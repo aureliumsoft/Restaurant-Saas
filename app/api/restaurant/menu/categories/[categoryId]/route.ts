@@ -4,10 +4,7 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
-
-const patchSchema = z.object({
-  name: z.string().min(1).max(120).optional(),
-});
+import { menuCategoryPatchSchema } from "@/lib/validation/menu";
 
 export async function PATCH(
   req: NextRequest,
@@ -37,7 +34,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = patchSchema.safeParse(json);
+  const parsed = menuCategoryPatchSchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -46,6 +43,9 @@ export async function PATCH(
     where: { id: categoryId },
     data: {
       ...(parsed.data.name !== undefined ? { name: parsed.data.name.trim() } : {}),
+      ...(parsed.data.showInFront !== undefined
+        ? { showInFront: parsed.data.showInFront }
+        : {}),
     },
   });
 

@@ -21,12 +21,70 @@ const menuInclude = {
               swatchHex: true,
               priceDelta: true,
               sortOrder: true,
+              restaurantVariationId: true,
+              restaurantVariation: {
+                select: { id: true, name: true, shortLabel: true },
+              },
             },
           },
           attributeGroups: {
             orderBy: { sortOrder: "asc" as const },
-            include: {
+            select: {
+              id: true,
+              name: true,
+              selectionType: true,
+              sourceType: true,
+              multipleMode: true,
+              freeQuantity: true,
+              required: true,
+              minItems: true,
+              maxItems: true,
+              sortOrder: true,
+              defaultLinkedMenuItemId: true,
+              useVariationPricing: true,
+              defaultLinkedMenuItem: {
+                select: {
+                  id: true,
+                  name: true,
+                  price: true,
+                  salePrice: true,
+                },
+              },
               linkedCategory: { select: { id: true, name: true } },
+              linkedProduct: {
+                select: {
+                  id: true,
+                  name: true,
+                  imageUrl: true,
+                  price: true,
+                  salePrice: true,
+                  categoryId: true,
+                  category: {
+                    select: {
+                      id: true,
+                      name: true,
+                      items: {
+                        orderBy: { name: "asc" as const },
+                        select: {
+                          id: true,
+                          name: true,
+                          imageUrl: true,
+                          price: true,
+                          salePrice: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              variationLimits: {
+                select: {
+                  variationId: true,
+                  minItems: true,
+                  maxItems: true,
+                },
+              },
+              productCategoryIds: true,
             },
           },
           offersFromThis: {

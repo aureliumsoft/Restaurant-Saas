@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { Check, ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,7 +18,53 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
+import { ConfigurationSelectSummary } from '@/components/order/configuration-select-summary';
+import {
+  NestedRecommendationSheet,
+  type NestedRecommendationResult,
+} from '@/components/order/nested-recommendation-sheet';
+import {
+  buildCategoryGroupSelectionSummary,
+  buildProductRecSelectionSummary,
+} from '@/lib/menu/configuration-selection-summary';
+import {
+  buildModifierSelectionsForGroups,
+  modifierSelectionsUnitTotal,
+} from '@/lib/menu/build-modifier-selections';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
+import {
+  chargeableUnitsForOption,
+  getRecommendationLimits,
+  totalSelectedUnits,
+} from '@/lib/menu/recommendation-limits';
+import {
+  chargeableConfigurationItemUnitPrice,
+  configurationGroupDisplayTitle,
+  configurationItemListUnitPrice,
+  filterConfigurationItemsForParentVariation,
+  formatConfigurationAddonDisplay,
+  isConfigurationGroupVisibleForParentVariation,
+  isConfigurationItemAvailableForParentVariation,
+  type ParentVariationContext,
+} from '@/lib/menu/configuration-variation-price';
+import {
+  chargeableVariationUnitPrice,
+  formatVariationAddonDisplay,
+  productUnitPriceWithVariation,
+} from '@/lib/menu/recommendation-addon-price';
+import {
+  clearOptionDataForGroup,
+  clearOptionDataForKey,
+  effectiveOptionVariationId,
+  isOptionConfigComplete,
+  optionNeedsManualVariationPicker,
+  optionSelectionKey,
+  recommendedProductNeedsSheet,
+  recommendationOptionNeedsSheet,
+  resolveCategoryItemVariationId,
+  shouldAutoOpenOptionFlow,
+  syncParentVariationOptionSelections,
+} from '@/lib/menu/recommendation-option-utils';
 
 export type MenuOption = {
   menuItemId: string;
@@ -25,10 +78,23 @@ export type AttributeGroup = {
   id: string;
   name: string;
   selectionType: 'SINGLE' | 'MULTIPLE';
+  sourceType?: 'CATEGORY' | 'PRODUCT';
+  multipleMode?: 'CHECKBOX' | 'QUANTITY';
+  freeQuantity?: number | null;
   required: boolean;
   minItems?: number | null;
   maxItems?: number | null;
+  variationLimits?: {
+    variationId: string;
+    minItems: number;
+    maxItems: number;
+  }[];
   linkedCategoryName?: string | null;
+  /** Baseline item for delta pricing (category configurations). */
+  defaultMenuItemId?: string | null;
+  defaultUnitPrice?: number | null;
+  /** When true, item prices follow the guest's selected base-product variation. */
+  useVariationPricing?: boolean;
   items: (Omit<MenuOption, 'unitPrice'> & {
     price: number;
     salePrice: number | null;
@@ -39,7 +105,9 @@ export type AttributeGroup = {
       swatchHex?: string | null;
       imageUrl?: string | null;
       priceDelta: number;
+      restaurantVariationId?: string | null;
     }[];
+    nestedAttributeGroups?: AttributeGroup[];
   })[];
 };
 
@@ -49,6 +117,8 @@ export type ProductVariationOption = {
   imageUrl?: string | null;
   swatchHex: string | null;
   priceDelta: number; // stored field; interpreted as absolute override price
+  restaurantVariationId?: string | null;
+  variationShortLabel?: string | null;
 };
 
 export type SelectedProductVariation = {
@@ -61,6 +131,52 @@ export type SelectedProductVariation = {
 function effectiveUnitPrice(price: number, salePrice: number | null) {
   if (salePrice != null && salePrice > 0 && salePrice < price) return salePrice;
   return price;
+}
+
+function visibleConfigurationItems(
+  group: AttributeGroup,
+  parentVariation: ParentVariationContext | null
+) {
+  return filterConfigurationItemsForParentVariation(
+    group.items,
+    parentVariation,
+    group.useVariationPricing ?? false
+  );
+}
+
+function configurationDefaultListUnit(
+  group: AttributeGroup,
+  parentVariation: ParentVariationContext | null
+): number | null {
+  const visible = visibleConfigurationItems(group, parentVariation);
+  const defaultItem = group.defaultMenuItemId
+    ? visible.find((i) => i.menuItemId === group.defaultMenuItemId)
+    : null;
+  if (defaultItem) {
+    return configurationItemListUnitPrice(
+      defaultItem,
+      parentVariation,
+      group.useVariationPricing ?? false
+    );
+  }
+  return group.defaultUnitPrice ?? null;
+}
+
+function configurationItemPickerPrice(
+  item: AttributeGroup['items'][number],
+  group: AttributeGroup,
+  parentVariation: ParentVariationContext | null
+) {
+  const defaultListUnit = configurationDefaultListUnit(group, parentVariation);
+  const listUnit = configurationItemListUnitPrice(
+    item,
+    parentVariation,
+    group.useVariationPricing ?? false
+  );
+  return {
+    price: chargeableConfigurationItemUnitPrice(listUnit, defaultListUnit),
+    priceLabel: formatConfigurationAddonDisplay(listUnit, defaultListUnit),
+  };
 }
 
 function multiSelectionHint(
@@ -91,9 +207,9 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   onConfirm: (
     mods: {
-    attributeGroupId: string;
-    groupName: string;
-    selections: MenuOption[];
+      attributeGroupId: string;
+      groupName: string;
+      selections: MenuOption[];
     }[],
     variation?: SelectedProductVariation | null,
     quantity?: number
@@ -125,23 +241,274 @@ export function ProductCustomizeDialog({
     | { kind: 'group-single'; groupId: string }
     | { kind: 'group-multi'; groupId: string }
     | { kind: 'nested'; groupId: string; optionId: string }
+    | { kind: 'recommendation-product-variation'; groupId: string }
   >(null);
+  const [nestedConfigs, setNestedConfigs] = useState<
+    Record<string, NestedRecommendationResult>
+  >({});
+  const [
+    preselectedRecommendationVariationByGroup,
+    setPreselectedRecommendationVariationByGroup,
+  ] = useState<Record<string, string>>({});
+  const [activeProductGroupId, setActiveProductGroupId] = useState<
+    string | null
+  >(null);
+  const [nestedOptionConfigs, setNestedOptionConfigs] = useState<
+    Record<string, NestedRecommendationResult>
+  >({});
+  const [activeCategoryOption, setActiveCategoryOption] = useState<{
+    groupId: string;
+    optionId: string;
+  } | null>(null);
+
+  const categoryGroups = useMemo(
+    () => attributeGroups.filter((g) => g.sourceType !== 'PRODUCT'),
+    [attributeGroups]
+  );
+  const productRecommendationGroups = useMemo(
+    () => attributeGroups.filter((g) => g.sourceType === 'PRODUCT'),
+    [attributeGroups]
+  );
+
+  const baseProductVariationContext = useMemo(() => {
+    const v = variations.find((x) => x.id === selectedVariationId);
+    if (!v) {
+      return {
+        parent: null as ParentVariationContext | null,
+        shortLabel: null as string | null,
+      };
+    }
+    return {
+      parent: {
+        id: v.id,
+        name: v.name,
+        title: v.name,
+        restaurantVariationId: v.restaurantVariationId ?? null,
+      },
+      shortLabel: v.variationShortLabel ?? null,
+    };
+  }, [variations, selectedVariationId]);
+
+  const visibleCategoryGroups = useMemo(
+    () =>
+      categoryGroups.filter((g) =>
+        isConfigurationGroupVisibleForParentVariation(
+          g,
+          baseProductVariationContext.parent
+        )
+      ),
+    [categoryGroups, baseProductVariationContext.parent]
+  );
+
+  const visibleProductRecommendationGroups = useMemo(
+    () =>
+      productRecommendationGroups.filter((g) => {
+        const item = g.items[0];
+        if (!item) return false;
+        return isConfigurationItemAvailableForParentVariation(
+          item,
+          baseProductVariationContext.parent,
+          g.useVariationPricing ?? false
+        );
+      }),
+    [productRecommendationGroups, baseProductVariationContext.parent]
+  );
+
+  useEffect(() => {
+    const parent = baseProductVariationContext.parent;
+    setSelectedByGroup((prev) => {
+      let changed = false;
+      const next: Record<string, string[]> = { ...prev };
+      for (const g of categoryGroups) {
+        if (!g.useVariationPricing) continue;
+        const allowed = new Set(
+          filterConfigurationItemsForParentVariation(
+            g.items,
+            parent,
+            true
+          ).map((it) => it.menuItemId)
+        );
+        const cur = prev[g.id] ?? [];
+        const filtered = cur.filter((id) => allowed.has(id));
+        if (filtered.length !== cur.length) {
+          next[g.id] = filtered;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [baseProductVariationContext.parent, categoryGroups, selectedVariationId]);
+
+  useEffect(() => {
+    const parent = baseProductVariationContext.parent;
+    setPreselectedRecommendationVariationByGroup((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const g of productRecommendationGroups) {
+        if (!g.useVariationPricing) continue;
+        const item = g.items[0];
+        if (!item) continue;
+        const resolved = resolveCategoryItemVariationId(item, parent, g);
+        if (resolved) {
+          if (next[g.id] !== resolved) {
+            next[g.id] = resolved;
+            changed = true;
+          }
+        } else if (next[g.id]) {
+          delete next[g.id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    setSelectedNestedVariationByOption((prev) => {
+      const synced = syncParentVariationOptionSelections(
+        categoryGroups,
+        selectedByGroup,
+        parent,
+        prev
+      );
+      return synced ?? prev;
+    });
+    setNestedOptionConfigs((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [key, config] of Object.entries(prev)) {
+        const [groupId, optionId] = key.split(':');
+        const group = categoryGroups.find((g) => g.id === groupId);
+        const item = group?.items.find((it) => it.menuItemId === optionId);
+        if (!item?.nestedAttributeGroups?.length) continue;
+        const synced = syncParentVariationOptionSelections(
+          item.nestedAttributeGroups,
+          config.selectedByGroup,
+          parent,
+          config.selectedNestedVariationByOption
+        );
+        if (synced) {
+          next[key] = {
+            ...config,
+            selectedNestedVariationByOption: synced,
+          };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [
+    baseProductVariationContext.parent,
+    categoryGroups,
+    productRecommendationGroups,
+    selectedByGroup,
+    selectedVariationId,
+  ]);
+
+  const groupRefs = useRef<Record<string, HTMLElement | null>>({});
+
+  const limitsForGroup = useCallback(
+    (group: AttributeGroup) =>
+      getRecommendationLimits(
+        {
+          selectionType: group.selectionType,
+          minItems: group.minItems ?? null,
+          maxItems: group.maxItems ?? null,
+          variationLimits: group.variationLimits,
+        },
+        selectedVariationId || null
+      ),
+    [selectedVariationId]
+  );
+
+  const scrollToGroup = (groupId: string) => {
+    const el = groupRefs.current[groupId];
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const advanceAfterGroupComplete = (
+    groupId: string,
+    nextSelectedByGroup: Record<string, string[]>
+  ) => {
+    const idx = visibleCategoryGroups.findIndex((g) => g.id === groupId);
+    for (let i = idx + 1; i < visibleCategoryGroups.length; i++) {
+      const next = visibleCategoryGroups[i]!;
+      const limits = limitsForGroup(next);
+      const count = totalSelectedUnits(nextSelectedByGroup[next.id] ?? []);
+      if (count < limits.maxItems) {
+        scrollToGroup(next.id);
+        setPicker(
+          next.selectionType === 'SINGLE'
+            ? { kind: 'group-single', groupId: next.id }
+            : { kind: 'group-multi', groupId: next.id }
+        );
+        return;
+      }
+    }
+    applyNextPendingPicker(
+      selectedVariationId,
+      nextSelectedByGroup,
+      selectedNestedVariationByOption,
+      {
+        nestedConfigs,
+        preselectedByGroup: preselectedRecommendationVariationByGroup,
+        optionNestedConfigs: nestedOptionConfigs,
+      }
+    );
+  };
 
   const getNextPendingPicker = (
     nextVariationId: string,
     nextSelectedByGroup: Record<string, string[]>,
-    nextNested: Record<string, string>
+    nextNested: Record<string, string>,
+    productRecState?: {
+      nestedConfigs: Record<string, NestedRecommendationResult>;
+      preselectedByGroup: Record<string, string>;
+      optionNestedConfigs?: Record<string, NestedRecommendationResult>;
+    }
   ):
     | null
     | { kind: 'variation' }
     | { kind: 'group-single'; groupId: string }
     | { kind: 'group-multi'; groupId: string }
-    | { kind: 'nested'; groupId: string; optionId: string } => {
+    | { kind: 'nested'; groupId: string; optionId: string }
+    | { kind: 'recommendation-product-variation'; groupId: string }
+    | { kind: 'recommendation-product-sheet'; groupId: string }
+    | { kind: 'category-option-sheet'; groupId: string; optionId: string } => {
     if (variations.length > 0 && !nextVariationId) {
       return { kind: 'variation' };
     }
 
-    for (const g of attributeGroups) {
+    if (productRecState) {
+      for (const g of visibleProductRecommendationGroups) {
+        const item = g.items[0];
+        if (!item) continue;
+        if (g.useVariationPricing) {
+          const resolved = resolveCategoryItemVariationId(
+            item,
+            baseProductVariationContext.parent,
+            g
+          );
+          if (!resolved) continue;
+          if (productRecState.nestedConfigs[g.id]) continue;
+          if (recommendedProductNeedsSheet(g)) {
+            return { kind: 'recommendation-product-sheet', groupId: g.id };
+          }
+          continue;
+        }
+        if (!recommendedProductNeedsSheet(g)) continue;
+        if (productRecState.nestedConfigs[g.id]) continue;
+        if (
+          optionNeedsManualVariationPicker(item, g) &&
+          !productRecState.preselectedByGroup[g.id]
+        ) {
+          return {
+            kind: 'recommendation-product-variation',
+            groupId: g.id,
+          };
+        }
+        return { kind: 'recommendation-product-sheet', groupId: g.id };
+      }
+    }
+
+    for (const g of visibleCategoryGroups) {
       const selectedIds = nextSelectedByGroup[g.id] ?? [];
       if (selectedIds.length === 0 && g.required) {
         if (g.selectionType === 'SINGLE') {
@@ -159,71 +526,230 @@ export function ProductCustomizeDialog({
         g.selectionType === 'SINGLE' ? selectedIds.slice(0, 1) : selectedIds;
       for (const optionId of optionsToCheck) {
         const selectedOption = g.items.find((it) => it.menuItemId === optionId);
+        if (!selectedOption) continue;
+        const key = optionSelectionKey(g.id, selectedOption.menuItemId);
+        const optionCtx = {
+          group: g,
+          parentVariation: baseProductVariationContext.parent,
+        };
         if (
-          !selectedOption ||
-          !selectedOption.variations ||
-          selectedOption.variations.length === 0
+          !recommendationOptionNeedsSheet(selectedOption, g) ||
+          isOptionConfigComplete(
+            selectedOption,
+            key,
+            nextNested,
+            productRecState?.optionNestedConfigs ?? {},
+            optionCtx
+          )
         ) {
           continue;
         }
-        const key = `${g.id}:${selectedOption.menuItemId}`;
-        if (!nextNested[key]) {
+        if (
+          g.useVariationPricing &&
+          (selectedOption.nestedAttributeGroups?.length ?? 0) > 0
+        ) {
+          return {
+            kind: 'category-option-sheet',
+            groupId: g.id,
+            optionId: selectedOption.menuItemId,
+          };
+        }
+        if (
+          optionNeedsManualVariationPicker(selectedOption, g) &&
+          !nextNested[key]
+        ) {
           return {
             kind: 'nested',
             groupId: g.id,
             optionId: selectedOption.menuItemId,
           };
         }
+        return {
+          kind: 'category-option-sheet',
+          groupId: g.id,
+          optionId: selectedOption.menuItemId,
+        };
       }
     }
 
     return null;
   };
 
+  const applyNextPendingPicker = (
+    nextVariationId: string,
+    nextSelectedByGroup: Record<string, string[]>,
+    nextNested: Record<string, string>,
+    productRecState?: {
+      nestedConfigs: Record<string, NestedRecommendationResult>;
+      preselectedByGroup: Record<string, string>;
+      optionNestedConfigs?: Record<string, NestedRecommendationResult>;
+    }
+  ) => {
+    const next = getNextPendingPicker(
+      nextVariationId,
+      nextSelectedByGroup,
+      nextNested,
+      productRecState
+    );
+    if (next?.kind === 'recommendation-product-sheet') {
+      setPicker(null);
+      setActiveCategoryOption(null);
+      setActiveProductGroupId(next.groupId);
+      return;
+    }
+    if (next?.kind === 'category-option-sheet') {
+      setPicker(null);
+      setActiveProductGroupId(null);
+      setActiveCategoryOption({
+        groupId: next.groupId,
+        optionId: next.optionId,
+      });
+      return;
+    }
+    if (next?.kind === 'recommendation-product-variation') {
+      const group = productRecommendationGroups.find((g) => g.id === next.groupId);
+      const item = group?.items[0];
+      if (group?.useVariationPricing && item) {
+        setPicker(null);
+        if (recommendedProductNeedsSheet(group)) {
+          setActiveProductGroupId(next.groupId);
+        }
+        return;
+      }
+      setActiveProductGroupId(null);
+      setActiveCategoryOption(null);
+    }
+    if (next?.kind === 'nested') {
+      const group = categoryGroups.find((g) => g.id === next.groupId);
+      const item = group?.items.find((it) => it.menuItemId === next.optionId);
+      if (group && item && !optionNeedsManualVariationPicker(item, group)) {
+        if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
+          setPicker(null);
+          setActiveCategoryOption({
+            groupId: next.groupId,
+            optionId: next.optionId,
+          });
+          return;
+        }
+        setPicker(null);
+        return;
+      }
+    }
+    setPicker(next);
+  };
+
+  const openCategoryOptionFlow = useCallback(
+    (groupId: string, optionId: string) => {
+      const group = categoryGroups.find((g) => g.id === groupId);
+      const item = group?.items.find((it) => it.menuItemId === optionId);
+      if (!item || !recommendationOptionNeedsSheet(item, group)) return;
+      setActiveProductGroupId(null);
+      setActiveCategoryOption(null);
+      if (optionNeedsManualVariationPicker(item, group)) {
+        setPicker({ kind: 'nested', groupId, optionId });
+        return;
+      }
+      setActiveCategoryOption({ groupId, optionId });
+    },
+    [categoryGroups]
+  );
+
   useEffect(() => {
     if (!open) return;
     const init: Record<string, string[]> = {};
-    for (const g of attributeGroups) init[g.id] = [];
+    for (const g of categoryGroups) init[g.id] = [];
     setSelectedByGroup(init);
     setSelectedVariationId('');
     setSelectedNestedVariationByOption({});
     setQuantity(1);
-    setPicker(getNextPendingPicker('', init, {}));
-  }, [open, attributeGroups]);
+    setNestedConfigs({});
+    setPreselectedRecommendationVariationByGroup({});
+    setActiveProductGroupId(null);
+    setNestedOptionConfigs({});
+    setActiveCategoryOption(null);
+    const autoNested: Record<string, NestedRecommendationResult> = {};
+    for (const g of productRecommendationGroups) {
+      if (!recommendedProductNeedsSheet(g)) {
+        autoNested[g.id] = {
+          productVariationId: '',
+          selectedByGroup: {},
+          selectedNestedVariationByOption: {},
+          mods: [],
+        };
+      }
+    }
+    setNestedConfigs(autoNested);
+    applyNextPendingPicker(
+      '',
+      init,
+      {},
+      {
+        nestedConfigs: autoNested,
+        preselectedByGroup: {},
+        optionNestedConfigs: {},
+      }
+    );
+  }, [open, categoryGroups, productRecommendationGroups]);
 
   const requiredMissing = useMemo(() => {
-    const missingAttrs = attributeGroups.some((g) => {
-      const count = groupSelectionCount(selectedByGroup[g.id] ?? []);
+    const missingProductRecs = visibleProductRecommendationGroups.some((g) => {
+      if (!recommendedProductNeedsSheet(g)) return false;
+      return !nestedConfigs[g.id];
+    });
+    const missingAttrs = visibleCategoryGroups.some((g) => {
+      const count = totalSelectedUnits(selectedByGroup[g.id] ?? []);
       if (g.selectionType === 'SINGLE') {
         return g.required && count === 0;
       }
-      const min = g.minItems ?? (g.required ? 1 : 0);
+      const min = limitsForGroup(g).minItems ?? (g.required ? 1 : 0);
       if (g.required && count < min) return true;
       if (count > 0 && min > 0 && count < min) return true;
-      if (g.maxItems != null && count > g.maxItems) return true;
+      if (count > limitsForGroup(g).maxItems) return true;
       return false;
     });
     const missingVariation = variations.length > 0 && !selectedVariationId;
-    const missingNestedVariation = attributeGroups.some((g) => {
+    const missingCategoryOptionConfig = visibleCategoryGroups.some((g) => {
       const selectedIds = selectedByGroup[g.id] ?? [];
-      if (selectedIds.length === 0) return false;
-      return selectedIds.some((optionId) => {
+      const ids =
+        g.selectionType === 'SINGLE' ? selectedIds.slice(0, 1) : selectedIds;
+      return ids.some((optionId) => {
         const option = g.items.find((it) => it.menuItemId === optionId);
-        if (!option || !option.variations || option.variations.length === 0)
-          return false;
-        return !selectedNestedVariationByOption[`${g.id}:${optionId}`];
+        if (!option) return false;
+        return !isOptionConfigComplete(
+          option,
+          optionSelectionKey(g.id, optionId),
+          selectedNestedVariationByOption,
+          nestedOptionConfigs,
+          {
+            group: g,
+            parentVariation: baseProductVariationContext.parent,
+          }
+        );
       });
     });
-    return missingAttrs || missingVariation || missingNestedVariation;
+    return (
+      missingProductRecs ||
+      missingAttrs ||
+      missingVariation ||
+      missingCategoryOptionConfig
+    );
   }, [
-    attributeGroups,
+    visibleCategoryGroups,
+    visibleProductRecommendationGroups,
+    nestedConfigs,
+    nestedOptionConfigs,
     selectedByGroup,
     variations,
     selectedVariationId,
     selectedNestedVariationByOption,
+    limitsForGroup,
+    baseProductVariationContext.parent,
   ]);
 
-  const setSingle = (groupId: string, optionId: string) => {
+  const clearCategoryGroupOptionData = useCallback((groupId: string) => {
+    setNestedOptionConfigs(
+      (prev) => clearOptionDataForGroup(groupId, prev, {}).configs
+    );
     setSelectedNestedVariationByOption((prevVar) => {
       const next = { ...prevVar };
       for (const key of Object.keys(next)) {
@@ -231,47 +757,98 @@ export function ProductCustomizeDialog({
       }
       return next;
     });
+    setActiveCategoryOption((cur) => (cur?.groupId === groupId ? null : cur));
+  }, []);
+
+  const setSingle = (groupId: string, optionId: string) => {
+    clearCategoryGroupOptionData(groupId);
     setSelectedByGroup((prev) => ({
       ...prev,
       [groupId]: prev[groupId]?.[0] === optionId ? [] : [optionId],
     }));
   };
 
-  const toggleMulti = (group: AttributeGroup, optionId: string) => {
+  const toggleMultiCheckbox = (group: AttributeGroup, optionId: string) => {
     setSelectedByGroup((prev) => {
       const cur = prev[group.id] ?? [];
-      const has = cur.includes(optionId);
-      if (has) {
-        setSelectedNestedVariationByOption((prevVar) => {
-          const next = { ...prevVar };
-          delete next[`${group.id}:${optionId}`];
-          return next;
-        });
+      const limits = limitsForGroup(group);
+      if (cur.includes(optionId)) {
+        const key = optionSelectionKey(group.id, optionId);
+        const cleared = clearOptionDataForKey(
+          key,
+          nestedOptionConfigs,
+          selectedNestedVariationByOption
+        );
+        setNestedOptionConfigs(cleared.configs);
+        setSelectedNestedVariationByOption(cleared.variations);
+        setActiveCategoryOption((curOpt) =>
+          curOpt?.groupId === group.id && curOpt?.optionId === optionId
+            ? null
+            : curOpt
+        );
         return {
           ...prev,
           [group.id]: cur.filter((x) => x !== optionId),
         };
       }
-      if (group.maxItems != null && cur.length >= group.maxItems) {
+      const key = optionSelectionKey(group.id, optionId);
+      setNestedOptionConfigs((prevCfg) => {
+        const next = { ...prevCfg };
+        delete next[key];
+        return next;
+      });
+      setSelectedNestedVariationByOption((prevVar) => {
+        const next = { ...prevVar };
+        delete next[key];
+        return next;
+      });
+      if (totalSelectedUnits(cur) >= limits.maxItems) {
+        advanceAfterGroupComplete(group.id, prev);
         return prev;
       }
-      return {
-        ...prev,
-        [group.id]: [...cur, optionId],
-      };
+      const next = { ...prev, [group.id]: [...cur, optionId] };
+      const item = group.items.find((it) => it.menuItemId === optionId);
+      if (item && recommendationOptionNeedsSheet(item, group)) {
+        queueMicrotask(() => openCategoryOptionFlow(group.id, optionId));
+      }
+      if (totalSelectedUnits(next[group.id]!) >= limits.maxItems) {
+        queueMicrotask(() => advanceAfterGroupComplete(group.id, next));
+      }
+      return next;
     });
   };
 
   const increaseMultiQty = (group: AttributeGroup, optionId: string) => {
     setSelectedByGroup((prev) => {
       const cur = prev[group.id] ?? [];
-      if (group.maxItems != null && cur.length >= group.maxItems) {
+      const limits = limitsForGroup(group);
+      if (totalSelectedUnits(cur) >= limits.maxItems) {
+        advanceAfterGroupComplete(group.id, prev);
         return prev;
       }
-      return {
-        ...prev,
-        [group.id]: [...cur, optionId],
-      };
+      const isFirstUnit = cur.filter((id) => id === optionId).length === 0;
+      if (isFirstUnit) {
+        const key = optionSelectionKey(group.id, optionId);
+        setNestedOptionConfigs((prevCfg) => {
+          const nextCfg = { ...prevCfg };
+          delete nextCfg[key];
+          return nextCfg;
+        });
+        setSelectedNestedVariationByOption((prevVar) => {
+          const nextVar = { ...prevVar };
+          delete nextVar[key];
+          return nextVar;
+        });
+      }
+      const next = { ...prev, [group.id]: [...cur, optionId] };
+      const item = group.items.find((it) => it.menuItemId === optionId);
+      if (isFirstUnit && item && recommendationOptionNeedsSheet(item, group)) {
+        queueMicrotask(() => openCategoryOptionFlow(group.id, optionId));
+      }
+      if (totalSelectedUnits(next[group.id]!) >= limits.maxItems) {
+        queueMicrotask(() => advanceAfterGroupComplete(group.id, next));
+      }
+      return next;
     });
   };
 
@@ -283,11 +860,19 @@ export function ProductCustomizeDialog({
       current.splice(idx, 1);
       const remainingQty = current.filter((id) => id === optionId).length;
       if (remainingQty === 0) {
-        setSelectedNestedVariationByOption((prevNested) => {
-          const next = { ...prevNested };
-          delete next[`${groupId}:${optionId}`];
-          return next;
-        });
+        const key = optionSelectionKey(groupId, optionId);
+        const cleared = clearOptionDataForKey(
+          key,
+          nestedOptionConfigs,
+          selectedNestedVariationByOption
+        );
+        setNestedOptionConfigs(cleared.configs);
+        setSelectedNestedVariationByOption(cleared.variations);
+        setActiveCategoryOption((curOpt) =>
+          curOpt?.groupId === groupId && curOpt?.optionId === optionId
+            ? null
+            : curOpt
+        );
       }
       return { ...prev, [groupId]: current };
     });
@@ -296,58 +881,76 @@ export function ProductCustomizeDialog({
   const handleConfirm = () => {
     if (requiredMissing) return;
 
-    const mods: {
-      attributeGroupId: string;
-      groupName: string;
-      selections: MenuOption[];
-    }[] = [];
+    const mods = buildModifierSelectionsForGroups(
+      visibleCategoryGroups,
+      selectedByGroup,
+      selectedNestedVariationByOption,
+      baseProductVariationContext.parent,
+      baseProductVariationContext.shortLabel
+    );
 
-    for (const g of attributeGroups) {
-      const ids = selectedByGroup[g.id] ?? [];
-      if (ids.length === 0) continue;
-
-      const selectedItems = g.items
-        .filter((it) => ids.includes(it.menuItemId))
-        .map((it) => {
-          const qty =
-            g.selectionType === 'MULTIPLE'
-              ? ids.filter((x) => x === it.menuItemId).length
-              : 1;
-          // If this add-on item has its own swatches, selected swatch price replaces base/sale.
-          const key = `${g.id}:${it.menuItemId}`;
-          const nestedVariationId = selectedNestedVariationByOption[key];
-          const nestedVariation = (it.variations ?? []).find(
-            (v) => v.id === nestedVariationId
-          );
-          const nestedVariationName =
-            nestedVariation?.name ?? nestedVariation?.title;
-          const finalName = nestedVariationName
-            ? `${it.name} (${nestedVariationName})`
-            : it.name;
-          const finalUnitPrice =
-            nestedVariation != null
-              ? nestedVariation.priceDelta
-              : effectiveUnitPrice(it.price, it.salePrice);
-          return {
-          menuItemId: it.menuItemId,
-            name: qty > 1 ? `${finalName} x${qty}` : finalName,
-          description: it.description,
-          imageUrl: it.imageUrl,
-            unitPrice: finalUnitPrice * qty,
-          };
-        });
-
-      if (selectedItems.length > 0) {
+    for (const config of Object.values(nestedOptionConfigs)) {
+      for (const child of config.mods) {
         mods.push({
-          attributeGroupId: g.id,
-          groupName: g.name,
-          selections: selectedItems,
+          attributeGroupId: child.attributeGroupId,
+          groupName: child.groupName,
+          selections: child.selections,
         });
       }
     }
 
-    const variation =
+    for (const g of visibleProductRecommendationGroups) {
+      const item = g.items[0];
+      if (!item) continue;
+      const config = nestedConfigs[g.id];
+      if (!config && recommendedProductNeedsSheet(g)) continue;
+
+      const pv = (item.variations ?? []).find(
+        (v) => v.id === config?.productVariationId
+      );
+      const itemBase = effectiveUnitPrice(item.price, item.salePrice);
+      const unit = pv
+        ? productUnitPriceWithVariation(itemBase, pv.priceDelta)
+        : itemBase;
+      const pvName = pv?.name ?? pv?.title;
+      const selectionName = pvName ? `${item.name} (${pvName})` : item.name;
+
+      mods.push({
+        attributeGroupId: g.id,
+        groupName: g.name,
+        selections: [
+          {
+            menuItemId: item.menuItemId,
+            name: selectionName,
+            description: item.description,
+            imageUrl: item.imageUrl,
+            unitPrice: unit,
+          },
+        ],
+      });
+
+      for (const child of config?.mods ?? []) {
+        mods.push({
+          attributeGroupId: child.attributeGroupId,
+          groupName: `${g.name} — ${child.groupName}`,
+          selections: child.selections,
+        });
+      }
+    }
+
+    const selectedVariation =
       variations.find((v) => v.id === selectedVariationId) ?? null;
+    const variation = selectedVariation
+      ? {
+          id: selectedVariation.id,
+          name: selectedVariation.name,
+          swatchHex: selectedVariation.swatchHex,
+          priceDelta: productUnitPriceWithVariation(
+            productBaseUnitPrice,
+            selectedVariation.priceDelta
+          ),
+        }
+      : null;
     onConfirm(mods, variation, quantity);
   };
 
@@ -387,37 +990,51 @@ export function ProductCustomizeDialog({
     setPicker({ kind: 'group-multi', groupId: group.id });
   };
 
+  const openCategoryGroupSelect = (group: AttributeGroup) => {
+    setActiveProductGroupId(null);
+    setActiveCategoryOption(null);
+    openGroupSelection(group);
+  };
+
   const selectedUnitTotal = useMemo(() => {
     const selectedVariation = variations.find(
       (v) => v.id === selectedVariationId
     );
-    const base = selectedVariation
-      ? selectedVariation.priceDelta
-      : productBaseUnitPrice;
-    const addons = attributeGroups.reduce((sum, g) => {
-      const ids = selectedByGroup[g.id] ?? [];
-      if (ids.length === 0) return sum;
+    const base = productUnitPriceWithVariation(
+      productBaseUnitPrice,
+      selectedVariation?.priceDelta
+    );
+    const categoryAddons = modifierSelectionsUnitTotal(
+      buildModifierSelectionsForGroups(
+        visibleCategoryGroups,
+        selectedByGroup,
+        selectedNestedVariationByOption,
+        baseProductVariationContext.parent,
+        baseProductVariationContext.shortLabel
+      )
+    );
 
-      // Count every selected instance so multi-quantity add-ons always increase popup total.
-      const perGroup = ids.reduce((groupSum, selectedId) => {
-        const it = g.items.find((x) => x.menuItemId === selectedId);
-        if (!it) return groupSum;
-        const key = `${g.id}:${it.menuItemId}`;
-        const nestedVariationId = selectedNestedVariationByOption[key];
-        const nested = (it.variations ?? []).find(
-          (v) => v.id === nestedVariationId
-        );
-        const price = nested
-          ? nested.priceDelta
-          : effectiveUnitPrice(it.price, it.salePrice);
-        return groupSum + price;
-      }, 0);
-
-      return sum + perGroup;
+    const productRecAddons = visibleProductRecommendationGroups.reduce((sum, g) => {
+      const item = g.items[0];
+      if (!item) return sum;
+      const config = nestedConfigs[g.id];
+      if (!config) return sum;
+      const pv = (item.variations ?? []).find(
+        (v) => v.id === config.productVariationId
+      );
+      const itemBase = effectiveUnitPrice(item.price, item.salePrice);
+      const unit = pv
+        ? productUnitPriceWithVariation(itemBase, pv.priceDelta)
+        : itemBase;
+      return sum + unit + modifierSelectionsUnitTotal(config.mods);
     }, 0);
-    return base + addons;
+
+    return base + categoryAddons + productRecAddons;
   }, [
-    attributeGroups,
+    baseProductVariationContext,
+    visibleCategoryGroups,
+    visibleProductRecommendationGroups,
+    nestedConfigs,
     productBaseUnitPrice,
     selectedByGroup,
     selectedNestedVariationByOption,
@@ -447,32 +1064,93 @@ export function ProductCustomizeDialog({
 
   const basePriceLabel = `€${productBaseUnitPrice.toFixed(2)}`;
 
+  const productRecPickerContext = () => ({
+    nestedConfigs,
+    preselectedByGroup: preselectedRecommendationVariationByGroup,
+    optionNestedConfigs: nestedOptionConfigs,
+  });
+
+  const activeCategoryOptionTarget = useMemo(() => {
+    if (!activeCategoryOption) return null;
+    const group = categoryGroups.find(
+      (g) => g.id === activeCategoryOption.groupId
+    );
+    const item = group?.items.find(
+      (it) => it.menuItemId === activeCategoryOption.optionId
+    );
+    if (!group || !item) return null;
+    return {
+      group,
+      item,
+      key: optionSelectionKey(
+        activeCategoryOption.groupId,
+        activeCategoryOption.optionId
+      ),
+    };
+  }, [activeCategoryOption, categoryGroups]);
+
   const pickerTitle = useMemo(() => {
     if (!picker) return '';
     if (picker.kind === 'variation') return 'Select variation';
+    if (picker.kind === 'recommendation-product-variation') {
+      const group = productRecommendationGroups.find(
+        (g) => g.id === picker.groupId
+      );
+      const item = group?.items[0];
+      return item ? `Select ${item.name}` : 'Select variation';
+    }
     if (picker.kind === 'group-single') {
-      const group = attributeGroups.find((g) => g.id === picker.groupId);
+      const group = categoryGroups.find((g) => g.id === picker.groupId);
       return group ? `Select ${group.name}` : 'Select option';
     }
     if (picker.kind === 'group-multi') {
-      const group = attributeGroups.find((g) => g.id === picker.groupId);
+      const group = categoryGroups.find((g) => g.id === picker.groupId);
       return group ? `Select ${group.name}` : 'Select options';
     }
-    const group = attributeGroups.find((g) => g.id === picker.groupId);
+    const group = categoryGroups.find((g) => g.id === picker.groupId);
     const item = group?.items.find((i) => i.menuItemId === picker.optionId);
     return item ? `Select ${item.name} variation` : 'Select variation';
-  }, [attributeGroups, picker]);
+  }, [categoryGroups, picker, productRecommendationGroups]);
 
   const pickerSubtitle = useMemo(() => {
+    if (picker?.kind === 'recommendation-product-variation') {
+      return 'Choose a variation first';
+    }
     if (!picker || picker.kind !== 'group-multi') return null;
-    const group = attributeGroups.find((g) => g.id === picker.groupId);
+    const group = categoryGroups.find((g) => g.id === picker.groupId);
     if (!group) return null;
-    const count = groupSelectionCount(selectedByGroup[group.id] ?? []);
-    const hint = multiSelectionHint(group.minItems, group.maxItems);
-    const progress =
-      group.maxItems != null ? ` · Selected ${count} / ${group.maxItems}` : ` · Selected ${count}`;
+    const limits = limitsForGroup(group);
+    const count = totalSelectedUnits(selectedByGroup[group.id] ?? []);
+    const hint = multiSelectionHint(limits.minItems, limits.maxItems);
+    const progress = ` · Selected ${count} / ${limits.maxItems}`;
     return `${hint}${progress}`;
-  }, [attributeGroups, picker, selectedByGroup]);
+  }, [categoryGroups, limitsForGroup, picker, selectedByGroup]);
+
+  const activeProductGroup = productRecommendationGroups.find(
+    (g) => g.id === activeProductGroupId
+  );
+  const activeProductItem = activeProductGroup?.items[0];
+
+  const openRecommendationGroup = (groupId: string) => {
+    const group = productRecommendationGroups.find((g) => g.id === groupId);
+    const item = group?.items[0];
+    if (!group || !item) return;
+    setActiveCategoryOption(null);
+    setActiveProductGroupId(null);
+    if (group.useVariationPricing) {
+      if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
+        setActiveProductGroupId(groupId);
+      }
+      return;
+    }
+    if (optionNeedsManualVariationPicker(item, group)) {
+      setPicker({ kind: 'recommendation-product-variation', groupId });
+      return;
+    }
+    if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
+      setActiveProductGroupId(groupId);
+    }
+  };
 
   const pickerEntries = useMemo(() => {
     if (!picker)
@@ -480,6 +1158,7 @@ export function ProductCustomizeDialog({
         id: string;
         name: string;
         price: number;
+        priceLabel: string | null;
         imageUrl?: string | null;
         selected: boolean;
         quantity?: number;
@@ -491,71 +1170,198 @@ export function ProductCustomizeDialog({
       return variations.map((v) => ({
         id: v.id,
         name: v.name,
-        price: v.priceDelta,
+        price: chargeableVariationUnitPrice(
+          v.priceDelta,
+          productBaseUnitPrice
+        ),
+        priceLabel: formatVariationAddonDisplay(
+          v.priceDelta,
+          productBaseUnitPrice
+        ),
         imageUrl: v.imageUrl ?? productImageUrl ?? null,
         selected: selectedVariationId === v.id,
         quantity: undefined,
         onChoose: () => {
           const nextVariationId = v.id;
-          const nextPicker = getNextPendingPicker(
+          setSelectedVariationId(nextVariationId);
+          applyNextPendingPicker(
             nextVariationId,
             selectedByGroup,
-            selectedNestedVariationByOption
+            selectedNestedVariationByOption,
+            productRecPickerContext()
           );
-          setSelectedVariationId(nextVariationId);
-          setPicker(nextPicker);
+        },
+        onIncrease: undefined,
+        onDecrease: undefined,
+      }));
+    }
+    if (picker.kind === 'recommendation-product-variation') {
+      const group = productRecommendationGroups.find(
+        (g) => g.id === picker.groupId
+      );
+      const item = group?.items[0];
+      if (!group || !item) return [];
+      const recItemBase = effectiveUnitPrice(item.price, item.salePrice);
+      return (item.variations ?? []).map((v) => ({
+        id: v.id,
+        name: v.name ?? v.title ?? 'Variation',
+        price: chargeableVariationUnitPrice(v.priceDelta, recItemBase),
+        priceLabel: formatVariationAddonDisplay(v.priceDelta, recItemBase),
+        imageUrl: v.imageUrl ?? item.imageUrl ?? null,
+        selected: preselectedRecommendationVariationByGroup[group.id] === v.id,
+        quantity: undefined,
+        onChoose: () => {
+          setPreselectedRecommendationVariationByGroup((prev) => ({
+            ...prev,
+            [group.id]: v.id,
+          }));
+          setPicker(null);
+          if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
+            setActiveProductGroupId(group.id);
+          } else {
+            applyNextPendingPicker(
+              selectedVariationId,
+              selectedByGroup,
+              selectedNestedVariationByOption,
+              {
+                ...productRecPickerContext(),
+                preselectedByGroup: {
+                  ...preselectedRecommendationVariationByGroup,
+                  [group.id]: v.id,
+                },
+              }
+            );
+          }
         },
         onIncrease: undefined,
         onDecrease: undefined,
       }));
     }
     if (picker.kind === 'group-single') {
-      const group = attributeGroups.find((g) => g.id === picker.groupId);
+      const group = categoryGroups.find((g) => g.id === picker.groupId);
       if (!group) return [];
       const selected = selectedByGroup[group.id]?.[0] ?? '';
-      return group.items.map((it) => ({
+      return visibleConfigurationItems(
+        group,
+        baseProductVariationContext.parent
+      ).map((it) => {
+        const { price, priceLabel } = configurationItemPickerPrice(
+          it,
+          group,
+          baseProductVariationContext.parent
+        );
+        return {
         id: it.menuItemId,
         name: it.name,
-        price: effectiveUnitPrice(it.price, it.salePrice),
+        price,
+        priceLabel,
         imageUrl: it.imageUrl,
         selected: selected === it.menuItemId,
         quantity: undefined,
         onChoose: () => {
+          const switching =
+            (selectedByGroup[group.id]?.[0] ?? '') !== it.menuItemId;
+          const cleared = switching
+            ? clearOptionDataForGroup(
+                group.id,
+                nestedOptionConfigs,
+                selectedNestedVariationByOption
+              )
+            : {
+                configs: nestedOptionConfigs,
+                variations: selectedNestedVariationByOption,
+              };
+          if (switching) {
+            setNestedOptionConfigs(cleared.configs);
+          }
+          const key = optionSelectionKey(group.id, it.menuItemId);
+          const resolved = resolveCategoryItemVariationId(
+            it,
+            baseProductVariationContext.parent,
+            group
+          );
+          const nextNestedVariations = { ...cleared.variations };
+          if (resolved) nextNestedVariations[key] = resolved;
+          setSelectedNestedVariationByOption(nextNestedVariations);
+          setActiveCategoryOption(null);
           const nextSelectedByGroup = {
             ...selectedByGroup,
-            [group.id]:
-              selectedByGroup[group.id]?.[0] === it.menuItemId
-                ? []
-                : [it.menuItemId],
+            [group.id]: [it.menuItemId],
           };
-          const nextNested = { ...selectedNestedVariationByOption };
-          for (const key of Object.keys(nextNested)) {
-            if (key.startsWith(`${group.id}:`)) delete nextNested[key];
+          setSelectedByGroup((prev) => ({
+            ...prev,
+            [group.id]: [it.menuItemId],
+          }));
+          if (optionNeedsManualVariationPicker(it, group)) {
+            setPicker({
+              kind: 'nested',
+              groupId: group.id,
+              optionId: it.menuItemId,
+            });
+            return;
           }
-          const nextPicker = getNextPendingPicker(
+          const optionCtx = {
+            group,
+            parentVariation: baseProductVariationContext.parent,
+          };
+          const needsNestedSheet =
+            (it.nestedAttributeGroups?.length ?? 0) > 0 &&
+            !isOptionConfigComplete(
+              it,
+              key,
+              nextNestedVariations,
+              cleared.configs,
+              optionCtx
+            );
+          if (group.useVariationPricing && needsNestedSheet) {
+            setPicker(null);
+            setActiveCategoryOption({
+              groupId: group.id,
+              optionId: it.menuItemId,
+            });
+            return;
+          }
+          applyNextPendingPicker(
             selectedVariationId,
             nextSelectedByGroup,
-            nextNested
+            nextNestedVariations,
+            {
+              ...productRecPickerContext(),
+              optionNestedConfigs: cleared.configs,
+            }
           );
-          setSingle(group.id, it.menuItemId);
-          setPicker(nextPicker);
         },
         onIncrease: undefined,
         onDecrease: undefined,
-      }));
+      };
+      });
     }
     if (picker.kind === 'group-multi') {
-      const group = attributeGroups.find((g) => g.id === picker.groupId);
+      const group = categoryGroups.find((g) => g.id === picker.groupId);
       if (!group) return [];
       const selected = selectedByGroup[group.id] ?? [];
-      return group.items.map((it) => ({
+      return visibleConfigurationItems(
+        group,
+        baseProductVariationContext.parent
+      ).map((it) => {
+        const { price, priceLabel } = configurationItemPickerPrice(
+          it,
+          group,
+          baseProductVariationContext.parent
+        );
+        return {
         id: it.menuItemId,
         name: it.name,
-        price: effectiveUnitPrice(it.price, it.salePrice),
+        price,
+        priceLabel,
         imageUrl: it.imageUrl,
         selected: selected.includes(it.menuItemId),
         quantity: selected.filter((x) => x === it.menuItemId).length,
         onChoose: () => {
+          if (group.multipleMode === 'CHECKBOX') {
+            toggleMultiCheckbox(group, it.menuItemId);
+            return;
+          }
           const qty = selected.filter((x) => x === it.menuItemId).length;
           if (qty > 0) {
             decreaseMultiQty(group.id, it.menuItemId);
@@ -563,41 +1369,65 @@ export function ProductCustomizeDialog({
           }
           increaseMultiQty(group, it.menuItemId);
         },
-        onIncrease: () => increaseMultiQty(group, it.menuItemId),
-        onDecrease: () => decreaseMultiQty(group.id, it.menuItemId),
-      }));
+        onIncrease:
+          group.multipleMode === 'QUANTITY'
+            ? () => increaseMultiQty(group, it.menuItemId)
+            : undefined,
+        onDecrease:
+          group.multipleMode === 'QUANTITY'
+            ? () => decreaseMultiQty(group.id, it.menuItemId)
+            : undefined,
+      };
+      });
     }
-    const group = attributeGroups.find((g) => g.id === picker.groupId);
-    const item = group?.items.find((it) => it.menuItemId === picker.optionId);
-    if (!item) return [];
-    const key = `${picker.groupId}:${picker.optionId}`;
-    return (item.variations ?? []).map((v) => ({
+    if (picker.kind === 'nested') {
+      const group = categoryGroups.find((g) => g.id === picker.groupId);
+      const item = group?.items.find((it) => it.menuItemId === picker.optionId);
+      if (!item || !group || !optionNeedsManualVariationPicker(item, group)) {
+        return [];
+      }
+      const key = optionSelectionKey(picker.groupId, picker.optionId);
+      const optionItemBase = effectiveUnitPrice(item.price, item.salePrice);
+      return (item.variations ?? []).map((v) => ({
       id: v.id,
       name: v.name ?? v.title ?? 'Variation',
-      price: v.priceDelta,
+      price: chargeableVariationUnitPrice(v.priceDelta, optionItemBase),
+      priceLabel: formatVariationAddonDisplay(v.priceDelta, optionItemBase),
       imageUrl: v.imageUrl ?? item.imageUrl ?? null,
       selected: selectedNestedVariationByOption[key] === v.id,
       quantity: undefined,
       onChoose: () => {
-        const nextNested = { ...selectedNestedVariationByOption, [key]: v.id };
-        const nextPicker = getNextPendingPicker(
-          selectedVariationId,
-          selectedByGroup,
-          nextNested
-        );
         setSelectedNestedVariationByOption((prev) => ({
           ...prev,
           [key]: v.id,
         }));
-        setPicker(nextPicker);
+        if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
+          setPicker(null);
+          setActiveCategoryOption({
+            groupId: picker.groupId,
+            optionId: picker.optionId,
+          });
+          return;
+        }
+        applyNextPendingPicker(
+          selectedVariationId,
+          selectedByGroup,
+          { ...selectedNestedVariationByOption, [key]: v.id },
+          productRecPickerContext()
+        );
       },
       onIncrease: undefined,
       onDecrease: undefined,
-    }));
+      }));
+    }
+    return [];
   }, [
-    attributeGroups,
+    baseProductVariationContext,
+    categoryGroups,
     picker,
+    preselectedRecommendationVariationByGroup,
     productImageUrl,
+    productRecommendationGroups,
     selectedByGroup,
     selectedNestedVariationByOption,
     selectedVariationId,
@@ -678,6 +1508,7 @@ export function ProductCustomizeDialog({
               ) : null}
             </SheetHeader>
 
+            <div className="relative flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-4">
               <h3 className="mb-4 text-lg font-semibold tracking-tight text-primary md:text-xl">
                 Personalize your product
@@ -701,8 +1532,8 @@ export function ProductCustomizeDialog({
                     >
                       <span className="truncate text-muted-foreground">
                         {selectedVariationId
-                          ? (variations.find((v) => v.id === selectedVariationId)
-                              ?.name ?? 'Select…')
+                          ? variations.find((v) => v.id === selectedVariationId)
+                              ?.name ?? 'Select…'
                           : 'Select…'}
                       </span>
                       <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -710,37 +1541,111 @@ export function ProductCustomizeDialog({
                   </section>
                 ) : null}
 
-          {attributeGroups.length === 0 ? (
+                {visibleProductRecommendationGroups.map((g) => {
+                  const item = g.items[0];
+                  if (!item) return null;
+                  const configured = Boolean(nestedConfigs[g.id]);
+                  const needsSheet = recommendedProductNeedsSheet(g);
+                  const missing = needsSheet && !configured && g.required;
+                  const manualProductVariation = optionNeedsManualVariationPicker(
+                    item,
+                    g
+                  );
+                  const selectedVariationIdForGroup = manualProductVariation
+                    ? preselectedRecommendationVariationByGroup[g.id]
+                    : resolveCategoryItemVariationId(
+                        item,
+                        baseProductVariationContext.parent,
+                        g
+                      ) ?? preselectedRecommendationVariationByGroup[g.id];
+                  const productRecSummary = buildProductRecSelectionSummary(
+                    g,
+                    nestedConfigs[g.id],
+                    selectedVariationIdForGroup,
+                    baseProductVariationContext.parent
+                  );
+                  return (
+                    <section
+                      key={g.id}
+                      className="rounded-xl border border-border bg-card p-4 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <Label className="text-sm font-semibold text-foreground">
+                          {item.name}
+                        </Label>
+                        {g.required ? (
+                          <span className="shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
+                            Required
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Optional
+                          </span>
+                        )}
+                      </div>
+                      {missing ? (
+                        <p className="mt-2 text-xs text-destructive">
+                          Please configure this recommendation
+                        </p>
+                      ) : null}
+                      {needsSheet ? (
+                        <button
+                          type="button"
+                          className="mt-3 flex w-full min-h-12 items-center justify-between gap-2 rounded-lg border border-input bg-muted/40 px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted/60"
+                          onClick={() => openRecommendationGroup(g.id)}
+                        >
+                          <ConfigurationSelectSummary
+                            lines={productRecSummary}
+                            placeholder={`Select ${item.name}`}
+                          />
+                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </button>
+                      ) : null}
+                    </section>
+                  );
+                })}
+
+                {visibleCategoryGroups.length === 0 &&
+                visibleProductRecommendationGroups.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No add-ons available.
                   </p>
-          ) : (
-            attributeGroups.map((g) => {
-              const selectedIds = selectedByGroup[g.id] ?? [];
-                    const count = groupSelectionCount(selectedIds);
-                    const min = g.minItems ?? (g.required ? 1 : 0);
+                ) : (
+                  visibleCategoryGroups.map((g) => {
+                    const selectedIds = selectedByGroup[g.id] ?? [];
+                    const limits = limitsForGroup(g);
+                    const count = totalSelectedUnits(selectedIds);
+                    const min = limits.minItems ?? (g.required ? 1 : 0);
                     const missing =
                       g.selectionType === 'SINGLE'
                         ? g.required && count === 0
                         : (g.required && count < min) ||
                           (count > 0 && min > 0 && count < min);
 
-              return (
-                <section
-                  key={g.id}
+                    return (
+                      <section
+                        key={g.id}
+                        ref={(el) => {
+                          groupRefs.current[g.id] = el;
+                        }}
                         className="rounded-xl border border-border bg-card p-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
+                      >
+                        <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <Label className="text-sm font-semibold leading-snug text-foreground">
-                              {g.name}
-                      </Label>
-                      {g.linkedCategoryName ? (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          From {g.linkedCategoryName}
-                        </p>
-                      ) : null}
-                    </div>
+                              {configurationGroupDisplayTitle(
+                                g.name,
+                                baseProductVariationContext.parent,
+                                g.useVariationPricing ?? false,
+                                baseProductVariationContext.shortLabel
+                              )}
+                            </Label>
+                            {g.linkedCategoryName ? (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                From {g.linkedCategoryName}
+                              </p>
+                            ) : null}
+                          </div>
                           {g.required ? (
                             <span className="shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
                               Required
@@ -749,22 +1654,20 @@ export function ProductCustomizeDialog({
                             <p className="shrink-0 text-xs text-muted-foreground">
                               {g.selectionType === 'SINGLE'
                                 ? 'Optional'
-                                : multiSelectionHint(g.minItems, g.maxItems)}
-                      </p>
-                    )}
-                  </div>
-                        {g.selectionType === 'MULTIPLE' &&
-                        (g.minItems != null || g.maxItems != null) ? (
+                                : multiSelectionHint(
+                                    limits.minItems,
+                                    limits.maxItems
+                                  )}
+                            </p>
+                          )}
+                        </div>
+                        {g.selectionType === 'MULTIPLE' ? (
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Selected {count}
-                            {g.maxItems != null ? ` / ${g.maxItems}` : ''}
-                            {g.minItems != null && g.maxItems != null
-                              ? ` · need ${g.minItems}–${g.maxItems}`
-                              : g.minItems != null
-                                ? ` · need at least ${g.minItems}`
-                                : g.maxItems != null
-                                  ? ` · up to ${g.maxItems}`
-                                  : ''}
+                            Selected {count} / {limits.maxItems}
+                            {g.multipleMode === 'QUANTITY' &&
+                            (g.freeQuantity ?? 0) > 0
+                              ? ` · first ${g.freeQuantity} free`
+                              : ''}
                           </p>
                         ) : null}
                         {missing ? (
@@ -775,150 +1678,197 @@ export function ProductCustomizeDialog({
                           </p>
                         ) : null}
 
-                  <div className="mt-3 space-y-3">
-                    {g.items.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        No options available in this category yet.
-                      </p>
-                    ) : g.selectionType === 'SINGLE' ? (
-                            <>
+                        <div className="mt-3">
+                          {(() => {
+                            const visible = visibleConfigurationItems(
+                              g,
+                              baseProductVariationContext.parent
+                            );
+                            if (visible.length === 0) {
+                              return (
+                                <p className="text-sm text-muted-foreground">
+                                  {g.useVariationPricing &&
+                                  variations.length > 0 &&
+                                  !selectedVariationId
+                                    ? 'Select a product variation to see add-ons for this size.'
+                                    : g.useVariationPricing
+                                      ? 'No add-ons available for this variation.'
+                                      : 'No options available in this category yet.'}
+                                </p>
+                              );
+                            }
+                            const categorySummary =
+                              buildCategoryGroupSelectionSummary(
+                                g,
+                                selectedIds,
+                                selectedNestedVariationByOption,
+                                nestedOptionConfigs,
+                                baseProductVariationContext.parent,
+                                baseProductVariationContext.shortLabel
+                              );
+                            return (
                               <button
                                 type="button"
-                                className="flex h-12 w-full items-center justify-between rounded-lg border border-input bg-muted/40 px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/60"
-                                onClick={() => openGroupSelection(g)}
+                                className="flex w-full min-h-12 items-center justify-between gap-2 rounded-lg border border-input bg-muted/40 px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted/60"
+                                onClick={() => openCategoryGroupSelect(g)}
                               >
-                                <span className="truncate text-muted-foreground">
-                                  {selectedIds[0]
-                                    ? (g.items.find(
-                                        (it) =>
-                                          it.menuItemId === selectedIds[0]
-                                      )?.name ?? 'Select…')
-                                    : 'Select…'}
-                                </span>
+                                <ConfigurationSelectSummary
+                                  lines={categorySummary}
+                                  placeholder="Select…"
+                                />
                                 <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
                               </button>
-                              {(() => {
-                                const selectedOption = g.items.find(
-                                  (it) => it.menuItemId === selectedIds[0]
-                                );
-                                if (
-                                  !selectedOption ||
-                                  !selectedOption.variations ||
-                                  selectedOption.variations.length === 0
-                                ) {
-                                  return null;
-                                }
-                                const key = `${g.id}:${selectedOption.menuItemId}`;
-                                return (
-                                  <button
-                                    type="button"
-                                    className="flex h-12 w-full items-center justify-between rounded-lg border border-input bg-muted/40 px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/60"
-                                    onClick={() =>
-                                      setPicker({
-                                        kind: 'nested',
-                                        groupId: g.id,
-                                        optionId: selectedOption.menuItemId,
-                                      })
-                                    }
-                                  >
-                                    <span className="truncate text-muted-foreground">
-                                      {selectedNestedVariationByOption[key]
-                                        ? (selectedOption.variations.find(
-                                            (v) =>
-                                              v.id ===
-                                              selectedNestedVariationByOption[
-                                                key
-                                              ]
-                                          )?.name ??
-                                          selectedOption.variations.find(
-                                            (v) =>
-                                              v.id ===
-                                              selectedNestedVariationByOption[
-                                                key
-                                              ]
-                                          )?.title ??
-                                          `Select ${selectedOption.name}…`)
-                                        : `Select ${selectedOption.name}…`}
-                                    </span>
-                                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                  </button>
-                                );
-                              })()}
-                            </>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                            <button
-                              type="button"
-                                className="flex h-12 w-full items-center justify-between rounded-lg border border-input bg-muted/40 px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/60"
-                                onClick={() => openGroupSelection(g)}
-                              >
-                                <span className="truncate text-muted-foreground">
-                                  {selectedIds.length > 0
-                                    ? `${selectedIds.length} selected`
-                                    : 'Select…'}
-                              </span>
-                                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            </button>
-                              {g.items.map((it) => {
-                                const checked = selectedIds.includes(
-                                  it.menuItemId
-                                );
-                                if (
-                                  !checked ||
-                                  !it.variations ||
-                                  it.variations.length === 0
-                                ) {
-                                  return null;
-                                }
-                                const key = `${g.id}:${it.menuItemId}`;
-                                return (
-                                  <div
-                                    key={`${it.menuItemId}-nested-variation`}
-                                    className="ml-1 rounded-lg border border-border bg-muted/30 p-3"
-                                  >
-                                    <p className="mb-2 text-xs font-medium text-muted-foreground">
-                                      {it.name} variation
-                                    </p>
-                                    <select
-                                      value={
-                                        selectedNestedVariationByOption[key] ??
-                                        ''
-                                      }
-                                      onChange={(e) =>
-                                        setSelectedNestedVariationByOption(
-                                          (prev) => ({
-                                            ...prev,
-                                            [key]: e.target.value,
-                                          })
-                                        )
-                                      }
-                                      className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                    >
-                                      <option value="">
-                                        Select nested variation…
-                                      </option>
-                                      {it.variations.map((v) => (
-                                        <option key={v.id} value={v.id}>
-                                          {(v.name ?? v.title ?? 'Variation') +
-                                            ` (€${v.priceDelta.toFixed(2)})`}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </section>
-              );
-            })
-          )}
-        </div>
+                            );
+                          })()}
+                        </div>
+                      </section>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
-            {/* Sticky footer: qty + Add (reference: Add left, price right on orange bar) */}
-            <footer className="shrink-0 border-t border-border bg-card px-4 py-4 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.12)]">
+            {picker ? (
+              <aside
+                className="absolute inset-0 flex min-h-0 flex-col justify-end bg-black/40 animate-in fade-in-0 duration-200"
+                aria-modal="true"
+                role="dialog"
+                aria-labelledby="product-customize-picker-title"
+              >
+                <div className="flex max-h-[min(50dvh,26rem)] w-full shrink-0 flex-col overflow-hidden rounded-t-2xl border-t border-border bg-card shadow-2xl animate-in slide-in-from-bottom-6 duration-300 ease-out">
+                  <div className="shrink-0 p-4 pb-0">
+                    <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted" />
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <h3
+                          id="product-customize-picker-title"
+                          className="text-base font-semibold text-foreground"
+                        >
+                          {pickerTitle}
+                        </h3>
+                        {pickerSubtitle ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {pickerSubtitle}
+                          </p>
+                        ) : null}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0"
+                        onClick={() => setPicker(null)}
+                        aria-label="Close picker"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-2">
+                    {pickerEntries.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left ${
+                          entry.selected
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background'
+                        }`}
+                        onClick={entry.onChoose}
+                      >
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
+                          {entry.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- menu images are external/base64
+                            <img
+                              src={entry.imageUrl}
+                              alt={entry.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {entry.name}
+                          </p>
+                          {entry.priceLabel ? (
+                            <p className="text-xs text-muted-foreground">
+                              {entry.priceLabel}
+                            </p>
+                          ) : null}
+                        </div>
+                        {picker.kind === 'group-multi' ? (
+                          <div
+                            className="ml-auto flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={!entry.quantity}
+                              onClick={entry.onDecrease}
+                            >
+                              -
+                            </Button>
+                            <span className="min-w-[2ch] text-center text-xs font-semibold">
+                              {entry.quantity ?? 0}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={entry.onIncrease}
+                            >
+                              +
+                            </Button>
+                          </div>
+                        ) : entry.selected ? (
+                          <Check className="h-4 w-4 text-primary" />
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                  {picker.kind === 'group-multi' ? (
+                    <div className="shrink-0 border-t border-border bg-card p-4 pt-3">
+                      <Button
+                        type="button"
+                        className="h-11 w-full rounded-xl font-semibold"
+                        onClick={() => {
+                          const nextPicker = getNextPendingPicker(
+                            selectedVariationId,
+                            selectedByGroup,
+                            selectedNestedVariationByOption,
+                            productRecPickerContext()
+                          );
+                          if (
+                            nextPicker &&
+                            nextPicker.kind === 'group-multi' &&
+                            nextPicker.groupId === picker.groupId
+                          ) {
+                            setPicker(null);
+                            return;
+                          }
+                          applyNextPendingPicker(
+                            selectedVariationId,
+                            selectedByGroup,
+                            selectedNestedVariationByOption,
+                            productRecPickerContext()
+                          );
+                        }}
+                      >
+                        Select
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              </aside>
+            ) : null}
+            </div>
+
+            {/* Sticky footer: qty + Add — stays above picker overlay */}
+            <footer className="relative z-[90] shrink-0 border-t border-border bg-card px-4 py-4 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.12)]">
               <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
                 <div className="flex items-center gap-0.5 rounded-lg border border-primary/30 bg-primary/5 p-0.5">
                   <Button
@@ -957,128 +1907,112 @@ export function ProductCustomizeDialog({
               </div>
             </footer>
 
-            {picker ? (
-              <aside
-                className="absolute inset-0 z-[80] flex min-h-0 flex-col justify-end bg-black/40 animate-in fade-in-0 duration-200"
-                aria-modal="true"
-                role="dialog"
-                aria-labelledby="product-customize-picker-title"
-              >
-                <div className="w-full max-h-[min(55dvh,28rem)] shrink-0 overflow-hidden rounded-t-2xl border-t border-border bg-card p-4 shadow-2xl animate-in slide-in-from-bottom-6 duration-300 ease-out">
-                  <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted" />
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <h3
-                        id="product-customize-picker-title"
-                        className="text-base font-semibold text-foreground"
-                      >
-                        {pickerTitle}
-                      </h3>
-                      {pickerSubtitle ? (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {pickerSubtitle}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {picker?.kind === 'group-multi' ? (
-                        <Button
-                          type="button"
-                          onClick={() => {
-                            const nextPicker = getNextPendingPicker(
-                              selectedVariationId,
-                              selectedByGroup,
-                              selectedNestedVariationByOption
-                            );
-                            if (
-                              nextPicker &&
-                              nextPicker.kind === 'group-multi' &&
-                              nextPicker.groupId === picker.groupId
-                            ) {
-                              setPicker(null);
-                              return;
-                            }
-                            setPicker(nextPicker);
-                          }}
-                        >
-                          Done
-                        </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setPicker(null)}
-                      >
-                        Close
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="max-h-[45vh] space-y-2 overflow-y-auto pb-2">
-                    {pickerEntries.map((entry) => (
-                      <button
-                        key={entry.id}
-                        type="button"
-                        className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left ${
-                          entry.selected
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border bg-background'
-                        }`}
-                        onClick={entry.onChoose}
-                      >
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
-                          {entry.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element -- menu images are external/base64
-                            <img
-                              src={entry.imageUrl}
-                              alt={entry.name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {entry.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            +€{entry.price.toFixed(2)}
-                          </p>
-                        </div>
-                        {picker?.kind === 'group-multi' ? (
-                          <div
-                            className="ml-auto flex items-center gap-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={!entry.quantity}
-                              onClick={entry.onDecrease}
-                            >
-                              -
-          </Button>
-                            <span className="min-w-[2ch] text-center text-xs font-semibold">
-                              {entry.quantity ?? 0}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={entry.onIncrease}
-                            >
-                              +
-          </Button>
-                          </div>
-                        ) : entry.selected ? (
-                          <Check className="h-4 w-4 text-primary" />
-                        ) : null}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </aside>
+            {activeCategoryOptionTarget ? (
+              <NestedRecommendationSheet
+                open
+                stackClassName="z-[92]"
+                parentGroupName={activeCategoryOptionTarget.group.name}
+                parentConfigurationGroup={activeCategoryOptionTarget.group}
+                baseProductVariation={baseProductVariationContext.parent}
+                baseProductVariationShortLabel={
+                  baseProductVariationContext.shortLabel
+                }
+                product={activeCategoryOptionTarget.item}
+                attributeGroups={
+                  activeCategoryOptionTarget.item.nestedAttributeGroups ?? []
+                }
+                initialProductVariationId={
+                  nestedOptionConfigs[activeCategoryOptionTarget.key]
+                    ?.productVariationId ??
+                  selectedNestedVariationByOption[
+                    activeCategoryOptionTarget.key
+                  ]
+                }
+                onClose={() => setActiveCategoryOption(null)}
+                onDone={(result) => {
+                  const { key } = activeCategoryOptionTarget;
+                  const nextNestedVariations = {
+                    ...selectedNestedVariationByOption,
+                    ...(result.productVariationId
+                      ? { [key]: result.productVariationId }
+                      : {}),
+                  };
+                  setActiveCategoryOption(null);
+                  if (result.productVariationId) {
+                    setSelectedNestedVariationByOption((prev) => ({
+                      ...prev,
+                      [key]: result.productVariationId,
+                    }));
+                  }
+                  setNestedOptionConfigs((prev) => {
+                    const nextOptionConfigs = { ...prev, [key]: result };
+                    queueMicrotask(() => {
+                      applyNextPendingPicker(
+                        selectedVariationId,
+                        selectedByGroup,
+                        nextNestedVariations,
+                        {
+                          nestedConfigs,
+                          preselectedByGroup:
+                            preselectedRecommendationVariationByGroup,
+                          optionNestedConfigs: nextOptionConfigs,
+                        }
+                      );
+                    });
+                    return nextOptionConfigs;
+                  });
+                }}
+              />
+            ) : null}
+
+            {activeProductGroup && activeProductItem ? (
+              <NestedRecommendationSheet
+                open={activeProductGroupId === activeProductGroup.id}
+                parentGroupName={activeProductGroup.name}
+                parentConfigurationGroup={activeProductGroup}
+                baseProductVariation={baseProductVariationContext.parent}
+                baseProductVariationShortLabel={
+                  baseProductVariationContext.shortLabel
+                }
+                product={activeProductItem}
+                attributeGroups={activeProductItem.nestedAttributeGroups ?? []}
+                initialProductVariationId={
+                  preselectedRecommendationVariationByGroup[
+                    activeProductGroup.id
+                  ]
+                }
+                onClose={() => setActiveProductGroupId(null)}
+                onDone={(result) => {
+                  const groupId = activeProductGroup.id;
+                  const nextPreselected = result.productVariationId
+                    ? {
+                        ...preselectedRecommendationVariationByGroup,
+                        [groupId]: result.productVariationId,
+                      }
+                    : preselectedRecommendationVariationByGroup;
+                  if (result.productVariationId) {
+                    setPreselectedRecommendationVariationByGroup(
+                      nextPreselected
+                    );
+                  }
+                  setNestedConfigs((prev) => {
+                    const nextNested = { ...prev, [groupId]: result };
+                    queueMicrotask(() => {
+                      applyNextPendingPicker(
+                        selectedVariationId,
+                        selectedByGroup,
+                        selectedNestedVariationByOption,
+                        {
+                          nestedConfigs: nextNested,
+                          preselectedByGroup: nextPreselected,
+                        }
+                      );
+                    });
+                    return nextNested;
+                  });
+                  setActiveProductGroupId(null);
+                }}
+              />
             ) : null}
           </div>
         </div>

@@ -1,50 +1,17 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { RECOMMENDATION_SOURCE_CATEGORY_WHERE } from "@/lib/menu/category-visibility";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
-import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from "@/lib/subscription-plan-enforcement";
+import {
+  getRestaurantPlanFeatures,
+  subscriptionPlanDeniedResponse,
+} from "@/lib/subscription-plan-enforcement";
+import { attributeGroupInclude } from "@/lib/menu/attribute-group-include";
+import { recommendationGroupBodySchema } from "@/lib/validation/recommendation-group";
 
-const createSchema = z
-  .object({
-    name: z.string().min(1).max(120),
-    selectionType: z.enum(["SINGLE", "MULTIPLE"]),
-    required: z.boolean().optional(),
-    linkedCategoryId: z.string().uuid(),
-    sortOrder: z.number().int().min(0).optional(),
-    minItems: z.number().int().min(0).nullable().optional(),
-    maxItems: z.number().int().min(1).nullable().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.selectionType === "MULTIPLE") {
-      if (data.minItems == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "minItems is required for multiple selection",
-          path: ["minItems"],
-        });
-      }
-      if (data.maxItems == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "maxItems is required for multiple selection",
-          path: ["maxItems"],
-        });
-      }
-      if (
-        data.minItems != null &&
-        data.maxItems != null &&
-        data.maxItems < data.minItems
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "maxItems must be greater than or equal to minItems",
-          path: ["maxItems"],
-        });
-      }
-    }
-  });
+const groupInclude = attributeGroupInclude;
 
 export async function POST(
   req: NextRequest,
@@ -60,13 +27,14 @@ export async function POST(
 
   const planFeatures = await getRestaurantPlanFeatures(auth.restaurant.id);
   if (!planFeatures.recommendations) {
-    return subscriptionPlanDeniedResponse("Recommendation groups (add-on categories)");
+    return subscriptionPlanDeniedResponse("Recommendation groups");
   }
 
   const { itemId } = await ctx.params;
 
   const item = await db.menuItem.findFirst({
     where: { id: itemId, restaurantId: auth.restaurant.id },
+    include: { variations: { select: { id: true } } },
   });
   if (!item) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
@@ -79,62 +47,179 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = createSchema.safeParse(json);
+  const parsed = recommendationGroupBodySchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const linked = await db.menuCategory.findFirst({
-    where: { id: parsed.data.linkedCategoryId, restaurantId: auth.restaurant.id },
-  });
-  if (!linked) {
-    return NextResponse.json({ error: "Linked category must belong to your restaurant" }, { status: 400 });
-  }
+  const data = parsed.data;
+  const isMultiple = data.selectionType === "MULTIPLE";
 
-  if (linked.id === item.categoryId) {
-    return NextResponse.json(
-      { error: "Choose a different category than the product's own category for add-ons." },
-      { status: 400 }
-    );
-  }
-
-  const duplicate = await db.menuItemAttributeGroup.findFirst({
-    where: {
-      menuItemId: itemId,
-      linkedCategoryId: parsed.data.linkedCategoryId,
-    },
-    select: { id: true },
-  });
-  if (duplicate) {
-    return NextResponse.json(
-      {
-        error:
-          "This category is already assigned as a recommendation for this product.",
+  if (data.sourceType === "CATEGORY") {
+    const linked = await db.menuCategory.findFirst({
+      where: {
+        id: data.linkedCategoryId!,
+        restaurantId: auth.restaurant.id,
+        ...RECOMMENDATION_SOURCE_CATEGORY_WHERE,
       },
-      { status: 400 }
-    );
+    });
+    if (!linked) {
+      return NextResponse.json(
+        {
+          error:
+            "Linked category must belong to your restaurant and contain at least one product.",
+        },
+        { status: 400 }
+      );
+    }
+    if (linked.id === item.categoryId) {
+      return NextResponse.json(
+        {
+          error:
+            "Choose a different category than the product's own category for add-ons.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const duplicate = await db.menuItemAttributeGroup.findFirst({
+      where: {
+        menuItemId: itemId,
+        linkedCategoryId: data.linkedCategoryId!,
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      return NextResponse.json(
+        { error: "This category is already assigned as a recommendation." },
+        { status: 400 }
+      );
+    }
+
+    const defaultItem = await db.menuItem.findFirst({
+      where: {
+        id: data.defaultLinkedMenuItemId!,
+        categoryId: data.linkedCategoryId!,
+        restaurantId: auth.restaurant.id,
+      },
+      select: { id: true },
+    });
+    if (!defaultItem) {
+      return NextResponse.json(
+        {
+          error:
+            "Default item must be a product in the selected recommendation category.",
+        },
+        { status: 400 }
+      );
+    }
+  } else {
+    const linkedProduct = await db.menuItem.findFirst({
+      where: {
+        id: data.linkedProductId!,
+        restaurantId: auth.restaurant.id,
+      },
+    });
+    if (!linkedProduct) {
+      return NextResponse.json({ error: "Linked product not found" }, { status: 400 });
+    }
+    if (linkedProduct.id === itemId) {
+      return NextResponse.json(
+        { error: "Cannot recommend the same product as itself." },
+        { status: 400 }
+      );
+    }
+
+    const duplicate = await db.menuItemAttributeGroup.findFirst({
+      where: {
+        menuItemId: itemId,
+        linkedProductId: data.linkedProductId!,
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      return NextResponse.json(
+        { error: "This product is already assigned as a recommendation." },
+        { status: 400 }
+      );
+    }
+
+    const categoryCount = await db.menuCategory.count({
+      where: {
+        id: { in: data.productCategoryIds ?? [] },
+        restaurantId: auth.restaurant.id,
+        items: { some: {} },
+      },
+    });
+    if (categoryCount !== (data.productCategoryIds?.length ?? 0)) {
+      return NextResponse.json(
+        { error: "Each selected category must exist and have products." },
+        { status: 400 }
+      );
+    }
   }
 
-  const isMultiple = parsed.data.selectionType === "MULTIPLE";
+  if (data.variationLimits?.length) {
+    const variationIds = new Set(item.variations.map((v) => v.id));
+    for (const row of data.variationLimits) {
+      if (!variationIds.has(row.variationId)) {
+        return NextResponse.json(
+          { error: "Variation limits must belong to this product." },
+          { status: 400 }
+        );
+      }
+    }
+  }
 
   const group = await db.menuItemAttributeGroup.create({
     data: {
       menuItemId: itemId,
-      name: parsed.data.name.trim(),
-      selectionType: parsed.data.selectionType,
-      required: parsed.data.required ?? false,
-      linkedCategoryId: parsed.data.linkedCategoryId,
-      sortOrder: parsed.data.sortOrder ?? 0,
+      name: data.name.trim(),
+      sourceType: data.sourceType,
+      selectionType: data.selectionType,
+      required: data.required ?? false,
+      useVariationPricing: data.useVariationPricing ?? false,
+      sortOrder: data.sortOrder ?? 0,
+      ...(data.sourceType === "CATEGORY"
+        ? {
+            linkedCategoryId: data.linkedCategoryId!,
+            defaultLinkedMenuItemId: data.defaultLinkedMenuItemId!,
+            productCategoryIds: [],
+            linkedProductId: null,
+          }
+        : {
+            linkedProductId: data.linkedProductId!,
+            productCategoryIds: data.productCategoryIds ?? [],
+            linkedCategoryId: null,
+            defaultLinkedMenuItemId: null,
+          }),
       ...(isMultiple
         ? {
-            minItems: parsed.data.minItems!,
-            maxItems: parsed.data.maxItems!,
+            multipleMode: data.multipleMode!,
+            freeQuantity:
+              data.multipleMode === "QUANTITY"
+                ? (data.freeQuantity ?? 0)
+                : null,
+            minItems: data.variationLimits?.length ? null : data.minItems!,
+            maxItems: data.variationLimits?.length ? null : data.maxItems!,
+            variationLimits: data.variationLimits?.length
+              ? {
+                  create: data.variationLimits.map((row) => ({
+                    variationId: row.variationId,
+                    minItems: row.minItems,
+                    maxItems: row.maxItems,
+                  })),
+                }
+              : undefined,
           }
-        : {}),
+        : {
+            minItems: 1,
+            maxItems: 1,
+            multipleMode: null,
+            freeQuantity: null,
+          }),
     },
-    include: {
-      linkedCategory: { select: { id: true, name: true } },
-    },
+    include: groupInclude,
   });
 
   return NextResponse.json({ data: group }, { status: 201 });

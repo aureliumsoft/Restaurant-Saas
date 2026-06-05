@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { attributeGroupInclude } from "@/lib/menu/attribute-group-include";
+import { RECOMMENDATION_SOURCE_CATEGORY_WHERE } from "@/lib/menu/category-visibility";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from "@/lib/subscription-plan-enforcement";
 
@@ -12,6 +14,7 @@ const patchSchema = z
     selectionType: z.enum(["SINGLE", "MULTIPLE"]).optional(),
     required: z.boolean().optional(),
     linkedCategoryId: z.string().uuid().optional(),
+    defaultLinkedMenuItemId: z.string().uuid().nullable().optional(),
     sortOrder: z.number().int().min(0).optional(),
     minItems: z.number().int().min(0).nullable().optional(),
     maxItems: z.number().int().min(1).nullable().optional(),
@@ -87,14 +90,58 @@ export async function PATCH(
 
   if (parsed.data.linkedCategoryId) {
     const linked = await db.menuCategory.findFirst({
-      where: { id: parsed.data.linkedCategoryId, restaurantId: auth.restaurant.id },
+      where: {
+        id: parsed.data.linkedCategoryId,
+        restaurantId: auth.restaurant.id,
+        ...RECOMMENDATION_SOURCE_CATEGORY_WHERE,
+      },
     });
     if (!linked) {
-      return NextResponse.json({ error: "Invalid linked category" }, { status: 400 });
+      return NextResponse.json(
+        {
+          error:
+            "Linked category must belong to your restaurant and contain at least one product.",
+        },
+        { status: 400 }
+      );
     }
     if (linked.id === group.menuItem.categoryId) {
       return NextResponse.json(
         { error: "Add-on category must differ from the product category." },
+        { status: 400 }
+      );
+    }
+  }
+
+  const categoryIdForDefault =
+    parsed.data.linkedCategoryId ?? group.linkedCategoryId;
+  if (parsed.data.defaultLinkedMenuItemId !== undefined) {
+    if (parsed.data.defaultLinkedMenuItemId === null) {
+      return NextResponse.json(
+        { error: "Category recommendations require a default item." },
+        { status: 400 }
+      );
+    }
+    if (!categoryIdForDefault) {
+      return NextResponse.json(
+        { error: "Link a category before setting a default item." },
+        { status: 400 }
+      );
+    }
+    const defaultItem = await db.menuItem.findFirst({
+      where: {
+        id: parsed.data.defaultLinkedMenuItemId,
+        categoryId: categoryIdForDefault,
+        restaurantId: auth.restaurant.id,
+      },
+      select: { id: true },
+    });
+    if (!defaultItem) {
+      return NextResponse.json(
+        {
+          error:
+            "Default item must be a product in the linked recommendation category.",
+        },
         { status: 400 }
       );
     }
@@ -117,12 +164,15 @@ export async function PATCH(
       ...(parsed.data.linkedCategoryId !== undefined
         ? { linkedCategoryId: parsed.data.linkedCategoryId }
         : {}),
+      ...(parsed.data.defaultLinkedMenuItemId !== undefined
+        ? { defaultLinkedMenuItemId: parsed.data.defaultLinkedMenuItemId }
+        : {}),
       ...(parsed.data.sortOrder !== undefined ? { sortOrder: parsed.data.sortOrder } : {}),
       ...(parsed.data.minItems !== undefined ? { minItems: parsed.data.minItems } : {}),
       ...(parsed.data.maxItems !== undefined ? { maxItems: parsed.data.maxItems } : {}),
       ...(clearMinMax ? { minItems: null, maxItems: null } : {}),
     },
-    include: { linkedCategory: { select: { id: true, name: true } } },
+    include: attributeGroupInclude,
   });
 
   return NextResponse.json({ data: updated }, { status: 200 });

@@ -10,10 +10,11 @@ export const DASHBOARD_MODULES = [
     path: '/order-display',
   },
   { moduleKey: 'branched', title: 'Branched', path: '/branched' },
+  { moduleKey: 'tables', title: 'Tables', path: '/tables' },
   { moduleKey: 'categories', title: 'Categories', path: '/categories' },
   { moduleKey: 'product', title: 'Products', path: '/product' },
-  { moduleKey: 'tables', title: 'Tables', path: '/tables' },
-  { moduleKey: 'recommendations', title: 'Recommendations', path: '/recommendations' },
+  { moduleKey: 'variations', title: 'Variations', path: '/variations' },
+  { moduleKey: 'recommendations', title: 'Product Configurations', path: '/configurations' },
   { moduleKey: 'records', title: 'Records', path: '/records' },
   { moduleKey: 'settings', title: 'Settings', path: '/settings' },
 ] as const;

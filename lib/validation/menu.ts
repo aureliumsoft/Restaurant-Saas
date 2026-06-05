@@ -73,9 +73,11 @@ export const menuItemCreateSchema = z
 export const menuCategoryCreateSchema = z.object({
   name: zRequiredText(120, 'Category name'),
   sortOrder: z.number().int().min(0).optional(),
+  showInFront: z.boolean().optional(),
 });
 
 export const menuCategoryPatchSchema = z.object({
   name: zRequiredText(120, 'Category name').optional(),
   sortOrder: z.number().int().min(0).optional(),
+  showInFront: z.boolean().optional(),
 });

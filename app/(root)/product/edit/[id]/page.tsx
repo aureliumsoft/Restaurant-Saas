@@ -21,6 +21,7 @@ import {
   buildProductPayload,
   isProductEditFormDirty,
   productFormStateFromItem,
+  useRestaurantVariationTemplates,
   variationRowsFromItem,
   type ProductFormState,
   type VariationFormRow,
@@ -72,6 +73,7 @@ export default function ProductEditPage() {
     salePrice: '',
   });
   const [variationRows, setVariationRows] = useState<VariationFormRow[]>([]);
+  const variationTemplates = useRestaurantVariationTemplates();
   const initialRef = useRef<{
     form: ProductFormState;
     variationRows: VariationFormRow[];
@@ -162,7 +164,8 @@ export default function ProductEditPage() {
     if (!productId) return;
     const payload = buildProductPayload(
       { ...form, categoryId: resolvedCategoryId },
-      variationRows
+      variationRows,
+      variationTemplates
     );
     if (!payload.ok) {
       toast.error(payload.error);

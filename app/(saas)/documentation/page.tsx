@@ -168,11 +168,13 @@ function moduleBlurb(key: (typeof DASHBOARD_MODULES)[number]['moduleKey']): stri
     case 'categories':
       return 'Organize the menu into categories; order and visibility feed the website, kiosk, and POS.';
     case 'product':
-      return 'Create and edit menu items, prices, images, variations, and modifier groups.';
+      return 'Create and edit menu items, prices, images, and assign variation rates per product.';
+    case 'variations':
+      return 'Define size templates (Small, Medium, Large) with short labels used on products and configuration add-ons.';
     case 'tables':
       return 'Define dining tables or service labels used for dine-in flows (e.g. kiosk table selection).';
     case 'recommendations':
-      return 'Link add-on categories to products (sauces, sides, drinks) when your plan includes recommendations.';
+      return 'Link add-on categories to products (configuration / upsell) when your plan includes this feature.';
     case 'records':
       return 'Historical records and transaction-oriented views for reconciliation and lookup.';
     case 'settings':

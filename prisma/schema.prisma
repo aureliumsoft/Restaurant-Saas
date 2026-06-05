@@ -28,6 +28,20 @@ enum AttributeSelectionType {
   MULTIPLE
 }
 
+/// Category (pick from menu) or a single linked product.
+enum RecommendationSourceType {
+  CATEGORY
+  PRODUCT
+}
+
+/// How MULTIPLE selection behaves for guests.
+enum RecommendationMultipleMode {
+  /// Each option at most once (checkboxes).
+  CHECKBOX
+  /// Same option can be chosen multiple times (+ / −).
+  QUANTITY
+}
+
 enum SubscriptionPlan {
   STARTER
   GROWTH
@@ -143,6 +157,7 @@ model Restaurant {
   saleTransactions     Transaction[]
   kitchenTickets       KitchenTicket[]
   diningTables         DiningTable[]
+  variationDefinitions RestaurantVariation[]
 }
 
 /// Seating labels for POS table service (managed per restaurant).
@@ -281,9 +296,12 @@ model EmployeeInvite {
 }
 
 model MenuCategory {
-  id           String @id @default(uuid())
+  id           String  @id @default(uuid())
   name         String
   restaurantId String
+  /// When true, category and its products appear on web, kiosk, and POS browse menus.
+  /// When false, products are only available via recommendation / add-on rules.
+  showInFront  Boolean @default(true)
 
   items                   MenuItem[]
   restaurant              Restaurant               @relation(fields: [restaurantId], references: [id])
@@ -313,9 +331,30 @@ model MenuItem {
 
   offersFromThis MenuItemOffer[] @relation("BaseItemOffers")
   offeredAs      MenuItemOffer[] @relation("OfferedItems")
+  linkedInRecommendationGroups MenuItemAttributeGroup[] @relation("RecommendationLinkedProduct")
+  defaultInRecommendationGroups MenuItemAttributeGroup[] @relation("RecommendationCategoryDefault")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Restaurant-wide variation template (Small, Medium, Large, XL) linked to product rates.
+model RestaurantVariation {
+  id           String @id @default(uuid())
+  restaurantId String
+  name         String
+  /// Short label for configuration UI headers (e.g. M, L, XL).
+  shortLabel   String?
+  sortOrder    Int    @default(0)
+
+  restaurant Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuRates  MenuItemVariation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId, sortOrder])
 }
 
 model MenuItemVariation {
@@ -327,14 +366,19 @@ model MenuItemVariation {
   imageKey   String?
   swatchHex  String?
   sortOrder  Int     @default(0)
+  /// Absolute unit price for this variation on this product.
   priceDelta Float   @default(0)
+  restaurantVariationId String?
 
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItem              MenuItem              @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  restaurantVariation   RestaurantVariation?  @relation(fields: [restaurantVariationId], references: [id], onDelete: SetNull)
+  configurationVariationLimits MenuItemAttributeGroupVariationLimit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([menuItemId, sortOrder])
+  @@index([restaurantVariationId])
 }
 
 model MenuItemOffer {
@@ -359,20 +403,55 @@ model MenuItemAttributeGroup {
   sortOrder        Int                    @default(0)
   selectionType    AttributeSelectionType @default(SINGLE)
   required         Boolean                @default(false)
-  /// Minimum selections for MULTIPLE groups (null for SINGLE).
+  sourceType       RecommendationSourceType @default(CATEGORY)
+  multipleMode     RecommendationMultipleMode?
+  /// First N units free when multipleMode is QUANTITY (0 = none free).
+  freeQuantity     Int?
+  /// Minimum selections for MULTIPLE (fallback when no per-variation row).
   minItems         Int?
-  /// Maximum selections for MULTIPLE groups (null = no cap).
+  /// Maximum selections for MULTIPLE (fallback when no per-variation row).
   maxItems         Int?
-  linkedCategoryId String
+  linkedCategoryId String?
+  linkedProductId  String?
+  /// Included baseline item when sourceType is CATEGORY (delta pricing for other items).
+  defaultLinkedMenuItemId String?
+  /// For PRODUCT source: category ids whose products guests can pick (same + other categories).
+  productCategoryIds String[] @default([])
+  /// When true, configuration item prices follow the guest's selected base-product variation.
+  useVariationPricing Boolean @default(false)
 
-  menuItem       MenuItem     @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  linkedCategory MenuCategory @relation("AttributeLinkedCategory", fields: [linkedCategoryId], references: [id], onDelete: Cascade)
+  menuItem         MenuItem     @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  linkedCategory   MenuCategory? @relation("AttributeLinkedCategory", fields: [linkedCategoryId], references: [id], onDelete: Cascade)
+  linkedProduct    MenuItem?    @relation("RecommendationLinkedProduct", fields: [linkedProductId], references: [id], onDelete: Cascade)
+  defaultLinkedMenuItem MenuItem? @relation("RecommendationCategoryDefault", fields: [defaultLinkedMenuItemId], references: [id], onDelete: SetNull)
+  variationLimits  MenuItemAttributeGroupVariationLimit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([menuItemId])
   @@index([linkedCategoryId])
+  @@index([linkedProductId])
+  @@index([defaultLinkedMenuItemId])
+}
+
+/// Min/max picks per base-product variation (e.g. Small → 2 meats, Large → 4).
+model MenuItemAttributeGroupVariationLimit {
+  id          String @id @default(uuid())
+  groupId     String
+  variationId String
+  minItems    Int
+  maxItems    Int
+
+  group     MenuItemAttributeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  variation MenuItemVariation      @relation(fields: [variationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, variationId])
+  @@index([groupId])
+  @@index([variationId])
 }
 
 model Customer {

@@ -16,17 +16,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 
+import { MenuOfferChoiceDialog } from '@/components/order/menu-offer-choice-dialog';
 import {
   ProductCustomizeDialog,
   type AttributeGroup,
   type MenuOption,
   type SelectedProductVariation,
 } from '@/components/order/product-customize-dialog';
+import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import type { OrderInfo } from '@/components/order/order-types';
 import {
   buildCustomerMenuRequestUrl,
   inferHostSubdomainForMenu,
 } from '@/lib/customer-menu-client';
+import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { setUiLanguage } from '@/lib/i18n/client';
@@ -61,10 +64,18 @@ type CustomerMenuProduct = {
     id: string;
     name: string;
     selectionType: 'SINGLE' | 'MULTIPLE';
+    sourceType?: 'CATEGORY' | 'PRODUCT';
+    multipleMode?: 'CHECKBOX' | 'QUANTITY' | null;
+    freeQuantity?: number | null;
     required: boolean;
     minItems: number | null;
     maxItems: number | null;
-    linkedCategory: {
+    variationLimits?: {
+      variationId: string;
+      minItems: number;
+      maxItems: number;
+    }[];
+    linkedCategory?: {
       id: string;
       name: string;
       items: {
@@ -84,7 +95,24 @@ type CustomerMenuProduct = {
           sortOrder?: number;
         }[];
       }[];
-    };
+    } | null;
+    linkedProduct?: {
+      id: string;
+      name: string;
+      description: string | null;
+      imageUrl: string | null;
+      price: number;
+      salePrice: number | null;
+      variations?: {
+        id: string;
+        name?: string;
+        title?: string;
+        imageUrl?: string | null;
+        swatchHex?: string | null;
+        priceDelta: number;
+        sortOrder?: number;
+      }[];
+    } | null;
   }[];
 };
 
@@ -364,6 +392,12 @@ export default function OrderPageClient({
   const [customizeProduct, setCustomizeProduct] =
     useState<CustomerMenuProduct | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [menuOfferOpen, setMenuOfferOpen] = useState(false);
+  const [menuOfferProduct, setMenuOfferProduct] =
+    useState<CustomerMenuProduct | null>(null);
+  const [menuOfferBundles, setMenuOfferBundles] = useState<
+    CustomerMenuProduct[]
+  >([]);
 
   const { theme, resolvedTheme } = useTheme();
   const router = useRouter();
@@ -570,6 +604,25 @@ export default function OrderPageClient({
   const hasVariations = (p: CustomerMenuProduct) =>
     (p.variations?.length ?? 0) > 0;
 
+  const proceedWithProduct = (p: CustomerMenuProduct) => {
+    if (hasRequiredAddons(p) || hasVariations(p)) {
+      openCustomizeForProduct(p);
+    } else {
+      addToCart(p, []);
+    }
+  };
+
+  const handleProductSelect = (product: CustomerMenuProduct) => {
+    const bundles = findBundleParentProducts(product.id, products);
+    if (bundles.length > 0) {
+      setMenuOfferProduct(product);
+      setMenuOfferBundles(bundles);
+      setMenuOfferOpen(true);
+      return;
+    }
+    proceedWithProduct(product);
+  };
+
   const filteredProducts = useMemo(() => {
     const base =
       selectedCategory === ALL_CATEGORY_ID
@@ -767,24 +820,9 @@ export default function OrderPageClient({
 
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
-    return customizeProduct.attributeGroups.map((g) => ({
-      id: g.id,
-      name: g.name,
-      selectionType: g.selectionType,
-      required: g.required,
-      minItems: g.minItems,
-      maxItems: g.maxItems,
-      linkedCategoryName: g.linkedCategory?.name ?? null,
-      items: g.linkedCategory.items.map((it) => ({
-        menuItemId: it.id,
-        name: it.name,
-        description: it.description,
-        imageUrl: it.imageUrl,
-        price: it.price,
-        salePrice: it.salePrice,
-        variations: it.variations ?? [],
-      })),
-    }));
+    return customizeProduct.attributeGroups.map((g) =>
+      buildCustomerAttributeGroup(g, customizeProduct.id)
+    );
   }, [customizeProduct]);
 
   // Avoid server/client markup mismatches by rendering only after first mount.
@@ -1165,14 +1203,7 @@ export default function OrderPageClient({
                               showCustomizeIndicator={hasRequiredAddons(
                                 product
                               )}
-                              onAdd={() => {
-                                if (
-                                  hasRequiredAddons(product) ||
-                                  hasVariations(product)
-                                ) {
-                                  openCustomizeForProduct(product);
-                                } else addToCart(product, []);
-                              }}
+                              onAdd={() => handleProductSelect(product)}
                             />
                           ))}
                         </div>
@@ -1223,6 +1254,15 @@ export default function OrderPageClient({
           imageUrl: v.imageUrl ?? null,
           swatchHex: v.swatchHex ?? null,
           priceDelta: v.priceDelta,
+          restaurantVariationId:
+            (v as { restaurantVariationId?: string | null })
+              .restaurantVariationId ?? null,
+          variationShortLabel:
+            (
+              v as {
+                restaurantVariation?: { shortLabel?: string | null } | null;
+              }
+            ).restaurantVariation?.shortLabel ?? null,
         }))}
         onConfirm={(mods, variation, quantity = 1) => {
           if (!customizeProduct) return;
@@ -1253,6 +1293,33 @@ export default function OrderPageClient({
           setEditingLineId(null);
         }}
       />
+
+        <MenuOfferChoiceDialog
+          open={menuOfferOpen}
+          onOpenChange={(open) => {
+            setMenuOfferOpen(open);
+            if (!open) {
+              setMenuOfferProduct(null);
+              setMenuOfferBundles([]);
+            }
+          }}
+          product={menuOfferProduct}
+          bundleProducts={menuOfferBundles}
+          themePrimaryColor={themePrimaryColor}
+          onChooseSingle={() => {
+            const p = menuOfferProduct;
+            setMenuOfferOpen(false);
+            setMenuOfferProduct(null);
+            setMenuOfferBundles([]);
+            if (p) proceedWithProduct(p);
+          }}
+          onChooseBundle={(bundle) => {
+            setMenuOfferOpen(false);
+            setMenuOfferProduct(null);
+            setMenuOfferBundles([]);
+            proceedWithProduct(bundle);
+          }}
+        />
 
       {showScrollTop ? (
         <Button

@@ -5,9 +5,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
+import { useUiLanguageSnapshot } from '@/components/i18n/ui-language-context';
 import { LanguageSwitcher } from '@/components/main/language-switcher';
+import '@/lib/i18n/client';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import type { UiLanguage } from '@/lib/i18n/resources';
+
+const WELCOME_BY_LANG: Record<UiLanguage, string> = {
+  en: 'Welcome',
+  es: 'Bienvenido',
+};
 
 type RestaurantBrand = {
   name: string | null;
@@ -35,8 +42,13 @@ export function Header() {
     themePrimaryColor: null,
   });
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
-  const { i18n } = useTranslation();
-  const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
+  const [localeReady, setLocaleReady] = useState(false);
+  const languageSnapshot = useUiLanguageSnapshot();
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    setLocaleReady(true);
+  }, []);
 
   const inferredSubdomain = useMemo(() => {
     if (typeof window === 'undefined') return null;
@@ -128,8 +140,13 @@ export function Header() {
         </div>
 
         <div className="flex shrink-0 items-center gap-3 sm:gap-4">
-          <span className="hidden text-sm text-primary-foreground/85 sm:inline">
-            {uiLang === 'en' ? 'Welcome' : 'Bienvenido'}
+          <span
+            className="hidden text-sm text-primary-foreground/85 sm:inline"
+            suppressHydrationWarning
+          >
+            {localeReady
+              ? t('headerWelcome')
+              : WELCOME_BY_LANG[languageSnapshot]}
           </span>
           <LanguageSwitcher variant="inline" tone="onPrimary" />
         </div>

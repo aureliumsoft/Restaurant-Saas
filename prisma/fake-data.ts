@@ -1,4 +1,4 @@
-import { AttributeSelectionType, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, OrderSourceType } from '@prisma/client';
+import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, OrderSourceType } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import Decimal from 'decimal.js';
 
@@ -275,6 +275,7 @@ export function fakeMenuCategoryComplete() {
     id: faker.string.uuid(),
     name: faker.person.fullName(),
     restaurantId: faker.string.uuid(),
+    showInFront: true,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -305,6 +306,24 @@ export function fakeMenuItemComplete() {
     updatedAt: faker.date.anytime(),
   };
 }
+export function fakeRestaurantVariation() {
+  return {
+    name: faker.person.fullName(),
+    shortLabel: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeRestaurantVariationComplete() {
+  return {
+    id: faker.string.uuid(),
+    restaurantId: faker.string.uuid(),
+    name: faker.person.fullName(),
+    shortLabel: undefined,
+    sortOrder: 0,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
 export function fakeMenuItemVariation() {
   return {
     name: faker.person.fullName(),
@@ -326,6 +345,7 @@ export function fakeMenuItemVariationComplete() {
     swatchHex: undefined,
     sortOrder: 0,
     priceDelta: 0,
+    restaurantVariationId: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -348,6 +368,8 @@ export function fakeMenuItemOfferComplete() {
 export function fakeMenuItemAttributeGroup() {
   return {
     name: faker.person.fullName(),
+    multipleMode: undefined,
+    freeQuantity: undefined,
     minItems: undefined,
     maxItems: undefined,
     updatedAt: faker.date.anytime(),
@@ -361,9 +383,34 @@ export function fakeMenuItemAttributeGroupComplete() {
     sortOrder: 0,
     selectionType: AttributeSelectionType.SINGLE,
     required: false,
+    sourceType: RecommendationSourceType.CATEGORY,
+    multipleMode: undefined,
+    freeQuantity: undefined,
     minItems: undefined,
     maxItems: undefined,
-    linkedCategoryId: faker.string.uuid(),
+    linkedCategoryId: undefined,
+    linkedProductId: undefined,
+    defaultLinkedMenuItemId: undefined,
+    productCategoryIds: [],
+    useVariationPricing: false,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeMenuItemAttributeGroupVariationLimit() {
+  return {
+    minItems: faker.number.int(),
+    maxItems: faker.number.int(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeMenuItemAttributeGroupVariationLimitComplete() {
+  return {
+    id: faker.string.uuid(),
+    groupId: faker.string.uuid(),
+    variationId: faker.string.uuid(),
+    minItems: faker.number.int(),
+    maxItems: faker.number.int(),
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };

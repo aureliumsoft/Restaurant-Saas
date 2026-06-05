@@ -1,6 +1,9 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import axios from 'axios';
 import { Plus, Trash2 } from 'lucide-react';
 
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
@@ -20,7 +23,11 @@ import {
   filterNameTextInput,
 } from '@/lib/validation/fields';
 
-import type { MenuCategoryRow, MenuItemRow } from './types';
+import type {
+  MenuCategoryRow,
+  MenuItemRow,
+  RestaurantVariationRow,
+} from './types';
 
 export type ProductFormState = {
   name: string;
@@ -32,10 +39,28 @@ export type ProductFormState = {
 };
 
 export type VariationFormRow = {
+  /** Synced from template; not edited on the product form. */
   name: string;
   priceDelta: string;
   imageUrl: string;
+  restaurantVariationId?: string;
 };
+
+/** Shared list of restaurant variation templates (products + Variations page). */
+export function useRestaurantVariationTemplates() {
+  const [variationTemplates, setVariationTemplates] = useState<
+    RestaurantVariationRow[]
+  >([]);
+
+  useEffect(() => {
+    axios
+      .get<{ data: RestaurantVariationRow[] }>('/api/restaurant/variations')
+      .then((res) => setVariationTemplates(res.data.data ?? []))
+      .catch(() => setVariationTemplates([]));
+  }, []);
+
+  return variationTemplates;
+}
 
 type Props = {
   categories: MenuCategoryRow[];
@@ -62,20 +87,39 @@ function FieldLabel({
   );
 }
 
-function parseVariationRows(rows: VariationFormRow[]) {
-  return rows
-    .map((r) => ({
-      name: r.name.trim(),
-      priceDelta: Number(r.priceDelta),
-      imageUrl: r.imageUrl.trim() || null,
-    }))
-    .filter((r) => r.name.length > 0);
+function templateName(
+  templates: RestaurantVariationRow[],
+  id: string | undefined
+) {
+  if (!id) return '';
+  return templates.find((t) => t.id === id)?.name ?? '';
 }
 
-function isVariationRowValid(row: VariationFormRow) {
-  const name = row.name.trim();
+function parseVariationRows(
+  rows: VariationFormRow[],
+  templates: RestaurantVariationRow[]
+) {
+  return rows
+    .map((r) => {
+      const name = templateName(templates, r.restaurantVariationId);
+      return {
+        name,
+        priceDelta: Number(r.priceDelta),
+        imageUrl: r.imageUrl.trim() || null,
+        restaurantVariationId: r.restaurantVariationId || null,
+      };
+    })
+    .filter((r) => r.restaurantVariationId && r.name.length > 0);
+}
+
+function isVariationRowValid(
+  row: VariationFormRow,
+  templates: RestaurantVariationRow[]
+) {
+  if (!row.restaurantVariationId) return false;
+  if (!templates.some((t) => t.id === row.restaurantVariationId)) return false;
   const price = Number(row.priceDelta);
-  return name.length > 0 && !Number.isNaN(price) && price > 0;
+  return !Number.isNaN(price) && price > 0;
 }
 
 export function ProductFormFields({
@@ -86,7 +130,24 @@ export function ProductFormFields({
   onVariationRowsChange,
   showRequired = false,
 }: Props) {
-  const validVariations = parseVariationRows(variationRows);
+  const variationTemplates = useRestaurantVariationTemplates();
+
+  const usedTemplateIds = useMemo(
+    () =>
+      new Set(
+        variationRows
+          .map((r) => r.restaurantVariationId)
+          .filter((id): id is string => Boolean(id))
+      ),
+    [variationRows]
+  );
+
+  const availableTemplates = useMemo(
+    () => variationTemplates.filter((t) => !usedTemplateIds.has(t.id)),
+    [variationTemplates, usedTemplateIds]
+  );
+
+  const validVariations = parseVariationRows(variationRows, variationTemplates);
   const hasVariations = validVariations.length > 0;
   const minVariation = hasVariations
     ? getMinVariationPrice(
@@ -115,6 +176,7 @@ export function ProductFormFields({
             {categories.map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.name}
+                {c.showInFront === false ? ' (configuration only)' : ''}
               </SelectItem>
             ))}
           </SelectContent>
@@ -204,88 +266,132 @@ export function ProductFormFields({
         <div>
           <Label className="text-base">Variations</Label>
           <p className="mt-1 text-sm text-muted-foreground">
-            Optional sizes, colors, or options. Each variation has its own price.
-            Adding at least one variation switches this product to variable
-            pricing.
+            Select a variation from{' '}
+            <Link href="/variations" className="font-medium text-primary underline">
+              Variations
+            </Link>
+            , then set its price and photo. Menu list price uses the lowest
+            variation price.
           </p>
         </div>
 
-        {variationRows.length === 0 ? (
+        {variationTemplates.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No variations yet. Add one if this product has multiple options.
+            No variation templates yet.{' '}
+            <Link href="/variations" className="font-medium text-primary underline">
+              Add variations
+            </Link>{' '}
+            before assigning them to this product.
+          </p>
+        ) : variationRows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No variations on this product yet.
           </p>
         ) : (
           <div className="space-y-3">
-            {variationRows.map((row, index) => (
-              <div
-                key={`variation-${index}`}
-                className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-[1fr,140px,1fr,auto]"
-              >
-                <div className="grid gap-1">
-                  <FieldLabel required={showRequired}>Name</FieldLabel>
-                  <Input
-                    value={row.name}
-                    onChange={(e) =>
-                      updateVariation(index, {
-                        name: filterNameTextInput(e.target.value),
-                      })
-                    }
-                    placeholder="Small / Red / 500ml"
-                    required={showRequired}
-                    aria-required={showRequired || undefined}
+            {variationRows.map((row, index) => {
+              const selectableTemplates = [
+                ...variationTemplates.filter(
+                  (t) =>
+                    t.id === row.restaurantVariationId ||
+                    !usedTemplateIds.has(t.id)
+                ),
+              ];
+              const selectedTemplate = variationTemplates.find(
+                (t) => t.id === row.restaurantVariationId
+              );
+              return (
+                <div
+                  key={`variation-${row.restaurantVariationId ?? index}`}
+                  className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-[minmax(0,1fr),120px,1fr,auto]"
+                >
+                  <div className="grid gap-1">
+                    <FieldLabel required={showRequired}>Variation</FieldLabel>
+                    <Select
+                      value={row.restaurantVariationId ?? ''}
+                      onValueChange={(v) => {
+                        const tpl = variationTemplates.find((t) => t.id === v);
+                        updateVariation(index, {
+                          restaurantVariationId: v,
+                          name: tpl?.name ?? '',
+                        });
+                      }}
+                    >
+                      <SelectTrigger aria-required={showRequired || undefined}>
+                        <SelectValue placeholder="Select variation" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectableTemplates.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name}
+                            {t.shortLabel ? ` (${t.shortLabel})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-1">
+                    <FieldLabel required={showRequired}>Price (€)</FieldLabel>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={row.priceDelta}
+                      onChange={(e) =>
+                        updateVariation(index, {
+                          priceDelta: filterDecimalInput(e.target.value),
+                        })
+                      }
+                      required={showRequired}
+                      aria-required={showRequired || undefined}
+                    />
+                  </div>
+                  <Base64ImageUploadField
+                    label="Photo"
+                    value={row.imageUrl}
+                    onChange={(v) => updateVariation(index, { imageUrl: v })}
                   />
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive"
+                      onClick={() =>
+                        onVariationRowsChange(
+                          variationRows.filter((_, i) => i !== index)
+                        )
+                      }
+                      aria-label="Remove variation"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="grid gap-1">
-                  <FieldLabel required={showRequired}>Price (€)</FieldLabel>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={row.priceDelta}
-                    onChange={(e) =>
-                      updateVariation(index, {
-                        priceDelta: filterDecimalInput(e.target.value),
-                      })
-                    }
-                    required={showRequired}
-                    aria-required={showRequired || undefined}
-                  />
-                </div>
-                <Base64ImageUploadField
-                  label="Variation photo"
-                  value={row.imageUrl}
-                  onChange={(v) => updateVariation(index, { imageUrl: v })}
-                />
-                <div className="flex items-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive"
-                    onClick={() =>
-                      onVariationRowsChange(
-                        variationRows.filter((_, i) => i !== index)
-                      )
-                    }
-                    aria-label="Remove variation"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
         <Button
           type="button"
           variant="outline"
-          onClick={() =>
+          disabled={
+            variationTemplates.length === 0 || availableTemplates.length === 0
+          }
+          onClick={() => {
+            const next = availableTemplates[0];
+            if (!next) return;
             onVariationRowsChange([
               ...variationRows,
-              { name: '', priceDelta: '', imageUrl: '' },
-            ])
-          }
+              {
+                name: next.name,
+                priceDelta: '',
+                imageUrl: '',
+                restaurantVariationId: next.id,
+              },
+            ]);
+          }}
         >
           <Plus className="mr-2 h-4 w-4" />
           Add variation
@@ -311,6 +417,7 @@ export function variationRowsFromItem(item: MenuItemRow): VariationFormRow[] {
     name: (v.name ?? v.title ?? '').trim(),
     priceDelta: String(v.priceDelta),
     imageUrl: v.imageUrl ?? '',
+    restaurantVariationId: v.restaurantVariationId ?? undefined,
   }));
 }
 
@@ -329,7 +436,7 @@ function variationRowsEqual(a: VariationFormRow[], b: VariationFormRow[]) {
   if (a.length !== b.length) return false;
   return a.every(
     (row, i) =>
-      row.name === b[i].name &&
+      row.restaurantVariationId === b[i].restaurantVariationId &&
       row.priceDelta === b[i].priceDelta &&
       row.imageUrl === b[i].imageUrl
   );
@@ -347,12 +454,15 @@ export function isProductEditFormDirty(
 
 export function isProductFormValid(
   form: ProductFormState,
-  variationRows: VariationFormRow[]
+  variationRows: VariationFormRow[],
+  variationTemplates: RestaurantVariationRow[] = []
 ): boolean {
   if (!form.name.trim() || !form.categoryId) return false;
 
   if (variationRows.length > 0) {
-    return variationRows.every(isVariationRowValid);
+    return variationRows.every((row) =>
+      isVariationRowValid(row, variationTemplates)
+    );
   }
 
   const price = Number(form.price);
@@ -380,13 +490,17 @@ export function isProductCreateFormDirty(
     return true;
   }
   return variationRows.some(
-    (r) => r.name.trim() || r.priceDelta.trim() || r.imageUrl.trim()
+    (r) =>
+      r.restaurantVariationId ||
+      r.priceDelta.trim() ||
+      r.imageUrl.trim()
   );
 }
 
 export function buildProductPayload(
   form: ProductFormState,
-  variationRows: VariationFormRow[]
+  variationRows: VariationFormRow[],
+  variationTemplates: RestaurantVariationRow[] = []
 ): {
   ok: true;
   body: {
@@ -400,6 +514,7 @@ export function buildProductPayload(
       name: string;
       imageUrl: string | null;
       priceDelta: number;
+      restaurantVariationId?: string | null;
     }[];
   };
 } | { ok: false; error: string } {
@@ -407,11 +522,14 @@ export function buildProductPayload(
     return { ok: false, error: 'Name and category are required.' };
   }
 
-  const variations = parseVariationRows(variationRows).map((v) => ({
+  const variations = parseVariationRows(variationRows, variationTemplates).map(
+    (v) => ({
     name: v.name,
     imageUrl: v.imageUrl,
     priceDelta: v.priceDelta,
-  }));
+    restaurantVariationId: v.restaurantVariationId,
+  })
+  );
 
   if (variations.some((v) => Number.isNaN(v.priceDelta) || v.priceDelta <= 0)) {
     return {

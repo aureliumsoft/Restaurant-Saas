@@ -9,9 +9,10 @@ import {
   Archive,
   Settings,
   FolderTree,
-  Sparkles,
   LayoutGrid,
+  SlidersHorizontal,
   type LucideIcon,
+  GalleryVerticalEnd,
 } from 'lucide-react';
 import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
 import { NavItem } from '@/types/Navbar';
@@ -28,8 +29,9 @@ export const MODULE_ICONS: Record<
   branched: Store,
   categories: FolderTree,
   product: Package,
+  variations: GalleryVerticalEnd,
   tables: LayoutGrid,
-  recommendations: Sparkles,
+  recommendations: SlidersHorizontal,
   records: Archive,
   settings: Settings,
 };

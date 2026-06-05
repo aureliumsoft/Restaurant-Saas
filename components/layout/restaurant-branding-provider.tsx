@@ -52,8 +52,10 @@ function isRestaurantStaffRoute(pathname: string): boolean {
     path.startsWith('/branched') ||
     path.startsWith('/categories') ||
     path.startsWith('/product') ||
+    path.startsWith('/variations') ||
     path.startsWith('/tables') ||
     path.startsWith('/recommendations') ||
+    path.startsWith('/configurations') ||
     path.startsWith('/records') ||
     path.startsWith('/settings') ||
     path.startsWith('/no-access') ||

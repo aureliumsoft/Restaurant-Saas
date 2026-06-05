@@ -262,7 +262,7 @@ export function Sidebar({
         </div>
       )}
 
-      <Card className="overflow-hidden rounded-3xl border border-[#fdba74] bg-white shadow-xl ">
+      <Card className="overflow-hidden rounded-3xl border border-primary/50 bg-white shadow-xl ">
         <CardContent className="space-y-4 ">
           <div className="flex items-center justify-center gap-2 py-5">
             <Button

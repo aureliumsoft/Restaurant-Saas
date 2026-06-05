@@ -59,11 +59,34 @@ import {
 import { cn } from '@/lib/utils';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 
+import { filterCategoriesWithProducts } from '@/lib/menu/category-visibility';
+import { enrichAttributeGroupSource } from '@/lib/menu/product-recommendation-pool';
+import { mapAttributeGroupItems } from '@/lib/menu/map-attribute-group-items';
+import {
+  effectiveMenuItemUnitPrice,
+  formatRecommendationAddonDisplay,
+} from '@/lib/menu/recommendation-addon-price';
+
+import {
+  RecommendationRuleForm,
+  type RecommendationRuleDraft,
+} from './recommendation-rule-form';
 import type { AttrGroupRow, MenuCategoryRow, MenuItemRow } from './types';
 
 function effectiveUnitPrice(price: number, salePrice: number | null) {
-  if (salePrice != null && salePrice > 0 && salePrice < price) return salePrice;
-  return price;
+  return effectiveMenuItemUnitPrice(price, salePrice);
+}
+
+function groupDefaultUnitPrice(
+  g: AttrGroupRow,
+  items: MenuItemRow[]
+): number | null {
+  const id = g.defaultLinkedMenuItemId ?? g.defaultLinkedMenuItem?.id;
+  if (!id) return null;
+  const fromList = items.find((i) => i.id === id);
+  const item = fromList ?? g.defaultLinkedMenuItem;
+  if (!item) return null;
+  return effectiveMenuItemUnitPrice(item.price, item.salePrice);
 }
 
 function linkedItemsForGroup(
@@ -71,8 +94,41 @@ function linkedItemsForGroup(
   baseProduct: MenuItemRow,
   categories: MenuCategoryRow[]
 ): MenuItemRow[] {
-  const cat = categories.find((c) => c.id === group.linkedCategory.id);
-  return (cat?.items ?? []).filter((i) => i.id !== baseProduct.id);
+  const enriched = enrichAttributeGroupSource(
+    {
+      sourceType: group.sourceType ?? 'CATEGORY',
+      productCategoryIds: group.productCategoryIds,
+      linkedCategory: group.linkedCategory
+        ? {
+            ...group.linkedCategory,
+            items:
+              categories.find((c) => c.id === group.linkedCategory?.id)?.items ??
+              [],
+          }
+        : null,
+      linkedProduct: group.linkedProduct
+        ? categories
+            .flatMap((c) => c.items)
+            .find((i) => i.id === group.linkedProduct?.id) ?? {
+            id: group.linkedProduct.id,
+            name: group.linkedProduct.name,
+            description: null,
+            imageUrl: group.linkedProduct.imageUrl,
+            price: group.linkedProduct.price,
+            salePrice: group.linkedProduct.salePrice,
+          }
+        : null,
+    },
+    categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      items: c.items,
+    })),
+    baseProduct.id
+  );
+
+  const fromMap = mapAttributeGroupItems(enriched, baseProduct.id);
+  return fromMap as MenuItemRow[];
 }
 
 function multiSelectionHint(
@@ -105,7 +161,7 @@ export function RecommendationsTab({
     useState<MenuCategoryRow[]>(categories);
 
   useEffect(() => {
-    setLocalCategories(categories);
+    setLocalCategories(filterCategoriesWithProducts(categories));
   }, [categories]);
 
   const allProducts = useMemo(
@@ -387,9 +443,12 @@ export function RecommendationsTab({
     return () => document.removeEventListener('click', onClick, true);
   }, [isDirty, pathname, requestLeave, resetDraftState, router]);
 
-  /** Categories usable for “offered products” (any except the product’s own). */
+  /** Non-empty categories for offered-product picker (except the product’s own). */
   const linkedOptions = useMemo(
-    () => localCategories.filter((c) => c.id !== selected?.categoryId),
+    () =>
+      localCategories.filter(
+        (c) => c.items.length > 0 && c.id !== selected?.categoryId
+      ),
     [localCategories, selected?.categoryId]
   );
 
@@ -397,7 +456,9 @@ export function RecommendationsTab({
   const assignableRuleCategories = useMemo(() => {
     if (!selected) return [];
     const alreadyLinked = new Set(
-      selected.attributeGroups.map((g) => g.linkedCategory.id)
+      selected.attributeGroups
+        .filter((g) => g.linkedCategory)
+        .map((g) => g.linkedCategory!.id)
     );
     return localCategories.filter(
       (c) => c.id !== selected.categoryId && !alreadyLinked.has(c.id)
@@ -407,7 +468,8 @@ export function RecommendationsTab({
   const assignedCategoryIdsKey = useMemo(() => {
     if (!selected?.attributeGroups.length) return '';
     return selected.attributeGroups
-      .map((g) => g.linkedCategory.id)
+      .map((g) => g.linkedCategory?.id ?? g.linkedProduct?.id ?? '')
+      .filter(Boolean)
       .sort()
       .join(',');
   }, [selected?.attributeGroups]);
@@ -472,7 +534,9 @@ export function RecommendationsTab({
       return;
     }
     const alreadyLinked = new Set(
-      selected.attributeGroups.map((g) => g.linkedCategory.id)
+      selected.attributeGroups
+        .filter((g) => g.linkedCategory)
+        .map((g) => g.linkedCategory!.id)
     );
     setRuleCategoryIds((prev) =>
       prev.filter(
@@ -496,50 +560,122 @@ export function RecommendationsTab({
     );
   };
 
-  const saveRules = async () => {
+  const saveRecommendationDraft = async (draft: RecommendationRuleDraft) => {
     if (!selected) {
       toast.error('Select a product first.');
       return;
     }
-    if (ruleCategoryIds.length === 0) {
+
+    if (draft.sourceType === 'CATEGORY' && draft.ruleCategoryIds.length === 0) {
       toast.error('Choose at least one recommendation category.');
       return;
     }
-    if (ruleSelectionType === 'MULTIPLE') {
-      if (!Number.isFinite(ruleMinItems) || ruleMinItems < 0) {
-        toast.error('Enter a valid minimum number of items.');
-        return;
+    if (draft.sourceType === 'CATEGORY') {
+      for (const catId of draft.ruleCategoryIds) {
+        if (!draft.categoryDefaults[catId]) {
+          const cat = localCategories.find((c) => c.id === catId);
+          toast.error(
+            `Select a default item for ${cat?.name ?? 'the category'}.`
+          );
+          return;
+        }
       }
-      if (!Number.isFinite(ruleMaxItems) || ruleMaxItems < 1) {
-        toast.error('Enter a valid maximum number of items.');
-        return;
-      }
-      if (ruleMaxItems < ruleMinItems) {
-        toast.error(
-          'Maximum items must be greater than or equal to minimum items.'
-        );
+    }
+    if (draft.sourceType === 'PRODUCT' && !draft.linkedProductId) {
+      toast.error('Choose an anchor product.');
+      return;
+    }
+    if (
+      draft.sourceType === 'PRODUCT' &&
+      draft.productCategoryIds.length === 0
+    ) {
+      toast.error('Choose at least one category for product recommendations.');
+      return;
+    }
+
+    const useVariationLimits =
+      draft.selectionType === 'MULTIPLE' &&
+      draft.sourceType === 'CATEGORY' &&
+      (selected.variations?.length ?? 0) > 0 &&
+      draft.variationLimits.length > 0;
+
+    if (draft.selectionType === 'MULTIPLE' && !useVariationLimits) {
+      if (draft.maxItems < draft.minItems) {
+        toast.error('Maximum must be >= minimum.');
         return;
       }
     }
+
     setSavingRules(true);
     try {
-      const selectedCategories = assignableRuleCategories.filter((c) =>
-        ruleCategoryIds.includes(c.id)
-      );
+      const payloads: Record<string, unknown>[] = [];
+
+      if (draft.sourceType === 'CATEGORY') {
+        const cats = localCategories.filter((c) =>
+          draft.ruleCategoryIds.includes(c.id)
+        );
+        for (const [index, cat] of cats.entries()) {
+          payloads.push({
+            name:
+              draft.selectionType === 'SINGLE'
+                ? `Choose ${cat.name}`
+                : `Choose from ${cat.name}`,
+            sourceType: 'CATEGORY',
+            selectionType: draft.selectionType,
+            required: draft.required,
+            linkedCategoryId: cat.id,
+            defaultLinkedMenuItemId: draft.categoryDefaults[cat.id],
+            useVariationPricing: draft.useVariationPricing,
+            sortOrder: selected.attributeGroups.length + index,
+            ...(draft.selectionType === 'MULTIPLE'
+              ? {
+                  multipleMode: draft.multipleMode,
+                  freeQuantity:
+                    draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
+                  ...(useVariationLimits
+                    ? { variationLimits: draft.variationLimits }
+                    : {
+                        minItems: draft.minItems,
+                        maxItems: draft.maxItems,
+                      }),
+                }
+              : {}),
+          });
+        }
+      } else {
+        const product = allProducts.find((p) => p.id === draft.linkedProductId);
+        const catNames = localCategories
+          .filter((c) => draft.productCategoryIds.includes(c.id))
+          .map((c) => c.name);
+        payloads.push({
+          name: product
+            ? catNames.length > 1
+              ? `Choose add-ons (${catNames.join(', ')})`
+              : `Choose from ${catNames[0] ?? product.categoryName}`
+            : 'Recommended products',
+          sourceType: 'PRODUCT',
+          selectionType: draft.selectionType,
+          required: draft.required,
+          linkedProductId: draft.linkedProductId,
+          productCategoryIds: draft.productCategoryIds,
+          sortOrder: selected.attributeGroups.length,
+          ...(draft.selectionType === 'MULTIPLE'
+            ? {
+                multipleMode: draft.multipleMode,
+                freeQuantity:
+                  draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
+                minItems: draft.minItems,
+                maxItems: draft.maxItems,
+              }
+            : {}),
+        });
+      }
+
       const responses = await Promise.all(
-        selectedCategories.map((cat, index) =>
+        payloads.map((body) =>
           axios.post<{ data: AttrGroupRow }>(
             `/api/restaurant/menu/items/${selected.id}/attributes`,
-            {
-              name: `Choose from ${cat.name}`,
-              selectionType: ruleSelectionType,
-              required: ruleRequired,
-              linkedCategoryId: cat.id,
-              sortOrder: index,
-              ...(ruleSelectionType === 'MULTIPLE'
-                ? { minItems: ruleMinItems, maxItems: ruleMaxItems }
-                : {}),
-            }
+            body
           )
         )
       );
@@ -554,7 +690,7 @@ export function RecommendationsTab({
           ),
         ],
       }));
-      toast.success('Recommendation categories saved');
+      toast.success('Recommendation saved');
       allowNextNavigation();
       resetDraftState();
     } catch (e: unknown) {
@@ -678,7 +814,7 @@ export function RecommendationsTab({
         ) : allProducts?.length === 0 ? (
     <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
       <p className="text-sm text-muted-foreground">
-        Add products first — recommendations are attached to a product.
+        Add products first — configuration rules are attached to a product.
       </p>
       <Button type="button" asChild className="w-fit">
         <Link href="/product">Go to Products</Link>
@@ -929,194 +1065,59 @@ export function RecommendationsTab({
 
               <TabsContent
                 value="recommendations"
-                className="space-y-3 rounded-lg border border-border p-3 sm:space-y-4 sm:p-4"
+                className="space-y-4 rounded-lg border border-border p-3 sm:p-4"
               >
-                <h4 className="text-sm font-semibold">
-                  Recommendation source categories
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  Select one or more categories. Each selected category is
-                  saved as a required/optional recommendation group for
-                  this product. Categories already used for this product
-                  cannot be assigned again.
-                </p>
-                {linkedOptions.length === 0 ? (
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                    <p className="text-xs text-muted-foreground">
-                      Create another category (e.g. Sauces) to use as
-                      recommendation source.
-                    </p>
-                    <Button
-                      type="button"
-                      asChild
-                      size="sm"
-                      variant="secondary"
-                      className="w-fit shrink-0"
-                    >
-                      <Link href="/categories">Go to Categories</Link>
-                    </Button>
-                  </div>
-                ) : assignableRuleCategories.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Every other category is already assigned as a
-                    recommendation for this product. Remove a rule in the
-                    customer preview if you want to reuse a category.
-                  </p>
-                ) : (
-                  <>
-                    <div className="flex w-full flex-col gap-4">
-                      <div className="grid w-full min-w-0 gap-2">
-                        <Label id="rule-selection-type-label">
-                          Selection Type
-                        </Label>
-                        <div
-                          role="radiogroup"
-                          aria-labelledby="rule-selection-type-label"
-                          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background p-0.5 shadow-sm sm:h-10"
-                        >
-                          {(
-                            [
-                              ['SINGLE', 'One Option'],
-                              ['MULTIPLE', 'Multiple Options'],
-                            ] as const
-                          ).map(([value, label]) => (
-                            <button
-                              key={value}
-                              type="button"
-                              role="radio"
-                              aria-checked={ruleSelectionType === value}
-                              className={cn(
-                                'h-full min-w-0 flex-1 rounded-sm px-2 text-center text-xs font-medium transition-colors sm:px-4 sm:text-sm',
-                                ruleSelectionType === value
-                                  ? 'bg-primary text-primary-foreground shadow-sm'
-                                  : 'text-muted-foreground hover:bg-muted/60'
-                              )}
-                              onClick={() => setRuleSelectionType(value)}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex min-h-11 items-center gap-2 sm:min-h-10 sm:pb-1">
-                      <input
-                        id="rule-required"
-                        type="checkbox"
-                        className="h-4 w-4 shrink-0 rounded border border-input"
-                        checked={ruleRequired}
-                        onChange={(e) =>
-                          setRuleRequired(e.target.checked)
-                        }
-                      />
-                      <Label
-                        htmlFor="rule-required"
-                        className="cursor-pointer text-sm font-normal leading-none"
+                {selected.attributeGroups.length > 0 ? (
+                  <ul className="space-y-2">
+                    {selected.attributeGroups.map((g) => (
+                      <li
+                        key={g.id}
+                        className="rounded-lg border border-border px-3 py-2 text-sm"
                       >
-                        Required Before Add to Cart
-                      </Label>
-                    </div>
-
-                    {ruleSelectionType === 'MULTIPLE' ? (
-                      <div className="grid w-full gap-3 sm:grid-cols-2">
-                        <div className="grid gap-2">
-                          <Label htmlFor="rule-min-items">
-                            Min Items
-                          </Label>
-                          <Input
-                            id="rule-min-items"
-                            type="number"
-                            min={0}
-                            className="h-10"
-                            value={ruleMinItems}
-                            onChange={(e) =>
-                              setRuleMinItems(
-                                Math.max(
-                                  0,
-                                  Number.parseInt(e.target.value, 10) || 0
-                                )
-                              )
-                            }
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="rule-max-items">
-                            Max Items
-                          </Label>
-                          <Input
-                            id="rule-max-items"
-                            type="number"
-                            min={1}
-                            className="h-10"
-                            value={ruleMaxItems}
-                            onChange={(e) =>
-                              setRuleMaxItems(
-                                Math.max(
-                                  1,
-                                  Number.parseInt(e.target.value, 10) || 1
-                                )
-                              )
-                            }
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-                    <p className="text-xs text-muted-foreground">
-                      {ruleSelectionType === 'SINGLE'
-                        ? 'Choose one or more categories. Each becomes a group where guests pick exactly one product.'
-                        : 'Choose one or more categories. Guests pick between min and max products from each group.'}
-                    </p>
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {assignableRuleCategories.map((cat) => {
-                        const checked = ruleCategoryIds.includes(cat.id);
-                        return (
-                          <label
-                            key={cat.id}
-                            className={cn(
-                              'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm',
-                              checked
-                                ? 'border-primary bg-primary/10'
-                                : 'border-border'
-                            )}
-                          >
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 shrink-0 accent-primary"
-                              checked={checked}
-                              onChange={() =>
-                                setRuleCategoryIds((prev) =>
-                                  toggleInArray(prev, cat.id)
-                                )
-                              }
-                            />
-                            <span>{cat.name}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => setSaveRulesConfirmOpen(true)}
-                      disabled={
-                        savingRules || ruleCategoryIds.length === 0
-                      }
-                      className="w-full"
-                    >
-                      {savingRules ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                          <span>Saving...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Save className="h-4 w-4 mr-2" />
-                          <span>Save Recommendation</span>
-                        </>
-                      )}
-                    </Button>
-                  </>
+                        <p className="font-medium">{g.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {g.sourceType === 'PRODUCT'
+                            ? `Products · ${g.linkedProduct?.name ?? '—'} anchor · ${
+                                g.productCategoryIds?.length ?? 0
+                              } categor${
+                                (g.productCategoryIds?.length ?? 0) === 1
+                                  ? 'y'
+                                  : 'ies'
+                              }`
+                            : `Category · ${g.linkedCategory?.name ?? '—'}${
+                                g.defaultLinkedMenuItem?.name
+                                  ? ` · Default: ${g.defaultLinkedMenuItem.name}`
+                                  : ''
+                              }`}
+                          {' · '}
+                          {g.selectionType === 'SINGLE'
+                            ? 'One option'
+                            : g.multipleMode === 'QUANTITY'
+                              ? 'Multiple (+/−)'
+                              : 'Multiple (checkbox)'}
+                          {g.selectionType === 'MULTIPLE' &&
+                          g.multipleMode === 'QUANTITY' &&
+                          g.freeQuantity != null &&
+                          g.freeQuantity > 0
+                            ? ` · ${g.freeQuantity} free`
+                            : ''}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No recommendations yet for this product.
+                  </p>
                 )}
+
+                <RecommendationRuleForm
+                  selected={selected}
+                  localCategories={localCategories}
+                  allProducts={allProducts}
+                  saving={savingRules}
+                  onSave={(draft) => void saveRecommendationDraft(draft)}
+                />
               </TabsContent>
 
               <TabsContent
@@ -1421,6 +1422,7 @@ export function RecommendationsTab({
                       localCategories
                     );
                     const previewIds = previewByGroup[g.id] ?? [];
+                    const defaultUnit = groupDefaultUnitPrice(g, items);
 
                     return (
                       <section
@@ -1466,7 +1468,10 @@ export function RecommendationsTab({
                               ) : null}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              From {g.linkedCategory.name}
+                              From{' '}
+                              {g.linkedCategory?.name ??
+                                g.linkedProduct?.name ??
+                                '—'}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {g.selectionType === 'SINGLE'
@@ -1514,9 +1519,10 @@ export function RecommendationsTab({
                             <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                               {items.map((it) => {
                                 const checked = previewIds[0] === it.id;
-                                const unit = effectiveUnitPrice(
+                                const priceLabel = formatRecommendationAddonDisplay(
                                   it.price,
-                                  it.salePrice
+                                  it.salePrice,
+                                  defaultUnit
                                 );
                                 return (
                                   <label
@@ -1544,9 +1550,18 @@ export function RecommendationsTab({
                                       <p className="truncate text-sm font-medium">
                                         {it.name}
                                       </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        €{unit.toFixed(2)}
-                                      </p>
+                                      {priceLabel ? (
+                                        <p className="text-xs text-muted-foreground">
+                                          {priceLabel}
+                                        </p>
+                                      ) : defaultUnit != null &&
+                                        (g.defaultLinkedMenuItemId === it.id ||
+                                          g.defaultLinkedMenuItem?.id ===
+                                            it.id) ? (
+                                        <p className="text-xs text-muted-foreground">
+                                          Included
+                                        </p>
+                                      ) : null}
                                     </div>
                                     <input
                                       type="radio"
@@ -1570,9 +1585,10 @@ export function RecommendationsTab({
                                 const checked = previewIds.includes(
                                   it.id
                                 );
-                                const unit = effectiveUnitPrice(
+                                const priceLabel = formatRecommendationAddonDisplay(
                                   it.price,
-                                  it.salePrice
+                                  it.salePrice,
+                                  defaultUnit
                                 );
                                 const atMax =
                                   g.maxItems != null &&
@@ -1606,9 +1622,18 @@ export function RecommendationsTab({
                                       <p className="truncate text-sm font-medium">
                                         {it.name}
                                       </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        €{unit.toFixed(2)}
-                                      </p>
+                                      {priceLabel ? (
+                                        <p className="text-xs text-muted-foreground">
+                                          {priceLabel}
+                                        </p>
+                                      ) : defaultUnit != null &&
+                                        (g.defaultLinkedMenuItemId === it.id ||
+                                          g.defaultLinkedMenuItem?.id ===
+                                            it.id) ? (
+                                        <p className="text-xs text-muted-foreground">
+                                          Included
+                                        </p>
+                                      ) : null}
                                     </div>
                                     <input
                                       type="checkbox"
@@ -1658,19 +1683,6 @@ export function RecommendationsTab({
         )}
 
       </CardContent>
-
-      <SaveConfirmation
-        open={saveRulesConfirmOpen}
-        title="Save recommendation categories"
-        description="Create recommendation groups for the selected categories?"
-        itemName={selected?.name || 'Selected product'}
-        loading={savingRules}
-        onConfirm={() => {
-          setSaveRulesConfirmOpen(false);
-          void saveRules();
-        }}
-        onCancel={() => setSaveRulesConfirmOpen(false)}
-      />
 
       <SaveConfirmation
         open={saveOffersConfirmOpen}

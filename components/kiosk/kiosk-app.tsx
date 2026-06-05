@@ -25,11 +25,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 
+import { MenuOfferChoiceDialog } from '@/components/order/menu-offer-choice-dialog';
 import {
   ProductCustomizeDialog,
   type AttributeGroup,
   type SelectedProductVariation,
 } from '@/components/order/product-customize-dialog';
+import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -48,6 +50,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
 import { cn } from '@/lib/utils';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import { setUiLanguage } from '@/lib/i18n/client';
@@ -106,9 +109,18 @@ type CustomerMenuProduct = {
     id: string;
     name: string;
     selectionType: 'SINGLE' | 'MULTIPLE';
+    sourceType?: 'CATEGORY' | 'PRODUCT';
     required: boolean;
     minItems: number | null;
     maxItems: number | null;
+    linkedProduct?: {
+      id: string;
+      name: string;
+      description: string | null;
+      imageUrl: string | null;
+      price: number;
+      salePrice: number | null;
+    } | null;
     linkedCategory: {
       id: string;
       name: string;
@@ -276,6 +288,12 @@ export function KioskApp({ slug }: { slug: string }) {
   const [customizeProduct, setCustomizeProduct] =
     useState<CustomerMenuProduct | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [menuOfferOpen, setMenuOfferOpen] = useState(false);
+  const [menuOfferProduct, setMenuOfferProduct] =
+    useState<CustomerMenuProduct | null>(null);
+  const [menuOfferBundles, setMenuOfferBundles] = useState<
+    CustomerMenuProduct[]
+  >([]);
   const [cookingNote, setCookingNote] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -457,24 +475,9 @@ export function KioskApp({ slug }: { slug: string }) {
 
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
-    return customizeProduct.attributeGroups.map((g) => ({
-      id: g.id,
-      name: g.name,
-      selectionType: g.selectionType,
-      required: g.required,
-      minItems: g.minItems,
-      maxItems: g.maxItems,
-      linkedCategoryName: g.linkedCategory?.name ?? null,
-      items: g.linkedCategory.items.map((it) => ({
-        menuItemId: it.id,
-        name: it.name,
-        description: it.description,
-        imageUrl: it.imageUrl,
-        price: it.price,
-        salePrice: it.salePrice,
-        variations: it.variations ?? [],
-      })),
-    }));
+    return customizeProduct.attributeGroups.map((g) =>
+      buildCustomerAttributeGroup(g, customizeProduct.id)
+    );
   }, [customizeProduct]);
 
   const addToCart = (
@@ -527,10 +530,25 @@ export function KioskApp({ slug }: { slug: string }) {
     setDialogOpen(true);
   };
 
-  const onProductTap = (p: CustomerMenuProduct) => {
+  const proceedWithProduct = (p: CustomerMenuProduct) => {
     const hasVariations = (p.variations?.length ?? 0) > 0;
     if (hasRequiredAddons(p) || hasVariations) openCustomize(p);
     else addToCart(p, []);
+  };
+
+  const handleProductSelect = (p: CustomerMenuProduct) => {
+    const bundles = findBundleParentProducts(p.id, allProducts);
+    if (bundles.length > 0) {
+      setMenuOfferProduct(p);
+      setMenuOfferBundles(bundles);
+      setMenuOfferOpen(true);
+      return;
+    }
+    proceedWithProduct(p);
+  };
+
+  const onProductTap = (p: CustomerMenuProduct) => {
+    handleProductSelect(p);
   };
 
   const qtyOnMenu = useCallback(
@@ -545,9 +563,7 @@ export function KioskApp({ slug }: { slug: string }) {
     if (delta > 0) {
       const p = allProducts.find((x) => x.id === productId);
       if (!p) return;
-      const hasVariations = (p.variations?.length ?? 0) > 0;
-      if (hasRequiredAddons(p) || hasVariations) openCustomize(p);
-      else addToCart(p, []);
+      handleProductSelect(p);
       return;
     }
     setCart((current) => {
@@ -1476,6 +1492,33 @@ export function KioskApp({ slug }: { slug: string }) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <MenuOfferChoiceDialog
+          open={menuOfferOpen}
+          onOpenChange={(open) => {
+            setMenuOfferOpen(open);
+            if (!open) {
+              setMenuOfferProduct(null);
+              setMenuOfferBundles([]);
+            }
+          }}
+          product={menuOfferProduct}
+          bundleProducts={menuOfferBundles}
+          themePrimaryColor={menu?.themePrimaryColor ?? null}
+          onChooseSingle={() => {
+            const p = menuOfferProduct;
+            setMenuOfferOpen(false);
+            setMenuOfferProduct(null);
+            setMenuOfferBundles([]);
+            if (p) proceedWithProduct(p);
+          }}
+          onChooseBundle={(bundle) => {
+            setMenuOfferOpen(false);
+            setMenuOfferProduct(null);
+            setMenuOfferBundles([]);
+            proceedWithProduct(bundle);
+          }}
+        />
 
         <ProductCustomizeDialog
           productName={customizeProduct?.name ?? ''}

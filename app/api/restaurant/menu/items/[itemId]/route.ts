@@ -18,6 +18,7 @@ const patchSchema = z
       .array(
         z.object({
           name: z.string().min(1).max(120),
+          restaurantVariationId: z.string().uuid().optional().nullable(),
           imageUrl: z.string().max(2_800_000).optional().nullable().or(z.literal("")),
           swatchHex: z
             .string()
@@ -122,6 +123,7 @@ export async function PATCH(
           .map((v, idx) => ({
             name: v.name.trim(),
             title: v.name.trim(),
+            restaurantVariationId: v.restaurantVariationId ?? null,
             imageUrl: v.imageUrl && v.imageUrl.length > 0 ? v.imageUrl : null,
             swatchHex: v.swatchHex && v.swatchHex.length > 0 ? v.swatchHex : null,
             priceDelta: Number.isFinite(v.priceDelta ?? 0) ? Number(v.priceDelta ?? 0) : 0,

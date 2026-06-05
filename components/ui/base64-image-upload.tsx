@@ -71,13 +71,14 @@ export function Base64ImageUploadField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <Input
           id={id}
           value={value}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
           autoComplete="off"
+          className="w-full"
         />
         <label>
           <input

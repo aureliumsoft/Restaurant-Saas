@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -18,6 +19,10 @@ import {
   DeleteConfirmation,
 } from '@/components/ui/confirmation-dialogs';
 import { Input } from '@/components/ui/input';
+import {
+  categoryHasProducts,
+  isMenuCategoryShownInFront,
+} from '@/lib/menu/category-visibility';
 
 import type { MenuCategoryRow } from './types';
 
@@ -29,11 +34,13 @@ type Props = {
 
 export function CategoriesTab({ categories, onRefresh, loading }: Props) {
   const [name, setName] = useState('');
+  const [showInFront, setShowInFront] = useState(true);
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmAddOpen, setConfirmAddOpen] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const canAdd = Boolean(name.trim()) && !adding;
 
@@ -43,9 +50,11 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
     try {
       await axios.post('/api/restaurant/menu/categories', {
         name: name.trim(),
+        showInFront,
       });
       toast.success('Category created');
       setName('');
+      setShowInFront(true);
       await onRefresh();
     } catch (e: unknown) {
       const err = e as { response?: { data?: unknown } };
@@ -69,6 +78,25 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
     }
   };
 
+  const setCategoryShowInFront = async (id: string, next: boolean) => {
+    setTogglingId(id);
+    try {
+      await axios.patch(`/api/restaurant/menu/categories/${id}`, {
+        showInFront: next,
+      });
+      toast.success(
+        next
+          ? 'Category visible on website, kiosk, and POS'
+          : 'Category hidden from storefront — use in recommendations only'
+      );
+      await onRefresh();
+    } catch {
+      toast.error('Could not update visibility');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const remove = async () => {
     if (!deletingId) return;
     try {
@@ -89,56 +117,72 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Categories</CardTitle>
+          <CardDescription>
+            Categories are your menu sections. Turn <strong>Show in front</strong> on
+            to list them on the website, kiosk, and POS. Turn it off for add-on pools
+            (sauces, sides, sizes) used only in Recommendations. Empty categories
+            (no products) are hidden everywhere until you add items.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex flex-wrap gap-2">
-            <Input
-              placeholder="New category name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="max-w-sm"
-              disabled={adding}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && canAdd) setConfirmAddOpen(true);
-              }}
-            />
-            <Button
-              type="button"
-              disabled={!canAdd}
-              onClick={() => setConfirmAddOpen(true)}
-            >
-              {adding ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" aria-hidden />
-              )}
-              {adding ? 'Adding…' : 'Add category'}
-            </Button>
+          <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex flex-wrap gap-2">
+              <Input
+                placeholder="New category name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="max-w-sm bg-background"
+                disabled={adding}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && canAdd) setConfirmAddOpen(true);
+                }}
+              />
+              <Button
+                type="button"
+                disabled={!canAdd}
+                onClick={() => setConfirmAddOpen(true)}
+              >
+                {adding ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" aria-hidden />
+                )}
+                {adding ? 'Adding…' : 'Add category'}
+              </Button>
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border accent-primary"
+                checked={showInFront}
+                onChange={(e) => setShowInFront(e.target.checked)}
+              />
+              <span>Show in front (website, kiosk, POS)</span>
+            </label>
           </div>
           {loading ? (
             <p className="text-sm text-muted-foreground">
-              <Loader2 className="animate-spin text-primary text-center mx-auto" />
+              <Loader2 className="mx-auto animate-spin text-primary" />
             </p>
           ) : (
-            <>
-              <ul className="space-y-2">
-                {categories.map((c) => (
-                  <CategoryRow
-                    key={c.id}
-                    category={c}
-                    onRename={rename}
-                    onDelete={(id) => {
-                      setDeletingId(id);
-                      setConfirmDeleteOpen(true);
-                    }}
-                  />
-                ))}
-              </ul>
-            </>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {categories.map((c) => (
+                <CategoryCard
+                  key={c.id}
+                  category={c}
+                  toggling={togglingId === c.id}
+                  onRename={rename}
+                  onToggleShowInFront={setCategoryShowInFront}
+                  onDelete={(id) => {
+                    setDeletingId(id);
+                    setConfirmDeleteOpen(true);
+                  }}
+                />
+              ))}
+            </div>
           )}
 
-          {categories.length === 0 && (
+          {!loading && categories.length === 0 && (
             <p className="text-sm text-muted-foreground">
               No categories yet. Add your first one above.
             </p>
@@ -171,42 +215,158 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
   );
 }
 
-function CategoryRow({
+function CategoryCard({
   category,
+  toggling,
   onRename,
+  onToggleShowInFront,
   onDelete,
 }: {
   category: MenuCategoryRow;
+  toggling: boolean;
   onRename: (id: string, name: string) => void;
+  onToggleShowInFront: (id: string, showInFront: boolean) => void;
   onDelete: (id: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(category.name);
-  useEffect(() => setVal(category.name), [category.name]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setVal(category.name);
+    setEditing(false);
+  }, [category.name]);
+
+  const hasProducts = categoryHasProducts(category);
+  const visible = isMenuCategoryShownInFront(category);
+
+  const cancelEdit = () => {
+    setVal(category.name);
+    setEditing(false);
+  };
+
+  const saveName = async () => {
+    const next = val.trim();
+    if (!next || next === category.name) {
+      cancelEdit();
+      return;
+    }
+    setSaving(true);
+    try {
+      await onRename(category.id, next);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <li className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2">
-      <Input
-        className="max-w-md"
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        onBlur={() => {
-          if (val.trim() && val.trim() !== category.name)
-            onRename(category.id, val.trim());
-        }}
-      />
-      <span className="text-xs text-muted-foreground">
-        {category.items.length} products
-      </span>
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        className="text-destructive"
-        onClick={() => onDelete(category.id)}
-        aria-label="Delete category"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </li>
+    <Card className="flex flex-col overflow-hidden transition-shadow hover:shadow-md">
+      <CardHeader className="space-y-3 pb-3">
+        <div className="flex items-start justify-between gap-2">
+          {!hasProducts ? (
+            <Badge variant="outline" className="shrink-0">
+              Empty — hidden
+            </Badge>
+          ) : (
+            <Badge variant={visible ? 'default' : 'secondary'} className="shrink-0">
+              {visible ? 'Storefront' : 'Recommendations only'}
+            </Badge>
+          )}
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+            onClick={() => onDelete(category.id)}
+            aria-label="Delete category"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+        {editing ? (
+          <div className="space-y-2">
+            <Input
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              disabled={saving}
+              autoFocus
+              aria-label="Category name"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void saveName();
+                if (e.key === 'Escape') cancelEdit();
+              }}
+            />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="flex-1"
+                disabled={saving || !val.trim()}
+                onClick={() => void saveName()}
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  'Save'
+                )}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={saving}
+                onClick={cancelEdit}
+                aria-label="Cancel edit"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start justify-between gap-2">
+            <CardTitle className="text-base leading-snug">{category.name}</CardTitle>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 shrink-0"
+              onClick={() => setEditing(true)}
+              aria-label="Edit category name"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </CardHeader>
+      <CardContent className="mt-auto flex flex-col gap-3 pt-0">
+        <p className="text-xs text-muted-foreground">
+          {category.items.length}{' '}
+          {category.items.length === 1 ? 'product' : 'products'}
+          {!hasProducts ? ' — add products to show on menu or recommendations' : ''}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          disabled={toggling || !hasProducts}
+          onClick={() => onToggleShowInFront(category.id, !visible)}
+        >
+          {toggling ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : visible ? (
+            <>
+              <EyeOff className="mr-2 h-4 w-4" />
+              Hide from front
+            </>
+          ) : (
+            <>
+              <Eye className="mr-2 h-4 w-4" />
+              Show in front
+            </>
+          )}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

@@ -22,16 +22,16 @@ async function seedDemoMenu(prisma: PrismaClient, restaurantId: string) {
   }
 
   const catMains = await prisma.menuCategory.create({
-    data: { name: 'Chef specials', restaurantId },
+    data: { name: 'Chef specials', restaurantId, showInFront: true },
   });
   const catSizes = await prisma.menuCategory.create({
-    data: { name: 'Choose size', restaurantId },
+    data: { name: 'Choose size', restaurantId, showInFront: false },
   });
   const catAddons = await prisma.menuCategory.create({
-    data: { name: 'Add-ons', restaurantId },
+    data: { name: 'Add-ons', restaurantId, showInFront: false },
   });
   const catDrinks = await prisma.menuCategory.create({
-    data: { name: 'Drinks', restaurantId },
+    data: { name: 'Drinks', restaurantId, showInFront: true },
   });
 
   await prisma.menuItem.create({

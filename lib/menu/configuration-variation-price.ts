@@ -1,0 +1,203 @@
+import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
+
+export type VariationLinkRef = {
+  id: string;
+  name?: string | null;
+  title?: string | null;
+  restaurantVariationId?: string | null;
+  priceDelta: number;
+};
+
+export type ParentVariationContext = {
+  id: string;
+  name?: string | null;
+  title?: string | null;
+  restaurantVariationId?: string | null;
+};
+
+function normalizeVariationKey(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+/** Build parent variation context from a menu item's selected variation id. */
+export function parentVariationFromItemVariation(
+  itemVariations: VariationLinkRef[] | null | undefined,
+  variationId: string | null | undefined
+): ParentVariationContext | null {
+  if (!variationId) return null;
+  const v = itemVariations?.find((x) => x.id === variationId);
+  if (!v) return null;
+  return {
+    id: v.id,
+    name: v.name ?? null,
+    title: v.title ?? null,
+    restaurantVariationId: v.restaurantVariationId ?? null,
+  };
+}
+
+/** Match an item variation to the guest's selected base-product variation. */
+export function matchItemVariationForParent(
+  parent: ParentVariationContext | null | undefined,
+  itemVariations: VariationLinkRef[]
+): VariationLinkRef | null {
+  if (!parent || itemVariations.length === 0) return null;
+
+  if (parent.restaurantVariationId) {
+    const byTemplate = itemVariations.find(
+      (v) => v.restaurantVariationId === parent.restaurantVariationId
+    );
+    if (byTemplate) return byTemplate;
+  }
+
+  const parentKeys = new Set(
+    [parent.name, parent.title]
+      .map(normalizeVariationKey)
+      .filter((k) => k.length > 0)
+  );
+  if (parentKeys.size === 0) return null;
+
+  return (
+    itemVariations.find((v) => {
+      const keys = [v.name, v.title]
+        .map(normalizeVariationKey)
+        .filter((k) => k.length > 0);
+      return keys.some((k) => parentKeys.has(k));
+    }) ?? null
+  );
+}
+
+export type ConfigurationItemLike = {
+  price: number;
+  salePrice: number | null;
+  variations?: VariationLinkRef[];
+};
+
+/** Whether this add-on is offered for the guest's selected base-product variation. */
+export function isConfigurationItemAvailableForParentVariation(
+  item: ConfigurationItemLike,
+  parentVariation: ParentVariationContext | null | undefined,
+  useVariationPricing: boolean
+): boolean {
+  if (!useVariationPricing) return true;
+  if (!parentVariation) return false;
+  return (
+    matchItemVariationForParent(parentVariation, item.variations ?? []) !=
+    null
+  );
+}
+
+/** Hide add-ons with no rate linked for the current product variation. */
+export function filterConfigurationItemsForParentVariation<
+  T extends ConfigurationItemLike,
+>(items: T[], parentVariation: ParentVariationContext | null | undefined, useVariationPricing: boolean): T[] {
+  if (!useVariationPricing) return items;
+  if (!parentVariation) return [];
+  return items.filter((item) =>
+    isConfigurationItemAvailableForParentVariation(
+      item,
+      parentVariation,
+      true
+    )
+  );
+}
+
+/** Whether a configuration section should render (category row / nested group). */
+export function isConfigurationGroupVisibleForParentVariation(
+  group: { items: ConfigurationItemLike[]; useVariationPricing?: boolean },
+  parentVariation: ParentVariationContext | null | undefined
+): boolean {
+  const useVariationPricing = group.useVariationPricing ?? false;
+  if (useVariationPricing) {
+    // Show the category once the main product variation is chosen; items are filtered inside.
+    return parentVariation != null;
+  }
+  return group.items.length > 0;
+}
+
+/** Whether a variation-priced group has at least one add-on for the current parent variation. */
+export function configurationGroupHasItemsForParentVariation(
+  group: { items: ConfigurationItemLike[]; useVariationPricing?: boolean },
+  parentVariation: ParentVariationContext | null | undefined
+): boolean {
+  const useVariationPricing = group.useVariationPricing ?? false;
+  if (!useVariationPricing) return group.items.length > 0;
+  if (!parentVariation) return false;
+  return (
+    filterConfigurationItemsForParentVariation(
+      group.items,
+      parentVariation,
+      true
+    ).length > 0
+  );
+}
+
+/** List unit price for a configuration item (variation rate or original item price). */
+export function configurationItemListUnitPrice(
+  item: ConfigurationItemLike,
+  parentVariation: ParentVariationContext | null | undefined,
+  useVariationPricing: boolean
+): number {
+  const original = effectiveMenuItemUnitPrice(item.price, item.salePrice);
+  if (!useVariationPricing) return original;
+
+  const matched = matchItemVariationForParent(
+    parentVariation,
+    item.variations ?? []
+  );
+  if (matched) return matched.priceDelta;
+  return original;
+}
+
+/** Header suffix when configuration prices follow variation (e.g. "Gratinage M"). */
+export function configurationGroupVariationSuffix(
+  parentVariation: ParentVariationContext | null | undefined,
+  restaurantVariationShortLabel?: string | null
+): string | null {
+  if (!parentVariation) return null;
+  const short =
+    restaurantVariationShortLabel?.trim() ||
+    parentVariation.title?.trim() ||
+    parentVariation.name?.trim();
+  if (!short) return null;
+  return short;
+}
+
+export function configurationGroupDisplayTitle(
+  baseName: string,
+  parentVariation: ParentVariationContext | null | undefined,
+  useVariationPricing: boolean,
+  restaurantVariationShortLabel?: string | null
+): string {
+  if (!useVariationPricing) return baseName;
+  const suffix = configurationGroupVariationSuffix(
+    parentVariation,
+    restaurantVariationShortLabel
+  );
+  if (!suffix) return baseName;
+  return `${baseName} ${suffix}`;
+}
+
+/** Chargeable addon unit after default-item delta (uses resolved list unit). */
+export function chargeableConfigurationItemUnitPrice(
+  resolvedListUnit: number,
+  defaultUnitPrice: number | null | undefined
+): number {
+  if (defaultUnitPrice == null) return resolvedListUnit;
+  return Math.max(
+    0,
+    Math.round((resolvedListUnit - defaultUnitPrice) * 100) / 100
+  );
+}
+
+/** Guest-facing (+€delta) for configuration items. */
+export function formatConfigurationAddonDisplay(
+  resolvedListUnit: number,
+  defaultUnitPrice: number | null | undefined
+): string | null {
+  if (defaultUnitPrice != null) {
+    const delta = Math.round((resolvedListUnit - defaultUnitPrice) * 100) / 100;
+    if (delta <= 0) return null;
+    return `(+€${delta.toFixed(2)})`;
+  }
+  return `(+€${resolvedListUnit.toFixed(2)})`;
+}

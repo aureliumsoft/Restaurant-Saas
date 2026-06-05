@@ -1,13 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { z } from "zod";
-
 import { db } from "@/lib/db";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
-
-const bodySchema = z.object({
-  name: z.string().min(1, "Category name is required").max(120),
-});
+import { menuCategoryCreateSchema } from "@/lib/validation/menu";
 
 export async function POST(req: NextRequest) {
   const auth = await getRestaurantForOwnerRequest(req, {
@@ -25,7 +20,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = bodySchema.safeParse(json);
+  const parsed = menuCategoryCreateSchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -35,6 +30,7 @@ export async function POST(req: NextRequest) {
       data: {
         name: parsed.data.name.trim(),
         restaurantId: auth.restaurant.id,
+        showInFront: parsed.data.showInFront ?? true,
       },
     });
     return NextResponse.json({ data: cat }, { status: 201 });

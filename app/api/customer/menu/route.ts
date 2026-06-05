@@ -2,6 +2,15 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
+import { applyProductRecommendationPools } from '@/lib/menu/apply-product-recommendation-pools';
+import {
+  buildCustomerMenuAttributeGroupsSelect,
+  customerMenuItemCoreSelect,
+} from '@/lib/menu/customer-menu-attribute-groups-select';
+import {
+  CUSTOMER_MENU_CATEGORY_WHERE,
+  sanitizeCustomerMenuPayload,
+} from '@/lib/menu/category-visibility';
 
 function getSubdomainFromHost(hostname: string) {
   if (hostname.endsWith('.localhost')) {
@@ -19,74 +28,15 @@ function getSubdomainFromHost(hostname: string) {
   return null;
 }
 
-const menuInclude = {
-  orderBy: { name: 'asc' as const },
-  select: {
-    id: true,
-    name: true,
-    items: {
+const menuCategorySelect = {
+  id: true,
+  name: true,
+  items: {
       orderBy: { name: 'asc' as const },
       select: {
-        id: true,
-        name: true,
-        description: true,
-        imageUrl: true,
-        price: true,
-        salePrice: true,
+        ...customerMenuItemCoreSelect,
         categoryId: true,
-        variations: {
-          orderBy: { sortOrder: 'asc' as const },
-          select: {
-            id: true,
-            name: true,
-            title: true,
-            imageUrl: true,
-            swatchHex: true,
-            priceDelta: true,
-            sortOrder: true,
-          },
-        },
-        attributeGroups: {
-          orderBy: { sortOrder: 'asc' as const },
-          select: {
-            id: true,
-            name: true,
-            selectionType: true,
-            required: true,
-            minItems: true,
-            maxItems: true,
-            sortOrder: true,
-            linkedCategory: {
-              select: {
-                id: true,
-                name: true,
-                items: {
-                  orderBy: { name: 'asc' as const },
-                  select: {
-                    id: true,
-                    name: true,
-                    description: true,
-                    imageUrl: true,
-                    price: true,
-                    salePrice: true,
-                    variations: {
-                      orderBy: { sortOrder: 'asc' as const },
-                      select: {
-                        id: true,
-                        name: true,
-                        title: true,
-                        imageUrl: true,
-                        swatchHex: true,
-                        priceDelta: true,
-                        sortOrder: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
+        attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
         offersFromThis: {
           orderBy: { sortOrder: 'asc' as const },
           select: {
@@ -106,8 +56,43 @@ const menuInclude = {
         },
       },
     },
+} as const;
+
+const customerMenusRelation = {
+  where: CUSTOMER_MENU_CATEGORY_WHERE,
+  orderBy: { name: 'asc' as const },
+  select: menuCategorySelect,
+} as const;
+
+const allCategoriesForRecommendations = {
+  orderBy: { name: 'asc' as const },
+  select: {
+    id: true,
+    name: true,
+    items: {
+      orderBy: { name: 'asc' as const },
+      select: {
+        ...customerMenuItemCoreSelect,
+        attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
+      },
+    },
   },
 } as const;
+
+async function enrichRestaurantMenuForCustomer<
+  T extends { id: string; menus: unknown },
+>(restaurant: T) {
+  const allCategories = await db.menuCategory.findMany({
+    where: { restaurantId: restaurant.id, items: { some: {} } },
+    ...allCategoriesForRecommendations,
+  });
+  return sanitizeCustomerMenuPayload(
+    applyProductRecommendationPools(
+      restaurant as Parameters<typeof applyProductRecommendationPools>[0],
+      allCategories
+    )
+  );
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -127,13 +112,16 @@ export async function GET(req: NextRequest) {
           themePrimaryColor: true,
           subdomain: true,
           slug: true,
-          menus: menuInclude,
+          menus: customerMenusRelation,
         },
       });
       if (!restaurant) {
         return NextResponse.json({ data: null }, { status: 200 });
       }
-      return NextResponse.json({ data: restaurant }, { status: 200 });
+      return NextResponse.json(
+        { data: await enrichRestaurantMenuForCustomer(restaurant) },
+        { status: 200 }
+      );
     }
 
     const subdomain = fromQuery || fromHost;
@@ -155,14 +143,17 @@ export async function GET(req: NextRequest) {
         themePrimaryColor: true,
         subdomain: true,
         slug: true,
-        menus: menuInclude,
+        menus: customerMenusRelation,
       },
     });
 
     if (!restaurant) {
       return NextResponse.json({ data: null }, { status: 200 });
     }
-    return NextResponse.json({ data: restaurant }, { status: 200 });
+    return NextResponse.json(
+      { data: await enrichRestaurantMenuForCustomer(restaurant) },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('customer menu', error);
     return NextResponse.json(

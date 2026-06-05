@@ -122,6 +122,7 @@ type RestaurantMenuApi = {
     menus?: Array<{
       id: string;
       name: string;
+      showInFront?: boolean;
       items?: Array<{
         id: string;
         name: string;
@@ -287,7 +288,10 @@ export function PosScreen() {
         });
         if (!res.ok) throw new Error('Failed to load menu');
         const json = (await res.json()) as RestaurantMenuApi;
-        const menus = json.data?.menus ?? [];
+        const menus = (json.data?.menus ?? []).filter(
+          (menu) =>
+            menu.showInFront !== false && (menu.items?.length ?? 0) > 0
+        );
 
         const nextCategories: Category[] = [{ id: 'all', label: 'ALL' }];
         const nextProducts: Product[] = [];

@@ -14,6 +14,19 @@ const nextConfig = {
       'openweathermap.org',
       'pbs.twimg.com',
       'via.placeholder.com',
+      'belorder-cloud.s3.eu-central-1.amazonaws.com',
+    ],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.s3.*.amazonaws.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.s3.amazonaws.com',
+        pathname: '/**',
+      },
     ],
   },
   env: {

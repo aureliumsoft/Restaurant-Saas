@@ -13,7 +13,7 @@ export default function CategoriesPage() {
       <ErrorBoundary>
         <MenuPageShell
           title="Categories"
-          description="Create and organize menu sections (e.g. Mains, Drinks, Sauces). Add categories before products."
+          description="Create menu sections (categories). Use Show in front for items customers browse on web, kiosk, and POS. Turn it off for add-on categories used only in Recommendations."
           loading={false}
         >
           <CategoriesTab categories={categories} onRefresh={load} loading={loading} />

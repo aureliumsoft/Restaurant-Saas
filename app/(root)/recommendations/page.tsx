@@ -12,8 +12,8 @@ export default function RecommendationsPage() {
     <div className="min-w-0 w-full max-w-full">
       <ErrorBoundary>
         <MenuPageShell
-          title="Recommendations"
-          description="Link add-on options to products (e.g. choose a sauce or drink from another category)."
+          title="Configuration"
+          description="Link add-on options to products (e.g. choose a sauce or gratin from another category)."
           loading={false}
         >
           <RecommendationsTab categories={categories} onRefresh={load} loading={loading} />

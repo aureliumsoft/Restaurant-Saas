@@ -13,6 +13,7 @@ import {
   buildProductPayload,
   isProductCreateFormDirty,
   isProductFormValid,
+  useRestaurantVariationTemplates,
   type ProductFormState,
   type VariationFormRow,
 } from '@/components/dashboard/menu-manager/product-form-fields';
@@ -63,6 +64,7 @@ export default function ProductCreatePage() {
     salePrice: '',
   });
   const [variationRows, setVariationRows] = useState<VariationFormRow[]>([]);
+  const variationTemplates = useRestaurantVariationTemplates();
 
   const resolvedCategoryId = form.categoryId || '';
 
@@ -79,9 +81,10 @@ export default function ProductCreatePage() {
     () =>
       isProductFormValid(
         { ...form, categoryId: resolvedCategoryId },
-        variationRows
+        variationRows,
+        variationTemplates
       ),
-    [form, resolvedCategoryId, variationRows]
+    [form, resolvedCategoryId, variationRows, variationTemplates]
   );
 
   const {
@@ -144,7 +147,8 @@ export default function ProductCreatePage() {
   const save = async (mode: 'close' | 'add-new') => {
     const payload = buildProductPayload(
       { ...form, categoryId: resolvedCategoryId },
-      variationRows
+      variationRows,
+      variationTemplates
     );
     if (!payload.ok) {
       toast.error(payload.error);
