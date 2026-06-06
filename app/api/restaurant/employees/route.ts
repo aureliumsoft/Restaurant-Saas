@@ -11,6 +11,7 @@ import {
 import { hashPassword, isStrongPassword } from '@/lib/auth/password';
 import { db } from '@/lib/db';
 import { GLOBAL_ROLE_SLUG, getGlobalRoleIdBySlug } from '@/lib/global-roles';
+import { syncEmployeeBranches } from '@/lib/branch/branch-scope';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { RESTAURANT_ROLE_SLUG } from '@/lib/restaurant-roles';
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from '@/lib/subscription-plan-enforcement';
@@ -19,6 +20,7 @@ const postSchema = z.object({
   email: z.string().email(),
   name: z.string().min(2).max(120).trim().optional(),
   roleId: z.string().uuid(),
+  branchIds: z.array(z.string().uuid()).optional().default([]),
   /** Set when creating a brand-new user; ignored when inviting an existing account. */
   password: z.string().min(8).max(200).optional(),
 });
@@ -76,6 +78,7 @@ export async function GET(req: NextRequest) {
       include: {
         user: { select: { id: true, name: true, email: true } },
         role: { select: { id: true, name: true, slug: true } },
+        branches: { select: { branchId: true } },
       },
       orderBy: { createdAt: 'asc' },
     }),
@@ -103,11 +106,13 @@ export async function GET(req: NextRequest) {
         slug: e.role.slug,
       },
       isOwner: e.userId === restaurant.ownerId,
+      branchIds: e.branches.map((b) => b.branchId),
     })),
     pendingInvites: pendingInvites.map((inv) => ({
       id: inv.id,
       email: inv.email,
       role: { id: inv.role.id, name: inv.role.name },
+      branchIds: inv.branchIds ?? [],
       expiresAt: inv.expiresAt.toISOString(),
     })),
   });
@@ -144,6 +149,16 @@ export async function POST(req: NextRequest) {
   );
   if (!roleCheck.ok) {
     return NextResponse.json({ error: roleCheck.error }, { status: 400 });
+  }
+
+  const isAdminRole =
+    roleCheck.role.slug === RESTAURANT_ROLE_SLUG.ADMIN ||
+    roleCheck.role.slug === RESTAURANT_ROLE_SLUG.OWNER;
+  if (!isAdminRole && (parsed.data.branchIds?.length ?? 0) === 0) {
+    return NextResponse.json(
+      { error: 'Select a branch for this team member.' },
+      { status: 400 }
+    );
   }
 
   const planFeatures = await getRestaurantPlanFeatures(auth.restaurantId);
@@ -205,6 +220,7 @@ export async function POST(req: NextRequest) {
         restaurantId: auth.restaurantId,
         email: emailNorm,
         roleId: parsed.data.roleId,
+        branchIds: parsed.data.branchIds ?? [],
         token,
         invitedById: auth.userId,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -300,6 +316,7 @@ export async function POST(req: NextRequest) {
     username = `${local.slice(0, Math.max(1, 40 - suffix.length))}${suffix}`;
   }
 
+  let createdEmployeeId: string | null = null;
   await db.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
@@ -311,14 +328,22 @@ export async function POST(req: NextRequest) {
         roleId: pendingWorkerId,
       },
     });
-    await tx.employee.create({
+    const employee = await tx.employee.create({
       data: {
         restaurantId: auth.restaurantId,
         userId: user.id,
         roleId: parsed.data.roleId,
       },
     });
+    createdEmployeeId = employee.id;
   });
+  if (createdEmployeeId && (parsed.data.branchIds?.length ?? 0) > 0) {
+    await syncEmployeeBranches(
+      createdEmployeeId,
+      parsed.data.branchIds ?? [],
+      auth.restaurantId
+    );
+  }
 
   const welcomeResult = await sendNewEmployeeLoginReadyEmail({
     to: emailNorm,

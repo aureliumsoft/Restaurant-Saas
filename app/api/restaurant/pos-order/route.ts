@@ -2,6 +2,10 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { OrderSourceType } from '@prisma/client';
 
+import {
+  getBranchScopeFromRequest,
+  validateBranchForRestaurant,
+} from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
@@ -23,6 +27,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
     const restaurantId = auth.restaurantId;
+    const branchScope = await getBranchScopeFromRequest(
+      req,
+      auth.userId,
+      restaurantId
+    );
 
     const body = await req.json().catch(() => null);
     if (!body || typeof body !== 'object') {
@@ -59,6 +68,26 @@ export async function POST(req: NextRequest) {
     const items = Array.isArray(body.items) ? (body.items as LineInput[]) : [];
     if (items.length === 0) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
+    }
+
+    let branchId: string | null =
+      typeof body.branchId === 'string' && body.branchId.trim()
+        ? body.branchId.trim()
+        : branchScope?.activeBranchId ?? null;
+    if (branchId) {
+      const ok = await validateBranchForRestaurant(branchId, restaurantId);
+      if (!ok) {
+        return NextResponse.json({ error: 'Invalid branch' }, { status: 400 });
+      }
+      if (
+        branchScope &&
+        !branchScope.allowedBranchIds.includes(branchId)
+      ) {
+        return NextResponse.json(
+          { error: 'You do not have access to this branch.' },
+          { status: 403 }
+        );
+      }
     }
 
     const paymentMode =
@@ -205,6 +234,7 @@ export async function POST(req: NextRequest) {
         where: {
           restaurantId,
           ticketDate,
+          branchId,
         },
         orderBy: { ticketNumber: 'desc' },
         select: { ticketNumber: true },
@@ -214,6 +244,7 @@ export async function POST(req: NextRequest) {
       const order = await tx.order.create({
         data: {
           restaurantId,
+          branchId,
           customerId,
           ticketDate,
           ticketNumber: nextTicketNumber,

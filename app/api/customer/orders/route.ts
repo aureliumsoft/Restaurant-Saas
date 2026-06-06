@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { OrderSourceType } from '@prisma/client';
 import { z } from 'zod';
 
+import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import {
   isPrismaUniqueViolation,
@@ -85,6 +86,14 @@ const postSchema = z.object({
       message: 'Customer phone is required',
     });
   }
+  const storeId = data.orderInfo.storeId?.trim() ?? '';
+  if (!storeId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['orderInfo', 'storeId'],
+      message: 'Branch is required',
+    });
+  }
 });
 
 function buildAddressSnapshot(
@@ -102,6 +111,8 @@ function buildAddressSnapshot(
   if (orderType === 'delivery') {
     if (info.addressName?.trim()) lines.push(`Name: ${info.addressName.trim()}`);
     if (info.customerPhone?.trim()) lines.push(`Phone: ${info.customerPhone.trim()}`);
+    if (info.storeName?.trim()) lines.push(`Branch: ${info.storeName.trim()}`);
+    if (info.storeAddress?.trim()) lines.push(`Branch address: ${info.storeAddress.trim()}`);
     if (info.address?.trim()) lines.push(`Address: ${info.address.trim()}`);
     if (info.apartment?.trim()) lines.push(`Apartment / door: ${info.apartment.trim()}`);
     if (info.gateCode?.trim()) lines.push(`Gate code: ${info.gateCode.trim()}`);
@@ -196,6 +207,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const branchId = orderInfo.storeId?.trim() || null;
+  if (!branchId || !(await validateBranchForRestaurant(branchId, restaurant.id))) {
+    return NextResponse.json({ error: 'Invalid branch for this restaurant' }, { status: 400 });
+  }
+
   const menuRows = await db.menuItem.findMany({
     where: { restaurantId: restaurant.id, id: { in: [...menuIds] } },
     select: { id: true },
@@ -221,6 +237,7 @@ export async function POST(req: NextRequest) {
         where: {
           restaurantId: restaurant.id,
           ticketDate,
+          branchId,
         },
         orderBy: { ticketNumber: 'desc' },
         select: { ticketNumber: true },
@@ -238,6 +255,7 @@ export async function POST(req: NextRequest) {
       const order = await tx.order.create({
         data: {
           restaurantId: restaurant.id,
+          branchId,
           customerId: customer.id,
           ticketDate,
           ticketNumber: nextTicketNumber,

@@ -1,7 +1,7 @@
 import { KioskPaymentSuccess } from '@/components/kiosk/kiosk-payment-success';
 
 type Props = {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ slug: string; branchId: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
@@ -13,8 +13,11 @@ function pick(
   return Array.isArray(v) ? (v[0] ?? '') : (v ?? '');
 }
 
-export default async function KioskSuccessPage({ params, searchParams }: Props) {
-  const { slug } = await params;
+export default async function KioskBranchSuccessPage({
+  params,
+  searchParams,
+}: Props) {
+  const { slug, branchId } = await params;
   const sp = await searchParams;
   const orderId = pick(sp, 'orderId').trim() || null;
   const sessionId = pick(sp, 'session_id').trim() || null;
@@ -24,6 +27,7 @@ export default async function KioskSuccessPage({ params, searchParams }: Props) 
   return (
     <KioskPaymentSuccess
       slug={decodeURIComponent(slug)}
+      branchId={decodeURIComponent(branchId)}
       orderId={orderId}
       sessionId={sessionId}
       token={token}

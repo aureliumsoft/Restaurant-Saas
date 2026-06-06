@@ -185,7 +185,9 @@ model Branch {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orders     Order[]
+  employees  EmployeeBranch[]
 
   @@index([restaurantId])
 }
@@ -265,14 +267,27 @@ model Employee {
   userId       String
   roleId       String
 
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
-  user       User       @relation(fields: [userId], references: [id])
-  role       Role       @relation(fields: [roleId], references: [id])
+  restaurant Restaurant       @relation(fields: [restaurantId], references: [id])
+  user       User             @relation(fields: [userId], references: [id])
+  role       Role             @relation(fields: [roleId], references: [id])
+  branches   EmployeeBranch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([userId, restaurantId])
+}
+
+/// Staff access to one or more branches (empty = all branches for owner/admin only).
+model EmployeeBranch {
+  employeeId String
+  branchId   String
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  branch   Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, branchId])
+  @@index([branchId])
 }
 
 // Pending join for an existing account; new users get Employee + set-password email immediately.
@@ -281,6 +296,8 @@ model EmployeeInvite {
   restaurantId String
   email        String
   roleId       String
+  /// Branch ids to assign when the invite is accepted.
+  branchIds    String[]             @default([])
   token        String               @unique
   status       EmployeeInviteStatus @default(PENDING)
   invitedById  String
@@ -475,8 +492,9 @@ model Order {
   /// Client-generated key for offline sync / retries (same key = same order).
   idempotencyKey String?         @unique @db.VarChar(80)
   restaurantId   String
+  branchId       String?
   customerId     String?
-  /// Daily ticket number (resets from 0 each day per restaurant).
+  /// Daily ticket number (resets from 0 each day per restaurant/branch).
   ticketNumber   Int?
   /// Date bucket for daily ticket sequence.
   ticketDate     DateTime?       @db.Date
@@ -500,14 +518,17 @@ model Order {
   payments       Payment[]
   kitchenTickets KitchenTicket[]
   restaurant     Restaurant      @relation(fields: [restaurantId], references: [id])
+  branch         Branch?         @relation(fields: [branchId], references: [id], onDelete: SetNull)
   customer       Customer?       @relation(fields: [customerId], references: [id])
   diningTable    DiningTable?    @relation(fields: [diningTableId], references: [id], onDelete: SetNull)
 
   @@index([restaurantId])
+  @@index([branchId])
   @@index([sourceType])
   @@index([diningTableId])
   @@index([restaurantId, ticketDate])
-  @@unique([restaurantId, ticketDate, ticketNumber])
+  @@index([restaurantId, branchId, ticketDate])
+  @@unique([restaurantId, branchId, ticketDate, ticketNumber])
 }
 
 model OrderItem {

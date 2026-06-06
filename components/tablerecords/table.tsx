@@ -102,6 +102,12 @@ export function Records() {
   }, [load]);
 
   useEffect(() => {
+    const onBranch = () => void load();
+    window.addEventListener('branch-changed', onBranch);
+    return () => window.removeEventListener('branch-changed', onBranch);
+  }, [load]);
+
+  useEffect(() => {
     setPage(1);
   }, [q, kind]);
 

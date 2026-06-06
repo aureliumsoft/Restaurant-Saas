@@ -242,6 +242,12 @@ export function fakeEmployeeComplete() {
     updatedAt: faker.date.anytime(),
   };
 }
+export function fakeEmployeeBranchComplete() {
+  return {
+    employeeId: faker.string.uuid(),
+    branchId: faker.string.uuid(),
+  };
+}
 export function fakeEmployeeInvite() {
   return {
     email: faker.internet.email(),
@@ -256,6 +262,7 @@ export function fakeEmployeeInviteComplete() {
     restaurantId: faker.string.uuid(),
     email: faker.internet.email(),
     roleId: faker.string.uuid(),
+    branchIds: [],
     token: faker.lorem.words(5),
     status: EmployeeInviteStatus.PENDING,
     invitedById: faker.string.uuid(),
@@ -452,6 +459,7 @@ export function fakeOrderComplete() {
     shortOrderId: '[object Object]',
     idempotencyKey: undefined,
     restaurantId: faker.string.uuid(),
+    branchId: undefined,
     customerId: undefined,
     ticketNumber: undefined,
     ticketDate: undefined,

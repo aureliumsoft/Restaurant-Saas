@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { getAppSession } from '@/lib/auth/app-session';
+import { syncEmployeeBranches } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 
 const bodySchema = z.object({
@@ -85,6 +86,7 @@ export async function POST(req: NextRequest) {
 
   // When a user accepts *any* restaurant invite, they should only be a member of
   // that restaurant. We therefore revoke/decline membership/invites for all other restaurants.
+  let employeeId: string | null = existing?.id ?? null;
   await db.$transaction(async (tx) => {
     if (existing) {
       await tx.employeeInvite.update({
@@ -92,13 +94,14 @@ export async function POST(req: NextRequest) {
         data: { status: 'ACCEPTED' },
       });
     } else {
-      await tx.employee.create({
+      const created = await tx.employee.create({
         data: {
           restaurantId: invite.restaurantId,
           userId: user.id,
           roleId: invite.roleId,
         },
       });
+      employeeId = created.id;
       await tx.employeeInvite.update({
         where: { id: invite.id },
         data: { status: 'ACCEPTED' },
@@ -123,6 +126,14 @@ export async function POST(req: NextRequest) {
       },
     });
   });
+
+  if (employeeId && invite.branchIds.length > 0) {
+    await syncEmployeeBranches(
+      employeeId,
+      invite.branchIds,
+      invite.restaurantId
+    );
+  }
 
   return NextResponse.json({
     ok: true,

@@ -143,6 +143,12 @@ export function KdsManagerBoard() {
   }, [load]);
 
   useEffect(() => {
+    const onBranch = () => void load();
+    window.addEventListener('branch-changed', onBranch);
+    return () => window.removeEventListener('branch-changed', onBranch);
+  }, [load]);
+
+  useEffect(() => {
     const t = window.setInterval(() => void load(), REFRESH_INTERVAL_MS);
     return () => window.clearInterval(t);
   }, [load]);

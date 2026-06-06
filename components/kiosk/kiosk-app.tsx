@@ -56,6 +56,12 @@ import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import { setUiLanguage } from '@/lib/i18n/client';
 import type { UiLanguage } from '@/lib/i18n/resources';
 import { IconArrowBack } from '@tabler/icons-react';
+import {
+  kioskBasePath,
+  kioskCartStorageKey,
+  kioskCheckoutDraftKey,
+  kioskSuccessPath,
+} from '@/lib/kiosk-path';
 import { submitKioskOrder } from '@/lib/offline/submit-order';
 
 function formatKioskOrderApiError(body: unknown): string {
@@ -218,14 +224,10 @@ function hasRequiredAddons(p: CustomerMenuProduct) {
   return p.attributeGroups.some((g) => g.required);
 }
 
-function cartStorageKey(slug: string) {
-  return `kiosk-cart-${slug}`;
-}
-
-function loadCart(slug: string): CartLine[] {
+function loadCart(slug: string, branchId: string): CartLine[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(cartStorageKey(slug));
+    const raw = localStorage.getItem(kioskCartStorageKey(slug, branchId));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -241,8 +243,11 @@ function loadCart(slug: string): CartLine[] {
   }
 }
 
-function saveCart(slug: string, lines: CartLine[]) {
-  localStorage.setItem(cartStorageKey(slug), JSON.stringify(lines));
+function saveCart(slug: string, branchId: string, lines: CartLine[]) {
+  localStorage.setItem(
+    kioskCartStorageKey(slug, branchId),
+    JSON.stringify(lines)
+  );
 }
 
 function formatMoney(n: number) {
@@ -273,9 +278,16 @@ function cartSummaryLines(cart: CartLine[], maxLines: number): string[] {
 
 type Step = 'mode' | 'menu' | 'cart' | 'checkout' | 'done';
 
-export function KioskApp({ slug }: { slug: string }) {
+export function KioskApp({
+  slug,
+  branchId,
+}: {
+  slug: string;
+  branchId: string;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const kioskPath = kioskBasePath(slug, branchId);
   const [step, setStep] = useState<Step>('mode');
   const [fulfillment, setFulfillment] = useState<
     'dine_in' | 'take_away' | null
@@ -305,6 +317,8 @@ export function KioskApp({ slug }: { slug: string }) {
   const [placing, setPlacing] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [lastTicketNumber, setLastTicketNumber] = useState<number | null>(null);
+  const [branchName, setBranchName] = useState<string | null>(null);
+  const [branchValid, setBranchValid] = useState<boolean | null>(null);
   const { t, i18n } = useTranslation();
   const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
 
@@ -333,8 +347,8 @@ export function KioskApp({ slug }: { slug: string }) {
 
         if (paid) {
           try {
-            localStorage.removeItem(`kiosk-cart-${slug}`);
-            localStorage.removeItem(`kiosk-checkout-draft-${slug}`);
+            localStorage.removeItem(kioskCartStorageKey(slug, branchId));
+            localStorage.removeItem(kioskCheckoutDraftKey(slug, branchId));
           } catch {
             // ignore storage errors
           }
@@ -346,29 +360,60 @@ export function KioskApp({ slug }: { slug: string }) {
         } else {
           toast.info('Payment is processing. Your order will sync shortly.');
         }
-        router.replace(`/kiosk/${encodeURIComponent(slug)}`);
+        router.replace(kioskPath);
       })();
       return;
     }
-    setCart(loadCart(slug));
-  }, [slug, searchParams, router]);
+    setCart(loadCart(slug, branchId));
+  }, [slug, branchId, kioskPath, searchParams, router]);
 
   useEffect(() => {
     if (step !== 'checkout') return;
     if (cart.length > 0) return;
-    const restored = loadCart(slug);
+    const restored = loadCart(slug, branchId);
     if (restored.length > 0) {
       setCart(restored);
     }
-  }, [step, cart.length, slug]);
+  }, [step, cart.length, slug, branchId]);
 
   const persistCart = useCallback(
     (next: CartLine[]) => {
       setCart(next);
-      saveCart(slug, next);
+      saveCart(slug, branchId, next);
     },
-    [slug]
+    [slug, branchId]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/customer/branches?slug=${encodeURIComponent(slug)}`
+        );
+        const json = (await res.json().catch(() => ({}))) as {
+          data?: { id: string; name: string }[];
+        };
+        if (cancelled) return;
+        const match = (json.data ?? []).find((b) => b.id === branchId);
+        if (match) {
+          setBranchValid(true);
+          setBranchName(match.name);
+        } else {
+          setBranchValid(false);
+          setBranchName(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setBranchValid(false);
+          setBranchName(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, branchId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -532,7 +577,7 @@ export function KioskApp({ slug }: { slug: string }) {
         };
         next = [...current, line];
       }
-      saveCart(slug, next);
+      saveCart(slug, branchId, next);
       return next;
     });
   };
@@ -590,7 +635,7 @@ export function KioskApp({ slug }: { slug: string }) {
         else copy[i] = { ...line, quantity: line.quantity - 1 };
         break;
       }
-      saveCart(slug, copy);
+      saveCart(slug, branchId, copy);
       return copy;
     });
   };
@@ -625,6 +670,7 @@ export function KioskApp({ slug }: { slug: string }) {
       }));
       const payload = {
         restaurantSlug: slug,
+        branchId,
         fulfillment,
         tableId: fulfillment === 'dine_in' ? selectedTableId || undefined : undefined,
         lines,
@@ -646,13 +692,13 @@ export function KioskApp({ slug }: { slug: string }) {
       setLastOrderId(placedId);
       setLastTicketNumber(ticketNumber);
       clearCart();
-      localStorage.removeItem(`kiosk-checkout-draft-${slug}`);
+      localStorage.removeItem(kioskCheckoutDraftKey(slug, branchId));
       setCookingNote('');
       setCustomerName('');
       setCustomerPhone('');
       toast.success('Order placed');
       window.location.assign(
-        `/kiosk/${encodeURIComponent(slug)}/success?orderId=${encodeURIComponent(placedId)}${
+        `${kioskSuccessPath(slug, branchId)}?orderId=${encodeURIComponent(placedId)}${
           ticketNumber != null
             ? `&ticket=${encodeURIComponent(String(ticketNumber))}`
             : ''
@@ -681,6 +727,7 @@ export function KioskApp({ slug }: { slug: string }) {
     }));
     return {
       restaurantSlug: slug,
+      branchId,
       fulfillment,
       tableId:
         fulfillment === 'dine_in' ? selectedTableId || undefined : undefined,
@@ -806,10 +853,27 @@ export function KioskApp({ slug }: { slug: string }) {
     );
   };
 
-  if (menuLoading && !menu) {
+  if ((menuLoading && !menu) || branchValid === null) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f8fafc] p-6">
         <Loader2 className="h-10 w-10 animate-spin text-primary text-center mx-auto" />
+      </div>
+    );
+  }
+
+  if (branchValid === false) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f8fafc] p-6">
+        <p className="text-center text-[#dc2626]">
+          This kiosk branch link is invalid.
+        </p>
+        <p className="text-center text-sm text-[#64748b]">
+          Use a URL like{' '}
+          <code className="rounded bg-white px-1 py-0.5 text-xs">
+            /kiosk/{slug}/[branchId]
+          </code>{' '}
+          from Settings → Website &amp; kiosk.
+        </p>
       </div>
     );
   }
@@ -860,6 +924,9 @@ export function KioskApp({ slug }: { slug: string }) {
               ) : null}
               <div className="min-w-0">
                 <p className="truncate font-semibold">{menu.name}</p>
+                {branchName ? (
+                  <p className="truncate text-xs text-[#64748b]">{branchName}</p>
+                ) : null}
                 {fulfillment ? (
                   <p className="text-xs text-[#64748b]">
                     {fulfillment === 'dine_in' ? 'Dine in' : 'Take away'}
@@ -1358,6 +1425,7 @@ export function KioskApp({ slug }: { slug: string }) {
                   metadata={{
                     source: 'kiosk',
                     restaurantSlug: slug,
+                    branchId,
                     fulfillment: fulfillment ?? '',
                   }}
                   disabled={placing}
@@ -1367,8 +1435,10 @@ export function KioskApp({ slug }: { slug: string }) {
                       capture.shortOrderId ?? capture.orderId ?? '';
                     const ticket = capture.ticketNumber;
                     try {
-                      localStorage.removeItem(`kiosk-cart-${slug}`);
-                      localStorage.removeItem(`kiosk-checkout-draft-${slug}`);
+                      localStorage.removeItem(kioskCartStorageKey(slug, branchId));
+                      localStorage.removeItem(
+                        kioskCheckoutDraftKey(slug, branchId)
+                      );
                     } catch {
                       // ignore storage errors
                     }
@@ -1390,7 +1460,7 @@ export function KioskApp({ slug }: { slug: string }) {
                       qs.set('ticket', String(ticket));
                     }
                     window.location.assign(
-                      `/kiosk/${encodeURIComponent(slug)}/success?${qs.toString()}`
+                      `${kioskSuccessPath(slug, branchId)}?${qs.toString()}`
                     );
                   }}
                   onError={(msg) => {

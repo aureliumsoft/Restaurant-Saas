@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
   IconChevronLeft,
@@ -73,6 +75,21 @@ export function Sidebar({
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [menuBanners, setMenuBanners] = useState<string[]>([]);
   const [bannerIndex, setBannerIndex] = useState(0);
+  const [deliveryInfoOpen, setDeliveryInfoOpen] = useState(false);
+
+  const selectDeliveryBranch = (storeId: string) => {
+    setSelectedStoreId(storeId);
+    setDeliveryInfoOpen(true);
+  };
+
+  const canProceedDelivery =
+    Boolean(selectedStoreId) &&
+    deliveryAddress.trim().length > 0 &&
+    addressName.trim().length > 0 &&
+    customerPhone.trim().length > 0;
+
+  const canProceedTakeaway =
+    Boolean(selectedStoreId) && addressName.trim().length > 0;
 
   useEffect(() => {
     if (!restaurantSlug?.trim()) return;
@@ -176,6 +193,7 @@ export function Sidebar({
         ? `/order/delivery/${orderId}?${params}`
         : `/order/pickUp/${orderId}?${params}`;
 
+    setDeliveryInfoOpen(false);
     window.location.href = path;
   };
 
@@ -267,14 +285,20 @@ export function Sidebar({
           <div className="flex items-center justify-center gap-2 py-5">
             <Button
               variant={mode === 'delivery' ? 'default' : 'outline'}
-              onClick={() => setMode('delivery')}
+              onClick={() => {
+                setMode('delivery');
+                setDeliveryInfoOpen(false);
+              }}
             >
               <IconTruck className="mr-2" />
               {t('delivery')}
             </Button>
             <Button
               variant={mode === 'takeaway' ? 'default' : 'outline'}
-              onClick={() => setMode('takeaway')}
+              onClick={() => {
+                setMode('takeaway');
+                setDeliveryInfoOpen(false);
+              }}
             >
               <IconShoppingBag className="mr-2" />
               {t('takeAwayLabel')}
@@ -284,61 +308,117 @@ export function Sidebar({
           {mode === 'delivery' && (
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-[#64748b]">
-                {t('deliveryAddress')}
+                {t('selectBranch')}
               </p>
+              <div className="max-h-56 space-y-3 overflow-y-auto pr-1">
+                {branchesLoading && (
+                  <Loader2 className="mx-auto h-4 w-4 animate-spin text-primary" />
+                )}
+                {!branchesLoading && activeStores?.length === 0 && (
+                  <p className="text-xs text-[#64748b]">
+                    {t('noBranchesTakeaway')}
+                  </p>
+                )}
+                {activeStores?.map((store) => (
+                  <div
+                    key={store.id}
+                    className={`flex items-start justify-between rounded-3xl border bg-[#f8fafc] p-4 transition ${
+                      selectedStoreId === store.id
+                        ? 'border-primary bg-primary/10'
+                        : 'border-[#e2e8f0]'
+                    }`}
+                  >
+                    <div className="flex flex-1 flex-col gap-1">
+                      <p className="text-sm font-semibold text-[#0f172a]">
+                        {store.name}
+                      </p>
+                      <p className="text-xs text-[#64748b]">{store.address}</p>
+                    </div>
+                    <Button
+                      variant={
+                        selectedStoreId === store.id ? 'default' : 'outline'
+                      }
+                      onClick={() => selectDeliveryBranch(store.id)}
+                    >
+                      {selectedStoreId === store.id ? t('selected') : t('select')}
+                      <IconChevronRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
 
-              <Input
-                placeholder={t('yourName')}
-                value={addressName}
-                onChange={(event) => setAddressName(event.target.value)}
-                className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
-              />
-              <Input
-                type="tel"
-                placeholder={t('phoneNumber')}
-                value={customerPhone}
-                onChange={(event) => {
-                  const value = event.target.value.replace(/\D/g, '');
-                  setCustomerPhone(value);
-                }}
-                className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
-              />
-              <Input
-                placeholder={t('yourAddressRequired')}
-                value={deliveryAddress}
-                onChange={(event) => setDeliveryAddress(event.target.value)}
-                required
-                autoComplete="street-address"
-                className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
-              />
-              <Input
-                placeholder={t('apartmentOrDoor')}
-                value={apartmentDoorNumber}
-                onChange={(event) => setApartmentDoorNumber(event.target.value)}
-                className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
-              />
-              {/* <Input
-                placeholder={t('gateCodeIntercom')}
-                value={gateCode}
-                onChange={(event) => setGateCode(event.target.value)}
-                className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
-              /> */}
-
-              <p className="text-xs text-[#64748b]">{t('deliveryInfoHint')}</p>
-              <Button
-                className="w-full"
-                onClick={createOrder}
-                disabled={
-                  !deliveryAddress.trim() ||
-                  !addressName.trim() ||
-                  !customerPhone.trim()
-                }
-              >
-                <IconShoppingCart className="w-4 h-4 mr-2" />
-                {t('proceedOrder')}
-              </Button>
+              {selectedStoreId ? (
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => setDeliveryInfoOpen(true)}
+                >
+                  <UserIcon className="mr-2 h-4 w-4" />
+                  {t('enterDeliveryDetails')}
+                </Button>
+              ) : null}
             </div>
           )}
+
+          <Dialog open={deliveryInfoOpen} onOpenChange={setDeliveryInfoOpen}>
+            <DialogContent className="web-app-customer max-w-md rounded-3xl border-[#e2e8f0] bg-white text-[#0f172a] shadow-xl">
+              <DialogHeader>
+                <DialogTitle className="text-[#0f172a]">
+                  {t('customerDetails')}
+                </DialogTitle>
+                <DialogDescription className="text-[#64748b]">
+                  {t('deliveryInfoHint')}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <Input
+                  placeholder={t('yourName')}
+                  value={addressName}
+                  onChange={(event) => setAddressName(event.target.value)}
+                  className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
+                />
+                <Input
+                  type="tel"
+                  placeholder={t('phoneNumber')}
+                  value={customerPhone}
+                  onChange={(event) => {
+                    const value = event.target.value.replace(/\D/g, '');
+                    setCustomerPhone(value);
+                  }}
+                  className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
+                />
+                <Input
+                  placeholder={t('yourAddressRequired')}
+                  value={deliveryAddress}
+                  onChange={(event) => setDeliveryAddress(event.target.value)}
+                  required
+                  autoComplete="street-address"
+                  className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
+                />
+                <Input
+                  placeholder={t('apartmentOrDoor')}
+                  value={apartmentDoorNumber}
+                  onChange={(event) =>
+                    setApartmentDoorNumber(event.target.value)
+                  }
+                  className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
+                />
+              </div>
+              <DialogFooter className="border-t border-[#e2e8f0] pt-4 w-full">
+                <div className="flex justify-end gap-2 w-full">
+                  
+                <Button
+                  className="w-full bg-primary text-primary-foreground hover:brightness-95"
+                  onClick={createOrder}
+                  disabled={!canProceedDelivery}
+                >
+                  <IconShoppingCart className="mr-2 h-4 w-4" />
+                  {t('proceedOrder')}
+                </Button>
+                </div>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {mode === 'takeaway' && (
             <div className="space-y-3">
@@ -350,7 +430,7 @@ export function Sidebar({
               />
               <Input
                 type="tel"
-                placeholder={t('phoneNumber')}
+                placeholder={`${t('phoneNumber')} (${t('optional')})`}
                 value={customerPhone}
                 onChange={(event) => {
                   const value = event.target.value.replace(/\D/g, '');
@@ -425,11 +505,7 @@ export function Sidebar({
               <Button
                 className="w-full"
                 onClick={createOrder}
-                disabled={
-                  !selectedStoreId ||
-                  !addressName.trim() ||
-                  !customerPhone.trim()
-                }
+                disabled={!canProceedTakeaway}
               >
                 <IconShoppingCart className="w-4 h-4 mr-2" />
                 {t('proceedOrder')}

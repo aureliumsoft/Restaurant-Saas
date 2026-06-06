@@ -26,6 +26,7 @@ import {
   Loader2,
   ArrowLeft,
 } from 'lucide-react';
+import { useBranchContext } from '@/hooks/use-branch-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -196,6 +197,12 @@ const POS_ARCHIVED_ORDERS_KEY = 'pos_archived_orders_v1';
 export function PosScreen() {
   const router = useRouter();
   const { setPosCartHasItems } = usePosCartGuard();
+  const {
+    branches: scopedBranches,
+    activeBranchId,
+    isOwnerOrAdmin,
+    setActiveBranch,
+  } = useBranchContext();
   const [orderMode, setOrderMode] = useState<OrderMode>('tables');
   const [categoryId, setCategoryId] = useState<string>('all');
   const [categories, setCategories] = useState<Category[]>([
@@ -431,6 +438,24 @@ export function PosScreen() {
   }, []);
 
   useEffect(() => {
+    if (activeBranchId) {
+      setSelectedBranchId(activeBranchId);
+    }
+  }, [activeBranchId]);
+
+  useEffect(() => {
+    const onBranch = (event: Event) => {
+      const branchId = (event as CustomEvent<{ branchId?: string }>).detail
+        ?.branchId;
+      if (typeof branchId === 'string' && branchId.length > 0) {
+        setSelectedBranchId(branchId);
+      }
+    };
+    window.addEventListener('branch-changed', onBranch);
+    return () => window.removeEventListener('branch-changed', onBranch);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     async function loadTables() {
       setTablesLoading(true);
@@ -506,8 +531,10 @@ export function PosScreen() {
 
   const isTableMode = orderMode === 'tables';
   const isDeliveryMode = orderMode === 'delivery';
+  const posBranches =
+    scopedBranches.length > 0 ? scopedBranches : branches;
   const selectedBranchName =
-    branches.find((b) => b.id === selectedBranchId)?.name ??
+    posBranches.find((b) => b.id === selectedBranchId)?.name ??
     'No branch selected';
   const hasPendingPosData = cart.length > 0 || archivedOrders.length > 0;
 
@@ -913,6 +940,7 @@ export function PosScreen() {
         customerPhone: phoneTrim || undefined,
         tableId: tableTrim || undefined,
         orderMode,
+        branchId: selectedBranchId || undefined,
         items: cart.map((l) => ({
           productId: l.productId,
           name: l.name,
@@ -1106,23 +1134,32 @@ export function PosScreen() {
         {/* Categories */}
         <ScrollArea className="min-h-0 border-b bg-muted/10 lg:border-b-0 lg:border-r">
           <div className="space-y-2 p-3">
-            <div className="text-sm font-semibold">Select Branch</div>
+            <div className="text-sm font-semibold">Branch</div>
             <div className="mb-2">
-              <Select
-                value={selectedBranchId}
-                onValueChange={setSelectedBranchId}
-              >
-                <SelectTrigger className="h-7 w-full text-xs">
-                  <SelectValue placeholder="Select branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isOwnerOrAdmin ? (
+                <Select
+                  value={selectedBranchId}
+                  onValueChange={(value) => {
+                    setSelectedBranchId(value);
+                    void setActiveBranch(value);
+                  }}
+                >
+                  <SelectTrigger className="h-7 w-full text-xs">
+                    <SelectValue placeholder="Select branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {posBranches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="rounded-md border bg-background px-2 py-1.5 text-xs text-muted-foreground">
+                  {selectedBranchName}
+                </p>
+              )}
             </div>
             <div className="text-sm font-semibold">Categories</div>
             <div className="space-y-2">

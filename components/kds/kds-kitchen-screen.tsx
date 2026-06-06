@@ -300,6 +300,12 @@ export function KdsKitchenScreen() {
   }, [load]);
 
   useEffect(() => {
+    const onBranch = () => void load();
+    window.addEventListener('branch-changed', onBranch);
+    return () => window.removeEventListener('branch-changed', onBranch);
+  }, [load]);
+
+  useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);

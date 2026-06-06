@@ -166,6 +166,12 @@ export default function DashboardAnalytics() {
   }, []);
 
   useEffect(() => {
+    const onBranch = () => void load(selectedDays);
+    window.addEventListener('branch-changed', onBranch);
+    return () => window.removeEventListener('branch-changed', onBranch);
+  }, [load, selectedDays]);
+
+  useEffect(() => {
     void load(selectedDays);
   }, [load, selectedDays]);
 
@@ -254,6 +260,7 @@ export default function DashboardAnalytics() {
             <Button asChild variant="secondary">
               <a
                 href={`/kiosk/${encodeURIComponent(slug)}`}
+                title="Opens branch picker — use Settings for per-branch kiosk URLs"
                 target="_blank"
                 rel="noopener noreferrer"
               >

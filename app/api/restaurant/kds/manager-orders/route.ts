@@ -2,6 +2,10 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { OrderSourceType } from '@prisma/client';
 
+import {
+  getBranchScopeFromRequest,
+  orderBranchWhere,
+} from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
@@ -15,9 +19,17 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
+    const branchScope = await getBranchScopeFromRequest(
+      _req,
+      auth.userId,
+      auth.restaurantId
+    );
+    const orderBranchFilter = orderBranchWhere(branchScope?.activeBranchId ?? null);
+
     const pending = await db.order.findMany({
       where: {
         restaurantId: auth.restaurantId,
+        ...orderBranchFilter,
         status: { in: ['pending', 'pedding'] },
         // POS sends straight to kitchen after checkout; not queued here.
         sourceType: { not: OrderSourceType.POS },

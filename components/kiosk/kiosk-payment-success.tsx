@@ -15,10 +15,12 @@ import {
   getThermalReceiptDocumentCss,
 } from '@/lib/thermal-receipt-html';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { kioskBasePath, kioskCartStorageKey, kioskCheckoutDraftKey } from '@/lib/kiosk-path';
 import { IconHome, IconPrinter } from '@tabler/icons-react';
 
 type Props = {
   slug: string;
+  branchId: string;
   orderId: string | null;
   ticketFromQuery: number | null;
   sessionId: string | null;
@@ -27,6 +29,7 @@ type Props = {
 
 export function KioskPaymentSuccess({
   slug,
+  branchId,
   orderId,
   ticketFromQuery,
   sessionId,
@@ -39,12 +42,12 @@ export function KioskPaymentSuccess({
 
   useEffect(() => {
     try {
-      localStorage.removeItem(`kiosk-cart-${slug}`);
-      localStorage.removeItem(`kiosk-checkout-draft-${slug}`);
+      localStorage.removeItem(kioskCartStorageKey(slug, branchId));
+      localStorage.removeItem(kioskCheckoutDraftKey(slug, branchId));
     } catch {
       // ignore storage errors
     }
-  }, [slug]);
+  }, [slug, branchId]);
 
   useEffect(() => {
     const paymentToken = sessionId ?? token ?? null;
@@ -334,7 +337,9 @@ export function KioskPaymentSuccess({
               <Button
                 type="button"
                 className="border border-primary bg-white text-primary hover:bg-primary/10 hover:text-primary"
-                onClick={() => router.push(`/kiosk/${encodeURIComponent(slug)}`)}
+                onClick={() =>
+                  router.push(kioskBasePath(slug, branchId))
+                }
               >
                 <IconHome className="w-4 h-4 mr-2" />
                 Back to Home

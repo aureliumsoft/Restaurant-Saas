@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { LayoutDashboard } from 'lucide-react';
 
+import { BranchSwitcher } from '@/components/dashboard/branch-switcher';
 import { OperationalHeaderRestaurantBrand } from '@/components/layout/operational-header-restaurant-brand';
 import { ModeToggle } from '@/components/darkmode/darkmode';
 import UserMenu from '@/components/dashboard/UserMenu';
@@ -40,6 +41,7 @@ export function KdsLayoutHeader() {
         </Button>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        <BranchSwitcher />
         <ModeToggle />
         <UserMenu />
       </div>

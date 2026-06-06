@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import {
+  getBranchScopeFromRequest,
+  orderBranchWhere,
+} from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
@@ -36,6 +40,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
     const restaurantId = auth.restaurantId;
+    const branchScope = await getBranchScopeFromRequest(
+      req,
+      auth.userId,
+      restaurantId
+    );
+    const orderBranchFilter = orderBranchWhere(branchScope?.activeBranchId ?? null);
 
     const q = req.nextUrl.searchParams.get('q')?.trim().toLowerCase() ?? '';
     const kindFilterRaw = req.nextUrl.searchParams.get('kind');
@@ -50,7 +60,7 @@ export async function GET(req: NextRequest) {
 
     const [orders, subscriptions, registerTxns] = await Promise.all([
       db.order.findMany({
-        where: { restaurantId },
+        where: { restaurantId, ...orderBranchFilter },
         select: {
           id: true,
           total: true,

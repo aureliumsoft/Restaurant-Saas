@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { OrderSourceType, Prisma } from '@prisma/client';
 
 import type { NextRequest } from 'next/server';
+import { getBranchScopeFromRequest, orderBranchSql } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { getOrderDisplayTimezone } from '@/lib/order-display-timezone';
@@ -73,6 +74,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
+    const branchScope = await getBranchScopeFromRequest(
+      req,
+      auth.userId,
+      auth.restaurantId
+    );
+    const branchSql = orderBranchSql(branchScope?.activeBranchId ?? null);
+
     const tz = getOrderDisplayTimezone();
     const [dateRow] = await db.$queryRaw<{ filterDate: Date | string }[]>(
       Prisma.sql`
@@ -120,6 +128,7 @@ export async function GET(req: NextRequest) {
         JOIN "Order" o    ON o."id" = kt."orderId"
         LEFT JOIN "Customer" c ON c."id" = o."customerId"
         WHERE kt."restaurantId" = ${restaurant.id}
+          ${branchSql}
           AND lower(kt."status") = 'completed'
           AND o."sourceType" IN (
             ${OrderSourceType.POS}::"OrderSourceType",
@@ -149,6 +158,7 @@ export async function GET(req: NextRequest) {
         JOIN "Order" o    ON o."id" = kt."orderId"
         LEFT JOIN "Customer" c ON c."id" = o."customerId"
         WHERE kt."restaurantId" = ${restaurant.id}
+          ${branchSql}
           AND lower(kt."status") = 'making'
           AND o."sourceType" IN (
             ${OrderSourceType.POS}::"OrderSourceType",

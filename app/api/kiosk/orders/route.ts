@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { OrderSourceType } from '@prisma/client';
 import { z } from 'zod';
 
+import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import {
   kioskDineInCustomerDisplayName,
@@ -47,6 +48,7 @@ const postSchema = z.object({
   cookingNote: z.string().max(2000).optional(),
   customerName: z.string().max(120).optional(),
   customerPhone: z.string().max(40).optional(),
+  branchId: z.string().uuid().optional(),
   paymentStatus: z.enum(['pending', 'completed']).optional(),
   paymentMethod: z.string().min(1).max(100).optional(),
 });
@@ -118,6 +120,7 @@ export async function POST(req: NextRequest) {
     cookingNote,
     customerName,
     customerPhone,
+    branchId: bodyBranchId,
     paymentStatus,
     paymentMethod,
   } = parsed.data;
@@ -200,6 +203,21 @@ export async function POST(req: NextRequest) {
     customerPhone
   );
 
+  let branchId: string | null = bodyBranchId ?? null;
+  if (branchId) {
+    const ok = await validateBranchForRestaurant(branchId, restaurant.id);
+    if (!ok) {
+      return NextResponse.json({ error: 'Invalid branch' }, { status: 400 });
+    }
+  } else {
+    const defaultBranch = await db.branch.findFirst({
+      where: { restaurantId: restaurant.id },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    branchId = defaultBranch?.id ?? null;
+  }
+
   try {
     const result = await db.$transaction(async (tx) => {
       const ticketDate = new Date(
@@ -212,6 +230,7 @@ export async function POST(req: NextRequest) {
       const previousOrder = await tx.order.findFirst({
         where: {
           restaurantId: restaurant.id,
+          branchId,
           ticketDate,
         },
         orderBy: { ticketNumber: 'desc' },
@@ -230,6 +249,7 @@ export async function POST(req: NextRequest) {
       const order = await tx.order.create({
         data: {
           restaurantId: restaurant.id,
+          branchId,
           customerId: customerId ?? undefined,
           ticketDate,
           ticketNumber: nextTicketNumber,

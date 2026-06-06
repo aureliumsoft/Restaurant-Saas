@@ -1,6 +1,10 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import {
+  getBranchScopeFromRequest,
+  orderBranchWhere,
+} from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { getRestaurantPlanFeatures } from '@/lib/subscription-plan-enforcement';
@@ -31,7 +35,15 @@ async function resolveRestaurantId(req: NextRequest) {
       error: NextResponse.json({ error: auth.error }, { status: auth.status }),
     };
   }
-  return { restaurantId: auth.restaurantId };
+  const branchScope = await getBranchScopeFromRequest(
+    req,
+    auth.userId,
+    auth.restaurantId
+  );
+  return {
+    restaurantId: auth.restaurantId,
+    orderBranchFilter: orderBranchWhere(branchScope?.activeBranchId ?? null),
+  };
 }
 
 export async function GET(_req: NextRequest) {
@@ -39,7 +51,7 @@ export async function GET(_req: NextRequest) {
     const auth = await resolveRestaurantId(_req);
     if ('error' in auth) return auth.error;
 
-    const { restaurantId } = auth;
+    const { restaurantId, orderBranchFilter } = auth;
     const planFeatures = await getRestaurantPlanFeatures(restaurantId);
     const url = new URL(_req.url);
     const rawDays = Number(url.searchParams.get('days') ?? 7);
@@ -66,6 +78,7 @@ export async function GET(_req: NextRequest) {
       db.order.count({
         where: {
           restaurantId,
+          ...orderBranchFilter,
           OR: [
             { status: { equals: 'completed', mode: 'insensitive' } },
             { status: { equals: 'complete', mode: 'insensitive' } },
@@ -75,6 +88,7 @@ export async function GET(_req: NextRequest) {
       db.order.count({
         where: {
           restaurantId,
+          ...orderBranchFilter,
           sourceType: 'POS',
           OR: [
             { status: { equals: 'completed', mode: 'insensitive' } },
@@ -90,12 +104,16 @@ export async function GET(_req: NextRequest) {
         where: {
           restaurantId,
           status: { notIn: ['completed', 'canceled'] },
+          ...(orderBranchFilter.branchId
+            ? { order: { branchId: orderBranchFilter.branchId } }
+            : {}),
         },
       }),
       db.employee.count({ where: { restaurantId } }),
       db.order.findMany({
         where: {
           restaurantId,
+          ...orderBranchFilter,
           createdAt: { gte: from },
           OR: [
             { status: { equals: 'completed', mode: 'insensitive' } },

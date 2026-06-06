@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 
+import { getBranchScopeFromRequest, orderBranchSql } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { salesOrderMethodLabel } from '@/lib/order-fulfillment';
@@ -164,6 +165,12 @@ export async function GET(req: NextRequest) {
     }
 
     const rid = restaurant.id;
+    const branchScope = await getBranchScopeFromRequest(
+      req,
+      auth.userId,
+      rid
+    );
+    const branchSql = orderBranchSql(branchScope?.activeBranchId ?? null);
 
     // --- Channel stats (all orders, not filtered by search/status) ---
     const stats: SalesOrdersStats = {
@@ -185,6 +192,7 @@ export async function GET(req: NextRequest) {
                COUNT(*)::int AS cnt, COALESCE(SUM(o.total), 0)::float AS amt
         FROM "Order" o
         WHERE o."restaurantId" = ${rid}
+          ${branchSql}
         GROUP BY o."sourceType", o.status
       `);
       for (const row of menuStatRows) {
@@ -283,6 +291,7 @@ export async function GET(req: NextRequest) {
             ) AS "paymentId"
           FROM "Order" o
           WHERE o."restaurantId" = ${rid}
+            ${branchSql}
             AND ${sourceSqlForTab(tab)}
             ${statusSqlFilter(statusFilter)}
             ${searchSql(search)}
@@ -307,6 +316,7 @@ export async function GET(req: NextRequest) {
         SELECT COUNT(*)::int AS count FROM (
           SELECT o.id FROM "Order" o
           WHERE o."restaurantId" = ${rid}
+            ${branchSql}
             AND ${sourceSqlForTab(tab)}
             ${statusSqlFilter(statusFilter)}
             ${searchSql(search)}
@@ -375,6 +385,7 @@ export async function GET(req: NextRequest) {
           ) AS "paymentId"
         FROM "Order" o
         WHERE o."restaurantId" = ${rid}
+          ${branchSql}
           AND ${sourceSqlForTab(tab)}
           ${statusSqlFilter(statusFilter)}
           ${searchSql(search)}
@@ -386,6 +397,7 @@ export async function GET(req: NextRequest) {
         SELECT COUNT(*)::int AS count
         FROM "Order" o
         WHERE o."restaurantId" = ${rid}
+          ${branchSql}
           AND ${sourceSqlForTab(tab)}
           ${statusSqlFilter(statusFilter)}
           ${searchSql(search)}

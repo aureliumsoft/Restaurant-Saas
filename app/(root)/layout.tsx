@@ -16,7 +16,9 @@ import { toast } from 'react-toastify';
 import axios from 'axios';
 import { cn } from '@/lib/utils';
 import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
+import { BranchSwitcher } from '@/components/dashboard/branch-switcher';
 import { useRestaurantBranding } from '@/components/layout/restaurant-branding-provider';
+import { BranchProvider } from '@/hooks/use-branch-context';
 
 const SIDEBAR_STORAGE_KEY = 'dashboard-sidebar-open';
 
@@ -205,7 +207,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
   }
 
   return (
-    <>
+    <BranchProvider>
       <div className="bg-gray-300 dark:bg-black">
         <div
           className={cn(
@@ -303,6 +305,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
               </div>
 
               <Bread />
+              <BranchSwitcher />
               <ModeToggle />
               <div
                 className={cn(
@@ -325,7 +328,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
           </div>
         </div>
       </div>
-    </>
+    </BranchProvider>
   );
 };
 

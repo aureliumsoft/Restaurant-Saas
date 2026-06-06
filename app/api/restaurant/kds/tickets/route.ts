@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 
+import { getBranchScopeFromRequest, orderBranchSql } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
@@ -79,6 +80,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
     const restaurantId = auth.restaurantId;
+    const branchScope = await getBranchScopeFromRequest(
+      req,
+      auth.userId,
+      restaurantId
+    );
+    const branchSql = orderBranchSql(branchScope?.activeBranchId ?? null);
 
     const requestedStatus = req.nextUrl.searchParams.get('status')?.trim().toLowerCase();
     const statusFilter =
@@ -104,6 +111,7 @@ export async function GET(req: NextRequest) {
         JOIN "Order" o ON o."id" = kt."orderId"
         LEFT JOIN "Customer" c ON c."id" = o."customerId"
         WHERE kt."restaurantId" = ${restaurantId}
+          ${branchSql}
           AND lower(kt."status") = ${statusFilter}
         ORDER BY kt."createdAt" DESC
       `

@@ -406,6 +406,12 @@ export function SalesOrdersTabs() {
   }, [activeTab, page, search, statusFilter]);
 
   useEffect(() => {
+    const onBranch = () => void load();
+    window.addEventListener('branch-changed', onBranch);
+    return () => window.removeEventListener('branch-changed', onBranch);
+  }, [load]);
+
+  useEffect(() => {
     void load();
   }, [load]);
 

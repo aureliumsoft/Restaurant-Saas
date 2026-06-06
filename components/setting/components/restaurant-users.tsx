@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { Loader2, RefreshCcw, Trash2, UserPlus, X } from 'lucide-react';
+import { Loader2, Pencil, RefreshCcw, Trash2, UserPlus, X } from 'lucide-react';
 
 import { RESTAURANT_ROLE_SLUG } from '@/lib/restaurant-roles';
 import {
@@ -27,6 +27,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Table,
   TableBody,
   TableCell,
@@ -36,6 +43,7 @@ import {
 } from '@/components/ui/table';
 
 type RoleOption = { id: string; name: string; slug?: string | null };
+type BranchOption = { id: string; name: string };
 
 type EmployeeRow = {
   id: string;
@@ -44,12 +52,14 @@ type EmployeeRow = {
   email: string | null;
   role: { id: string; name: string; slug?: string | null };
   isOwner: boolean;
+  branchIds: string[];
 };
 
 type PendingInvite = {
   id: string;
   email: string;
   role: { id: string; name: string };
+  branchIds: string[];
   expiresAt: string;
 };
 
@@ -67,6 +77,12 @@ export default function RestaurantUsersCard({
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
+  const [branchOptions, setBranchOptions] = useState<BranchOption[]>([]);
+  const [inviteBranchId, setInviteBranchId] = useState('');
+  const [isOwnerOrAdmin, setIsOwnerOrAdmin] = useState(false);
+  const [branchEditEmployee, setBranchEditEmployee] =
+    useState<EmployeeRow | null>(null);
+  const [editBranchId, setEditBranchId] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [email, setEmail] = useState('');
@@ -110,15 +126,21 @@ export default function RestaurantUsersCard({
     }
     setLoading(true);
     try {
-      const [empRes] = await Promise.all([
+      const [empRes, branchRes, branchCtxRes] = await Promise.all([
         axios.get<{
           employees: EmployeeRow[];
           pendingInvites: PendingInvite[];
         }>('/api/restaurant/employees'),
+        axios.get<{ data?: BranchOption[] }>('/api/restaurant/branches'),
+        axios.get<{ data?: { isOwnerOrAdmin?: boolean } }>(
+          '/api/me/branch-context'
+        ),
         loadAssignableRoles(),
       ]);
       setEmployees(empRes.data.employees ?? []);
       setPendingInvites(empRes.data.pendingInvites ?? []);
+      setBranchOptions(branchRes.data.data ?? []);
+      setIsOwnerOrAdmin(Boolean(branchCtxRes.data.data?.isOwnerOrAdmin));
     } catch (e: any) {
       toast.error(
         e.response?.data?.error ?? e.message ?? 'Failed to load team members.'
@@ -133,6 +155,54 @@ export default function RestaurantUsersCard({
   useEffect(() => {
     void fetchAll();
   }, [fetchAll]);
+
+  const selectedInviteRole = roles.find((r) => r.id === roleId);
+  const inviteRequiresBranch =
+    selectedInviteRole?.slug !== RESTAURANT_ROLE_SLUG.ADMIN;
+
+  useEffect(() => {
+    if (!inviteRequiresBranch) {
+      setInviteBranchId('');
+    }
+  }, [inviteRequiresBranch]);
+
+  function employeeBranchLabel(emp: EmployeeRow) {
+    if (
+      emp.isOwner ||
+      emp.role.slug === RESTAURANT_ROLE_SLUG.ADMIN ||
+      emp.role.slug === RESTAURANT_ROLE_SLUG.OWNER
+    ) {
+      return 'All branches';
+    }
+    const ids = emp.branchIds ?? [];
+    if (ids.length === 0) return 'No branch assigned';
+    const names = ids
+      .map((id) => branchOptions.find((b) => b.id === id)?.name)
+      .filter((name): name is string => Boolean(name));
+    return names.length > 0 ? names.join(', ') : '—';
+  }
+
+  function pendingInviteBranchLabel(invite: PendingInvite) {
+    if (invite.branchIds.length === 0) return 'All branches';
+    const names = invite.branchIds
+      .map((id) => branchOptions.find((b) => b.id === id)?.name)
+      .filter((name): name is string => Boolean(name));
+    return names.length > 0 ? names.join(', ') : '—';
+  }
+
+  function canEditEmployeeBranches(emp: EmployeeRow) {
+    return (
+      isOwnerOrAdmin &&
+      !emp.isOwner &&
+      emp.role.slug !== RESTAURANT_ROLE_SLUG.ADMIN &&
+      emp.role.slug !== RESTAURANT_ROLE_SLUG.OWNER
+    );
+  }
+
+  function openBranchEdit(emp: EmployeeRow) {
+    setBranchEditEmployee(emp);
+    setEditBranchId(emp.branchIds[0] ?? '');
+  }
 
   async function handleAdd() {
     const e = email.trim().toLowerCase();
@@ -154,6 +224,10 @@ export default function RestaurantUsersCard({
       toast.error('Password and confirmation do not match.');
       return;
     }
+    if (inviteRequiresBranch && !inviteBranchId) {
+      toast.error('Select a branch for this team member.');
+      return;
+    }
     if (!navigator.onLine) {
       toast.error('You are offline.');
       return;
@@ -165,10 +239,12 @@ export default function RestaurantUsersCard({
         roleId: string;
         password: string;
         name?: string;
+        branchIds?: string[];
       } = {
         email: e,
         roleId,
         password,
+        branchIds: inviteBranchId ? [inviteBranchId] : [],
       };
       const nm = name.trim();
       if (nm.length >= 2) {
@@ -202,6 +278,7 @@ export default function RestaurantUsersCard({
       setName('');
       setPassword('');
       setConfirmPassword('');
+      setInviteBranchId('');
       await fetchAll();
     } catch (err: any) {
       const d = err.response?.data;
@@ -212,6 +289,36 @@ export default function RestaurantUsersCard({
       );
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function saveEmployeeBranchEdit() {
+    if (!branchEditEmployee) return;
+    if (!editBranchId) {
+      toast.error('Select a branch.');
+      return;
+    }
+    if (!navigator.onLine) {
+      toast.error('You are offline.');
+      return;
+    }
+    setSavingEmployeeId(branchEditEmployee.id);
+    try {
+      await axios.patch(`/api/restaurant/employees/${branchEditEmployee.id}`, {
+        branchIds: [editBranchId],
+      });
+      toast.success('Branch assignment updated.');
+      setBranchEditEmployee(null);
+      setEditBranchId('');
+      await fetchAll();
+    } catch (err: any) {
+      toast.error(
+        typeof err.response?.data?.error === 'string'
+          ? err.response.data.error
+          : err.message ?? 'Could not update branch.'
+      );
+    } finally {
+      setSavingEmployeeId(null);
     }
   }
 
@@ -386,7 +493,27 @@ export default function RestaurantUsersCard({
               ))}
             </select>
           </div>
-          <div className="flex lg:col-span-3 lg:justify-end">
+          {branchOptions.length > 0 && inviteRequiresBranch ? (
+            <div className="space-y-2 sm:col-span-2">
+              <label className="text-sm font-medium" htmlFor="member-branch">
+                Branch
+              </label>
+              <select
+                id="member-branch"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={inviteBranchId}
+                onChange={(e) => setInviteBranchId(e.target.value)}
+              >
+                <option value="">Select branch…</option>
+                {branchOptions.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          
             <Button
               type="button"
               className="text-white"
@@ -402,7 +529,6 @@ export default function RestaurantUsersCard({
                 </>
               )}
             </Button>
-          </div>
         </div>
 
         {loading ? (
@@ -420,6 +546,7 @@ export default function RestaurantUsersCard({
                       <TableRow>
                         <TableHead>Email</TableHead>
                         <TableHead>Role</TableHead>
+                        <TableHead>Branches</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -428,6 +555,9 @@ export default function RestaurantUsersCard({
                         <TableRow key={p.id}>
                           <TableCell>{p.email}</TableCell>
                           <TableCell>{p.role.name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {pendingInviteBranchLabel(p)}
+                          </TableCell>
                           <TableCell className="text-right">
                             <Button
                               type="button"
@@ -478,6 +608,7 @@ export default function RestaurantUsersCard({
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Role</TableHead>
+                        <TableHead>Branches</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -530,6 +661,26 @@ export default function RestaurantUsersCard({
                                 ))}
                               </select>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-muted-foreground">
+                                {employeeBranchLabel(emp)}
+                              </span>
+                              {canEditEmployeeBranches(emp) ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  title="Change branch"
+                                  disabled={savingEmployeeId === emp.id}
+                                  onClick={() => openBranchEdit(emp)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              ) : null}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             {emp.isOwner ? (
@@ -595,6 +746,67 @@ export default function RestaurantUsersCard({
           )}
         </Button>
       </CardFooter>
+
+      <Dialog
+        open={!!branchEditEmployee}
+        onOpenChange={(open) => {
+          if (!open && !savingEmployeeId) {
+            setBranchEditEmployee(null);
+            setEditBranchId('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change branch assignment</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {branchEditEmployee ? (
+              <>
+                Assign <strong>{branchEditEmployee.name}</strong> to a branch.
+                They will only see data for that branch.
+              </>
+            ) : null}
+          </p>
+          <select
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={editBranchId}
+            onChange={(e) => setEditBranchId(e.target.value)}
+            disabled={Boolean(savingEmployeeId)}
+          >
+            <option value="">Select branch…</option>
+            {branchOptions.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={Boolean(savingEmployeeId)}
+              onClick={() => {
+                setBranchEditEmployee(null);
+                setEditBranchId('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={Boolean(savingEmployeeId)}
+              onClick={() => void saveEmployeeBranchEdit()}
+            >
+              {savingEmployeeId ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                'Save'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={!!confirmAction}

@@ -15,9 +15,13 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { kioskBasePath } from '@/lib/kiosk-path';
+
+type BranchRow = { id: string; name: string };
 
 export function CustomerEntryLinks() {
   const [slug, setSlug] = useState<string | null>(null);
+  const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [publicBase, setPublicBase] = useState('');
 
@@ -25,13 +29,20 @@ export function CustomerEntryLinks() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await axios.get<{ data: { slug?: string } | null }>(
-          '/api/restaurant'
-        );
-        const s = res.data?.data?.slug?.trim();
-        if (!cancelled) setSlug(s && s.length > 0 ? s : null);
+        const [restaurantRes, branchesRes] = await Promise.all([
+          axios.get<{ data: { slug?: string } | null }>('/api/restaurant'),
+          axios.get<{ data?: BranchRow[] }>('/api/restaurant/branches'),
+        ]);
+        const s = restaurantRes.data?.data?.slug?.trim();
+        if (!cancelled) {
+          setSlug(s && s.length > 0 ? s : null);
+          setBranches(branchesRes.data?.data ?? []);
+        }
       } catch {
-        if (!cancelled) setSlug(null);
+        if (!cancelled) {
+          setSlug(null);
+          setBranches([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -46,12 +57,9 @@ export function CustomerEntryLinks() {
   }, []);
 
   const webAppPath = slug ? `/web-app/${encodeURIComponent(slug)}` : '';
-  const kioskPath = slug ? `/kiosk/${encodeURIComponent(slug)}` : '';
 
   const webAppUrl =
     publicBase && webAppPath ? `${publicBase}${webAppPath}` : webAppPath;
-  const kioskUrl =
-    publicBase && kioskPath ? `${publicBase}${kioskPath}` : kioskPath;
 
   async function copyText(label: string, text: string) {
     try {
@@ -96,7 +104,7 @@ export function CustomerEntryLinks() {
           <CardTitle>Public URLs</CardTitle>
           <CardDescription>
             Share or configure these absolute links (your current domain +
-            path). Use them as redirect targets.
+            path). Each kiosk device should use its branch-specific kiosk URL.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -129,32 +137,54 @@ export function CustomerEntryLinks() {
               </Button>
             </div>
           </div>
-          <div className="space-y-2">
+
+          <div className="space-y-3">
             <p className="text-sm font-medium text-foreground">Kiosk UI</p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <code className="block flex-1 break-all rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                {kioskUrl}
-              </code>
-              <Button
-                type="button"
-                variant="outline"
-                className="shrink-0 gap-1"
-                onClick={() => void copyText('Kiosk URL', kioskUrl)}
-              >
-                <IconCopy className="h-4 w-4" aria-hidden />
-                Copy
-              </Button>
-              <Button asChild className="gap-2">
-                <Link
-                  href={kioskPath}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Open kiosk
-                  <IconExternalLink className="h-4 w-4" aria-hidden />
-                </Link>
-              </Button>
-            </div>
+            {branches.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Add at least one branch to generate kiosk URLs.
+              </p>
+            ) : (
+              branches.map((branch) => {
+                const path = kioskBasePath(slug, branch.id);
+                const url =
+                  publicBase && path ? `${publicBase}${path}` : path;
+                return (
+                  <div
+                    key={branch.id}
+                    className="space-y-2 rounded-md border bg-muted/20 p-3"
+                  >
+                    <p className="text-sm font-medium">{branch.name}</p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <code className="block flex-1 break-all rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                        {url}
+                      </code>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="shrink-0 gap-1"
+                        onClick={() =>
+                          void copyText(`${branch.name} kiosk URL`, url)
+                        }
+                      >
+                        <IconCopy className="h-4 w-4" aria-hidden />
+                        Copy
+                      </Button>
+                      <Button asChild className="gap-2">
+                        <Link
+                          href={path}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Open kiosk
+                          <IconExternalLink className="h-4 w-4" aria-hidden />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </CardContent>
       </Card>
