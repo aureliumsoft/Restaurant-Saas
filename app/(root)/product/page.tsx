@@ -13,7 +13,7 @@ export default function ProductPage() {
       <ErrorBoundary>
         <MenuPageShell
           title="Products"
-          description="Add menu items with photos, pricing, optional sale price, and descriptions. Manage swatches in a dedicated module."
+          description="Manage your full menu inventory on one page — add categories, variation templates, and products without leaving this screen."
           loading={false}
         >
          

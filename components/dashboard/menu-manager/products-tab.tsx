@@ -36,6 +36,7 @@ import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import { cn } from '@/lib/utils';
 import { useDashboardPermissions } from '@/hooks/use-dashboard-permissions';
 
+import { InventoryQuickActions } from './inventory-quick-actions';
 import type { MenuCategoryRow, MenuItemRow } from './types';
 
 const PRODUCTS_PAGE_SIZE = 12;
@@ -142,10 +143,14 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>Products</CardTitle>
+        <InventoryQuickActions
+          onMenuRefresh={onRefresh}
+          className="flex flex-wrap gap-2"
+        />
       </CardHeader>
-      <CardContent className="space-y-4 pt-10">
+      <CardContent className="space-y-4 pt-4">
         {loading ? (
           <p className="text-sm text-muted-foreground">
             <Loader2 className="animate-spin text-primary text-center mx-auto" />
@@ -157,9 +162,11 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                 <p className="text-sm text-muted-foreground">
                   Create at least one category before you can add products.
                 </p>
-                <Button type="button" asChild className="w-fit">
-                  <Link href="/categories">Go to Categories</Link>
-                </Button>
+                <InventoryQuickActions
+                  variant="toolbar"
+                  showVariation={false}
+                  onMenuRefresh={onRefresh}
+                />
               </div>
             ) : allRows.length === 0 ? (
               <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">

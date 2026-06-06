@@ -7,7 +7,6 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import {
   ArrowLeft,
-  ArrowRight,
   Cross,
   Loader2,
   Save,
@@ -26,6 +25,7 @@ import {
   type ProductFormState,
   type VariationFormRow,
 } from '@/components/dashboard/menu-manager/product-form-fields';
+import { InventoryQuickActions } from '@/components/dashboard/menu-manager/inventory-quick-actions';
 import { useRestaurantMenu } from '@/components/dashboard/menu-manager/use-restaurant-menu';
 import type { MenuItemRow } from '@/components/dashboard/menu-manager/types';
 import ErrorBoundary from '@/components/toaster/toaster';
@@ -73,7 +73,8 @@ export default function ProductEditPage() {
     salePrice: '',
   });
   const [variationRows, setVariationRows] = useState<VariationFormRow[]>([]);
-  const variationTemplates = useRestaurantVariationTemplates();
+  const { variationTemplates, reloadVariationTemplates } =
+    useRestaurantVariationTemplates();
   const initialRef = useRef<{
     form: ProductFormState;
     variationRows: VariationFormRow[];
@@ -228,26 +229,37 @@ export default function ProductEditPage() {
                     <p className="text-sm text-muted-foreground">
                       Create at least one category before editing products.
                     </p>
-                    <Button type="button" asChild className="w-fit">
-                      <Link href="/categories">
-                        <span>Go to Categories</span>
-                        <ArrowRight className="ml-2 h-4 w-4" />{' '}
-                      </Link>
-                    </Button>
+                    <InventoryQuickActions
+                      variant="toolbar"
+                      showVariation={false}
+                      onMenuRefresh={load}
+                      onCategoryCreated={(categoryId) =>
+                        setForm((f) => ({ ...f, categoryId }))
+                      }
+                    />
                   </CardContent>
                 </Card>
               ) : item ? (
                 <Card>
-                  <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-                    <CardTitle className="text-lg">{item.name}</CardTitle>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={goToProducts}
-                    >
-                      <ArrowLeft className="mr-2 h-4 w-4" />
-                      Back to products
-                    </Button>
+                  <CardHeader className="flex flex-col gap-4 space-y-0">
+                    <div className="flex flex-row flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="text-lg">{item.name}</CardTitle>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={goToProducts}
+                      >
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back to products
+                      </Button>
+                    </div>
+                    <InventoryQuickActions
+                      onMenuRefresh={load}
+                      onVariationTemplatesReload={reloadVariationTemplates}
+                      onCategoryCreated={(categoryId) =>
+                        setForm((f) => ({ ...f, categoryId }))
+                      }
+                    />
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <ProductFormFields
@@ -258,6 +270,9 @@ export default function ProductEditPage() {
                       }
                       variationRows={variationRows}
                       onVariationRowsChange={setVariationRows}
+                      onMenuRefresh={load}
+                      variationTemplates={variationTemplates}
+                      onVariationTemplatesReload={reloadVariationTemplates}
                     />
                     <div className="flex flex-wrap gap-2 border-t border-border pt-4">
                       <Button

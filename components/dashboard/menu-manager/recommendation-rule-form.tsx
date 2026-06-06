@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, Save } from 'lucide-react';
 
@@ -13,6 +13,8 @@ import {
   isMenuCategoryShownInFront,
 } from '@/lib/menu/category-visibility';
 import { Badge } from '@/components/ui/badge';
+
+import type { RecommendationFormVariant } from '@/lib/menu/recommendation-preview-groups';
 
 import type { MenuCategoryRow, MenuItemRow } from './types';
 
@@ -32,6 +34,7 @@ export type RecommendationRuleDraft = {
   categoryDefaults: Record<string, string>;
   productCategoryIds: string[];
   linkedProductId: string;
+  linkedProductIds: string[];
   minItems: number;
   maxItems: number;
   freeQuantity: number;
@@ -40,22 +43,43 @@ export type RecommendationRuleDraft = {
 };
 
 type Props = {
+  variant: RecommendationFormVariant;
   selected: MenuItemRow & { categoryName: string };
   localCategories: MenuCategoryRow[];
   allProducts: (MenuItemRow & { categoryName: string })[];
   saving: boolean;
   onSave: (draft: RecommendationRuleDraft) => void;
+  onDraftChange?: (draft: RecommendationRuleDraft) => void;
 };
 
+function variantDefaults(variant: RecommendationFormVariant): {
+  sourceType: 'CATEGORY' | 'PRODUCT';
+  selectionType: 'SINGLE' | 'MULTIPLE';
+} {
+  switch (variant) {
+    case 'category-single':
+      return { sourceType: 'CATEGORY', selectionType: 'SINGLE' };
+    case 'category-multiple':
+      return { sourceType: 'CATEGORY', selectionType: 'MULTIPLE' };
+    case 'product-single':
+      return { sourceType: 'PRODUCT', selectionType: 'SINGLE' };
+    case 'product-multiple':
+      return { sourceType: 'PRODUCT', selectionType: 'MULTIPLE' };
+  }
+}
+
 export function RecommendationRuleForm({
+  variant,
   selected,
   localCategories,
   allProducts,
   saving,
   onSave,
+  onDraftChange,
 }: Props) {
-  const [sourceType, setSourceType] = useState<'CATEGORY' | 'PRODUCT'>('CATEGORY');
-  const [selectionType, setSelectionType] = useState<'SINGLE' | 'MULTIPLE'>('SINGLE');
+  const locked = variantDefaults(variant);
+  const [sourceType] = useState<'CATEGORY' | 'PRODUCT'>(locked.sourceType);
+  const [selectionType] = useState<'SINGLE' | 'MULTIPLE'>(locked.selectionType);
   const [multipleMode, setMultipleMode] = useState<'CHECKBOX' | 'QUANTITY'>('CHECKBOX');
   const [required, setRequired] = useState(false);
   const [ruleCategoryIds, setRuleCategoryIds] = useState<string[]>([]);
@@ -64,6 +88,7 @@ export function RecommendationRuleForm({
   >({});
   const [productCategoryIds, setProductCategoryIds] = useState<string[]>([]);
   const [linkedProductId, setLinkedProductId] = useState('');
+  const [linkedProductIds, setLinkedProductIds] = useState<string[]>([]);
   const [minItems, setMinItems] = useState(1);
   const [maxItems, setMaxItems] = useState(3);
   const [freeQuantity, setFreeQuantity] = useState(1);
@@ -182,71 +207,60 @@ export function RecommendationRuleForm({
     );
   };
 
+  const currentDraft = useMemo(
+    (): RecommendationRuleDraft => ({
+      sourceType,
+      selectionType,
+      multipleMode,
+      required,
+      ruleCategoryIds,
+      categoryDefaults,
+      productCategoryIds,
+      linkedProductId,
+      linkedProductIds,
+      minItems,
+      maxItems,
+      freeQuantity,
+      variationLimits,
+      useVariationPricing,
+    }),
+    [
+      sourceType,
+      selectionType,
+      multipleMode,
+      required,
+      ruleCategoryIds,
+      categoryDefaults,
+      productCategoryIds,
+      linkedProductId,
+      linkedProductIds,
+      minItems,
+      maxItems,
+      freeQuantity,
+      variationLimits,
+      useVariationPricing,
+    ]
+  );
+
+  const onDraftChangeRef = useRef(onDraftChange);
+  onDraftChangeRef.current = onDraftChange;
+  const lastDraftKeyRef = useRef('');
+
+  useEffect(() => {
+    const draftKey = JSON.stringify(currentDraft);
+    if (draftKey === lastDraftKeyRef.current) return;
+    lastDraftKeyRef.current = draftKey;
+    onDraftChangeRef.current?.(currentDraft);
+  }, [currentDraft]);
+
+  const toggleLinkedProduct = (id: string) => {
+    setLinkedProductIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
   return (
-    <div className="space-y-4 border-t border-border pt-4">
-      <p className="text-xs font-medium text-foreground">Add configuration</p>
-
-      <div className="grid gap-2">
-        <Label>Source</Label>
-        <div className="flex rounded-md border border-input p-0.5">
-          {(
-            [
-              ['CATEGORY', 'Category'],
-              ['PRODUCT', 'Single product'],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              className={cn(
-                'flex-1 rounded-sm px-2 py-2 text-xs font-medium sm:text-sm',
-                sourceType === value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted/60'
-              )}
-              onClick={() => {
-                setSourceType(value);
-                if (value === 'CATEGORY') {
-                  setProductCategoryIds([]);
-                  setLinkedProductId('');
-                } else {
-                  setRuleCategoryIds([]);
-                  setCategoryDefaults({});
-                }
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid gap-2">
-        <Label>Selection</Label>
-        <div className="flex rounded-md border border-input p-0.5">
-          {(
-            [
-              ['SINGLE', 'One option'],
-              ['MULTIPLE', 'Multiple options'],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              className={cn(
-                'flex-1 rounded-sm px-2 py-2 text-xs font-medium sm:text-sm',
-                selectionType === value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted/60'
-              )}
-              onClick={() => setSelectionType(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
+    <div className="space-y-4">
       {selectionType === 'MULTIPLE' ? (
         <div className="grid gap-2">
           <Label>Multiple style</Label>
@@ -454,6 +468,68 @@ export function RecommendationRuleForm({
             <p className="text-sm text-muted-foreground">
               No products in the selected categories (or already assigned).
             </p>
+          ) : variant === 'product-multiple' ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {productsFromSelectedCategories.map((p) => {
+                const checked = linkedProductIds.includes(p.id);
+                return (
+                  <label
+                    key={`rec-product-${p.id}`}
+                    className="group relative block cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={checked}
+                      onChange={() => toggleLinkedProduct(p.id)}
+                    />
+                    <div
+                      className={cn(
+                        'flex h-full flex-col overflow-hidden rounded-xl border bg-card text-left shadow-sm transition hover:border-primary/40 hover:shadow-md',
+                        'peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2',
+                        checked
+                          ? 'border-primary ring-2 ring-primary/25'
+                          : 'border-border'
+                      )}
+                    >
+                      <div className="relative aspect-[4/3] w-full shrink-0 bg-muted">
+                        {p.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={p.imageUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                            No photo
+                          </div>
+                        )}
+                        <span
+                          className={cn(
+                            'absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border-2 bg-background/90 text-xs font-bold shadow-sm backdrop-blur-sm transition',
+                            checked
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border text-transparent group-hover:border-primary/50'
+                          )}
+                          aria-hidden
+                        >
+                          ✓
+                        </span>
+                      </div>
+                      <div className="flex flex-1 flex-col gap-1.5 p-3">
+                        <p className="line-clamp-2 text-sm font-semibold leading-snug">
+                          {p.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {p.categoryName}
+                        </p>
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {productsFromSelectedCategories.map((p) => {
@@ -465,7 +541,7 @@ export function RecommendationRuleForm({
                   >
                     <input
                       type="radio"
-                      name="rec-product"
+                      name={`rec-product-${variant}`}
                       className="peer sr-only"
                       checked={checked}
                       onChange={() => setLinkedProductId(p.id)}
@@ -633,23 +709,7 @@ export function RecommendationRuleForm({
         type="button"
         className="w-full"
         disabled={saving}
-        onClick={() =>
-          onSave({
-            sourceType,
-            selectionType,
-            multipleMode,
-            required,
-            ruleCategoryIds,
-            categoryDefaults,
-            productCategoryIds,
-            linkedProductId,
-            minItems,
-            maxItems,
-            freeQuantity,
-            variationLimits,
-            useVariationPricing,
-          })
-        }
+        onClick={() => onSave(currentDraft)}
       >
         {saving ? (
           <>

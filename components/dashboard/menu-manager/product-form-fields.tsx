@@ -1,8 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -23,6 +22,7 @@ import {
   filterNameTextInput,
 } from '@/lib/validation/fields';
 
+import { InventoryQuickActions } from './inventory-quick-actions';
 import type {
   MenuCategoryRow,
   MenuItemRow,
@@ -51,15 +51,26 @@ export function useRestaurantVariationTemplates() {
   const [variationTemplates, setVariationTemplates] = useState<
     RestaurantVariationRow[]
   >([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    axios
-      .get<{ data: RestaurantVariationRow[] }>('/api/restaurant/variations')
-      .then((res) => setVariationTemplates(res.data.data ?? []))
-      .catch(() => setVariationTemplates([]));
+  const reloadVariationTemplates = useCallback(async () => {
+    try {
+      const res = await axios.get<{ data: RestaurantVariationRow[] }>(
+        '/api/restaurant/variations'
+      );
+      setVariationTemplates(res.data.data ?? []);
+    } catch {
+      setVariationTemplates([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return variationTemplates;
+  useEffect(() => {
+    void reloadVariationTemplates();
+  }, [reloadVariationTemplates]);
+
+  return { variationTemplates, reloadVariationTemplates, loading };
 }
 
 type Props = {
@@ -70,6 +81,9 @@ type Props = {
   onVariationRowsChange: (rows: VariationFormRow[]) => void;
   /** Show asterisks on category, name, and price (create flow). */
   showRequired?: boolean;
+  onMenuRefresh?: () => Promise<void>;
+  variationTemplates?: RestaurantVariationRow[];
+  onVariationTemplatesReload?: () => Promise<void>;
 };
 
 function FieldLabel({
@@ -129,8 +143,15 @@ export function ProductFormFields({
   variationRows,
   onVariationRowsChange,
   showRequired = false,
+  onMenuRefresh,
+  variationTemplates: variationTemplatesProp,
+  onVariationTemplatesReload,
 }: Props) {
-  const variationTemplates = useRestaurantVariationTemplates();
+  const internalTemplates = useRestaurantVariationTemplates();
+  const variationTemplates =
+    variationTemplatesProp ?? internalTemplates.variationTemplates;
+  const reloadVariationTemplates =
+    onVariationTemplatesReload ?? internalTemplates.reloadVariationTemplates;
 
   const usedTemplateIds = useMemo(
     () =>
@@ -161,10 +182,38 @@ export function ProductFormFields({
     );
   };
 
+  const handleVariationCreated = (variation: RestaurantVariationRow) => {
+    const alreadyUsed = variationRows.some(
+      (r) => r.restaurantVariationId === variation.id
+    );
+    if (!alreadyUsed) {
+      onVariationRowsChange([
+        ...variationRows,
+        {
+          name: variation.name,
+          priceDelta: '',
+          imageUrl: '',
+          restaurantVariationId: variation.id,
+        },
+      ]);
+    }
+  };
+
   return (
     <div className="grid gap-6">
       <div className="grid gap-2">
-        <FieldLabel required={showRequired}>Category</FieldLabel>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <FieldLabel required={showRequired}>Category</FieldLabel>
+          <InventoryQuickActions
+            variant="inline"
+            showVariation={false}
+            onMenuRefresh={onMenuRefresh}
+            
+            onCategoryCreated={(categoryId) =>
+              onFormChange({ categoryId })
+            }
+          />
+        </div>
         <Select
           value={form.categoryId}
           onValueChange={(v) => onFormChange({ categoryId: v })}
@@ -263,25 +312,26 @@ export function ProductFormFields({
       )}
 
       <div className="space-y-3">
-        <div>
-          <Label className="text-base">Variations</Label>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Select a variation from{' '}
-            <Link href="/variations" className="font-medium text-primary underline">
-              Variations
-            </Link>
-            , then set its price and photo. Menu list price uses the lowest
-            variation price.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <Label className="text-base">Variations</Label>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Select a variation template, then set its price and photo. Menu list
+              price uses the lowest variation price.
+            </p>
+          </div>
+          <InventoryQuickActions
+            variant="inline"
+            showCategory={false}
+            onVariationTemplatesReload={reloadVariationTemplates}
+            onVariationCreated={handleVariationCreated}
+          />
         </div>
 
         {variationTemplates.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No variation templates yet.{' '}
-            <Link href="/variations" className="font-medium text-primary underline">
-              Add variations
-            </Link>{' '}
-            before assigning them to this product.
+            No variation templates yet. Use &quot;Add variation&quot; above to
+            create one, then assign it to this product.
           </p>
         ) : variationRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
@@ -394,7 +444,7 @@ export function ProductFormFields({
           }}
         >
           <Plus className="mr-2 h-4 w-4" />
-          Add variation
+          Add variation to product
         </Button>
       </div>
     </div>

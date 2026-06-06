@@ -1,0 +1,204 @@
+import { enrichAttributeGroupSource } from '@/lib/menu/product-recommendation-pool';
+import { mapAttributeGroupItems } from '@/lib/menu/map-attribute-group-items';
+
+import type { RecommendationRuleDraft } from '@/components/dashboard/menu-manager/recommendation-rule-form';
+import type {
+  AttrGroupRow,
+  MenuCategoryRow,
+  MenuItemRow,
+} from '@/components/dashboard/menu-manager/types';
+
+export type RecommendationFormVariant =
+  | 'category-single'
+  | 'category-multiple'
+  | 'product-single'
+  | 'product-multiple';
+
+export type PreviewAttrGroup = AttrGroupRow & {
+  isDraft?: boolean;
+  draftKey?: string;
+};
+
+function categoryGroupName(
+  catName: string,
+  selectionType: 'SINGLE' | 'MULTIPLE'
+): string {
+  return selectionType === 'SINGLE'
+    ? `Choose ${catName}`
+    : `Choose from ${catName}`;
+}
+
+function productGroupName(
+  product: MenuItemRow & { categoryName?: string },
+  catNames: string[],
+  selectionType: 'SINGLE' | 'MULTIPLE'
+): string {
+  if (catNames.length > 1) {
+    return `Choose add-ons (${catNames.join(', ')})`;
+  }
+  const cat = catNames[0] ?? product.categoryName ?? 'products';
+  return selectionType === 'SINGLE'
+    ? `Choose ${product.name}`
+    : `Choose from ${cat}`;
+}
+
+function draftHasContent(
+  variant: RecommendationFormVariant,
+  draft: RecommendationRuleDraft
+): boolean {
+  if (variant === 'category-single' || variant === 'category-multiple') {
+    return draft.ruleCategoryIds.length > 0;
+  }
+  if (variant === 'product-single') {
+    return Boolean(draft.linkedProductId);
+  }
+  return draft.linkedProductIds.length > 0;
+}
+
+/** Build virtual attribute groups from unsaved form drafts for live preview. */
+export function buildDraftPreviewGroups(
+  drafts: Partial<Record<RecommendationFormVariant, RecommendationRuleDraft>>,
+  localCategories: MenuCategoryRow[],
+  allProducts: (MenuItemRow & { categoryName: string })[],
+  baseProduct: MenuItemRow
+): PreviewAttrGroup[] {
+  const out: PreviewAttrGroup[] = [];
+
+  const pushCategoryDrafts = (
+    variant: 'category-single' | 'category-multiple',
+    draft: RecommendationRuleDraft
+  ) => {
+    if (!draftHasContent(variant, draft)) return;
+    for (const catId of draft.ruleCategoryIds) {
+      const cat = localCategories.find((c) => c.id === catId);
+      if (!cat) continue;
+      const defaultItem = draft.categoryDefaults[catId]
+        ? cat.items.find((i) => i.id === draft.categoryDefaults[catId])
+        : null;
+      out.push({
+        id: `draft-${variant}-${catId}`,
+        draftKey: `${variant}-${catId}`,
+        isDraft: true,
+        name: categoryGroupName(cat.name, draft.selectionType),
+        selectionType: draft.selectionType,
+        sourceType: 'CATEGORY',
+        multipleMode: draft.multipleMode,
+        freeQuantity: draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
+        required: draft.required,
+        minItems: draft.minItems,
+        maxItems: draft.maxItems,
+        sortOrder: 9999,
+        linkedCategory: { id: cat.id, name: cat.name },
+        defaultLinkedMenuItemId: draft.categoryDefaults[catId] ?? null,
+        defaultLinkedMenuItem: defaultItem
+          ? {
+              id: defaultItem.id,
+              name: defaultItem.name,
+              price: defaultItem.price,
+              salePrice: defaultItem.salePrice,
+            }
+          : null,
+        variationLimits: draft.variationLimits,
+        useVariationPricing: draft.useVariationPricing,
+      });
+    }
+  };
+
+  const pushProductDraft = (
+    variant: RecommendationFormVariant,
+    draft: RecommendationRuleDraft,
+    productId: string
+  ) => {
+    const product = allProducts.find((p) => p.id === productId);
+    if (!product) return;
+    const catNames = localCategories
+      .filter((c) => draft.productCategoryIds.includes(c.id))
+      .map((c) => c.name);
+    out.push({
+      id: `draft-${variant}-${productId}`,
+      draftKey: `${variant}-${productId}`,
+      isDraft: true,
+      name: productGroupName(product, catNames, draft.selectionType),
+      selectionType: draft.selectionType,
+      sourceType: 'PRODUCT',
+      multipleMode: draft.multipleMode,
+      freeQuantity: draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
+      required: draft.required,
+      minItems: draft.minItems,
+      maxItems: draft.maxItems,
+      sortOrder: 9999,
+      linkedProduct: {
+        id: product.id,
+        name: product.name,
+        imageUrl: product.imageUrl,
+        price: product.price,
+        salePrice: product.salePrice,
+      },
+      productCategoryIds: draft.productCategoryIds,
+      useVariationPricing: false,
+    });
+  };
+
+  const catSingle = drafts['category-single'];
+  if (catSingle) pushCategoryDrafts('category-single', catSingle);
+
+  const catMulti = drafts['category-multiple'];
+  if (catMulti) pushCategoryDrafts('category-multiple', catMulti);
+
+  const prodSingle = drafts['product-single'];
+  if (prodSingle?.linkedProductId) {
+    pushProductDraft('product-single', prodSingle, prodSingle.linkedProductId);
+  }
+
+  const prodMulti = drafts['product-multiple'];
+  if (prodMulti) {
+    for (const pid of prodMulti.linkedProductIds) {
+      pushProductDraft('product-multiple', prodMulti, pid);
+    }
+  }
+
+  return out;
+}
+
+export function linkedItemsForPreviewGroup(
+  group: PreviewAttrGroup,
+  baseProduct: MenuItemRow,
+  categories: MenuCategoryRow[]
+): MenuItemRow[] {
+  const enriched = enrichAttributeGroupSource(
+    {
+      sourceType: group.sourceType ?? 'CATEGORY',
+      productCategoryIds: group.productCategoryIds,
+      linkedCategory: group.linkedCategory
+        ? {
+            ...group.linkedCategory,
+            items:
+              categories.find((c) => c.id === group.linkedCategory?.id)?.items ??
+              [],
+          }
+        : null,
+      linkedProduct: group.linkedProduct
+        ? categories
+            .flatMap((c) => c.items)
+            .find((i) => i.id === group.linkedProduct?.id) ?? {
+            id: group.linkedProduct.id,
+            name: group.linkedProduct.name,
+            description: null,
+            imageUrl: group.linkedProduct.imageUrl,
+            price: group.linkedProduct.price,
+            salePrice: group.linkedProduct.salePrice,
+            categoryId: baseProduct.categoryId,
+            attributeGroups: [],
+          }
+        : null,
+    },
+    categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      items: c.items,
+    })),
+    baseProduct.id
+  );
+
+  return mapAttributeGroupItems(enriched, baseProduct.id) as MenuItemRow[];
+}

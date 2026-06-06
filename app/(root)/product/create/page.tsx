@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { ArrowLeft, ArrowRight, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Trash2, X } from 'lucide-react';
 
 import { MenuPageShell } from '@/components/dashboard/menu-manager/menu-page-shell';
 import {
@@ -17,6 +16,7 @@ import {
   type ProductFormState,
   type VariationFormRow,
 } from '@/components/dashboard/menu-manager/product-form-fields';
+import { InventoryQuickActions } from '@/components/dashboard/menu-manager/inventory-quick-actions';
 import { useRestaurantMenu } from '@/components/dashboard/menu-manager/use-restaurant-menu';
 import ErrorBoundary from '@/components/toaster/toaster';
 import {
@@ -52,7 +52,7 @@ const EMPTY_PRODUCT_FORM: ProductFormState = {
 export default function ProductCreatePage() {
   const router = useRouter();
   const pathname = usePathname();
-  const { loading, categories } = useRestaurantMenu();
+  const { loading, categories, load } = useRestaurantMenu();
   const [saving, setSaving] = useState(false);
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const [form, setForm] = useState<ProductFormState>({
@@ -64,7 +64,8 @@ export default function ProductCreatePage() {
     salePrice: '',
   });
   const [variationRows, setVariationRows] = useState<VariationFormRow[]>([]);
-  const variationTemplates = useRestaurantVariationTemplates();
+  const { variationTemplates, reloadVariationTemplates } =
+    useRestaurantVariationTemplates();
 
   const resolvedCategoryId = form.categoryId || '';
 
@@ -188,23 +189,21 @@ export default function ProductCreatePage() {
           loading={false}
         >
           <Card>
-            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-              <CardTitle> Create product</CardTitle>
-              {categories.length === 0 && !loading ? (
-                <></>
-              ) : (
-                <>
-                  {' '}
+            <CardHeader className="flex flex-col gap-4 space-y-0">
+              <div className="flex flex-row flex-wrap items-center justify-between gap-2">
+                <CardTitle>Create product</CardTitle>
+                {categories.length > 0 || loading ? (
                   <Button
                     type="button"
-                    variant="default"
+                    variant="outline"
                     onClick={goToProducts}
                   >
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to products
                   </Button>
-                </>
-              )}
+                ) : null}
+              </div>
+             
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -218,17 +217,14 @@ export default function ProductCreatePage() {
                       <p className="text-sm text-muted-foreground">
                         Create at least one category before adding products.
                       </p>
-                      <Button
-                        type="button"
-                        variant="default"
-                        asChild
-                        className="w-fit"
-                      >
-                        <Link href="/categories"> 
-                          <span>Go to Categories</span>
-                          <ArrowRight className="ml-2 h-4 w-4" /> 
-                        </Link>
-                      </Button>
+                      <InventoryQuickActions
+                        variant="toolbar"
+                        showVariation={false}
+                        onMenuRefresh={load}
+                        onCategoryCreated={(categoryId) =>
+                          setForm((f) => ({ ...f, categoryId }))
+                        }
+                      />
                     </div>
                   ) : (
                     <>
@@ -241,6 +237,9 @@ export default function ProductCreatePage() {
                         variationRows={variationRows}
                         onVariationRowsChange={setVariationRows}
                         showRequired
+                        onMenuRefresh={load}
+                        variationTemplates={variationTemplates}
+                        onVariationTemplatesReload={reloadVariationTemplates}
                       />
                       <div className="flex flex-wrap gap-2 border-t border-border pt-4">
                         <Button

@@ -33,7 +33,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Popover,
   PopoverContent,
@@ -45,7 +44,6 @@ import {
   SaveConfirmation,
 } from '@/components/ui/confirmation-dialogs';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,87 +58,21 @@ import { cn } from '@/lib/utils';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 
 import { filterCategoriesWithProducts } from '@/lib/menu/category-visibility';
-import { enrichAttributeGroupSource } from '@/lib/menu/product-recommendation-pool';
-import { mapAttributeGroupItems } from '@/lib/menu/map-attribute-group-items';
-import {
-  effectiveMenuItemUnitPrice,
-  formatRecommendationAddonDisplay,
-} from '@/lib/menu/recommendation-addon-price';
+import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
 
 import {
-  RecommendationRuleForm,
-  type RecommendationRuleDraft,
-} from './recommendation-rule-form';
+  buildDraftPreviewGroups,
+  type RecommendationFormVariant,
+  type PreviewAttrGroup,
+} from '@/lib/menu/recommendation-preview-groups';
+
+import { RecommendationConfigSections } from './recommendation-config-sections';
+import { RecommendationPreviewPanel } from './recommendation-preview-panel';
+import type { RecommendationRuleDraft } from './recommendation-rule-form';
 import type { AttrGroupRow, MenuCategoryRow, MenuItemRow } from './types';
 
 function effectiveUnitPrice(price: number, salePrice: number | null) {
   return effectiveMenuItemUnitPrice(price, salePrice);
-}
-
-function groupDefaultUnitPrice(
-  g: AttrGroupRow,
-  items: MenuItemRow[]
-): number | null {
-  const id = g.defaultLinkedMenuItemId ?? g.defaultLinkedMenuItem?.id;
-  if (!id) return null;
-  const fromList = items.find((i) => i.id === id);
-  const item = fromList ?? g.defaultLinkedMenuItem;
-  if (!item) return null;
-  return effectiveMenuItemUnitPrice(item.price, item.salePrice);
-}
-
-function linkedItemsForGroup(
-  group: AttrGroupRow,
-  baseProduct: MenuItemRow,
-  categories: MenuCategoryRow[]
-): MenuItemRow[] {
-  const enriched = enrichAttributeGroupSource(
-    {
-      sourceType: group.sourceType ?? 'CATEGORY',
-      productCategoryIds: group.productCategoryIds,
-      linkedCategory: group.linkedCategory
-        ? {
-            ...group.linkedCategory,
-            items:
-              categories.find((c) => c.id === group.linkedCategory?.id)?.items ??
-              [],
-          }
-        : null,
-      linkedProduct: group.linkedProduct
-        ? categories
-            .flatMap((c) => c.items)
-            .find((i) => i.id === group.linkedProduct?.id) ?? {
-            id: group.linkedProduct.id,
-            name: group.linkedProduct.name,
-            description: null,
-            imageUrl: group.linkedProduct.imageUrl,
-            price: group.linkedProduct.price,
-            salePrice: group.linkedProduct.salePrice,
-          }
-        : null,
-    },
-    categories.map((c) => ({
-      id: c.id,
-      name: c.name,
-      items: c.items,
-    })),
-    baseProduct.id
-  );
-
-  const fromMap = mapAttributeGroupItems(enriched, baseProduct.id);
-  return fromMap as MenuItemRow[];
-}
-
-function multiSelectionHint(
-  minItems: number | null,
-  maxItems: number | null
-): string {
-  if (minItems != null && maxItems != null) {
-    return `Choose ${minItems}–${maxItems} options`;
-  }
-  if (minItems != null) return `Choose at least ${minItems}`;
-  if (maxItems != null) return `Choose up to ${maxItems}`;
-  return 'Choose one or more options';
 }
 
 type Props = {
@@ -316,9 +248,9 @@ export function RecommendationsTab({
   const [previewByGroup, setPreviewByGroup] = useState<
     Record<string, string[]>
   >({});
-  const [editorTab, setEditorTab] = useState<'recommendations' | 'offered'>(
-    'recommendations'
-  );
+  const [draftByVariant, setDraftByVariant] = useState<
+    Partial<Record<RecommendationFormVariant, RecommendationRuleDraft>>
+  >({});
 
   const defaultRuleDraft = useMemo(
     () => ({
@@ -335,6 +267,7 @@ export function RecommendationsTab({
   useEffect(() => {
     if (!selectedId) return;
     setRuleDraftBaseline(defaultRuleDraft);
+    setDraftByVariant({});
   }, [selectedId, defaultRuleDraft]);
 
   const isDirty = useMemo(() => {
@@ -385,6 +318,7 @@ export function RecommendationsTab({
     setRuleMinItems(defaultRuleDraft.minItems);
     setRuleMaxItems(defaultRuleDraft.maxItems);
     setRuleDraftBaseline(defaultRuleDraft);
+    setDraftByVariant({});
   }, [defaultRuleDraft]);
 
   const selectProduct = useCallback(
@@ -392,8 +326,8 @@ export function RecommendationsTab({
       if (id === selectedId) return;
       requestLeave(() => {
         resetDraftState();
+        setDraftByVariant({});
         setSelectedId(id);
-        setEditorTab('recommendations');
       });
     },
     [selectedId, requestLeave, resetDraftState]
@@ -581,8 +515,14 @@ export function RecommendationsTab({
         }
       }
     }
-    if (draft.sourceType === 'PRODUCT' && !draft.linkedProductId) {
-      toast.error('Choose an anchor product.');
+    const linkedProductIds =
+      draft.linkedProductIds.length > 0
+        ? draft.linkedProductIds
+        : draft.linkedProductId
+          ? [draft.linkedProductId]
+          : [];
+    if (draft.sourceType === 'PRODUCT' && linkedProductIds.length === 0) {
+      toast.error('Choose at least one product.');
       return;
     }
     if (
@@ -643,31 +583,37 @@ export function RecommendationsTab({
           });
         }
       } else {
-        const product = allProducts.find((p) => p.id === draft.linkedProductId);
         const catNames = localCategories
           .filter((c) => draft.productCategoryIds.includes(c.id))
           .map((c) => c.name);
-        payloads.push({
-          name: product
-            ? catNames.length > 1
-              ? `Choose add-ons (${catNames.join(', ')})`
-              : `Choose from ${catNames[0] ?? product.categoryName}`
-            : 'Recommended products',
-          sourceType: 'PRODUCT',
-          selectionType: draft.selectionType,
-          required: draft.required,
-          linkedProductId: draft.linkedProductId,
-          productCategoryIds: draft.productCategoryIds,
-          sortOrder: selected.attributeGroups.length,
-          ...(draft.selectionType === 'MULTIPLE'
-            ? {
-                multipleMode: draft.multipleMode,
-                freeQuantity:
-                  draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
-                minItems: draft.minItems,
-                maxItems: draft.maxItems,
-              }
-            : {}),
+        linkedProductIds.forEach((productId, index) => {
+          const product = allProducts.find((p) => p.id === productId);
+          payloads.push({
+            name: product
+              ? catNames.length > 1
+                ? `Choose add-ons (${catNames.join(', ')})`
+                : draft.selectionType === 'SINGLE'
+                  ? `Choose ${product.name}`
+                  : `Choose from ${catNames[0] ?? product.categoryName}`
+              : 'Recommended products',
+            sourceType: 'PRODUCT',
+            selectionType: draft.selectionType,
+            required: draft.required,
+            linkedProductId: productId,
+            productCategoryIds: draft.productCategoryIds,
+            sortOrder: selected.attributeGroups.length + index,
+            ...(draft.selectionType === 'MULTIPLE'
+              ? {
+                  multipleMode: draft.multipleMode,
+                  freeQuantity:
+                    draft.multipleMode === 'QUANTITY'
+                      ? draft.freeQuantity
+                      : null,
+                  minItems: draft.minItems,
+                  maxItems: draft.maxItems,
+                }
+              : {}),
+          });
         });
       }
 
@@ -693,6 +639,7 @@ export function RecommendationsTab({
       toast.success('Recommendation saved');
       allowNextNavigation();
       resetDraftState();
+      setDraftByVariant({});
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || 'Could not save');
@@ -753,12 +700,19 @@ export function RecommendationsTab({
     setDeletingRule(true);
     try {
       await axios.delete(`/api/restaurant/menu/attributes/${deletingRuleId}`);
+      const removedId = deletingRuleId;
       updateSelectedItem((item) => ({
         ...item,
         attributeGroups: item.attributeGroups.filter(
-          (g) => g.id !== deletingRuleId
+          (g) => g.id !== removedId
         ),
       }));
+      setPreviewByGroup((prev) => {
+        if (!(removedId in prev)) return prev;
+        const next = { ...prev };
+        delete next[removedId];
+        return next;
+      });
       toast.success('Removed');
       setDeleteRuleConfirmOpen(false);
       setDeletingRuleId(null);
@@ -791,6 +745,80 @@ export function RecommendationsTab({
   };
 
   const allOtherProductsExist = selected != null && linkedOptions.length > 0;
+
+  const previewGroups = useMemo((): PreviewAttrGroup[] => {
+    if (!selected) return [];
+    const saved = selected.attributeGroups as PreviewAttrGroup[];
+    const drafts = buildDraftPreviewGroups(
+      draftByVariant,
+      localCategories,
+      allProducts,
+      selected
+    );
+    return [...saved, ...drafts];
+  }, [selected, draftByVariant, localCategories, allProducts]);
+
+  const offeredPreviewItems = useMemo(() => {
+    const saved = currentOffers.map((o) => ({
+      id: o.offeredItem.id,
+      name: o.offeredItem.name,
+      imageUrl: o.offeredItem.imageUrl,
+      isDraft: false as const,
+    }));
+    const draft = selectedOfferProductIds
+      .map((id) => allProducts.find((p) => p.id === id))
+      .filter((p): p is (typeof allProducts)[number] => Boolean(p))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        imageUrl: p.imageUrl,
+        isDraft: true as const,
+      }));
+    return [...saved, ...draft];
+  }, [allProducts, currentOffers, selectedOfferProductIds]);
+
+  const draftChangeHandlers = useMemo(
+    (): Record<
+      RecommendationFormVariant,
+      (draft: RecommendationRuleDraft) => void
+    > => ({
+      'category-single': (draft) =>
+        setDraftByVariant((prev) => ({ ...prev, 'category-single': draft })),
+      'category-multiple': (draft) =>
+        setDraftByVariant((prev) => ({ ...prev, 'category-multiple': draft })),
+      'product-single': (draft) =>
+        setDraftByVariant((prev) => ({ ...prev, 'product-single': draft })),
+      'product-multiple': (draft) =>
+        setDraftByVariant((prev) => ({ ...prev, 'product-multiple': draft })),
+    }),
+    []
+  );
+
+  const savedGroupsByType = useMemo(() => {
+    if (!selected) {
+      return {
+        categorySingle: [] as AttrGroupRow[],
+        categoryMultiple: [] as AttrGroupRow[],
+        productSingle: [] as AttrGroupRow[],
+        productMultiple: [] as AttrGroupRow[],
+      };
+    }
+    const groups = selected.attributeGroups;
+    return {
+      categorySingle: groups.filter(
+        (g) => g.sourceType !== 'PRODUCT' && g.selectionType === 'SINGLE'
+      ),
+      categoryMultiple: groups.filter(
+        (g) => g.sourceType !== 'PRODUCT' && g.selectionType === 'MULTIPLE'
+      ),
+      productSingle: groups.filter(
+        (g) => g.sourceType === 'PRODUCT' && g.selectionType === 'SINGLE'
+      ),
+      productMultiple: groups.filter(
+        (g) => g.sourceType === 'PRODUCT' && g.selectionType === 'MULTIPLE'
+      ),
+    };
+  }, [selected]);
 
   return (
     <Card className="min-w-0 max-w-full">
@@ -1037,646 +1065,70 @@ export function RecommendationsTab({
       </section>
 
       <div className="grid min-w-0 max-w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(260px,1fr)] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] xl:gap-10 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,440px)]">
-        <div className="min-w-0 w-full max-w-xl space-y-6 lg:mx-auto">
+        <div className="min-w-0 w-full max-w-full space-y-6 lg:mx-auto">
           {selected ? (
-            <Tabs
-              value={editorTab}
-              onValueChange={(value) => {
-                const next = value as 'recommendations' | 'offered';
-                if (next === editorTab) return;
-                requestLeave(() => setEditorTab(next));
+            <RecommendationConfigSections
+              selected={selected}
+              localCategories={localCategories}
+              allProducts={allProducts}
+              linkedOptions={linkedOptions}
+              savedGroupsByType={savedGroupsByType}
+              savingRules={savingRules}
+              onSaveDraft={(draft) => void saveRecommendationDraft(draft)}
+              draftChangeHandlers={draftChangeHandlers}
+              onDeleteGroup={(groupId) => {
+                setDeletingRuleId(groupId);
+                setDeleteRuleConfirmOpen(true);
               }}
-              className="w-full"
-            >
-              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1">
-                <TabsTrigger
-                  value="recommendations"
-                  className="text-xs sm:text-sm"
-                >
-                  Recommendations
-                </TabsTrigger>
-                <TabsTrigger
-                  value="offered"
-                  className="text-xs sm:text-sm"
-                >
-                  Offered products
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent
-                value="recommendations"
-                className="space-y-4 rounded-lg border border-border p-3 sm:p-4"
-              >
-                {selected.attributeGroups.length > 0 ? (
-                  <ul className="space-y-2">
-                    {selected.attributeGroups.map((g) => (
-                      <li
-                        key={g.id}
-                        className="rounded-lg border border-border px-3 py-2 text-sm"
-                      >
-                        <p className="font-medium">{g.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {g.sourceType === 'PRODUCT'
-                            ? `Products · ${g.linkedProduct?.name ?? '—'} anchor · ${
-                                g.productCategoryIds?.length ?? 0
-                              } categor${
-                                (g.productCategoryIds?.length ?? 0) === 1
-                                  ? 'y'
-                                  : 'ies'
-                              }`
-                            : `Category · ${g.linkedCategory?.name ?? '—'}${
-                                g.defaultLinkedMenuItem?.name
-                                  ? ` · Default: ${g.defaultLinkedMenuItem.name}`
-                                  : ''
-                              }`}
-                          {' · '}
-                          {g.selectionType === 'SINGLE'
-                            ? 'One option'
-                            : g.multipleMode === 'QUANTITY'
-                              ? 'Multiple (+/−)'
-                              : 'Multiple (checkbox)'}
-                          {g.selectionType === 'MULTIPLE' &&
-                          g.multipleMode === 'QUANTITY' &&
-                          g.freeQuantity != null &&
-                          g.freeQuantity > 0
-                            ? ` · ${g.freeQuantity} free`
-                            : ''}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No recommendations yet for this product.
-                  </p>
-                )}
-
-                <RecommendationRuleForm
-                  selected={selected}
-                  localCategories={localCategories}
-                  allProducts={allProducts}
-                  saving={savingRules}
-                  onSave={(draft) => void saveRecommendationDraft(draft)}
-                />
-              </TabsContent>
-
-              <TabsContent
-                value="offered"
-                className="space-y-3 rounded-lg border border-border p-3 sm:space-y-4 sm:p-4"
-              >
-                <h4 className="text-sm font-semibold">
-                  Offered Products
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  Choose categories first, then select multiple products
-                  from those categories.
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {linkedOptions.map((cat) => {
-                    const checked = offerCategoryIds.includes(cat.id);
-                    return (
-                      <label
-                        key={`offer-cat-${cat.id}`}
-                        className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-sm ${
-                          checked
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border'
-                        }`}
-                      >
-                        <button
-                          onClick={() => {
-                            setOfferCategoryIds((prev) =>
-                              toggleInArray(prev, cat.id)
-                            );
-                            setSelectedOfferProductIds([]);
-                          }}
-                        >
-                          {cat.name}
-                        </button>
-                      </label>
-                    );
-                  })}
-                </div>
-
-                {!allOtherProductsExist ? null : offerCategoryIds.length ===
-                  0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Select at least one category to load products.
-                  </p>
-                ) : offeredProductsFromSelectedCategories.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No products found in selected categories (or already
-                    offered).
-                  </p>
-                ) : (
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {offeredProductsFromSelectedCategories.map((p) => {
-                      const checked = selectedOfferProductIds.includes(
-                        p.id
-                      );
-
-                      return (
-                        <label
-                          key={`offer-product-${p.id}`}
-                          className="group relative block cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            className="peer sr-only"
-                            checked={checked}
-                            onChange={() =>
-                              setSelectedOfferProductIds((prev) =>
-                                toggleInArray(prev, p.id)
-                              )
-                            }
-                          />
-                          <div
-                            className={cn(
-                              'flex h-full flex-col overflow-hidden rounded-xl border bg-card text-left shadow-sm transition hover:border-primary/40 hover:shadow-md',
-                              'peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2',
-                              checked
-                                ? 'border-primary ring-2 ring-primary/25'
-                                : 'border-border'
-                            )}
-                          >
-                            <div className="relative aspect-[4/3] w-full shrink-0 bg-muted">
-                              {p.imageUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={p.imageUrl}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                                  No photo
-                                </div>
-                              )}
-                              <span
-                                className={cn(
-                                  'absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border-2 bg-background/90 text-xs font-bold shadow-sm backdrop-blur-sm transition',
-                                  checked
-                                    ? 'border-primary bg-primary text-primary-foreground'
-                                    : 'border-border text-transparent group-hover:border-primary/50'
-                                )}
-                                aria-hidden
-                              >
-                                ✓
-                              </span>
-                            </div>
-                            <div className="flex flex-1 flex-col gap-1.5 p-3">
-                              <p className="line-clamp-2 text-sm font-semibold leading-snug">
-                                {p.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {p.categoryName}
-                              </p>
-                            </div>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-                <Button
-                  type="button"
-                  onClick={() => setSaveOffersConfirmOpen(true)}
-                  disabled={
-                    savingOffers || selectedOfferProductIds.length === 0
-                  }
-                  className="w-full"
-                >
-                  {savingOffers ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      <span>Save Offered Products</span>
-                    </>
-                  )}
-                </Button>
-
-                {currentOffers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No offered products yet.
-                  </p>
-                ) : (
-                  <>
-                    <h4 className="text-sm font-semibold">
-                      Current Offered Products
-                    </h4>
-                    <p className="text-xs text-muted-foreground">
-                      These are the products that are currently offered
-                      for this product.
-                    </p>
-                    <ul className="space-y-2">
-                      {currentOffers.map((offer) => (
-                        <li
-                          key={offer.id}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm"
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            {offer.offeredItem.imageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={offer.offeredItem.imageUrl}
-                                alt=""
-                                className="h-10 w-10 shrink-0 rounded-md object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted text-[10px] text-muted-foreground">
-                                —
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <span className="font-medium">
-                                {offer.offeredItem.name}
-                              </span>
-                            </div>
-                          </div>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="text-destructive"
-                            onClick={() => {
-                              setDeletingOfferId(offer.id);
-                              setDeleteOfferConfirmOpen(true);
-                            }}
-                            aria-label="Remove offered product"
-                            disabled={deletingOffer}
-                          >
-                            {deletingOffer &&
-                            deletingOfferId === offer.id ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                                <span>Deleting...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Trash2 className="h-4 w-4 mr-2" />{' '}
-                                <span>Remove</span>
-                              </>
-                            )}
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </TabsContent>
-            </Tabs>
+              offerCategoryIds={offerCategoryIds}
+              setOfferCategoryIds={setOfferCategoryIds}
+              selectedOfferProductIds={selectedOfferProductIds}
+              setSelectedOfferProductIds={setSelectedOfferProductIds}
+              offeredProductsFromSelectedCategories={
+                offeredProductsFromSelectedCategories
+              }
+              currentOffers={currentOffers}
+              savingOffers={savingOffers}
+              onSaveOffers={() => setSaveOffersConfirmOpen(true)}
+              onDeleteOffer={(offerId) => {
+                setDeletingOfferId(offerId);
+                setDeleteOfferConfirmOpen(true);
+              }}
+              deletingOffer={deletingOffer}
+              deletingOfferId={deletingOfferId}
+              toggleInArray={toggleInArray}
+            />
           ) : (
             <div className="rounded-lg border border-dashed border-border bg-muted/15 px-4 py-10 text-center sm:px-6 sm:py-12">
               <p className="text-sm font-medium text-foreground">
-                Select a Product
+                Select a product
               </p>
               <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-muted-foreground">
                 Tap a card in the horizontal strip to configure
-                recommendations and offered products for that item.
+                recommendations and associated products for that item.
               </p>
             </div>
           )}
         </div>
 
         <aside className="min-w-0 rounded-2xl border border-border bg-muted/25 p-1 lg:sticky lg:top-4 lg:max-h-[min(100dvh-8rem,calc(100dvh-10rem))] lg:overflow-y-auto">
-          {!selected ? (
-            <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/80 p-6 text-center sm:min-h-[280px] sm:p-8">
-              <p className="text-sm font-medium text-foreground">
-                Customer Preview
-              </p>
-              <p className="max-w-[min(100%,260px)] text-xs leading-relaxed text-muted-foreground">
-                Choose a product in the strip above to see how guests view
-                it when ordering online.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4 rounded-xl bg-card p-3 shadow-sm sm:p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Customer Preview
-              </p>
-
-              <div className="overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-sm">
-                {selected.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={selected.imageUrl}
-                    alt={selected.name}
-                    className="aspect-[4/3] w-full object-cover sm:aspect-video lg:h-56 lg:max-h-[40vh]"
-                  />
-                ) : (
-                  <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted text-sm text-muted-foreground sm:aspect-video lg:h-56">
-                    No photo
-                  </div>
-                )}
-                <div className="space-y-3 border-t border-border p-4">
-                  <div>
-                    <h3 className="text-xl font-bold uppercase leading-tight tracking-wide text-primary md:text-2xl">
-                      {selected.name}
-                    </h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {selected.categoryName}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/30 p-3">
-                    <p className="text-lg font-bold tabular-nums text-primary">
-                      €
-                      {effectiveUnitPrice(
-                        selected.price,
-                        selected.salePrice
-                      ).toFixed(2)}
-                    </p>
-                    {selected.description?.trim() ? (
-                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                        {selected.description}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-sm font-semibold text-foreground">
-                  Recommended Add-ons
-                </h4>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Matches your storefront customize step. Choices here are
-                  preview only (not saved to a cart).
-                </p>
-              </div>
-
-              {selected.attributeGroups.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No add-on groups yet. Link categories in the
-                  Recommendations tab, then save.
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {selected.attributeGroups.map((g) => {
-                    const items = linkedItemsForGroup(
-                      g,
-                      selected,
-                      localCategories
-                    );
-                    const previewIds = previewByGroup[g.id] ?? [];
-                    const defaultUnit = groupDefaultUnitPrice(g, items);
-
-                    return (
-                      <section
-                        key={g.id}
-                        className="rounded-lg border border-border bg-background p-4 text-foreground shadow-sm"
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0 space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Label className="text-sm font-semibold">
-                                {g.name}
-                              </Label>
-                              {g.required ? (
-                                <Badge
-                                  variant="outline"
-                                  className="border-red-200 bg-red-50 text-[10px] font-semibold uppercase text-red-700"
-                                >
-                                  Required
-                                </Badge>
-                              ) : null}
-                              <Badge
-                                variant="secondary"
-                                className="text-[10px] uppercase"
-                              >
-                                {g.selectionType === 'SINGLE'
-                                  ? 'Single'
-                                  : 'Multiple'}
-                              </Badge>
-                              {g.selectionType === 'MULTIPLE' &&
-                              (g.minItems != null ||
-                                g.maxItems != null) ? (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] font-medium uppercase"
-                                >
-                                  {g.minItems != null &&
-                                  g.maxItems != null
-                                    ? `Min ${g.minItems} · Max ${g.maxItems}`
-                                    : g.minItems != null
-                                      ? `Min ${g.minItems}`
-                                      : `Max ${g.maxItems}`}
-                                </Badge>
-                              ) : null}
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              From{' '}
-                              {g.linkedCategory?.name ??
-                                g.linkedProduct?.name ??
-                                '—'}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {g.selectionType === 'SINGLE'
-                                ? 'Choose exactly one option'
-                                : multiSelectionHint(
-                                    g.minItems,
-                                    g.maxItems
-                                  )}
-                            </p>
-                            {g.selectionType === 'MULTIPLE' ? (
-                              <p className="text-xs font-medium text-foreground">
-                                Selected {previewIds.length}
-                                {g.maxItems != null
-                                  ? ` / ${g.maxItems}`
-                                  : ''}
-                              </p>
-                            ) : null}
-                          </div>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="shrink-0 text-destructive hover:text-destructive"
-                            onClick={() => {
-                              setDeletingRuleId(g.id);
-                              setDeleteRuleConfirmOpen(true);
-                            }}
-                            disabled={deletingRule}
-                            aria-label="Remove rule"
-                          >
-                            {deletingRule && deletingRuleId === g.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-destructive" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-
-                        <div className="mt-4">
-                          {items.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                              No products in this linked category yet.
-                            </p>
-                          ) : g.selectionType === 'SINGLE' ? (
-                            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-                              {items.map((it) => {
-                                const checked = previewIds[0] === it.id;
-                                const priceLabel = formatRecommendationAddonDisplay(
-                                  it.price,
-                                  it.salePrice,
-                                  defaultUnit
-                                );
-                                return (
-                                  <label
-                                    key={it.id}
-                                    className={cn(
-                                      'flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition',
-                                      checked
-                                        ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                                        : 'border-border bg-card hover:bg-muted/50'
-                                    )}
-                                  >
-                                    {it.imageUrl ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img
-                                        src={it.imageUrl}
-                                        alt=""
-                                        className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
-                                      />
-                                    ) : (
-                                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted text-[10px] text-muted-foreground">
-                                        —
-                                      </div>
-                                    )}
-                                    <div className="min-w-0 flex-1">
-                                      <p className="truncate text-sm font-medium">
-                                        {it.name}
-                                      </p>
-                                      {priceLabel ? (
-                                        <p className="text-xs text-muted-foreground">
-                                          {priceLabel}
-                                        </p>
-                                      ) : defaultUnit != null &&
-                                        (g.defaultLinkedMenuItemId === it.id ||
-                                          g.defaultLinkedMenuItem?.id ===
-                                            it.id) ? (
-                                        <p className="text-xs text-muted-foreground">
-                                          Included
-                                        </p>
-                                      ) : null}
-                                    </div>
-                                    <input
-                                      type="radio"
-                                      name={`preview-${g.id}`}
-                                      className="h-4 w-4 shrink-0 accent-primary"
-                                      checked={checked}
-                                      onChange={() =>
-                                        setPreviewByGroup((prev) => ({
-                                          ...prev,
-                                          [g.id]: [it.id],
-                                        }))
-                                      }
-                                    />
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-                              {items.map((it) => {
-                                const checked = previewIds.includes(
-                                  it.id
-                                );
-                                const priceLabel = formatRecommendationAddonDisplay(
-                                  it.price,
-                                  it.salePrice,
-                                  defaultUnit
-                                );
-                                const atMax =
-                                  g.maxItems != null &&
-                                  previewIds.length >= g.maxItems &&
-                                  !checked;
-                                return (
-                                  <label
-                                    key={it.id}
-                                    className={cn(
-                                      'flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition',
-                                      checked
-                                        ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                                        : 'border-border bg-card hover:bg-muted/50',
-                                      atMax &&
-                                        'cursor-not-allowed opacity-50'
-                                    )}
-                                  >
-                                    {it.imageUrl ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img
-                                        src={it.imageUrl}
-                                        alt=""
-                                        className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
-                                      />
-                                    ) : (
-                                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted text-[10px] text-muted-foreground">
-                                        —
-                                      </div>
-                                    )}
-                                    <div className="min-w-0 flex-1">
-                                      <p className="truncate text-sm font-medium">
-                                        {it.name}
-                                      </p>
-                                      {priceLabel ? (
-                                        <p className="text-xs text-muted-foreground">
-                                          {priceLabel}
-                                        </p>
-                                      ) : defaultUnit != null &&
-                                        (g.defaultLinkedMenuItemId === it.id ||
-                                          g.defaultLinkedMenuItem?.id ===
-                                            it.id) ? (
-                                        <p className="text-xs text-muted-foreground">
-                                          Included
-                                        </p>
-                                      ) : null}
-                                    </div>
-                                    <input
-                                      type="checkbox"
-                                      className="h-4 w-4 shrink-0 accent-primary"
-                                      checked={checked}
-                                      disabled={atMax}
-                                      onChange={() => {
-                                        setPreviewByGroup((prev) => {
-                                          const cur = prev[g.id] ?? [];
-                                          if (cur.includes(it.id)) {
-                                            return {
-                                              ...prev,
-                                              [g.id]: cur.filter(
-                                                (id) => id !== it.id
-                                              ),
-                                            };
-                                          }
-                                          if (
-                                            g.maxItems != null &&
-                                            cur.length >= g.maxItems
-                                          ) {
-                                            return prev;
-                                          }
-                                          return {
-                                            ...prev,
-                                            [g.id]: [...cur, it.id],
-                                          };
-                                        });
-                                      }}
-                                    />
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </section>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+          <RecommendationPreviewPanel
+            selected={selected}
+            localCategories={localCategories}
+            previewGroups={previewGroups}
+            previewByGroup={previewByGroup}
+            onPreviewChange={(groupId, ids) =>
+              setPreviewByGroup((prev) => ({ ...prev, [groupId]: ids }))
+            }
+            offeredItems={offeredPreviewItems}
+            onDeleteGroup={(groupId, isDraft) => {
+              if (isDraft) return;
+              setDeletingRuleId(groupId);
+              setDeleteRuleConfirmOpen(true);
+            }}
+            deletingRuleId={deletingRuleId}
+            deletingRule={deletingRule}
+          />
         </aside>
       </div>
     </div>
