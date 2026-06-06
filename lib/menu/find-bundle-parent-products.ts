@@ -14,17 +14,21 @@ export type BundleLookupProduct = {
   attributeGroups?: BundleLookupAttributeGroup[] | null;
 };
 
-function configurationGroupReferencesProduct(
+/** Deal includes this item as a linked product recommendation (not a category pool). */
+function configurationGroupReferencesProductRecommendation(
   group: BundleLookupAttributeGroup,
   productId: string
 ): boolean {
-  if (group.sourceType === 'PRODUCT') {
-    return group.linkedProduct?.id === productId;
-  }
-  return (group.linkedCategory?.items ?? []).some((item) => item.id === productId);
+  return (
+    group.sourceType === 'PRODUCT' && group.linkedProduct?.id === productId
+  );
 }
 
-/** Menu/deal products that include `productId` in a configuration group. */
+/**
+ * Deals that offer `productId` as a product recommendation.
+ * Category recommendations (items inside a linked category) do not trigger the
+ * single-vs-deal popup — guests order that product alone instead.
+ */
 export function findBundleParentProducts<T extends BundleLookupProduct>(
   productId: string,
   allProducts: T[]
@@ -33,7 +37,7 @@ export function findBundleParentProducts<T extends BundleLookupProduct>(
     (parent) =>
       parent.id !== productId &&
       (parent.attributeGroups ?? []).some((group) =>
-        configurationGroupReferencesProduct(group, productId)
+        configurationGroupReferencesProductRecommendation(group, productId)
       )
   );
 }

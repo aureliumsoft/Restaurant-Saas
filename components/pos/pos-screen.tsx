@@ -78,20 +78,35 @@ import {
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import eventBus from '@/lib/even';
+import { MenuOfferChoiceDialog } from '@/components/order/menu-offer-choice-dialog';
+import {
+  ProductCustomizeDialog,
+  type AttributeGroup,
+  type MenuOption,
+  type SelectedProductVariation,
+} from '@/components/order/product-customize-dialog';
 import { usePosCartGuard } from '@/components/pos/pos-cart-guard-context';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import { ModeToggle } from '@/components/darkmode/darkmode';
 import UserMenu from '@/components/dashboard/UserMenu';
 import { Cross2Icon } from '@radix-ui/react-icons';
+import {
+  cartLineTitle,
+  cartModifierSelectionNames,
+} from '@/lib/cart-line-display';
+import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
+import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 
 export type OrderMode = 'new' | 'tables' | 'delivery' | 'takeaway' | 'queue';
 
-type Product = {
+type PosMenuProduct = {
   id: string;
   name: string;
+  description: string | null;
+  imageUrl: string | null;
   price: number;
+  salePrice: number | null;
   categoryId: string;
-  imageUrl?: string | null;
   variations?: {
     id: string;
     name?: string;
@@ -99,17 +114,84 @@ type Product = {
     imageUrl?: string | null;
     swatchHex?: string | null;
     priceDelta: number;
+    sortOrder?: number;
+    restaurantVariationId?: string | null;
+    restaurantVariation?: { shortLabel?: string | null } | null;
+  }[];
+  attributeGroups: {
+    id: string;
+    name: string;
+    selectionType: 'SINGLE' | 'MULTIPLE';
+    sourceType?: 'CATEGORY' | 'PRODUCT';
+    multipleMode?: 'CHECKBOX' | 'QUANTITY' | null;
+    freeQuantity?: number | null;
+    required: boolean;
+    minItems: number | null;
+    maxItems: number | null;
+    variationLimits?: {
+      variationId: string;
+      minItems: number;
+      maxItems: number;
+    }[];
+    defaultLinkedMenuItemId?: string | null;
+    useVariationPricing?: boolean;
+    linkedCategory?: {
+      id: string;
+      name: string;
+      items: {
+        id: string;
+        name: string;
+        description: string | null;
+        imageUrl: string | null;
+        price: number;
+        salePrice: number | null;
+        variations?: PosMenuProduct['variations'];
+      }[];
+    } | null;
+    linkedProduct?: {
+      id: string;
+      name: string;
+      description: string | null;
+      imageUrl: string | null;
+      price: number;
+      salePrice: number | null;
+      variations?: PosMenuProduct['variations'];
+    } | null;
+  }[];
+  offersFromThis?: {
+    id: string;
+    sortOrder: number;
+    offeredItem: {
+      id: string;
+      name: string;
+      description: string | null;
+      imageUrl: string | null;
+      price: number;
+      salePrice: number | null;
+    };
   }[];
 };
 
+type CartModifierSelection = {
+  attributeGroupId: string;
+  groupName: string;
+  selections: { menuItemId: string; name: string; unitPrice: number }[];
+};
+
 type CartLine = {
-  productId: string;
-  name: string;
+  lineId: string;
+  menuItemId: string;
+  productName: string;
+  imageUrl: string | null;
   unitPrice: number;
   qty: number;
   lineDiscPct: number;
-  variationId?: string | null;
-  variationName?: string | null;
+  baseUnitPrice: number;
+  variationId: string | null;
+  variationName: string | null;
+  variationPriceDelta: number;
+  modifiers: CartModifierSelection[];
+  modifiersSignature: string;
 };
 
 /** `all` shows every product; other ids match `Product.categoryId`. */
@@ -120,27 +202,14 @@ type Category = {
 
 type RestaurantMenuApi = {
   data?: {
+    themePrimaryColor?: string | null;
     menus?: Array<{
       id: string;
       name: string;
       showInFront?: boolean;
-      items?: Array<{
-        id: string;
-        name: string;
-        imageUrl?: string | null;
-        price: number | string | null;
-        salePrice: number | string | null;
-        variations?: Array<{
-          id: string;
-          name?: string;
-          title?: string;
-          imageUrl?: string | null;
-          swatchHex?: string | null;
-          priceDelta: number | string | null;
-        }>;
-      }>;
+      items?: PosMenuProduct[];
     }>;
-  };
+  } | null;
 };
 
 type DiningTableOption = {
@@ -192,6 +261,121 @@ function formatMoney(n: number) {
   });
 }
 
+function effectiveUnitPrice(price: number, salePrice: number | null) {
+  if (salePrice != null && salePrice > 0 && salePrice < price) return salePrice;
+  return price;
+}
+
+function getModifiersSignature(
+  mods: CartModifierSelection[],
+  variationId: string | null
+) {
+  return [...mods]
+    .sort((a, b) => a.attributeGroupId.localeCompare(b.attributeGroupId))
+    .map(
+      (m) =>
+        `${m.attributeGroupId}:${m.selections
+          .map((s) => `${s.menuItemId}:${s.name}`)
+          .sort()
+          .join(',')}`
+    )
+    .join('|')
+    .concat(`::v:${variationId ?? ''}`);
+}
+
+function lineUnitTotal(line: CartLine) {
+  const base = line.variationId
+    ? line.variationPriceDelta
+    : line.baseUnitPrice;
+  const modTotal = line.modifiers.reduce(
+    (sum, m) => sum + m.selections.reduce((s2, sel) => s2 + sel.unitPrice, 0),
+    0
+  );
+  return base + modTotal;
+}
+
+function posCartLineDisplayName(line: CartLine) {
+  const base = cartLineTitle(line.productName, line.variationName);
+  const addonNames = cartModifierSelectionNames(line.modifiers);
+  if (!addonNames.length) return base;
+  return `${base} (${addonNames.join(', ')})`;
+}
+
+function hasRequiredAddons(p: PosMenuProduct) {
+  return p.attributeGroups.some((g) => g.required);
+}
+
+function normalizeCartLine(
+  raw: Partial<CartLine> & { productId?: string; name?: string }
+): CartLine {
+  if (raw.lineId && raw.menuItemId && raw.productName) {
+    return {
+      lineId: raw.lineId,
+      menuItemId: raw.menuItemId,
+      productName: raw.productName,
+      imageUrl: raw.imageUrl ?? null,
+      unitPrice: Number(raw.unitPrice ?? 0),
+      qty: Math.max(1, Number(raw.qty ?? 1)),
+      lineDiscPct: Number(raw.lineDiscPct ?? 0),
+      baseUnitPrice: Number(raw.baseUnitPrice ?? raw.unitPrice ?? 0),
+      variationId: raw.variationId ?? null,
+      variationName: raw.variationName ?? null,
+      variationPriceDelta: Number(raw.variationPriceDelta ?? 0),
+      modifiers: Array.isArray(raw.modifiers) ? raw.modifiers : [],
+      modifiersSignature: raw.modifiersSignature ?? '',
+    };
+  }
+
+  const legacyName = raw.name?.trim() || 'Item';
+  const legacyId = raw.productId?.trim() || raw.menuItemId?.trim() || legacyName;
+  return {
+    lineId: raw.lineId ?? `legacy-${legacyId}-${Date.now()}`,
+    menuItemId: legacyId.split('::sw:')[0] ?? legacyId,
+    productName: legacyName.replace(/\s*\([^)]*\)\s*$/, '').trim() || legacyName,
+    imageUrl: null,
+    unitPrice: Number(raw.unitPrice ?? 0),
+    qty: Math.max(1, Number(raw.qty ?? 1)),
+    lineDiscPct: Number(raw.lineDiscPct ?? 0),
+    baseUnitPrice: Number(raw.unitPrice ?? 0),
+    variationId: null,
+    variationName: null,
+    variationPriceDelta: 0,
+    modifiers: [],
+    modifiersSignature: '',
+  };
+}
+
+function PosCartLineSummary({
+  line,
+  titleClassName = 'font-medium leading-snug',
+  subItemClassName = 'text-xs text-muted-foreground',
+}: {
+  line: CartLine;
+  titleClassName?: string;
+  subItemClassName?: string;
+}) {
+  const addonNames = cartModifierSelectionNames(line.modifiers);
+  return (
+    <>
+      <p className={titleClassName}>
+        {cartLineTitle(line.productName, line.variationName)}
+      </p>
+      {addonNames.length > 0 ? (
+        <div className="mt-1 space-y-0.5">
+          {addonNames.map((name, index) => (
+            <p
+              key={`${line.lineId}-sel-${index}`}
+              className={subItemClassName}
+            >
+              - {name}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 const POS_ARCHIVED_ORDERS_KEY = 'pos_archived_orders_v1';
 
 export function PosScreen() {
@@ -208,7 +392,10 @@ export function PosScreen() {
   const [categories, setCategories] = useState<Category[]>([
     { id: 'all', label: 'ALL' },
   ]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<PosMenuProduct[]>([]);
+  const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
+    null
+  );
   const [loadingMenu, setLoadingMenu] = useState(true);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -234,9 +421,13 @@ export function PosScreen() {
   const [kotNote, setKotNote] = useState('');
   const [savingOrder, setSavingOrder] = useState(false);
   const [terminalProcessing, setTerminalProcessing] = useState(false);
-  const [swatchDialogOpen, setSwatchDialogOpen] = useState(false);
-  const [swatchProduct, setSwatchProduct] = useState<Product | null>(null);
-  const [swatchId, setSwatchId] = useState<string>('');
+  const [customizeProduct, setCustomizeProduct] =
+    useState<PosMenuProduct | null>(null);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [menuOfferOpen, setMenuOfferOpen] = useState(false);
+  const [menuOfferProduct, setMenuOfferProduct] =
+    useState<PosMenuProduct | null>(null);
+  const [menuOfferBundles, setMenuOfferBundles] = useState<PosMenuProduct[]>([]);
 
   const [now, setNow] = useState<Date>(() => new Date());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -301,7 +492,7 @@ export function PosScreen() {
         );
 
         const nextCategories: Category[] = [{ id: 'all', label: 'ALL' }];
-        const nextProducts: Product[] = [];
+        const nextProducts: PosMenuProduct[] = [];
 
         for (const menu of menus) {
           nextCategories.push({
@@ -309,26 +500,22 @@ export function PosScreen() {
             label: String(menu.name || 'UNNAMED').toUpperCase(),
           });
           for (const item of menu.items ?? []) {
-            const sale = Number(item.salePrice);
             const base = Number(item.price);
-            const price =
-              Number.isFinite(sale) && sale > 0
-                ? sale
-                : Number.isFinite(base)
-                  ? base
-                  : 0;
+            const saleRaw = item.salePrice;
+            const sale =
+              saleRaw != null && Number.isFinite(Number(saleRaw))
+                ? Number(saleRaw)
+                : null;
             nextProducts.push({
-              id: item.id,
-              name: item.name,
-              price,
-              categoryId: menu.id,
+              ...item,
+              description: item.description ?? null,
               imageUrl: item.imageUrl ?? null,
+              price: Number.isFinite(base) ? base : 0,
+              salePrice: sale,
+              categoryId: menu.id,
+              attributeGroups: item.attributeGroups ?? [],
               variations: (item.variations ?? []).map((v) => ({
-                id: v.id,
-                name: v.name,
-                title: v.title,
-                imageUrl: v.imageUrl ?? null,
-                swatchHex: v.swatchHex ?? null,
+                ...v,
                 priceDelta: Number(v.priceDelta ?? 0),
               })),
             });
@@ -336,6 +523,7 @@ export function PosScreen() {
         }
 
         if (!isMounted) return;
+        setThemePrimaryColor(json.data?.themePrimaryColor?.trim() || null);
         setCategories(nextCategories);
         setProducts(nextProducts);
       } catch {
@@ -366,7 +554,16 @@ export function PosScreen() {
       const raw = window.localStorage.getItem(POS_ARCHIVED_ORDERS_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as ArchivedOrder[];
-      if (Array.isArray(parsed)) setArchivedOrders(parsed);
+      if (Array.isArray(parsed)) {
+        setArchivedOrders(
+          parsed.map((order) => ({
+            ...order,
+            lines: (order.lines ?? []).map((line) =>
+              normalizeCartLine(line as Partial<CartLine> & { productId?: string; name?: string })
+            ),
+          }))
+        );
+      }
     } catch {
       // ignore bad local cache
     }
@@ -394,7 +591,11 @@ export function PosScreen() {
         });
         if (!res.ok) return;
         const json = (await res.json()) as {
-          data?: { name?: string | null; logoUrl?: string | null } | null;
+          data?: {
+            name?: string | null;
+            logoUrl?: string | null;
+            themePrimaryColor?: string | null;
+          } | null;
         };
         const data = json?.data;
         if (cancelled || !data) return;
@@ -402,6 +603,9 @@ export function PosScreen() {
           name: (data.name?.trim() || 'Restaurant') as string,
           logoUrl: data.logoUrl ?? null,
         });
+        if (data.themePrimaryColor?.trim()) {
+          setThemePrimaryColor(data.themePrimaryColor.trim());
+        }
       } catch {
         // ignore branding fetch errors for printing fallback
       }
@@ -520,9 +724,16 @@ export function PosScreen() {
 
   const itemsCount = useMemo(() => cart.reduce((s, l) => s + l.qty, 0), [cart]);
 
+  const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
+    if (!customizeProduct) return [];
+    return customizeProduct.attributeGroups.map((g) =>
+      buildCustomerAttributeGroup(g, customizeProduct.id)
+    );
+  }, [customizeProduct]);
+
   const subtotal = useMemo(() => {
     return cart.reduce((sum, line) => {
-      const gross = line.unitPrice * line.qty;
+      const gross = lineUnitTotal(line) * line.qty;
       const disc = gross * (line.lineDiscPct / 100);
       return sum + (gross - disc);
     }, 0);
@@ -567,26 +778,20 @@ export function PosScreen() {
 
     const rows = cart
       .map((line) => {
-        const gross = line.unitPrice * line.qty;
+        const gross = lineUnitTotal(line) * line.qty;
         const discAmt = gross * (line.lineDiscPct / 100);
         const lineTotal = gross - discAmt;
-        const nestedMatch = line.name.match(/^(.*)\((.*)\)\s*$/);
-        const baseName = nestedMatch?.[1]?.trim() || line.name;
-        const nestedRaw = nestedMatch?.[2]?.trim() || '';
-        const nestedRows = nestedRaw
-          ? nestedRaw
-              .split(';')
-              .map((s) => s.trim())
-              .filter(Boolean)
-              .map(
-                (part) => `<tr>
+        const baseName = cartLineTitle(line.productName, line.variationName);
+        const addonNames = cartModifierSelectionNames(line.modifiers);
+        const nestedRows = addonNames
+          .map(
+            (part) => `<tr>
           <td style="padding-left:10px;color:#555;">${part}</td>
           <td class="qty">1</td>
           <td class="amt">—</td>
         </tr>`
-              )
-              .join('')
-          : '';
+          )
+          .join('');
         return `<tr>
           <td>${baseName}</td>
           <td class="qty">${line.qty}</td>
@@ -687,64 +892,96 @@ export function PosScreen() {
     };
   }
 
-  function addProduct(
-    p: Product,
-    swatch?: { id: string; name: string; price: number } | null
-  ) {
-    const productId = swatch ? `${p.id}::sw:${swatch.id}` : p.id;
-    const unitPrice = swatch ? swatch.price : p.price;
-    const displayName = swatch ? `${p.name} (${swatch.name})` : p.name;
-    if (p.price <= 0) {
-      toast.info('Open modifiers from staff menu — price is 0 for this item.');
-    }
+  const addToCart = (
+    product: PosMenuProduct,
+    modifiers: CartModifierSelection[],
+    variation?: SelectedProductVariation | null
+  ) => {
+    const baseUnitPrice = effectiveUnitPrice(product.price, product.salePrice);
+    const variationId = variation?.id ?? null;
+    const modifiersSignature = getModifiersSignature(modifiers, variationId);
+    const unitPrice = (() => {
+      const base = variationId ? (variation?.priceDelta ?? 0) : baseUnitPrice;
+      const modTotal = modifiers.reduce(
+        (sum, m) =>
+          sum + m.selections.reduce((s2, sel) => s2 + sel.unitPrice, 0),
+        0
+      );
+      return base + modTotal;
+    })();
+
     setCart((prev) => {
-      const existing = prev.find((l) => l.productId === productId);
+      const existing = prev.find(
+        (l) =>
+          l.menuItemId === product.id &&
+          l.modifiersSignature === modifiersSignature
+      );
       if (existing) {
         return prev.map((l) =>
-          l.productId === productId ? { ...l, qty: l.qty + 1 } : l
+          l.lineId === existing.lineId ? { ...l, qty: l.qty + 1 } : l
         );
       }
-      return [
-        ...prev,
-        {
-          productId,
-          name: displayName,
-          unitPrice,
-          qty: 1,
-          lineDiscPct: 0,
-          variationId: swatch?.id ?? null,
-          variationName: swatch?.name ?? null,
-        },
-      ];
+      const line: CartLine = {
+        lineId:
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `l${Date.now()}`,
+        menuItemId: product.id,
+        productName: product.name,
+        imageUrl: product.imageUrl ?? null,
+        baseUnitPrice,
+        unitPrice,
+        qty: 1,
+        lineDiscPct: 0,
+        variationId,
+        variationName: variation?.name ?? null,
+        variationPriceDelta: variation?.priceDelta ?? 0,
+        modifiers,
+        modifiersSignature,
+      };
+      return [...prev, line];
     });
-  }
+  };
 
-  function requestAddProduct(p: Product) {
-    if ((p.variations?.length ?? 0) === 0) {
-      addProduct(p, null);
+  const openCustomize = (p: PosMenuProduct) => {
+    setCustomizeProduct(p);
+    setCustomizeOpen(true);
+  };
+
+  const resolveCatalogProduct = (ref: { id: string }) =>
+    products.find((p) => p.id === ref.id) ?? null;
+
+  const proceedWithProduct = (p: PosMenuProduct) => {
+    const hasVariations = (p.variations?.length ?? 0) > 0;
+    if (hasRequiredAddons(p) || hasVariations) openCustomize(p);
+    else addToCart(p, []);
+  };
+
+  const handleProductSelect = (p: PosMenuProduct) => {
+    const bundles = findBundleParentProducts(p.id, products);
+    if (bundles.length > 0) {
+      setMenuOfferProduct(p);
+      setMenuOfferBundles(bundles);
+      setMenuOfferOpen(true);
       return;
     }
-    setSwatchProduct(p);
-    setSwatchId('');
-    setSwatchDialogOpen(true);
-  }
+    proceedWithProduct(p);
+  };
 
-  function setQty(productId: string, qty: number) {
+  function setQty(lineId: string, qty: number) {
     if (qty < 1) {
-      setCart((prev) => prev.filter((l) => l.productId !== productId));
+      setCart((prev) => prev.filter((l) => l.lineId !== lineId));
       return;
     }
     setCart((prev) =>
-      prev.map((l) => (l.productId === productId ? { ...l, qty } : l))
+      prev.map((l) => (l.lineId === lineId ? { ...l, qty } : l))
     );
   }
 
-  function setLineDisc(productId: string, pct: number) {
+  function setLineDisc(lineId: string, pct: number) {
     const v = Math.min(100, Math.max(0, pct));
     setCart((prev) =>
-      prev.map((l) =>
-        l.productId === productId ? { ...l, lineDiscPct: v } : l
-      )
+      prev.map((l) => (l.lineId === lineId ? { ...l, lineDiscPct: v } : l))
     );
   }
 
@@ -780,7 +1017,7 @@ export function PosScreen() {
   }
 
   function restoreArchivedOrder(order: ArchivedOrder) {
-    setCart(order.lines);
+    setCart(order.lines.map((line) => normalizeCartLine(line)));
     setOrderMode(order.orderMode);
     setTaxPct(order.taxPct || '0');
     setDisPct(order.discountPct || '0');
@@ -951,10 +1188,10 @@ export function PosScreen() {
         orderMode,
         branchId: selectedBranchId || undefined,
         items: cart.map((l) => ({
-          productId: l.productId,
-          name: l.name,
+          productId: l.menuItemId,
+          name: posCartLineDisplayName(l),
           qty: l.qty,
-          unitPrice: l.unitPrice,
+          unitPrice: lineUnitTotal(l),
           lineDiscPct: l.lineDiscPct,
         })),
       });
@@ -1201,7 +1438,7 @@ export function PosScreen() {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => requestAddProduct(p)}
+                onClick={() => handleProductSelect(p)}
                 className="group flex flex-col items-center gap-2 rounded-xl border bg-background p-3 text-center transition hover:border-primary/40 hover:bg-muted/40"
               >
                 <div className="h-14 w-14 overflow-hidden rounded-full bg-muted ring-2 ring-primary/20 transition group-hover:scale-[1.02]">
@@ -1222,7 +1459,7 @@ export function PosScreen() {
                   {p.name}
                 </span>
                 <span className="text-sm font-medium tabular-nums text-muted-foreground">
-                  {formatMoney(p.price)}
+                  {formatMoney(effectiveUnitPrice(p.price, p.salePrice))}
                 </span>
               </button>
             ))}
@@ -1299,22 +1536,37 @@ export function PosScreen() {
                   </p>
                 ) : (
                   cart.map((line) => {
-                    const gross = line.unitPrice * line.qty;
+                    const gross = lineUnitTotal(line) * line.qty;
                     const discAmt = gross * (line.lineDiscPct / 100);
                     const lineTotal = gross - discAmt;
                     return (
                       <div
-                        key={line.productId}
+                        key={line.lineId}
                         className="space-y-1 border-b px-1 pb-2 last:border-b-0"
                       >
-                        <div className="flex items-start justify-between gap-2 text-sm">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{line.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {line.qty}x
+                        <div className="flex items-start gap-2 text-sm">
+                          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
+                            {line.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element -- POS accepts external image URLs
+                              <img
+                                src={line.imageUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : null}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <PosCartLineSummary
+                              line={line}
+                              titleClassName="text-sm font-medium leading-snug"
+                              subItemClassName="text-[11px] text-muted-foreground"
+                            />
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {line.qty}x · €{formatMoney(lineUnitTotal(line))}{' '}
+                              each
                             </p>
                           </div>
-                          <p className="tabular-nums">
+                          <p className="shrink-0 tabular-nums">
                             €{formatMoney(lineTotal)}
                           </p>
                         </div>
@@ -1324,7 +1576,7 @@ export function PosScreen() {
                             variant="outline"
                             size="icon"
                             className="h-6 w-6"
-                            onClick={() => setQty(line.productId, line.qty - 1)}
+                            onClick={() => setQty(line.lineId, line.qty - 1)}
                           >
                             <Minus className="h-3 w-3" />
                           </Button>
@@ -1336,7 +1588,7 @@ export function PosScreen() {
                             variant="outline"
                             size="icon"
                             className="h-6 w-6"
-                            onClick={() => setQty(line.productId, line.qty + 1)}
+                            onClick={() => setQty(line.lineId, line.qty + 1)}
                           >
                             <Plus className="h-3 w-3" />
                           </Button>
@@ -1347,7 +1599,7 @@ export function PosScreen() {
                             placeholder="%"
                             onChange={(e) =>
                               setLineDisc(
-                                line.productId,
+                                line.lineId,
                                 Number(e.target.value) || 0
                               )
                             }
@@ -1359,9 +1611,7 @@ export function PosScreen() {
                             className="ml-auto h-6 w-6 text-destructive"
                             onClick={() =>
                               setCart((prev) =>
-                                prev.filter(
-                                  (l) => l.productId !== line.productId
-                                )
+                                prev.filter((l) => l.lineId !== line.lineId)
                               )
                             }
                           >
@@ -1685,11 +1935,34 @@ export function PosScreen() {
                       <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                         {order.lines.map((line) => (
                           <div
-                            key={`${order.id}-${line.productId}`}
+                            key={`${order.id}-${line.lineId}`}
                             className="flex items-center justify-between gap-2"
                           >
-                            <span className="truncate">
-                              {line.qty}x {line.name}
+                            <span className="min-w-0">
+                              <span className="block truncate">
+                                {line.qty}x{' '}
+                                {'productName' in line
+                                  ? cartLineTitle(
+                                      (line as CartLine).productName,
+                                      (line as CartLine).variationName
+                                    )
+                                  : (line as { name?: string }).name}
+                              </span>
+                              {'modifiers' in line &&
+                              Array.isArray((line as CartLine).modifiers) ? (
+                                <span className="mt-0.5 block space-y-0.5">
+                                  {cartModifierSelectionNames(
+                                    (line as CartLine).modifiers
+                                  ).map((name, index) => (
+                                    <span
+                                      key={`${order.id}-${line.lineId}-sel-${index}`}
+                                      className="block truncate text-[10px] text-muted-foreground"
+                                    >
+                                      - {name}
+                                    </span>
+                                  ))}
+                                </span>
+                              ) : null}
                             </span>
                             <span className="tabular-nums">
                               €{formatMoney(line.unitPrice * line.qty)}
@@ -1747,13 +2020,17 @@ export function PosScreen() {
                   </TableHeader>
                   <TableBody>
                     {cart.map((line) => {
-                      const gross = line.unitPrice * line.qty;
+                      const gross = lineUnitTotal(line) * line.qty;
                       const discAmt = gross * (line.lineDiscPct / 100);
                       const lineTotal = gross - discAmt;
                       return (
-                        <TableRow key={line.productId}>
-                          <TableCell className="text-xs font-medium">
-                            {line.name}
+                        <TableRow key={line.lineId}>
+                          <TableCell className="text-xs">
+                            <PosCartLineSummary
+                              line={line}
+                              titleClassName="text-xs font-medium leading-snug"
+                              subItemClassName="text-[11px] text-muted-foreground"
+                            />
                           </TableCell>
                           <TableCell className="text-center text-xs tabular-nums">
                             {line.qty}
@@ -2071,63 +2348,81 @@ export function PosScreen() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={swatchDialogOpen} onOpenChange={setSwatchDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Select swatch</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <label className="text-xs text-muted-foreground">Swatch</label>
-            <Select value={swatchId} onValueChange={setSwatchId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose swatch" />
-              </SelectTrigger>
-              <SelectContent>
-                {(swatchProduct?.variations ?? []).map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {(v.name ?? v.title ?? 'Swatch') +
-                      ` - ${formatMoney(Number(v.priceDelta ?? 0))}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setSwatchDialogOpen(false)}
-            >
-              <>
-                <X className="mr-2 h-4 w-4" /> <span>Cancel</span>
-              </>
-            </Button>
-            <Button
-              type="button"
-              disabled={!swatchId || !swatchProduct}
-              onClick={() => {
-                if (!swatchProduct) return;
-                const picked = (swatchProduct.variations ?? []).find(
-                  (v) => v.id === swatchId
-                );
-                if (!picked) return;
-                addProduct(swatchProduct, {
-                  id: picked.id,
-                  name: picked.name ?? picked.title ?? 'Swatch',
-                  price: Number(picked.priceDelta ?? 0),
-                });
-                setSwatchDialogOpen(false);
-                setSwatchProduct(null);
-                setSwatchId('');
-              }}
-            >
-              <>
-                <Plus className="h-4 w-4 mr-2" /> <span>Add Swatch</span>
-              </>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <MenuOfferChoiceDialog
+        open={menuOfferOpen}
+        onOpenChange={(open) => {
+          setMenuOfferOpen(open);
+          if (!open) {
+            setMenuOfferProduct(null);
+            setMenuOfferBundles([]);
+          }
+        }}
+        product={menuOfferProduct}
+        bundleProducts={menuOfferBundles}
+        themePrimaryColor={themePrimaryColor}
+        onChooseSingle={() => {
+          const p = menuOfferProduct;
+          setMenuOfferOpen(false);
+          setMenuOfferProduct(null);
+          setMenuOfferBundles([]);
+          if (p) proceedWithProduct(p);
+        }}
+        onChooseBundle={(bundle) => {
+          setMenuOfferOpen(false);
+          setMenuOfferProduct(null);
+          setMenuOfferBundles([]);
+          const full = resolveCatalogProduct(bundle);
+          if (full) proceedWithProduct(full);
+        }}
+      />
+
+      <ProductCustomizeDialog
+        productName={customizeProduct?.name ?? ''}
+        productImageUrl={customizeProduct?.imageUrl ?? null}
+        productDescription={customizeProduct?.description ?? null}
+        themePrimaryColor={themePrimaryColor}
+        productBaseUnitPrice={
+          customizeProduct
+            ? effectiveUnitPrice(
+                customizeProduct.price,
+                customizeProduct.salePrice
+              )
+            : 0
+        }
+        attributeGroups={attributeGroupsForDialog}
+        variations={(customizeProduct?.variations ?? []).map((v) => ({
+          id: v.id,
+          name: v.name ?? v.title ?? 'Variation',
+          imageUrl: v.imageUrl ?? null,
+          swatchHex: v.swatchHex ?? null,
+          priceDelta: v.priceDelta,
+          restaurantVariationId: v.restaurantVariationId ?? null,
+          variationShortLabel: v.restaurantVariation?.shortLabel ?? null,
+        }))}
+        open={customizeOpen}
+        onOpenChange={(open) => {
+          setCustomizeOpen(open);
+          if (!open) setCustomizeProduct(null);
+        }}
+        onConfirm={(mods, variation, quantity = 1) => {
+          if (!customizeProduct) return;
+          const mapped: CartModifierSelection[] = mods.map((m) => ({
+            attributeGroupId: m.attributeGroupId,
+            groupName: m.groupName,
+            selections: m.selections.map((s: MenuOption) => ({
+              menuItemId: s.menuItemId,
+              name: s.name,
+              unitPrice: s.unitPrice,
+            })),
+          }));
+          const times = Math.max(1, Math.floor(quantity));
+          for (let i = 0; i < times; i += 1) {
+            addToCart(customizeProduct, mapped, variation ?? null);
+          }
+          setCustomizeOpen(false);
+          setCustomizeProduct(null);
+        }}
+      />
     </div>
   );
 }
