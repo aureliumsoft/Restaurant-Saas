@@ -11,12 +11,13 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
-import { formatMenuItemPrice } from '@/lib/menu-item-pricing';
+import {
+  formatMenuItemPrice,
+  type MenuItemPriceSource,
+} from '@/lib/menu-item-pricing';
 import type { BundleLookupProduct } from '@/lib/menu/find-bundle-parent-products';
 
-type OfferProduct = BundleLookupProduct & {
-  variations?: unknown[] | null;
-};
+type OfferProduct = BundleLookupProduct & Pick<MenuItemPriceSource, 'variations'>;
 
 type Props = {
   open: boolean;
