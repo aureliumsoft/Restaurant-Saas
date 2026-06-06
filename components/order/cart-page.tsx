@@ -23,6 +23,10 @@ import {
   buildCustomerMenuRequestUrl,
   inferHostSubdomainForMenu,
 } from '@/lib/customer-menu-client';
+import {
+  cartLineTitle,
+  cartModifierSelectionNames,
+} from '@/lib/cart-line-display';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 
@@ -40,6 +44,9 @@ type CartLine = {
   imageUrl: string | null;
   baseUnitPrice: number;
   quantity: number;
+  variationId?: string | null;
+  variationName?: string | null;
+  variationPriceOverride?: number;
   modifiers: CartModifierSelection[];
   modifiersSignature: string;
 };
@@ -98,11 +105,15 @@ type OfferedProduct = {
 };
 
 function lineUnitTotal(line: CartLine) {
+  const base =
+    line.variationId && line.variationPriceOverride != null
+      ? line.variationPriceOverride
+      : line.baseUnitPrice;
   const modTotal = line.modifiers.reduce(
     (sum, m) => sum + m.selections.reduce((s2, sel) => s2 + sel.unitPrice, 0),
     0
   );
-  return line.baseUnitPrice + modTotal;
+  return base + modTotal;
 }
 
 function lineTotal(line: CartLine) {
@@ -129,6 +140,9 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
           imageUrl: (maybeLine as any).imageUrl ?? null,
           baseUnitPrice: maybeLine.baseUnitPrice,
           quantity: Number(maybeLine.quantity ?? 1),
+          variationId: (maybeLine as CartLine).variationId ?? null,
+          variationName: (maybeLine as CartLine).variationName ?? null,
+          variationPriceOverride: (maybeLine as CartLine).variationPriceOverride,
           modifiers: Array.isArray((maybeLine as any).modifiers) ? (maybeLine as any).modifiers : [],
           modifiersSignature: String(maybeLine.modifiersSignature ?? ''),
         });
@@ -178,21 +192,43 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
     setCustomerPhone(orderInfo?.customerPhone?.trim() ?? '');
   }, [orderInfo?.addressName, orderInfo?.customerPhone, orderId]);
 
+  const resolvedCustomerName =
+    customerName.trim() || orderInfo?.addressName?.trim() || '';
+  const resolvedCustomerPhone =
+    customerPhone.trim() || orderInfo?.customerPhone?.trim() || '';
+
   const orderInfoWithCustomer = useMemo((): OrderInfo | undefined => {
     if (!orderInfo) return undefined;
     return {
       ...orderInfo,
-      addressName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
+      addressName: resolvedCustomerName,
+      customerPhone: resolvedCustomerPhone,
     };
-  }, [orderInfo, customerName, customerPhone]);
+  }, [orderInfo, resolvedCustomerName, resolvedCustomerPhone]);
 
-  const customerDetailsValid =
-    customerName.trim().length > 0 && customerPhone.trim().length > 0;
+  const customerDetailsValid = useMemo(() => {
+    if (!resolvedCustomerName) return false;
+    if (orderType === 'pickUp') {
+      return true;
+    }
+    return (
+      resolvedCustomerPhone.length > 0 &&
+      Boolean(orderInfo?.address?.trim())
+    );
+  }, [
+    orderType,
+    resolvedCustomerName,
+    resolvedCustomerPhone,
+    orderInfo?.address,
+  ]);
 
   const proceedToCheckout = () => {
     if (!customerDetailsValid) {
-      toast.error(t('customerDetailsRequired'));
+      toast.error(
+        orderType === 'pickUp'
+          ? 'Please enter your name to continue.'
+          : t('customerDetailsRequired')
+      );
       return;
     }
     router.push(
@@ -452,7 +488,9 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
         ) : (
           <>
             <div className="mb-6 space-y-4">
-              {cart.map((line) => (
+              {cart.map((line) => {
+                const addonNames = cartModifierSelectionNames(line.modifiers);
+                return (
                 <Card key={line.lineId}>
                   <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-4 min-w-0">
@@ -464,13 +502,17 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                         </div>
                       )}
                       <div className="min-w-0">
-                        <h3 className="font-semibold">{line.productName}</h3>
-                        {line.description ? <p className="text-sm text-muted-foreground">{line.description}</p> : null}
-                        {line.modifiers.length > 0 ? (
-                          <div className="mt-2 space-y-1">
-                            {line.modifiers.map((m) => (
-                              <p key={m.attributeGroupId} className="text-xs text-muted-foreground">
-                                {m.groupName}: {m.selections.map((s) => s.name).join(', ')}
+                        <h3 className="font-semibold">
+                          {cartLineTitle(line.productName, line.variationName)}
+                        </h3>
+                        {addonNames.length > 0 ? (
+                          <div className="mt-2 space-y-0.5">
+                            {addonNames.map((name, index) => (
+                              <p
+                                key={`${line.lineId}-sel-${index}`}
+                                className="truncate text-xs text-muted-foreground"
+                              >
+                                - {name}
                               </p>
                             ))}
                           </div>
@@ -481,41 +523,48 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => adjustQuantity(line.lineId, -1)}
-                        disabled={line.quantity <= 1}
-                        type="button"
-                      >
-                        <IconMinus className="h-4 w-4" />
-                      </Button>
-                      <span className="w-8 text-center">{line.quantity}</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => adjustQuantity(line.lineId, 1)}
-                        type="button"
-                      >
-                        <IconPlus className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => removeFromCart(line.lineId)}
-                        type="button"
-                      >
-                        <IconTrash className="h-4 w-4" />
-                      </Button>
-
-                      <div className="ml-auto text-right font-semibold sm:ml-4">
-                        €{lineTotal(line).toFixed(2)}
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => adjustQuantity(line.lineId, -1)}
+                          disabled={line.quantity <= 1}
+                          type="button"
+                        >
+                          <IconMinus className="h-4 w-4" />
+                        </Button>
+                        <span className="w-8 text-center text-sm font-medium">
+                          {line.quantity}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => adjustQuantity(line.lineId, 1)}
+                          type="button"
+                        >
+                          <IconPlus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex w-full items-center justify-between gap-3">
+                      <span className="text-right font-semibold">
+                          €{lineTotal(line).toFixed(2)}
+                        </span>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => removeFromCart(line.lineId)}
+                          type="button"
+                        >
+                          <IconTrash className="h-4 w-4" />
+                        </Button>
+                        
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
 
             <Card>
@@ -536,7 +585,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                 ) : null}
                 <Button
                   className="w-full"
-                  disabled={!customerDetailsValid}
+                  disabled={cart.length === 0 || !customerDetailsValid}
                   onClick={proceedToCheckout}
                   type="button"
                 >

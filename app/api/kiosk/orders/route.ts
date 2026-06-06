@@ -4,6 +4,7 @@ import { OrderSourceType } from '@prisma/client';
 import { z } from 'zod';
 
 import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
+import { findDiningTableForBranch } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
 import {
   kioskDineInCustomerDisplayName,
@@ -15,6 +16,11 @@ import {
   recoverOrderFromIdempotencyConflict,
   respondIfIdempotentOrderExists,
 } from '@/lib/order-idempotency-server';
+import {
+  allocateTicketNumber,
+  isTicketNumberConflict,
+  utcTicketDateFromNow,
+} from '@/lib/order-ticket-number';
 
 const SELECTED_MINUTES_KIOSK = 25;
 
@@ -175,34 +181,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let selectedTableId: string | undefined;
-  let selectedTableName: string | undefined;
-  if (fulfillment === 'dine_in') {
-    if (!tableId) {
-      return NextResponse.json(
-        { error: 'Table is required for dine in orders' },
-        { status: 400 }
-      );
-    }
-    const table = await db.diningTable.findFirst({
-      where: { id: tableId, restaurantId: restaurant.id },
-      select: { id: true, name: true },
-    });
-    if (!table) {
-      return NextResponse.json({ error: 'Selected table not found' }, { status: 400 });
-    }
-    selectedTableId = table.id;
-    selectedTableName = table.name;
-  }
-
-  const addressSnapshot = buildKioskAddressSnapshot(
-    fulfillment,
-    selectedTableName,
-    cookingNote,
-    customerName,
-    customerPhone
-  );
-
   let branchId: string | null = bodyBranchId ?? null;
   if (branchId) {
     const ok = await validateBranchForRestaurant(branchId, restaurant.id);
@@ -218,25 +196,43 @@ export async function POST(req: NextRequest) {
     branchId = defaultBranch?.id ?? null;
   }
 
+  let selectedTableId: string | undefined;
+  let selectedTableName: string | undefined;
+  if (fulfillment === 'dine_in') {
+    if (!tableId) {
+      return NextResponse.json(
+        { error: 'Table is required for dine in orders' },
+        { status: 400 }
+      );
+    }
+    const table = await findDiningTableForBranch(
+      tableId,
+      restaurant.id,
+      branchId
+    );
+    if (!table) {
+      return NextResponse.json({ error: 'Selected table not found' }, { status: 400 });
+    }
+    selectedTableId = table.id;
+    selectedTableName = table.name;
+  }
+
+  const addressSnapshot = buildKioskAddressSnapshot(
+    fulfillment,
+    selectedTableName,
+    cookingNote,
+    customerName,
+    customerPhone
+  );
+
   try {
     const result = await db.$transaction(async (tx) => {
-      const ticketDate = new Date(
-        Date.UTC(
-          new Date().getUTCFullYear(),
-          new Date().getUTCMonth(),
-          new Date().getUTCDate()
-        )
-      );
-      const previousOrder = await tx.order.findFirst({
-        where: {
-          restaurantId: restaurant.id,
-          branchId,
-          ticketDate,
-        },
-        orderBy: { ticketNumber: 'desc' },
-        select: { ticketNumber: true },
+      const ticketDate = utcTicketDateFromNow();
+      let ticketNumber = await allocateTicketNumber(tx, {
+        restaurantId: restaurant.id,
+        ticketDate,
+        branchId,
       });
-      const nextTicketNumber = (previousOrder?.ticketNumber ?? -1) + 1;
 
       const customerId = await upsertKioskOrderCustomer(tx, restaurant.id, {
         fulfillment,
@@ -246,24 +242,33 @@ export async function POST(req: NextRequest) {
         customerPhone,
       });
 
-      const order = await tx.order.create({
-        data: {
-          restaurantId: restaurant.id,
-          branchId,
-          customerId: customerId ?? undefined,
-          ticketDate,
-          ticketNumber: nextTicketNumber,
-          status: 'pending',
-          total: computedSubtotal,
-          sourceType: OrderSourceType.KIOSK,
-          address: addressSnapshot || null,
-          diningTableId: selectedTableId ?? undefined,
-          tableLabel: selectedTableName ?? undefined,
-          taxAmount: 0,
-          discountAmount: 0,
-          idempotencyKey: idempotencyKey ?? undefined,
-        },
-      });
+      let order: Awaited<ReturnType<typeof tx.order.create>>;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        try {
+          order = await tx.order.create({
+            data: {
+              restaurantId: restaurant.id,
+              branchId,
+              customerId: customerId ?? undefined,
+              ticketDate,
+              ticketNumber,
+              status: 'pending',
+              total: computedSubtotal,
+              sourceType: OrderSourceType.KIOSK,
+              address: addressSnapshot || null,
+              diningTableId: selectedTableId ?? undefined,
+              tableLabel: selectedTableName ?? undefined,
+              taxAmount: 0,
+              discountAmount: 0,
+              idempotencyKey: idempotencyKey ?? undefined,
+            },
+          });
+          break;
+        } catch (e) {
+          if (!isTicketNumberConflict(e) || attempt >= 7) throw e;
+          ticketNumber += 1;
+        }
+      }
 
       await Promise.all(
         lines.map(async (line) => {
@@ -318,7 +323,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return { order, ticketNumber: nextTicketNumber };
+      return { order: order!, ticketNumber };
     }, { timeout: 20000, maxWait: 10000 });
 
     return NextResponse.json(

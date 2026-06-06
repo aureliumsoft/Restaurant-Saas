@@ -1,12 +1,15 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { OrderSourceType } from '@prisma/client';
 
 import {
   getBranchScopeFromRequest,
   orderBranchWhere,
 } from '@/lib/branch/branch-scope';
+import { countDiningTables } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { analyticsActiveOrderStatusWhere } from '@/lib/sales-order-status';
 import { getRestaurantPlanFeatures } from '@/lib/subscription-plan-enforcement';
 
 function utcDayKey(d: Date): string {
@@ -40,9 +43,14 @@ async function resolveRestaurantId(req: NextRequest) {
     auth.userId,
     auth.restaurantId
   );
+  const activeBranchId = branchScope?.activeBranchId ?? null;
+  const activeBranchName =
+    branchScope?.branches.find((b) => b.id === activeBranchId)?.name ?? null;
   return {
     restaurantId: auth.restaurantId,
-    orderBranchFilter: orderBranchWhere(branchScope?.activeBranchId ?? null),
+    activeBranchId,
+    activeBranchName,
+    orderBranchFilter: orderBranchWhere(activeBranchId),
   };
 }
 
@@ -51,7 +59,9 @@ export async function GET(_req: NextRequest) {
     const auth = await resolveRestaurantId(_req);
     if ('error' in auth) return auth.error;
 
-    const { restaurantId, orderBranchFilter } = auth;
+    const { restaurantId, activeBranchId, activeBranchName, orderBranchFilter } =
+      auth;
+    const branchId = orderBranchFilter.branchId ?? null;
     const planFeatures = await getRestaurantPlanFeatures(restaurantId);
     const url = new URL(_req.url);
     const rawDays = Number(url.searchParams.get('days') ?? 7);
@@ -59,44 +69,46 @@ export async function GET(_req: NextRequest) {
     const days = planFeatures.advancedAnalytics ? requestedDays : 7;
     const dayKeys = lastNDayKeys(days);
     const from = new Date(`${dayKeys[0]}T00:00:00.000Z`);
+    const activeOrderStatus = analyticsActiveOrderStatusWhere();
+    const orderScope = {
+      restaurantId,
+      ...orderBranchFilter,
+      ...activeOrderStatus,
+    };
 
     const [
       branches,
       categories,
       menuItems,
+      variations,
+      tables,
       ordersTotal,
       posOrders,
       customers,
       recommendations,
       kdsOpen,
+      orderDisplayQueue,
       employees,
       ordersWindow,
     ] = await Promise.all([
       db.branch.count({ where: { restaurantId } }),
       db.menuCategory.count({ where: { restaurantId } }),
       db.menuItem.count({ where: { restaurantId } }),
+      db.restaurantVariation.count({ where: { restaurantId } }),
+      countDiningTables(restaurantId, branchId),
+      db.order.count({ where: orderScope }),
       db.order.count({
         where: {
-          restaurantId,
-          ...orderBranchFilter,
-          OR: [
-            { status: { equals: 'completed', mode: 'insensitive' } },
-            { status: { equals: 'complete', mode: 'insensitive' } },
-          ],
+          ...orderScope,
+          sourceType: OrderSourceType.POS,
         },
       }),
-      db.order.count({
+      db.customer.count({
         where: {
           restaurantId,
-          ...orderBranchFilter,
-          sourceType: 'POS',
-          OR: [
-            { status: { equals: 'completed', mode: 'insensitive' } },
-            { status: { equals: 'complete', mode: 'insensitive' } },
-          ],
+          ...(branchId ? { orders: { some: { branchId } } } : {}),
         },
       }),
-      db.customer.count({ where: { restaurantId } }),
       db.menuItemOffer.count({
         where: { baseItem: { restaurantId } } },
       ),
@@ -109,16 +121,26 @@ export async function GET(_req: NextRequest) {
             : {}),
         },
       }),
-      db.employee.count({ where: { restaurantId } }),
-      db.order.findMany({
+      db.kitchenTicket.count({
         where: {
           restaurantId,
-          ...orderBranchFilter,
+          status: { notIn: ['completed', 'canceled'] },
+          order: {
+            ...orderBranchFilter,
+            sourceType: { in: [OrderSourceType.POS, OrderSourceType.KIOSK] },
+          },
+        },
+      }),
+      db.employee.count({
+        where: {
+          restaurantId,
+          ...(branchId ? { branches: { some: { branchId } } } : {}),
+        },
+      }),
+      db.order.findMany({
+        where: {
+          ...orderScope,
           createdAt: { gte: from },
-          OR: [
-            { status: { equals: 'completed', mode: 'insensitive' } },
-            { status: { equals: 'complete', mode: 'insensitive' } },
-          ],
         },
         select: { createdAt: true, total: true, sourceType: true },
       }),
@@ -200,20 +222,23 @@ export async function GET(_req: NextRequest) {
           branches,
           categories,
           menuItems,
+          variations,
+          tables,
           orders: ordersTotal,
           posOrders,
           customers,
           recommendations: 0,
           kdsOpen,
+          orderDisplayQueue,
           employees,
         },
         series,
-        channelTotals: {
-          orders: { online: 0, pos: 0, kiosk: 0 },
-          revenue: { online: 0, pos: 0, kiosk: 0 },
-        },
+        channelTotals,
         days,
         analyticsTier: 'basic' as const,
+        activeBranchId,
+        activeBranchName,
+        branchScoped: Boolean(branchId),
       });
     }
 
@@ -222,17 +247,23 @@ export async function GET(_req: NextRequest) {
         branches,
         categories,
         menuItems,
+        variations,
+        tables,
         orders: ordersTotal,
         posOrders,
         customers,
         recommendations,
         kdsOpen,
+        orderDisplayQueue,
         employees,
       },
       series,
       channelTotals,
       days,
       analyticsTier: 'advanced' as const,
+      activeBranchId,
+      activeBranchName,
+      branchScoped: Boolean(branchId),
     });
   } catch (e) {
     console.error(e);

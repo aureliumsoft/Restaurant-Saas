@@ -34,6 +34,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  useBranchContext,
+  withBranchQuery,
+} from '@/hooks/use-branch-context';
 
 export type DiningTableRow = {
   id: string;
@@ -44,6 +48,10 @@ export type DiningTableRow = {
 };
 
 export function TablesModule() {
+  const { activeBranchId, loading: branchLoading, branches } =
+    useBranchContext();
+  const activeBranchName =
+    branches.find((b) => b.id === activeBranchId)?.name ?? null;
   const [rows, setRows] = useState<DiningTableRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -57,7 +65,9 @@ export function TablesModule() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get<{ data: DiningTableRow[] }>('/api/restaurant/tables');
+      const res = await axios.get<{ data: DiningTableRow[] }>(
+        withBranchQuery('/api/restaurant/tables', activeBranchId)
+      );
       setRows(Array.isArray(res.data?.data) ? res.data.data : []);
     } catch {
       toast.error('Could not load tables');
@@ -65,11 +75,12 @@ export function TablesModule() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
+    if (branchLoading) return;
     void load();
-  }, [load]);
+  }, [load, branchLoading]);
 
   function openCreate() {
     setEditing(null);
@@ -93,6 +104,11 @@ export function TablesModule() {
     }
     const sort = Math.min(9999, Math.max(0, Math.floor(Number(sortOrder) || 0)));
 
+    if (!editing && !activeBranchId) {
+      toast.error('Select a branch before adding tables');
+      return;
+    }
+
     setSaving(true);
     try {
       if (editing) {
@@ -105,6 +121,7 @@ export function TablesModule() {
         await axios.post('/api/restaurant/tables', {
           name: nameTrim,
           sortOrder: sort,
+          branchId: activeBranchId,
         });
         toast.success('Table added');
       }
@@ -142,8 +159,9 @@ export function TablesModule() {
       <CardHeader>
         <CardTitle>Dining tables</CardTitle>
         <CardDescription>
-          Managed separately from the menu catalog. Tables appear in POS when &quot;Tables&quot;
-          mode is selected. Names must be unique per restaurant.
+          {activeBranchName
+            ? `Tables for ${activeBranchName} — shown in POS and kiosk dine-in for this branch. Names must be unique per branch.`
+            : 'Select a branch to manage dining tables for POS and kiosk dine-in.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

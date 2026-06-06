@@ -23,6 +23,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
+import { useBranchContext } from '@/hooks/use-branch-context';
 import { salesOrderMethodLabel } from '@/lib/order-fulfillment';
 import { salesOrderStatusBucket } from '@/lib/sales-order-status';
 import {
@@ -347,6 +348,7 @@ function OrdersTable({
 }
 
 export function SalesOrdersTabs() {
+  const { activeBranchId, loading: branchLoading } = useBranchContext();
   const [orders, setOrders] = useState<SalesOrderRow[]>([]);
   const [stats, setStats] = useState<SalesOrdersStats>(emptyStats);
   const [pagination, setPagination] = useState<SalesOrdersPagination>({
@@ -382,6 +384,7 @@ export function SalesOrdersTabs() {
         status: statusFilter,
       });
       if (search.trim()) params.set('search', search.trim());
+      if (activeBranchId) params.set('branchId', activeBranchId);
       const res = await axios.get<SalesOrdersApiResponse>(
         `/api/restaurant/sales-orders?${params.toString()}`
       );
@@ -403,17 +406,12 @@ export function SalesOrdersTabs() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, page, search, statusFilter]);
+  }, [activeTab, page, search, statusFilter, activeBranchId]);
 
   useEffect(() => {
-    const onBranch = () => void load();
-    window.addEventListener('branch-changed', onBranch);
-    return () => window.removeEventListener('branch-changed', onBranch);
-  }, [load]);
-
-  useEffect(() => {
+    if (branchLoading) return;
     void load();
-  }, [load]);
+  }, [load, branchLoading]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {

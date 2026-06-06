@@ -11,6 +11,11 @@ import {
   recoverOrderFromIdempotencyConflict,
   respondIfIdempotentOrderExists,
 } from '@/lib/order-idempotency-server';
+import {
+  allocateTicketNumber,
+  isTicketNumberConflict,
+  utcTicketDateFromNow,
+} from '@/lib/order-ticket-number';
 
 const SERVICE_FEE = 0.99;
 const SELECTED_MINUTES_ONLINE = 30;
@@ -79,11 +84,11 @@ const postSchema = z.object({
       message: 'Delivery address is required',
     });
   }
-  if (!phone) {
+  if (data.orderType === 'delivery' && !phone) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['orderInfo', 'customerPhone'],
-      message: 'Customer phone is required',
+      message: 'Customer phone is required for delivery',
     });
   }
   const storeId = data.orderInfo.storeId?.trim() ?? '';
@@ -222,27 +227,19 @@ export async function POST(req: NextRequest) {
 
   const addressSnapshot = buildAddressSnapshot(orderType, orderInfo, cutlery, comment);
   const customerName = orderInfo.addressName?.trim() ?? '';
-  const customerPhone = orderInfo.customerPhone?.trim() ?? '';
+  const customerPhone =
+    orderInfo.customerPhone?.trim() ||
+    (orderType === 'pickUp' ? 'N/A' : '');
 
   try {
-    const result = await db.$transaction(async (tx) => {
-      const ticketDate = new Date(
-        Date.UTC(
-          new Date().getUTCFullYear(),
-          new Date().getUTCMonth(),
-          new Date().getUTCDate()
-        )
-      );
-      const previousOrder = await tx.order.findFirst({
-        where: {
-          restaurantId: restaurant.id,
-          ticketDate,
-          branchId,
-        },
-        orderBy: { ticketNumber: 'desc' },
-        select: { ticketNumber: true },
+    const result = await db.$transaction(
+      async (tx) => {
+      const ticketDate = utcTicketDateFromNow();
+      let ticketNumber = await allocateTicketNumber(tx, {
+        restaurantId: restaurant.id,
+        ticketDate,
+        branchId,
       });
-      const nextTicketNumber = (previousOrder?.ticketNumber ?? -1) + 1;
 
       const customer = await tx.customer.create({
         data: {
@@ -252,22 +249,32 @@ export async function POST(req: NextRequest) {
         },
         select: { id: true },
       });
-      const order = await tx.order.create({
-        data: {
-          restaurantId: restaurant.id,
-          branchId,
-          customerId: customer.id,
-          ticketDate,
-          ticketNumber: nextTicketNumber,
-          status: 'pending',
-          total: computedTotal,
-          sourceType: OrderSourceType.ONLINE,
-          address: addressSnapshot || null,
-          taxAmount: 0,
-          discountAmount: 0,
-          idempotencyKey: idempotencyKey ?? undefined,
-        },
-      });
+
+      let order: Awaited<ReturnType<typeof tx.order.create>>;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        try {
+          order = await tx.order.create({
+            data: {
+              restaurantId: restaurant.id,
+              branchId,
+              customerId: customer.id,
+              ticketDate,
+              ticketNumber,
+              status: 'pending',
+              total: computedTotal,
+              sourceType: OrderSourceType.ONLINE,
+              address: addressSnapshot || null,
+              taxAmount: 0,
+              discountAmount: 0,
+              idempotencyKey: idempotencyKey ?? undefined,
+            },
+          });
+          break;
+        } catch (e) {
+          if (!isTicketNumberConflict(e) || attempt >= 7) throw e;
+          ticketNumber += 1;
+        }
+      }
 
       for (const line of lines) {
         const orderItem = await tx.orderItem.create({
@@ -320,8 +327,10 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return { order, ticketNumber: nextTicketNumber };
-    });
+      return { order: order!, ticketNumber };
+      },
+      { maxWait: 10_000, timeout: 30_000 }
+    );
 
     return NextResponse.json(
       {

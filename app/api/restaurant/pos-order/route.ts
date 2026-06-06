@@ -6,7 +6,13 @@ import {
   getBranchScopeFromRequest,
   validateBranchForRestaurant,
 } from '@/lib/branch/branch-scope';
+import { findDiningTableForBranch } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
+import {
+  allocateTicketNumber,
+  isTicketNumberConflict,
+  utcTicketDateFromNow,
+} from '@/lib/order-ticket-number';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
 type LineInput = {
@@ -136,10 +142,11 @@ export async function POST(req: NextRequest) {
     let diningTableId: string | null = null;
     let tableLabel: string | null = null;
     if (tableIdRaw) {
-      const diningTable = await db.diningTable.findFirst({
-        where: { id: tableIdRaw, restaurantId },
-        select: { id: true, name: true },
-      });
+      const diningTable = await findDiningTableForBranch(
+        tableIdRaw,
+        restaurantId,
+        branchId
+      );
       if (!diningTable) {
         return NextResponse.json({ error: 'Invalid table selection' }, { status: 400 });
       }
@@ -222,67 +229,68 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const result = await db.$transaction(async (tx) => {
-      const ticketDate = new Date(
-        Date.UTC(
-          new Date().getUTCFullYear(),
-          new Date().getUTCMonth(),
-          new Date().getUTCDate()
-        )
-      );
-      const previousOrder = await tx.order.findFirst({
-        where: {
+    const result = await db.$transaction(
+      async (tx) => {
+        const ticketDate = utcTicketDateFromNow();
+        let ticketNumber = await allocateTicketNumber(tx, {
           restaurantId,
           ticketDate,
           branchId,
-        },
-        orderBy: { ticketNumber: 'desc' },
-        select: { ticketNumber: true },
-      });
-      const nextTicketNumber = (previousOrder?.ticketNumber ?? -1) + 1;
+        });
 
-      const order = await tx.order.create({
-        data: {
-          restaurantId,
-          branchId,
-          customerId,
-          ticketDate,
-          ticketNumber: nextTicketNumber,
-          status: 'pending',
-          total: grandTotal,
-          sourceType: OrderSourceType.POS,
-          address,
-          taxAmount,
-          discountAmount,
-          diningTableId,
-          tableLabel,
-        },
-      });
+        let order: Awaited<ReturnType<typeof tx.order.create>>;
+        for (let attempt = 0; attempt < 8; attempt++) {
+          try {
+            order = await tx.order.create({
+              data: {
+                restaurantId,
+                branchId,
+                customerId,
+                ticketDate,
+                ticketNumber,
+                status: 'pending',
+                total: grandTotal,
+                sourceType: OrderSourceType.POS,
+                address,
+                taxAmount,
+                discountAmount,
+                diningTableId,
+                tableLabel,
+              },
+            });
+            break;
+          } catch (e) {
+            if (!isTicketNumberConflict(e) || attempt >= 7) throw e;
+            ticketNumber += 1;
+          }
+        }
 
-      await tx.orderItem.createMany({
-        data: normalizedItems.map((line) => ({
-          orderId: order.id,
-          menuItemId: line.menuItemId,
-          quantity: line.quantity,
-          price: line.price,
-        })),
-      });
+        await tx.orderItem.createMany({
+          data: normalizedItems.map((line) => ({
+            orderId: order!.id,
+            menuItemId: line.menuItemId,
+            quantity: line.quantity,
+            price: line.price,
+          })),
+        });
 
-      // Kitchen ticket is created from POS via /api/restaurant/kds/tickets after
-      // staff enters prep time (skips KDS Manager queue).
+        // Kitchen ticket is created from POS via /api/restaurant/kds/tickets after
+        // staff enters prep time (skips KDS Manager queue).
 
-      await tx.payment.create({
-        data: {
-          orderId: order.id,
-          amount: paymentAmount,
-          status: initialPaymentStatus,
-          method: methodLabel,
-          restaurantId,
-        },
-      });
+        await tx.payment.create({
+          data: {
+            orderId: order!.id,
+            amount: paymentAmount,
+            status: initialPaymentStatus,
+            method: methodLabel,
+            restaurantId,
+          },
+        });
 
-      return { order, ticketNumber: nextTicketNumber };
-    });
+        return { order: order!, ticketNumber };
+      },
+      { maxWait: 10_000, timeout: 30_000 }
+    );
 
     return NextResponse.json(
       {

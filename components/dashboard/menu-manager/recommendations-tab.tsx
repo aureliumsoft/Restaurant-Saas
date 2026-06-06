@@ -511,8 +511,8 @@ export function RecommendationsTab({
           toast.error(
             `Select a default item for ${cat?.name ?? 'the category'}.`
           );
-          return;
-        }
+        return;
+      }
       }
     }
     const linkedProductIds =
@@ -523,15 +523,15 @@ export function RecommendationsTab({
           : [];
     if (draft.sourceType === 'PRODUCT' && linkedProductIds.length === 0) {
       toast.error('Choose at least one product.');
-      return;
-    }
+        return;
+      }
     if (
       draft.sourceType === 'PRODUCT' &&
       draft.productCategoryIds.length === 0
     ) {
       toast.error('Choose at least one category for product recommendations.');
-      return;
-    }
+        return;
+      }
 
     const useVariationLimits =
       draft.selectionType === 'MULTIPLE' &&
@@ -563,7 +563,7 @@ export function RecommendationsTab({
             sourceType: 'CATEGORY',
             selectionType: draft.selectionType,
             required: draft.required,
-            linkedCategoryId: cat.id,
+              linkedCategoryId: cat.id,
             defaultLinkedMenuItemId: draft.categoryDefaults[cat.id],
             useVariationPricing: draft.useVariationPricing,
             sortOrder: selected.attributeGroups.length + index,
@@ -579,7 +579,7 @@ export function RecommendationsTab({
                         maxItems: draft.maxItems,
                       }),
                 }
-              : {}),
+                : {}),
           });
         }
       } else {
@@ -1124,8 +1124,8 @@ export function RecommendationsTab({
             onDeleteGroup={(groupId, isDraft) => {
               if (isDraft) return;
               setDeletingRuleId(groupId);
-              setDeleteRuleConfirmOpen(true);
-            }}
+                              setDeleteRuleConfirmOpen(true);
+                            }}
             deletingRuleId={deletingRuleId}
             deletingRule={deletingRule}
           />

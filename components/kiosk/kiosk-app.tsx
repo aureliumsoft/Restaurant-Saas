@@ -51,6 +51,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
+import {
+  cartLineTitle,
+  cartModifierSelectionNames,
+} from '@/lib/cart-line-display';
 import { cn } from '@/lib/utils';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import { setUiLanguage } from '@/lib/i18n/client';
@@ -265,9 +269,9 @@ function cartLineDisplayName(line: CartLine): string {
   if (!line.modifiers.length) return base;
   const bits = line.modifiers.map((g) => {
     const names = g.selections.map((s) => s.name).join(', ');
-    return `${g.groupName}: ${names}`;
+    return `${names}, `;
   });
-  return `${base} (${bits.join('; ')})`;
+  return `${base} (${bits.join(', ')})`;
 }
 
 function cartSummaryLines(cart: CartLine[], maxLines: number): string[] {
@@ -457,8 +461,12 @@ export function KioskApp({
     let cancelled = false;
     (async () => {
       try {
+        const tableParams = new URLSearchParams({ slug });
+        if (branchId?.trim()) {
+          tableParams.set('branchId', branchId.trim());
+        }
         const res = await fetch(
-          `/api/customer/tables?slug=${encodeURIComponent(slug)}`,
+          `/api/customer/tables?${tableParams.toString()}`,
           { cache: 'no-store' }
         );
         if (!res.ok) return;
@@ -466,16 +474,23 @@ export function KioskApp({
           data?: DiningTableOption[];
         };
         if (!cancelled) {
-          setDiningTables(Array.isArray(body.data) ? body.data : []);
+          const list = Array.isArray(body.data) ? body.data : [];
+          setDiningTables(list);
+          setSelectedTableId((prev) =>
+            prev && list.some((t) => t.id === prev) ? prev : ''
+          );
         }
       } catch {
-        if (!cancelled) setDiningTables([]);
+        if (!cancelled) {
+          setDiningTables([]);
+          setSelectedTableId('');
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, branchId]);
 
   const allProducts = useMemo(() => {
     if (!menu) return [];
@@ -1216,7 +1231,9 @@ export function KioskApp({
             ) : (
               <>
                 <ul className="space-y-3">
-                  {cart.map((line) => (
+                  {cart.map((line) => {
+                    const addonNames = cartModifierSelectionNames(line.modifiers);
+                    return (
                     <li
                       key={line.lineId}
                       className="flex gap-3 rounded-xl border border-[#e2e8f0] bg-white p-3 shadow-sm"
@@ -1233,9 +1250,21 @@ export function KioskApp({
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium leading-snug">
-                          {cartLineDisplayName(line)}
+                          {cartLineTitle(line.productName, line.variationName)}
                         </p>
-                        <p className="text-xs text-[#64748b]">
+                        {addonNames.length > 0 ? (
+                          <div className="mt-1 space-y-0.5">
+                            {addonNames.map((name, index) => (
+                              <p
+                                key={`${line.lineId}-sel-${index}`}
+                                className="text-xs text-[#64748b]"
+                              >
+                                - {name}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                        <p className="mt-1 text-xs text-[#64748b]">
                           €{formatMoney(lineUnitTotal(line))} each
                         </p>
                         <div className="mt-2 flex items-center gap-2">
@@ -1272,7 +1301,8 @@ export function KioskApp({
                         </div>
                       </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
                 <Button
                   type="button"
@@ -1314,11 +1344,13 @@ export function KioskApp({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="kiosk-customer-phone">{t('phoneNumber')}</Label>
+                      <Label htmlFor="kiosk-customer-phone">
+                        {t('phoneNumber')} ({t('optional')})
+                      </Label>
                       <Input
                         id="kiosk-customer-phone"
                         type="tel"
-                        placeholder={t('phoneNumber')}
+                        placeholder={`${t('phoneNumber')} (${t('optional')})`}
                         value={customerPhone}
                         onChange={(e) => {
                           const value = e.target.value.replace(/\D/g, '');
@@ -1348,11 +1380,8 @@ export function KioskApp({
                   type="button"
                   className="w-full bg-primary py-6 text-base font-semibold text-primary-foreground hover:brightness-95"
                   onClick={() => {
-                    if (
-                      fulfillment === 'take_away' &&
-                      (!customerName.trim() || !customerPhone.trim())
-                    ) {
-                      toast.warn(t('customerDetailsRequired'));
+                    if (fulfillment === 'take_away' && !customerName.trim()) {
+                      toast.warn(t('customerNameRequired'));
                       return;
                     }
                     setStep('checkout');
@@ -1394,20 +1423,40 @@ export function KioskApp({
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#64748b]">
                 Order summary
               </p>
-              <ul className="mb-3 max-h-40 space-y-1.5 overflow-y-auto text-sm">
-                {cart.map((line) => (
+              <ul className="mb-3 max-h-48 space-y-2 overflow-y-auto text-sm">
+                {cart.map((line) => {
+                  const addonNames = cartModifierSelectionNames(line.modifiers);
+                  return (
                   <li
                     key={line.lineId}
-                    className="flex justify-between gap-2 border-b border-[#e2e8f0]/80 py-1 last:border-0"
+                    className="border-b border-[#e2e8f0]/80 py-2 last:border-0"
                   >
-                    <span className="min-w-0 truncate font-medium">
-                      {line.quantity}× {cartLineDisplayName(line)}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-[#64748b]">
-                      €{formatMoney(lineTotal(line))}
-                    </span>
+                    <div className="flex justify-between gap-2">
+                      <p className="min-w-0 font-medium">
+                        {cartLineTitle(line.productName, line.variationName)}
+                      </p>
+                      <span className="shrink-0 tabular-nums text-[#64748b]">
+                        €{formatMoney(lineTotal(line))}
+                      </span>
+                    </div>
+                    {addonNames.length > 0 ? (
+                      <div className="mt-0.5 space-y-0.5">
+                        {addonNames.map((name, index) => (
+                          <p
+                            key={`${line.lineId}-sel-${index}`}
+                            className="text-xs text-[#64748b]"
+                          >
+                            - {name}
+                          </p>
+                        ))}
+                      </div>
+                    ) : null}
+                    <p className="mt-0.5 text-xs text-[#64748b]">
+                      x{line.quantity}
+                    </p>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
               <div className="flex justify-between border-t border-[#e2e8f0] pt-2 font-semibold">
                 <span>Total due</span>

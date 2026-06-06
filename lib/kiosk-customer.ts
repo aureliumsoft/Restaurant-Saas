@@ -66,9 +66,15 @@ export async function upsertKioskOrderCustomer(
   }
 
   const phone = opts.customerPhone?.trim();
-  if (!phone) return null;
-
   const name = opts.customerName?.trim() || 'Guest';
+
+  if (!phone) {
+    if (!opts.customerName?.trim()) return null;
+    const created = await tx.customer.create({
+      data: { restaurantId, name, phone: 'N/A' },
+    });
+    return created.id;
+  }
   const existing = await tx.customer.findFirst({
     where: { restaurantId, phone },
     select: { id: true, name: true },

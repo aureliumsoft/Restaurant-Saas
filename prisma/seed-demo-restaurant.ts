@@ -169,15 +169,20 @@ async function seedDemoBranchesAndTables(
   prisma: PrismaClient,
   restaurantId: string
 ) {
-  const branchCount = await prisma.branch.count({ where: { restaurantId } });
-  if (branchCount === 0) {
-    await prisma.branch.create({
+  let mainBranch = await prisma.branch.findFirst({
+    where: { restaurantId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  if (!mainBranch) {
+    mainBranch = await prisma.branch.create({
       data: {
         restaurantId,
         name: 'Main location',
         address: '123 Demo Street',
         phone: '+1 555 0100',
       },
+      select: { id: true },
     });
     console.log('[seed-demo] Created main branch');
   }
@@ -189,6 +194,7 @@ async function seedDemoBranchesAndTables(
       await prisma.diningTable.create({
         data: {
           restaurantId,
+          branchId: mainBranch.id,
           name: tables[i]!,
           sortOrder: i,
         },

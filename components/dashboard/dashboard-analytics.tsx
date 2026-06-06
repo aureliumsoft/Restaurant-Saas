@@ -33,6 +33,10 @@ import {
   type DashboardModuleKey,
 } from '@/constant/dashboardModules';
 import { MODULE_ICONS } from '@/constant/navbarMenu';
+import {
+  useBranchContext,
+  withBranchQuery,
+} from '@/hooks/use-branch-context';
 import { canAccessDashboardModule } from '@/lib/restaurant-roles';
 import { cn } from '@/lib/utils';
 import { IconExternalLink } from '@tabler/icons-react';
@@ -43,11 +47,14 @@ type AnalyticsCounts = {
   branches: number;
   categories: number;
   menuItems: number;
+  variations: number;
+  tables: number;
   orders: number;
   posOrders: number;
   customers: number;
   recommendations: number;
   kdsOpen: number;
+  orderDisplayQueue: number;
   employees: number;
 };
 
@@ -72,6 +79,9 @@ type AnalyticsPayload = {
     revenue: { online: number; pos: number; kiosk: number };
   };
   analyticsTier?: 'basic' | 'advanced';
+  activeBranchId?: string | null;
+  activeBranchName?: string | null;
+  branchScoped?: boolean;
 };
 
 const DAY_OPTIONS: Array<7 | 14 | 30> = [7, 14, 30];
@@ -105,32 +115,55 @@ function moduleMetric(
     case 'dashboard':
       return {
         value: String(ordersWindow),
-        hint: `Completed orders (${data.days ?? 7} days)`,
+        hint: `Active orders (${data.days ?? 7} days)`,
       };
     case 'sales':
-      return { value: String(c.orders), hint: 'Completed orders' };
+      return { value: String(c.orders), hint: 'Active orders at branch' };
     case 'pos':
       return { value: String(c.posOrders), hint: 'POS orders' };
     case 'kds':
       return { value: String(c.kdsOpen), hint: 'Open kitchen tickets' };
+    case 'order-display':
+      return {
+        value: String(c.orderDisplayQueue ?? 0),
+        hint: data.branchScoped
+          ? 'POS/kiosk in progress'
+          : 'On order display queue',
+      };
     case 'branched':
       return { value: String(c.branches), hint: 'Branches' };
     case 'categories':
       return { value: String(c.categories), hint: 'Menu categories' };
+    case 'variations':
+      return { value: String(c.variations ?? 0), hint: 'Product variations' };
+    case 'tables':
+      return {
+        value: String(c.tables ?? 0),
+        hint: data.branchScoped ? 'Tables at this branch' : 'Dining tables',
+      };
     case 'product':
       return { value: String(c.menuItems), hint: 'Menu items' };
     case 'recommendations':
       return { value: String(c.recommendations), hint: 'Upsell links' };
     case 'records':
-      return { value: String(c.customers), hint: 'Customers on file' };
+      return {
+        value: String(c.customers),
+        hint: data.branchScoped
+          ? 'Customers with orders at this branch'
+          : 'Customers on file',
+      };
     case 'settings':
-      return { value: String(c.employees), hint: 'Team members' };
+      return {
+        value: String(c.employees),
+        hint: data.branchScoped ? 'Team at this branch' : 'Team members',
+      };
     default:
       return { value: '—', hint: '' };
   }
 }
 
 export default function DashboardAnalytics() {
+  const { activeBranchId, loading: branchLoading } = useBranchContext();
   const [permissions, setPermissions] = useState<string[] | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -139,41 +172,42 @@ export default function DashboardAnalytics() {
   const [planRecommendations, setPlanRecommendations] = useState(true);
   const [selectedDays, setSelectedDays] = useState<7 | 14 | 30>(7);
 
-  const load = useCallback(async (days: 7 | 14 | 30) => {
-    setError(null);
-    setPermissionsLoaded(false);
-    try {
-      const [permRes, dashRes] = await Promise.all([
-        axios.get<{
-          permissions: string[];
-          plan?: { recommendations?: boolean };
-        }>('/api/me/dashboard-permissions'),
-        axios.get<AnalyticsPayload>(
-          `/api/restaurant/dashboard-analytics?days=${days}`
-        ),
-      ]);
-      setPermissions(permRes.data.permissions ?? []);
-      setPlanRecommendations(permRes.data.plan?.recommendations !== false);
-      setAnalytics(dashRes.data);
-    } catch {
-      setError('Could not load dashboard analytics.');
-      setPermissions([]);
-      setPlanRecommendations(true);
-      setAnalytics(null);
-    } finally {
-      setPermissionsLoaded(true);
-    }
-  }, []);
+  const load = useCallback(
+    async (days: 7 | 14 | 30, branchId: string | null) => {
+      setError(null);
+      setPermissionsLoaded(false);
+      try {
+        const [permRes, dashRes] = await Promise.all([
+          axios.get<{
+            permissions: string[];
+            plan?: { recommendations?: boolean };
+          }>('/api/me/dashboard-permissions'),
+          axios.get<AnalyticsPayload>(
+            withBranchQuery(
+              `/api/restaurant/dashboard-analytics?days=${days}`,
+              branchId
+            )
+          ),
+        ]);
+        setPermissions(permRes.data.permissions ?? []);
+        setPlanRecommendations(permRes.data.plan?.recommendations !== false);
+        setAnalytics(dashRes.data);
+      } catch {
+        setError('Could not load dashboard analytics.');
+        setPermissions([]);
+        setPlanRecommendations(true);
+        setAnalytics(null);
+      } finally {
+        setPermissionsLoaded(true);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
-    const onBranch = () => void load(selectedDays);
-    window.addEventListener('branch-changed', onBranch);
-    return () => window.removeEventListener('branch-changed', onBranch);
-  }, [load, selectedDays]);
-
-  useEffect(() => {
-    void load(selectedDays);
-  }, [load, selectedDays]);
+    if (branchLoading) return;
+    void load(selectedDays, activeBranchId);
+  }, [load, selectedDays, activeBranchId, branchLoading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -242,7 +276,9 @@ export default function DashboardAnalytics() {
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Overview</h2>
           <p className="text-sm text-muted-foreground">
-            Completed orders only — online, POS, and kiosk with selectable day ranges.
+            {analytics?.branchScoped && analytics.activeBranchName
+              ? `Showing data for ${analytics.activeBranchName} — active orders and revenue (online, POS, kiosk).`
+              : 'Active orders and revenue — online, POS, and kiosk with selectable day ranges.'}
           </p>
         </div>
         {slug ? (
@@ -291,10 +327,10 @@ export default function DashboardAnalytics() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">
-                    Completed orders (last 7 days)
+                    Active orders (last 7 days)
                   </CardTitle>
                   <CardDescription>
-                    Daily completed orders for Starter plan.
+                    Daily active orders for Starter plan.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
@@ -359,7 +395,7 @@ export default function DashboardAnalytics() {
                     Completed revenue (last 7 days)
                   </CardTitle>
                   <CardDescription>
-                    Revenue from completed orders only (Starter plan).
+                    Revenue from active orders (Starter plan).
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
@@ -398,10 +434,10 @@ export default function DashboardAnalytics() {
                 <CardHeader className="gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <CardTitle className="text-base">
-                      Completed orders trend ({analytics.days ?? selectedDays} days)
+                      Active orders trend ({analytics.days ?? selectedDays} days)
                     </CardTitle>
                     <CardDescription>
-                      Completed orders by channel: Online, POS, and Kiosk.
+                      Active orders by channel: Online, POS, and Kiosk.
                     </CardDescription>
                   </div>
 
@@ -615,10 +651,10 @@ export default function DashboardAnalytics() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">
-                      Channel mix (completed orders & revenue)
+                      Channel mix (orders & revenue)
                     </CardTitle>
                     <CardDescription>
-                      Share of completed orders and revenue by channel.
+                      Share of active orders and revenue by channel.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0">

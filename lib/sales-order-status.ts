@@ -19,6 +19,20 @@ export function isCompletedSalesStatus(status: string): boolean {
   return salesOrderStatusBucket(status) === 'completed';
 }
 
+/** Prisma filter: active orders for dashboard charts (excludes canceled/failed). */
+export function analyticsActiveOrderStatusWhere() {
+  return {
+    NOT: {
+      OR: [
+        { status: { equals: 'canceled', mode: 'insensitive' as const } },
+        { status: { equals: 'cancelled', mode: 'insensitive' as const } },
+        { status: { equals: 'failed', mode: 'insensitive' as const } },
+        { status: { equals: 'cancel', mode: 'insensitive' as const } },
+      ],
+    },
+  };
+}
+
 export function rowTotalAmount(total: number | null | undefined): number {
   if (total == null || Number.isNaN(total)) return 0;
   return total;

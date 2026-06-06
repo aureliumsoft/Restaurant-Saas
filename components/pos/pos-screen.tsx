@@ -460,17 +460,26 @@ export function PosScreen() {
     async function loadTables() {
       setTablesLoading(true);
       try {
-        const res = await fetch('/api/restaurant/tables', {
+        const branchQuery = activeBranchId
+          ? `?branchId=${encodeURIComponent(activeBranchId)}`
+          : '';
+        const res = await fetch(`/api/restaurant/tables${branchQuery}`, {
           method: 'GET',
           cache: 'no-store',
         });
         if (!res.ok) throw new Error('tables');
         const json = (await res.json()) as { data?: DiningTableOption[] };
         const list = Array.isArray(json?.data) ? json.data : [];
-        if (!cancelled) setDiningTables(list);
+        if (!cancelled) {
+          setDiningTables(list);
+          setTableId((prev) =>
+            prev && list.some((t) => t.id === prev) ? prev : ''
+          );
+        }
       } catch {
         if (!cancelled) {
           setDiningTables([]);
+          setTableId('');
           toast.error('Could not load dining tables for POS.');
         }
       } finally {
@@ -481,7 +490,7 @@ export function PosScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
     setPosCartHasItems(cart.length > 0);
@@ -1063,9 +1072,9 @@ export function PosScreen() {
   ];
 
   return (
-    <ScrollArea className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b bg-muted/30 px-4 py-3">
+      <div className="flex shrink-0 items-center gap-3 border-b bg-muted/30 px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 overflow-hidden rounded-full bg-muted ring-1 ring-border">
             {branding.logoUrl ? (
@@ -1130,9 +1139,9 @@ export function PosScreen() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[240px_1fr_minmax(320px,400px)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[240px_1fr_minmax(320px,400px)] lg:grid-rows-1">
         {/* Categories */}
-        <ScrollArea className="min-h-0 border-b bg-muted/10 lg:border-b-0 lg:border-r">
+        <ScrollArea className="min-h-0 max-h-[40dvh] border-b bg-muted/10 lg:h-full lg:max-h-full lg:border-b-0 lg:border-r">
           <div className="space-y-2 p-3">
             <div className="text-sm font-semibold">Branch</div>
             <div className="mb-2">
@@ -1186,7 +1195,7 @@ export function PosScreen() {
         </ScrollArea>
 
         {/* Products */}
-        <ScrollArea className="min-h-0 border-b lg:border-b-0 lg:border-r">
+        <ScrollArea className="min-h-0 max-h-[50dvh] border-b lg:h-full lg:max-h-full lg:border-b-0 lg:border-r">
           <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 md:grid-cols-4  2xl:grid-cols-6">
             {filteredProducts.map((p) => (
               <button
@@ -1242,7 +1251,7 @@ export function PosScreen() {
           </div>
         </ScrollArea>
         {/* Checkout */}
-        <div className="flex min-h-0 flex-col gap-3 border-t bg-muted/20 p-3 lg:border-t-0">
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-t bg-muted/20 p-3 lg:h-full lg:border-t-0">
           <div className="grid grid-cols-4 gap-2">
             {modeButtons.map((b) => {
               const active = orderMode === b.id;
@@ -2119,6 +2128,6 @@ export function PosScreen() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </ScrollArea>
+    </div>
   );
 }

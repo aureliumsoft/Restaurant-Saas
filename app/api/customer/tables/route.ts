@@ -1,11 +1,15 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
+import { listDiningTables } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
     const slug = req.nextUrl.searchParams.get('slug')?.trim();
+    const branchId = req.nextUrl.searchParams.get('branchId')?.trim() || null;
+
     if (!slug) {
       return NextResponse.json({ error: 'Missing slug' }, { status: 400 });
     }
@@ -18,13 +22,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data: [] }, { status: 200 });
     }
 
-    const rows = await db.diningTable.findMany({
-      where: { restaurantId: restaurant.id },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-      select: { id: true, name: true, sortOrder: true },
-    });
+    if (!branchId) {
+      return NextResponse.json({ data: [] }, { status: 200 });
+    }
 
-    return NextResponse.json({ data: rows }, { status: 200 });
+    if (!(await validateBranchForRestaurant(branchId, restaurant.id))) {
+      return NextResponse.json({ error: 'Invalid branch' }, { status: 400 });
+    }
+
+    const rows = await listDiningTables(restaurant.id, branchId);
+
+    return NextResponse.json(
+      {
+        data: rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          sortOrder: r.sortOrder,
+        })),
+      },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('customer tables', error);
     return NextResponse.json(
@@ -33,4 +50,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-

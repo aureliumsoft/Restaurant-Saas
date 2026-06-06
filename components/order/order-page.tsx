@@ -31,6 +31,10 @@ import {
 } from '@/lib/customer-menu-client';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
+import {
+  cartLineTitle,
+  cartModifierSelectionNames,
+} from '@/lib/cart-line-display';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { setUiLanguage } from '@/lib/i18n/client';
 import type { UiLanguage } from '@/lib/i18n/resources';
@@ -859,23 +863,22 @@ export default function OrderPageClient({
                   {(() => {
                     const isCustomized =
                       Boolean(line.variationId) || line.modifiers.length > 0;
+                    const addonNames = cartModifierSelectionNames(
+                      line.modifiers
+                    );
                     return (
                       <>
                         <p className="truncate font-medium">
-                          {line.productName}
-                          {line.variationName
-                            ? ` (${line.variationName})`
-                            : ''}
+                          {cartLineTitle(line.productName, line.variationName)}
                         </p>
-                        {line.modifiers.length > 0 ? (
-                          <div className="mt-1 space-y-1">
-                            {line.modifiers.map((m) => (
+                        {addonNames.length > 0 ? (
+                          <div className="mt-1 space-y-0.5">
+                            {addonNames.map((name, index) => (
                               <p
-                                key={m.attributeGroupId}
-                                className="text-xs text-muted-foreground"
+                                key={`${line.lineId}-sel-${index}`}
+                                className="truncate text-xs text-muted-foreground"
                               >
-                                {m.groupName}:{' '}
-                                {m.selections.map((s) => s.name).join(', ')}
+                                - {name}
                               </p>
                             ))}
                           </div>

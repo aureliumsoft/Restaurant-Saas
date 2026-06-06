@@ -9,6 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import type { OrderInfo } from '@/components/order/order-types';
+import {
+  cartLineTitle,
+  cartModifierSelectionNames,
+} from '@/lib/cart-line-display';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { submitCustomerOrder } from '@/lib/offline/submit-order';
 import { PayPalCheckoutButtons } from '@/components/payments/paypal-checkout-buttons';
@@ -19,7 +23,16 @@ function formatOrderApiError(body: unknown): string {
   }
   const err = (body as { error?: unknown }).error;
   if (typeof err === 'string') return err;
-  if (err && typeof err === 'object' && 'formErrors' in err) {
+  if (err && typeof err === 'object') {
+    const flat = err as {
+      formErrors?: string[];
+      fieldErrors?: Record<string, string[] | undefined>;
+    };
+    const fieldMsg = Object.values(flat.fieldErrors ?? {})
+      .flat()
+      .find((m): m is string => typeof m === 'string' && m.length > 0);
+    if (fieldMsg) return fieldMsg;
+    if (flat.formErrors?.[0]) return flat.formErrors[0];
     return 'Invalid order data';
   }
   return 'Could not place order. Please try again.';
@@ -47,16 +60,23 @@ type CartLine = {
   imageUrl: string | null;
   baseUnitPrice: number;
   quantity: number;
+  variationId?: string | null;
+  variationName?: string | null;
+  variationPriceOverride?: number;
   modifiers: CartModifierSelection[];
   modifiersSignature: string;
 };
 
 function lineUnitTotal(line: CartLine) {
+  const base =
+    line.variationId && line.variationPriceOverride != null
+      ? line.variationPriceOverride
+      : line.baseUnitPrice;
   const modTotal = line.modifiers.reduce(
     (sum, m) => sum + m.selections.reduce((s2, sel) => s2 + sel.unitPrice, 0),
     0
   );
-  return line.baseUnitPrice + modTotal;
+  return base + modTotal;
 }
 
 function lineTotal(line: CartLine) {
@@ -89,6 +109,9 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
           imageUrl: (maybeLine as any).imageUrl ?? null,
           baseUnitPrice: maybeLine.baseUnitPrice,
           quantity: Number(maybeLine.quantity ?? 1),
+          variationId: (maybeLine as CartLine).variationId ?? null,
+          variationName: (maybeLine as CartLine).variationName ?? null,
+          variationPriceOverride: (maybeLine as CartLine).variationPriceOverride,
           modifiers: Array.isArray((maybeLine as any).modifiers)
             ? (maybeLine as any).modifiers
             : [],
@@ -196,8 +219,7 @@ export default function CheckoutPageClient({
         return;
       }
 
-      const placedId =
-        result.data.shortOrderId ?? result.data.orderId;
+      const placedId = result.data.shortOrderId ?? result.data.orderId;
       toast.success(
         placedId
           ? `Order placed. Reference: ${placedId}`
@@ -366,7 +388,8 @@ export default function CheckoutPageClient({
                         {orderInfo.address || 'N/A'}
                       </div>
                       <div>
-                        <strong>{t('name')}:</strong> {orderInfo.addressName || 'N/A'}
+                        <strong>{t('name')}:</strong>{' '}
+                        {orderInfo.addressName || 'N/A'}
                       </div>
                       <div>
                         <strong>{t('phoneLabel')}:</strong>{' '}
@@ -392,7 +415,8 @@ export default function CheckoutPageClient({
                         {orderInfo?.storeAddress || 'N/A'}
                       </div>
                       <div>
-                        <strong>{t('name')}:</strong> {orderInfo?.addressName || 'N/A'}
+                        <strong>{t('name')}:</strong>{' '}
+                        {orderInfo?.addressName || 'N/A'}
                       </div>
                       <div>
                         <strong>{t('phoneLabel')}:</strong>{' '}
@@ -457,21 +481,24 @@ export default function CheckoutPageClient({
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {cart.map((line) => (
+                  {cart.map((line) => {
+                    const addonNames = cartModifierSelectionNames(line.modifiers);
+                    return (
                     <div key={line.lineId} className="space-y-1">
                       <div className="flex justify-between text-sm">
-                        <p className="font-medium">{line.productName}</p>
+                        <p className="font-medium">
+                          {cartLineTitle(line.productName, line.variationName)}
+                        </p>
                         <p>€{lineTotal(line).toFixed(2)}</p>
                       </div>
-                      {line.modifiers.length > 0 ? (
-                        <div className="space-y-1">
-                          {line.modifiers.map((m) => (
+                      {addonNames.length > 0 ? (
+                        <div className="space-y-0.5">
+                          {addonNames.map((name, index) => (
                             <p
-                              key={m.attributeGroupId}
+                              key={`${line.lineId}-sel-${index}`}
                               className="text-xs text-muted-foreground"
                             >
-                              {m.groupName}:{' '}
-                              {m.selections.map((s) => s.name).join(', ')}
+                              - {name}
                             </p>
                           ))}
                         </div>
@@ -480,7 +507,8 @@ export default function CheckoutPageClient({
                         x{line.quantity}
                       </p>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="mt-4 space-y-2 border-t border-border pt-2 text-sm">
@@ -545,7 +573,8 @@ export default function CheckoutPageClient({
                     />
                   ) : (
                     <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                      Missing store link. Reopen the menu from your restaurant page.
+                      Missing store link. Reopen the menu from your restaurant
+                      page.
                     </p>
                   )}
                 </div>
@@ -554,8 +583,6 @@ export default function CheckoutPageClient({
                 </p>
               </CardContent>
             </Card>
-
-            
           </div>
         </div>
       </div>

@@ -149,6 +149,11 @@ export function orderBranchWhere(branchId: string | null) {
   return { branchId };
 }
 
+export function tableBranchWhere(branchId: string | null) {
+  if (!branchId) return {};
+  return { branchId };
+}
+
 export async function validateBranchForRestaurant(
   branchId: string,
   restaurantId: string

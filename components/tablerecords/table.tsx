@@ -28,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useBranchContext } from '@/hooks/use-branch-context';
 import {
   Sheet,
   SheetContent,
@@ -59,6 +60,7 @@ function kindBadge(kind: TransactionHistoryKind) {
 }
 
 export function Records() {
+  const { activeBranchId, loading: branchLoading } = useBranchContext();
   const [rows, setRows] = useState<TransactionHistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +85,7 @@ export function Records() {
             kind: kind === 'ALL' ? undefined : kind,
             page,
             take: PAGE_SIZE,
+            ...(activeBranchId ? { branchId: activeBranchId } : {}),
           },
         }
       );
@@ -95,17 +98,12 @@ export function Records() {
     } finally {
       setLoading(false);
     }
-  }, [q, kind, page]);
+  }, [q, kind, page, activeBranchId]);
 
   useEffect(() => {
+    if (branchLoading) return;
     void load();
-  }, [load]);
-
-  useEffect(() => {
-    const onBranch = () => void load();
-    window.addEventListener('branch-changed', onBranch);
-    return () => window.removeEventListener('branch-changed', onBranch);
-  }, [load]);
+  }, [load, branchLoading]);
 
   useEffect(() => {
     setPage(1);

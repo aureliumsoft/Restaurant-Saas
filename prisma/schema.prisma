@@ -160,20 +160,23 @@ model Restaurant {
   variationDefinitions RestaurantVariation[]
 }
 
-/// Seating labels for POS table service (managed per restaurant).
+/// Seating labels for POS / kiosk dine-in (scoped per branch).
 model DiningTable {
-  id             String   @id @default(uuid())
+  id           String   @id @default(uuid())
   restaurantId String
-  name           String
-  sortOrder      Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  branchId     String?
+  name         String
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branch     Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
   orders     Order[]
 
-  @@unique([restaurantId, name])
+  @@unique([restaurantId, branchId, name])
   @@index([restaurantId])
+  @@index([branchId])
 }
 
 model Branch {
@@ -185,9 +188,10 @@ model Branch {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  restaurant Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  orders     Order[]
-  employees  EmployeeBranch[]
+  restaurant   Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orders       Order[]
+  employees    EmployeeBranch[]
+  diningTables DiningTable[]
 
   @@index([restaurantId])
 }

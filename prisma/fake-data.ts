@@ -99,6 +99,7 @@ export function fakeDiningTableComplete() {
   return {
     id: faker.string.uuid(),
     restaurantId: faker.string.uuid(),
+    branchId: undefined,
     name: faker.person.fullName(),
     sortOrder: 0,
     createdAt: new Date(),

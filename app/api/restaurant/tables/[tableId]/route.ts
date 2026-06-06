@@ -61,7 +61,7 @@ export async function PATCH(
     const code = (e as { code?: string })?.code;
     if (code === 'P2002') {
       return NextResponse.json(
-        { error: 'A table with this name already exists' },
+        { error: 'A table with this name already exists at this branch' },
         { status: 409 }
       );
     }
