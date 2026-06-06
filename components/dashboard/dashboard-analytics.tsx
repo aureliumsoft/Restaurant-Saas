@@ -1,7 +1,6 @@
 'use client';
 
 import axios from 'axios';
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Area,
@@ -20,6 +19,7 @@ import {
   YAxis,
 } from 'recharts';
 
+import { AnalyticsKpiCard } from '@/components/dashboard/analytics-kpi-card';
 import {
   Card,
   CardContent,
@@ -28,6 +28,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { kpiSparklineFromValue } from '@/components/ui/sparkline';
 import {
   DASHBOARD_MODULES,
   type DashboardModuleKey,
@@ -87,9 +88,47 @@ type AnalyticsPayload = {
 const DAY_OPTIONS: Array<7 | 14 | 30> = [7, 14, 30];
 const CHANNEL_COLORS = {
   online: '#ed6e40',
-  pos: '#297fcf',
-  kiosk: '#E03C50',
+  pos: '#7c3aed',
+  kiosk: '#e11d48',
 } as const;
+
+const MODULE_ACCENTS: Partial<Record<DashboardModuleKey, string>> = {
+  sales: CHANNEL_COLORS.online,
+  pos: CHANNEL_COLORS.pos,
+  kds: '#f59e0b',
+  'order-display': CHANNEL_COLORS.kiosk,
+  branched: '#0ea5e9',
+  categories: '#8b5cf6',
+  variations: '#6366f1',
+  tables: '#3b82f6',
+  product: '#10b981',
+  recommendations: '#ec4899',
+  records: '#14b8a6',
+  settings: '#64748b',
+};
+
+function moduleSparklineData(
+  key: DashboardModuleKey,
+  data: AnalyticsPayload | null
+): number[] {
+  if (!data?.series?.length) return kpiSparklineFromValue(0);
+  const s = data.series;
+  switch (key) {
+    case 'sales':
+      return s.map((p) => p.orders);
+    case 'pos':
+      return s.map((p) => p.posOrders);
+    case 'order-display':
+      return s.map((p) => p.kioskOrders + p.posOrders);
+    case 'kds':
+      return s.map((p) => p.orders);
+    default: {
+      const { value } = moduleMetric(key, data);
+      const n = Number.parseInt(value, 10);
+      return kpiSparklineFromValue(Number.isFinite(n) ? n : 0);
+    }
+  }
+}
 
 function formatDayLabel(isoDay: string): string {
   const d = new Date(`${isoDay}T12:00:00.000Z`);
@@ -271,10 +310,13 @@ export default function DashboardAnalytics() {
   );
 
   return (
-    <div className="space-y-8 w-full">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="w-full space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Overview</h2>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h2 className="mt-1 text-lg font-semibold text-foreground/90">
+            Overview
+          </h2>
           <p className="text-sm text-muted-foreground">
             {analytics?.branchScoped && analytics.activeBranchName
               ? `Showing data for ${analytics.activeBranchName} — active orders and revenue (online, POS, kiosk).`
@@ -283,24 +325,24 @@ export default function DashboardAnalytics() {
         </div>
         {slug ? (
           <div className="flex flex-wrap gap-2">
-            <Button asChild>
+            <Button asChild className="rounded-xl shadow-sm">
               <a
                 href={`/web-app/${encodeURIComponent(slug)}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Open website
+                Open Website
                 <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
               </a>
             </Button>
-            <Button asChild variant="secondary">
+            <Button asChild variant="outline" className="rounded-xl">
               <a
                 href={`/kiosk/${encodeURIComponent(slug)}`}
                 title="Opens branch picker — use Settings for per-branch kiosk URLs"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Open kiosk
+                Open Kiosk
                 <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
               </a>
             </Button>
@@ -324,9 +366,9 @@ export default function DashboardAnalytics() {
         <div className="space-y-4">
           {analytics.analyticsTier === 'basic' ? (
             <>
-              <Card>
+              <Card className="rounded-2xl border-border/60 shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-base">
+                  <CardTitle className="text-base font-semibold">
                     Active orders (last 7 days)
                   </CardTitle>
                   <CardDescription>
@@ -389,9 +431,9 @@ export default function DashboardAnalytics() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="rounded-2xl border-border/60 shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-base">
+                  <CardTitle className="text-base font-semibold">
                     Completed revenue (last 7 days)
                   </CardTitle>
                   <CardDescription>
@@ -430,31 +472,32 @@ export default function DashboardAnalytics() {
             </>
           ) : (
             <>
-              <Card>
+              <Card className="rounded-2xl border-border/60 shadow-sm">
                 <CardHeader className="gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <CardTitle className="text-base">
-                      Active orders trend ({analytics.days ?? selectedDays} days)
+                    <CardTitle className="text-base font-semibold">
+                      Completed orders trend ({analytics.days ?? selectedDays}{' '}
+                      days)
                     </CardTitle>
                     <CardDescription>
-                      Active orders by channel: Online, POS, and Kiosk.
+                      Online, POS, and Kiosk active orders over time.
                     </CardDescription>
                   </div>
 
-                  <div className="inline-flex rounded-md border p-1">
+                  <div className="inline-flex rounded-xl border bg-muted/30 p-1">
                     {DAY_OPTIONS.map((d) => (
                       <button
                         key={d}
                         type="button"
                         className={cn(
-                          'rounded px-3 py-1 text-xs font-medium transition-colors',
+                          'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
                           selectedDays === d
-                            ? 'bg-primary text-primary-foreground'
+                            ? 'bg-primary text-primary-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground'
                         )}
                         onClick={() => setSelectedDays(d)}
                       >
-                        {d}d
+                        {d}D
                       </button>
                     ))}
                   </div>
@@ -570,9 +613,9 @@ export default function DashboardAnalytics() {
               </Card>
 
               <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
+                <Card className="rounded-2xl border-border/60 shadow-sm">
                   <CardHeader>
-                    <CardTitle className="text-base">
+                    <CardTitle className="text-base font-semibold">
                       Revenue by channel ({analytics.days ?? selectedDays} days)
                     </CardTitle>
                     <CardDescription>
@@ -648,10 +691,10 @@ export default function DashboardAnalytics() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="rounded-2xl border-border/60 shadow-sm">
                   <CardHeader>
-                    <CardTitle className="text-base">
-                      Channel mix (orders & revenue)
+                    <CardTitle className="text-base font-semibold">
+                      Channel mix
                     </CardTitle>
                     <CardDescription>
                       Share of active orders and revenue by channel.
@@ -806,39 +849,22 @@ export default function DashboardAnalytics() {
           const Icon = MODULE_ICONS[m.moduleKey];
           const { value, hint } = moduleMetric(m.moduleKey, analytics);
           const allowed = can(m.moduleKey);
+          if (!allowed) return null;
 
           return (
-            <Link
+            <AnalyticsKpiCard
               key={m.moduleKey}
+              title={m.title}
+              subtitle={hint}
+              value={value}
+              sparklineData={moduleSparklineData(m.moduleKey, analytics)}
+              accentColor={
+                MODULE_ACCENTS[m.moduleKey] ?? CHANNEL_COLORS.online
+              }
+              icon={Icon}
               href={m.path}
-              className={cn(
-                'group rounded-xl outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring',
-                !allowed && 'hidden'
-              )}
-              aria-label={`Open ${m.title}`}
-            >
-              <Card className="h-full border-border/80 shadow-sm transition-shadow group-hover:shadow-md group-hover:border-primary/30">
-                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                  <div className="space-y-1">
-                    <CardTitle className="text-base font-medium">
-                      {m.title}
-                    </CardTitle>
-                    <CardDescription>{hint}</CardDescription>
-                  </div>
-                  <div className="rounded-lg border bg-muted/40 p-2 text-muted-foreground group-hover:text-foreground group-hover:bg-muted/60">
-                    <Icon className="h-5 w-5" aria-hidden />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-semibold tabular-nums tracking-tight">
-                    {value}
-                  </p>
-                  <p className="mt-3 text-xs text-muted-foreground group-hover:text-primary">
-                    Go to module →
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
+              daysLabel={`${analytics?.days ?? selectedDays} days`}
+            />
           );
         })}
       </div>

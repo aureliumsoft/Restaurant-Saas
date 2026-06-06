@@ -18,11 +18,11 @@ function Navbar() {
             <Link
               key={item.path}
               href={item.path}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 ${
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${
                 pathname === item.path
-                  ? 'bg-muted text-foreground' // Apply active styles if current path matches item path
-                  : 'text-muted-foreground hover:text-foreground' // Apply default styles otherwise
-              } transition-all hover:text-primary`}
+                  ? 'bg-primary/10 font-medium text-primary'
+                  : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+              } transition-all`}
             >
               {/* Render the icon and title for each navigation item */}
               {item.icon}

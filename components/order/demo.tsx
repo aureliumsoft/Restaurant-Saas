@@ -16,22 +16,24 @@ export function Orders() {
   const tableRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div
-      ref={tableRef}
-      className="flex h-full min-h-0 w-full flex-1 flex-col gap-4 overflow-hidden"
-    >
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-4 overflow-hidden">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Orders</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Sale Records</h2>
           <p className="text-sm text-muted-foreground">
-            Online, POS, and kiosk orders with fulfillment method, totals, and per-order details.
+            Online, POS, and kiosk orders with fulfillment method, totals, and
+            per-order details.
           </p>
         </div>
       </div>
-      <Card className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+      <Card
+        className="flex min-h-0 w-full flex-1 flex-col overflow-hidden"
+        ref={tableRef}
+      >
         <div className="relative shrink-0">
           <CardHeader>
-            <CardTitle>Sales</CardTitle>
+            <CardTitle>Orders</CardTitle>
+           
             <FullscreenButton targetRef={tableRef} />
           </CardHeader>
         </div>

@@ -207,9 +207,9 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   onConfirm: (
     mods: {
-      attributeGroupId: string;
-      groupName: string;
-      selections: MenuOption[];
+    attributeGroupId: string;
+    groupName: string;
+    selections: MenuOption[];
     }[],
     variation?: SelectedProductVariation | null,
     quantity?: number
@@ -915,9 +915,9 @@ export function ProductCustomizeDialog({
       const pvName = pv?.name ?? pv?.title;
       const selectionName = pvName ? `${item.name} (${pvName})` : item.name;
 
-      mods.push({
-        attributeGroupId: g.id,
-        groupName: g.name,
+        mods.push({
+          attributeGroupId: g.id,
+          groupName: g.name,
         selections: [
           {
             menuItemId: item.menuItemId,
@@ -1027,7 +1027,7 @@ export function ProductCustomizeDialog({
         ? productUnitPriceWithVariation(itemBase, pv.priceDelta)
         : itemBase;
       return sum + unit + modifierSelectionsUnitTotal(config.mods);
-    }, 0);
+      }, 0);
 
     return base + categoryAddons + productRecAddons;
   }, [
@@ -1382,13 +1382,13 @@ export function ProductCustomizeDialog({
     }
     if (picker.kind === 'nested') {
       const group = categoryGroups.find((g) => g.id === picker.groupId);
-      const item = group?.items.find((it) => it.menuItemId === picker.optionId);
+    const item = group?.items.find((it) => it.menuItemId === picker.optionId);
       if (!item || !group || !optionNeedsManualVariationPicker(item, group)) {
         return [];
       }
       const key = optionSelectionKey(picker.groupId, picker.optionId);
       const optionItemBase = effectiveUnitPrice(item.price, item.salePrice);
-      return (item.variations ?? []).map((v) => ({
+    return (item.variations ?? []).map((v) => ({
       id: v.id,
       name: v.name ?? v.title ?? 'Variation',
       price: chargeableVariationUnitPrice(v.priceDelta, optionItemBase),
@@ -1418,7 +1418,7 @@ export function ProductCustomizeDialog({
       },
       onIncrease: undefined,
       onDecrease: undefined,
-      }));
+    }));
     }
     return [];
   }, [
@@ -1610,9 +1610,9 @@ export function ProductCustomizeDialog({
                   <p className="text-sm text-muted-foreground">
                     No add-ons available.
                   </p>
-                ) : (
+          ) : (
                   visibleCategoryGroups.map((g) => {
-                    const selectedIds = selectedByGroup[g.id] ?? [];
+              const selectedIds = selectedByGroup[g.id] ?? [];
                     const limits = limitsForGroup(g);
                     const count = totalSelectedUnits(selectedIds);
                     const min = limits.minItems ?? (g.required ? 1 : 0);
@@ -1622,15 +1622,15 @@ export function ProductCustomizeDialog({
                         : (g.required && count < min) ||
                           (count > 0 && min > 0 && count < min);
 
-                    return (
-                      <section
-                        key={g.id}
+              return (
+                <section
+                  key={g.id}
                         ref={(el) => {
                           groupRefs.current[g.id] = el;
                         }}
                         className="rounded-xl border border-border bg-card p-4 shadow-sm"
-                      >
-                        <div className="flex items-start justify-between gap-3">
+                >
+                  <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <Label className="text-sm font-semibold leading-snug text-foreground">
                               {configurationGroupDisplayTitle(
@@ -1639,13 +1639,13 @@ export function ProductCustomizeDialog({
                                 g.useVariationPricing ?? false,
                                 baseProductVariationContext.shortLabel
                               )}
-                            </Label>
-                            {g.linkedCategoryName ? (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                From {g.linkedCategoryName}
-                              </p>
-                            ) : null}
-                          </div>
+                      </Label>
+                      {g.linkedCategoryName ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          From {g.linkedCategoryName}
+                        </p>
+                      ) : null}
+                    </div>
                           {g.required ? (
                             <span className="shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
                               Required
@@ -1658,16 +1658,16 @@ export function ProductCustomizeDialog({
                                     limits.minItems,
                                     limits.maxItems
                                   )}
-                            </p>
-                          )}
-                        </div>
+                      </p>
+                    )}
+                  </div>
                         {g.selectionType === 'MULTIPLE' ? (
                           <p className="mt-1 text-xs text-muted-foreground">
                             Selected {count} / {limits.maxItems}
                             {g.multipleMode === 'QUANTITY' &&
                             (g.freeQuantity ?? 0) > 0
                               ? ` · first ${g.freeQuantity} free`
-                              : ''}
+                                  : ''}
                           </p>
                         ) : null}
                         {missing ? (
@@ -1686,7 +1686,7 @@ export function ProductCustomizeDialog({
                             );
                             if (visible.length === 0) {
                               return (
-                                <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                                   {g.useVariationPricing &&
                                   variations.length > 0 &&
                                   !selectedVariationId
@@ -1706,9 +1706,9 @@ export function ProductCustomizeDialog({
                                 baseProductVariationContext.parent,
                                 baseProductVariationContext.shortLabel
                               );
-                            return (
-                              <button
-                                type="button"
+                                return (
+                                  <button
+                                    type="button"
                                 className="flex w-full min-h-12 items-center justify-between gap-2 rounded-lg border border-input bg-muted/40 px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted/60"
                                 onClick={() => openCategoryGroupSelect(g)}
                               >
@@ -1716,16 +1716,16 @@ export function ProductCustomizeDialog({
                                   lines={categorySummary}
                                   placeholder="Select…"
                                 />
-                                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                              </button>
-                            );
-                          })()}
-                        </div>
-                      </section>
-                    );
-                  })
-                )}
-              </div>
+                                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                  </button>
+                                );
+                              })()}
+                  </div>
+                </section>
+              );
+            })
+          )}
+        </div>
             </div>
 
             {picker ? (
@@ -1737,21 +1737,21 @@ export function ProductCustomizeDialog({
               >
                 <div className="flex max-h-[min(50dvh,26rem)] w-full shrink-0 flex-col overflow-hidden rounded-t-2xl border-t border-border bg-card shadow-2xl animate-in slide-in-from-bottom-6 duration-300 ease-out">
                   <div className="shrink-0 p-4 pb-0">
-                    <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted" />
+                  <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted" />
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <h3
-                          id="product-customize-picker-title"
-                          className="text-base font-semibold text-foreground"
-                        >
-                          {pickerTitle}
-                        </h3>
-                        {pickerSubtitle ? (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {pickerSubtitle}
-                          </p>
-                        ) : null}
-                      </div>
+                    <div className="min-w-0 flex-1">
+                      <h3
+                        id="product-customize-picker-title"
+                        className="text-base font-semibold text-foreground"
+                      >
+                        {pickerTitle}
+                      </h3>
+                      {pickerSubtitle ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {pickerSubtitle}
+                        </p>
+                      ) : null}
+                    </div>
                       <Button
                         type="button"
                         variant="ghost"
@@ -1791,9 +1791,9 @@ export function ProductCustomizeDialog({
                             {entry.name}
                           </p>
                           {entry.priceLabel ? (
-                            <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                               {entry.priceLabel}
-                            </p>
+                          </p>
                           ) : null}
                         </div>
                         {picker.kind === 'group-multi' ? (
@@ -1810,7 +1810,7 @@ export function ProductCustomizeDialog({
                               onClick={entry.onDecrease}
                             >
                               -
-                            </Button>
+          </Button>
                             <span className="min-w-[2ch] text-center text-xs font-semibold">
                               {entry.quantity ?? 0}
                             </span>
@@ -1822,7 +1822,7 @@ export function ProductCustomizeDialog({
                               onClick={entry.onIncrease}
                             >
                               +
-                            </Button>
+          </Button>
                           </div>
                         ) : entry.selected ? (
                           <Check className="h-4 w-4 text-primary" />

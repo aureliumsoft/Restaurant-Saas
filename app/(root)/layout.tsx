@@ -208,7 +208,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
 
   return (
     <BranchProvider>
-      <div className="bg-gray-300 dark:bg-black">
+      <div className="bg-[#eef0f3] dark:bg-[#0d0d0d]">
         <div
           className={cn(
             'grid min-h-screen w-full',
@@ -220,7 +220,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
           {/* Sidebar */}
           <div
             className={cn(
-              'hidden border-r bg-muted/40 md:flex md:flex-col',
+              'hidden border-r border-border/60 bg-white dark:bg-[#141414] md:flex md:flex-col',
               !sidebarOpen && 'md:hidden'
             )}
           >
