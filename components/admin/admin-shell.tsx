@@ -14,10 +14,15 @@ import { ADMIN_NAV_ITEMS } from '@/constant/adminNav';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { isPlatformAdminSession } from '@/lib/auth/admin';
+import Image from 'next/image';
 
 const ADMIN_SIDEBAR_KEY = 'saas-admin-sidebar-open';
 
-function AdminMobileNav({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
+function AdminMobileNav({
+  onOpenChange,
+}: {
+  onOpenChange: (o: boolean) => void;
+}) {
   const pathname = usePathname();
   return (
     <SheetContent side="left" className="flex w-[min(100vw,280px)] flex-col">
@@ -33,7 +38,9 @@ function AdminMobileNav({ onOpenChange }: { onOpenChange: (o: boolean) => void }
             onClick={() => onOpenChange(false)}
             className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-2',
-              pathname === item.path ? 'bg-muted' : 'text-muted-foreground hover:bg-muted/80'
+              pathname === item.path
+                ? 'bg-muted'
+                : 'text-muted-foreground hover:bg-muted/80'
             )}
           >
             {item.icon}
@@ -73,7 +80,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [sidebarOpen]);
 
   const toggleDesktop = () => {
-    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia('(min-width: 768px)').matches
+    ) {
       setSidebarOpen((o) => !o);
     } else {
       setMobileOpen((o) => !o);
@@ -120,10 +130,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           )}
         >
           <div className="flex h-14 items-center gap-2 border-b border-zinc-200 px-4 dark:border-zinc-800">
-            <Shield className="h-5 w-5 text-primary" />
+            <Image src="/Logo.png" alt="Foodluk Admin" width={32} height={32} />
             <div className="flex flex-col leading-tight">
               <span className="text-sm font-semibold">Foodluk Admin</span>
-              <span className="text-[10px] text-muted-foreground">Platform</span>
+              <span className="text-[10px] text-muted-foreground">
+                Platform
+              </span>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto py-4">
@@ -136,9 +148,19 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
         <div className="flex min-w-0 flex-col">
           <header className="flex h-14 items-center gap-2 border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-4">
-            <Button type="button" variant="outline" size="icon" className="shrink-0" onClick={toggleDesktop}>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="shrink-0"
+              onClick={toggleDesktop}
+            >
               <span className="hidden md:inline-flex" aria-hidden>
-                {sidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
+                {sidebarOpen ? (
+                  <PanelLeftClose className="h-5 w-5" />
+                ) : (
+                  <PanelLeft className="h-5 w-5" />
+                )}
               </span>
               <span className="inline-flex md:hidden" aria-hidden>
                 <Menu className="h-5 w-5" />
@@ -154,7 +176,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <ModeToggle />
-            <div className={cn('flex items-center', sidebarOpen && 'md:hidden')}>
+            <div
+              className={cn('flex items-center', sidebarOpen && 'md:hidden')}
+            >
               <UserMenu />
             </div>
           </header>

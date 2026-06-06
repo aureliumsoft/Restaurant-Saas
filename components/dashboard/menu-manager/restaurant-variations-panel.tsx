@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/confirmation-dialogs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { apiErrorMessage } from '@/lib/api-error-message';
 import { filterNameTextInput } from '@/lib/validation/fields';
 
 import type { RestaurantVariationRow } from './types';
@@ -78,8 +79,8 @@ export function RestaurantVariationsPanel() {
       setName('');
       setShortLabel('');
       await load();
-    } catch {
-      toast.error('Could not create variation');
+    } catch (e: unknown) {
+      toast.error(apiErrorMessage(e, 'Could not create variation'));
     } finally {
       setAdding(false);
     }
@@ -111,8 +112,8 @@ export function RestaurantVariationsPanel() {
       await axios.delete(`/api/restaurant/variations/${deletingId}`);
       toast.success('Deleted');
       await load();
-    } catch {
-      toast.error('Could not delete variation');
+    } catch (e: unknown) {
+      toast.error(apiErrorMessage(e, 'Could not delete variation'));
     } finally {
       setDeleting(false);
       setConfirmDeleteOpen(false);

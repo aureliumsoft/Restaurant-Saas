@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { apiErrorMessage } from '@/lib/api-error-message';
 
 type CreatedCategory = {
   id: string;
@@ -59,8 +60,8 @@ export function AddCategoryFormDialog({
       await onMenuRefresh?.();
       onCreated?.(created);
       onOpenChange(false);
-    } catch {
-      toast.error('Could not create category');
+    } catch (e: unknown) {
+      toast.error(apiErrorMessage(e, 'Could not create category'));
     } finally {
       setSaving(false);
     }

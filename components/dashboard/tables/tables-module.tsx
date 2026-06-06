@@ -242,7 +242,7 @@ export function TablesModule() {
                 Cancel
               </Button>
               <Button type="button" disabled={saving} onClick={() => void handleSave()}>
-                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> <span>Saving...</span></> : <><Save className="h-4 w-4 mr-2" /> <span>Save</span></>}
+                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> <span>Creating...</span></> : <><Plus className="h-4 w-4 mr-2" /> <span>Create Table</span></>}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -19,6 +19,7 @@ import {
   DeleteConfirmation,
 } from '@/components/ui/confirmation-dialogs';
 import { Input } from '@/components/ui/input';
+import { apiErrorMessage } from '@/lib/api-error-message';
 import {
   categoryHasProducts,
   isMenuCategoryShownInFront,
@@ -57,9 +58,7 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
       setShowInFront(true);
       await onRefresh();
     } catch (e: unknown) {
-      const err = e as { response?: { data?: unknown } };
-      toast.error('Could not create category');
-      console.error(err.response?.data);
+      toast.error(apiErrorMessage(e, 'Could not create category'));
     } finally {
       setAdding(false);
     }
@@ -104,8 +103,7 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
       toast.success('Deleted');
       await onRefresh();
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || 'Could not delete');
+      toast.error(apiErrorMessage(e, 'Could not delete'));
     } finally {
       setDeleting(false);
       setConfirmDeleteOpen(false);

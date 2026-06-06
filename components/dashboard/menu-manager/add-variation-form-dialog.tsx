@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { apiErrorMessage } from '@/lib/api-error-message';
 import { filterNameTextInput } from '@/lib/validation/fields';
 
 import type { RestaurantVariationRow } from './types';
@@ -60,8 +61,8 @@ export function AddVariationFormDialog({
       await onTemplatesReload?.();
       onCreated?.(created);
       onOpenChange(false);
-    } catch {
-      toast.error('Could not create variation');
+    } catch (e: unknown) {
+      toast.error(apiErrorMessage(e, 'Could not create variation'));
     } finally {
       setSaving(false);
     }

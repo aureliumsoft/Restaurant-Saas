@@ -11,7 +11,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { toast } from 'react-toastify';
-import { Cross, Loader2, Loader2Icon, Pencil, Plus, Save, Trash, Trash2, X } from 'lucide-react';
+import {
+  Cross,
+  Loader2,
+  Loader2Icon,
+  Pencil,
+  Plus,
+  Save,
+  Trash,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 type BranchRow = {
   id: string;
@@ -178,10 +188,13 @@ export function BranchedPage() {
 
   return (
     <>
-    <div className="flex flex-col gap-2 mb-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Branches</h1>
-      <p className="text-sm text-muted-foreground space-y-2">Add, edit, and delete your branches here. You can add up to {maxBranches === null ? 'unlimited' : maxBranches} branches.</p>
-    </div>
+      <div className="flex flex-col gap-2 mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Branches</h1>
+        <p className="text-sm text-muted-foreground space-y-2">
+          Add, edit, and delete your branches here. You can add up to{' '}
+          {maxBranches === null ? 'unlimited' : maxBranches} branches.
+        </p>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Branch Management</CardTitle>
@@ -223,11 +236,14 @@ export function BranchedPage() {
                   onClick={() => setConfirmEditOpen(true)}
                 >
                   {saving ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> <span>Updating...</span></>
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
+                      <span>Updating...</span>
+                    </>
                   ) : (
                     <>
-                    <Save className="h-4 w-4 mr-2" />
-                    <span>Update Branch</span>
+                      <Save className="h-4 w-4 mr-2" />
+                      <span>Update Branch</span>
                     </>
                   )}
                 </Button>
@@ -241,11 +257,14 @@ export function BranchedPage() {
                   onClick={() => setConfirmDeleteOpen(true)}
                 >
                   {deletingId === activeId ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> <span>Deleting...</span></>
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
+                      <span>Deleting...</span>
+                    </>
                   ) : (
                     <>
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    <span>Delete Branch</span>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      <span>Delete Branch</span>
                     </>
                   )}
                 </Button>
@@ -265,15 +284,27 @@ export function BranchedPage() {
               <Button
                 type="button"
                 onClick={() => setConfirmAddOpen(true)}
-                disabled={saving || atBranchLimit}
+                disabled={saving || atBranchLimit || !name.trim() || !address.trim() || !phone.trim()}
               >
-                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> <span>Adding...</span></> : <><Plus className="h-4 w-4 mr-2" /> <span>Add New Branch</span></>}
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
+                    <span>Adding...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />{' '}
+                    <span>Add New Branch</span>
+                  </>
+                )}
               </Button>
             )}
           </div>
 
           {loading ? (
-            <p className="text-sm text-muted-foreground"><Loader2 className="animate-spin text-primary text-center mx-auto" /></p>
+            <p className="text-sm text-muted-foreground">
+              <Loader2 className="animate-spin text-primary text-center mx-auto" />
+            </p>
           ) : branches.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No branches found yet. Add your first branch now.
