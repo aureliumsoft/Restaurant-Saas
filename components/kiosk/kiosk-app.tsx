@@ -542,6 +542,9 @@ export function KioskApp({ slug }: { slug: string }) {
     setDialogOpen(true);
   };
 
+  const resolveCatalogProduct = (ref: { id: string }) =>
+    allProducts.find((p) => p.id === ref.id) ?? null;
+
   const proceedWithProduct = (p: CustomerMenuProduct) => {
     const hasVariations = (p.variations?.length ?? 0) > 0;
     if (hasRequiredAddons(p) || hasVariations) openCustomize(p);
@@ -1531,7 +1534,8 @@ export function KioskApp({ slug }: { slug: string }) {
             setMenuOfferOpen(false);
             setMenuOfferProduct(null);
             setMenuOfferBundles([]);
-            proceedWithProduct(bundle);
+            const full = resolveCatalogProduct(bundle);
+            if (full) proceedWithProduct(full);
           }}
         />
 

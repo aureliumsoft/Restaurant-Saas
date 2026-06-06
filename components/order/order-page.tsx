@@ -604,6 +604,9 @@ export default function OrderPageClient({
   const hasVariations = (p: CustomerMenuProduct) =>
     (p.variations?.length ?? 0) > 0;
 
+  const resolveCatalogProduct = (ref: { id: string }) =>
+    products.find((p) => p.id === ref.id) ?? null;
+
   const proceedWithProduct = (p: CustomerMenuProduct) => {
     if (hasRequiredAddons(p) || hasVariations(p)) {
       openCustomizeForProduct(p);
@@ -1317,7 +1320,8 @@ export default function OrderPageClient({
             setMenuOfferOpen(false);
             setMenuOfferProduct(null);
             setMenuOfferBundles([]);
-            proceedWithProduct(bundle);
+            const full = resolveCatalogProduct(bundle);
+            if (full) proceedWithProduct(full);
           }}
         />
 

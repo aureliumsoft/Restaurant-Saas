@@ -14,7 +14,7 @@ export const DASHBOARD_MODULES = [
   { moduleKey: 'categories', title: 'Categories', path: '/categories' },
   { moduleKey: 'variations', title: 'Variations', path: '/variations' },
   { moduleKey: 'product', title: 'Inventory', path: '/product' },
-  { moduleKey: 'recommendations', title: 'Product Configurations', path: '/configurations' },
+  { moduleKey: 'recommendations', title: 'Configurations', path: '/configurations' },
   { moduleKey: 'records', title: 'Records', path: '/records' },
   { moduleKey: 'settings', title: 'Settings', path: '/settings' },
 ] as const;
