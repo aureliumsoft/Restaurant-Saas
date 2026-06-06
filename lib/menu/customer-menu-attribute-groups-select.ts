@@ -1,6 +1,8 @@
 /** Shared Prisma select for menu item recommendation groups on the customer menu API. */
 
-const variationSelect = {
+export type CustomerMenuSelectMode = 'full' | 'legacy';
+
+const variationSelectFull = {
   orderBy: { sortOrder: 'asc' as const },
   select: {
     id: true,
@@ -17,6 +19,19 @@ const variationSelect = {
   },
 } as const;
 
+const variationSelectLegacy = {
+  orderBy: { sortOrder: 'asc' as const },
+  select: {
+    id: true,
+    name: true,
+    title: true,
+    imageUrl: true,
+    swatchHex: true,
+    priceDelta: true,
+    sortOrder: true,
+  },
+} as const;
+
 export const customerMenuItemCoreSelect = {
   id: true,
   name: true,
@@ -24,72 +39,105 @@ export const customerMenuItemCoreSelect = {
   imageUrl: true,
   price: true,
   salePrice: true,
-  variations: variationSelect,
+  variations: variationSelectFull,
 } as const;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildCustomerMenuAttributeGroupsSelect(depth: number): any {
+export const customerMenuItemCoreSelectLegacy = {
+  id: true,
+  name: true,
+  description: true,
+  imageUrl: true,
+  price: true,
+  salePrice: true,
+  variations: variationSelectLegacy,
+} as const;
+
+function buildAttributeGroupsSelect(
+  depth: number,
+  mode: CustomerMenuSelectMode
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
   if (depth <= 0) {
     return undefined;
   }
 
+  const itemCore =
+    mode === 'full'
+      ? customerMenuItemCoreSelect
+      : customerMenuItemCoreSelectLegacy;
+
   const nestedItemSelect: Record<string, unknown> = {
-    ...customerMenuItemCoreSelect,
+    ...itemCore,
     ...(depth > 1
       ? {
-          attributeGroups: buildCustomerMenuAttributeGroupsSelect(depth - 1),
+          attributeGroups: buildAttributeGroupsSelect(depth - 1, mode),
         }
       : {}),
   };
 
-  return {
-    orderBy: { sortOrder: 'asc' as const },
-    select: {
-      id: true,
-      name: true,
-      selectionType: true,
-      sourceType: true,
-      multipleMode: true,
-      freeQuantity: true,
-      required: true,
-      minItems: true,
-      maxItems: true,
-      sortOrder: true,
-      productCategoryIds: true,
-      defaultLinkedMenuItemId: true,
-      useVariationPricing: true,
-      defaultLinkedMenuItem: {
-        select: {
-          id: true,
-          name: true,
-          price: true,
-          salePrice: true,
-        },
+  const groupSelect: Record<string, unknown> = {
+    id: true,
+    name: true,
+    selectionType: true,
+    sourceType: true,
+    multipleMode: true,
+    freeQuantity: true,
+    required: true,
+    minItems: true,
+    maxItems: true,
+    sortOrder: true,
+    productCategoryIds: true,
+    defaultLinkedMenuItemId: true,
+    defaultLinkedMenuItem: {
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        salePrice: true,
       },
-      linkedCategory: {
-        select: {
-          id: true,
-          name: true,
-          items: {
-            orderBy: { name: 'asc' as const },
-            select: nestedItemSelect,
-          },
-        },
-      },
-      linkedProduct: {
-        select: {
-          ...customerMenuItemCoreSelect,
-          categoryId: true,
-          attributeGroups: buildCustomerMenuAttributeGroupsSelect(depth - 1),
-        },
-      },
-      variationLimits: {
-        select: {
-          variationId: true,
-          minItems: true,
-          maxItems: true,
+    },
+    linkedCategory: {
+      select: {
+        id: true,
+        name: true,
+        items: {
+          orderBy: { name: 'asc' as const },
+          select: nestedItemSelect,
         },
       },
     },
+    linkedProduct: {
+      select: {
+        ...itemCore,
+        categoryId: true,
+        attributeGroups: buildAttributeGroupsSelect(depth - 1, mode),
+      },
+    },
+    variationLimits: {
+      select: {
+        variationId: true,
+        minItems: true,
+        maxItems: true,
+      },
+    },
   };
+
+  if (mode === 'full') {
+    groupSelect.useVariationPricing = true;
+  }
+
+  return {
+    orderBy: { sortOrder: 'asc' as const },
+    select: groupSelect,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildCustomerMenuAttributeGroupsSelect(depth: number): any {
+  return buildAttributeGroupsSelect(depth, 'full');
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildCustomerMenuAttributeGroupsSelectLegacy(depth: number): any {
+  return buildAttributeGroupsSelect(depth, 'legacy');
 }

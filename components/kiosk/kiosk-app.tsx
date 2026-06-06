@@ -379,8 +379,20 @@ export function KioskApp({ slug }: { slug: string }) {
         const res = await fetch(
           `/api/customer/menu?slug=${encodeURIComponent(slug)}`
         );
-        const body = (await res.json()) as { data: MenuRestaurant | null };
+        const body = (await res.json().catch(() => ({}))) as {
+          data?: MenuRestaurant | null;
+          error?: string;
+        };
         if (cancelled) return;
+        if (!res.ok) {
+          setMenu(null);
+          setMenuError(
+            typeof body.error === 'string'
+              ? body.error
+              : 'Could not load menu. Please try again.'
+          );
+          return;
+        }
         setMenu(body.data ?? null);
         if (!body.data) {
           setMenuError('Restaurant not found for this link.');
@@ -800,14 +812,17 @@ export function KioskApp({ slug }: { slug: string }) {
   }
 
   if (menuError || !menu) {
+    const notFound = menuError === 'Restaurant not found for this link.';
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f8fafc] p-6">
         <p className="text-center text-[#dc2626]">
           {menuError ?? 'Menu unavailable.'}
         </p>
-        <p className="text-center text-sm text-[#64748b]">
-          Check the URL slug matches your restaurant slug in Settings.
-        </p>
+        {notFound ? (
+          <p className="text-center text-sm text-[#64748b]">
+            Check the URL slug matches your restaurant slug in Settings.
+          </p>
+        ) : null}
       </div>
     );
   }
