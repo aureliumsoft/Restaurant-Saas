@@ -55,20 +55,26 @@ export async function syncMenuItemCategoryLinks(
 }
 
 export async function loadCategoriesWithLinkedItems<
-  TItem extends Record<string, unknown>,
+  TCategorySelect extends Prisma.MenuCategorySelect & { id: true },
+  TItemSelect extends Prisma.MenuItemSelect,
 >(options: {
   restaurantId: string;
-  categorySelect: Prisma.MenuCategorySelect;
-  itemSelect: Prisma.MenuItemSelect;
+  categorySelect: TCategorySelect;
+  itemSelect: TItemSelect;
   categoryWhere?: Prisma.MenuCategoryWhereInput;
   itemOrderBy?: Prisma.MenuItemOrderByWithRelationInput;
 }): Promise<
   Array<
-    Prisma.MenuCategoryGetPayload<{ select: typeof options.categorySelect }> & {
-      items: TItem[];
+    Prisma.MenuCategoryGetPayload<{ select: TCategorySelect }> & {
+      items: Prisma.MenuItemGetPayload<{ select: TItemSelect }>[];
     }
   >
 > {
+  type MenuItem = Prisma.MenuItemGetPayload<{ select: TItemSelect }>;
+  type Result = Prisma.MenuCategoryGetPayload<{ select: TCategorySelect }> & {
+    items: MenuItem[];
+  };
+
   const categories = await db.menuCategory.findMany({
     where: {
       restaurantId: options.restaurantId,
@@ -83,24 +89,32 @@ export async function loadCategoriesWithLinkedItems<
     orderBy: [{ sortOrder: 'asc' }, { menuItem: { name: 'asc' } }],
     select: {
       categoryId: true,
+      menuItemId: true,
       menuItem: { select: options.itemSelect },
     },
   });
 
-  const itemsByCategory = new Map<string, TItem[]>();
+  const itemsByCategory = new Map<string, MenuItem[]>();
+  const itemIdsByCategory = new Map<string, Set<string>>();
   for (const link of links) {
-    const item = link.menuItem as TItem;
+    const item = link.menuItem;
     const list = itemsByCategory.get(link.categoryId) ?? [];
-    if (!list.some((existing) => existing.id === item.id)) {
+    const seen = itemIdsByCategory.get(link.categoryId) ?? new Set<string>();
+    if (!seen.has(link.menuItemId)) {
+      seen.add(link.menuItemId);
       list.push(item);
     }
+    itemIdsByCategory.set(link.categoryId, seen);
     itemsByCategory.set(link.categoryId, list);
   }
 
-  return categories.map((category) => ({
-    ...category,
-    items: itemsByCategory.get(category.id) ?? [],
-  }));
+  return categories.map((category) => {
+    const categoryId = (category as { id: string }).id;
+    return {
+      ...category,
+      items: itemsByCategory.get(categoryId) ?? [],
+    };
+  }) as Result[];
 }
 
 export async function getMenuItemCategoryIds(
