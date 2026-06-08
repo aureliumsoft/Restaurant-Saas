@@ -14,6 +14,23 @@ export type RecommendationFormVariant =
   | 'product-single'
   | 'product-multiple';
 
+export const RECOMMENDATION_FORM_VARIANTS: RecommendationFormVariant[] = [
+  'category-single',
+  'category-multiple',
+  'product-single',
+  'product-multiple',
+];
+
+export const RECOMMENDATION_SECTION_LABELS: Record<
+  RecommendationFormVariant,
+  string
+> = {
+  'category-single': 'Category · single selection',
+  'category-multiple': 'Category · multiple selection',
+  'product-single': 'Product · single selection',
+  'product-multiple': 'Product · multiple selection',
+};
+
 export type PreviewAttrGroup = AttrGroupRow & {
   isDraft?: boolean;
   draftKey?: string;
@@ -42,7 +59,7 @@ function productGroupName(
     : `Choose from ${cat}`;
 }
 
-function draftHasContent(
+export function draftHasContent(
   variant: RecommendationFormVariant,
   draft: RecommendationRuleDraft
 ): boolean {

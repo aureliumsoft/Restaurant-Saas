@@ -5,7 +5,10 @@ import { Loader2, Save, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { RecommendationFormVariant } from '@/lib/menu/recommendation-preview-groups';
+import {
+  RECOMMENDATION_SECTION_LABELS,
+  type RecommendationFormVariant,
+} from '@/lib/menu/recommendation-preview-groups';
 
 import { RecommendationConfigSectionShell } from './recommendation-config-section-shell';
 import {
@@ -28,6 +31,7 @@ type Props = {
     productMultiple: AttrGroupRow[];
   };
   savingRules: boolean;
+  savingAll: boolean;
   onSaveDraft: (draft: RecommendationRuleDraft) => void;
   draftChangeHandlers: Record<
     RecommendationFormVariant,
@@ -101,6 +105,7 @@ export function RecommendationConfigSections({
   linkedOptions,
   savedGroupsByType,
   savingRules,
+  savingAll,
   onSaveDraft,
   draftChangeHandlers,
   onDeleteGroup,
@@ -117,11 +122,13 @@ export function RecommendationConfigSections({
   deletingOfferId,
   toggleInArray,
 }: Props) {
+  const isSaving = savingRules || savingOffers || savingAll;
+
   const formProps = {
     selected,
     localCategories,
     allProducts,
-    saving: savingRules,
+    saving: isSaving,
     onSave: onSaveDraft,
   };
 
@@ -139,6 +146,7 @@ export function RecommendationConfigSections({
         <RecommendationRuleForm
           variant="category-single"
           {...formProps}
+          saveLabel={`Save ${RECOMMENDATION_SECTION_LABELS['category-single']}`}
           onDraftChange={draftChangeHandlers['category-single']}
         />
       </RecommendationConfigSectionShell>
@@ -155,6 +163,7 @@ export function RecommendationConfigSections({
         <RecommendationRuleForm
           variant="category-multiple"
           {...formProps}
+          saveLabel={`Save ${RECOMMENDATION_SECTION_LABELS['category-multiple']}`}
           onDraftChange={draftChangeHandlers['category-multiple']}
         />
       </RecommendationConfigSectionShell>
@@ -171,6 +180,7 @@ export function RecommendationConfigSections({
         <RecommendationRuleForm
           variant="product-single"
           {...formProps}
+          saveLabel={`Save ${RECOMMENDATION_SECTION_LABELS['product-single']}`}
           onDraftChange={draftChangeHandlers['product-single']}
         />
       </RecommendationConfigSectionShell>
@@ -187,6 +197,7 @@ export function RecommendationConfigSections({
         <RecommendationRuleForm
           variant="product-multiple"
           {...formProps}
+          saveLabel={`Save ${RECOMMENDATION_SECTION_LABELS['product-multiple']}`}
           onDraftChange={draftChangeHandlers['product-multiple']}
         />
       </RecommendationConfigSectionShell>
@@ -289,7 +300,7 @@ export function RecommendationConfigSections({
         <Button
           type="button"
           onClick={onSaveOffers}
-          disabled={savingOffers || selectedOfferProductIds.length === 0}
+          disabled={isSaving || selectedOfferProductIds.length === 0}
           className="w-full"
         >
           {savingOffers ? (
@@ -300,7 +311,7 @@ export function RecommendationConfigSections({
           ) : (
             <>
               <Save className="mr-2 h-4 w-4" />
-              Save associated products
+              Save associated products section
             </>
           )}
         </Button>

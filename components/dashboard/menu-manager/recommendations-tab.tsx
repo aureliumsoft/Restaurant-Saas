@@ -62,6 +62,9 @@ import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-pric
 
 import {
   buildDraftPreviewGroups,
+  draftHasContent,
+  RECOMMENDATION_FORM_VARIANTS,
+  RECOMMENDATION_SECTION_LABELS,
   type RecommendationFormVariant,
   type PreviewAttrGroup,
 } from '@/lib/menu/recommendation-preview-groups';
@@ -73,6 +76,161 @@ import type { AttrGroupRow, MenuCategoryRow, MenuItemRow } from './types';
 
 function effectiveUnitPrice(price: number, salePrice: number | null) {
   return effectiveMenuItemUnitPrice(price, salePrice);
+}
+
+function validateRecommendationDraft(
+  draft: RecommendationRuleDraft,
+  localCategories: MenuCategoryRow[], 
+  selected: MenuItemRow
+): string | null {
+  if (draft.sourceType === 'CATEGORY' && draft.ruleCategoryIds.length === 0) {
+    return 'Choose at least one recommendation category.';
+  }
+  if (draft.sourceType === 'CATEGORY') {
+    for (const catId of draft.ruleCategoryIds) {
+      if (!draft.categoryDefaults[catId]) {
+        const cat = localCategories.find((c) => c.id === catId);
+        return `Select a default item for ${cat?.name ?? 'the category'}.`;
+      }
+    }
+  }
+  const linkedProductIds =
+    draft.linkedProductIds.length > 0
+      ? draft.linkedProductIds
+      : draft.linkedProductId
+        ? [draft.linkedProductId]
+        : [];
+  if (draft.sourceType === 'PRODUCT' && linkedProductIds.length === 0) {
+    return 'Choose at least one product.';
+  }
+  if (draft.sourceType === 'PRODUCT' && draft.productCategoryIds.length === 0) {
+    return 'Choose at least one category for product recommendations.';
+  }
+
+  const useVariationLimits =
+    draft.selectionType === 'MULTIPLE' &&
+    draft.sourceType === 'CATEGORY' &&
+    (selected.variations?.length ?? 0) > 0 &&
+    draft.variationLimits.length > 0;
+
+  if (draft.selectionType === 'MULTIPLE' && !useVariationLimits) {
+    if (draft.maxItems < draft.minItems) {
+      return 'Maximum must be >= minimum.';
+    }
+  }
+  return null;
+}
+
+function buildRecommendationPayloads(
+  draft: RecommendationRuleDraft,
+  context: {
+    selected: MenuItemRow & { categoryName: string };
+    localCategories: MenuCategoryRow[];
+    allProducts: (MenuItemRow & { categoryName: string })[];
+    sortOrderBase: number;
+  }
+): Record<string, unknown>[] {
+  const { selected, localCategories, allProducts, sortOrderBase } = context;
+  const payloads: Record<string, unknown>[] = [];
+  const linkedProductIds =
+    draft.linkedProductIds.length > 0
+      ? draft.linkedProductIds
+      : draft.linkedProductId
+        ? [draft.linkedProductId]
+        : [];
+
+  const useVariationLimits =
+    draft.selectionType === 'MULTIPLE' &&
+    draft.sourceType === 'CATEGORY' &&
+    (selected.variations?.length ?? 0) > 0 &&
+    draft.variationLimits.length > 0;
+
+  if (draft.sourceType === 'CATEGORY') {
+    const cats = localCategories.filter((c) =>
+      draft.ruleCategoryIds.includes(c.id)
+    );
+    for (const [index, cat] of cats.entries()) {
+      payloads.push({
+        name:
+          draft.selectionType === 'SINGLE'
+            ? `Choose ${cat.name}`
+            : `Choose from ${cat.name}`,
+        sourceType: 'CATEGORY',
+        selectionType: draft.selectionType,
+        required: draft.required,
+        linkedCategoryId: cat.id,
+        defaultLinkedMenuItemId: draft.categoryDefaults[cat.id],
+        useVariationPricing: draft.useVariationPricing,
+        sortOrder: sortOrderBase + index,
+        ...(draft.selectionType === 'MULTIPLE'
+          ? {
+              multipleMode: draft.multipleMode,
+              freeQuantity:
+                draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
+              ...(useVariationLimits
+                ? { variationLimits: draft.variationLimits }
+                : {
+                    minItems: draft.minItems,
+                    maxItems: draft.maxItems,
+                  }),
+            }
+          : {}),
+      });
+    }
+  } else {
+    const catNames = localCategories
+      .filter((c) => draft.productCategoryIds.includes(c.id))
+      .map((c) => c.name);
+    linkedProductIds.forEach((productId, index) => {
+      const product = allProducts.find((p) => p.id === productId);
+      payloads.push({
+        name: product
+          ? catNames.length > 1
+            ? `Choose add-ons (${catNames.join(', ')})`
+            : draft.selectionType === 'SINGLE'
+              ? `Choose ${product.name}`
+              : `Choose from ${catNames[0] ?? product.categoryName}`
+          : 'Recommended products',
+        sourceType: 'PRODUCT',
+        selectionType: draft.selectionType,
+        required: draft.required,
+        linkedProductId: productId,
+        productCategoryIds: draft.productCategoryIds,
+        sortOrder: sortOrderBase + index,
+        ...(draft.selectionType === 'MULTIPLE'
+          ? {
+              multipleMode: draft.multipleMode,
+              freeQuantity:
+                draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
+              minItems: draft.minItems,
+              maxItems: draft.maxItems,
+            }
+          : {}),
+      });
+    });
+  }
+  return payloads;
+}
+
+async function persistRecommendationDraft(
+  draft: RecommendationRuleDraft,
+  context: {
+    selected: MenuItemRow & { categoryName: string };
+    localCategories: MenuCategoryRow[];
+    allProducts: (MenuItemRow & { categoryName: string })[];
+    sortOrderBase: number;
+  }
+): Promise<AttrGroupRow[]> {
+  const payloads = buildRecommendationPayloads(draft, context);
+  const responses = await Promise.all(
+    payloads.map((body) =>
+      axios.post<{ data: AttrGroupRow }>(
+        `/api/restaurant/menu/items/${context.selected.id}/attributes`,
+        body
+      )
+    )
+  );
+  return responses.map((res) => res.data.data);
 }
 
 type Props = {
@@ -222,7 +380,8 @@ export function RecommendationsTab({
   }, []);
 
   const [savingRules, setSavingRules] = useState(false);
-  const [saveRulesConfirmOpen, setSaveRulesConfirmOpen] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
+  const [saveAllConfirmOpen, setSaveAllConfirmOpen] = useState(false);
   const [ruleSelectionType, setRuleSelectionType] = useState<
     'SINGLE' | 'MULTIPLE'
   >('SINGLE');
@@ -494,138 +653,33 @@ export function RecommendationsTab({
     );
   };
 
-  const saveRecommendationDraft = async (draft: RecommendationRuleDraft) => {
+  const saveRecommendationDraft = async (
+    draft: RecommendationRuleDraft,
+    options?: { resetAfter?: boolean }
+  ) => {
     if (!selected) {
       toast.error('Select a product first.');
-      return;
+      return false;
     }
 
-    if (draft.sourceType === 'CATEGORY' && draft.ruleCategoryIds.length === 0) {
-      toast.error('Choose at least one recommendation category.');
-      return;
-    }
-    if (draft.sourceType === 'CATEGORY') {
-      for (const catId of draft.ruleCategoryIds) {
-        if (!draft.categoryDefaults[catId]) {
-          const cat = localCategories.find((c) => c.id === catId);
-          toast.error(
-            `Select a default item for ${cat?.name ?? 'the category'}.`
-          );
-        return;
-      }
-      }
-    }
-    const linkedProductIds =
-      draft.linkedProductIds.length > 0
-        ? draft.linkedProductIds
-        : draft.linkedProductId
-          ? [draft.linkedProductId]
-          : [];
-    if (draft.sourceType === 'PRODUCT' && linkedProductIds.length === 0) {
-      toast.error('Choose at least one product.');
-        return;
-      }
-    if (
-      draft.sourceType === 'PRODUCT' &&
-      draft.productCategoryIds.length === 0
-    ) {
-      toast.error('Choose at least one category for product recommendations.');
-        return;
-      }
-
-    const useVariationLimits =
-      draft.selectionType === 'MULTIPLE' &&
-      draft.sourceType === 'CATEGORY' &&
-      (selected.variations?.length ?? 0) > 0 &&
-      draft.variationLimits.length > 0;
-
-    if (draft.selectionType === 'MULTIPLE' && !useVariationLimits) {
-      if (draft.maxItems < draft.minItems) {
-        toast.error('Maximum must be >= minimum.');
-        return;
-      }
+    const validationError = validateRecommendationDraft(
+      draft,
+      localCategories,
+      selected
+    );
+    if (validationError) {
+      toast.error(validationError);
+      return false;
     }
 
     setSavingRules(true);
     try {
-      const payloads: Record<string, unknown>[] = [];
-
-      if (draft.sourceType === 'CATEGORY') {
-        const cats = localCategories.filter((c) =>
-          draft.ruleCategoryIds.includes(c.id)
-        );
-        for (const [index, cat] of cats.entries()) {
-          payloads.push({
-            name:
-              draft.selectionType === 'SINGLE'
-                ? `Choose ${cat.name}`
-                : `Choose from ${cat.name}`,
-            sourceType: 'CATEGORY',
-            selectionType: draft.selectionType,
-            required: draft.required,
-              linkedCategoryId: cat.id,
-            defaultLinkedMenuItemId: draft.categoryDefaults[cat.id],
-            useVariationPricing: draft.useVariationPricing,
-            sortOrder: selected.attributeGroups.length + index,
-            ...(draft.selectionType === 'MULTIPLE'
-              ? {
-                  multipleMode: draft.multipleMode,
-                  freeQuantity:
-                    draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
-                  ...(useVariationLimits
-                    ? { variationLimits: draft.variationLimits }
-                    : {
-                        minItems: draft.minItems,
-                        maxItems: draft.maxItems,
-                      }),
-                }
-                : {}),
-          });
-        }
-      } else {
-        const catNames = localCategories
-          .filter((c) => draft.productCategoryIds.includes(c.id))
-          .map((c) => c.name);
-        linkedProductIds.forEach((productId, index) => {
-          const product = allProducts.find((p) => p.id === productId);
-          payloads.push({
-            name: product
-              ? catNames.length > 1
-                ? `Choose add-ons (${catNames.join(', ')})`
-                : draft.selectionType === 'SINGLE'
-                  ? `Choose ${product.name}`
-                  : `Choose from ${catNames[0] ?? product.categoryName}`
-              : 'Recommended products',
-            sourceType: 'PRODUCT',
-            selectionType: draft.selectionType,
-            required: draft.required,
-            linkedProductId: productId,
-            productCategoryIds: draft.productCategoryIds,
-            sortOrder: selected.attributeGroups.length + index,
-            ...(draft.selectionType === 'MULTIPLE'
-              ? {
-                  multipleMode: draft.multipleMode,
-                  freeQuantity:
-                    draft.multipleMode === 'QUANTITY'
-                      ? draft.freeQuantity
-                      : null,
-                  minItems: draft.minItems,
-                  maxItems: draft.maxItems,
-                }
-              : {}),
-          });
-        });
-      }
-
-      const responses = await Promise.all(
-        payloads.map((body) =>
-          axios.post<{ data: AttrGroupRow }>(
-            `/api/restaurant/menu/items/${selected.id}/attributes`,
-            body
-          )
-        )
-      );
-      const createdGroups = responses.map((res) => res.data.data);
+      const createdGroups = await persistRecommendationDraft(draft, {
+        selected,
+        localCategories,
+        allProducts,
+        sortOrderBase: selected.attributeGroups.length,
+      });
       updateSelectedItem((item) => ({
         ...item,
         attributeGroups: [
@@ -636,26 +690,30 @@ export function RecommendationsTab({
           ),
         ],
       }));
-      toast.success('Recommendation saved');
-      allowNextNavigation();
-      resetDraftState();
-      setDraftByVariant({});
+      if (options?.resetAfter !== false) {
+        toast.success('Recommendation saved');
+        allowNextNavigation();
+        resetDraftState();
+        setDraftByVariant({});
+      }
+      return true;
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || 'Could not save');
+      return false;
     } finally {
       setSavingRules(false);
     }
   };
 
-  const saveOfferedProducts = async () => {
+  const saveOfferedProducts = async (options?: { resetAfter?: boolean }) => {
     if (!selected) {
       toast.error('Select a product first.');
-      return;
+      return false;
     }
     if (selectedOfferProductIds.length === 0) {
       toast.error('Select offered products first.');
-      return;
+      return false;
     }
     setSavingOffers(true);
     try {
@@ -665,7 +723,7 @@ export function RecommendationsTab({
             data: NonNullable<MenuItemRow['offersFromThis']>[number];
           }>(`/api/restaurant/menu/items/${selected.id}/offers`, {
             offeredItemId: itemId,
-            sortOrder: index,
+            sortOrder: (selected.offersFromThis?.length ?? 0) + index,
           })
         )
       );
@@ -682,16 +740,132 @@ export function RecommendationsTab({
           ),
         ],
       }));
-      toast.success('Offered products added');
-      allowNextNavigation();
-      resetDraftState();
+      if (options?.resetAfter !== false) {
+        toast.success('Offered products added');
+        allowNextNavigation();
+        resetDraftState();
+      }
+      return true;
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(
         err.response?.data?.error || 'Could not add offered products'
       );
+      return false;
     } finally {
       setSavingOffers(false);
+    }
+  };
+
+  const hasPendingConfiguration = useMemo(() => {
+    const hasRuleDrafts = RECOMMENDATION_FORM_VARIANTS.some((variant) => {
+      const draft = draftByVariant[variant];
+      return draft != null && draftHasContent(variant, draft);
+    });
+    return hasRuleDrafts || selectedOfferProductIds.length > 0;
+  }, [draftByVariant, selectedOfferProductIds]);
+
+  const saveAllConfiguration = async () => {
+    if (!selected) {
+      toast.error('Select a product first.');
+      return;
+    }
+
+    const draftsToSave: RecommendationRuleDraft[] = [];
+    for (const variant of RECOMMENDATION_FORM_VARIANTS) {
+      const draft = draftByVariant[variant];
+      if (!draft || !draftHasContent(variant, draft)) continue;
+      const validationError = validateRecommendationDraft(
+        draft,
+        localCategories,
+        selected
+      );
+      if (validationError) {
+        toast.error(`${RECOMMENDATION_SECTION_LABELS[variant]}: ${validationError}`);
+        return;
+      }
+      draftsToSave.push(draft);
+    }
+
+    const hasOffers = selectedOfferProductIds.length > 0;
+    if (draftsToSave.length === 0 && !hasOffers) {
+      toast.error('Nothing to save. Configure at least one section first.');
+      return;
+    }
+
+    setSavingAll(true);
+    try {
+      let sortOrderBase = selected.attributeGroups.length;
+      const allCreatedGroups: AttrGroupRow[] = [];
+
+      for (const draft of draftsToSave) {
+        const created = await persistRecommendationDraft(draft, {
+          selected,
+          localCategories,
+          allProducts,
+          sortOrderBase,
+        });
+        allCreatedGroups.push(...created);
+        sortOrderBase += created.length;
+      }
+
+      let createdOffers: NonNullable<MenuItemRow['offersFromThis']> = [];
+      if (hasOffers) {
+        const responses = await Promise.all(
+          selectedOfferProductIds.map((itemId, index) =>
+            axios.post<{
+              data: NonNullable<MenuItemRow['offersFromThis']>[number];
+            }>(`/api/restaurant/menu/items/${selected.id}/offers`, {
+              offeredItemId: itemId,
+              sortOrder: (selected.offersFromThis?.length ?? 0) + index,
+            })
+          )
+        );
+        createdOffers = responses.map((res) => res.data.data);
+      }
+
+      updateSelectedItem((item) => ({
+        ...item,
+        attributeGroups: [
+          ...item.attributeGroups,
+          ...allCreatedGroups.filter(
+            (group) =>
+              !item.attributeGroups.some((existing) => existing.id === group.id)
+          ),
+        ],
+        ...(hasOffers
+          ? {
+              offersFromThis: [
+                ...(item.offersFromThis ?? []),
+                ...createdOffers.filter(
+                  (offer) =>
+                    !(item.offersFromThis ?? []).some(
+                      (existing) => existing.id === offer.id
+                    )
+                ),
+              ],
+            }
+          : {}),
+      }));
+
+      const parts: string[] = [];
+      if (draftsToSave.length > 0) {
+        parts.push(
+          `${draftsToSave.length} recommendation section${draftsToSave.length === 1 ? '' : 's'}`
+        );
+      }
+      if (hasOffers) {
+        parts.push('associated products');
+      }
+      toast.success(`Saved ${parts.join(' and ')}`);
+      allowNextNavigation();
+      resetDraftState();
+      setDraftByVariant({});
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || 'Could not save configuration');
+    } finally {
+      setSavingAll(false);
     }
   };
 
@@ -1074,6 +1248,7 @@ export function RecommendationsTab({
               linkedOptions={linkedOptions}
               savedGroupsByType={savedGroupsByType}
               savingRules={savingRules}
+              savingAll={savingAll}
               onSaveDraft={(draft) => void saveRecommendationDraft(draft)}
               draftChangeHandlers={draftChangeHandlers}
               onDeleteGroup={(groupId) => {
@@ -1111,7 +1286,7 @@ export function RecommendationsTab({
           )}
         </div>
 
-        <aside className="min-w-0 rounded-2xl border border-border bg-muted/25 p-1 lg:sticky lg:top-4 lg:max-h-[min(100dvh-8rem,calc(100dvh-10rem))] lg:overflow-y-auto">
+        <aside className="min-w-0 rounded-2xl border border-border bg-muted/25 p-1 lg:sticky lg:top-4 lg:flex lg:max-h-[min(100dvh-8rem,calc(100dvh-10rem))] lg:flex-col lg:overflow-hidden">
           <RecommendationPreviewPanel
             selected={selected}
             localCategories={localCategories}
@@ -1124,10 +1299,20 @@ export function RecommendationsTab({
             onDeleteGroup={(groupId, isDraft) => {
               if (isDraft) return;
               setDeletingRuleId(groupId);
-                              setDeleteRuleConfirmOpen(true);
-                            }}
+              setDeleteRuleConfirmOpen(true);
+            }}
             deletingRuleId={deletingRuleId}
             deletingRule={deletingRule}
+            savingAll={savingAll}
+            saveAllDisabled={
+              savingRules ||
+              savingOffers ||
+              savingAll ||
+              !hasPendingConfiguration
+            }
+            onSaveAll={
+              selected ? () => setSaveAllConfirmOpen(true) : undefined
+            }
           />
         </aside>
       </div>
@@ -1135,6 +1320,19 @@ export function RecommendationsTab({
         )}
 
       </CardContent>
+
+      <SaveConfirmation
+        open={saveAllConfirmOpen}
+        title="Save all configuration"
+        description="Save every configured recommendation section and associated products for this product in one step?"
+        itemName={selected?.name || 'Selected product'}
+        loading={savingAll}
+        onConfirm={() => {
+          setSaveAllConfirmOpen(false);
+          void saveAllConfiguration();
+        }}
+        onCancel={() => setSaveAllConfirmOpen(false)}
+      />
 
       <SaveConfirmation
         open={saveOffersConfirmOpen}

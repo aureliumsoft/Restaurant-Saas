@@ -48,6 +48,7 @@ type Props = {
   localCategories: MenuCategoryRow[];
   allProducts: (MenuItemRow & { categoryName: string })[];
   saving: boolean;
+  saveLabel?: string;
   onSave: (draft: RecommendationRuleDraft) => void;
   onDraftChange?: (draft: RecommendationRuleDraft) => void;
 };
@@ -74,6 +75,7 @@ export function RecommendationRuleForm({
   localCategories,
   allProducts,
   saving,
+  saveLabel = 'Save section',
   onSave,
   onDraftChange,
 }: Props) {
@@ -719,7 +721,7 @@ export function RecommendationRuleForm({
         ) : (
           <>
             <Save className="mr-2 h-4 w-4" />
-            Save configuration
+            {saveLabel}
           </>
         )}
       </Button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Save, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -62,6 +62,9 @@ type Props = {
   onDeleteGroup?: (groupId: string, isDraft: boolean) => void;
   deletingRuleId?: string | null;
   deletingRule?: boolean;
+  savingAll?: boolean;
+  saveAllDisabled?: boolean;
+  onSaveAll?: () => void;
 };
 
 export function RecommendationPreviewPanel({
@@ -74,6 +77,9 @@ export function RecommendationPreviewPanel({
   onDeleteGroup,
   deletingRuleId,
   deletingRule,
+  savingAll,
+  saveAllDisabled,
+  onSaveAll,
 }: Props) {
   if (!selected) {
     return (
@@ -88,7 +94,8 @@ export function RecommendationPreviewPanel({
   }
 
   return (
-    <div className="space-y-4 rounded-xl bg-card p-3 shadow-sm sm:p-4">
+    <div className="flex min-h-0 flex-1 flex-col rounded-xl bg-card shadow-sm">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3 sm:p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Customer preview
@@ -211,6 +218,30 @@ export function RecommendationPreviewPanel({
               </li>
             ))}
           </ul>
+        </div>
+      ) : null}
+      </div>
+
+      {onSaveAll ? (
+        <div className="shrink-0 border-t border-border bg-card p-3 sm:p-4">
+          <Button
+            type="button"
+            className="w-full"
+            disabled={saveAllDisabled}
+            onClick={onSaveAll}
+          >
+            {savingAll ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving all…
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Save all configuration
+              </>
+            )}
+          </Button>
         </div>
       ) : null}
     </div>
