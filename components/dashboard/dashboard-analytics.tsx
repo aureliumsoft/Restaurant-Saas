@@ -313,10 +313,7 @@ export default function DashboardAnalytics() {
     <div className="w-full space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <h2 className="mt-1 text-lg font-semibold text-foreground/90">
-            Overview
-          </h2>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard Overview</h1>
           <p className="text-sm text-muted-foreground">
             {analytics?.branchScoped && analytics.activeBranchName
               ? `Showing data for ${analytics.activeBranchName} — active orders and revenue (online, POS, kiosk).`

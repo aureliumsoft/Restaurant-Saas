@@ -4,13 +4,18 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import { estimateDataUrlBytes, isAcceptedImageValue } from "@/lib/image-data-url";
+import {
+  syncMenuItemCategoryLinks,
+  validateMenuItemCategoryIds,
+} from "@/lib/menu/menu-item-categories";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 
 const createSchema = z
   .object({
     name: z.string().min(1, "Name is required").max(200),
     description: z.string().max(2000).optional().nullable(),
-    categoryId: z.string().uuid(),
+    categoryId: z.string().uuid().optional(),
+    categoryIds: z.array(z.string().uuid()).min(1).optional(),
     imageUrl: z.string().max(2_800_000).optional().nullable().or(z.literal("")),
     price: z.number().positive(),
     salePrice: z.number().positive().optional().nullable(),
@@ -53,6 +58,16 @@ const createSchema = z
     };
     check("Image", val.imageUrl, ["imageUrl"]);
     (val.variations ?? []).forEach((v, i) => check("Variation image", v.imageUrl, ["variations", i, "imageUrl"]));
+
+    const categoryIds =
+      val.categoryIds ?? (val.categoryId ? [val.categoryId] : []);
+    if (categoryIds.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Select at least one category",
+        path: ["categoryIds"],
+      });
+    }
   });
 
 export async function POST(req: NextRequest) {
@@ -76,10 +91,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const category = await db.menuCategory.findFirst({
-    where: { id: parsed.data.categoryId, restaurantId: auth.restaurant.id },
-  });
-  if (!category) {
+  const requestedCategoryIds =
+    parsed.data.categoryIds ??
+    (parsed.data.categoryId ? [parsed.data.categoryId] : []);
+  const categoryIds = await validateMenuItemCategoryIds(
+    db,
+    auth.restaurant.id,
+    requestedCategoryIds
+  );
+  if (!categoryIds) {
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
   }
 
@@ -106,27 +126,35 @@ export async function POST(req: NextRequest) {
     .filter((v) => v.name.length > 0);
 
   try {
-    const item = await db.menuItem.create({
-      data: {
-        name: parsed.data.name.trim(),
-        description,
-        imageUrl,
-        price: parsed.data.price,
-        salePrice,
-        categoryId: parsed.data.categoryId,
-        restaurantId: auth.restaurant.id,
-        variations:
-          variations.length > 0
-            ? {
-                create: variations,
-              }
-            : undefined,
-      },
-      include: {
-        variations: { orderBy: { sortOrder: "asc" } },
-      },
+    const item = await db.$transaction(async (tx) => {
+      const primaryCategoryId = categoryIds[0];
+      const created = await tx.menuItem.create({
+        data: {
+          name: parsed.data.name.trim(),
+          description,
+          imageUrl,
+          price: parsed.data.price,
+          salePrice,
+          categoryId: primaryCategoryId,
+          restaurantId: auth.restaurant.id,
+          variations:
+            variations.length > 0
+              ? {
+                  create: variations,
+                }
+              : undefined,
+        },
+        include: {
+          variations: { orderBy: { sortOrder: "asc" } },
+        },
+      });
+      await syncMenuItemCategoryLinks(tx, created.id, categoryIds);
+      return created;
     });
-    return NextResponse.json({ data: item }, { status: 201 });
+    return NextResponse.json(
+      { data: { ...item, categoryIds } },
+      { status: 201 }
+    );
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Failed to create product" }, { status: 500 });

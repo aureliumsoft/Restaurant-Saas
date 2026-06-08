@@ -4,6 +4,11 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import { estimateDataUrlBytes, isAcceptedImageValue } from "@/lib/image-data-url";
+import {
+  getMenuItemCategoryIds,
+  syncMenuItemCategoryLinks,
+  validateMenuItemCategoryIds,
+} from "@/lib/menu/menu-item-categories";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 
 const patchSchema = z
@@ -11,6 +16,7 @@ const patchSchema = z
     name: z.string().min(1).max(200).optional(),
     description: z.string().max(2000).optional().nullable(),
     categoryId: z.string().uuid().optional(),
+    categoryIds: z.array(z.string().uuid()).min(1).optional(),
     imageUrl: z.string().max(2_800_000).optional().nullable().or(z.literal("")),
     price: z.number().positive().optional(),
     salePrice: z.number().positive().optional().nullable(),
@@ -88,11 +94,17 @@ export async function PATCH(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  if (parsed.data.categoryId) {
-    const cat = await db.menuCategory.findFirst({
-      where: { id: parsed.data.categoryId, restaurantId: auth.restaurant.id },
-    });
-    if (!cat) {
+  const requestedCategoryIds =
+    parsed.data.categoryIds ??
+    (parsed.data.categoryId ? [parsed.data.categoryId] : null);
+  let categoryIds: string[] | null = null;
+  if (requestedCategoryIds) {
+    categoryIds = await validateMenuItemCategoryIds(
+      db,
+      auth.restaurant.id,
+      requestedCategoryIds
+    );
+    if (!categoryIds) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
   }
@@ -132,30 +144,45 @@ export async function PATCH(
           .filter((v) => v.name.length > 0)
       : undefined;
 
-  const updated = await db.menuItem.update({
-    where: { id: itemId },
-    data: {
-      ...(parsed.data.name !== undefined ? { name: parsed.data.name.trim() } : {}),
-      ...(description !== undefined ? { description } : {}),
-      ...(parsed.data.categoryId !== undefined ? { categoryId: parsed.data.categoryId } : {}),
-      ...(imageUrl !== undefined ? { imageUrl } : {}),
-      ...(parsed.data.price !== undefined ? { price: parsed.data.price } : {}),
-      ...(salePrice !== undefined ? { salePrice } : {}),
-      ...(variations !== undefined
-        ? {
-            variations: {
-              deleteMany: {},
-              ...(variations.length > 0 ? { create: variations } : {}),
-            },
-          }
-        : {}),
-    },
-    include: {
-      variations: { orderBy: { sortOrder: "asc" } },
-    },
+  const updated = await db.$transaction(async (tx) => {
+    const primaryCategoryId = categoryIds?.[0];
+    const item = await tx.menuItem.update({
+      where: { id: itemId },
+      data: {
+        ...(parsed.data.name !== undefined ? { name: parsed.data.name.trim() } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(primaryCategoryId !== undefined ? { categoryId: primaryCategoryId } : {}),
+        ...(imageUrl !== undefined ? { imageUrl } : {}),
+        ...(parsed.data.price !== undefined ? { price: parsed.data.price } : {}),
+        ...(salePrice !== undefined ? { salePrice } : {}),
+        ...(variations !== undefined
+          ? {
+              variations: {
+                deleteMany: {},
+                ...(variations.length > 0 ? { create: variations } : {}),
+              },
+            }
+          : {}),
+      },
+      include: {
+        variations: { orderBy: { sortOrder: "asc" } },
+      },
+    });
+
+    if (categoryIds) {
+      await syncMenuItemCategoryLinks(tx, itemId, categoryIds);
+    }
+
+    return item;
   });
 
-  return NextResponse.json({ data: updated }, { status: 200 });
+  const resolvedCategoryIds =
+    categoryIds ?? (await getMenuItemCategoryIds(itemId));
+
+  return NextResponse.json(
+    { data: { ...updated, categoryIds: resolvedCategoryIds } },
+    { status: 200 }
+  );
 }
 
 export async function DELETE(

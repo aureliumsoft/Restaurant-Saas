@@ -198,6 +198,7 @@ type CartLine = {
 type Category = {
   id: string;
   label: string;
+  imageUrl?: string | null;
 };
 
 type RestaurantMenuApi = {
@@ -206,6 +207,7 @@ type RestaurantMenuApi = {
     menus?: Array<{
       id: string;
       name: string;
+      imageUrl?: string | null;
       showInFront?: boolean;
       items?: PosMenuProduct[];
     }>;
@@ -498,6 +500,10 @@ export function PosScreen() {
           nextCategories.push({
             id: menu.id,
             label: String(menu.name || 'UNNAMED').toUpperCase(),
+            imageUrl:
+              menu.imageUrl ??
+              menu.items?.[0]?.imageUrl ??
+              null,
           });
           for (const item of menu.items ?? []) {
             const base = Number(item.price);
@@ -714,11 +720,18 @@ export function PosScreen() {
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return products.filter((p) => {
+    const matched = products.filter((p) => {
       const inCategory = categoryId === 'all' || p.categoryId === categoryId;
       if (!inCategory) return false;
       if (!q) return true;
       return p.name.toLowerCase().includes(q);
+    });
+    if (categoryId !== 'all') return matched;
+    const seen = new Set<string>();
+    return matched.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
     });
   }, [categoryId, products, search]);
 
@@ -1414,16 +1427,28 @@ export function PosScreen() {
                   key={c.id}
                   type="button"
                   className={cn(
-                    'flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition',
+                    'flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition',
                     categoryId === c.id
                       ? 'border-primary/40 bg-primary/10 text-primary'
                       : 'bg-background hover:bg-muted/40'
                   )}
                   onClick={() => setCategoryId(c.id)}
                 >
-                  <span className="font-medium">{c.label}</span>
+                  {c.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={c.imageUrl}
+                      alt=""
+                      className="h-8 w-8 shrink-0 rounded-md object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] text-muted-foreground">
+                      —
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 font-medium">{c.label}</span>
                   {categoryId === c.id ? (
-                    <Check className="h-4 w-4" aria-hidden />
+                    <Check className="h-4 w-4 shrink-0" aria-hidden />
                   ) : null}
                 </button>
               ))}

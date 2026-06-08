@@ -5,6 +5,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Loader2, Plus } from 'lucide-react';
 
+import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -37,12 +38,14 @@ export function AddCategoryFormDialog({
   onCreated,
 }: Props) {
   const [name, setName] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [showInFront, setShowInFront] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setName('');
+      setImageUrl('');
       setShowInFront(true);
     }
   }, [open]);
@@ -53,7 +56,11 @@ export function AddCategoryFormDialog({
     try {
       const res = await axios.post<{ data: CreatedCategory }>(
         '/api/restaurant/menu/categories',
-        { name: name.trim(), showInFront }
+        {
+          name: name.trim(),
+          showInFront,
+          ...(imageUrl.trim() ? { imageUrl: imageUrl.trim() } : {}),
+        }
       );
       const created = res.data.data;
       toast.success('Category created');
@@ -92,6 +99,12 @@ export function AddCategoryFormDialog({
               }}
             />
           </div>
+          <Base64ImageUploadField
+            label="Category image"
+            value={imageUrl}
+            onChange={setImageUrl}
+            helperText="Shown on website, kiosk, and POS category strips."
+          />
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"

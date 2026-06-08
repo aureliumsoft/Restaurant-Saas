@@ -201,7 +201,7 @@ export function BranchedPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {!loading && atBranchLimit && !activeId ? (
-            <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+            <p className="rounded-md border border-dashed border-destructive p-3 text-sm text-destructive bg-destructive/10">
               Your plan allows{' '}
               {maxBranches === null
                 ? 'unlimited'

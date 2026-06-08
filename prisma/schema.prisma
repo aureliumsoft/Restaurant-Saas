@@ -319,17 +319,35 @@ model EmployeeInvite {
 model MenuCategory {
   id           String  @id @default(uuid())
   name         String
+  imageUrl     String?
   restaurantId String
   /// When true, category and its products appear on web, kiosk, and POS browse menus.
   /// When false, products are only available via recommendation / add-on rules.
   showInFront  Boolean @default(true)
 
   items                   MenuItem[]
+  itemLinks               MenuItemCategory[]
   restaurant              Restaurant               @relation(fields: [restaurantId], references: [id])
   linkedByAttributeGroups MenuItemAttributeGroup[] @relation("AttributeLinkedCategory")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Many-to-many: a product can appear in multiple menu categories.
+model MenuItemCategory {
+  menuItemId String
+  categoryId String
+  sortOrder  Int    @default(0)
+
+  menuItem MenuItem     @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  category MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([menuItemId, categoryId])
+  @@index([categoryId])
+  @@index([menuItemId])
 }
 
 model MenuItem {
@@ -340,10 +358,12 @@ model MenuItem {
   imageKey     String?
   price        Float
   salePrice    Float?
+  /// Primary category (first selected); kept for backward compatibility.
   categoryId   String
   restaurantId String
 
   category          MenuCategory             @relation(fields: [categoryId], references: [id])
+  categoryLinks     MenuItemCategory[]
   restaurant        Restaurant               @relation(fields: [restaurantId], references: [id])
   orderItems        OrderItem[]
   attributeGroups   MenuItemAttributeGroup[]

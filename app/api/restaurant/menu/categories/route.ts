@@ -26,11 +26,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const imageUrl =
+      parsed.data.imageUrl && parsed.data.imageUrl.length > 0
+        ? parsed.data.imageUrl
+        : null;
+
     const cat = await db.menuCategory.create({
       data: {
         name: parsed.data.name.trim(),
         restaurantId: auth.restaurant.id,
         showInFront: parsed.data.showInFront ?? true,
+        imageUrl,
       },
     });
     return NextResponse.json({ data: cat }, { status: 201 });

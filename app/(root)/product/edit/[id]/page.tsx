@@ -67,7 +67,7 @@ export default function ProductEditPage() {
   const [form, setForm] = useState<ProductFormState>({
     name: '',
     description: '',
-    categoryId: '',
+    categoryIds: [],
     imageUrl: '',
     price: '',
     salePrice: '',
@@ -99,15 +99,13 @@ export default function ProductEditPage() {
     hydratedIdRef.current = item.id;
   }, [item]);
 
-  const resolvedCategoryId = form.categoryId || item?.categoryId || '';
-
   const isDirty = useMemo(() => {
     if (!initialRef.current) return false;
     return isProductEditFormDirty(initialRef.current, {
-      form: { ...form, categoryId: resolvedCategoryId },
+      form,
       variationRows,
     });
-  }, [form, resolvedCategoryId, variationRows]);
+  }, [form, variationRows]);
 
   const {
     leaveOpen,
@@ -163,11 +161,7 @@ export default function ProductEditPage() {
 
   const save = async () => {
     if (!productId) return;
-    const payload = buildProductPayload(
-      { ...form, categoryId: resolvedCategoryId },
-      variationRows,
-      variationTemplates
-    );
+    const payload = buildProductPayload(form, variationRows, variationTemplates);
     if (!payload.ok) {
       toast.error(payload.error);
       return;
@@ -234,7 +228,12 @@ export default function ProductEditPage() {
                       showVariation={false}
                       onMenuRefresh={load}
                       onCategoryCreated={(categoryId) =>
-                        setForm((f) => ({ ...f, categoryId }))
+                        setForm((f) => ({
+                          ...f,
+                          categoryIds: f.categoryIds.includes(categoryId)
+                            ? f.categoryIds
+                            : [...f.categoryIds, categoryId],
+                        }))
                       }
                     />
                   </CardContent>
@@ -257,14 +256,19 @@ export default function ProductEditPage() {
                       onMenuRefresh={load}
                       onVariationTemplatesReload={reloadVariationTemplates}
                       onCategoryCreated={(categoryId) =>
-                        setForm((f) => ({ ...f, categoryId }))
+                        setForm((f) => ({
+                          ...f,
+                          categoryIds: f.categoryIds.includes(categoryId)
+                            ? f.categoryIds
+                            : [...f.categoryIds, categoryId],
+                        }))
                       }
                     />
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <ProductFormFields
                       categories={categories}
-                      form={{ ...form, categoryId: resolvedCategoryId }}
+                      form={form}
                       onFormChange={(patch) =>
                         setForm((f) => ({ ...f, ...patch }))
                       }

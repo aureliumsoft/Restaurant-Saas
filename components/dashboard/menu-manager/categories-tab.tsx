@@ -5,6 +5,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Eye, EyeOff, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 
+import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,6 +36,7 @@ type Props = {
 
 export function CategoriesTab({ categories, onRefresh, loading }: Props) {
   const [name, setName] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [showInFront, setShowInFront] = useState(true);
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -52,15 +54,29 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
       await axios.post('/api/restaurant/menu/categories', {
         name: name.trim(),
         showInFront,
+        ...(imageUrl.trim() ? { imageUrl: imageUrl.trim() } : {}),
       });
       toast.success('Category created');
       setName('');
+      setImageUrl('');
       setShowInFront(true);
       await onRefresh();
     } catch (e: unknown) {
       toast.error(apiErrorMessage(e, 'Could not create category'));
     } finally {
       setAdding(false);
+    }
+  };
+
+  const updateImage = async (id: string, next: string) => {
+    try {
+      await axios.patch(`/api/restaurant/menu/categories/${id}`, {
+        imageUrl: next.trim() || null,
+      });
+      toast.success('Image saved');
+      await onRefresh();
+    } catch {
+      toast.error('Could not update image');
     }
   };
 
@@ -115,39 +131,40 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
     <>
       <Card>
         <CardHeader>
-          <CardDescription>
-            Categories are your menu sections. Turn <strong>Show in front</strong> on
-            to list them on the website, kiosk, and POS. Turn it off for add-on pools
-            (sauces, sides, sizes) used only in Recommendations. Empty categories
-            (no products) are hidden everywhere until you add items.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
-            <div className="flex flex-wrap gap-2">
-              <Input
-                placeholder="New category name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="max-w-sm bg-background"
-                disabled={adding}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && canAdd) setConfirmAddOpen(true);
-                }}
-              />
-              <Button
-                type="button"
-                disabled={!canAdd}
-                onClick={() => setConfirmAddOpen(true)}
-              >
-                {adding ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                ) : (
-                  <Plus className="mr-2 h-4 w-4" aria-hidden />
-                )}
-                {adding ? 'Adding…' : 'Add category'}
-              </Button>
-            </div>
+          <label htmlFor="new-category-name" className="text-sm font-medium">
+            Category Name
+          </label>
+            <Input
+              placeholder="New category name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-background"
+              disabled={adding}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && canAdd) setConfirmAddOpen(true);
+              }}
+            />
+            <Base64ImageUploadField
+              label="Category image"
+              value={imageUrl}
+              onChange={setImageUrl}
+              helperText="Optional — shown on website, kiosk, and POS."
+            />
+            <Button
+              type="button"
+              disabled={!canAdd}
+              onClick={() => setConfirmAddOpen(true)}
+            >
+              {adding ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <Plus className="mr-2 h-4 w-4" aria-hidden />
+              )}
+              {adding ? 'Adding…' : 'Add category'}
+            </Button>
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -170,6 +187,7 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
                   category={c}
                   toggling={togglingId === c.id}
                   onRename={rename}
+                  onImageChange={updateImage}
                   onToggleShowInFront={setCategoryShowInFront}
                   onDelete={(id) => {
                     setDeletingId(id);
@@ -217,49 +235,78 @@ function CategoryCard({
   category,
   toggling,
   onRename,
+  onImageChange,
   onToggleShowInFront,
   onDelete,
 }: {
   category: MenuCategoryRow;
   toggling: boolean;
   onRename: (id: string, name: string) => void;
+  onImageChange: (id: string, imageUrl: string) => void;
   onToggleShowInFront: (id: string, showInFront: boolean) => void;
   onDelete: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(category.name);
+  const [imageVal, setImageVal] = useState(category.imageUrl ?? '');
   const [saving, setSaving] = useState(false);
+  const [savingImage, setSavingImage] = useState(false);
 
   useEffect(() => {
     setVal(category.name);
+    setImageVal(category.imageUrl ?? '');
     setEditing(false);
-  }, [category.name]);
+  }, [category.name, category.imageUrl]);
 
   const hasProducts = categoryHasProducts(category);
   const visible = isMenuCategoryShownInFront(category);
 
   const cancelEdit = () => {
     setVal(category.name);
+    setImageVal(category.imageUrl ?? '');
     setEditing(false);
   };
 
-  const saveName = async () => {
-    const next = val.trim();
-    if (!next || next === category.name) {
+  const saveEdits = async () => {
+    const nextName = val.trim();
+    if (!nextName) return;
+
+    const nextImage = imageVal.trim();
+    const currentImage = (category.imageUrl ?? '').trim();
+    const nameChanged = nextName !== category.name;
+    const imageChanged = nextImage !== currentImage;
+
+    if (!nameChanged && !imageChanged) {
       cancelEdit();
       return;
     }
+
     setSaving(true);
+    setSavingImage(true);
     try {
-      await onRename(category.id, next);
+      if (nameChanged) await onRename(category.id, nextName);
+      if (imageChanged) await onImageChange(category.id, nextImage);
       setEditing(false);
     } finally {
       setSaving(false);
+      setSavingImage(false);
     }
   };
 
   return (
     <Card className="flex flex-col overflow-hidden transition-shadow hover:shadow-md">
+      {category.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={category.imageUrl}
+          alt=""
+          className="aspect-[16/7] w-full object-cover"
+        />
+      ) : (
+        <div className="flex aspect-[16/7] w-full items-center justify-center bg-muted text-xs text-muted-foreground">
+          No category image
+        </div>
+      )}
       <CardHeader className="space-y-3 pb-3">
         <div className="flex items-start justify-between gap-2">
           {!hasProducts ? (
@@ -283,7 +330,7 @@ function CategoryCard({
           </Button>
         </div>
         {editing ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Input
               value={val}
               onChange={(e) => setVal(e.target.value)}
@@ -291,19 +338,25 @@ function CategoryCard({
               autoFocus
               aria-label="Category name"
               onKeyDown={(e) => {
-                if (e.key === 'Enter') void saveName();
+                if (e.key === 'Enter') void saveEdits();
                 if (e.key === 'Escape') cancelEdit();
               }}
+            />
+            <Base64ImageUploadField
+              label="Category image"
+              value={imageVal}
+              onChange={setImageVal}
+              helperText="Shown on website, kiosk, and POS."
             />
             <div className="flex gap-2">
               <Button
                 type="button"
                 size="sm"
                 className="flex-1"
-                disabled={saving || !val.trim()}
-                onClick={() => void saveName()}
+                disabled={saving || savingImage || !val.trim()}
+                onClick={() => void saveEdits()}
               >
-                {saving ? (
+                {saving || savingImage ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                 ) : (
                   'Save'
@@ -313,7 +366,7 @@ function CategoryCard({
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={saving}
+                disabled={saving || savingImage}
                 onClick={cancelEdit}
                 aria-label="Cancel edit"
               >
@@ -330,7 +383,7 @@ function CategoryCard({
               variant="ghost"
               className="h-8 w-8 shrink-0"
               onClick={() => setEditing(true)}
-              aria-label="Edit category name"
+              aria-label="Edit category"
             >
               <Pencil className="h-4 w-4" />
             </Button>

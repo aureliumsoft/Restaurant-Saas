@@ -170,6 +170,7 @@ type CustomerMenuProduct = {
 type CustomerMenuCategory = {
   id: string;
   name: string;
+  imageUrl?: string | null;
   items: CustomerMenuProduct[];
 };
 
@@ -1086,7 +1087,8 @@ export function KioskApp({
                       All
                     </button>
                     {menu.menus.map((c) => {
-                      const thumb = c.items[0]?.imageUrl ?? null;
+                      const thumb =
+                        c.imageUrl ?? c.items[0]?.imageUrl ?? null;
                       return (
                         <button
                           key={c.id}
@@ -1126,17 +1128,29 @@ export function KioskApp({
                   >
                     All
                   </Button>
-                  {menu.menus.map((c) => (
-                    <Button
-                      key={c.id}
-                      type="button"
-                      variant={categoryId === c.id ? 'default' : 'outline'}
-                      className="shrink-0"
-                      onClick={() => setCategoryId(c.id)}
-                    >
-                      {c.name}
-                    </Button>
-                  ))}
+                  {menu.menus.map((c) => {
+                    const thumb =
+                      c.imageUrl ?? c.items[0]?.imageUrl ?? null;
+                    return (
+                      <Button
+                        key={c.id}
+                        type="button"
+                        variant={categoryId === c.id ? 'default' : 'outline'}
+                        className="h-auto shrink-0 gap-1.5 px-2.5 py-1.5"
+                        onClick={() => setCategoryId(c.id)}
+                      >
+                        {thumb ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={thumb}
+                            alt=""
+                            className="h-6 w-6 rounded-full object-cover"
+                          />
+                        ) : null}
+                        {c.name}
+                      </Button>
+                    );
+                  })}
                 </div>
 
                 <HorizontalRow

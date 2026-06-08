@@ -50,6 +50,7 @@ export type MenuItemRow = {
   price: number;
   salePrice: number | null;
   categoryId: string;
+  categoryIds?: string[];
   updatedAt?: string;
   createdAt?: string;
   variations?: {
@@ -80,6 +81,7 @@ export type MenuItemRow = {
 export type MenuCategoryRow = {
   id: string;
   name: string;
+  imageUrl?: string | null;
   showInFront: boolean;
   items: MenuItemRow[];
 };

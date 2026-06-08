@@ -43,7 +43,7 @@ import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 const EMPTY_PRODUCT_FORM: ProductFormState = {
   name: '',
   description: '',
-  categoryId: '',
+  categoryIds: [],
   imageUrl: '',
   price: '',
   salePrice: '',
@@ -55,37 +55,19 @@ export default function ProductCreatePage() {
   const { loading, categories, load } = useRestaurantMenu();
   const [saving, setSaving] = useState(false);
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
-  const [form, setForm] = useState<ProductFormState>({
-    name: '',
-    description: '',
-    categoryId: '',
-    imageUrl: '',
-    price: '',
-    salePrice: '',
-  });
+  const [form, setForm] = useState<ProductFormState>(EMPTY_PRODUCT_FORM);
   const [variationRows, setVariationRows] = useState<VariationFormRow[]>([]);
   const { variationTemplates, reloadVariationTemplates } =
     useRestaurantVariationTemplates();
 
-  const resolvedCategoryId = form.categoryId || '';
-
   const isDirty = useMemo(
-    () =>
-      isProductCreateFormDirty(
-        { ...form, categoryId: resolvedCategoryId },
-        variationRows
-      ),
-    [form, resolvedCategoryId, variationRows]
+    () => isProductCreateFormDirty(form, variationRows),
+    [form, variationRows]
   );
 
   const canCreate = useMemo(
-    () =>
-      isProductFormValid(
-        { ...form, categoryId: resolvedCategoryId },
-        variationRows,
-        variationTemplates
-      ),
-    [form, resolvedCategoryId, variationRows, variationTemplates]
+    () => isProductFormValid(form, variationRows, variationTemplates),
+    [form, variationRows, variationTemplates]
   );
 
   const {
@@ -146,11 +128,7 @@ export default function ProductCreatePage() {
   };
 
   const save = async (mode: 'close' | 'add-new') => {
-    const payload = buildProductPayload(
-      { ...form, categoryId: resolvedCategoryId },
-      variationRows,
-      variationTemplates
-    );
+    const payload = buildProductPayload(form, variationRows, variationTemplates);
     if (!payload.ok) {
       toast.error(payload.error);
       return;
@@ -222,7 +200,12 @@ export default function ProductCreatePage() {
                         showVariation={false}
                         onMenuRefresh={load}
                         onCategoryCreated={(categoryId) =>
-                          setForm((f) => ({ ...f, categoryId }))
+                          setForm((f) => ({
+                            ...f,
+                            categoryIds: f.categoryIds.includes(categoryId)
+                              ? f.categoryIds
+                              : [...f.categoryIds, categoryId],
+                          }))
                         }
                       />
                     </div>
@@ -230,7 +213,7 @@ export default function ProductCreatePage() {
                     <>
                       <ProductFormFields
                         categories={categories}
-                        form={{ ...form, categoryId: resolvedCategoryId }}
+                        form={form}
                         onFormChange={(patch) =>
                           setForm((f) => ({ ...f, ...patch }))
                         }

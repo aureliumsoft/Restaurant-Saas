@@ -12,6 +12,7 @@ import {
   isCategoryEligibleForRecommendations,
   isMenuCategoryShownInFront,
 } from '@/lib/menu/category-visibility';
+import { menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
 import { Badge } from '@/components/ui/badge';
 
 import type { RecommendationFormVariant } from '@/lib/menu/recommendation-preview-groups';
@@ -99,15 +100,20 @@ export function RecommendationRuleForm({
 
   const baseVariations = selected.variations ?? [];
 
-  /** Non-empty categories for category-type rules (exclude base product's category). */
+  const selectedCategoryIds = useMemo(
+    () => menuItemCategoryIds(selected),
+    [selected]
+  );
+
+  /** Non-empty categories for category-type rules (exclude base product's categories). */
   const recommendationCategories = useMemo(
     () =>
       localCategories.filter(
         (c) =>
           isCategoryEligibleForRecommendations(c) &&
-          c.id !== selected.categoryId
+          !selectedCategoryIds.includes(c.id)
       ),
-    [localCategories, selected.categoryId]
+    [localCategories, selectedCategoryIds]
   );
 
   /** All non-empty categories for single-product picker (same + other categories). */

@@ -72,7 +72,11 @@ export async function POST(
         { status: 400 }
       );
     }
-    if (linked.id === item.categoryId) {
+    const itemCategoryIds = await db.menuItemCategory.findMany({
+      where: { menuItemId: itemId },
+      select: { categoryId: true },
+    });
+    if (itemCategoryIds.some((row) => row.categoryId === linked.id)) {
       return NextResponse.json(
         {
           error:
@@ -96,13 +100,13 @@ export async function POST(
       );
     }
 
-    const defaultItem = await db.menuItem.findFirst({
+    const defaultItem = await db.menuItemCategory.findFirst({
       where: {
-        id: data.defaultLinkedMenuItemId!,
+        menuItemId: data.defaultLinkedMenuItemId!,
         categoryId: data.linkedCategoryId!,
-        restaurantId: auth.restaurant.id,
+        menuItem: { restaurantId: auth.restaurant.id },
       },
-      select: { id: true },
+      select: { menuItemId: true },
     });
     if (!defaultItem) {
       return NextResponse.json(

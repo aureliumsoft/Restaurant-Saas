@@ -58,6 +58,7 @@ import { cn } from '@/lib/utils';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 
 import { filterCategoriesWithProducts } from '@/lib/menu/category-visibility';
+import { menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
 import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
 
 import {
@@ -254,13 +255,37 @@ export function RecommendationsTab({
     setLocalCategories(filterCategoriesWithProducts(categories));
   }, [categories]);
 
-  const allProducts = useMemo(
-    () =>
-      localCategories.flatMap((c) =>
-        c.items.map((i) => ({ ...i, categoryName: c.name }))
-      ),
-    [localCategories]
-  );
+  const allProducts = useMemo(() => {
+    const byId = new Map<
+      string,
+      MenuItemRow & { categoryName: string; categoryNames: string[] }
+    >();
+    for (const category of localCategories) {
+      for (const item of category.items) {
+        const categoryIds =
+          item.categoryIds && item.categoryIds.length > 0
+            ? item.categoryIds
+            : [item.categoryId];
+        const existing = byId.get(item.id);
+        if (existing) {
+          if (!existing.categoryNames.includes(category.name)) {
+            existing.categoryNames.push(category.name);
+          }
+          existing.categoryIds = [
+            ...new Set([...(existing.categoryIds ?? []), ...categoryIds]),
+          ];
+          continue;
+        }
+        byId.set(item.id, {
+          ...item,
+          categoryIds,
+          categoryName: category.name,
+          categoryNames: [category.name],
+        });
+      }
+    }
+    return Array.from(byId.values());
+  }, [localCategories]);
 
   const [selectedId, setSelectedId] = useState<string>('');
   /** Checked category ids for the product strip + search. Empty = none. */
@@ -300,11 +325,22 @@ export function RecommendationsTab({
     [allProducts, selectedId]
   );
 
+  const selectedCategoryIds = useMemo(
+    () => (selected ? menuItemCategoryIds(selected) : []),
+    [selected]
+  );
+
   const filteredProducts = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
     if (filterCategoryIds.length === 0) return [];
     const allow = new Set(filterCategoryIds);
-    let list = allProducts.filter((p) => allow.has(p.categoryId));
+    let list = allProducts.filter((p) => {
+      const ids =
+        p.categoryIds && p.categoryIds.length > 0
+          ? p.categoryIds
+          : [p.categoryId];
+      return ids.some((id) => allow.has(id));
+    });
     if (q) {
       list = list.filter(
         (p) =>
@@ -540,9 +576,11 @@ export function RecommendationsTab({
   const linkedOptions = useMemo(
     () =>
       localCategories.filter(
-        (c) => c.items.length > 0 && c.id !== selected?.categoryId
-      ),
-    [localCategories, selected?.categoryId]
+        (c) =>
+          c.items.length > 0 &&
+          !selectedCategoryIds.includes(c.id)
+    ),
+    [localCategories, selectedCategoryIds]
   );
 
   /** Categories not yet used as a recommendation rule for this product (cannot assign twice). */
@@ -554,9 +592,10 @@ export function RecommendationsTab({
         .map((g) => g.linkedCategory!.id)
     );
     return localCategories.filter(
-      (c) => c.id !== selected.categoryId && !alreadyLinked.has(c.id)
+      (c) =>
+        !selectedCategoryIds.includes(c.id) && !alreadyLinked.has(c.id)
     );
-  }, [localCategories, selected]);
+  }, [localCategories, selected, selectedCategoryIds]);
 
   const assignedCategoryIdsKey = useMemo(() => {
     if (!selected?.attributeGroups.length) return '';
@@ -577,7 +616,13 @@ export function RecommendationsTab({
     const byId = new Map<string, (typeof allProducts)[number]>();
     for (const p of allProducts) {
       if (blockedIds.has(p.id)) continue;
-      if (!offerCategoryIds.includes(p.categoryId)) continue;
+      const productCategoryIds =
+        p.categoryIds && p.categoryIds.length > 0
+          ? p.categoryIds
+          : [p.categoryId];
+      if (!productCategoryIds.some((id) => offerCategoryIds.includes(id))) {
+        continue;
+      }
       byId.set(p.id, p);
     }
     return Array.from(byId.values());
@@ -597,7 +642,12 @@ export function RecommendationsTab({
       filterCategoryIds.length > 0 &&
       (() => {
         const p = allProducts.find((x) => x.id === selectedId);
-        return p != null && filterCategoryIds.includes(p.categoryId);
+        if (p == null) return false;
+        const ids =
+          p.categoryIds && p.categoryIds.length > 0
+            ? p.categoryIds
+            : [p.categoryId];
+        return ids.some((id) => filterCategoryIds.includes(id));
       })();
 
     if (stillVisible) return;
@@ -634,12 +684,12 @@ export function RecommendationsTab({
     setRuleCategoryIds((prev) =>
       prev.filter(
         (id) =>
-          id !== selected.categoryId &&
+          !selectedCategoryIds.includes(id) &&
           !alreadyLinked.has(id) &&
           localCategories.some((c) => c.id === id)
       )
     );
-  }, [selectedId, assignedCategoryIdsKey, selected, localCategories]);
+  }, [selectedId, assignedCategoryIdsKey, selected, selectedCategoryIds, localCategories]);
 
   const updateSelectedItem = (updater: (item: MenuItemRow) => MenuItemRow) => {
     if (!selectedId) return;

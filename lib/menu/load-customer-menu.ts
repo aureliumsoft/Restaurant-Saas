@@ -9,8 +9,10 @@ import {
 } from '@/lib/menu/customer-menu-attribute-groups-select';
 import {
   CUSTOMER_MENU_CATEGORY_WHERE,
+  RECOMMENDATION_SOURCE_CATEGORY_WHERE,
   sanitizeCustomerMenuPayload,
 } from '@/lib/menu/category-visibility';
+import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
 
 export function isPrismaSchemaDriftError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -18,7 +20,7 @@ export function isPrismaSchemaDriftError(error: unknown): boolean {
   return code === 'P2021' || code === 'P2022';
 }
 
-function buildMenuCategorySelect(mode: CustomerMenuSelectMode) {
+function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
   const itemCore =
     mode === 'full'
       ? customerMenuItemCoreSelect
@@ -29,29 +31,22 @@ function buildMenuCategorySelect(mode: CustomerMenuSelectMode) {
       : buildCustomerMenuAttributeGroupsSelectLegacy;
 
   return {
-    id: true,
-    name: true,
-    items: {
-      orderBy: { name: 'asc' as const },
+    ...itemCore,
+    categoryId: true,
+    attributeGroups: buildGroups(2),
+    offersFromThis: {
+      orderBy: { sortOrder: 'asc' as const },
       select: {
-        ...itemCore,
-        categoryId: true,
-        attributeGroups: buildGroups(2),
-        offersFromThis: {
-          orderBy: { sortOrder: 'asc' as const },
+        id: true,
+        sortOrder: true,
+        offeredItem: {
           select: {
             id: true,
-            sortOrder: true,
-            offeredItem: {
-              select: {
-                id: true,
-                name: true,
-                description: true,
-                imageUrl: true,
-                price: true,
-                salePrice: true,
-              },
-            },
+            name: true,
+            description: true,
+            imageUrl: true,
+            price: true,
+            salePrice: true,
           },
         },
       },
@@ -59,7 +54,7 @@ function buildMenuCategorySelect(mode: CustomerMenuSelectMode) {
   } as const;
 }
 
-function buildAllCategoriesForRecommendations(mode: CustomerMenuSelectMode) {
+function buildRecommendationPoolItemSelect(mode: CustomerMenuSelectMode) {
   const itemCore =
     mode === 'full'
       ? customerMenuItemCoreSelect
@@ -70,18 +65,8 @@ function buildAllCategoriesForRecommendations(mode: CustomerMenuSelectMode) {
       : buildCustomerMenuAttributeGroupsSelectLegacy;
 
   return {
-    orderBy: { name: 'asc' as const },
-    select: {
-      id: true,
-      name: true,
-      items: {
-        orderBy: { name: 'asc' as const },
-        select: {
-          ...itemCore,
-          attributeGroups: buildGroups(2),
-        },
-      },
-    },
+    ...itemCore,
+    attributeGroups: buildGroups(2),
   } as const;
 }
 
@@ -98,9 +83,11 @@ const restaurantPublicSelect = {
 async function enrichRestaurantMenuForCustomer<
   T extends { id: string; menus: unknown },
 >(restaurant: T, mode: CustomerMenuSelectMode) {
-  const allCategories = await db.menuCategory.findMany({
-    where: { restaurantId: restaurant.id, items: { some: {} } },
-    ...buildAllCategoriesForRecommendations(mode),
+  const allCategories = await loadRestaurantMenuCategories({
+    restaurantId: restaurant.id,
+    categorySelect: { id: true, name: true },
+    itemSelect: buildRecommendationPoolItemSelect(mode),
+    categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
   });
   return sanitizeCustomerMenuPayload(
     applyProductRecommendationPools(
@@ -113,17 +100,18 @@ async function enrichRestaurantMenuForCustomer<
 async function loadBySlugWithMode(slug: string, mode: CustomerMenuSelectMode) {
   const restaurant = await db.restaurant.findUnique({
     where: { slug },
-    select: {
-      ...restaurantPublicSelect,
-      menus: {
-        where: CUSTOMER_MENU_CATEGORY_WHERE,
-        orderBy: { name: 'asc' as const },
-        select: buildMenuCategorySelect(mode),
-      },
-    },
+    select: restaurantPublicSelect,
   });
   if (!restaurant) return null;
-  return enrichRestaurantMenuForCustomer(restaurant, mode);
+
+  const menus = await loadRestaurantMenuCategories({
+    restaurantId: restaurant.id,
+    categorySelect: { id: true, name: true, imageUrl: true },
+    itemSelect: buildCustomerMenuItemSelect(mode),
+    categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
+  });
+
+  return enrichRestaurantMenuForCustomer({ ...restaurant, menus }, mode);
 }
 
 async function loadBySubdomainWithMode(
@@ -132,17 +120,18 @@ async function loadBySubdomainWithMode(
 ) {
   const restaurant = await db.restaurant.findUnique({
     where: { subdomain },
-    select: {
-      ...restaurantPublicSelect,
-      menus: {
-        where: CUSTOMER_MENU_CATEGORY_WHERE,
-        orderBy: { name: 'asc' as const },
-        select: buildMenuCategorySelect(mode),
-      },
-    },
+    select: restaurantPublicSelect,
   });
   if (!restaurant) return null;
-  return enrichRestaurantMenuForCustomer(restaurant, mode);
+
+  const menus = await loadRestaurantMenuCategories({
+    restaurantId: restaurant.id,
+    categorySelect: { id: true, name: true, imageUrl: true },
+    itemSelect: buildCustomerMenuItemSelect(mode),
+    categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
+  });
+
+  return enrichRestaurantMenuForCustomer({ ...restaurant, menus }, mode);
 }
 
 /** Load customer menu; retries with legacy Prisma select when production DB lags migrations. */

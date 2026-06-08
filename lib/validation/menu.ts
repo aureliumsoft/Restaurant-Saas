@@ -70,14 +70,69 @@ export const menuItemCreateSchema = z
   })
   .superRefine(imageRefine);
 
-export const menuCategoryCreateSchema = z.object({
-  name: zRequiredText(120, 'Category name'),
-  sortOrder: z.number().int().min(0).optional(),
-  showInFront: z.boolean().optional(),
-});
+const categoryImageUrl = z
+  .string()
+  .max(2_800_000)
+  .optional()
+  .nullable()
+  .or(z.literal(''));
 
-export const menuCategoryPatchSchema = z.object({
-  name: zRequiredText(120, 'Category name').optional(),
-  sortOrder: z.number().int().min(0).optional(),
-  showInFront: z.boolean().optional(),
-});
+export const menuCategoryCreateSchema = z
+  .object({
+    name: zRequiredText(120, 'Category name'),
+    sortOrder: z.number().int().min(0).optional(),
+    showInFront: z.boolean().optional(),
+    imageUrl: categoryImageUrl,
+  })
+  .superRefine((val, ctx) => {
+    const v = val.imageUrl;
+    if (!v || !v.trim()) return;
+    if (!isAcceptedImageValue(v)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Image must be an http/https URL or base64 image',
+        path: ['imageUrl'],
+      });
+      return;
+    }
+    if (
+      v.startsWith('data:image/') &&
+      estimateDataUrlBytes(v) > 2 * 1024 * 1024
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Image base64 must be <= 2MB',
+        path: ['imageUrl'],
+      });
+    }
+  });
+
+export const menuCategoryPatchSchema = z
+  .object({
+    name: zRequiredText(120, 'Category name').optional(),
+    sortOrder: z.number().int().min(0).optional(),
+    showInFront: z.boolean().optional(),
+    imageUrl: categoryImageUrl,
+  })
+  .superRefine((val, ctx) => {
+    const v = val.imageUrl;
+    if (v === undefined || v === null || !v.trim()) return;
+    if (!isAcceptedImageValue(v)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Image must be an http/https URL or base64 image',
+        path: ['imageUrl'],
+      });
+      return;
+    }
+    if (
+      v.startsWith('data:image/') &&
+      estimateDataUrlBytes(v) > 2 * 1024 * 1024
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Image base64 must be <= 2MB',
+        path: ['imageUrl'],
+      });
+    }
+  });

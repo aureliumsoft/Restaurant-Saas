@@ -123,6 +123,7 @@ type CustomerMenuProduct = {
 type CustomerMenuCategory = {
   id: string;
   name: string;
+  imageUrl?: string | null;
   items: CustomerMenuProduct[];
 };
 
@@ -689,7 +690,8 @@ export default function OrderPageClient({
       ...categories.map((category) => ({
         id: category.id,
         name: category.name,
-        imageUrl: category.items[0]?.imageUrl ?? null,
+        imageUrl:
+          category.imageUrl ?? category.items[0]?.imageUrl ?? null,
       })),
     ],
     [categories, t]

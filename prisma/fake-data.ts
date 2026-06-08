@@ -275,6 +275,7 @@ export function fakeEmployeeInviteComplete() {
 export function fakeMenuCategory() {
   return {
     name: faker.person.fullName(),
+    imageUrl: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -282,10 +283,19 @@ export function fakeMenuCategoryComplete() {
   return {
     id: faker.string.uuid(),
     name: faker.person.fullName(),
+    imageUrl: undefined,
     restaurantId: faker.string.uuid(),
     showInFront: true,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeMenuItemCategoryComplete() {
+  return {
+    menuItemId: faker.string.uuid(),
+    categoryId: faker.string.uuid(),
+    sortOrder: 0,
+    createdAt: new Date(),
   };
 }
 export function fakeMenuItem() {

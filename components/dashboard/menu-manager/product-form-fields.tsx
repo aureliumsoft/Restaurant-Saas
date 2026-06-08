@@ -22,6 +22,7 @@ import {
   filterNameTextInput,
 } from '@/lib/validation/fields';
 
+import { CategoryPickerStrip } from './category-picker-strip';
 import { InventoryQuickActions } from './inventory-quick-actions';
 import type {
   MenuCategoryRow,
@@ -32,7 +33,7 @@ import type {
 export type ProductFormState = {
   name: string;
   description: string;
-  categoryId: string;
+  categoryIds: string[];
   imageUrl: string;
   price: string;
   salePrice: string;
@@ -203,33 +204,28 @@ export function ProductFormFields({
     <div className="grid gap-6">
       <div className="grid gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <FieldLabel required={showRequired}>Category</FieldLabel>
+          <FieldLabel required={showRequired}>Categories</FieldLabel>
           <InventoryQuickActions
             variant="inline"
             showVariation={false}
             onMenuRefresh={onMenuRefresh}
-            
             onCategoryCreated={(categoryId) =>
-              onFormChange({ categoryId })
+              onFormChange({
+                categoryIds: form.categoryIds.includes(categoryId)
+                  ? form.categoryIds
+                  : [...form.categoryIds, categoryId],
+              })
             }
           />
         </div>
-        <Select
-          value={form.categoryId}
-          onValueChange={(v) => onFormChange({ categoryId: v })}
-        >
-          <SelectTrigger aria-required={showRequired || undefined}>
-            <SelectValue placeholder="Select category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-                {c.showInFront === false ? ' (configuration only)' : ''}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <p className="text-xs text-muted-foreground">
+          Select one or more categories where this product should appear.
+        </p>
+        <CategoryPickerStrip
+          categories={categories}
+          selectedIds={form.categoryIds}
+          onChange={(categoryIds) => onFormChange({ categoryIds })}
+        />
       </div>
 
       <div className="grid gap-2 ">
@@ -401,7 +397,6 @@ export function ProductFormFields({
                     value={row.imageUrl}
                     onChange={(v) => updateVariation(index, { imageUrl: v })}
                   />
-                  <div className="flex items-end">
                     <Button
                       type="button"
                       variant="ghost"
@@ -416,7 +411,6 @@ export function ProductFormFields({
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </div>
                 </div>
               );
             })}
@@ -455,7 +449,10 @@ export function productFormStateFromItem(item: MenuItemRow): ProductFormState {
   return {
     name: item.name,
     description: item.description ?? '',
-    categoryId: item.categoryId,
+    categoryIds:
+      item.categoryIds && item.categoryIds.length > 0
+        ? [...item.categoryIds]
+        : [item.categoryId],
     imageUrl: item.imageUrl ?? '',
     price: String(item.price),
     salePrice: item.salePrice != null ? String(item.salePrice) : '',
@@ -471,11 +468,18 @@ export function variationRowsFromItem(item: MenuItemRow): VariationFormRow[] {
   }));
 }
 
+function categoryIdsEqual(a: string[], b: string[]) {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((id, index) => id === sortedB[index]);
+}
+
 function formStatesEqual(a: ProductFormState, b: ProductFormState) {
   return (
     a.name === b.name &&
     a.description === b.description &&
-    a.categoryId === b.categoryId &&
+    categoryIdsEqual(a.categoryIds, b.categoryIds) &&
     a.imageUrl === b.imageUrl &&
     a.price === b.price &&
     a.salePrice === b.salePrice
@@ -507,7 +511,7 @@ export function isProductFormValid(
   variationRows: VariationFormRow[],
   variationTemplates: RestaurantVariationRow[] = []
 ): boolean {
-  if (!form.name.trim() || !form.categoryId) return false;
+  if (!form.name.trim() || form.categoryIds.length === 0) return false;
 
   if (variationRows.length > 0) {
     return variationRows.every((row) =>
@@ -535,7 +539,7 @@ export function isProductCreateFormDirty(
     form.imageUrl.trim() ||
     form.price.trim() ||
     form.salePrice.trim() ||
-    form.categoryId.trim()
+    form.categoryIds.length > 0
   ) {
     return true;
   }
@@ -556,7 +560,7 @@ export function buildProductPayload(
   body: {
     name: string;
     description: string | null;
-    categoryId: string;
+    categoryIds: string[];
     imageUrl: string | null;
     price: number;
     salePrice: number | null;
@@ -568,8 +572,8 @@ export function buildProductPayload(
     }[];
   };
 } | { ok: false; error: string } {
-  if (!form.name.trim() || !form.categoryId) {
-    return { ok: false, error: 'Name and category are required.' };
+  if (!form.name.trim() || form.categoryIds.length === 0) {
+    return { ok: false, error: 'Name and at least one category are required.' };
   }
 
   const variations = parseVariationRows(variationRows, variationTemplates).map(
@@ -597,7 +601,7 @@ export function buildProductPayload(
       body: {
         name: form.name.trim(),
         description: form.description.trim() || null,
-        categoryId: form.categoryId,
+        categoryIds: form.categoryIds,
         imageUrl: form.imageUrl.trim() || null,
         price: minPrice,
         salePrice: null,
@@ -624,7 +628,7 @@ export function buildProductPayload(
     body: {
       name: form.name.trim(),
       description: form.description.trim() || null,
-      categoryId: form.categoryId,
+      categoryIds: form.categoryIds,
       imageUrl: form.imageUrl.trim() || null,
       price,
       salePrice: sale,

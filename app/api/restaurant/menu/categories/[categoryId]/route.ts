@@ -39,6 +39,13 @@ export async function PATCH(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const imageUrl =
+    parsed.data.imageUrl === undefined
+      ? undefined
+      : parsed.data.imageUrl && parsed.data.imageUrl.length > 0
+        ? parsed.data.imageUrl
+        : null;
+
   const updated = await db.menuCategory.update({
     where: { id: categoryId },
     data: {
@@ -46,6 +53,7 @@ export async function PATCH(
       ...(parsed.data.showInFront !== undefined
         ? { showInFront: parsed.data.showInFront }
         : {}),
+      ...(imageUrl !== undefined ? { imageUrl } : {}),
     },
   });
 

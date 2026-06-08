@@ -136,14 +136,12 @@ export default function OnboardingStep2Page() {
               variant="outline"
               onClick={addMenuBannerRow}
             >
-              <>
-                <Plus className="h-4 w-4 mr-2" />
-                <span>Add Banner</span>
-              </>
+              <Plus className="h-4 w-4 mr-2" />
+              <span>Add Banner</span>
             </Button>
           </div>
           {menuBanners.map((url, i) => (
-            <div key={i} className="flex gap-2">
+            <div key={i} className="flex gap-2 items-end">
               <Base64ImageUploadField
                 label={`Menu banner ${i + 1}`}
                 value={url}
@@ -154,13 +152,11 @@ export default function OnboardingStep2Page() {
                   type="button"
                   variant="ghost"
                   size="icon"
+                  className="text-destructive hover:bg-destructive/10"
                   onClick={() => removeMenuBanner(i)}
                   aria-label="Remove"
                 >
-                  <>
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    <span>Remove</span>
-                  </>
+                  <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               )}
             </div>
