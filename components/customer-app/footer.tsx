@@ -41,7 +41,7 @@ export function Footer() {
           <p>
             Powered by <span className="text-white">Foodluk</span>
           </p>
-          <p>Foodluk SAAS v2.5.0</p>
+          <p>Foodluk SAAS v3.0</p>
         </div>
       </div>
     </footer>

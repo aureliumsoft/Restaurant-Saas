@@ -1,6 +1,6 @@
 {
   "name": "storage",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "private": true,
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

@@ -9,9 +9,9 @@ import {
   ShoppingBag,
   CircleDollarSign,
   Clock3,
+  Ban,
   ChevronDown,
   Calendar,
-  EyeIcon,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -323,8 +323,8 @@ function OrdersTable({
                     className="h-8 gap-1 px-2 text-muted-foreground hover:text-foreground"
                     onClick={() => onView(row)}
                   >
-                    <EyeIcon className="h-4 w-4" />
-                    View
+                    Action menu
+                    <ChevronDown className="h-3.5 w-3.5" />
                   </Button>
                 </TableCell>
               </TableRow>
@@ -464,64 +464,57 @@ export function SalesOrdersTabs() {
   const activeLabel =
     activeTab === 'online' ? 'Online' : activeTab === 'pos' ? 'POS' : 'Kiosk';
 
+  const combinedStats = {
+    totalOrders:
+      stats.online.totalOrders + stats.pos.totalOrders + stats.kiosk.totalOrders,
+    totalRevenue:
+      stats.online.revenueAmount +
+      stats.pos.revenueAmount +
+      stats.kiosk.revenueAmount,
+    pending:
+      stats.online.pending.count +
+      stats.pos.pending.count +
+      stats.kiosk.pending.count,
+    canceled:
+      stats.online.canceled.count +
+      stats.pos.canceled.count +
+      stats.kiosk.canceled.count,
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid w-full gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <OrdersKpiCard
-          label={`Total ${activeLabel} orders`}
-          value={activeStats.totalOrders}
-          sparklineData={kpiSparklineFromValue(activeStats.totalOrders)}
+          label="Total Orders"
+          value={combinedStats.totalOrders}
+          sparklineData={kpiSparklineFromValue(combinedStats.totalOrders)}
           accentColor="#ed6e40"
           icon={ShoppingBag}
           loading={loading}
         />
         <OrdersKpiCard
-          label={`Total ${activeLabel} amount`}
-          value={`€${formatMoney(activeStats.totalAmount)}`}
-          sparklineData={kpiSparklineFromValue(activeStats.totalAmount)}
-          accentColor="#3b82f6"
-          icon={CircleDollarSign}
-          loading={loading}
-        />
-        <OrdersKpiCard
-          label="Revenue"
-          value={`€${formatMoney(activeStats.revenueAmount)}`}
-          subtitle={`${activeStats.revenueOrders} completed orders`}
-          sparklineData={kpiSparklineFromValue(activeStats.revenueAmount)}
+          label="Total Revenue"
+          value={`€${formatMoney(combinedStats.totalRevenue)}`}
+          sparklineData={kpiSparklineFromValue(combinedStats.totalRevenue)}
           accentColor="#22c55e"
           icon={CircleDollarSign}
           loading={loading}
-          valueClassName="text-3xl font-bold text-green-700 dark:text-green-400"
         />
         <OrdersKpiCard
-          label="Pending & canceled"
-          value={
-            <div className="space-y-2 text-sm font-medium">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-yellow-700 dark:text-yellow-400">
-                  Pending
-                </span>
-                <span>
-                  {activeStats.pending.count} · €
-                  {formatMoney(activeStats.pending.amount)}
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-destructive">Canceled</span>
-                <span>
-                  {activeStats.canceled.count} · €
-                  {formatMoney(activeStats.canceled.amount)}
-                </span>
-              </div>
-            </div>
-          }
-          sparklineData={kpiSparklineFromValue(
-            activeStats.pending.count + activeStats.canceled.count
-          )}
+          label="Pending Orders"
+          value={combinedStats.pending}
+          sparklineData={kpiSparklineFromValue(combinedStats.pending)}
           accentColor="#f59e0b"
           icon={Clock3}
           loading={loading}
-          valueClassName="text-sm font-medium"
+        />
+        <OrdersKpiCard
+          label="Cancelled Orders"
+          value={combinedStats.canceled}
+          sparklineData={kpiSparklineFromValue(combinedStats.canceled)}
+          accentColor="#ef4444"
+          icon={Ban}
+          loading={loading}
         />
       </div>
 

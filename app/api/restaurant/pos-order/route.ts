@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
           branchId,
         });
 
-        let order: Awaited<ReturnType<typeof tx.order.create>>;
+        let order: Awaited<ReturnType<typeof tx.order.create>> | undefined;
         for (let attempt = 0; attempt < 8; attempt++) {
           try {
             order = await tx.order.create({
@@ -265,9 +265,13 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        if (!order) {
+          throw new Error('Failed to create order after ticket retries');
+        }
+
         await tx.orderItem.createMany({
           data: normalizedItems.map((line) => ({
-            orderId: order!.id,
+            orderId: order.id,
             menuItemId: line.menuItemId,
             quantity: line.quantity,
             price: line.price,
@@ -279,7 +283,7 @@ export async function POST(req: NextRequest) {
 
         await tx.payment.create({
           data: {
-            orderId: order!.id,
+            orderId: order.id,
             amount: paymentAmount,
             status: initialPaymentStatus,
             method: methodLabel,
@@ -287,7 +291,7 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        return { order: order!, ticketNumber };
+        return { order, ticketNumber };
       },
       { maxWait: 10_000, timeout: 30_000 }
     );

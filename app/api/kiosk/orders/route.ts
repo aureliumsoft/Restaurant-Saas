@@ -242,7 +242,7 @@ export async function POST(req: NextRequest) {
         customerPhone,
       });
 
-      let order: Awaited<ReturnType<typeof tx.order.create>>;
+      let order: Awaited<ReturnType<typeof tx.order.create>> | undefined;
       for (let attempt = 0; attempt < 8; attempt++) {
         try {
           order = await tx.order.create({
@@ -268,6 +268,10 @@ export async function POST(req: NextRequest) {
           if (!isTicketNumberConflict(e) || attempt >= 7) throw e;
           ticketNumber += 1;
         }
+      }
+
+      if (!order) {
+        throw new Error('Failed to create order after ticket retries');
       }
 
       await Promise.all(
@@ -323,7 +327,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return { order: order!, ticketNumber };
+      return { order, ticketNumber };
     }, { timeout: 20000, maxWait: 10000 });
 
     return NextResponse.json(

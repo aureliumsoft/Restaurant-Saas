@@ -1,8 +1,0 @@
--- AlterTable
-ALTER TABLE "Order" ADD COLUMN "address" TEXT;
-
--- AlterTable
-ALTER TABLE "Order" ADD COLUMN "taxAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
-
--- AlterTable
-ALTER TABLE "Order" ADD COLUMN "discountAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
