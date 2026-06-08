@@ -73,6 +73,7 @@ export function Sidebar({
   const { t } = useTranslation();
   const [activeStores, setActiveStores] = useState<Store[]>();
   const [branchesLoading, setBranchesLoading] = useState(false);
+  const [restaurantName, setRestaurantName] = useState('');
   const [menuBanners, setMenuBanners] = useState<string[]>([]);
   const [bannerIndex, setBannerIndex] = useState(0);
   const [deliveryInfoOpen, setDeliveryInfoOpen] = useState(false);
@@ -141,6 +142,9 @@ export function Sidebar({
             )
           : [];
         if (!cancelled) {
+          const name =
+            typeof json?.data?.name === 'string' ? json.data.name.trim() : '';
+          setRestaurantName(name);
           setMenuBanners(urls);
           setBannerIndex(0);
         }
@@ -185,6 +189,9 @@ export function Sidebar({
     };
     if (restaurantSlug?.trim()) {
       paramsObj.restaurantSlug = restaurantSlug.trim();
+    }
+    if (restaurantName) {
+      paramsObj.restaurantName = restaurantName;
     }
     const params = new URLSearchParams(paramsObj).toString();
 

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
+import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -65,6 +66,7 @@ export function OrderTrackingPage({
   return (
     <div className="min-h-screen bg-background px-4 py-10">
       <div className="mx-auto max-w-2xl space-y-4">
+        <WebAppRestaurantTitle size="compact" />
         <Card>
           <CardHeader>
             <CardTitle>Track Your Order</CardTitle>

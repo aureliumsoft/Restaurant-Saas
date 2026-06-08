@@ -59,6 +59,19 @@ export function customerBrandingRouteFromLocation(
     };
   }
 
+  const orderFlow =
+    parts[0] === 'order' ||
+    parts[0] === 'track-order' ||
+    (parts[0] === 'web-app' &&
+      (parts[1] === 'order' || parts[1] === 'track-order'));
+
+  if (orderFlow) {
+    return {
+      slug: slugFromQuery,
+      pageSuffix: webAppPageSuffix(path),
+    };
+  }
+
   if (parts[0] === 'web-app') {
     if (parts[1] && parts[1] !== 'order' && parts[1] !== 'track-order') {
       return {

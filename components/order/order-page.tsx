@@ -30,6 +30,7 @@ import {
   inferHostSubdomainForMenu,
 } from '@/lib/customer-menu-client';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
+import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import {
   cartLineTitle,
@@ -38,6 +39,7 @@ import {
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { setUiLanguage } from '@/lib/i18n/client';
 import type { UiLanguage } from '@/lib/i18n/resources';
+import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
 import { cn } from '@/lib/utils';
 import { ArrowUp, Loader2, Pencil, Search, Trash2, X } from 'lucide-react';
 
@@ -690,8 +692,7 @@ export default function OrderPageClient({
       ...categories.map((category) => ({
         id: category.id,
         name: category.name,
-        imageUrl:
-          category.imageUrl ?? category.items[0]?.imageUrl ?? null,
+        imageUrl: getCategoryDisplayImageUrl(category),
       })),
     ],
     [categories, t]
@@ -957,15 +958,17 @@ export default function OrderPageClient({
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-7xl px-4 pb-10 pt-6 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center justify-center gap-4 mb-6">
-          <h1 className="text-3xl font-bold">
-            {orderInfo?.restaurantName ?? 'Enjoy Tacos'}
-          </h1>
+        <div className="mb-6 flex flex-wrap items-center justify-center gap-4">
+          <WebAppRestaurantTitle
+            restaurantName={orderInfo?.restaurantName}
+            subtitle={
+              <>
+                {orderType === 'delivery' ? t('delivery') : t('pickUp')}{' '}
+                {t('order')} · {orderId}
+              </>
+            }
+          />
           <div className="flex items-center gap-2">
-            <div className="text-primary ">
-              {orderType === 'delivery' ? t('delivery') : t('pickUp')}{' '}
-              {t('order')} - {orderId}
-            </div>
             <Button
               type="button"
               variant="default"

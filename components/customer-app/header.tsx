@@ -34,7 +34,12 @@ export function Header() {
     pathSlugRaw && pathSlugRaw !== 'order' && pathSlugRaw !== 'track-order'
       ? decodeURIComponent(pathSlugRaw)
       : undefined;
-  const slugForApi = queryRestaurantSlug ?? pathSlug;
+  const isOrderFlowPath =
+    pathname?.startsWith('/order/') ||
+    pathname === '/order' ||
+    pathname?.startsWith('/track-order') ||
+    pathname === '/track-order';
+  const slugForApi = queryRestaurantSlug ?? (isOrderFlowPath ? undefined : pathSlug);
 
   const [brand, setBrand] = useState<RestaurantBrand>({
     name: 'Restaurant',

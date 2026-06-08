@@ -95,6 +95,7 @@ import {
   cartModifierSelectionNames,
 } from '@/lib/cart-line-display';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
+import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 
 export type OrderMode = 'new' | 'tables' | 'delivery' | 'takeaway' | 'queue';
@@ -500,10 +501,7 @@ export function PosScreen() {
           nextCategories.push({
             id: menu.id,
             label: String(menu.name || 'UNNAMED').toUpperCase(),
-            imageUrl:
-              menu.imageUrl ??
-              menu.items?.[0]?.imageUrl ??
-              null,
+            imageUrl: getCategoryDisplayImageUrl(menu),
           });
           for (const item of menu.items ?? []) {
             const base = Number(item.price);

@@ -28,6 +28,7 @@ import {
   cartModifierSelectionNames,
 } from '@/lib/cart-line-display';
 import { orderPathWithQuery } from '@/lib/order-search-params';
+import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 
 type CartModifierSelection = {
@@ -411,11 +412,17 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-4xl px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">{t('yourCart')}</h1>
-          <p className="text-sm text-muted-foreground">
-            {orderType === 'delivery' ? 'Delivery' : 'Pick-Up'} order - {orderId}
-          </p>
+        <div className="mb-6 space-y-4">
+          <WebAppRestaurantTitle
+            restaurantName={orderInfo?.restaurantName}
+            subtitle={
+              <>
+                {orderType === 'delivery' ? 'Delivery' : 'Pick-Up'} order ·{' '}
+                {orderId}
+              </>
+            }
+          />
+          <h2 className="text-2xl font-bold">{t('yourCart')}</h2>
         </div>
 
         {orderInfo && (

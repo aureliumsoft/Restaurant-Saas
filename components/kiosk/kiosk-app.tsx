@@ -31,6 +31,7 @@ import {
   type AttributeGroup,
   type SelectedProductVariation,
 } from '@/components/order/product-customize-dialog';
+import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -1087,8 +1088,7 @@ export function KioskApp({
                       All
                     </button>
                     {menu.menus.map((c) => {
-                      const thumb =
-                        c.imageUrl ?? c.items[0]?.imageUrl ?? null;
+                      const thumb = getCategoryDisplayImageUrl(c);
                       return (
                         <button
                           key={c.id}
@@ -1129,8 +1129,7 @@ export function KioskApp({
                     All
                   </Button>
                   {menu.menus.map((c) => {
-                    const thumb =
-                      c.imageUrl ?? c.items[0]?.imageUrl ?? null;
+                    const thumb = getCategoryDisplayImageUrl(c);
                     return (
                       <Button
                         key={c.id}

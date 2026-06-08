@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, Check, Copy, Home, TrainTrack } from 'lucide-react';
 import { toast } from 'react-toastify';
 
+import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { OrderInfo } from '@/components/order/order-types';
@@ -121,7 +122,11 @@ export function OnlinePaymentSuccess({
 
   return (
     <div className="min-h-screen bg-background px-4 py-12">
-      <div className="mx-auto max-w-xl">
+      <div className="mx-auto max-w-xl space-y-6">
+        <WebAppRestaurantTitle
+          restaurantName={orderInfo?.restaurantName}
+          size="compact"
+        />
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">Payment successful</CardTitle>
