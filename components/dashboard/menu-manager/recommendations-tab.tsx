@@ -57,6 +57,11 @@ import {
 import { cn } from '@/lib/utils';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 
+import {
+  categoryUsesVariationLimits,
+  DEFAULT_CATEGORY_MIN_MAX,
+  DEFAULT_FREE_QUANTITY,
+} from '@/lib/menu/recommendation-category-limits';
 import { filterCategoriesWithProducts } from '@/lib/menu/category-visibility';
 import { menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
 import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
@@ -111,17 +116,55 @@ function validateRecommendationDraft(
     return 'Choose at least one category for product recommendations.';
   }
 
-  const useVariationLimits =
-    draft.selectionType === 'MULTIPLE' &&
-    draft.sourceType === 'CATEGORY' &&
-    (selected.variations?.length ?? 0) > 0 &&
-    draft.variationLimits.length > 0;
+  if (draft.selectionType !== 'MULTIPLE') return null;
 
-  if (draft.selectionType === 'MULTIPLE' && !useVariationLimits) {
-    if (draft.maxItems < draft.minItems) {
-      return 'Maximum must be >= minimum.';
+  const baseVariationCount = selected.variations?.length ?? 0;
+
+  if (draft.sourceType === 'CATEGORY') {
+    for (const catId of draft.ruleCategoryIds) {
+      const cat = localCategories.find((c) => c.id === catId);
+      const catName = cat?.name ?? 'Category';
+      if (
+        categoryUsesVariationLimits(
+          baseVariationCount,
+          draft.categoryVariationLimits[catId]
+        )
+      ) {
+        for (const row of draft.categoryVariationLimits[catId] ?? []) {
+          if (row.maxItems < row.minItems) {
+            return `${catName}: maximum must be >= minimum.`;
+          }
+        }
+      } else {
+        const limits =
+          draft.categoryMinMax[catId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
+        if (limits.maxItems < limits.minItems) {
+          return `${catName}: maximum must be >= minimum.`;
+        }
+      }
     }
   }
+
+  if (draft.sourceType === 'PRODUCT') {
+    const linkedProductIds =
+      draft.linkedProductIds.length > 0
+        ? draft.linkedProductIds
+        : draft.linkedProductId
+          ? [draft.linkedProductId]
+          : [];
+    for (const productId of linkedProductIds) {
+      const productName =
+        localCategories
+          .flatMap((c) => c.items)
+          .find((i) => i.id === productId)?.name ?? 'Product';
+      const limits =
+        draft.productMinMax[productId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
+      if (limits.maxItems < limits.minItems) {
+        return `${productName}: maximum must be >= minimum.`;
+      }
+    }
+  }
+
   return null;
 }
 
@@ -143,17 +186,21 @@ function buildRecommendationPayloads(
         ? [draft.linkedProductId]
         : [];
 
-  const useVariationLimits =
-    draft.selectionType === 'MULTIPLE' &&
-    draft.sourceType === 'CATEGORY' &&
-    (selected.variations?.length ?? 0) > 0 &&
-    draft.variationLimits.length > 0;
+  const baseVariationCount = selected.variations?.length ?? 0;
 
   if (draft.sourceType === 'CATEGORY') {
     const cats = localCategories.filter((c) =>
       draft.ruleCategoryIds.includes(c.id)
     );
     for (const [index, cat] of cats.entries()) {
+      const catVariationLimits = draft.categoryVariationLimits[cat.id];
+      const useCatVariationLimits = categoryUsesVariationLimits(
+        baseVariationCount,
+        catVariationLimits
+      );
+      const catMinMax =
+        draft.categoryMinMax[cat.id] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
+
       payloads.push({
         name:
           draft.selectionType === 'SINGLE'
@@ -164,18 +211,21 @@ function buildRecommendationPayloads(
         required: draft.required,
         linkedCategoryId: cat.id,
         defaultLinkedMenuItemId: draft.categoryDefaults[cat.id] ?? null,
-        useVariationPricing: draft.useVariationPricing,
+        useVariationPricing: draft.categoryVariationPricing[cat.id] ?? false,
         sortOrder: sortOrderBase + index,
         ...(draft.selectionType === 'MULTIPLE'
           ? {
               multipleMode: draft.multipleMode,
               freeQuantity:
-                draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
-              ...(useVariationLimits
-                ? { variationLimits: draft.variationLimits }
+                draft.multipleMode === 'QUANTITY'
+                  ? (draft.categoryFreeQuantity[cat.id] ??
+                    DEFAULT_FREE_QUANTITY)
+                  : null,
+              ...(useCatVariationLimits
+                ? { variationLimits: catVariationLimits }
                 : {
-                    minItems: draft.minItems,
-                    maxItems: draft.maxItems,
+                    minItems: catMinMax.minItems,
+                    maxItems: catMinMax.maxItems,
                   }),
             }
           : {}),
@@ -205,9 +255,16 @@ function buildRecommendationPayloads(
           ? {
               multipleMode: draft.multipleMode,
               freeQuantity:
-                draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
-              minItems: draft.minItems,
-              maxItems: draft.maxItems,
+                draft.multipleMode === 'QUANTITY'
+                  ? (draft.productFreeQuantity[productId] ??
+                    DEFAULT_FREE_QUANTITY)
+                  : null,
+              minItems: (
+                draft.productMinMax[productId] ?? DEFAULT_CATEGORY_MIN_MAX
+              ).minItems,
+              maxItems: (
+                draft.productMinMax[productId] ?? DEFAULT_CATEGORY_MIN_MAX
+              ).maxItems,
             }
           : {}),
       });
@@ -426,6 +483,7 @@ export function RecommendationsTab({
   );
   const [personalizeDirty, setPersonalizeDirty] = useState(false);
   const [savingPersonalize, setSavingPersonalize] = useState(false);
+  const [loadingPersonalize, setLoadingPersonalize] = useState(false);
   const [previewPersonalizeByGroup, setPreviewPersonalizeByGroup] = useState<
     Record<string, string[]>
   >({});
@@ -622,16 +680,6 @@ export function RecommendationsTab({
   }, [selectedId]);
 
   useEffect(() => {
-    if (!selected) {
-      setPersonalizeDraft([]);
-      setPersonalizeDirty(false);
-      return;
-    }
-    setPersonalizeDraft(personalizeGroupsToDraft(selected.personalizeGroups));
-    setPersonalizeDirty(false);
-  }, [selectedId, selected?.personalizeGroups]);
-
-  useEffect(() => {
     if (!selectedId) return;
 
     const stillVisible =
@@ -678,6 +726,47 @@ export function RecommendationsTab({
       }))
     );
   };
+
+  useEffect(() => {
+    if (!selectedId) {
+      setPersonalizeDraft([]);
+      setPersonalizeDirty(false);
+      return;
+    }
+
+    const menuItem = allProducts.find((item) => item.id === selectedId);
+    setPersonalizeDraft(personalizeGroupsToDraft(menuItem?.personalizeGroups));
+    setPersonalizeDirty(false);
+
+    let cancelled = false;
+    setLoadingPersonalize(true);
+    void axios
+      .get<{ data: PersonalizeGroupRow[] }>(
+        `/api/restaurant/menu/items/${selectedId}/personalize`
+      )
+      .then((res) => {
+        if (cancelled) return;
+        const groups = res.data.data ?? [];
+        updateSelectedItem((item) => ({ ...item, personalizeGroups: groups }));
+        setPersonalizeDraft(personalizeGroupsToDraft(groups));
+        setPersonalizeDirty(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPersonalizeDraft(
+          personalizeGroupsToDraft(menuItem?.personalizeGroups)
+        );
+        setPersonalizeDirty(false);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPersonalize(false);
+      });
+
+    return () => {
+      cancelled = true;
+      setLoadingPersonalize(false);
+    };
+  }, [selectedId]);
 
   const saveRecommendationDraft = async (
     draft: RecommendationRuleDraft,
@@ -860,19 +949,32 @@ export function RecommendationsTab({
 
   const personalizePreviewGroups = useMemo(() => {
     if (!selected) return [];
-    if (personalizeDirty) {
-      return personalizeDraftToPreviewGroups(personalizeDraft);
+
+    const draftPreview = personalizeDraftToPreviewGroups(personalizeDraft);
+
+    const savedPreview = (selected.personalizeGroups ?? [])
+      .filter((group) => group.options.length > 0)
+      .map((group) => ({
+        id: group.id,
+        parentName: group.parentName,
+        maxItems: group.maxItems,
+        options: group.options.map((option) => ({
+          id: option.id,
+          name: option.name,
+          imageUrl: option.imageUrl,
+        })),
+      }));
+
+    if (personalizeDirty && draftPreview.length > 0) {
+      return draftPreview;
     }
-    return (selected.personalizeGroups ?? []).map((group) => ({
-      id: group.id,
-      parentName: group.parentName,
-      maxItems: group.maxItems,
-      options: group.options.map((option) => ({
-        id: option.id,
-        name: option.name,
-        imageUrl: option.imageUrl,
-      })),
-    }));
+    if (!personalizeDirty && savedPreview.length > 0) {
+      return savedPreview;
+    }
+    if (draftPreview.length > 0) {
+      return draftPreview;
+    }
+    return savedPreview;
   }, [selected, personalizeDirty, personalizeDraft]);
 
   const saveAllConfiguration = async () => {
@@ -945,26 +1047,31 @@ export function RecommendationsTab({
 
       let savedPersonalize: PersonalizeGroupRow[] | undefined;
       if (hasPersonalize) {
-        const personalizeRes = await axios.put<{ data: PersonalizeGroupRow[] }>(
-          `/api/restaurant/menu/items/${selected.id}/personalize`,
-          {
-            groups: personalizeDraft.map((group, groupIndex) => ({
-              id: group.id,
-              parentName: group.parentName.trim(),
-              maxItems: group.maxItems,
-              sortOrder: group.sortOrder ?? groupIndex,
-              options: group.options
-                .filter((option) => option.name.trim())
-                .map((option, optionIndex) => ({
-                  id: option.id,
-                  name: option.name.trim(),
-                  imageUrl: option.imageUrl?.trim() || '',
-                  sortOrder: option.sortOrder ?? optionIndex,
-                })),
-            })),
-          }
-        );
-        savedPersonalize = personalizeRes.data.data;
+        setSavingPersonalize(true);
+        try {
+          const personalizeRes = await axios.put<{ data: PersonalizeGroupRow[] }>(
+            `/api/restaurant/menu/items/${selected.id}/personalize`,
+            {
+              groups: personalizeDraft.map((group, groupIndex) => ({
+                id: group.id,
+                parentName: group.parentName.trim(),
+                maxItems: group.maxItems,
+                sortOrder: group.sortOrder ?? groupIndex,
+                options: group.options
+                  .filter((option) => option.name.trim())
+                  .map((option, optionIndex) => ({
+                    id: option.id,
+                    name: option.name.trim(),
+                    imageUrl: option.imageUrl?.trim() || '',
+                    sortOrder: option.sortOrder ?? optionIndex,
+                  })),
+              })),
+            }
+          );
+          savedPersonalize = personalizeRes.data.data;
+        } finally {
+          setSavingPersonalize(false);
+        }
       }
 
       updateSelectedItem((item) => ({
@@ -1429,7 +1536,8 @@ export function RecommendationsTab({
                 setPersonalizeDraft(groups);
                 setPersonalizeDirty(true);
               }}
-              savingPersonalize={savingPersonalize}
+              savingPersonalize={savingPersonalize || savingAll}
+              loadingPersonalize={loadingPersonalize}
               onSavePersonalize={() => void savePersonalize()}
               formResetKeys={formResetKeys}
             />
@@ -1464,6 +1572,7 @@ export function RecommendationsTab({
             deletingRuleId={deletingRuleId}
             deletingRule={deletingRule}
             savingAll={savingAll}
+            loadingPersonalize={loadingPersonalize}
             personalizePreviewGroups={personalizePreviewGroups}
             previewPersonalizeByGroup={previewPersonalizeByGroup}
             onPersonalizePreviewChange={(groupId, ids) =>
@@ -1493,7 +1602,7 @@ export function RecommendationsTab({
       <SaveConfirmation
         open={saveAllConfirmOpen}
         title="Save all configuration"
-        description="Save every configured recommendation section and associated products for this product in one step?"
+        description="Save every configured recommendation section, personalize items, and associated products for this product in one step?"
         itemName={selected?.name || 'Selected product'}
         loading={savingAll}
         onConfirm={() => {

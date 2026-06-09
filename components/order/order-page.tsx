@@ -30,11 +30,13 @@ import {
   inferHostSubdomainForMenu,
 } from '@/lib/customer-menu-client';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
+import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import {
   cartLineTitle,
   cartModifierSelectionNames,
+  cartPersonalizeSelectionNames,
 } from '@/lib/cart-line-display';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { setUiLanguage } from '@/lib/i18n/client';
@@ -616,16 +618,11 @@ export default function OrderPageClient({
     }
   };
 
-  const hasRequiredAddons = (p: CustomerMenuProduct) =>
-    p.attributeGroups.some((g) => g.required);
-  const hasVariations = (p: CustomerMenuProduct) =>
-    (p.variations?.length ?? 0) > 0;
-
   const resolveCatalogProduct = (ref: { id: string }) =>
     products.find((p) => p.id === ref.id) ?? null;
 
   const proceedWithProduct = (p: CustomerMenuProduct) => {
-    if (hasRequiredAddons(p) || hasVariations(p)) {
+    if (productNeedsCustomizeDialog(p)) {
       openCustomizeForProduct(p);
     } else {
       addToCart(p, []);
@@ -876,6 +873,9 @@ export default function OrderPageClient({
                   {(() => {
                     const isCustomized =
                       Boolean(line.variationId) || line.modifiers.length > 0;
+                    const personalizeNames = cartPersonalizeSelectionNames(
+                      line.modifiers
+                    );
                     const addonNames = cartModifierSelectionNames(
                       line.modifiers
                     );
@@ -884,6 +884,18 @@ export default function OrderPageClient({
                         <p className="truncate font-medium">
                           {cartLineTitle(line.productName, line.variationName)}
                         </p>
+                        {personalizeNames.length > 0 ? (
+                          <div className="mt-1 space-y-0.5">
+                            {personalizeNames.map((name, index) => (
+                              <p
+                                key={`${line.lineId}-personalize-${index}`}
+                                className="truncate text-xs font-medium text-foreground/90"
+                              >
+                                {name}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
                         {addonNames.length > 0 ? (
                           <div className="mt-1 space-y-0.5">
                             {addonNames.map((name, index) => (
@@ -1221,7 +1233,7 @@ export default function OrderPageClient({
                             <ProductCard
                               key={product.id}
                               product={product}
-                              showCustomizeIndicator={hasRequiredAddons(
+                              showCustomizeIndicator={productNeedsCustomizeDialog(
                                 product
                               )}
                               onAdd={() => handleProductSelect(product)}

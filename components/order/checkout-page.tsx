@@ -12,6 +12,7 @@ import type { OrderInfo } from '@/components/order/order-types';
 import {
   cartLineTitle,
   cartModifierSelectionNames,
+  cartPersonalizeSelectionNames,
 } from '@/lib/cart-line-display';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { submitCustomerOrder } from '@/lib/offline/submit-order';
@@ -488,6 +489,9 @@ export default function CheckoutPageClient({
               <CardContent>
                 <div className="space-y-3">
                   {cart.map((line) => {
+                    const personalizeNames = cartPersonalizeSelectionNames(
+                      line.modifiers
+                    );
                     const addonNames = cartModifierSelectionNames(line.modifiers);
                     return (
                     <div key={line.lineId} className="space-y-1">
@@ -497,6 +501,18 @@ export default function CheckoutPageClient({
                         </p>
                         <p>€{lineTotal(line).toFixed(2)}</p>
                       </div>
+                      {personalizeNames.length > 0 ? (
+                        <div className="space-y-0.5">
+                          {personalizeNames.map((name, index) => (
+                            <p
+                              key={`${line.lineId}-personalize-${index}`}
+                              className="text-xs font-medium text-foreground/90"
+                            >
+                              {name}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
                       {addonNames.length > 0 ? (
                         <div className="space-y-0.5">
                           {addonNames.map((name, index) => (

@@ -93,10 +93,12 @@ import { Cross2Icon } from '@radix-ui/react-icons';
 import {
   cartLineTitle,
   cartModifierSelectionNames,
+  cartPersonalizeSelectionNames,
 } from '@/lib/cart-line-display';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
+import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 
 export type OrderMode = 'new' | 'tables' | 'delivery' | 'takeaway' | 'queue';
 
@@ -314,10 +316,6 @@ function posCartLineDisplayName(line: CartLine) {
   return `${base} (${addonNames.join(', ')})`;
 }
 
-function hasRequiredAddons(p: PosMenuProduct) {
-  return p.attributeGroups.some((g) => g.required);
-}
-
 function normalizeCartLine(
   raw: Partial<CartLine> & { productId?: string; name?: string }
 ): CartLine {
@@ -367,12 +365,25 @@ function PosCartLineSummary({
   titleClassName?: string;
   subItemClassName?: string;
 }) {
+  const personalizeNames = cartPersonalizeSelectionNames(line.modifiers);
   const addonNames = cartModifierSelectionNames(line.modifiers);
   return (
     <>
       <p className={titleClassName}>
         {cartLineTitle(line.productName, line.variationName)}
       </p>
+      {personalizeNames.length > 0 ? (
+        <div className="mt-1 space-y-0.5">
+          {personalizeNames.map((name, index) => (
+            <p
+              key={`${line.lineId}-personalize-${index}`}
+              className="text-xs font-medium text-foreground/90"
+            >
+              {name}
+            </p>
+          ))}
+        </div>
+      ) : null}
       {addonNames.length > 0 ? (
         <div className="mt-1 space-y-0.5">
           {addonNames.map((name, index) => (
@@ -973,8 +984,7 @@ export function PosScreen() {
     products.find((p) => p.id === ref.id) ?? null;
 
   const proceedWithProduct = (p: PosMenuProduct) => {
-    const hasVariations = (p.variations?.length ?? 0) > 0;
-    if (hasRequiredAddons(p) || hasVariations) openCustomize(p);
+    if (productNeedsCustomizeDialog(p)) openCustomize(p);
     else addToCart(p, []);
   };
 

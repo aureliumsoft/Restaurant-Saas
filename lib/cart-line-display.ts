@@ -1,19 +1,39 @@
+import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
+
 export type CartModifierSelectionLike = {
-  selections: { name: string }[];
+  selections: { name: string; menuItemId?: string }[];
 };
 
-/** Addon / recommendation names only — no category group labels. */
-export function cartModifierSelectionNames(
-  modifiers: CartModifierSelectionLike[]
+function selectionNames(
+  modifiers: CartModifierSelectionLike[],
+  personalize: boolean
 ): string[] {
   const names: string[] = [];
   for (const mod of modifiers) {
     for (const sel of mod.selections) {
+      const isPersonalize = sel.menuItemId
+        ? isPersonalizeModifierMenuItemId(sel.menuItemId)
+        : false;
+      if (isPersonalize !== personalize) continue;
       const n = sel.name.trim();
       if (n.length > 0) names.push(n);
     }
   }
   return names;
+}
+
+/** Personalize selections — shown below the product name. */
+export function cartPersonalizeSelectionNames(
+  modifiers: CartModifierSelectionLike[]
+): string[] {
+  return selectionNames(modifiers, true);
+}
+
+/** Addon / recommendation names only — no personalize, no category group labels. */
+export function cartModifierSelectionNames(
+  modifiers: CartModifierSelectionLike[]
+): string[] {
+  return selectionNames(modifiers, false);
 }
 
 export function cartLineTitle(

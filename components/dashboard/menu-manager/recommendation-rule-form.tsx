@@ -15,6 +15,13 @@ import {
 import { menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
 import { Badge } from '@/components/ui/badge';
 
+import {
+  DEFAULT_CATEGORY_MIN_MAX,
+  DEFAULT_FREE_QUANTITY,
+  defaultVariationLimitsForVariations,
+  type CategoryMinMaxDraft,
+  variationLabel,
+} from '@/lib/menu/recommendation-category-limits';
 import type { RecommendationFormVariant } from '@/lib/menu/recommendation-preview-groups';
 
 import type { MenuCategoryRow, MenuItemRow } from './types';
@@ -36,11 +43,18 @@ export type RecommendationRuleDraft = {
   productCategoryIds: string[];
   linkedProductId: string;
   linkedProductIds: string[];
-  minItems: number;
-  maxItems: number;
-  freeQuantity: number;
-  variationLimits: VariationLimitDraft[];
-  useVariationPricing: boolean;
+  /** categoryId → free quantity (QUANTITY mode) */
+  categoryFreeQuantity: Record<string, number>;
+  /** categoryId → min/max when base product has no variations */
+  categoryMinMax: Record<string, CategoryMinMaxDraft>;
+  /** categoryId → min/max per base-product variation */
+  categoryVariationLimits: Record<string, VariationLimitDraft[]>;
+  /** linkedProductId → free quantity (product MULTIPLE + QUANTITY) */
+  productFreeQuantity: Record<string, number>;
+  /** linkedProductId → min/max */
+  productMinMax: Record<string, CategoryMinMaxDraft>;
+  /** categoryId → price add-ons by product variation */
+  categoryVariationPricing: Record<string, boolean>;
 };
 
 type Props = {
@@ -95,11 +109,24 @@ export function RecommendationRuleForm({
   const [productCategoryIds, setProductCategoryIds] = useState<string[]>([]);
   const [linkedProductId, setLinkedProductId] = useState('');
   const [linkedProductIds, setLinkedProductIds] = useState<string[]>([]);
-  const [minItems, setMinItems] = useState(1);
-  const [maxItems, setMaxItems] = useState(3);
-  const [freeQuantity, setFreeQuantity] = useState(1);
-  const [variationLimits, setVariationLimits] = useState<VariationLimitDraft[]>([]);
-  const [useVariationPricing, setUseVariationPricing] = useState(false);
+  const [categoryFreeQuantity, setCategoryFreeQuantity] = useState<
+    Record<string, number>
+  >({});
+  const [categoryMinMax, setCategoryMinMax] = useState<
+    Record<string, CategoryMinMaxDraft>
+  >({});
+  const [categoryVariationLimits, setCategoryVariationLimits] = useState<
+    Record<string, VariationLimitDraft[]>
+  >({});
+  const [productFreeQuantity, setProductFreeQuantity] = useState<
+    Record<string, number>
+  >({});
+  const [productMinMax, setProductMinMax] = useState<
+    Record<string, CategoryMinMaxDraft>
+  >({});
+  const [categoryVariationPricing, setCategoryVariationPricing] = useState<
+    Record<string, boolean>
+  >({});
 
   const baseVariations = selected.variations ?? [];
 
@@ -182,6 +209,67 @@ export function RecommendationRuleForm({
     sourceType === 'CATEGORY' &&
     baseVariations.length > 0;
 
+  const initCategoryLimitDefaults = (categoryId: string) => {
+    setCategoryFreeQuantity((prev) => ({
+      ...prev,
+      [categoryId]: prev[categoryId] ?? DEFAULT_FREE_QUANTITY,
+    }));
+    setCategoryMinMax((prev) => ({
+      ...prev,
+      [categoryId]: prev[categoryId] ?? { ...DEFAULT_CATEGORY_MIN_MAX },
+    }));
+    if (baseVariations.length > 0) {
+      setCategoryVariationLimits((prev) => ({
+        ...prev,
+        [categoryId]:
+          prev[categoryId] ??
+          defaultVariationLimitsForVariations(baseVariations),
+      }));
+    }
+  };
+
+  const clearCategoryLimitDefaults = (categoryId: string) => {
+    setCategoryFreeQuantity((prev) => {
+      const next = { ...prev };
+      delete next[categoryId];
+      return next;
+    });
+    setCategoryMinMax((prev) => {
+      const next = { ...prev };
+      delete next[categoryId];
+      return next;
+    });
+    setCategoryVariationLimits((prev) => {
+      const next = { ...prev };
+      delete next[categoryId];
+      return next;
+    });
+  };
+
+  const initProductLimitDefaults = (productId: string) => {
+    setProductFreeQuantity((prev) => ({
+      ...prev,
+      [productId]: prev[productId] ?? DEFAULT_FREE_QUANTITY,
+    }));
+    setProductMinMax((prev) => ({
+      ...prev,
+      [productId]: prev[productId] ?? { ...DEFAULT_CATEGORY_MIN_MAX },
+    }));
+  };
+
+  const clearProductLimitDefaults = (productId: string) => {
+    setProductFreeQuantity((prev) => {
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+    setProductMinMax((prev) => {
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+  };
+
   const toggleCategory = (id: string) => {
     setRuleCategoryIds((prev) => {
       if (prev.includes(id)) {
@@ -190,8 +278,15 @@ export function RecommendationRuleForm({
           delete next[id];
           return next;
         });
+        setCategoryVariationPricing((prevPricing) => {
+          const next = { ...prevPricing };
+          delete next[id];
+          return next;
+        });
+        clearCategoryLimitDefaults(id);
         return prev.filter((x) => x !== id);
       }
+      initCategoryLimitDefaults(id);
       return [...prev, id];
     });
   };
@@ -208,15 +303,21 @@ export function RecommendationRuleForm({
     });
   };
 
-  const initVariationLimits = () => {
-    setVariationLimits(
-      baseVariations.map((v) => ({
-        variationId: v.id,
-        minItems: 1,
-        maxItems: 3,
-      }))
-    );
+  const setCategoryVariationPricingEnabled = (
+    categoryId: string,
+    enabled: boolean
+  ) => {
+    setCategoryVariationPricing((prev) => ({
+      ...prev,
+      [categoryId]: enabled,
+    }));
   };
+
+  const selectedCategories = useMemo(
+    () =>
+      localCategories.filter((c) => ruleCategoryIds.includes(c.id)),
+    [localCategories, ruleCategoryIds]
+  );
 
   const currentDraft = useMemo(
     (): RecommendationRuleDraft => ({
@@ -229,11 +330,12 @@ export function RecommendationRuleForm({
       productCategoryIds,
       linkedProductId,
       linkedProductIds,
-      minItems,
-      maxItems,
-      freeQuantity,
-      variationLimits,
-      useVariationPricing,
+      categoryFreeQuantity,
+      categoryMinMax,
+      categoryVariationLimits,
+      productFreeQuantity,
+      productMinMax,
+      categoryVariationPricing,
     }),
     [
       sourceType,
@@ -245,11 +347,12 @@ export function RecommendationRuleForm({
       productCategoryIds,
       linkedProductId,
       linkedProductIds,
-      minItems,
-      maxItems,
-      freeQuantity,
-      variationLimits,
-      useVariationPricing,
+      categoryFreeQuantity,
+      categoryMinMax,
+      categoryVariationLimits,
+      productFreeQuantity,
+      productMinMax,
+      categoryVariationPricing,
     ]
   );
 
@@ -265,11 +368,12 @@ export function RecommendationRuleForm({
     setProductCategoryIds([]);
     setLinkedProductId('');
     setLinkedProductIds([]);
-    setMinItems(1);
-    setMaxItems(3);
-    setFreeQuantity(1);
-    setVariationLimits([]);
-    setUseVariationPricing(false);
+    setCategoryFreeQuantity({});
+    setCategoryMinMax({});
+    setCategoryVariationLimits({});
+    setProductFreeQuantity({});
+    setProductMinMax({});
+    setCategoryVariationPricing({});
     lastDraftKeyRef.current = '';
   }, [resetKey]);
 
@@ -281,9 +385,14 @@ export function RecommendationRuleForm({
   }, [currentDraft]);
 
   const toggleLinkedProduct = (id: string) => {
-    setLinkedProductIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    setLinkedProductIds((prev) => {
+      if (prev.includes(id)) {
+        clearProductLimitDefaults(id);
+        return prev.filter((x) => x !== id);
+      }
+      initProductLimitDefaults(id);
+      return [...prev, id];
+    });
   };
 
   return (
@@ -313,27 +422,47 @@ export function RecommendationRuleForm({
               </button>
             ))}
           </div>
-          {multipleMode === 'QUANTITY' ? (
-            <div className="grid gap-2">
-              <Label htmlFor="free-qty">Free quantity</Label>
-              <Input
-                id="free-qty"
-                type="number"
-                min={0}
-                className="h-10"
-                value={freeQuantity}
-                onChange={(e) =>
-                  setFreeQuantity(
-                    Math.max(0, Number.parseInt(e.target.value, 10) || 0)
-                  )
-                }
-              />
-              <p className="text-xs text-muted-foreground">
-                First N units are free; extra units are charged (e.g. 1 free
-                topping, then paid).
-              </p>
+          {multipleMode === 'QUANTITY' &&
+          sourceType === 'CATEGORY' &&
+          selectedCategories.length > 0 ? (
+            <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+              <div>
+                <Label>Free quantity</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  First N units free per category; extra units are charged.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {selectedCategories.map((cat) => (
+                  <div
+                    key={`free-qty-${cat.id}`}
+                    className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]"
+                  >
+                    <span className="self-center text-sm font-medium">
+                      {cat.name}
+                    </span>
+                    <Input
+                      type="number"
+                      min={0}
+                      className="h-10"
+                      value={categoryFreeQuantity[cat.id] ?? DEFAULT_FREE_QUANTITY}
+                      onChange={(e) => {
+                        const val = Math.max(
+                          0,
+                          Number.parseInt(e.target.value, 10) || 0
+                        );
+                        setCategoryFreeQuantity((prev) => ({
+                          ...prev,
+                          [cat.id]: val,
+                        }));
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
+          
         </div>
       ) : null}
 
@@ -370,6 +499,8 @@ export function RecommendationRuleForm({
                 const checked = ruleCategoryIds.includes(cat.id);
                 const onMenu = isMenuCategoryShownInFront(cat);
                 const defaultId = categoryDefaults[cat.id];
+                const variationPricingEnabled =
+                  categoryVariationPricing[cat.id] ?? false;
                 return (
                   <div
                     key={cat.id}
@@ -457,6 +588,32 @@ export function RecommendationRuleForm({
                       <p className="mt-2 text-xs text-destructive">
                         Add products to this category first.
                       </p>
+                    ) : null}
+                    {checked &&
+                    baseVariations.length > 0 &&
+                    cat.items.length > 0 ? (
+                      <label className="mt-3 flex cursor-pointer items-start gap-2 border-t border-border pt-3">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                          checked={variationPricingEnabled}
+                          onChange={(e) =>
+                            setCategoryVariationPricingEnabled(
+                              cat.id,
+                              e.target.checked
+                            )
+                          }
+                        />
+                        <span className="text-xs">
+                          <span className="font-medium text-foreground">
+                            Price add-ons by product variation
+                          </span>
+                          <span className="mt-0.5 block text-muted-foreground">
+                            Use each add-on&apos;s variation rate when the guest
+                            picks Small, Medium, or Large on this product.
+                          </span>
+                        </span>
+                      </label>
                     ) : null}
                   </div>
                 );
@@ -644,112 +801,285 @@ export function RecommendationRuleForm({
         </div>
       )}
 
-      {selectionType === 'MULTIPLE' && !useVariationLimits ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-2">
-            <Label htmlFor="rec-min">Min items</Label>
-            <Input
-              id="rec-min"
-              type="number"
-              min={0}
-              className="h-10"
-              value={minItems}
-              onChange={(e) =>
-                setMinItems(Math.max(0, Number.parseInt(e.target.value, 10) || 0))
-              }
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="rec-max">Max items</Label>
-            <Input
-              id="rec-max"
-              type="number"
-              min={1}
-              className="h-10"
-              value={maxItems}
-              onChange={(e) =>
-                setMaxItems(Math.max(1, Number.parseInt(e.target.value, 10) || 1))
-              }
-            />
-          </div>
-        </div>
-      ) : null}
-
-      {useVariationLimits ? (
+      {selectionType === 'MULTIPLE' &&
+      sourceType === 'CATEGORY' &&
+      selectedCategories.length > 0 &&
+      !useVariationLimits ? (
         <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium">Min / max per variation</p>
-            {variationLimits.length === 0 ? (
-              <Button type="button" size="sm" variant="secondary" onClick={initVariationLimits}>
-                Set limits
-              </Button>
-            ) : null}
+          <div>
+            <p className="text-sm font-medium">Min / max</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Minimum and maximum selections per category.
+            </p>
           </div>
-          {variationLimits.map((row, index) => {
-            const v = baseVariations.find((x) => x.id === row.variationId);
-            const label = v?.title?.trim() || v?.name?.trim() || 'Variation';
-            return (
-              <div
-                key={row.variationId}
-                className="grid gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-[1fr_auto_auto]"
-              >
-                <span className="self-center text-sm font-medium">{label}</span>
-                <Input
-                  type="number"
-                  min={0}
-                  className="h-9"
-                  value={row.minItems}
-                  onChange={(e) => {
-                    const val = Math.max(0, Number.parseInt(e.target.value, 10) || 0);
-                    setVariationLimits((prev) =>
-                      prev.map((r, i) =>
-                        i === index ? { ...r, minItems: val } : r
-                      )
-                    );
-                  }}
-                />
-                <Input
-                  type="number"
-                  min={1}
-                  className="h-9"
-                  value={row.maxItems}
-                  onChange={(e) => {
-                    const val = Math.max(1, Number.parseInt(e.target.value, 10) || 1);
-                    setVariationLimits((prev) =>
-                      prev.map((r, i) =>
-                        i === index ? { ...r, maxItems: val } : r
-                      )
-                    );
-                  }}
-                />
-              </div>
-            );
-          })}
-          <p className="text-xs text-muted-foreground">
-            Example: Small → min 1 max 2 meats; Large → min 2 max 4 meats.
-          </p>
+          <div className="space-y-2">
+            {selectedCategories.map((cat) => {
+              const limits =
+                categoryMinMax[cat.id] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
+              return (
+                <div
+                  key={`minmax-${cat.id}`}
+                  className="grid gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-[minmax(0,1fr)_5rem_5rem]"
+                >
+                  <span className="self-center text-sm font-medium">
+                    {cat.name}
+                  </span>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-9"
+                    aria-label={`${cat.name} minimum`}
+                    value={limits.minItems}
+                    onChange={(e) => {
+                      const val = Math.max(
+                        0,
+                        Number.parseInt(e.target.value, 10) || 0
+                      );
+                      setCategoryMinMax((prev) => ({
+                        ...prev,
+                        [cat.id]: {
+                          ...(prev[cat.id] ?? DEFAULT_CATEGORY_MIN_MAX),
+                          minItems: val,
+                        },
+                      }));
+                    }}
+                  />
+                  <Input
+                    type="number"
+                    min={1}
+                    className="h-9"
+                    aria-label={`${cat.name} maximum`}
+                    value={limits.maxItems}
+                    onChange={(e) => {
+                      const val = Math.max(
+                        1,
+                        Number.parseInt(e.target.value, 10) || 1
+                      );
+                      setCategoryMinMax((prev) => ({
+                        ...prev,
+                        [cat.id]: {
+                          ...(prev[cat.id] ?? DEFAULT_CATEGORY_MIN_MAX),
+                          maxItems: val,
+                        },
+                      }));
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 
-      {baseVariations.length > 0 && sourceType === 'CATEGORY' ? (
-        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={useVariationPricing}
-            onChange={(e) => setUseVariationPricing(e.target.checked)}
-          />
-          <span className="text-sm">
-            <span className="font-medium text-foreground">
-              Price add-ons by product variation
-            </span>
-            <span className="mt-1 block text-xs text-muted-foreground">
-              When the guest picks Small, Medium, or Large on this product, each
-              configuration item uses its matching variation rate when linked;
-              otherwise the item&apos;s normal price is shown.
-            </span>
-          </span>
-        </label>
+{multipleMode === 'QUANTITY' &&
+          sourceType === 'PRODUCT' &&
+          linkedProductIds.length > 0 ? (
+            <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+              <div>
+                <Label>Free quantity</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  First N units free per linked product.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {linkedProductIds.map((productId) => {
+                  const product = allProducts.find((p) => p.id === productId);
+                  if (!product) return null;
+                  return (
+                    <div
+                      key={`free-qty-product-${productId}`}
+                      className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]"
+                    >
+                      <span className="self-center text-sm font-medium">
+                        {product.name}
+                      </span>
+                      <Input
+                        type="number"
+                        min={0}
+                        className="h-10"
+                        value={
+                          productFreeQuantity[productId] ?? DEFAULT_FREE_QUANTITY
+                        }
+                        onChange={(e) => {
+                          const val = Math.max(
+                            0,
+                            Number.parseInt(e.target.value, 10) || 0
+                          );
+                          setProductFreeQuantity((prev) => ({
+                            ...prev,
+                            [productId]: val,
+                          }));
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+      {selectionType === 'MULTIPLE' &&
+      sourceType === 'PRODUCT' &&
+      linkedProductIds.length > 0 ? (
+        <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+          <div>
+            <p className="text-sm font-medium">Min / max</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Minimum and maximum selections per linked product.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {linkedProductIds.map((productId) => {
+              const product = allProducts.find((p) => p.id === productId);
+              if (!product) return null;
+              const limits =
+                productMinMax[productId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
+              return (
+                <div
+                  key={`minmax-product-${productId}`}
+                  className="grid gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-[minmax(0,1fr)_5rem_5rem]"
+                >
+                  <span className="self-center text-sm font-medium">
+                    {product.name}
+                  </span>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-9"
+                    aria-label={`${product.name} minimum`}
+                    value={limits.minItems}
+                    onChange={(e) => {
+                      const val = Math.max(
+                        0,
+                        Number.parseInt(e.target.value, 10) || 0
+                      );
+                      setProductMinMax((prev) => ({
+                        ...prev,
+                        [productId]: {
+                          ...(prev[productId] ?? DEFAULT_CATEGORY_MIN_MAX),
+                          minItems: val,
+                        },
+                      }));
+                    }}
+                  />
+                  <Input
+                    type="number"
+                    min={1}
+                    className="h-9"
+                    aria-label={`${product.name} maximum`}
+                    value={limits.maxItems}
+                    onChange={(e) => {
+                      const val = Math.max(
+                        1,
+                        Number.parseInt(e.target.value, 10) || 1
+                      );
+                      setProductMinMax((prev) => ({
+                        ...prev,
+                        [productId]: {
+                          ...(prev[productId] ?? DEFAULT_CATEGORY_MIN_MAX),
+                          maxItems: val,
+                        },
+                      }));
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {useVariationLimits && selectedCategories.length > 0 ? (
+        <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+          <div>
+            <p className="text-sm font-medium">Min / max</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Per category and base-product variation.
+            </p>
+          </div>
+          <div className="space-y-4">
+            {selectedCategories.map((cat) => {
+              const rows =
+                categoryVariationLimits[cat.id] ??
+                defaultVariationLimitsForVariations(baseVariations);
+              return (
+                <div key={`var-limits-${cat.id}`} className="space-y-2">
+                  <p className="text-sm font-semibold text-foreground">
+                    {cat.name}
+                  </p>
+                  {rows.map((row, index) => {
+                    const v = baseVariations.find(
+                      (x) => x.id === row.variationId
+                    );
+                    const label = v ? variationLabel(v) : 'Variation';
+                    return (
+                      <div
+                        key={`${cat.id}-${row.variationId}`}
+                        className="grid gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-[minmax(0,1fr)_5rem_5rem]"
+                      >
+                        <span className="self-center text-sm text-foreground">
+                          {label}
+                        </span>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="h-9"
+                          aria-label={`${cat.name} ${label} minimum`}
+                          value={row.minItems}
+                          onChange={(e) => {
+                            const val = Math.max(
+                              0,
+                              Number.parseInt(e.target.value, 10) || 0
+                            );
+                            setCategoryVariationLimits((prev) => {
+                              const current =
+                                prev[cat.id] ??
+                                defaultVariationLimitsForVariations(
+                                  baseVariations
+                                );
+                              return {
+                                ...prev,
+                                [cat.id]: current.map((r, i) =>
+                                  i === index ? { ...r, minItems: val } : r
+                                ),
+                              };
+                            });
+                          }}
+                        />
+                        <Input
+                          type="number"
+                          min={1}
+                          className="h-9"
+                          aria-label={`${cat.name} ${label} maximum`}
+                          value={row.maxItems}
+                          onChange={(e) => {
+                            const val = Math.max(
+                              1,
+                              Number.parseInt(e.target.value, 10) || 1
+                            );
+                            setCategoryVariationLimits((prev) => {
+                              const current =
+                                prev[cat.id] ??
+                                defaultVariationLimitsForVariations(
+                                  baseVariations
+                                );
+                              return {
+                                ...prev,
+                                [cat.id]: current.map((r, i) =>
+                                  i === index ? { ...r, maxItems: val } : r
+                                ),
+                              };
+                            });
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       ) : null}
 
       <Button

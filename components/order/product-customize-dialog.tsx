@@ -113,6 +113,7 @@ export type AttributeGroup = {
       restaurantVariationId?: string | null;
     }[];
     nestedAttributeGroups?: AttributeGroup[];
+    personalizeGroups?: PersonalizeGroup[];
   })[];
 };
 
@@ -254,6 +255,9 @@ export function ProductCustomizeDialog({
   onConfirm,
 }: Props) {
   const [selectedByGroup, setSelectedByGroup] = useState<
+    Record<string, string[]>
+  >({});
+  const [selectedPersonalizeByGroup, setSelectedPersonalizeByGroup] = useState<
     Record<string, string[]>
   >({});
   const [selectedVariationId, setSelectedVariationId] = useState('');
@@ -570,16 +574,6 @@ export function ProductCustomizeDialog({
           continue;
         }
         if (
-          g.useVariationPricing &&
-          (selectedOption.nestedAttributeGroups?.length ?? 0) > 0
-        ) {
-          return {
-            kind: 'category-option-sheet',
-            groupId: g.id,
-            optionId: selectedOption.menuItemId,
-          };
-        }
-        if (
           optionNeedsManualVariationPicker(selectedOption, g) &&
           !nextNested[key]
         ) {
@@ -684,6 +678,9 @@ export function ProductCustomizeDialog({
     const init: Record<string, string[]> = {};
     for (const g of categoryGroups) init[g.id] = [];
     setSelectedByGroup(init);
+    const personalizeInit: Record<string, string[]> = {};
+    for (const g of personalizeGroups) personalizeInit[g.id] = [];
+    setSelectedPersonalizeByGroup(personalizeInit);
     setSelectedVariationId('');
     setSelectedNestedVariationByOption({});
     setQuantity(1);
@@ -714,10 +711,11 @@ export function ProductCustomizeDialog({
         optionNestedConfigs: {},
       }
     );
-  }, [open, categoryGroups, productRecommendationGroups]);
+  }, [open, categoryGroups, productRecommendationGroups, personalizeGroups]);
 
   const requiredMissing = useMemo(() => {
     const missingProductRecs = visibleProductRecommendationGroups.some((g) => {
+      if (!g.required) return false;
       if (!recommendedProductNeedsSheet(g)) return false;
       return !nestedConfigs[g.id];
     });
@@ -880,7 +878,7 @@ export function ProductCustomizeDialog({
   const togglePersonalizeOption = (groupId: string, optionId: string) => {
     const group = personalizeGroups.find((g) => g.id === groupId);
     if (!group) return;
-    setSelectedByGroup((prev) => {
+    setSelectedPersonalizeByGroup((prev) => {
       const cur = prev[groupId] ?? [];
       if (cur.includes(optionId)) {
         return {
@@ -941,14 +939,17 @@ export function ProductCustomizeDialog({
     }
 
     mods.push(
-      ...buildPersonalizeModifierSelections(personalizeGroups, selectedByGroup)
+      ...buildPersonalizeModifierSelections(
+        personalizeGroups,
+        selectedPersonalizeByGroup
+      )
     );
 
     for (const g of visibleProductRecommendationGroups) {
       const item = g.items[0];
       if (!item) continue;
       const config = nestedConfigs[g.id];
-      if (!config && recommendedProductNeedsSheet(g)) continue;
+      if (!config && g.required && recommendedProductNeedsSheet(g)) continue;
 
       const pv = (item.variations ?? []).find(
         (v) => v.id === config?.productVariationId
@@ -1183,18 +1184,14 @@ export function ProductCustomizeDialog({
     setActiveCategoryOption(null);
     setActiveProductGroupId(null);
     if (group.useVariationPricing) {
-      if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
-        setActiveProductGroupId(groupId);
-      }
+      setActiveProductGroupId(groupId);
       return;
     }
     if (optionNeedsManualVariationPicker(item, group)) {
       setPicker({ kind: 'recommendation-product-variation', groupId });
       return;
     }
-    if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
-      setActiveProductGroupId(groupId);
-    }
+    setActiveProductGroupId(groupId);
   };
 
   const pickerEntries = useMemo(() => {
@@ -1261,22 +1258,7 @@ export function ProductCustomizeDialog({
             [group.id]: v.id,
           }));
           setPicker(null);
-          if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
-            setActiveProductGroupId(group.id);
-          } else {
-            applyNextPendingPicker(
-              selectedVariationId,
-              selectedByGroup,
-              selectedNestedVariationByOption,
-              {
-                ...productRecPickerContext(),
-                preselectedByGroup: {
-                  ...preselectedRecommendationVariationByGroup,
-                  [group.id]: v.id,
-                },
-              }
-            );
-          }
+          setActiveProductGroupId(group.id);
         },
         onIncrease: undefined,
         onDecrease: undefined,
@@ -1351,16 +1333,16 @@ export function ProductCustomizeDialog({
             group,
             parentVariation: baseProductVariationContext.parent,
           };
-          const needsNestedSheet =
-            (it.nestedAttributeGroups?.length ?? 0) > 0 &&
+          if (
+            recommendationOptionNeedsSheet(it, group) &&
             !isOptionConfigComplete(
               it,
               key,
               nextNestedVariations,
               cleared.configs,
               optionCtx
-            );
-          if (group.useVariationPricing && needsNestedSheet) {
+            )
+          ) {
             setPicker(null);
             setActiveCategoryOption({
               groupId: group.id,
@@ -1559,10 +1541,6 @@ export function ProductCustomizeDialog({
 
             <div className="relative flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-4">
-              <h3 className="mb-4 text-lg font-semibold tracking-tight text-primary md:text-xl">
-                Personalize your product
-              </h3>
-
               <div className="space-y-5">
                 {variations.length > 0 ? (
                   <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -1589,12 +1567,6 @@ export function ProductCustomizeDialog({
                     </button>
                   </section>
                 ) : null}
-
-                <PersonalizeOptionsSection
-                  groups={personalizeGroups}
-                  selectedByGroup={selectedByGroup}
-                  onToggle={togglePersonalizeOption}
-                />
 
                 {visibleProductRecommendationGroups.map((g) => {
                   const item = g.items[0];
@@ -1780,6 +1752,14 @@ export function ProductCustomizeDialog({
               );
             })
           )}
+
+                {personalizeGroups.length > 0 ? (
+                  <PersonalizeOptionsSection
+                    groups={personalizeGroups}
+                    selectedByGroup={selectedPersonalizeByGroup}
+                    onToggle={togglePersonalizeOption}
+                  />
+                ) : null}
         </div>
             </div>
 

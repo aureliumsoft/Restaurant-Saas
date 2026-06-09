@@ -57,6 +57,7 @@ type Props = {
   personalizeDraft: PersonalizeGroupDraft[];
   onPersonalizeDraftChange: (groups: PersonalizeGroupDraft[]) => void;
   savingPersonalize: boolean;
+  loadingPersonalize?: boolean;
   onSavePersonalize: () => void;
   formResetKeys: Record<RecommendationFormVariant, number>;
 };
@@ -133,6 +134,7 @@ export function RecommendationConfigSections({
   personalizeDraft,
   onPersonalizeDraftChange,
   savingPersonalize,
+  loadingPersonalize = false,
   onSavePersonalize,
   formResetKeys,
 }: Props) {
@@ -229,6 +231,7 @@ export function RecommendationConfigSections({
           groups={personalizeDraft}
           onChange={onPersonalizeDraftChange}
           saving={savingPersonalize}
+          loading={loadingPersonalize}
           onSave={onSavePersonalize}
         />
       </RecommendationConfigSectionShell>

@@ -46,6 +46,11 @@ import {
   productUnitPriceWithVariation,
 } from '@/lib/menu/recommendation-addon-price';
 
+import {
+  PersonalizeOptionsSection,
+  type PersonalizeGroup,
+} from '@/components/order/personalize-options-section';
+import { buildPersonalizeModifierSelections } from '@/lib/menu/personalize-modifiers';
 import type {
   AttributeGroup,
   MenuOption,
@@ -137,7 +142,9 @@ export type NestedRecommendationResult = {
   }[];
 };
 
-type ProductItem = AttributeGroup['items'][number];
+type ProductItem = AttributeGroup['items'][number] & {
+  personalizeGroups?: PersonalizeGroup[];
+};
 
 /** Depth-first ids of category sections currently visible in the sheet. */
 function collectVisibleCategoryGroupIds(
@@ -836,6 +843,9 @@ export function NestedRecommendationSheet({
   const [selectedByGroup, setSelectedByGroup] = useState<
     Record<string, string[]>
   >({});
+  const [selectedPersonalizeByGroup, setSelectedPersonalizeByGroup] = useState<
+    Record<string, string[]>
+  >({});
   const [selectedNestedVariationByOption, setSelectedNestedVariationByOption] =
     useState<Record<string, string>>({});
   const [optionNestedConfigs, setOptionNestedConfigs] = useState<
@@ -860,6 +870,14 @@ export function NestedRecommendationSheet({
   const [collapsedNestedGroupIds, setCollapsedNestedGroupIds] = useState<
     Set<string>
   >(() => new Set());
+
+  const personalizeGroups = useMemo(
+    () =>
+      (product.personalizeGroups ?? []).filter(
+        (group) => group.options.length > 0
+      ),
+    [product.personalizeGroups]
+  );
 
   const productRecommendationGroups = useMemo(
     () => attributeGroups.filter((g) => g.sourceType === 'PRODUCT'),
@@ -926,6 +944,11 @@ export function NestedRecommendationSheet({
       }
     }
     setSelectedByGroup(init);
+    const personalizeInit: Record<string, string[]> = {};
+    for (const g of product.personalizeGroups ?? []) {
+      personalizeInit[g.id] = [];
+    }
+    setSelectedPersonalizeByGroup(personalizeInit);
     setSelectedNestedVariationByOption({});
     setOptionNestedConfigs({});
     setProductGroupConfigs(initProductConfigs);
@@ -940,6 +963,7 @@ export function NestedRecommendationSheet({
     open,
     attributeGroups,
     initialProductVariationId,
+    product.personalizeGroups,
     productRecommendationGroups,
   ]);
 
@@ -1077,18 +1101,14 @@ export function NestedRecommendationSheet({
       if (!group || !item) return;
       setActiveProductGroupId(null);
       if (group.useVariationPricing) {
-        if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
-          setActiveProductGroupId(groupId);
-        }
+        setActiveProductGroupId(groupId);
         return;
       }
       if (optionNeedsManualVariationPicker(item, group)) {
         setProductRecVariationPickerGroupId(groupId);
         return;
       }
-      if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
-        setActiveProductGroupId(groupId);
-      }
+      setActiveProductGroupId(groupId);
     },
     [productRecommendationGroups]
   );
@@ -1513,11 +1533,34 @@ export function NestedRecommendationSheet({
       }
     }
 
+    mods.push(
+      ...buildPersonalizeModifierSelections(
+        personalizeGroups,
+        selectedPersonalizeByGroup
+      )
+    );
+
     onDone({
       productVariationId,
       selectedByGroup,
       selectedNestedVariationByOption,
       mods,
+    });
+  };
+
+  const togglePersonalizeOption = (groupId: string, optionId: string) => {
+    const group = personalizeGroups.find((g) => g.id === groupId);
+    if (!group) return;
+    setSelectedPersonalizeByGroup((prev) => {
+      const cur = prev[groupId] ?? [];
+      if (cur.includes(optionId)) {
+        return {
+          ...prev,
+          [groupId]: cur.filter((id) => id !== optionId),
+        };
+      }
+      if (cur.length >= group.maxItems) return prev;
+      return { ...prev, [groupId]: [...cur, optionId] };
     });
   };
 
@@ -1642,6 +1685,14 @@ export function NestedRecommendationSheet({
             onExpandNestedForGroup={expandNestedForGroup}
             advanceAfterGroupComplete={advanceAfterGroupComplete}
           />
+
+          {personalizeGroups.length > 0 ? (
+            <PersonalizeOptionsSection
+              groups={personalizeGroups}
+              selectedByGroup={selectedPersonalizeByGroup}
+              onToggle={togglePersonalizeOption}
+            />
+          ) : null}
         </div>
       </div>
 
@@ -1773,14 +1824,7 @@ export function NestedRecommendationSheet({
                         [groupId]: v.id,
                       }));
                       setProductRecVariationPickerGroupId(null);
-                      if (
-                        (productRecVariationTarget.item.nestedAttributeGroups
-                          ?.length ?? 0) > 0
-                      ) {
-                        setActiveProductGroupId(groupId);
-                      } else {
-                        queueMicrotask(() => runNestedPendingFlows());
-                      }
+                      setActiveProductGroupId(groupId);
                     }}
                   >
                     <OptionThumbnail

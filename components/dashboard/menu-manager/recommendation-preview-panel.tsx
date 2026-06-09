@@ -65,6 +65,7 @@ type Props = {
   deletingRuleId?: string | null;
   deletingRule?: boolean;
   savingAll?: boolean;
+  loadingPersonalize?: boolean;
   saveAllDisabled?: boolean;
   onSaveAll?: () => void;
   personalizePreviewGroups?: Array<{
@@ -88,6 +89,7 @@ export function RecommendationPreviewPanel({
   deletingRuleId,
   deletingRule,
   savingAll,
+  loadingPersonalize = false,
   saveAllDisabled,
   onSaveAll,
   personalizePreviewGroups = [],
@@ -154,38 +156,6 @@ export function RecommendationPreviewPanel({
         </div>
       </div>
 
-      {personalizePreviewGroups.length > 0 ? (
-        <div className="space-y-3">
-          <div>
-            <h4 className="text-sm font-semibold text-foreground">
-              Personalize items
-            </h4>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Photo and name only — multiple selection up to the maximum. No
-              price change.
-            </p>
-          </div>
-          <PersonalizeOptionsSection
-            groups={personalizePreviewGroups}
-            selectedByGroup={previewPersonalizeByGroup}
-            onToggle={(groupId, optionId) => {
-              if (!onPersonalizePreviewChange) return;
-              const group = personalizePreviewGroups.find(
-                (g) => g.id === groupId
-              );
-              if (!group) return;
-              const current = previewPersonalizeByGroup[groupId] ?? [];
-              const next = current.includes(optionId)
-                ? current.filter((id) => id !== optionId)
-                : current.length >= group.maxItems
-                  ? current
-                  : [...current, optionId];
-              onPersonalizePreviewChange(groupId, next);
-            }}
-          />
-        </div>
-      ) : null}
-
       <div>
         <h4 className="text-sm font-semibold text-foreground">
           Configuration groups
@@ -223,6 +193,34 @@ export function RecommendationPreviewPanel({
           ))}
         </div>
       )}
+
+      {loadingPersonalize ? (
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading personalize items…
+        </div>
+      ) : personalizePreviewGroups.length > 0 ? (
+        <div className="space-y-3 border-t border-border pt-4">
+          <PersonalizeOptionsSection
+            groups={personalizePreviewGroups}
+            selectedByGroup={previewPersonalizeByGroup}
+            onToggle={(groupId, optionId) => {
+              if (!onPersonalizePreviewChange) return;
+              const group = personalizePreviewGroups.find(
+                (g) => g.id === groupId
+              );
+              if (!group) return;
+              const current = previewPersonalizeByGroup[groupId] ?? [];
+              const next = current.includes(optionId)
+                ? current.filter((id) => id !== optionId)
+                : current.length >= group.maxItems
+                  ? current
+                  : [...current, optionId];
+              onPersonalizePreviewChange(groupId, next);
+            }}
+          />
+        </div>
+      ) : null}
 
       {offeredItems.length > 0 ? (
         <div className="space-y-2 border-t border-border pt-4">

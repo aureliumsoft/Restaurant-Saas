@@ -1,3 +1,8 @@
+import {
+  categoryUsesVariationLimits,
+  DEFAULT_CATEGORY_MIN_MAX,
+  DEFAULT_FREE_QUANTITY,
+} from '@/lib/menu/recommendation-category-limits';
 import { enrichAttributeGroupSource } from '@/lib/menu/product-recommendation-pool';
 import { mapAttributeGroupItems } from '@/lib/menu/map-attribute-group-items';
 
@@ -103,6 +108,14 @@ export function buildDraftPreviewGroups(
       const defaultItem = draft.categoryDefaults[catId]
         ? cat.items.find((i) => i.id === draft.categoryDefaults[catId])
         : null;
+      const catMinMax =
+        draft.categoryMinMax[catId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
+      const catVariationLimits = draft.categoryVariationLimits[catId];
+      const useCatVariationLimits = categoryUsesVariationLimits(
+        (baseProduct.variations?.length ?? 0),
+        catVariationLimits
+      );
+
       out.push({
         id: `draft-${variant}-${catId}`,
         draftKey: `${variant}-${catId}`,
@@ -111,10 +124,13 @@ export function buildDraftPreviewGroups(
         selectionType: draft.selectionType,
         sourceType: 'CATEGORY',
         multipleMode: draft.multipleMode,
-        freeQuantity: draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
+        freeQuantity:
+          draft.multipleMode === 'QUANTITY'
+            ? (draft.categoryFreeQuantity[catId] ?? DEFAULT_FREE_QUANTITY)
+            : null,
         required: draft.required,
-        minItems: draft.minItems,
-        maxItems: draft.maxItems,
+        minItems: useCatVariationLimits ? null : catMinMax.minItems,
+        maxItems: useCatVariationLimits ? null : catMinMax.maxItems,
         sortOrder: 9999,
         linkedCategory: { id: cat.id, name: cat.name },
         defaultLinkedMenuItemId: draft.categoryDefaults[catId] ?? null,
@@ -126,8 +142,8 @@ export function buildDraftPreviewGroups(
               salePrice: defaultItem.salePrice,
             }
           : null,
-        variationLimits: draft.variationLimits,
-        useVariationPricing: draft.useVariationPricing,
+        variationLimits: useCatVariationLimits ? catVariationLimits : undefined,
+        useVariationPricing: draft.categoryVariationPricing[catId] ?? false,
       });
     }
   };
@@ -142,6 +158,8 @@ export function buildDraftPreviewGroups(
     const catNames = localCategories
       .filter((c) => draft.productCategoryIds.includes(c.id))
       .map((c) => c.name);
+    const productMinMax =
+      draft.productMinMax[productId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
     out.push({
       id: `draft-${variant}-${productId}`,
       draftKey: `${variant}-${productId}`,
@@ -150,10 +168,13 @@ export function buildDraftPreviewGroups(
       selectionType: draft.selectionType,
       sourceType: 'PRODUCT',
       multipleMode: draft.multipleMode,
-      freeQuantity: draft.multipleMode === 'QUANTITY' ? draft.freeQuantity : null,
+      freeQuantity:
+        draft.multipleMode === 'QUANTITY'
+          ? (draft.productFreeQuantity[productId] ?? DEFAULT_FREE_QUANTITY)
+          : null,
       required: draft.required,
-      minItems: draft.minItems,
-      maxItems: draft.maxItems,
+      minItems: productMinMax.minItems,
+      maxItems: productMinMax.maxItems,
       sortOrder: 9999,
       linkedProduct: {
         id: product.id,

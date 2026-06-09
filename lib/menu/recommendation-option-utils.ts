@@ -2,6 +2,7 @@ import {
   matchItemVariationForParent,
   type ParentVariationContext,
 } from '@/lib/menu/configuration-variation-price';
+import { hasPersonalizeOptions } from '@/lib/menu/personalize-options';
 
 export type OptionConfigGroup = { useVariationPricing?: boolean };
 
@@ -60,13 +61,16 @@ export function recommendedProductNeedsSheet(group: {
   items: Array<{
     variations?: unknown[] | null;
     nestedAttributeGroups?: unknown[] | null;
+    personalizeGroups?: Array<{ options?: unknown[] }> | null;
   }>;
 }): boolean {
   const item = group.items[0];
   if (!item) return false;
   if (optionNeedsManualVariationPicker(item, group)) return true;
   if ((item.nestedAttributeGroups?.length ?? 0) > 0) return true;
-  return group.required ?? false;
+  if (hasPersonalizeOptions(item)) return true;
+  // Always surface linked products in the nested sheet (required or optional).
+  return true;
 }
 
 /** Category option needs nested sheet and/or manual variation picker. */
@@ -74,12 +78,14 @@ export function recommendationOptionNeedsSheet(
   item: {
     variations?: unknown[] | null;
     nestedAttributeGroups?: unknown[] | null;
+    personalizeGroups?: Array<{ options?: unknown[] }> | null;
   },
   group?: OptionConfigGroup
 ): boolean {
   return (
     optionNeedsManualVariationPicker(item, group) ||
-    (item.nestedAttributeGroups?.length ?? 0) > 0
+    (item.nestedAttributeGroups?.length ?? 0) > 0 ||
+    hasPersonalizeOptions(item)
   );
 }
 

@@ -33,6 +33,7 @@ import {
 } from '@/components/order/product-customize-dialog';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
+import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -55,6 +56,7 @@ import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute
 import {
   cartLineTitle,
   cartModifierSelectionNames,
+  cartPersonalizeSelectionNames,
 } from '@/lib/cart-line-display';
 import { cn } from '@/lib/utils';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
@@ -234,10 +236,6 @@ function lineUnitTotal(line: CartLine) {
 
 function lineTotal(line: CartLine) {
   return lineUnitTotal(line) * line.quantity;
-}
-
-function hasRequiredAddons(p: CustomerMenuProduct) {
-  return p.attributeGroups.some((g) => g.required);
 }
 
 function loadCart(slug: string, branchId: string): CartLine[] {
@@ -618,8 +616,7 @@ export function KioskApp({
     allProducts.find((p) => p.id === ref.id) ?? null;
 
   const proceedWithProduct = (p: CustomerMenuProduct) => {
-    const hasVariations = (p.variations?.length ?? 0) > 0;
-    if (hasRequiredAddons(p) || hasVariations) openCustomize(p);
+    if (productNeedsCustomizeDialog(p)) openCustomize(p);
     else addToCart(p, []);
   };
 
@@ -797,8 +794,7 @@ export function KioskApp({
     const unit = effectiveUnitPrice(p.price, p.salePrice);
     const showStrike =
       p.salePrice != null && p.salePrice > 0 && p.salePrice < p.price;
-    const isCustomizable =
-      hasRequiredAddons(p) || (p.variations?.length ?? 0) > 0;
+    const isCustomizable = productNeedsCustomizeDialog(p);
     const q = qtyOnMenu(p.id);
 
     return (
@@ -1255,6 +1251,9 @@ export function KioskApp({
               <>
                 <ul className="space-y-3">
                   {cart.map((line) => {
+                    const personalizeNames = cartPersonalizeSelectionNames(
+                      line.modifiers
+                    );
                     const addonNames = cartModifierSelectionNames(line.modifiers);
                     return (
                     <li
@@ -1275,6 +1274,18 @@ export function KioskApp({
                         <p className="font-medium leading-snug">
                           {cartLineTitle(line.productName, line.variationName)}
                         </p>
+                        {personalizeNames.length > 0 ? (
+                          <div className="mt-1 space-y-0.5">
+                            {personalizeNames.map((name, index) => (
+                              <p
+                                key={`${line.lineId}-personalize-${index}`}
+                                className="text-xs font-medium text-[#334155]"
+                              >
+                                {name}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
                         {addonNames.length > 0 ? (
                           <div className="mt-1 space-y-0.5">
                             {addonNames.map((name, index) => (
@@ -1448,6 +1459,9 @@ export function KioskApp({
               </p>
               <ul className="mb-3 max-h-48 space-y-2 overflow-y-auto text-sm">
                 {cart.map((line) => {
+                  const personalizeNames = cartPersonalizeSelectionNames(
+                    line.modifiers
+                  );
                   const addonNames = cartModifierSelectionNames(line.modifiers);
                   return (
                   <li
@@ -1462,6 +1476,18 @@ export function KioskApp({
                         €{formatMoney(lineTotal(line))}
                       </span>
                     </div>
+                    {personalizeNames.length > 0 ? (
+                      <div className="mt-0.5 space-y-0.5">
+                        {personalizeNames.map((name, index) => (
+                          <p
+                            key={`${line.lineId}-personalize-${index}`}
+                            className="text-xs font-medium text-[#334155]"
+                          >
+                            {name}
+                          </p>
+                        ))}
+                      </div>
+                    ) : null}
                     {addonNames.length > 0 ? (
                       <div className="mt-0.5 space-y-0.5">
                         {addonNames.map((name, index) => (

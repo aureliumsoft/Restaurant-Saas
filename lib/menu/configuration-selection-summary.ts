@@ -1,4 +1,5 @@
 import { buildModifierSelectionsForGroups } from '@/lib/menu/build-modifier-selections';
+import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
 import {
   effectiveMenuItemUnitPrice,
   productUnitPriceWithVariation,
@@ -18,6 +19,8 @@ import type { NestedRecommendationResult } from '@/components/order/nested-recom
 export type ConfigurationSummaryLine = {
   name: string;
   priceLabel: string | null;
+  /** Personalize picks — shown below the line name, not as indented sub-items. */
+  personalize: ConfigurationSummaryLine[];
   nested: ConfigurationSummaryLine[];
 };
 
@@ -26,20 +29,32 @@ export function formatSelectionPriceLabel(unitPrice: number): string | null {
   return `(+€${unitPrice.toFixed(2)})`;
 }
 
-function flattenModsToSummaryLines(
-  mods: { selections: MenuOption[] }[]
-): ConfigurationSummaryLine[] {
-  const out: ConfigurationSummaryLine[] = [];
+function selectionToSummaryLine(sel: MenuOption): ConfigurationSummaryLine {
+  return {
+    name: sel.name,
+    priceLabel: formatSelectionPriceLabel(sel.unitPrice),
+    personalize: [],
+    nested: [],
+  };
+}
+
+function splitModsToSummaryLines(mods: { selections: MenuOption[] }[]): {
+  personalize: ConfigurationSummaryLine[];
+  nested: ConfigurationSummaryLine[];
+} {
+  const personalize: ConfigurationSummaryLine[] = [];
+  const nested: ConfigurationSummaryLine[] = [];
   for (const mod of mods) {
     for (const sel of mod.selections) {
-      out.push({
-        name: sel.name,
-        priceLabel: formatSelectionPriceLabel(sel.unitPrice),
-        nested: [],
-      });
+      const line = selectionToSummaryLine(sel);
+      if (isPersonalizeModifierMenuItemId(sel.menuItemId)) {
+        personalize.push(line);
+      } else {
+        nested.push(line);
+      }
     }
   }
-  return out;
+  return { personalize, nested };
 }
 
 export function buildCategoryGroupSelectionSummary(
@@ -64,10 +79,13 @@ export function buildCategoryGroupSelectionSummary(
   for (const mod of mainMods) {
     for (const sel of mod.selections) {
       const key = optionSelectionKey(group.id, sel.menuItemId);
+      const nestedConfigMods = nestedOptionConfigs[key]?.mods ?? [];
+      const { personalize, nested } = splitModsToSummaryLines(nestedConfigMods);
       lines.push({
         name: sel.name,
         priceLabel: formatSelectionPriceLabel(sel.unitPrice),
-        nested: flattenModsToSummaryLines(nestedOptionConfigs[key]?.mods ?? []),
+        personalize,
+        nested,
       });
     }
   }
@@ -98,11 +116,14 @@ export function buildProductRecSelectionSummary(
   const pvName = pv?.name ?? pv?.title;
   const name = pvName ? `${item.name} (${pvName})` : item.name;
 
+  const { personalize, nested } = splitModsToSummaryLines(config?.mods ?? []);
+
   return [
     {
       name,
       priceLabel: formatSelectionPriceLabel(unit),
-      nested: flattenModsToSummaryLines(config?.mods ?? []),
+      personalize,
+      nested,
     },
   ];
 }

@@ -43,6 +43,18 @@ export function ConfigurationSelectSummary({ lines, placeholder }: Props) {
       {lines.map((line, index) => (
         <div key={`${line.name}-${index}`} className="min-w-0">
           <SummaryLine line={line} />
+          {line.personalize.length > 0 ? (
+            <div className="mt-0.5 space-y-0.5">
+              {line.personalize.map((personalizeLine, personalizeIndex) => (
+                <p
+                  key={`${personalizeLine.name}-${personalizeIndex}`}
+                  className="truncate text-sm font-medium text-foreground/90"
+                >
+                  {personalizeLine.name}
+                </p>
+              ))}
+            </div>
+          ) : null}
           {line.nested.length > 0 ? (
             <div className="mt-0.5 space-y-0.5 pl-1">
               {line.nested.map((nestedLine, nestedIndex) => (

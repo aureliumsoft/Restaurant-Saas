@@ -26,6 +26,7 @@ import {
 import {
   cartLineTitle,
   cartModifierSelectionNames,
+  cartPersonalizeSelectionNames,
 } from '@/lib/cart-line-display';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
@@ -496,6 +497,9 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
           <>
             <div className="mb-6 space-y-4">
               {cart.map((line) => {
+                const personalizeNames = cartPersonalizeSelectionNames(
+                  line.modifiers
+                );
                 const addonNames = cartModifierSelectionNames(line.modifiers);
                 return (
                 <Card key={line.lineId}>
@@ -512,6 +516,18 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                         <h3 className="font-semibold">
                           {cartLineTitle(line.productName, line.variationName)}
                         </h3>
+                        {personalizeNames.length > 0 ? (
+                          <div className="mt-2 space-y-0.5">
+                            {personalizeNames.map((name, index) => (
+                              <p
+                                key={`${line.lineId}-personalize-${index}`}
+                                className="truncate text-xs font-medium text-foreground/90"
+                              >
+                                {name}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
                         {addonNames.length > 0 ? (
                           <div className="mt-2 space-y-0.5">
                             {addonNames.map((name, index) => (

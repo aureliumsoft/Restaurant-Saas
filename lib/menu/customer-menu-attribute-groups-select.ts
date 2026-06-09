@@ -1,5 +1,7 @@
 /** Shared Prisma select for menu item recommendation groups on the customer menu API. */
 
+import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
+
 export type CustomerMenuSelectMode = 'full' | 'legacy';
 
 const variationSelectFull = {
@@ -68,6 +70,7 @@ function buildAttributeGroupsSelect(
 
   const nestedItemSelect: Record<string, unknown> = {
     ...itemCore,
+    personalizeGroups: personalizeGroupsSelect,
     ...(depth > 1
       ? {
           attributeGroups: buildAttributeGroupsSelect(depth - 1, mode),
@@ -110,6 +113,7 @@ function buildAttributeGroupsSelect(
       select: {
         ...itemCore,
         categoryId: true,
+        personalizeGroups: personalizeGroupsSelect,
         attributeGroups: buildAttributeGroupsSelect(depth - 1, mode),
       },
     },

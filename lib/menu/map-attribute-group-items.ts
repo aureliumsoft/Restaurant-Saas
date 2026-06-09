@@ -6,6 +6,16 @@ type LinkedItem = {
   price: number;
   salePrice: number | null;
   attributeGroups?: AttributeGroupSource[] | null;
+  personalizeGroups?: Array<{
+    id: string;
+    parentName: string;
+    maxItems: number;
+    options: Array<{
+      id: string;
+      name: string;
+      imageUrl?: string | null;
+    }>;
+  }> | null;
   variations?: {
     id: string;
     name?: string;

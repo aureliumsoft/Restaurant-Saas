@@ -6,6 +6,7 @@ import {
 import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
 
 import type { AttributeGroup } from '@/components/order/product-customize-dialog';
+import type { PersonalizeGroup } from '@/components/order/personalize-options-section';
 
 export function buildCustomerAttributeGroup(
   group: AttributeGroupSource & {
@@ -86,6 +87,9 @@ export function buildCustomerAttributeGroup(
                 )
               )
             : undefined,
+        personalizeGroups:
+          (raw as { personalizeGroups?: PersonalizeGroup[] } | undefined)
+            ?.personalizeGroups ?? undefined,
       };
     }),
   };

@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
 import { Button } from '@/components/ui/button';
@@ -81,6 +81,7 @@ type Props = {
   groups: PersonalizeGroupDraft[];
   onChange: (groups: PersonalizeGroupDraft[]) => void;
   saving?: boolean;
+  loading?: boolean;
   onSave: () => void;
 };
 
@@ -88,6 +89,7 @@ export function PersonalizeConfigSection({
   groups,
   onChange,
   saving,
+  loading = false,
   onSave,
 }: Props) {
   const updateGroup = (
@@ -153,6 +155,15 @@ export function PersonalizeConfigSection({
         g.maxItems >= 1 &&
         g.options.some((o) => o.name.trim().length > 0)
     );
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[120px] items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading personalize items…
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -275,7 +286,14 @@ export function PersonalizeConfigSection({
           disabled={!canSave || saving}
           onClick={onSave}
         >
-          {saving ? 'Saving…' : 'Save personalize'}
+          {saving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            'Save personalize'
+          )}
         </Button>
       </div>
     </div>

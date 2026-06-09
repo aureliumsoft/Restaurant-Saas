@@ -68,7 +68,7 @@ async function loadCategoryIdsByItem(restaurantId: string) {
 
 export async function GET(req: NextRequest) {
   const auth = await getRestaurantForOwnerRequest(req, {
-    moduleKeys: ['product', 'pos'],
+    moduleKeys: ['product', 'pos', 'recommendations'],
     action: 'access',
   });
   if ('error' in auth) {
