@@ -7,6 +7,10 @@ import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
 import { findDiningTableForBranch } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
 import {
+  isPersonalizeModifierMenuItemId,
+  normalizePersonalizeModifierMenuItemId,
+} from '@/lib/menu/personalize-modifiers';
+import {
   kioskDineInCustomerDisplayName,
   upsertKioskOrderCustomer,
 } from '@/lib/kiosk-customer';
@@ -165,7 +169,9 @@ export async function POST(req: NextRequest) {
     menuIds.add(line.menuItemId);
     for (const g of line.modifiers) {
       for (const s of g.selections) {
-        menuIds.add(s.menuItemId);
+        if (!isPersonalizeModifierMenuItemId(s.menuItemId)) {
+          menuIds.add(s.menuItemId);
+        }
       }
     }
   }
@@ -290,7 +296,7 @@ export async function POST(req: NextRequest) {
             await tx.orderItemModifier.createMany({
               data: flatMods.map((s) => ({
                 orderItemId: orderItem.id,
-                menuItemId: s.menuItemId,
+                menuItemId: normalizePersonalizeModifierMenuItemId(s.menuItemId),
                 name: s.name,
                 unitPrice: s.unitPrice,
                 quantity: 1,

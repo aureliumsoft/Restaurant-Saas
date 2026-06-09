@@ -9,12 +9,14 @@ import {
 } from '@/lib/menu/customer-menu-attribute-groups-select';
 import { RECOMMENDATION_SOURCE_CATEGORY_WHERE } from '@/lib/menu/category-visibility';
 import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
+import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 
 const menuItemSelect = {
   ...customerMenuItemCoreSelect,
   categoryId: true,
   attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
+  personalizeGroups: personalizeGroupsSelect,
   offersFromThis: {
     orderBy: { sortOrder: 'asc' as const },
     select: {

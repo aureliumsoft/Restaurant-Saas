@@ -120,6 +120,16 @@ type CustomerMenuProduct = {
       }[];
     } | null;
   }[];
+  personalizeGroups?: {
+    id: string;
+    parentName: string;
+    maxItems: number;
+    options: Array<{
+      id: string;
+      name: string;
+      imageUrl?: string | null;
+    }>;
+  }[];
 };
 
 type CustomerMenuCategory = {
@@ -1259,6 +1269,7 @@ export default function OrderPageClient({
             : 0
         }
         attributeGroups={attributeGroupsForDialog}
+        personalizeGroups={customizeProduct?.personalizeGroups ?? []}
         variations={(customizeProduct?.variations ?? []).map((v) => ({
           id: v.id,
           name: v.name ?? v.title ?? 'Variation',

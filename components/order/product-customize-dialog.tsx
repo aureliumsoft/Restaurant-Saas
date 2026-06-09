@@ -31,6 +31,11 @@ import {
   buildModifierSelectionsForGroups,
   modifierSelectionsUnitTotal,
 } from '@/lib/menu/build-modifier-selections';
+import { buildPersonalizeModifierSelections } from '@/lib/menu/personalize-modifiers';
+import {
+  PersonalizeOptionsSection,
+  type PersonalizeGroup,
+} from '@/components/order/personalize-options-section';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import {
   chargeableUnitsForOption,
@@ -202,6 +207,7 @@ type Props = {
   productDescription?: string | null;
   themePrimaryColor?: string | null;
   attributeGroups: AttributeGroup[];
+  personalizeGroups?: PersonalizeGroup[];
   variations?: ProductVariationOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -223,6 +229,7 @@ export function ProductCustomizeDialog({
   productDescription,
   themePrimaryColor,
   attributeGroups,
+  personalizeGroups = [],
   variations = [],
   open,
   onOpenChange,
@@ -852,6 +859,22 @@ export function ProductCustomizeDialog({
     });
   };
 
+  const togglePersonalizeOption = (groupId: string, optionId: string) => {
+    const group = personalizeGroups.find((g) => g.id === groupId);
+    if (!group) return;
+    setSelectedByGroup((prev) => {
+      const cur = prev[groupId] ?? [];
+      if (cur.includes(optionId)) {
+        return {
+          ...prev,
+          [groupId]: cur.filter((id) => id !== optionId),
+        };
+      }
+      if (cur.length >= group.maxItems) return prev;
+      return { ...prev, [groupId]: [...cur, optionId] };
+    });
+  };
+
   const decreaseMultiQty = (groupId: string, optionId: string) => {
     setSelectedByGroup((prev) => {
       const current = [...(prev[groupId] ?? [])];
@@ -898,6 +921,10 @@ export function ProductCustomizeDialog({
         });
       }
     }
+
+    mods.push(
+      ...buildPersonalizeModifierSelections(personalizeGroups, selectedByGroup)
+    );
 
     for (const g of visibleProductRecommendationGroups) {
       const item = g.items[0];
@@ -1540,6 +1567,12 @@ export function ProductCustomizeDialog({
                     </button>
                   </section>
                 ) : null}
+
+                <PersonalizeOptionsSection
+                  groups={personalizeGroups}
+                  selectedByGroup={selectedByGroup}
+                  onToggle={togglePersonalizeOption}
+                />
 
                 {visibleProductRecommendationGroups.map((g) => {
                   const item = g.items[0];

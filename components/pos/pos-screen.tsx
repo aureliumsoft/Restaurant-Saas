@@ -159,6 +159,16 @@ type PosMenuProduct = {
       variations?: PosMenuProduct['variations'];
     } | null;
   }[];
+  personalizeGroups?: {
+    id: string;
+    parentName: string;
+    maxItems: number;
+    options: Array<{
+      id: string;
+      name: string;
+      imageUrl?: string | null;
+    }>;
+  }[];
   offersFromThis?: {
     id: string;
     sortOrder: number;
@@ -2413,6 +2423,7 @@ export function PosScreen() {
             : 0
         }
         attributeGroups={attributeGroupsForDialog}
+        personalizeGroups={customizeProduct?.personalizeGroups ?? []}
         variations={(customizeProduct?.variations ?? []).map((v) => ({
           id: v.id,
           name: v.name ?? v.title ?? 'Variation',

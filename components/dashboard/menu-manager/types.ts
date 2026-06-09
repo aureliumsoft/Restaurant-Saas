@@ -4,6 +4,21 @@ export type VariationLimitRow = {
   maxItems: number;
 };
 
+export type PersonalizeOptionRow = {
+  id: string;
+  name: string;
+  imageUrl?: string | null;
+  sortOrder: number;
+};
+
+export type PersonalizeGroupRow = {
+  id: string;
+  parentName: string;
+  maxItems: number;
+  sortOrder: number;
+  options: PersonalizeOptionRow[];
+};
+
 export type AttrGroupRow = {
   id: string;
   name: string;
@@ -64,6 +79,7 @@ export type MenuItemRow = {
     restaurantVariationId?: string | null;
   }[];
   attributeGroups: AttrGroupRow[];
+  personalizeGroups?: PersonalizeGroupRow[];
   offersFromThis?: {
     id: string;
     sortOrder: number;

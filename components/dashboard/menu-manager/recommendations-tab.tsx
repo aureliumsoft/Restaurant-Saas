@@ -70,6 +70,12 @@ import {
   type PreviewAttrGroup,
 } from '@/lib/menu/recommendation-preview-groups';
 
+import {
+  personalizeDraftToPreviewGroups,
+  personalizeGroupsToDraft,
+  type PersonalizeGroupDraft,
+} from './personalize-config-section';
+import type { PersonalizeGroupRow } from './types';
 import { RecommendationConfigSections } from './recommendation-config-sections';
 import { RecommendationPreviewPanel } from './recommendation-preview-panel';
 import type { RecommendationRuleDraft } from './recommendation-rule-form';
@@ -418,6 +424,14 @@ export function RecommendationsTab({
   const [savingRules, setSavingRules] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
   const [saveAllConfirmOpen, setSaveAllConfirmOpen] = useState(false);
+  const [personalizeDraft, setPersonalizeDraft] = useState<PersonalizeGroupDraft[]>(
+    []
+  );
+  const [personalizeDirty, setPersonalizeDirty] = useState(false);
+  const [savingPersonalize, setSavingPersonalize] = useState(false);
+  const [previewPersonalizeByGroup, setPreviewPersonalizeByGroup] = useState<
+    Record<string, string[]>
+  >({});
   const [ruleSelectionType, setRuleSelectionType] = useState<
     'SINGLE' | 'MULTIPLE'
   >('SINGLE');
@@ -633,7 +647,18 @@ export function RecommendationsTab({
 
   useEffect(() => {
     setPreviewByGroup({});
+    setPreviewPersonalizeByGroup({});
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!selected) {
+      setPersonalizeDraft([]);
+      setPersonalizeDirty(false);
+      return;
+    }
+    setPersonalizeDraft(personalizeGroupsToDraft(selected.personalizeGroups));
+    setPersonalizeDirty(false);
+  }, [selectedId, selected?.personalizeGroups]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -807,13 +832,103 @@ export function RecommendationsTab({
     }
   };
 
+  const validatePersonalizeDraft = (
+    draft: PersonalizeGroupDraft[]
+  ): string | null => {
+    for (const group of draft) {
+      if (!group.parentName.trim()) {
+        return 'Each personalize group needs a parent name';
+      }
+      const namedOptions = group.options.filter((o) => o.name.trim());
+      if (namedOptions.length === 0) {
+        return `Group "${group.parentName}" needs at least one option with a name`;
+      }
+      if (group.maxItems < 1) {
+        return 'Max items must be at least 1';
+      }
+    }
+    return null;
+  };
+
+  const savePersonalize = async (options?: { resetAfter?: boolean }) => {
+    if (!selected) {
+      toast.error('Select a product first.');
+      return false;
+    }
+
+    const validationError = validatePersonalizeDraft(personalizeDraft);
+    if (validationError) {
+      toast.error(validationError);
+      return false;
+    }
+
+    setSavingPersonalize(true);
+    try {
+      const res = await axios.put<{ data: PersonalizeGroupRow[] }>(
+        `/api/restaurant/menu/items/${selected.id}/personalize`,
+        {
+          groups: personalizeDraft.map((group, groupIndex) => ({
+            id: group.id,
+            parentName: group.parentName.trim(),
+            maxItems: group.maxItems,
+            sortOrder: group.sortOrder ?? groupIndex,
+            options: group.options
+              .filter((option) => option.name.trim())
+              .map((option, optionIndex) => ({
+                id: option.id,
+                name: option.name.trim(),
+                imageUrl: option.imageUrl?.trim() || '',
+                sortOrder: option.sortOrder ?? optionIndex,
+              })),
+          })),
+        }
+      );
+      const saved = res.data.data;
+      updateSelectedItem((item) => ({ ...item, personalizeGroups: saved }));
+      setPersonalizeDraft(personalizeGroupsToDraft(saved));
+      setPersonalizeDirty(false);
+      if (options?.resetAfter !== false) {
+        toast.success('Personalize items saved');
+        allowNextNavigation();
+      }
+      return true;
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || 'Could not save personalize items');
+      return false;
+    } finally {
+      setSavingPersonalize(false);
+    }
+  };
+
+  const personalizePreviewGroups = useMemo(() => {
+    if (!selected) return [];
+    if (personalizeDirty) {
+      return personalizeDraftToPreviewGroups(personalizeDraft);
+    }
+    return (selected.personalizeGroups ?? []).map((group) => ({
+      id: group.id,
+      parentName: group.parentName,
+      maxItems: group.maxItems,
+      options: group.options.map((option) => ({
+        id: option.id,
+        name: option.name,
+        imageUrl: option.imageUrl,
+      })),
+    }));
+  }, [selected, personalizeDirty, personalizeDraft]);
+
   const hasPendingConfiguration = useMemo(() => {
     const hasRuleDrafts = RECOMMENDATION_FORM_VARIANTS.some((variant) => {
       const draft = draftByVariant[variant];
       return draft != null && draftHasContent(variant, draft);
     });
-    return hasRuleDrafts || selectedOfferProductIds.length > 0;
-  }, [draftByVariant, selectedOfferProductIds]);
+    return (
+      hasRuleDrafts ||
+      selectedOfferProductIds.length > 0 ||
+      personalizeDirty
+    );
+  }, [draftByVariant, selectedOfferProductIds, personalizeDirty]);
 
   const saveAllConfiguration = async () => {
     if (!selected) {
@@ -838,9 +953,18 @@ export function RecommendationsTab({
     }
 
     const hasOffers = selectedOfferProductIds.length > 0;
-    if (draftsToSave.length === 0 && !hasOffers) {
+    const hasPersonalize = personalizeDirty;
+    if (draftsToSave.length === 0 && !hasOffers && !hasPersonalize) {
       toast.error('Nothing to save. Configure at least one section first.');
       return;
+    }
+
+    if (hasPersonalize) {
+      const personalizeError = validatePersonalizeDraft(personalizeDraft);
+      if (personalizeError) {
+        toast.error(`Personalize items: ${personalizeError}`);
+        return;
+      }
     }
 
     setSavingAll(true);
@@ -874,6 +998,30 @@ export function RecommendationsTab({
         createdOffers = responses.map((res) => res.data.data);
       }
 
+      let savedPersonalize: PersonalizeGroupRow[] | undefined;
+      if (hasPersonalize) {
+        const personalizeRes = await axios.put<{ data: PersonalizeGroupRow[] }>(
+          `/api/restaurant/menu/items/${selected.id}/personalize`,
+          {
+            groups: personalizeDraft.map((group, groupIndex) => ({
+              id: group.id,
+              parentName: group.parentName.trim(),
+              maxItems: group.maxItems,
+              sortOrder: group.sortOrder ?? groupIndex,
+              options: group.options
+                .filter((option) => option.name.trim())
+                .map((option, optionIndex) => ({
+                  id: option.id,
+                  name: option.name.trim(),
+                  imageUrl: option.imageUrl?.trim() || '',
+                  sortOrder: option.sortOrder ?? optionIndex,
+                })),
+            })),
+          }
+        );
+        savedPersonalize = personalizeRes.data.data;
+      }
+
       updateSelectedItem((item) => ({
         ...item,
         attributeGroups: [
@@ -896,6 +1044,9 @@ export function RecommendationsTab({
               ],
             }
           : {}),
+        ...(savedPersonalize != null
+          ? { personalizeGroups: savedPersonalize }
+          : {}),
       }));
 
       const parts: string[] = [];
@@ -904,6 +1055,9 @@ export function RecommendationsTab({
           `${draftsToSave.length} recommendation section${draftsToSave.length === 1 ? '' : 's'}`
         );
       }
+      if (hasPersonalize) {
+        parts.push('personalize items');
+      }
       if (hasOffers) {
         parts.push('associated products');
       }
@@ -911,6 +1065,10 @@ export function RecommendationsTab({
       allowNextNavigation();
       resetDraftState();
       setDraftByVariant({});
+      if (savedPersonalize != null) {
+        setPersonalizeDraft(personalizeGroupsToDraft(savedPersonalize));
+        setPersonalizeDirty(false);
+      }
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || 'Could not save configuration');
@@ -1322,6 +1480,13 @@ export function RecommendationsTab({
               deletingOffer={deletingOffer}
               deletingOfferId={deletingOfferId}
               toggleInArray={toggleInArray}
+              personalizeDraft={personalizeDraft}
+              onPersonalizeDraftChange={(groups) => {
+                setPersonalizeDraft(groups);
+                setPersonalizeDirty(true);
+              }}
+              savingPersonalize={savingPersonalize}
+              onSavePersonalize={() => void savePersonalize()}
             />
           ) : (
             <div className="rounded-lg border border-dashed border-border bg-muted/15 px-4 py-10 text-center sm:px-6 sm:py-12">
@@ -1354,9 +1519,18 @@ export function RecommendationsTab({
             deletingRuleId={deletingRuleId}
             deletingRule={deletingRule}
             savingAll={savingAll}
+            personalizePreviewGroups={personalizePreviewGroups}
+            previewPersonalizeByGroup={previewPersonalizeByGroup}
+            onPersonalizePreviewChange={(groupId, ids) =>
+              setPreviewPersonalizeByGroup((prev) => ({
+                ...prev,
+                [groupId]: ids,
+              }))
+            }
             saveAllDisabled={
               savingRules ||
               savingOffers ||
+              savingPersonalize ||
               savingAll ||
               !hasPendingConfiguration
             }

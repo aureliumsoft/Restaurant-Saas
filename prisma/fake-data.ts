@@ -324,6 +324,41 @@ export function fakeMenuItemComplete() {
     updatedAt: faker.date.anytime(),
   };
 }
+export function fakeMenuItemPersonalizeGroup() {
+  return {
+    parentName: faker.lorem.words(5),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeMenuItemPersonalizeGroupComplete() {
+  return {
+    id: faker.string.uuid(),
+    menuItemId: faker.string.uuid(),
+    parentName: faker.lorem.words(5),
+    maxItems: 2,
+    sortOrder: 0,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeMenuItemPersonalizeOption() {
+  return {
+    name: faker.person.fullName(),
+    imageUrl: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeMenuItemPersonalizeOptionComplete() {
+  return {
+    id: faker.string.uuid(),
+    groupId: faker.string.uuid(),
+    name: faker.person.fullName(),
+    imageUrl: undefined,
+    sortOrder: 0,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
 export function fakeRestaurantVariation() {
   return {
     name: faker.person.fullName(),
@@ -515,7 +550,7 @@ export function fakeOrderItemModifierComplete() {
   return {
     id: faker.string.uuid(),
     orderItemId: faker.string.uuid(),
-    menuItemId: faker.string.uuid(),
+    menuItemId: undefined,
     name: faker.person.fullName(),
     unitPrice: faker.number.float(),
     quantity: 1,

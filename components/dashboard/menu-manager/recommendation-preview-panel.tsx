@@ -15,6 +15,8 @@ import {
   type PreviewAttrGroup,
 } from '@/lib/menu/recommendation-preview-groups';
 
+import { PersonalizeOptionsSection } from '@/components/order/personalize-options-section';
+
 import type { MenuCategoryRow, MenuItemRow } from './types';
 
 function effectiveUnitPrice(price: number, salePrice: number | null) {
@@ -65,6 +67,14 @@ type Props = {
   savingAll?: boolean;
   saveAllDisabled?: boolean;
   onSaveAll?: () => void;
+  personalizePreviewGroups?: Array<{
+    id: string;
+    parentName: string;
+    maxItems: number;
+    options: Array<{ id: string; name: string; imageUrl?: string | null }>;
+  }>;
+  previewPersonalizeByGroup?: Record<string, string[]>;
+  onPersonalizePreviewChange?: (groupId: string, ids: string[]) => void;
 };
 
 export function RecommendationPreviewPanel({
@@ -80,6 +90,9 @@ export function RecommendationPreviewPanel({
   savingAll,
   saveAllDisabled,
   onSaveAll,
+  personalizePreviewGroups = [],
+  previewPersonalizeByGroup = {},
+  onPersonalizePreviewChange,
 }: Props) {
   if (!selected) {
     return (
@@ -140,6 +153,38 @@ export function RecommendationPreviewPanel({
           </div>
         </div>
       </div>
+
+      {personalizePreviewGroups.length > 0 ? (
+        <div className="space-y-3">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">
+              Personalize items
+            </h4>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Photo and name only — multiple selection up to the maximum. No
+              price change.
+            </p>
+          </div>
+          <PersonalizeOptionsSection
+            groups={personalizePreviewGroups}
+            selectedByGroup={previewPersonalizeByGroup}
+            onToggle={(groupId, optionId) => {
+              if (!onPersonalizePreviewChange) return;
+              const group = personalizePreviewGroups.find(
+                (g) => g.id === groupId
+              );
+              if (!group) return;
+              const current = previewPersonalizeByGroup[groupId] ?? [];
+              const next = current.includes(optionId)
+                ? current.filter((id) => id !== optionId)
+                : current.length >= group.maxItems
+                  ? current
+                  : [...current, optionId];
+              onPersonalizePreviewChange(groupId, next);
+            }}
+          />
+        </div>
+      ) : null}
 
       <div>
         <h4 className="text-sm font-semibold text-foreground">

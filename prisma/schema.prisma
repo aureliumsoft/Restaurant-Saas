@@ -374,9 +374,43 @@ model MenuItem {
   offeredAs      MenuItemOffer[] @relation("OfferedItems")
   linkedInRecommendationGroups MenuItemAttributeGroup[] @relation("RecommendationLinkedProduct")
   defaultInRecommendationGroups MenuItemAttributeGroup[] @relation("RecommendationCategoryDefault")
+  personalizeGroups          MenuItemPersonalizeGroup[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Guest-facing preference group (e.g. "Personalize") — no pricing.
+model MenuItemPersonalizeGroup {
+  id         String @id @default(uuid())
+  menuItemId String
+  /// Group title shown to guests (parent name).
+  parentName String
+  maxItems   Int    @default(2)
+  sortOrder  Int    @default(0)
+
+  menuItem MenuItem                    @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  options  MenuItemPersonalizeOption[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([menuItemId])
+}
+
+model MenuItemPersonalizeOption {
+  id       String  @id @default(uuid())
+  groupId  String
+  name     String
+  imageUrl String?
+  sortOrder Int    @default(0)
+
+  group MenuItemPersonalizeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
 }
 
 /// Restaurant-wide variation template (Small, Medium, Large, XL) linked to product rates.
@@ -571,15 +605,16 @@ model OrderItem {
 }
 
 model OrderItemModifier {
-  id          String @id @default(uuid())
+  id          String  @id @default(uuid())
   orderItemId String
-  menuItemId  String
+  /// Null for personalize-only lines (no linked menu product).
+  menuItemId  String?
   name        String
   unitPrice   Float
-  quantity    Int    @default(1)
+  quantity    Int     @default(1)
 
   orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
-  addonItem MenuItem  @relation("OrderAddonProduct", fields: [menuItemId], references: [id])
+  addonItem MenuItem? @relation("OrderAddonProduct", fields: [menuItemId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

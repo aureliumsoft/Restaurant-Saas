@@ -15,6 +15,10 @@ import {
   RecommendationRuleForm,
   type RecommendationRuleDraft,
 } from './recommendation-rule-form';
+import {
+  PersonalizeConfigSection,
+  type PersonalizeGroupDraft,
+} from './personalize-config-section';
 import type { AttrGroupRow, MenuCategoryRow, MenuItemRow } from './types';
 
 type ProductWithCategory = MenuItemRow & { categoryName: string };
@@ -50,6 +54,10 @@ type Props = {
   deletingOffer: boolean;
   deletingOfferId: string | null;
   toggleInArray: (arr: string[], id: string) => string[];
+  personalizeDraft: PersonalizeGroupDraft[];
+  onPersonalizeDraftChange: (groups: PersonalizeGroupDraft[]) => void;
+  savingPersonalize: boolean;
+  onSavePersonalize: () => void;
 };
 
 function SavedGroupList({
@@ -121,8 +129,12 @@ export function RecommendationConfigSections({
   deletingOffer,
   deletingOfferId,
   toggleInArray,
+  personalizeDraft,
+  onPersonalizeDraftChange,
+  savingPersonalize,
+  onSavePersonalize,
 }: Props) {
-  const isSaving = savingRules || savingOffers || savingAll;
+  const isSaving = savingRules || savingOffers || savingAll || savingPersonalize;
 
   const formProps = {
     selected,
@@ -204,6 +216,19 @@ export function RecommendationConfigSections({
 
       <RecommendationConfigSectionShell
         step={5}
+        title="Personalize items"
+        description="Optional guest preferences with photo and name only — multiple selection up to a maximum. No price change."
+      >
+        <PersonalizeConfigSection
+          groups={personalizeDraft}
+          onChange={onPersonalizeDraftChange}
+          saving={savingPersonalize}
+          onSave={onSavePersonalize}
+        />
+      </RecommendationConfigSectionShell>
+
+      <RecommendationConfigSectionShell
+        step={6}
         title="Associated products"
         description="Optional cross-sell items shown with this product. Select categories, then pick products."
       >

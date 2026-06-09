@@ -13,6 +13,7 @@ import {
   sanitizeCustomerMenuPayload,
 } from '@/lib/menu/category-visibility';
 import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
+import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
 
 export function isPrismaSchemaDriftError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -34,6 +35,7 @@ function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
     ...itemCore,
     categoryId: true,
     attributeGroups: buildGroups(2),
+    personalizeGroups: personalizeGroupsSelect,
     offersFromThis: {
       orderBy: { sortOrder: 'asc' as const },
       select: {
