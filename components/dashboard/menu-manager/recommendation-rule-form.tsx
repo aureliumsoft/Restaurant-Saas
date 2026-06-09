@@ -23,6 +23,10 @@ import {
   variationLabel,
 } from '@/lib/menu/recommendation-category-limits';
 import type { RecommendationFormVariant } from '@/lib/menu/recommendation-preview-groups';
+import {
+  reservedRecommendationCategoryIds,
+  reservedRecommendationProductIds,
+} from '@/lib/menu/recommendation-reserved-ids';
 
 import type { MenuCategoryRow, MenuItemRow } from './types';
 
@@ -68,6 +72,10 @@ type Props = {
   onDraftChange?: (draft: RecommendationRuleDraft) => void;
   /** Bumps when the form should reset (after save, discard, or product change). */
   resetKey?: string | number;
+  /** Unsaved drafts from other sections — used to hide already-picked categories/products. */
+  draftByVariant?: Partial<
+    Record<RecommendationFormVariant, RecommendationRuleDraft>
+  >;
 };
 
 function variantDefaults(variant: RecommendationFormVariant): {
@@ -96,6 +104,7 @@ export function RecommendationRuleForm({
   onSave,
   onDraftChange,
   resetKey = 0,
+  draftByVariant = {},
 }: Props) {
   const locked = variantDefaults(variant);
   const [sourceType] = useState<'CATEGORY' | 'PRODUCT'>(locked.sourceType);
@@ -152,35 +161,41 @@ export function RecommendationRuleForm({
     [localCategories]
   );
 
-  const alreadyLinkedCategoryIds = useMemo(
+  const reservedCategoryIds = useMemo(
     () =>
-      new Set(
-        selected.attributeGroups
-          .filter((g) => g.sourceType !== 'PRODUCT' && g.linkedCategory)
-          .map((g) => g.linkedCategory!.id)
-      ),
-    [selected.attributeGroups]
+      reservedRecommendationCategoryIds(selected, draftByVariant, variant),
+    [selected, draftByVariant, variant]
   );
 
-  const alreadyLinkedProductIds = useMemo(
-    () =>
-      new Set(
-        selected.attributeGroups
-          .filter((g) => g.sourceType === 'PRODUCT' && g.linkedProduct)
-          .map((g) => g.linkedProduct!.id)
-      ),
-    [selected.attributeGroups]
+  const reservedProductIds = useMemo(
+    () => reservedRecommendationProductIds(selected, draftByVariant, variant),
+    [selected, draftByVariant, variant]
   );
 
   const assignableCategories = recommendationCategories.filter(
-    (c) => !alreadyLinkedCategoryIds.has(c.id)
+    (c) => !reservedCategoryIds.has(c.id)
   );
 
   const assignableProducts = allProducts.filter(
-    (p) =>
-      p.id !== selected.id &&
-      !alreadyLinkedProductIds.has(p.id)
+    (p) => !reservedProductIds.has(p.id)
   );
+
+  useEffect(() => {
+    setRuleCategoryIds((prev) => {
+      const next = prev.filter((id) => !reservedCategoryIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [reservedCategoryIds]);
+
+  useEffect(() => {
+    setLinkedProductId((prev) =>
+      prev && reservedProductIds.has(prev) ? '' : prev
+    );
+    setLinkedProductIds((prev) => {
+      const next = prev.filter((id) => !reservedProductIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [reservedProductIds]);
 
   const productsFromSelectedCategories = useMemo(() => {
     if (productCategoryIds.length === 0) return [];
@@ -480,8 +495,9 @@ export function RecommendationRuleForm({
         assignableCategories.length === 0 ? (
           <div className="flex flex-col gap-2">
             <p className="text-xs text-muted-foreground">
-              Add products to a category first, or link categories you have not
-              used yet for this product.
+              {recommendationCategories.length === 0
+                ? 'Add products to a category first, or link categories other than this product’s own.'
+                : 'All available categories are already used in another recommendation section for this product.'}
             </p>
             <Button type="button" asChild size="sm" variant="secondary" className="w-fit">
               <Link href="/categories">Go to Categories</Link>
@@ -829,6 +845,8 @@ export function RecommendationRuleForm({
                     min={0}
                     className="h-9"
                     aria-label={`${cat.name} minimum`}
+                    maxLength={limits.maxItems.toString().length}
+                    disabled={limits.minItems >= limits.maxItems}
                     value={limits.minItems}
                     onChange={(e) => {
                       const val = Math.max(
@@ -849,6 +867,8 @@ export function RecommendationRuleForm({
                     min={1}
                     className="h-9"
                     aria-label={`${cat.name} maximum`}
+                    // minLength={limits.maxItems.toString().length}
+                    disabled={limits.minItems >= limits.maxItems}
                     value={limits.maxItems}
                     onChange={(e) => {
                       const val = Math.max(

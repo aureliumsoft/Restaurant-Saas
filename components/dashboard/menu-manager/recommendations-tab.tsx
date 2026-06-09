@@ -75,6 +75,7 @@ import {
   type RecommendationFormVariant,
   type PreviewAttrGroup,
 } from '@/lib/menu/recommendation-preview-groups';
+import { findDuplicateRecommendationAssignments } from '@/lib/menu/recommendation-reserved-ids';
 
 const INITIAL_FORM_RESET_KEYS = Object.fromEntries(
   RECOMMENDATION_FORM_VARIANTS.map((variant) => [variant, 0])
@@ -635,20 +636,6 @@ export function RecommendationsTab({
     [localCategories, selectedCategoryIds]
   );
 
-  /** Categories not yet used as a recommendation rule for this product (cannot assign twice). */
-  const assignableRuleCategories = useMemo(() => {
-    if (!selected) return [];
-    const alreadyLinked = new Set(
-      selected.attributeGroups
-        .filter((g) => g.linkedCategory)
-        .map((g) => g.linkedCategory!.id)
-    );
-    return localCategories.filter(
-      (c) =>
-        !selectedCategoryIds.includes(c.id) && !alreadyLinked.has(c.id)
-    );
-  }, [localCategories, selected, selectedCategoryIds]);
-
   const currentOffers = selected?.offersFromThis ?? [];
   const offeredProductsFromSelectedCategories = useMemo(() => {
     if (!selected || offerCategoryIds.length === 0) return [];
@@ -784,6 +771,15 @@ export function RecommendationsTab({
     );
     if (validationError) {
       toast.error(validationError);
+      return false;
+    }
+
+    const duplicateError = findDuplicateRecommendationAssignments(
+      selected,
+      { ...draftByVariant, [variantFromDraft(draft)]: draft }
+    );
+    if (duplicateError) {
+      toast.error(duplicateError);
       return false;
     }
 
@@ -980,6 +976,15 @@ export function RecommendationsTab({
   const saveAllConfiguration = async () => {
     if (!selected) {
       toast.error('Select a product first.');
+      return;
+    }
+
+    const duplicateError = findDuplicateRecommendationAssignments(
+      selected,
+      draftByVariant
+    );
+    if (duplicateError) {
+      toast.error(duplicateError);
       return;
     }
 
@@ -1540,6 +1545,7 @@ export function RecommendationsTab({
               loadingPersonalize={loadingPersonalize}
               onSavePersonalize={() => void savePersonalize()}
               formResetKeys={formResetKeys}
+              draftByVariant={draftByVariant}
             />
           ) : (
             <div className="rounded-lg border border-dashed border-border bg-muted/15 px-4 py-10 text-center sm:px-6 sm:py-12">

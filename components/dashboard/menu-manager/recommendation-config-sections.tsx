@@ -60,6 +60,9 @@ type Props = {
   loadingPersonalize?: boolean;
   onSavePersonalize: () => void;
   formResetKeys: Record<RecommendationFormVariant, number>;
+  draftByVariant: Partial<
+    Record<RecommendationFormVariant, RecommendationRuleDraft>
+  >;
 };
 
 function SavedGroupList({
@@ -137,6 +140,7 @@ export function RecommendationConfigSections({
   loadingPersonalize = false,
   onSavePersonalize,
   formResetKeys,
+  draftByVariant,
 }: Props) {
   const isSaving = savingRules || savingOffers || savingAll || savingPersonalize;
 
@@ -146,6 +150,7 @@ export function RecommendationConfigSections({
     allProducts,
     saving: isSaving,
     onSave: onSaveDraft,
+    draftByVariant,
   };
 
   return (
