@@ -107,12 +107,7 @@ export function isConfigurationGroupVisibleForParentVariation(
   group: { items: ConfigurationItemLike[]; useVariationPricing?: boolean },
   parentVariation: ParentVariationContext | null | undefined
 ): boolean {
-  const useVariationPricing = group.useVariationPricing ?? false;
-  if (useVariationPricing) {
-    // Show the category once the main product variation is chosen; items are filtered inside.
-    return parentVariation != null;
-  }
-  return group.items.length > 0;
+  return configurationGroupHasItemsForParentVariation(group, parentVariation);
 }
 
 /** Whether a variation-priced group has at least one add-on for the current parent variation. */

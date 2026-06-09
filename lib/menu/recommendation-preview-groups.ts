@@ -3,6 +3,12 @@ import {
   DEFAULT_CATEGORY_MIN_MAX,
   DEFAULT_FREE_QUANTITY,
 } from '@/lib/menu/recommendation-category-limits';
+import {
+  configurationGroupHasItemsForParentVariation,
+  filterConfigurationItemsForParentVariation,
+  isConfigurationItemAvailableForParentVariation,
+  type ParentVariationContext,
+} from '@/lib/menu/configuration-variation-price';
 import { enrichAttributeGroupSource } from '@/lib/menu/product-recommendation-pool';
 import { mapAttributeGroupItems } from '@/lib/menu/map-attribute-group-items';
 
@@ -250,4 +256,60 @@ export function linkedItemsForPreviewGroup(
   );
 
   return mapAttributeGroupItems(enriched, baseProduct.id) as MenuItemRow[];
+}
+
+function previewItemConfigLike(item: MenuItemRow) {
+  return {
+    price: item.price,
+    salePrice: item.salePrice,
+    variations: item.variations,
+  };
+}
+
+export function isPreviewGroupVisibleForParentVariation(
+  group: PreviewAttrGroup,
+  items: MenuItemRow[],
+  parentVariation: ParentVariationContext | null | undefined
+): boolean {
+  const useVariationPricing = group.useVariationPricing ?? false;
+  if (group.sourceType === 'PRODUCT') {
+    const item = items[0];
+    if (!item) return false;
+    return isConfigurationItemAvailableForParentVariation(
+      previewItemConfigLike(item),
+      parentVariation,
+      useVariationPricing
+    );
+  }
+  return configurationGroupHasItemsForParentVariation(
+    {
+      items: items.map(previewItemConfigLike),
+      useVariationPricing,
+    },
+    parentVariation
+  );
+}
+
+export function visibleItemsForPreviewGroup(
+  group: PreviewAttrGroup,
+  items: MenuItemRow[],
+  parentVariation: ParentVariationContext | null | undefined
+): MenuItemRow[] {
+  const useVariationPricing = group.useVariationPricing ?? false;
+  if (group.sourceType === 'PRODUCT') {
+    const item = items[0];
+    if (!item) return [];
+    return isConfigurationItemAvailableForParentVariation(
+      previewItemConfigLike(item),
+      parentVariation,
+      useVariationPricing
+    )
+      ? items
+      : [];
+  }
+  return filterConfigurationItemsForParentVariation(
+    items,
+    parentVariation,
+    useVariationPricing
+  ) as MenuItemRow[];
 }

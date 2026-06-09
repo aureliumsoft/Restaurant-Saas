@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Save, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -7,11 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import {
-  effectiveMenuItemUnitPrice,
-  recommendationAddonPriceLabel,
-} from '@/lib/menu/recommendation-addon-price';
+  configurationAddonPriceLabel,
+  configurationGroupDisplayTitle,
+  configurationItemListUnitPrice,
+  type ParentVariationContext,
+} from '@/lib/menu/configuration-variation-price';
+import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
 import {
+  isPreviewGroupVisibleForParentVariation,
   linkedItemsForPreviewGroup,
+  visibleItemsForPreviewGroup,
   type PreviewAttrGroup,
 } from '@/lib/menu/recommendation-preview-groups';
 
@@ -23,16 +29,31 @@ function effectiveUnitPrice(price: number, salePrice: number | null) {
   return effectiveMenuItemUnitPrice(price, salePrice);
 }
 
-function groupDefaultUnitPrice(
-  g: PreviewAttrGroup,
-  items: MenuItemRow[]
+function previewDefaultListUnit(
+  group: PreviewAttrGroup,
+  visibleItems: MenuItemRow[],
+  parentVariation: ParentVariationContext | null
 ): number | null {
-  const id = g.defaultLinkedMenuItemId ?? g.defaultLinkedMenuItem?.id;
-  if (!id) return null;
-  const fromList = items.find((i) => i.id === id);
-  const item = fromList ?? g.defaultLinkedMenuItem;
-  if (!item) return null;
-  return effectiveMenuItemUnitPrice(item.price, item.salePrice);
+  const useVariationPricing = group.useVariationPricing ?? false;
+  const defaultId =
+    group.defaultLinkedMenuItemId ?? group.defaultLinkedMenuItem?.id;
+  if (defaultId) {
+    const defaultItem = visibleItems.find((i) => i.id === defaultId);
+    if (defaultItem) {
+      return configurationItemListUnitPrice(
+        defaultItem,
+        parentVariation,
+        useVariationPricing
+      );
+    }
+  }
+  if (!useVariationPricing && group.defaultLinkedMenuItem) {
+    return effectiveMenuItemUnitPrice(
+      group.defaultLinkedMenuItem.price,
+      group.defaultLinkedMenuItem.salePrice
+    );
+  }
+  return null;
 }
 
 function multiSelectionHint(
@@ -96,6 +117,51 @@ export function RecommendationPreviewPanel({
   previewPersonalizeByGroup = {},
   onPersonalizePreviewChange,
 }: Props) {
+  const [previewVariationId, setPreviewVariationId] = useState('');
+
+  useEffect(() => {
+    const first = selected?.variations?.[0]?.id ?? '';
+    setPreviewVariationId(first);
+  }, [selected?.id, selected?.variations]);
+
+  const previewVariationContext = useMemo(() => {
+    const variation = selected?.variations?.find(
+      (v) => v.id === previewVariationId
+    );
+    if (!variation) {
+      return {
+        parent: null as ParentVariationContext | null,
+        shortLabel: null as string | null,
+      };
+    }
+    return {
+      parent: {
+        id: variation.id,
+        name: variation.name ?? null,
+        title: variation.title ?? variation.name ?? null,
+        restaurantVariationId: variation.restaurantVariationId ?? null,
+      },
+      shortLabel: variation.title ?? variation.name ?? null,
+    };
+  }, [previewVariationId, selected?.variations]);
+
+  const visiblePreviewGroups = useMemo(() => {
+    if (!selected) return [];
+    return previewGroups.filter((group) => {
+      const items = linkedItemsForPreviewGroup(group, selected, categories);
+      return isPreviewGroupVisibleForParentVariation(
+        group,
+        items,
+        previewVariationContext.parent
+      );
+    });
+  }, [previewGroups, selected, categories, previewVariationContext.parent]);
+
+  const hasVariationPricingGroups = useMemo(
+    () => previewGroups.some((g) => g.useVariationPricing),
+    [previewGroups]
+  );
+
   if (!selected) {
     return (
       <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/80 p-6 text-center sm:min-h-[280px] sm:p-8">
@@ -153,6 +219,42 @@ export function RecommendationPreviewPanel({
               </p>
             ) : null}
           </div>
+          {(selected.variations?.length ?? 0) > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Product variation
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {selected.variations!.map((variation) => {
+                  const active = previewVariationId === variation.id;
+                  const label =
+                    variation.title?.trim() ||
+                    variation.name?.trim() ||
+                    'Variation';
+                  return (
+                    <button
+                      key={variation.id}
+                      type="button"
+                      className={cn(
+                        'rounded-full border px-3 py-1.5 text-xs font-medium transition',
+                        active
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-background text-foreground hover:border-primary/40'
+                      )}
+                      onClick={() => setPreviewVariationId(variation.id)}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              {hasVariationPricingGroups && !previewVariationContext.parent ? (
+                <p className="text-xs text-muted-foreground">
+                  Select a variation to preview variation-priced add-ons.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -171,14 +273,22 @@ export function RecommendationPreviewPanel({
           No configuration groups yet. Add categories or products in the
           sections on the left.
         </p>
+      ) : visiblePreviewGroups.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {hasVariationPricingGroups
+            ? 'No add-on categories are available for this product variation.'
+            : 'No configuration groups are available to preview yet.'}
+        </p>
       ) : (
         <div className="space-y-4">
-          {previewGroups.map((g) => (
+          {visiblePreviewGroups.map((g) => (
             <PreviewGroupCard
               key={g.id}
               group={g}
               baseProduct={selected}
               categories={localCategories}
+              parentVariation={previewVariationContext.parent}
+              variationShortLabel={previewVariationContext.shortLabel}
               previewIds={previewByGroup[g.id] ?? []}
               onPreviewChange={(ids) => onPreviewChange(g.id, ids)}
               onDelete={
@@ -295,6 +405,8 @@ function PreviewGroupCard({
   group,
   baseProduct,
   categories,
+  parentVariation,
+  variationShortLabel,
   previewIds,
   onPreviewChange,
   onDelete,
@@ -303,13 +415,27 @@ function PreviewGroupCard({
   group: PreviewAttrGroup;
   baseProduct: MenuItemRow;
   categories: MenuCategoryRow[];
+  parentVariation: ParentVariationContext | null;
+  variationShortLabel: string | null;
   previewIds: string[];
   onPreviewChange: (ids: string[]) => void;
   onDelete?: () => void;
   deleting?: boolean;
 }) {
-  const items = linkedItemsForPreviewGroup(group, baseProduct, categories);
-  const defaultUnit = groupDefaultUnitPrice(group, items);
+  const allItems = linkedItemsForPreviewGroup(group, baseProduct, categories);
+  const items = visibleItemsForPreviewGroup(
+    group,
+    allItems,
+    parentVariation
+  );
+  const useVariationPricing = group.useVariationPricing ?? false;
+  const defaultUnit = previewDefaultListUnit(group, items, parentVariation);
+  const groupTitle = configurationGroupDisplayTitle(
+    group.name,
+    parentVariation,
+    useVariationPricing,
+    variationShortLabel
+  );
 
   return (
     <section
@@ -323,7 +449,7 @@ function PreviewGroupCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Label className="text-sm font-semibold">{group.name}</Label>
+            <Label className="text-sm font-semibold">{groupTitle}</Label>
             {group.isDraft ? (
               <Badge variant="outline" className="text-[10px] uppercase">
                 Draft
@@ -375,10 +501,19 @@ function PreviewGroupCard({
           <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
             {items.map((it) => {
               const checked = previewIds[0] === it.id;
-              const priceLabel = recommendationAddonPriceLabel(
-                it.price,
-                it.salePrice,
-                defaultUnit
+              const listUnit = configurationItemListUnitPrice(
+                it,
+                parentVariation,
+                useVariationPricing
+              );
+              const priceLabel = configurationAddonPriceLabel(
+                listUnit,
+                defaultUnit,
+                {
+                  freeQuantity: group.freeQuantity,
+                  multipleMode: group.multipleMode,
+                  groupSelectedIds: previewIds,
+                }
               );
               return (
                 <label
@@ -414,9 +549,13 @@ function PreviewGroupCard({
           <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
             {items.map((it) => {
               const checked = previewIds.includes(it.id);
-              const priceLabel = recommendationAddonPriceLabel(
-                it.price,
-                it.salePrice,
+              const listUnit = configurationItemListUnitPrice(
+                it,
+                parentVariation,
+                useVariationPricing
+              );
+              const priceLabel = configurationAddonPriceLabel(
+                listUnit,
                 defaultUnit,
                 {
                   freeQuantity: group.freeQuantity,
