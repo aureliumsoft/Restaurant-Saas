@@ -148,14 +148,18 @@ export function RecommendationPreviewPanel({
   const visiblePreviewGroups = useMemo(() => {
     if (!selected) return [];
     return previewGroups.filter((group) => {
-      const items = linkedItemsForPreviewGroup(group, selected, categories);
+      const items = linkedItemsForPreviewGroup(
+        group,
+        selected,
+        localCategories
+      );
       return isPreviewGroupVisibleForParentVariation(
         group,
         items,
         previewVariationContext.parent
       );
     });
-  }, [previewGroups, selected, categories, previewVariationContext.parent]);
+  }, [previewGroups, selected, localCategories, previewVariationContext.parent]);
 
   const hasVariationPricingGroups = useMemo(
     () => previewGroups.some((g) => g.useVariationPricing),
