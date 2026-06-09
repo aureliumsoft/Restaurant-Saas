@@ -1,3 +1,5 @@
+import { shouldShowQuantityGroupPickerPrices } from '@/lib/menu/recommendation-limits';
+
 /** Effective sell price for a menu item (sale when valid, else list). */
 export function effectiveMenuItemUnitPrice(
   price: number,
@@ -37,6 +39,32 @@ export function formatRecommendationAddonDisplay(
   }
   const unit = effectiveMenuItemUnitPrice(itemPrice, itemSalePrice);
   return `(+€${unit.toFixed(2)})`;
+}
+
+/** Guest-facing addon label for recommendation pickers (quantity + free tier). */
+export function recommendationAddonPriceLabel(
+  itemPrice: number,
+  itemSalePrice: number | null | undefined,
+  defaultUnitPrice: number | null | undefined,
+  options?: {
+    freeQuantity?: number | null;
+    multipleMode?: 'CHECKBOX' | 'QUANTITY' | null;
+    /** All selected option ids in the group (with duplicates for qty). */
+    groupSelectedIds?: string[];
+  }
+): string | null {
+  if (options?.multipleMode === 'QUANTITY') {
+    const show = shouldShowQuantityGroupPickerPrices(
+      options.groupSelectedIds ?? [],
+      options.freeQuantity
+    );
+    if (!show) return null;
+  }
+  return formatRecommendationAddonDisplay(
+    itemPrice,
+    itemSalePrice,
+    defaultUnitPrice
+  );
 }
 
 /** Chargeable unit for cart totals (delta when default baseline is set). */

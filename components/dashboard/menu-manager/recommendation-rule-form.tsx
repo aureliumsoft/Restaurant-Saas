@@ -52,6 +52,8 @@ type Props = {
   saveLabel?: string;
   onSave: (draft: RecommendationRuleDraft) => void;
   onDraftChange?: (draft: RecommendationRuleDraft) => void;
+  /** Bumps when the form should reset (after save, discard, or product change). */
+  resetKey?: string | number;
 };
 
 function variantDefaults(variant: RecommendationFormVariant): {
@@ -79,6 +81,7 @@ export function RecommendationRuleForm({
   saveLabel = 'Save section',
   onSave,
   onDraftChange,
+  resetKey = 0,
 }: Props) {
   const locked = variantDefaults(variant);
   const [sourceType] = useState<'CATEGORY' | 'PRODUCT'>(locked.sourceType);
@@ -189,20 +192,20 @@ export function RecommendationRuleForm({
         });
         return prev.filter((x) => x !== id);
       }
-      const cat = recommendationCategories.find((c) => c.id === id);
-      const firstItem = cat?.items[0];
-      if (firstItem) {
-        setCategoryDefaults((defaults) => ({
-          ...defaults,
-          [id]: firstItem.id,
-        }));
-      }
       return [...prev, id];
     });
   };
 
   const setCategoryDefault = (categoryId: string, menuItemId: string) => {
     setCategoryDefaults((prev) => ({ ...prev, [categoryId]: menuItemId }));
+  };
+
+  const clearCategoryDefault = (categoryId: string) => {
+    setCategoryDefaults((prev) => {
+      const next = { ...prev };
+      delete next[categoryId];
+      return next;
+    });
   };
 
   const initVariationLimits = () => {
@@ -253,6 +256,22 @@ export function RecommendationRuleForm({
   const onDraftChangeRef = useRef(onDraftChange);
   onDraftChangeRef.current = onDraftChange;
   const lastDraftKeyRef = useRef('');
+
+  useEffect(() => {
+    setMultipleMode('CHECKBOX');
+    setRequired(false);
+    setRuleCategoryIds([]);
+    setCategoryDefaults({});
+    setProductCategoryIds([]);
+    setLinkedProductId('');
+    setLinkedProductIds([]);
+    setMinItems(1);
+    setMaxItems(3);
+    setFreeQuantity(1);
+    setVariationLimits([]);
+    setUseVariationPricing(false);
+    lastDraftKeyRef.current = '';
+  }, [resetKey]);
 
   useEffect(() => {
     const draftKey = JSON.stringify(currentDraft);
@@ -342,8 +361,9 @@ export function RecommendationRuleForm({
         ) : (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              For each category, choose the included default item. Guests only
-              see an extra charge (+€) for options priced above that default.
+              For each category, optionally choose a default item. When set,
+              guests only see an extra charge (+€) for options priced above
+              that default. Leave as none to show full prices.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               {assignableCategories.map((cat) => {
@@ -378,8 +398,27 @@ export function RecommendationRuleForm({
                     {checked && cat.items.length > 0 ? (
                       <div className="mt-3 max-h-40 space-y-1 overflow-y-auto border-t border-border pt-3">
                         <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Default item
+                          Default item (optional)
                         </p>
+                        <label
+                          className={cn(
+                            'mb-1 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs',
+                            !defaultId
+                              ? 'bg-primary/10 text-foreground'
+                              : 'hover:bg-muted/50'
+                          )}
+                        >
+                          <input
+                            type="radio"
+                            name={`default-${cat.id}`}
+                            className="h-3.5 w-3.5 accent-primary"
+                            checked={!defaultId}
+                            onChange={() => clearCategoryDefault(cat.id)}
+                          />
+                          <span className="italic text-muted-foreground">
+                            None
+                          </span>
+                        </label>
                         {cat.items.map((it) => (
                           <label
                             key={it.id}

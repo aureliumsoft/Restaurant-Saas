@@ -1,4 +1,5 @@
 import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
+import { shouldShowQuantityGroupPickerPrices } from '@/lib/menu/recommendation-limits';
 
 export type VariationLinkRef = {
   id: string;
@@ -200,4 +201,25 @@ export function formatConfigurationAddonDisplay(
     return `(+€${delta.toFixed(2)})`;
   }
   return `(+€${resolvedListUnit.toFixed(2)})`;
+}
+
+/** Guest-facing addon label for configuration pickers (quantity + free tier). */
+export function configurationAddonPriceLabel(
+  resolvedListUnit: number,
+  defaultUnitPrice: number | null | undefined,
+  options?: {
+    freeQuantity?: number | null;
+    multipleMode?: 'CHECKBOX' | 'QUANTITY' | null;
+    /** All selected option ids in the group (with duplicates for qty). */
+    groupSelectedIds?: string[];
+  }
+): string | null {
+  if (options?.multipleMode === 'QUANTITY') {
+    const show = shouldShowQuantityGroupPickerPrices(
+      options.groupSelectedIds ?? [],
+      options.freeQuantity
+    );
+    if (!show) return null;
+  }
+  return formatConfigurationAddonDisplay(resolvedListUnit, defaultUnitPrice);
 }

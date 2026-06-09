@@ -34,7 +34,7 @@ import {
   configurationGroupDisplayTitle,
   configurationItemListUnitPrice,
   filterConfigurationItemsForParentVariation,
-  formatConfigurationAddonDisplay,
+  configurationAddonPriceLabel,
   isConfigurationGroupVisibleForParentVariation,
   isConfigurationItemAvailableForParentVariation,
   parentVariationFromItemVariation,
@@ -677,13 +677,18 @@ function InlineRecommendationGroups({
                     baseProductVariation,
                     g.useVariationPricing ?? false
                   );
-                  const addonLabel = formatConfigurationAddonDisplay(
-                    listUnit,
-                    defaultListUnit ?? null
-                  );
                   const qty = selectedIds.filter(
                     (id) => id === it.menuItemId
                   ).length;
+                  const addonLabel = configurationAddonPriceLabel(
+                    listUnit,
+                    defaultListUnit ?? null,
+                    {
+                      freeQuantity: g.freeQuantity,
+                      multipleMode: g.multipleMode,
+                      groupSelectedIds: selectedIds,
+                    }
+                  );
                   const radioSelected = selectedIds[0] === it.menuItemId;
                   const checkboxSelected = qty > 0;
                   const atMax =

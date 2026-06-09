@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Loader, Loader2, Loader2Icon, Menu, PanelLeft, PanelLeftClose } from 'lucide-react';
+import { Loader2, Menu, PanelLeft, PanelLeftClose } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
 import { ModeToggle } from '@/components/darkmode/darkmode';
@@ -19,6 +19,7 @@ import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
 import { BranchSwitcher } from '@/components/dashboard/branch-switcher';
 import { useRestaurantBranding } from '@/components/layout/restaurant-branding-provider';
 import { BranchProvider } from '@/hooks/use-branch-context';
+import { DashboardAppShell } from '@/components/layout/dashboard-app-shell';
 
 const SIDEBAR_STORAGE_KEY = 'dashboard-sidebar-open';
 
@@ -208,126 +209,102 @@ const RootLayout = ({ children }: RootLayoutProps) => {
 
   return (
     <BranchProvider>
-      <div className="bg-[#eef0f3] dark:bg-[#0d0d0d]">
-        <div
-          className={cn(
-            'grid min-h-screen w-full',
-            sidebarOpen
-              ? 'md:grid-cols-[minmax(0,220px)_1fr] lg:grid-cols-[minmax(0,280px)_1fr]'
-              : 'grid-cols-1'
-          )}
-        >
-          {/* Sidebar */}
-          <div
-            className={cn(
-              'hidden border-r border-border/60 bg-white dark:bg-[#141414] md:flex md:flex-col',
-              !sidebarOpen && 'md:hidden'
-            )}
+      <DashboardAppShell
+        sidebarOpen={sidebarOpen}
+        sidebarHeader={
+          <Link
+            href={restaurantSlug ? `/web-app/${restaurantSlug}` : '/'}
+            target={restaurantSlug ? '_blank' : undefined}
+            className="flex items-center gap-2 font-semibold"
           >
-            <div className="flex h-full flex-col gap-2">
-              <div className="flex h-14 items-center border-b px-4">
-                <Link
-                  href={restaurantSlug ? `/web-app/${restaurantSlug}` : '/'}
-                  target={restaurantSlug ? '_blank' : undefined}
-                  className="flex items-center gap-2 font-semibold"
-                >
-                  <div className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-xs font-semibold uppercase">
-                    {restaurantLogoUrl && !logoFailed ? (
-                      <img
-                        src={restaurantLogoUrl}
-                        alt={restaurantName}
-                        className="h-full w-full object-cover"
-                        onError={() => setLogoFailed(true)}
-                      />
-                    ) : (
-                      <span>{restaurantName.charAt(0)}</span>
-                    )}
-                  </div>
-                  <span className="truncate">{restaurantName}</span>
-                </Link>
-              </div>
-              <Navbar />
-              <div className="mt-auto px-2 pb-4">
-                <UserMenu className="w-full justify-start" />
-              </div>
-            </div>
-          </div>
-
-          {/* Main */}
-          <div className="flex flex-col">
-            <header className="flex h-14 items-center gap-2 border-b bg-muted/40 px-4 sm:gap-4">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="shrink-0"
-                aria-label="Toggle navigation"
-                title="Show or hide the sidebar with navigation links"
-                onClick={toggleNav}
-              >
-                <span className="hidden md:inline-flex" aria-hidden>
-                  {sidebarOpen ? (
-                    <PanelLeftClose className="h-5 w-5" />
-                  ) : (
-                    <PanelLeft className="h-5 w-5" />
-                  )}
-                </span>
-                <span className="inline-flex md:hidden" aria-hidden>
-                  <Menu className="h-5 w-5" />
-                </span>
-              </Button>
-
-              <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-                <NavbarSheet onNavigate={() => setMobileNavOpen(false)} />
-              </Sheet>
-
-              <div
-                className={cn(
-                  'flex min-w-0 shrink items-center gap-2',
-                  sidebarOpen && 'md:hidden'
-                )}
-              >
-                <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-sm font-semibold uppercase ring-1 ring-border">
-                  {restaurantLogoUrl && !logoFailed ? (
-                    <img
-                      src={restaurantLogoUrl}
-                      alt={restaurantName}
-                      className="h-full w-full object-cover"
-                      onError={() => setLogoFailed(true)}
-                    />
-                  ) : (
-                    <span>{restaurantName.charAt(0)}</span>
-                  )}
-                </div>
-                <span className="truncate text-sm font-semibold">
-                  {restaurantName}
-                </span>
-              </div>
-
-              <Bread />
-              <BranchSwitcher />
-              <ModeToggle />
-              <div
-                className={cn(
-                  'ml-auto flex items-center gap-2',
-                  sidebarOpen && 'md:hidden'
-                )}
-              >
-                <UserMenu />
-              </div>
-            </header>
-
-            <main className="flex flex-1 flex-col gap-4 p-4">
-              {subscriptionWarning && (
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
-                  {subscriptionWarning}
-                </div>
+            <div className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-xs font-semibold uppercase">
+              {restaurantLogoUrl && !logoFailed ? (
+                <img
+                  src={restaurantLogoUrl}
+                  alt={restaurantName}
+                  className="h-full w-full object-cover"
+                  onError={() => setLogoFailed(true)}
+                />
+              ) : (
+                <span>{restaurantName.charAt(0)}</span>
               )}
-              {children}
-            </main>
+            </div>
+            <span className="truncate">{restaurantName}</span>
+          </Link>
+        }
+        sidebarNav={<Navbar />}
+        sidebarFooter={<UserMenu className="w-full justify-start" />}
+        header={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="shrink-0"
+              aria-label="Toggle navigation"
+              title="Show or hide the sidebar with navigation links"
+              onClick={toggleNav}
+            >
+              <span className="hidden md:inline-flex" aria-hidden>
+                {sidebarOpen ? (
+                  <PanelLeftClose className="h-5 w-5" />
+                ) : (
+                  <PanelLeft className="h-5 w-5" />
+                )}
+              </span>
+              <span className="inline-flex md:hidden" aria-hidden>
+                <Menu className="h-5 w-5" />
+              </span>
+            </Button>
+
+            <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+              <NavbarSheet onNavigate={() => setMobileNavOpen(false)} />
+            </Sheet>
+
+            <div
+              className={cn(
+                'flex min-w-0 shrink items-center gap-2',
+                sidebarOpen && 'md:hidden'
+              )}
+            >
+              <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-sm font-semibold uppercase ring-1 ring-border">
+                {restaurantLogoUrl && !logoFailed ? (
+                  <img
+                    src={restaurantLogoUrl}
+                    alt={restaurantName}
+                    className="h-full w-full object-cover"
+                    onError={() => setLogoFailed(true)}
+                  />
+                ) : (
+                  <span>{restaurantName.charAt(0)}</span>
+                )}
+              </div>
+              <span className="truncate text-sm font-semibold">
+                {restaurantName}
+              </span>
+            </div>
+
+            <Bread />
+            <BranchSwitcher />
+            <ModeToggle />
+            <div
+              className={cn(
+                'ml-auto flex items-center gap-2',
+                sidebarOpen && 'md:hidden'
+              )}
+            >
+              <UserMenu />
+            </div>
+          </>
+        }
+      >
+        {subscriptionWarning && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+            {subscriptionWarning}
           </div>
-        </div>
-      </div>
+        )}
+        {children}
+      </DashboardAppShell>
     </BranchProvider>
   );
 };

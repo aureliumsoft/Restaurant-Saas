@@ -14,7 +14,7 @@ export const recommendationGroupBodySchema = z
     multipleMode: z.enum(['CHECKBOX', 'QUANTITY']).optional(),
     required: z.boolean().optional(),
     linkedCategoryId: z.string().uuid().optional(),
-    defaultLinkedMenuItemId: z.string().uuid().optional(),
+    defaultLinkedMenuItemId: z.string().uuid().nullable().optional(),
     linkedProductId: z.string().uuid().optional(),
     productCategoryIds: z.array(z.string().uuid()).optional(),
     sortOrder: z.number().int().min(0).optional(),
@@ -30,14 +30,6 @@ export const recommendationGroupBodySchema = z
         code: z.ZodIssueCode.custom,
         message: 'linkedCategoryId is required for category recommendations',
         path: ['linkedCategoryId'],
-      });
-    }
-    if (data.sourceType === 'CATEGORY' && !data.defaultLinkedMenuItemId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          'defaultLinkedMenuItemId is required for category recommendations',
-        path: ['defaultLinkedMenuItemId'],
       });
     }
     if (data.sourceType === 'PRODUCT' && data.defaultLinkedMenuItemId) {

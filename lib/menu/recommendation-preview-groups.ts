@@ -59,6 +59,17 @@ function productGroupName(
     : `Choose from ${cat}`;
 }
 
+export function variantFromDraft(
+  draft: RecommendationRuleDraft
+): RecommendationFormVariant {
+  if (draft.sourceType === 'CATEGORY') {
+    return draft.selectionType === 'SINGLE'
+      ? 'category-single'
+      : 'category-multiple';
+  }
+  return draft.selectionType === 'SINGLE' ? 'product-single' : 'product-multiple';
+}
+
 export function draftHasContent(
   variant: RecommendationFormVariant,
   draft: RecommendationRuleDraft

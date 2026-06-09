@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import {
   effectiveMenuItemUnitPrice,
-  formatRecommendationAddonDisplay,
+  recommendationAddonPriceLabel,
 } from '@/lib/menu/recommendation-addon-price';
 import {
   linkedItemsForPreviewGroup,
@@ -377,7 +377,7 @@ function PreviewGroupCard({
           <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
             {items.map((it) => {
               const checked = previewIds[0] === it.id;
-              const priceLabel = formatRecommendationAddonDisplay(
+              const priceLabel = recommendationAddonPriceLabel(
                 it.price,
                 it.salePrice,
                 defaultUnit
@@ -416,10 +416,15 @@ function PreviewGroupCard({
           <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
             {items.map((it) => {
               const checked = previewIds.includes(it.id);
-              const priceLabel = formatRecommendationAddonDisplay(
+              const priceLabel = recommendationAddonPriceLabel(
                 it.price,
                 it.salePrice,
-                defaultUnit
+                defaultUnit,
+                {
+                  freeQuantity: group.freeQuantity,
+                  multipleMode: group.multipleMode,
+                  groupSelectedIds: previewIds,
+                }
               );
               const atMax =
                 group.maxItems != null &&

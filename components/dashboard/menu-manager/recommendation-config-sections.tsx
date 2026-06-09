@@ -58,6 +58,7 @@ type Props = {
   onPersonalizeDraftChange: (groups: PersonalizeGroupDraft[]) => void;
   savingPersonalize: boolean;
   onSavePersonalize: () => void;
+  formResetKeys: Record<RecommendationFormVariant, number>;
 };
 
 function SavedGroupList({
@@ -133,6 +134,7 @@ export function RecommendationConfigSections({
   onPersonalizeDraftChange,
   savingPersonalize,
   onSavePersonalize,
+  formResetKeys,
 }: Props) {
   const isSaving = savingRules || savingOffers || savingAll || savingPersonalize;
 
@@ -149,7 +151,7 @@ export function RecommendationConfigSections({
       <RecommendationConfigSectionShell
         step={1}
         title="Category · single selection"
-        description="Guests pick one item from each linked category. Set a default item for delta pricing."
+        description="Guests pick one item from each linked category. Optionally set a default item for delta pricing."
       >
         <SavedGroupList
           groups={savedGroupsByType.categorySingle}
@@ -158,6 +160,7 @@ export function RecommendationConfigSections({
         <RecommendationRuleForm
           variant="category-single"
           {...formProps}
+          resetKey={`${selected.id}:${formResetKeys['category-single']}`}
           saveLabel={`Save ${RECOMMENDATION_SECTION_LABELS['category-single']}`}
           onDraftChange={draftChangeHandlers['category-single']}
         />
@@ -175,6 +178,7 @@ export function RecommendationConfigSections({
         <RecommendationRuleForm
           variant="category-multiple"
           {...formProps}
+          resetKey={`${selected.id}:${formResetKeys['category-multiple']}`}
           saveLabel={`Save ${RECOMMENDATION_SECTION_LABELS['category-multiple']}`}
           onDraftChange={draftChangeHandlers['category-multiple']}
         />
@@ -192,6 +196,7 @@ export function RecommendationConfigSections({
         <RecommendationRuleForm
           variant="product-single"
           {...formProps}
+          resetKey={`${selected.id}:${formResetKeys['product-single']}`}
           saveLabel={`Save ${RECOMMENDATION_SECTION_LABELS['product-single']}`}
           onDraftChange={draftChangeHandlers['product-single']}
         />
@@ -209,6 +214,7 @@ export function RecommendationConfigSections({
         <RecommendationRuleForm
           variant="product-multiple"
           {...formProps}
+          resetKey={`${selected.id}:${formResetKeys['product-multiple']}`}
           saveLabel={`Save ${RECOMMENDATION_SECTION_LABELS['product-multiple']}`}
           onDraftChange={draftChangeHandlers['product-multiple']}
         />

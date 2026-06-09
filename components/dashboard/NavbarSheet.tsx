@@ -5,6 +5,7 @@ import { ScrollAreaDemo } from '../scrollarea/scrollarea';
 import { SheetContent } from '@/components/ui/sheet';
 import { usePathname } from 'next/navigation';
 import UserMenu from './UserMenu';
+import { isDashboardNavItemActive } from '@/lib/dashboard-nav';
 import { useDashboardNavItems } from './use-dashboard-nav-items';
 
 type NavbarSheetProps = {
@@ -44,9 +45,9 @@ export function NavbarSheet({ onNavigate }: NavbarSheetProps) {
                 : undefined
             }
             className={`mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 ${
-              pathname === item.path
-                ? 'bg-primary/10 text-foreground' // Apply active styles if current path matches item path
-                : 'text-muted-foreground hover:text-foreground bg-primary/10' // Apply default styles otherwise
+              isDashboardNavItemActive(pathname ?? '', item.path)
+                ? 'bg-primary/10 text-foreground'
+                : 'text-muted-foreground hover:text-foreground bg-primary/10'
             } transition-all hover:text-primary hover:bg-primary/20`}
           >
             {/* Render the icon and title for each navigation item */}

@@ -3,6 +3,7 @@ import React from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { ScrollAreaDemo } from '../scrollarea/scrollarea';
+import { isDashboardNavItemActive } from '@/lib/dashboard-nav';
 import { useDashboardNavItems } from './use-dashboard-nav-items';
 
 function Navbar() {
@@ -19,7 +20,7 @@ function Navbar() {
               key={item.path}
               href={item.path}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${
-                pathname === item.path
+                isDashboardNavItemActive(pathname ?? '', item.path)
                   ? 'bg-primary/10 font-medium text-primary'
                   : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
               } transition-all`}

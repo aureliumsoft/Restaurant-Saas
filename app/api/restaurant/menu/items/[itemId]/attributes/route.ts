@@ -100,22 +100,24 @@ export async function POST(
       );
     }
 
-    const defaultItem = await db.menuItemCategory.findFirst({
-      where: {
-        menuItemId: data.defaultLinkedMenuItemId!,
-        categoryId: data.linkedCategoryId!,
-        menuItem: { restaurantId: auth.restaurant.id },
-      },
-      select: { menuItemId: true },
-    });
-    if (!defaultItem) {
-      return NextResponse.json(
-        {
-          error:
-            "Default item must be a product in the selected recommendation category.",
+    if (data.defaultLinkedMenuItemId) {
+      const defaultItem = await db.menuItemCategory.findFirst({
+        where: {
+          menuItemId: data.defaultLinkedMenuItemId,
+          categoryId: data.linkedCategoryId!,
+          menuItem: { restaurantId: auth.restaurant.id },
         },
-        { status: 400 }
-      );
+        select: { menuItemId: true },
+      });
+      if (!defaultItem) {
+        return NextResponse.json(
+          {
+            error:
+              "Default item must be a product in the selected recommendation category.",
+          },
+          { status: 400 }
+        );
+      }
     }
   } else {
     const linkedProduct = await db.menuItem.findFirst({
@@ -187,7 +189,7 @@ export async function POST(
       ...(data.sourceType === "CATEGORY"
         ? {
             linkedCategoryId: data.linkedCategoryId!,
-            defaultLinkedMenuItemId: data.defaultLinkedMenuItemId!,
+            defaultLinkedMenuItemId: data.defaultLinkedMenuItemId ?? null,
             productCategoryIds: [],
             linkedProductId: null,
           }

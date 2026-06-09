@@ -66,9 +66,14 @@ import {
   draftHasContent,
   RECOMMENDATION_FORM_VARIANTS,
   RECOMMENDATION_SECTION_LABELS,
+  variantFromDraft,
   type RecommendationFormVariant,
   type PreviewAttrGroup,
 } from '@/lib/menu/recommendation-preview-groups';
+
+const INITIAL_FORM_RESET_KEYS = Object.fromEntries(
+  RECOMMENDATION_FORM_VARIANTS.map((variant) => [variant, 0])
+) as Record<RecommendationFormVariant, number>;
 
 import {
   personalizeDraftToPreviewGroups,
@@ -92,14 +97,6 @@ function validateRecommendationDraft(
 ): string | null {
   if (draft.sourceType === 'CATEGORY' && draft.ruleCategoryIds.length === 0) {
     return 'Choose at least one recommendation category.';
-  }
-  if (draft.sourceType === 'CATEGORY') {
-    for (const catId of draft.ruleCategoryIds) {
-      if (!draft.categoryDefaults[catId]) {
-        const cat = localCategories.find((c) => c.id === catId);
-        return `Select a default item for ${cat?.name ?? 'the category'}.`;
-      }
-    }
   }
   const linkedProductIds =
     draft.linkedProductIds.length > 0
@@ -166,7 +163,7 @@ function buildRecommendationPayloads(
         selectionType: draft.selectionType,
         required: draft.required,
         linkedCategoryId: cat.id,
-        defaultLinkedMenuItemId: draft.categoryDefaults[cat.id],
+        defaultLinkedMenuItemId: draft.categoryDefaults[cat.id] ?? null,
         useVariationPricing: draft.useVariationPricing,
         sortOrder: sortOrderBase + index,
         ...(draft.selectionType === 'MULTIPLE'
@@ -432,14 +429,6 @@ export function RecommendationsTab({
   const [previewPersonalizeByGroup, setPreviewPersonalizeByGroup] = useState<
     Record<string, string[]>
   >({});
-  const [ruleSelectionType, setRuleSelectionType] = useState<
-    'SINGLE' | 'MULTIPLE'
-  >('SINGLE');
-  const [ruleRequired, setRuleRequired] = useState(true);
-  const [ruleMinItems, setRuleMinItems] = useState(1);
-  const [ruleMaxItems, setRuleMaxItems] = useState(3);
-  const [ruleCategoryIds, setRuleCategoryIds] = useState<string[]>([]);
-
   const [offerCategoryIds, setOfferCategoryIds] = useState<string[]>([]);
   const [selectedOfferProductIds, setSelectedOfferProductIds] = useState<
     string[]
@@ -460,51 +449,48 @@ export function RecommendationsTab({
   const [draftByVariant, setDraftByVariant] = useState<
     Partial<Record<RecommendationFormVariant, RecommendationRuleDraft>>
   >({});
+  const [formResetKeys, setFormResetKeys] = useState(INITIAL_FORM_RESET_KEYS);
 
-  const defaultRuleDraft = useMemo(
-    () => ({
-      selectionType: 'SINGLE' as const,
-      required: true,
-      minItems: 1,
-      maxItems: 3,
-    }),
-    []
-  );
+  const bumpFormReset = useCallback((variant: RecommendationFormVariant) => {
+    setFormResetKeys((prev) => ({
+      ...prev,
+      [variant]: (prev[variant] ?? 0) + 1,
+    }));
+  }, []);
 
-  const [ruleDraftBaseline, setRuleDraftBaseline] = useState(defaultRuleDraft);
+  const bumpAllFormResets = useCallback(() => {
+    setFormResetKeys((prev) =>
+      RECOMMENDATION_FORM_VARIANTS.reduce(
+        (acc, variant) => ({
+          ...acc,
+          [variant]: (prev[variant] ?? 0) + 1,
+        }),
+        {} as Record<RecommendationFormVariant, number>
+      )
+    );
+  }, []);
 
-  useEffect(() => {
-    if (!selectedId) return;
-    setRuleDraftBaseline(defaultRuleDraft);
-    setDraftByVariant({});
-  }, [selectedId, defaultRuleDraft]);
-
-  const isDirty = useMemo(() => {
+  const hasPendingConfiguration = useMemo(() => {
     if (!selectedId) return false;
-    if (
-      ruleCategoryIds.length > 0 ||
-      offerCategoryIds.length > 0 ||
-      selectedOfferProductIds.length > 0
-    ) {
-      return true;
-    }
+    const hasRuleDrafts = RECOMMENDATION_FORM_VARIANTS.some((variant) => {
+      const draft = draftByVariant[variant];
+      return draft != null && draftHasContent(variant, draft);
+    });
     return (
-      ruleSelectionType !== ruleDraftBaseline.selectionType ||
-      ruleRequired !== ruleDraftBaseline.required ||
-      ruleMinItems !== ruleDraftBaseline.minItems ||
-      ruleMaxItems !== ruleDraftBaseline.maxItems
+      hasRuleDrafts ||
+      selectedOfferProductIds.length > 0 ||
+      offerCategoryIds.length > 0 ||
+      personalizeDirty
     );
   }, [
     selectedId,
-    ruleCategoryIds,
-    offerCategoryIds,
+    draftByVariant,
     selectedOfferProductIds,
-    ruleSelectionType,
-    ruleRequired,
-    ruleMinItems,
-    ruleMaxItems,
-    ruleDraftBaseline,
+    offerCategoryIds,
+    personalizeDirty,
   ]);
+
+  const isDirty = hasPendingConfiguration;
 
   const {
     leaveOpen,
@@ -519,23 +505,17 @@ export function RecommendationsTab({
   });
 
   const resetDraftState = useCallback(() => {
-    setRuleCategoryIds([]);
     setOfferCategoryIds([]);
     setSelectedOfferProductIds([]);
-    setRuleSelectionType(defaultRuleDraft.selectionType);
-    setRuleRequired(defaultRuleDraft.required);
-    setRuleMinItems(defaultRuleDraft.minItems);
-    setRuleMaxItems(defaultRuleDraft.maxItems);
-    setRuleDraftBaseline(defaultRuleDraft);
     setDraftByVariant({});
-  }, [defaultRuleDraft]);
+    bumpAllFormResets();
+  }, [bumpAllFormResets]);
 
   const selectProduct = useCallback(
     (id: string) => {
       if (id === selectedId) return;
       requestLeave(() => {
         resetDraftState();
-        setDraftByVariant({});
         setSelectedId(id);
       });
     },
@@ -610,15 +590,6 @@ export function RecommendationsTab({
         !selectedCategoryIds.includes(c.id) && !alreadyLinked.has(c.id)
     );
   }, [localCategories, selected, selectedCategoryIds]);
-
-  const assignedCategoryIdsKey = useMemo(() => {
-    if (!selected?.attributeGroups.length) return '';
-    return selected.attributeGroups
-      .map((g) => g.linkedCategory?.id ?? g.linkedProduct?.id ?? '')
-      .filter(Boolean)
-      .sort()
-      .join(',');
-  }, [selected?.attributeGroups]);
 
   const currentOffers = selected?.offersFromThis ?? [];
   const offeredProductsFromSelectedCategories = useMemo(() => {
@@ -696,26 +667,6 @@ export function RecommendationsTab({
     resetDraftState,
   ]);
 
-  useEffect(() => {
-    if (!selected) {
-      setRuleCategoryIds([]);
-      return;
-    }
-    const alreadyLinked = new Set(
-      selected.attributeGroups
-        .filter((g) => g.linkedCategory)
-        .map((g) => g.linkedCategory!.id)
-    );
-    setRuleCategoryIds((prev) =>
-      prev.filter(
-        (id) =>
-          !selectedCategoryIds.includes(id) &&
-          !alreadyLinked.has(id) &&
-          localCategories.some((c) => c.id === id)
-      )
-    );
-  }, [selectedId, assignedCategoryIdsKey, selected, selectedCategoryIds, localCategories]);
-
   const updateSelectedItem = (updater: (item: MenuItemRow) => MenuItemRow) => {
     if (!selectedId) return;
     setLocalCategories((prev) =>
@@ -766,10 +717,15 @@ export function RecommendationsTab({
         ],
       }));
       if (options?.resetAfter !== false) {
+        const variant = variantFromDraft(draft);
+        setDraftByVariant((prev) => {
+          const next = { ...prev };
+          delete next[variant];
+          return next;
+        });
+        bumpFormReset(variant);
         toast.success('Recommendation saved');
         allowNextNavigation();
-        resetDraftState();
-        setDraftByVariant({});
       }
       return true;
     } catch (e: unknown) {
@@ -816,9 +772,10 @@ export function RecommendationsTab({
         ],
       }));
       if (options?.resetAfter !== false) {
+        setOfferCategoryIds([]);
+        setSelectedOfferProductIds([]);
         toast.success('Offered products added');
         allowNextNavigation();
-        resetDraftState();
       }
       return true;
     } catch (e: unknown) {
@@ -917,18 +874,6 @@ export function RecommendationsTab({
       })),
     }));
   }, [selected, personalizeDirty, personalizeDraft]);
-
-  const hasPendingConfiguration = useMemo(() => {
-    const hasRuleDrafts = RECOMMENDATION_FORM_VARIANTS.some((variant) => {
-      const draft = draftByVariant[variant];
-      return draft != null && draftHasContent(variant, draft);
-    });
-    return (
-      hasRuleDrafts ||
-      selectedOfferProductIds.length > 0 ||
-      personalizeDirty
-    );
-  }, [draftByVariant, selectedOfferProductIds, personalizeDirty]);
 
   const saveAllConfiguration = async () => {
     if (!selected) {
@@ -1064,7 +1009,6 @@ export function RecommendationsTab({
       toast.success(`Saved ${parts.join(' and ')}`);
       allowNextNavigation();
       resetDraftState();
-      setDraftByVariant({});
       if (savedPersonalize != null) {
         setPersonalizeDraft(personalizeGroupsToDraft(savedPersonalize));
         setPersonalizeDirty(false);
@@ -1487,6 +1431,7 @@ export function RecommendationsTab({
               }}
               savingPersonalize={savingPersonalize}
               onSavePersonalize={() => void savePersonalize()}
+              formResetKeys={formResetKeys}
             />
           ) : (
             <div className="rounded-lg border border-dashed border-border bg-muted/15 px-4 py-10 text-center sm:px-6 sm:py-12">

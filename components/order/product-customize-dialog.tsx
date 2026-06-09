@@ -47,7 +47,7 @@ import {
   configurationGroupDisplayTitle,
   configurationItemListUnitPrice,
   filterConfigurationItemsForParentVariation,
-  formatConfigurationAddonDisplay,
+  configurationAddonPriceLabel,
   isConfigurationGroupVisibleForParentVariation,
   isConfigurationItemAvailableForParentVariation,
   type ParentVariationContext,
@@ -170,7 +170,8 @@ function configurationDefaultListUnit(
 function configurationItemPickerPrice(
   item: AttributeGroup['items'][number],
   group: AttributeGroup,
-  parentVariation: ParentVariationContext | null
+  parentVariation: ParentVariationContext | null,
+  groupSelectedIds: string[]
 ) {
   const defaultListUnit = configurationDefaultListUnit(group, parentVariation);
   const listUnit = configurationItemListUnitPrice(
@@ -178,9 +179,26 @@ function configurationItemPickerPrice(
     parentVariation,
     group.useVariationPricing ?? false
   );
+  const itemQty = groupSelectedIds.filter(
+    (id) => id === item.menuItemId
+  ).length;
+  const unitCharge = chargeableConfigurationItemUnitPrice(
+    listUnit,
+    defaultListUnit
+  );
+  const chargeableQty =
+    group.multipleMode === 'QUANTITY'
+      ? chargeableUnitsForOption(itemQty, group.freeQuantity)
+      : itemQty > 0
+        ? 1
+        : 0;
   return {
-    price: chargeableConfigurationItemUnitPrice(listUnit, defaultListUnit),
-    priceLabel: formatConfigurationAddonDisplay(listUnit, defaultListUnit),
+    price: unitCharge * chargeableQty,
+    priceLabel: configurationAddonPriceLabel(listUnit, defaultListUnit, {
+      freeQuantity: group.freeQuantity,
+      multipleMode: group.multipleMode,
+      groupSelectedIds,
+    }),
   };
 }
 
@@ -1268,6 +1286,7 @@ export function ProductCustomizeDialog({
       const group = categoryGroups.find((g) => g.id === picker.groupId);
       if (!group) return [];
       const selected = selectedByGroup[group.id]?.[0] ?? '';
+      const groupSelectedIds = selected ? [selected] : [];
       return visibleConfigurationItems(
         group,
         baseProductVariationContext.parent
@@ -1275,7 +1294,8 @@ export function ProductCustomizeDialog({
         const { price, priceLabel } = configurationItemPickerPrice(
           it,
           group,
-          baseProductVariationContext.parent
+          baseProductVariationContext.parent,
+          groupSelectedIds
         );
         return {
         id: it.menuItemId,
@@ -1371,10 +1391,12 @@ export function ProductCustomizeDialog({
         group,
         baseProductVariationContext.parent
       ).map((it) => {
+        const itemQty = selected.filter((x) => x === it.menuItemId).length;
         const { price, priceLabel } = configurationItemPickerPrice(
           it,
           group,
-          baseProductVariationContext.parent
+          baseProductVariationContext.parent,
+          selected
         );
         return {
         id: it.menuItemId,
@@ -1383,7 +1405,7 @@ export function ProductCustomizeDialog({
         priceLabel,
         imageUrl: it.imageUrl,
         selected: selected.includes(it.menuItemId),
-        quantity: selected.filter((x) => x === it.menuItemId).length,
+        quantity: itemQty,
         onChoose: () => {
           if (group.multipleMode === 'CHECKBOX') {
             toggleMultiCheckbox(group, it.menuItemId);
