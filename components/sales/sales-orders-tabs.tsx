@@ -62,6 +62,7 @@ import type {
   SalesOrderRow,
   SalesOrdersApiResponse,
   SalesOrdersPagination,
+  SalesOrdersPeriodFilter,
   SalesOrdersStats,
   SalesOrdersStatusFilter,
   SalesOrdersTab,
@@ -354,6 +355,8 @@ export function SalesOrdersTabs() {
   const [searchInput, setSearchInput] = useState('');
   const [statusFilter, setStatusFilter] =
     useState<SalesOrdersStatusFilter>('all');
+  const [periodFilter, setPeriodFilter] =
+    useState<SalesOrdersPeriodFilter>('overall');
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [activeRow, setActiveRow] = useState<SalesOrderRow | null>(null);
@@ -371,6 +374,7 @@ export function SalesOrdersTabs() {
         tab: activeTab,
         page: String(page),
         status: statusFilter,
+        period: periodFilter,
       });
       if (search.trim()) params.set('search', search.trim());
       if (activeBranchId) params.set('branchId', activeBranchId);
@@ -395,7 +399,7 @@ export function SalesOrdersTabs() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, page, search, statusFilter, activeBranchId]);
+  }, [activeTab, page, search, statusFilter, periodFilter, activeBranchId]);
 
   useEffect(() => {
     if (branchLoading) return;
@@ -585,13 +589,18 @@ export function SalesOrdersTabs() {
 
           <Button
             type="button"
-            variant="outline"
+            variant={periodFilter === 'today' ? 'default' : 'outline'}
             className="gap-2 rounded-xl"
             disabled={loading}
-            onClick={() => load()}
+            onClick={() => {
+              setPeriodFilter((current) =>
+                current === 'today' ? 'overall' : 'today'
+              );
+              setPage(1);
+            }}
           >
             <Calendar className="h-4 w-4" />
-            Today
+            {periodFilter === 'today' ? 'All Time' : 'Today'}
           </Button>
 
           <Button
@@ -615,7 +624,8 @@ export function SalesOrdersTabs() {
             Orders Table
           </h2>
           <p className="text-xs text-muted-foreground">
-            {activeLabel} · {loading ? '…' : activeStats.totalOrders} orders
+            {activeLabel} · {periodFilter === 'today' ? 'Today' : 'Overall'} ·{' '}
+            {loading ? '…' : activeStats.totalOrders} orders
           </p>
         </div>
 

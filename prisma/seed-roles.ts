@@ -88,33 +88,22 @@ async function upsertGlobalRole(
   console.log(`[seed] Created global role "${name}" (${slug})`);
 }
 
-/** Sync migration-created roles with full permission sets. */
+/** Platform roles used before invite acceptance / employee onboarding. */
 async function refreshPendingSignupRoles(prisma: PrismaClient) {
   const ownerPerms = allRestaurantOwnerPermissionNames();
 
-  const pendingOwner = await prisma.role.findFirst({
-    where: { restaurantId: null, slug: 'pending_owner' },
-  });
-  if (pendingOwner) {
-    await prisma.permission.deleteMany({ where: { roleId: pendingOwner.id } });
-    await prisma.permission.createMany({
-      data: ownerPerms.map((name) => ({ name, roleId: pendingOwner.id })),
-    });
-    console.log('[seed] Refreshed permissions for pending_owner');
-  }
-
-  const pendingWorker = await prisma.role.findFirst({
-    where: { restaurantId: null, slug: 'pending_worker' },
-  });
-  if (pendingWorker) {
-    await prisma.permission.deleteMany({
-      where: { roleId: pendingWorker.id },
-    });
-    await prisma.permission.createMany({
-      data: ownerPerms.map((name) => ({ name, roleId: pendingWorker.id })),
-    });
-    console.log('[seed] Refreshed permissions for pending_worker');
-  }
+  await upsertGlobalRole(
+    prisma,
+    'pending_owner',
+    'Pending Owner',
+    ownerPerms
+  );
+  await upsertGlobalRole(
+    prisma,
+    'pending_worker',
+    'Pending Worker',
+    ownerPerms
+  );
 }
 
 /**

@@ -10,26 +10,36 @@ function utcDateOnly(d: Date): string {
 }
 
 /**
- * Assign a daily ticket number (starts from 0 each UTC date, per restaurant).
+ * Assign a daily ticket number (starts from 1 each UTC date, per branch).
  * Uses SQL so it works even when Prisma client is stale.
  */
 async function assignWithExecutor(
   exec: Prisma.TransactionClient | PrismaClient,
   orderId: string,
-  restaurantId: string
+  restaurantId: string,
+  branchId: string | null = null
 ): Promise<number | null> {
   const ticketDate = utcDateOnly(new Date());
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
       const rows = await exec.$queryRaw<Array<{ next: number }>>(
-        Prisma.sql`
-          SELECT COALESCE(MAX("ticketNumber"), -1) + 1 AS next
+        branchId
+          ? Prisma.sql`
+          SELECT COALESCE(MAX("ticketNumber"), 0) + 1 AS next
           FROM "Order"
           WHERE "restaurantId" = ${restaurantId}::uuid
             AND "ticketDate" = ${ticketDate}::date
+            AND "branchId" = ${branchId}::uuid
+        `
+          : Prisma.sql`
+          SELECT COALESCE(MAX("ticketNumber"), 0) + 1 AS next
+          FROM "Order"
+          WHERE "restaurantId" = ${restaurantId}::uuid
+            AND "ticketDate" = ${ticketDate}::date
+            AND "branchId" IS NULL
         `
       );
-      const ticketNumber = Number(rows[0]?.next ?? 0);
+      const ticketNumber = Number(rows[0]?.next ?? 1);
       await exec.$executeRaw(
         Prisma.sql`
           UPDATE "Order"
@@ -56,9 +66,10 @@ async function assignWithExecutor(
 export async function assignDailyTicketNumber(
   tx: Prisma.TransactionClient,
   orderId: string,
-  restaurantId: string
+  restaurantId: string,
+  branchId: string | null = null
 ): Promise<number | null> {
-  return assignWithExecutor(tx, orderId, restaurantId);
+  return assignWithExecutor(tx, orderId, restaurantId, branchId);
 }
 
 /**
@@ -67,12 +78,13 @@ export async function assignDailyTicketNumber(
  */
 export async function assignDailyTicketNumberForOrder(
   orderId: string,
-  restaurantId: string
+  restaurantId: string,
+  branchId: string | null = null
 ): Promise<number | null> {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
       const assigned = await db.$transaction(async (tx) => {
-        return assignWithExecutor(tx, orderId, restaurantId);
+        return assignWithExecutor(tx, orderId, restaurantId, branchId);
       });
       if (assigned != null) return assigned;
     } catch {
@@ -86,7 +98,7 @@ export async function assignDailyTicketNumberForOrder(
 
   // Last attempt without wrapping transaction.
   try {
-    const direct = await assignWithExecutor(db, orderId, restaurantId);
+    const direct = await assignWithExecutor(db, orderId, restaurantId, branchId);
     if (direct != null) return direct;
   } catch {
     // ignore

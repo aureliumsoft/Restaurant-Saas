@@ -128,8 +128,6 @@ export default function RegisterPage() {
       const slug = registerRoles.find((r) => r.id === roleId)?.slug;
       if (slug === REGISTER_ROLE_SLUG.OWNER) {
         router.push('/onboarding/1');
-      } else if (slug === REGISTER_ROLE_SLUG.USER) {
-        router.push('/customer-app');
       } else {
         router.push('/dashboard');
       }
@@ -260,8 +258,7 @@ export default function RegisterPage() {
           </select>
           {!rolesLoading && registerRoles.length === 0 ? (
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              No signup roles found. Ensure the database is seeded (Owner and
-              User global roles).
+              No signup roles found. Run database seed (Owner and Worker roles).
             </p>
           ) : null}
         </div>

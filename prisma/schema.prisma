@@ -552,7 +552,7 @@ model Order {
   restaurantId   String
   branchId       String?
   customerId     String?
-  /// Daily ticket number (resets from 0 each day per restaurant/branch).
+  /// Daily ticket number (resets from 1 each day per branch).
   ticketNumber   Int?
   /// Date bucket for daily ticket sequence.
   ticketDate     DateTime?       @db.Date

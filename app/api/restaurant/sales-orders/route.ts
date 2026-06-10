@@ -4,6 +4,12 @@ import { Prisma } from '@prisma/client';
 
 import { getBranchScopeFromRequest, orderBranchSql } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
+import {
+  parseSalesOrdersPeriod,
+  salesOrderFilterTimezone,
+  salesOrderPeriodMenuSql,
+  salesOrderPeriodTransactionSql,
+} from '@/lib/sales-order-period';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { salesOrderMethodLabel } from '@/lib/order-fulfillment';
 import {
@@ -144,8 +150,15 @@ export async function GET(req: NextRequest) {
     const tab = parseTab(url.searchParams.get('tab'));
     const page = Math.max(1, Number(url.searchParams.get('page') ?? 1) || 1);
     const statusFilter = parseStatusFilter(url.searchParams.get('status'));
+    const period = parseSalesOrdersPeriod(url.searchParams.get('period'));
     const search = (url.searchParams.get('search') ?? '').trim();
     const offset = (page - 1) * PAGE_SIZE;
+    const filterTz = salesOrderFilterTimezone();
+    const menuPeriodSql = salesOrderPeriodMenuSql(period, filterTz);
+    const transactionPeriodSql = salesOrderPeriodTransactionSql(
+      period,
+      filterTz
+    );
 
     const restaurant = await db.restaurant.findUnique({
       where: { id: auth.restaurantId },
@@ -193,6 +206,7 @@ export async function GET(req: NextRequest) {
         FROM "Order" o
         WHERE o."restaurantId" = ${rid}
           ${branchSql}
+          ${menuPeriodSql}
         GROUP BY o."sourceType", o.status
       `);
       for (const row of menuStatRows) {
@@ -233,6 +247,7 @@ export async function GET(req: NextRequest) {
                COALESCE(SUM(t."totalAmount"), 0)::float AS amt
         FROM "Transaction" t
         WHERE t."restaurantId" = ${rid}
+          ${transactionPeriodSql}
         GROUP BY t."isComplete"
       `);
       for (const row of txRows) {
@@ -295,6 +310,7 @@ export async function GET(req: NextRequest) {
             AND ${sourceSqlForTab(tab)}
             ${statusSqlFilter(statusFilter)}
             ${searchSql(search)}
+            ${menuPeriodSql}
           UNION ALL
           SELECT t.id, 'sale_transaction'::text AS kind,
             t.id::text AS "trackingToken", NULL::int AS "ticketNumber",
@@ -307,6 +323,7 @@ export async function GET(req: NextRequest) {
           WHERE t."restaurantId" = ${rid}
             ${transactionStatusSqlFilter(statusFilter)}
             ${transactionSearchSql(search)}
+            ${transactionPeriodSql}
         ) u
         ORDER BY u."createdAt" DESC
         LIMIT ${PAGE_SIZE} OFFSET ${offset}
@@ -320,11 +337,13 @@ export async function GET(req: NextRequest) {
             AND ${sourceSqlForTab(tab)}
             ${statusSqlFilter(statusFilter)}
             ${searchSql(search)}
+            ${menuPeriodSql}
           UNION ALL
           SELECT t.id FROM "Transaction" t
           WHERE t."restaurantId" = ${rid}
             ${transactionStatusSqlFilter(statusFilter)}
             ${transactionSearchSql(search)}
+            ${transactionPeriodSql}
         ) c
       `);
       total = Number(countRow[0]?.count ?? 0);
@@ -389,6 +408,7 @@ export async function GET(req: NextRequest) {
           AND ${sourceSqlForTab(tab)}
           ${statusSqlFilter(statusFilter)}
           ${searchSql(search)}
+          ${menuPeriodSql}
         ORDER BY o."createdAt" DESC
         LIMIT ${PAGE_SIZE} OFFSET ${offset}
       `);
@@ -401,6 +421,7 @@ export async function GET(req: NextRequest) {
           AND ${sourceSqlForTab(tab)}
           ${statusSqlFilter(statusFilter)}
           ${searchSql(search)}
+          ${menuPeriodSql}
       `);
       total = Number(countRow[0]?.count ?? 0);
 
@@ -418,6 +439,7 @@ export async function GET(req: NextRequest) {
         total,
         totalPages,
       },
+      period,
       onlineOrders: tab === 'online' ? orders : [],
       posOrders: tab === 'pos' ? orders : [],
       kioskOrders: tab === 'kiosk' ? orders : [],

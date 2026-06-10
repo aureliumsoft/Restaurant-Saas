@@ -9,9 +9,9 @@ export function utcTicketDateFromNow(now = new Date()): Date {
 }
 
 /**
- * Next daily ticket number for a restaurant (and branch when set).
- * Uses the higher of branch-scoped and restaurant-wide sequences so legacy DB
- * indexes on (restaurantId, ticketDate, ticketNumber) stay satisfied.
+ * Next daily ticket number for a restaurant branch (resets to 1 each UTC date).
+ * Each branch maintains its own sequence — main branch #1 and second branch #1
+ * on the same day are independent.
  */
 export async function allocateTicketNumber(
   tx: Prisma.TransactionClient,
@@ -22,31 +22,17 @@ export async function allocateTicketNumber(
   },
   maxAttempts = 16
 ): Promise<number> {
-  const [scopedPrevious, globalPrevious] = await Promise.all([
-    tx.order.findFirst({
-      where: {
-        restaurantId: args.restaurantId,
-        ticketDate: args.ticketDate,
-        branchId: args.branchId,
-      },
-      orderBy: { ticketNumber: 'desc' },
-      select: { ticketNumber: true },
-    }),
-    tx.order.findFirst({
-      where: {
-        restaurantId: args.restaurantId,
-        ticketDate: args.ticketDate,
-      },
-      orderBy: { ticketNumber: 'desc' },
-      select: { ticketNumber: true },
-    }),
-  ]);
+  const scopedPrevious = await tx.order.findFirst({
+    where: {
+      restaurantId: args.restaurantId,
+      ticketDate: args.ticketDate,
+      branchId: args.branchId,
+    },
+    orderBy: { ticketNumber: 'desc' },
+    select: { ticketNumber: true },
+  });
 
-  let candidate =
-    Math.max(
-      (scopedPrevious?.ticketNumber ?? -1) + 1,
-      (globalPrevious?.ticketNumber ?? -1) + 1
-    );
+  let candidate = (scopedPrevious?.ticketNumber ?? 0) + 1;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const scopedTaken = await tx.order.findFirst({
@@ -58,17 +44,7 @@ export async function allocateTicketNumber(
       },
       select: { id: true },
     });
-    if (!scopedTaken) {
-      const globalTaken = await tx.order.findFirst({
-        where: {
-          restaurantId: args.restaurantId,
-          ticketDate: args.ticketDate,
-          ticketNumber: candidate,
-        },
-        select: { id: true },
-      });
-      if (!globalTaken) return candidate;
-    }
+    if (!scopedTaken) return candidate;
     candidate += 1;
   }
 

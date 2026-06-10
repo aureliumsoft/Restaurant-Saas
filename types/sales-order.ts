@@ -61,3 +61,5 @@ export type SalesOrdersApiResponse = {
 
 export type SalesOrdersTab = 'online' | 'pos' | 'kiosk';
 export type SalesOrdersStatusFilter = 'all' | 'completed' | 'pending' | 'canceled';
+/** `today` = current calendar day; `overall` = all dates. */
+export type SalesOrdersPeriodFilter = 'today' | 'overall';

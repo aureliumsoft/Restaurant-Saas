@@ -38,6 +38,7 @@ import {
   useBranchContext,
   withBranchQuery,
 } from '@/hooks/use-branch-context';
+import { kioskBasePath } from '@/lib/kiosk-path';
 import { canAccessDashboardModule } from '@/lib/restaurant-roles';
 import { cn } from '@/lib/utils';
 import { IconExternalLink } from '@tabler/icons-react';
@@ -334,8 +335,16 @@ export default function DashboardAnalytics() {
             </Button>
             <Button asChild variant="outline" className="rounded-xl">
               <a
-                href={`/kiosk/${encodeURIComponent(slug)}`}
-                title="Opens branch picker — use Settings for per-branch kiosk URLs"
+                href={
+                  activeBranchId
+                    ? kioskBasePath(slug, activeBranchId)
+                    : `/kiosk/${encodeURIComponent(slug)}`
+                }
+                title={
+                  activeBranchId
+                    ? 'Opens kiosk for the selected branch'
+                    : 'Select a branch to open its kiosk'
+                }
                 target="_blank"
                 rel="noopener noreferrer"
               >

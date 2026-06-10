@@ -2,15 +2,20 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { OrderSourceType } from '@prisma/client';
 
+import {
+  getBranchScopeFromRequest,
+  orderBranchWhere,
+} from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
 /**
  * POS orders paid/saved but not yet on the kitchen display (no ticket in "making").
+ * Scoped to the active branch when one is selected.
  */
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const auth = await getRestaurantIdForRequest(_req, {
+    const auth = await getRestaurantIdForRequest(req, {
       moduleKey: 'pos',
       action: 'access',
     });
@@ -18,9 +23,17 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
+    const branchScope = await getBranchScopeFromRequest(
+      req,
+      auth.userId,
+      auth.restaurantId
+    );
+    const branchId = branchScope?.activeBranchId ?? null;
+
     const orders = await db.order.findMany({
       where: {
         restaurantId: auth.restaurantId,
+        ...orderBranchWhere(branchId),
         sourceType: OrderSourceType.POS,
         status: { in: ['pending', 'pedding'] },
         kitchenTickets: {
@@ -71,7 +84,18 @@ export async function GET(_req: NextRequest) {
       })),
     }));
 
-    return NextResponse.json({ data }, { status: 200 });
+    return NextResponse.json(
+      {
+        data,
+        branchId,
+        branchName:
+          branchId != null
+            ? (branchScope?.branches.find((b) => b.id === branchId)?.name ??
+              null)
+            : null,
+      },
+      { status: 200 }
+    );
   } catch (e) {
     console.error('pos pending-kitchen', e);
     return NextResponse.json(

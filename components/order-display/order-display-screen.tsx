@@ -22,6 +22,7 @@ import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
 
 const REFRESH_INTERVAL_MS = 5000;
 const VOICE_STORAGE_KEY = 'order-display:voice-enabled';
+const COMPLETED_ANNOUNCEMENT_REPEATS = 3;
 
 /**
  * Build the speech string for a newly-ready order.
@@ -42,21 +43,46 @@ function buildAnnouncement(ticket: OrderDisplayTicket): string {
   return `Order number ${tokenSpoken} completed. ${name}, please come to the counter to pick up your order.`;
 }
 
-function speakAnnouncement(text: string): void {
-  if (typeof window === 'undefined') return;
+function speakUtterance(
+  synth: SpeechSynthesis,
+  text: string
+): Promise<void> {
+  return new Promise((resolve) => {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'en-US';
+    utter.rate = 0.95;
+    utter.pitch = 1;
+    utter.volume = 1;
+    const done = () => resolve();
+    utter.onend = done;
+    utter.onerror = done;
+    synth.speak(utter);
+  });
+}
+
+/** Announce each completed order {@link COMPLETED_ANNOUNCEMENT_REPEATS} times in sequence. */
+async function speakCompletedAnnouncements(
+  tickets: OrderDisplayTicket[],
+  isEnabled: () => boolean
+): Promise<void> {
+  if (typeof window === 'undefined' || tickets.length === 0) return;
   const synth = window.speechSynthesis;
   if (!synth) return;
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = 'en-US';
-  utter.rate = 0.95;
-  utter.pitch = 1;
-  utter.volume = 1;
-  // Don't queue indefinitely — cap to ~3 pending so a long absence + many
-  // new orders doesn't cause a 30-second backlog of announcements.
-  if (synth.pending && synth.speaking) {
-    // Already speaking + queued; let the new one wait its turn.
+
+  for (const ticket of tickets) {
+    if (!isEnabled()) {
+      synth.cancel();
+      return;
+    }
+    const text = buildAnnouncement(ticket);
+    for (let repeat = 0; repeat < COMPLETED_ANNOUNCEMENT_REPEATS; repeat++) {
+      if (!isEnabled()) {
+        synth.cancel();
+        return;
+      }
+      await speakUtterance(synth, text);
+    }
   }
-  synth.speak(utter);
 }
 
 /**
@@ -193,9 +219,10 @@ export function OrderDisplayScreen() {
         // Speak only AFTER the first load so we don't read out everything
         // that was already on screen when the kiosk was opened.
         if (initializedRef.current && voiceEnabledRef.current) {
-          for (const ticket of freshTickets) {
-            speakAnnouncement(buildAnnouncement(ticket));
-          }
+          void speakCompletedAnnouncements(
+            freshTickets,
+            () => voiceEnabledRef.current
+          );
         }
       }
       initializedRef.current = true;

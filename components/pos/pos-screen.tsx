@@ -299,9 +299,7 @@ function getModifiersSignature(
 }
 
 function lineUnitTotal(line: CartLine) {
-  const base = line.variationId
-    ? line.variationPriceDelta
-    : line.baseUnitPrice;
+  const base = line.variationId ? line.variationPriceDelta : line.baseUnitPrice;
   const modTotal = line.modifiers.reduce(
     (sum, m) => sum + m.selections.reduce((s2, sel) => s2 + sel.unitPrice, 0),
     0
@@ -338,11 +336,13 @@ function normalizeCartLine(
   }
 
   const legacyName = raw.name?.trim() || 'Item';
-  const legacyId = raw.productId?.trim() || raw.menuItemId?.trim() || legacyName;
+  const legacyId =
+    raw.productId?.trim() || raw.menuItemId?.trim() || legacyName;
   return {
     lineId: raw.lineId ?? `legacy-${legacyId}-${Date.now()}`,
     menuItemId: legacyId.split('::sw:')[0] ?? legacyId,
-    productName: legacyName.replace(/\s*\([^)]*\)\s*$/, '').trim() || legacyName,
+    productName:
+      legacyName.replace(/\s*\([^)]*\)\s*$/, '').trim() || legacyName,
     imageUrl: null,
     unitPrice: Number(raw.unitPrice ?? 0),
     qty: Math.max(1, Number(raw.qty ?? 1)),
@@ -387,10 +387,7 @@ function PosCartLineSummary({
       {addonNames.length > 0 ? (
         <div className="mt-1 space-y-0.5">
           {addonNames.map((name, index) => (
-            <p
-              key={`${line.lineId}-sel-${index}`}
-              className={subItemClassName}
-            >
+            <p key={`${line.lineId}-sel-${index}`} className={subItemClassName}>
               - {name}
             </p>
           ))}
@@ -451,7 +448,9 @@ export function PosScreen() {
   const [menuOfferOpen, setMenuOfferOpen] = useState(false);
   const [menuOfferProduct, setMenuOfferProduct] =
     useState<PosMenuProduct | null>(null);
-  const [menuOfferBundles, setMenuOfferBundles] = useState<PosMenuProduct[]>([]);
+  const [menuOfferBundles, setMenuOfferBundles] = useState<PosMenuProduct[]>(
+    []
+  );
 
   const [now, setNow] = useState<Date>(() => new Date());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -485,9 +484,12 @@ export function PosScreen() {
   const loadPendingKitchenOrders = useCallback(async () => {
     setLoadingPendingKitchen(true);
     try {
-      const res = await fetch('/api/restaurant/pos-order/pending-kitchen', {
-        cache: 'no-store',
-      });
+      const branchId = selectedBranchId || activeBranchId || '';
+      const query = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+      const res = await fetch(
+        `/api/restaurant/pos-order/pending-kitchen${query}`,
+        { cache: 'no-store' }
+      );
       if (!res.ok) throw new Error('Failed to load');
       const json = (await res.json()) as { data?: PosPendingKitchenOrder[] };
       setPendingKitchenOrders(json.data ?? []);
@@ -496,7 +498,7 @@ export function PosScreen() {
     } finally {
       setLoadingPendingKitchen(false);
     }
-  }, []);
+  }, [selectedBranchId, activeBranchId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -511,8 +513,7 @@ export function PosScreen() {
         if (!res.ok) throw new Error('Failed to load menu');
         const json = (await res.json()) as RestaurantMenuApi;
         const menus = (json.data?.menus ?? []).filter(
-          (menu) =>
-            menu.showInFront !== false && (menu.items?.length ?? 0) > 0
+          (menu) => menu.showInFront !== false && (menu.items?.length ?? 0) > 0
         );
 
         const nextCategories: Category[] = [{ id: 'all', label: 'ALL' }];
@@ -584,7 +585,12 @@ export function PosScreen() {
           parsed.map((order) => ({
             ...order,
             lines: (order.lines ?? []).map((line) =>
-              normalizeCartLine(line as Partial<CartLine> & { productId?: string; name?: string })
+              normalizeCartLine(
+                line as Partial<CartLine> & {
+                  productId?: string;
+                  name?: string;
+                }
+              )
             ),
           }))
         );
@@ -727,6 +733,10 @@ export function PosScreen() {
   }, [cart, setPosCartHasItems]);
 
   useEffect(() => {
+    void loadPendingKitchenOrders();
+  }, [loadPendingKitchenOrders]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
     if (archivedOrders.length > 0) {
@@ -783,8 +793,7 @@ export function PosScreen() {
 
   const isTableMode = orderMode === 'tables';
   const isDeliveryMode = orderMode === 'delivery';
-  const posBranches =
-    scopedBranches.length > 0 ? scopedBranches : branches;
+  const posBranches = scopedBranches.length > 0 ? scopedBranches : branches;
   const selectedBranchName =
     posBranches.find((b) => b.id === selectedBranchId)?.name ??
     'No branch selected';
@@ -933,7 +942,7 @@ export function PosScreen() {
     const variationId = variation?.id ?? null;
     const modifiersSignature = getModifiersSignature(modifiers, variationId);
     const unitPrice = (() => {
-      const base = variationId ? (variation?.priceDelta ?? 0) : baseUnitPrice;
+      const base = variationId ? variation?.priceDelta ?? 0 : baseUnitPrice;
       const modTotal = modifiers.reduce(
         (sum, m) =>
           sum + m.selections.reduce((s2, sel) => s2 + sel.unitPrice, 0),
@@ -1411,33 +1420,37 @@ export function PosScreen() {
         {/* Categories */}
         <ScrollArea className="min-h-0 max-h-[40dvh] border-b bg-muted/10 lg:h-full lg:max-h-full lg:border-b-0 lg:border-r">
           <div className="space-y-2 p-3">
-            <div className="text-sm font-semibold">Branch</div>
-            <div className="mb-2">
-              {isOwnerOrAdmin ? (
-                <Select
-                  value={selectedBranchId}
-                  onValueChange={(value) => {
-                    setSelectedBranchId(value);
-                    void setActiveBranch(value);
-                  }}
-                >
-                  <SelectTrigger className="h-7 w-full text-xs">
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {posBranches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <p className="rounded-md border bg-background px-2 py-1.5 text-xs text-muted-foreground">
-                  {selectedBranchName}
-                </p>
-              )}
-            </div>
+            {isOwnerOrAdmin && (
+              <>
+                <div className="text-sm font-semibold">Branch</div>
+                <div className="mb-2">
+                  {isOwnerOrAdmin ? (
+                    <Select
+                      value={selectedBranchId}
+                      onValueChange={(value) => {
+                        setSelectedBranchId(value);
+                        void setActiveBranch(value);
+                      }}
+                    >
+                      <SelectTrigger className="h-7 w-full text-xs">
+                        <SelectValue placeholder="Select branch" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {posBranches.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="rounded-md border bg-background px-2 py-1.5 text-xs text-muted-foreground">
+                      {selectedBranchName}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
             <div className="text-sm font-semibold">Categories</div>
             <div className="space-y-2">
               {categories.map((c) => (
@@ -1827,7 +1840,11 @@ export function PosScreen() {
           <SheetHeader>
             <SheetTitle>Not sent to kitchen</SheetTitle>
             <SheetDescription>
-              Paid POS orders waiting for prep time and kitchen display.
+              Paid POS orders waiting for prep time and kitchen display
+              {selectedBranchName !== 'No branch selected'
+                ? ` · ${selectedBranchName}`
+                : ''}
+              .
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">

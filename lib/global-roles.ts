@@ -7,10 +7,10 @@ export const GLOBAL_ROLE_SLUG = {
   PENDING_WORKER: 'pending_worker',
 } as const;
 
-/** Global roles shown on `/register` (seed: name Owner + User). */
+/** Global roles offered on `/register` (pending until onboarding or invite). */
 export const REGISTER_ROLE_SLUG = {
-  OWNER: 'seed_owner',
-  USER: 'customer_user',
+  OWNER: 'pending_owner',
+  WORKER: 'pending_worker',
 } as const;
 
 export async function getGlobalRoleIdBySlug(
