@@ -330,7 +330,9 @@ export function RecommendationRuleForm({
 
   const selectedCategories = useMemo(
     () =>
-      localCategories.filter((c) => ruleCategoryIds.includes(c.id)),
+      ruleCategoryIds
+        .map((id) => localCategories.find((c) => c.id === id))
+        .filter((c): c is MenuCategoryRow => Boolean(c)),
     [localCategories, ruleCategoryIds]
   );
 
@@ -513,6 +515,7 @@ export function RecommendationRuleForm({
             <div className="grid gap-3 sm:grid-cols-2">
               {assignableCategories.map((cat) => {
                 const checked = ruleCategoryIds.includes(cat.id);
+                const selectionOrder = ruleCategoryIds.indexOf(cat.id);
                 const onMenu = isMenuCategoryShownInFront(cat);
                 const defaultId = categoryDefaults[cat.id];
                 const variationPricingEnabled =
@@ -535,6 +538,14 @@ export function RecommendationRuleForm({
                       <span className="min-w-0 flex-1 truncate font-medium">
                         {cat.name}
                       </span>
+                      {checked && selectionOrder >= 0 ? (
+                        <Badge
+                          variant="secondary"
+                          className="shrink-0 text-[10px] font-semibold tabular-nums"
+                        >
+                          #{selectionOrder + 1}
+                        </Badge>
+                      ) : null}
                       <Badge
                         variant="outline"
                         className="shrink-0 text-[10px] font-normal"

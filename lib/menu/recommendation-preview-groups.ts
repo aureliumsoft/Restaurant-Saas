@@ -99,9 +99,11 @@ export function buildDraftPreviewGroups(
   drafts: Partial<Record<RecommendationFormVariant, RecommendationRuleDraft>>,
   localCategories: MenuCategoryRow[],
   allProducts: (MenuItemRow & { categoryName: string })[],
-  baseProduct: MenuItemRow
+  baseProduct: MenuItemRow,
+  sortOrderBase = 0
 ): PreviewAttrGroup[] {
   const out: PreviewAttrGroup[] = [];
+  let sortCursor = sortOrderBase;
 
   const pushCategoryDrafts = (
     variant: 'category-single' | 'category-multiple',
@@ -137,7 +139,7 @@ export function buildDraftPreviewGroups(
         required: draft.required,
         minItems: useCatVariationLimits ? null : catMinMax.minItems,
         maxItems: useCatVariationLimits ? null : catMinMax.maxItems,
-        sortOrder: 9999,
+        sortOrder: sortCursor++,
         linkedCategory: { id: cat.id, name: cat.name },
         defaultLinkedMenuItemId: draft.categoryDefaults[catId] ?? null,
         defaultLinkedMenuItem: defaultItem
@@ -161,9 +163,9 @@ export function buildDraftPreviewGroups(
   ) => {
     const product = allProducts.find((p) => p.id === productId);
     if (!product) return;
-    const catNames = localCategories
-      .filter((c) => draft.productCategoryIds.includes(c.id))
-      .map((c) => c.name);
+    const catNames = draft.productCategoryIds
+      .map((id) => localCategories.find((c) => c.id === id)?.name)
+      .filter((name): name is string => Boolean(name));
     const productMinMax =
       draft.productMinMax[productId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
     out.push({
@@ -181,7 +183,7 @@ export function buildDraftPreviewGroups(
       required: draft.required,
       minItems: productMinMax.minItems,
       maxItems: productMinMax.maxItems,
-      sortOrder: 9999,
+      sortOrder: sortCursor++,
       linkedProduct: {
         id: product.id,
         name: product.name,

@@ -190,10 +190,9 @@ function buildRecommendationPayloads(
   const baseVariationCount = selected.variations?.length ?? 0;
 
   if (draft.sourceType === 'CATEGORY') {
-    const cats = localCategories.filter((c) =>
-      draft.ruleCategoryIds.includes(c.id)
-    );
-    for (const [index, cat] of cats.entries()) {
+    for (const [index, catId] of draft.ruleCategoryIds.entries()) {
+      const cat = localCategories.find((c) => c.id === catId);
+      if (!cat) continue;
       const catVariationLimits = draft.categoryVariationLimits[cat.id];
       const useCatVariationLimits = categoryUsesVariationLimits(
         baseVariationCount,
@@ -233,9 +232,9 @@ function buildRecommendationPayloads(
       });
     }
   } else {
-    const catNames = localCategories
-      .filter((c) => draft.productCategoryIds.includes(c.id))
-      .map((c) => c.name);
+    const catNames = draft.productCategoryIds
+      .map((id) => localCategories.find((c) => c.id === id)?.name)
+      .filter((name): name is string => Boolean(name));
     linkedProductIds.forEach((productId, index) => {
       const product = allProducts.find((p) => p.id === productId);
       payloads.push({
@@ -799,7 +798,7 @@ export function RecommendationsTab({
             (group) =>
               !item.attributeGroups.some((existing) => existing.id === group.id)
           ),
-        ],
+        ].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
       }));
       if (options?.resetAfter !== false) {
         const variant = variantFromDraft(draft);
@@ -1087,7 +1086,7 @@ export function RecommendationsTab({
             (group) =>
               !item.attributeGroups.some((existing) => existing.id === group.id)
           ),
-        ],
+        ].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
         ...(hasOffers
           ? {
               offersFromThis: [
@@ -1186,14 +1185,23 @@ export function RecommendationsTab({
 
   const previewGroups = useMemo((): PreviewAttrGroup[] => {
     if (!selected) return [];
-    const saved = selected.attributeGroups as PreviewAttrGroup[];
+    const saved = [...(selected.attributeGroups as PreviewAttrGroup[])].sort(
+      (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+    );
+    const maxSavedSort = saved.reduce(
+      (max, group) => Math.max(max, group.sortOrder ?? 0),
+      -1
+    );
     const drafts = buildDraftPreviewGroups(
       draftByVariant,
       localCategories,
       allProducts,
-      selected
+      selected,
+      maxSavedSort + 1
     );
-    return [...saved, ...drafts];
+    return [...saved, ...drafts].sort(
+      (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+    );
   }, [selected, draftByVariant, localCategories, allProducts]);
 
   const offeredPreviewItems = useMemo(() => {
@@ -1241,20 +1249,30 @@ export function RecommendationsTab({
         productMultiple: [] as AttrGroupRow[],
       };
     }
-    const groups = selected.attributeGroups;
+    const bySort = (a: AttrGroupRow, b: AttrGroupRow) =>
+      (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    const groups = [...selected.attributeGroups].sort(bySort);
     return {
-      categorySingle: groups.filter(
-        (g) => g.sourceType !== 'PRODUCT' && g.selectionType === 'SINGLE'
-      ),
-      categoryMultiple: groups.filter(
-        (g) => g.sourceType !== 'PRODUCT' && g.selectionType === 'MULTIPLE'
-      ),
-      productSingle: groups.filter(
-        (g) => g.sourceType === 'PRODUCT' && g.selectionType === 'SINGLE'
-      ),
-      productMultiple: groups.filter(
-        (g) => g.sourceType === 'PRODUCT' && g.selectionType === 'MULTIPLE'
-      ),
+      categorySingle: groups
+        .filter(
+          (g) => g.sourceType !== 'PRODUCT' && g.selectionType === 'SINGLE'
+        )
+        .sort(bySort),
+      categoryMultiple: groups
+        .filter(
+          (g) => g.sourceType !== 'PRODUCT' && g.selectionType === 'MULTIPLE'
+        )
+        .sort(bySort),
+      productSingle: groups
+        .filter(
+          (g) => g.sourceType === 'PRODUCT' && g.selectionType === 'SINGLE'
+        )
+        .sort(bySort),
+      productMultiple: groups
+        .filter(
+          (g) => g.sourceType === 'PRODUCT' && g.selectionType === 'MULTIPLE'
+        )
+        .sort(bySort),
     };
   }, [selected]);
 
