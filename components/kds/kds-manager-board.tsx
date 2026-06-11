@@ -33,6 +33,9 @@ type PendingOrder = {
   total: number;
   sourceType: string;
   createdAt: string;
+  paymentStatus: string | null;
+  paymentMethod: string | null;
+  paymentAmount: number | null;
   customer: { name: string } | null;
   items: {
     id: string;
@@ -316,7 +319,15 @@ export function KdsManagerBoard() {
                       </span>
                     </div>
                   </div>
-                  <Badge variant="secondary">{o.sourceType}</Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {o.paymentStatus?.toLowerCase() === 'pending' ? (
+                      <Badge className="bg-amber-500/15 text-amber-800 hover:bg-amber-500/20 dark:text-amber-300">
+                        Payment pending
+                        {o.paymentMethod ? ` · ${o.paymentMethod}` : ''}
+                      </Badge>
+                    ) : null}
+                    <Badge variant="secondary">{o.sourceType}</Badge>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>

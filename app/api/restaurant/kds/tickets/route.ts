@@ -238,6 +238,11 @@ export async function POST(req: NextRequest) {
           where: { id: order.id },
           data: { status: 'making' },
         });
+
+        await tx.payment.updateMany({
+          where: { orderId: order.id, status: 'pending' },
+          data: { status: 'completed' },
+        });
       }, KDS_TX_OPTIONS);
 
       return NextResponse.json({ data: { id: activeTicket.id } }, { status: 200 });
@@ -267,6 +272,11 @@ export async function POST(req: NextRequest) {
       await tx.order.update({
         where: { id: order.id },
         data: { status: 'making' },
+      });
+
+      await tx.payment.updateMany({
+        where: { orderId: order.id, status: 'pending' },
+        data: { status: 'completed' },
       });
 
       return created;

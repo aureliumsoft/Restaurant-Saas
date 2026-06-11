@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -25,6 +25,8 @@ import {
   CrossIcon,
   Loader2,
   ArrowLeft,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { Button } from '@/components/ui/button';
@@ -101,6 +103,8 @@ import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 
 export type OrderMode = 'new' | 'tables' | 'delivery' | 'takeaway' | 'queue';
+
+type CardPaymentStatus = 'idle' | 'processing' | 'success' | 'error' | 'cancelled';
 
 type PosMenuProduct = {
   id: string;
@@ -455,6 +459,17 @@ export function PosScreen() {
   const [now, setNow] = useState<Date>(() => new Date());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [amountPaid, setAmountPaid] = useState('');
+  const [cardPaymentStatus, setCardPaymentStatus] =
+    useState<CardPaymentStatus>('idle');
+  const [cardProcessingOpen, setCardProcessingOpen] = useState(false);
+  const [cardPaymentOutcomeOpen, setCardPaymentOutcomeOpen] = useState<
+    'success' | 'error' | null
+  >(null);
+  const [cardTransactionId, setCardTransactionId] = useState<
+    string | undefined
+  >();
+  const cardPaymentCancelledRef = useRef(false);
+  const cardPaymentResolvedRef = useRef(false);
   const [archivedOrdersOpen, setArchivedOrdersOpen] = useState(false);
   const [archivedOrders, setArchivedOrders] = useState<ArchivedOrder[]>([]);
 
@@ -1175,6 +1190,141 @@ export function PosScreen() {
     setKitchenSendOpen(true);
   }
 
+  function resetCardPayment() {
+    setCardPaymentStatus('idle');
+    setCardTransactionId(undefined);
+    setCardPaymentOutcomeOpen(null);
+    cardPaymentCancelledRef.current = false;
+    cardPaymentResolvedRef.current = false;
+  }
+
+  function handleCheckoutOpenChange(open: boolean) {
+    setCheckoutOpen(open);
+    if (!open) {
+      resetCardPayment();
+      setPaymentMode('cash');
+      setAmountPaid('');
+    }
+  }
+
+  function handleSelectPaymentMode(mode: 'cash' | 'card') {
+    setPaymentMode(mode);
+    resetCardPayment();
+    setAmountPaid('');
+  }
+
+  function finalizeCardPayment(
+    result: 'success' | 'error' | 'cancelled',
+    txnId?: string,
+    force = false
+  ) {
+    if (cardPaymentResolvedRef.current && !force) return;
+    cardPaymentResolvedRef.current = true;
+    setCardProcessingOpen(false);
+    if (result === 'success') {
+      setCardPaymentStatus('success');
+      if (txnId) setCardTransactionId(txnId);
+      const pay = grandTotal.toFixed(2);
+      setAmountPaid(pay);
+      setPayment(pay);
+      setCardPaymentOutcomeOpen('success');
+      return;
+    }
+    setCardPaymentStatus(result === 'cancelled' ? 'cancelled' : 'error');
+    setCardTransactionId(undefined);
+    setAmountPaid('');
+    setPayment('');
+    setCardPaymentOutcomeOpen('error');
+  }
+
+  async function runTerminalCardCharge(): Promise<{
+    ok: boolean;
+    transactionId?: string;
+    message?: string;
+    cancelled?: boolean;
+  }> {
+    const terminalBase =
+      process.env.NEXT_PUBLIC_POS_TERMINAL_API?.trim().replace(/\/$/, '') || '';
+    if (!terminalBase) {
+      return { ok: false, message: 'Terminal API not configured' };
+    }
+    try {
+      const terminalRes = await axios.post<{
+        status?: string;
+        transactionId?: string;
+        message?: string;
+      }>(
+        `${terminalBase}/charge`,
+        {
+          orderId: `POS-PRE-${Date.now()}`,
+          amount: grandTotal,
+          currency: 'EUR',
+        },
+        { timeout: 120000 }
+      );
+      if (cardPaymentCancelledRef.current) {
+        return { ok: false, cancelled: true };
+      }
+      const status = String(terminalRes.data?.status ?? '').toLowerCase();
+      const transactionId = terminalRes.data?.transactionId;
+      const message = String(terminalRes.data?.message ?? '');
+      if (
+        status === 'approved' ||
+        status === 'success' ||
+        status === 'completed'
+      ) {
+        return { ok: true, transactionId };
+      }
+      if (status === 'cancelled' || status === 'canceled') {
+        return { ok: false, cancelled: true, message };
+      }
+      return { ok: false, message };
+    } catch {
+      if (cardPaymentCancelledRef.current) {
+        return { ok: false, cancelled: true };
+      }
+      return { ok: false, message: 'Card terminal request failed' };
+    }
+  }
+
+  async function handleCardPayClick() {
+    if (cardPaymentStatus === 'success') return;
+    cardPaymentCancelledRef.current = false;
+    cardPaymentResolvedRef.current = false;
+    setCardProcessingOpen(true);
+    setCardPaymentStatus('processing');
+
+    const terminalBase =
+      process.env.NEXT_PUBLIC_POS_TERMINAL_API?.trim().replace(/\/$/, '') ||
+      '';
+    if (!terminalBase) return;
+
+    const result = await runTerminalCardCharge();
+    if (cardPaymentCancelledRef.current) return;
+    if (result.ok) {
+      finalizeCardPayment('success', result.transactionId);
+      return;
+    }
+    if (result.cancelled) {
+      finalizeCardPayment('cancelled');
+      return;
+    }
+    finalizeCardPayment('error');
+  }
+
+  function handleCardPaymentBypass() {
+    cardPaymentCancelledRef.current = true;
+    finalizeCardPayment('success', `BYPASS-${Date.now()}`, true);
+  }
+
+  function handleCardPaymentCancel() {
+    cardPaymentCancelledRef.current = true;
+    finalizeCardPayment('cancelled');
+  }
+
+  const isCardPaymentComplete = cardPaymentStatus === 'success';
+  const isCardMode = paymentMode === 'card';
+
   async function saveOrder(opts?: { paymentMode?: string; payment?: string }) {
     const effectivePaymentMode = opts?.paymentMode ?? paymentMode;
     const effectivePayment = opts?.payment ?? payment;
@@ -1315,6 +1465,8 @@ export function PosScreen() {
       clearCart();
       setPayment('');
       setAmountPaid('');
+      resetCardPayment();
+      setPaymentMode('cash');
       setOrderAddress('');
       setCustomerName('');
       setCustomerPhone('');
@@ -1789,6 +1941,8 @@ export function PosScreen() {
                   cart.length === 0 || savingOrder || terminalProcessing
                 }
                 onClick={() => {
+                  resetCardPayment();
+                  setPaymentMode('cash');
                   setAmountPaid('');
                   setCheckoutOpen(true);
                 }}
@@ -2054,7 +2208,7 @@ export function PosScreen() {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+      <Dialog open={checkoutOpen} onOpenChange={handleCheckoutOpenChange}>
         <DialogContent
           className={cn(
             'max-w-2xl flex max-h-[min(90dvh,42rem)] flex-col gap-0 overflow-hidden p-6',
@@ -2168,7 +2322,7 @@ export function PosScreen() {
                             paymentMode === 'cash' ? 'default' : 'outline'
                           }
                           className="justify-start gap-2"
-                          onClick={() => setPaymentMode('cash')}
+                          onClick={() => handleSelectPaymentMode('cash')}
                         >
                           <Banknote className="h-4 w-4" />
                           Cash
@@ -2179,35 +2333,93 @@ export function PosScreen() {
                             paymentMode === 'card' ? 'default' : 'outline'
                           }
                           className="justify-start gap-2"
-                          onClick={() => setPaymentMode('card')}
+                          onClick={() => handleSelectPaymentMode('card')}
                         >
                           <CreditCard className="h-4 w-4" />
                           Card
                         </Button>
                       </div>
+                      {isCardMode ? (
+                        <Button
+                          type="button"
+                          className={cn(
+                            'w-full gap-2',
+                            cardPaymentStatus === 'success' &&
+                              'bg-emerald-600 hover:bg-emerald-600/90',
+                            (cardPaymentStatus === 'error' ||
+                              cardPaymentStatus === 'cancelled') &&
+                              'bg-destructive hover:bg-destructive/90'
+                          )}
+                          disabled={
+                            cardPaymentStatus === 'processing' ||
+                            cardPaymentStatus === 'success'
+                          }
+                          onClick={() => void handleCardPayClick()}
+                        >
+                          {cardPaymentStatus === 'success' ? (
+                            <>
+                              <CheckCircle2 className="h-4 w-4" />
+                              Paid
+                            </>
+                          ) : cardPaymentStatus === 'error' ||
+                            cardPaymentStatus === 'cancelled' ? (
+                            <>
+                              <XCircle className="h-4 w-4" />
+                              Pay
+                            </>
+                          ) : cardPaymentStatus === 'processing' ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Processing…
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="h-4 w-4" />
+                              Pay €{formatMoney(grandTotal)}
+                            </>
+                          )}
+                        </Button>
+                      ) : null}
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">
-                        Total payment
-                      </label>
-                      <Input
-                        className="h-9 bg-background"
-                        inputMode="decimal"
-                        placeholder="0.00"
-                        value={amountPaid}
-                        onChange={(e) => setAmountPaid(e.target.value)}
-                      />
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Change</span>
-                        <span className="tabular-nums text-foreground">
-                          €
-                          {formatMoney(
-                            Math.max(0, (Number(amountPaid) || 0) - grandTotal)
-                          )}
-                        </span>
+                    {isCardMode ? (
+                      <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                        {isCardPaymentComplete ? (
+                          <span className="text-emerald-700 dark:text-emerald-400">
+                            Card payment completed — you can place the order.
+                          </span>
+                        ) : (
+                          <span>
+                            Complete card payment before placing the order.
+                          </span>
+                        )}
                       </div>
-                    </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">
+                          Total payment
+                        </label>
+                        <Input
+                          className="h-9 bg-background"
+                          inputMode="decimal"
+                          placeholder="0.00"
+                          value={amountPaid}
+                          onChange={(e) => setAmountPaid(e.target.value)}
+                        />
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Change</span>
+                          <span className="tabular-nums text-foreground">
+                            €
+                            {formatMoney(
+                              Math.max(
+                                0,
+                                (Number(amountPaid) || 0) - grandTotal
+                              )
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2279,11 +2491,16 @@ export function PosScreen() {
                 cart.length === 0 ||
                 savingOrder ||
                 terminalProcessing ||
-                amountPaid.trim() === ''
+                cardPaymentStatus === 'processing' ||
+                (isCardMode
+                  ? !isCardPaymentComplete
+                  : amountPaid.trim() === '')
               }
               onClick={() => {
-                const pm = paymentMode === 'card' ? 'card' : 'cash';
-                const pay = (Number(amountPaid) || 0).toFixed(2);
+                const pm = isCardMode ? 'card' : 'cash';
+                const pay = isCardMode
+                  ? grandTotal.toFixed(2)
+                  : (Number(amountPaid) || 0).toFixed(2);
                 setPaymentMode(pm);
                 setPayment(pay);
                 void saveOrder({ paymentMode: pm, payment: pay });
@@ -2305,6 +2522,119 @@ export function PosScreen() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={cardProcessingOpen}
+        onOpenChange={(open) => {
+          if (!open && cardPaymentStatus === 'processing') return;
+          setCardProcessingOpen(open);
+        }}
+      >
+        <DialogContent
+          className="max-w-sm"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="text-center sm:text-center">
+            <DialogTitle>Payment processing</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-2">
+            <div className="relative flex h-28 w-36 flex-col items-center justify-end rounded-xl border-2 border-primary/40 bg-muted/50 p-3 shadow-inner">
+              <div className="absolute inset-x-3 top-3 h-10 rounded-md bg-primary/15">
+                <div className="mx-auto mt-2 h-2 w-16 animate-pulse rounded-full bg-primary/50" />
+                <div className="mx-auto mt-2 h-1.5 w-10 animate-pulse rounded-full bg-primary/30 [animation-delay:150ms]" />
+              </div>
+              <div className="mb-1 flex h-10 w-full items-center justify-center rounded-md border border-primary/30 bg-background">
+                <CreditCard className="h-6 w-6 animate-bounce text-primary" />
+              </div>
+              <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                ATM
+              </div>
+            </div>
+            <p className="text-center text-sm text-muted-foreground">
+              Insert or tap card on the terminal…
+            </p>
+            <p className="text-lg font-semibold tabular-nums">
+              €{formatMoney(grandTotal)}
+            </p>
+          </div>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={handleCardPaymentBypass}
+            >
+              Bypass payment (test)
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleCardPaymentCancel}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={cardPaymentOutcomeOpen === 'success'}
+        onOpenChange={(open) => {
+          if (!open) setCardPaymentOutcomeOpen(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              Payment successful
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Card payment of €{formatMoney(grandTotal)} was approved
+              {cardTransactionId ? ` (${cardTransactionId})` : ''}. You can now
+              place the order.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => setCardPaymentOutcomeOpen(null)}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={cardPaymentOutcomeOpen === 'error'}
+        onOpenChange={(open) => {
+          if (!open) setCardPaymentOutcomeOpen(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-destructive" />
+              Payment failed
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {cardPaymentStatus === 'cancelled'
+                ? 'Card payment was cancelled. Tap Pay to try again.'
+                : 'Card payment could not be completed. Tap Pay to try again.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => setCardPaymentOutcomeOpen(null)}
+            >
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog
         open={kitchenSendOpen}

@@ -2,7 +2,10 @@
 
 import {
   ArrowLeft,
+  Banknote,
   CheckCircle,
+  CheckCircle2,
+  CreditCard,
   Loader2,
   Minus,
   Plus,
@@ -11,8 +14,12 @@ import {
   Store,
   Trash2,
   UtensilsCrossed,
+  XCircle,
 } from 'lucide-react';
-import { PayPalCheckoutButtons } from '@/components/payments/paypal-checkout-buttons';
+import {
+  CardPaymentDialogs,
+  useCardPaymentFlow,
+} from '@/components/payments/card-payment-flow';
 import {
   useCallback,
   useEffect,
@@ -329,6 +336,7 @@ export function KioskApp({
     null
   );
   const [placing, setPlacing] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<'cash' | 'card'>('cash');
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [lastTicketNumber, setLastTicketNumber] = useState<number | null>(null);
   const [branchName, setBranchName] = useState<string | null>(null);
@@ -555,6 +563,12 @@ export function KioskApp({
     [cart]
   );
 
+  const cardPayment = useCardPaymentFlow({
+    amount: cartSubtotal,
+    orderIdPrefix: 'KIOSK-PRE',
+    formatMoney,
+  });
+
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
     return customizeProduct.attributeGroups.map((g) =>
@@ -681,66 +695,15 @@ export function KioskApp({
 
   const clearCart = () => persistCart([]);
 
-  const placeOrder = async () => {
-    if (!fulfillment || cart.length === 0) return;
-    setPlacing(true);
-    try {
-      const lines = cart.map((line) => ({
-        menuItemId: line.menuItemId,
-        quantity: line.quantity,
-        unitPrice: lineUnitTotal(line),
-        productName: cartLineDisplayName(line),
-        modifiers: line.modifiers,
-      }));
-      const payload = {
-        restaurantSlug: slug,
-        branchId,
-        fulfillment,
-        tableId: fulfillment === 'dine_in' ? selectedTableId || undefined : undefined,
-        lines,
-        subtotal: cartSubtotal,
-        total: cartSubtotal,
-        cookingNote: cookingNote.trim() || undefined,
-        customerName: customerName.trim() || undefined,
-        customerPhone: customerPhone.trim() || undefined,
-      };
-      const result = await submitKioskOrder(payload);
-      if (result.status === 'queued') {
-        toast.info(
-          'You appear offline. This order is saved on this device and will send when you are back online.'
-        );
-        return;
-      }
-      const placedId = result.data.shortOrderId ?? result.data.orderId;
-      const ticketNumber = result.data.ticketNumber ?? null;
-      setLastOrderId(placedId);
-      setLastTicketNumber(ticketNumber);
-      clearCart();
-      localStorage.removeItem(kioskCheckoutDraftKey(slug, branchId));
-      setCookingNote('');
-      setCustomerName('');
-      setCustomerPhone('');
-      toast.success('Order placed');
-      window.location.assign(
-        `${kioskSuccessPath(slug, branchId)}?orderId=${encodeURIComponent(placedId)}${
-          ticketNumber != null
-            ? `&ticket=${encodeURIComponent(String(ticketNumber))}`
-            : ''
-        }`
-      );
-    } catch (e: unknown) {
-      const ex = e as { body?: unknown };
-      toast.error(
-        ex.body !== undefined
-          ? formatKioskOrderApiError(ex.body)
-          : 'Could not place order.'
-      );
-    } finally {
-      setPlacing(false);
-    }
-  };
+  function handleSelectPaymentMode(mode: 'cash' | 'card') {
+    setPaymentMode(mode);
+    cardPayment.resetCardPayment();
+  }
 
-  const buildKioskOrderPayload = () => {
+  function buildOrderPayload(payment: {
+    paymentStatus: 'pending' | 'completed';
+    paymentMethod: string;
+  }) {
     if (!fulfillment) return null;
     const lines = cart.map((line) => ({
       menuItemId: line.menuItemId,
@@ -761,9 +724,72 @@ export function KioskApp({
       cookingNote: cookingNote.trim() || undefined,
       customerName: customerName.trim() || undefined,
       customerPhone: customerPhone.trim() || undefined,
-      paymentStatus: 'completed' as const,
-      paymentMethod: 'PayPal',
+      paymentStatus: payment.paymentStatus,
+      paymentMethod: payment.paymentMethod,
     };
+  }
+
+  const placeOrder = async (payment: {
+    paymentStatus: 'pending' | 'completed';
+    paymentMethod: string;
+  }) => {
+    if (!fulfillment || cart.length === 0) return;
+    setPlacing(true);
+    try {
+      const payload = buildOrderPayload(payment);
+      if (!payload) return;
+      const result = await submitKioskOrder(payload);
+      if (result.status === 'queued') {
+        toast.info(
+          'You appear offline. This order is saved on this device and will send when you are back online.'
+        );
+        return;
+      }
+      const placedId = result.data.shortOrderId ?? result.data.orderId;
+      const ticketNumber = result.data.ticketNumber ?? null;
+      setLastOrderId(placedId);
+      setLastTicketNumber(ticketNumber);
+      clearCart();
+      cardPayment.resetCardPayment();
+      setPaymentMode('cash');
+      localStorage.removeItem(kioskCheckoutDraftKey(slug, branchId));
+      setCookingNote('');
+      setCustomerName('');
+      setCustomerPhone('');
+      toast.success(
+        payment.paymentStatus === 'pending'
+          ? 'Order placed — pay at counter when ready.'
+          : 'Order placed'
+      );
+      window.location.assign(
+        `${kioskSuccessPath(slug, branchId)}?orderId=${encodeURIComponent(placedId)}${
+          ticketNumber != null
+            ? `&ticket=${encodeURIComponent(String(ticketNumber))}`
+            : ''
+        }`
+      );
+    } catch (e: unknown) {
+      const ex = e as { body?: unknown };
+      toast.error(
+        ex.body !== undefined
+          ? formatKioskOrderApiError(ex.body)
+          : 'Could not place order.'
+      );
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  const confirmCheckoutOrder = () => {
+    if (paymentMode === 'card') {
+      if (!cardPayment.isCardPaymentComplete) {
+        toast.warn('Complete card payment before confirming your order.');
+        return;
+      }
+      void placeOrder({ paymentStatus: 'completed', paymentMethod: 'Card' });
+      return;
+    }
+    void placeOrder({ paymentStatus: 'pending', paymentMethod: 'Cash' });
   };
 
   const startOver = () => {
@@ -1418,6 +1444,8 @@ export function KioskApp({
                       toast.warn(t('customerNameRequired'));
                       return;
                     }
+                    setPaymentMode('cash');
+                    cardPayment.resetCardPayment();
                     setStep('checkout');
                   }}
                 >
@@ -1513,72 +1541,135 @@ export function KioskApp({
               </div>
             </div>
             <div className="space-y-3">
-              {cart.length > 0 ? (
-                <PayPalCheckoutButtons
-                  amount={cartSubtotal}
-                  title="Kiosk order payment"
-                  source="kiosk"
-                  endpoint="/api/kiosk/orders"
-                  payload={buildKioskOrderPayload()}
-                  metadata={{
-                    source: 'kiosk',
-                    restaurantSlug: slug,
-                    branchId,
-                    fulfillment: fulfillment ?? '',
-                  }}
-                  disabled={placing}
-                  onProcessingChange={setPlacing}
-                  onApproved={async ({ capture }) => {
-                    const placedId =
-                      capture.shortOrderId ?? capture.orderId ?? '';
-                    const ticket = capture.ticketNumber;
-                    try {
-                      localStorage.removeItem(kioskCartStorageKey(slug, branchId));
-                      localStorage.removeItem(
-                        kioskCheckoutDraftKey(slug, branchId)
-                      );
-                    } catch {
-                      // ignore storage errors
-                    }
-                    clearCart();
-                    setCookingNote('');
-                    setCustomerName('');
-                    setCustomerPhone('');
-                    if (!placedId) {
-                      toast.warn(
-                        'Payment received but order id is missing. Contact staff.'
-                      );
-                      return;
-                    }
-                    toast.success('Payment received. Order sent to kitchen.');
-                    const qs = new URLSearchParams({
-                      orderId: placedId,
-                    });
-                    if (typeof ticket === 'number' && Number.isFinite(ticket)) {
-                      qs.set('ticket', String(ticket));
-                    }
-                    window.location.assign(
-                      `${kioskSuccessPath(slug, branchId)}?${qs.toString()}`
-                    );
-                  }}
-                  onError={(msg) => {
-                    toast.error(msg);
-                    setPlacing(false);
-                  }}
-                  onCancel={() => {
-                    toast.info('Payment cancelled.');
-                  }}
-                />
-              ) : null}
+              <div className="rounded-xl border border-[#e2e8f0] bg-white p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#64748b]">
+                  Payment method
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={paymentMode === 'cash' ? 'default' : 'outline'}
+                    className="h-12 justify-start gap-2"
+                    onClick={() => handleSelectPaymentMode('cash')}
+                  >
+                    <Banknote className="h-4 w-4" />
+                    Cash
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={paymentMode === 'card' ? 'default' : 'outline'}
+                    className="h-12 justify-start gap-2"
+                    onClick={() => handleSelectPaymentMode('card')}
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    Card
+                  </Button>
+                </div>
+                {paymentMode === 'card' ? (
+                  <div className="mt-3 space-y-2">
+                    <Button
+                      type="button"
+                      className={cn(
+                        'w-full gap-2',
+                        cardPayment.cardPaymentStatus === 'success' &&
+                          'bg-emerald-600 hover:bg-emerald-600/90',
+                        (cardPayment.cardPaymentStatus === 'error' ||
+                          cardPayment.cardPaymentStatus === 'cancelled') &&
+                          'bg-destructive hover:bg-destructive/90'
+                      )}
+                      disabled={
+                        cardPayment.cardPaymentStatus === 'processing' ||
+                        cardPayment.cardPaymentStatus === 'success'
+                      }
+                      onClick={() => void cardPayment.handleCardPayClick()}
+                    >
+                      {cardPayment.cardPaymentStatus === 'success' ? (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" />
+                          Paid
+                        </>
+                      ) : cardPayment.cardPaymentStatus === 'error' ||
+                        cardPayment.cardPaymentStatus === 'cancelled' ? (
+                        <>
+                          <XCircle className="h-4 w-4" />
+                          Pay €{formatMoney(cartSubtotal)}
+                        </>
+                      ) : cardPayment.cardPaymentStatus === 'processing' ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Processing…
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="h-4 w-4" />
+                          Pay €{formatMoney(cartSubtotal)}
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-[#64748b]">
+                      {cardPayment.isCardPaymentComplete
+                        ? 'Payment complete — confirm your order below.'
+                        : 'Pay by card before confirming your order.'}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-[#64748b]">
+                    Pay with cash at the counter. Your order will be created with
+                    payment pending until staff sends it to the kitchen.
+                  </p>
+                )}
+              </div>
+
+              <Button
+                type="button"
+                className="w-full bg-primary py-6 text-base font-semibold text-primary-foreground hover:brightness-95"
+                disabled={
+                  placing ||
+                  cart.length === 0 ||
+                  cardPayment.cardPaymentStatus === 'processing' ||
+                  (paymentMode === 'card' && !cardPayment.isCardPaymentComplete)
+                }
+                onClick={confirmCheckoutOrder}
+              >
+                {placing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Placing order…
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Confirm order
+                  </>
+                )}
+              </Button>
+
               <Button
                 type="button"
                 variant="outline"
                 className="w-full border-[#e2e8f0] bg-white text-[#0f172a] hover:bg-[#f8fafc]"
-                onClick={() => setStep('cart')}
+                onClick={() => {
+                  cardPayment.resetCardPayment();
+                  setPaymentMode('cash');
+                  setStep('cart');
+                }}
               >
                 Back
               </Button>
             </div>
+
+            <CardPaymentDialogs
+              amount={cartSubtotal}
+              cardPaymentStatus={cardPayment.cardPaymentStatus}
+              cardTransactionId={cardPayment.cardTransactionId}
+              cardProcessingOpen={cardPayment.cardProcessingOpen}
+              cardPaymentOutcomeOpen={cardPayment.cardPaymentOutcomeOpen}
+              setCardPaymentOutcomeOpen={cardPayment.setCardPaymentOutcomeOpen}
+              setCardProcessingOpen={cardPayment.setCardProcessingOpen}
+              onBypass={cardPayment.handleCardPaymentBypass}
+              onCancel={cardPayment.handleCardPaymentCancel}
+              formatMoney={formatMoney}
+            />
           </div>
         )}
 

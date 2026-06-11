@@ -217,12 +217,23 @@ CREATE TABLE "EmployeeInvite" (
 CREATE TABLE "MenuCategory" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "imageUrl" TEXT,
     "restaurantId" TEXT NOT NULL,
     "showInFront" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "MenuCategory_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MenuItemCategory" (
+    "menuItemId" TEXT NOT NULL,
+    "categoryId" TEXT NOT NULL,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "MenuItemCategory_pkey" PRIMARY KEY ("menuItemId","categoryId")
 );
 
 -- CreateTable
@@ -240,6 +251,32 @@ CREATE TABLE "MenuItem" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "MenuItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MenuItemPersonalizeGroup" (
+    "id" TEXT NOT NULL,
+    "menuItemId" TEXT NOT NULL,
+    "parentName" TEXT NOT NULL,
+    "maxItems" INTEGER NOT NULL DEFAULT 2,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MenuItemPersonalizeGroup_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MenuItemPersonalizeOption" (
+    "id" TEXT NOT NULL,
+    "groupId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "imageUrl" TEXT,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MenuItemPersonalizeOption_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -376,7 +413,7 @@ CREATE TABLE "OrderItem" (
 CREATE TABLE "OrderItemModifier" (
     "id" TEXT NOT NULL,
     "orderItemId" TEXT NOT NULL,
-    "menuItemId" TEXT NOT NULL,
+    "menuItemId" TEXT,
     "name" TEXT NOT NULL,
     "unitPrice" DOUBLE PRECISION NOT NULL,
     "quantity" INTEGER NOT NULL DEFAULT 1,
@@ -541,6 +578,18 @@ CREATE UNIQUE INDEX "EmployeeInvite_token_key" ON "EmployeeInvite"("token");
 CREATE INDEX "EmployeeInvite_restaurantId_email_idx" ON "EmployeeInvite"("restaurantId", "email");
 
 -- CreateIndex
+CREATE INDEX "MenuItemCategory_categoryId_idx" ON "MenuItemCategory"("categoryId");
+
+-- CreateIndex
+CREATE INDEX "MenuItemCategory_menuItemId_idx" ON "MenuItemCategory"("menuItemId");
+
+-- CreateIndex
+CREATE INDEX "MenuItemPersonalizeGroup_menuItemId_idx" ON "MenuItemPersonalizeGroup"("menuItemId");
+
+-- CreateIndex
+CREATE INDEX "MenuItemPersonalizeOption_groupId_idx" ON "MenuItemPersonalizeOption"("groupId");
+
+-- CreateIndex
 CREATE INDEX "RestaurantVariation_restaurantId_sortOrder_idx" ON "RestaurantVariation"("restaurantId", "sortOrder");
 
 -- CreateIndex
@@ -691,10 +740,22 @@ ALTER TABLE "EmployeeInvite" ADD CONSTRAINT "EmployeeInvite_invitedById_fkey" FO
 ALTER TABLE "MenuCategory" ADD CONSTRAINT "MenuCategory_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "Restaurant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "MenuItemCategory" ADD CONSTRAINT "MenuItemCategory_menuItemId_fkey" FOREIGN KEY ("menuItemId") REFERENCES "MenuItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MenuItemCategory" ADD CONSTRAINT "MenuItemCategory_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "MenuCategory"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "MenuItem" ADD CONSTRAINT "MenuItem_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "MenuCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MenuItem" ADD CONSTRAINT "MenuItem_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "Restaurant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MenuItemPersonalizeGroup" ADD CONSTRAINT "MenuItemPersonalizeGroup_menuItemId_fkey" FOREIGN KEY ("menuItemId") REFERENCES "MenuItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MenuItemPersonalizeOption" ADD CONSTRAINT "MenuItemPersonalizeOption_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "MenuItemPersonalizeGroup"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "RestaurantVariation" ADD CONSTRAINT "RestaurantVariation_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "Restaurant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -754,7 +815,7 @@ ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_menuItemId_fkey" FOREIGN KEY (
 ALTER TABLE "OrderItemModifier" ADD CONSTRAINT "OrderItemModifier_orderItemId_fkey" FOREIGN KEY ("orderItemId") REFERENCES "OrderItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "OrderItemModifier" ADD CONSTRAINT "OrderItemModifier_menuItemId_fkey" FOREIGN KEY ("menuItemId") REFERENCES "MenuItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "OrderItemModifier" ADD CONSTRAINT "OrderItemModifier_menuItemId_fkey" FOREIGN KEY ("menuItemId") REFERENCES "MenuItem"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Payment" ADD CONSTRAINT "Payment_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -41,7 +41,7 @@ import type {
   TransactionHistoryResponse,
   TransactionHistoryRow,
 } from '@/types/transaction-history';
-import { Loader2, RefreshCcw } from 'lucide-react';
+import { Eye, Loader2, RefreshCcw } from 'lucide-react';
 
 const PAGE_SIZE = 20;
 
@@ -285,7 +285,7 @@ export function Records() {
                                 setDetailOpen(true);
                               }}
                             >
-                              View
+                              <Eye className="h-4 w-4 mr-2" /> View
                             </Button>
                           </TableCell>
                         </TableRow>

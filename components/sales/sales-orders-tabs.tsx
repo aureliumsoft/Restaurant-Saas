@@ -10,8 +10,8 @@ import {
   CircleDollarSign,
   Clock3,
   Ban,
-  ChevronDown,
   Calendar,
+  Eye,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -152,10 +152,21 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function orderAvatarLabel(row: SalesOrderRow): string {
-  const token = row.trackingToken ?? row.id;
-  const clean = token.replace(/[^a-zA-Z0-9]/g, '');
-  return (clean.slice(0, 2) || 'OR').toUpperCase();
+const TAB_ACCENT: Record<SalesOrdersTab, string> = {
+  online: '#ed6e40',
+  pos: '#7c3aed',
+  kiosk: '#e11d48',
+};
+
+function orderNumberLabel(row: SalesOrderRow): string {
+  if (row.ticketNumber != null) return `#${row.ticketNumber}`;
+  return '—';
+}
+
+function trackingNumberLabel(row: SalesOrderRow): string {
+  const token = (row.trackingToken ?? row.id).replace(/[^a-zA-Z0-9]/g, '');
+  if (!token) return '—';
+  return token.length <= 8 ? token.toUpperCase() : token.slice(0, 6).toUpperCase();
 }
 
 function SalesOrdersPaginationBar({
@@ -257,7 +268,8 @@ function OrdersTable({
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="text-muted-foreground">Order ID</TableHead>
+            <TableHead className="text-muted-foreground">Order #</TableHead>
+            <TableHead className="text-muted-foreground">Tracking #</TableHead>
             <TableHead className="hidden text-muted-foreground sm:table-cell">
               Order Type
             </TableHead>
@@ -280,7 +292,7 @@ function OrdersTable({
           {rows.length === 0 ? (
             <TableRow className="hover:bg-transparent">
               <TableCell
-                colSpan={8}
+                colSpan={9}
                 className="py-10 text-center text-muted-foreground"
               >
                 No orders in this tab.
@@ -292,11 +304,11 @@ function OrdersTable({
                 key={`${row.kind}-${row.id}`}
                 className="hover:bg-muted/40"
               >
-               
-                <TableCell className="font-medium text-foreground">
-                  {row.ticketNumber != null
-                    ? `#${row.ticketNumber}`
-                    : `#${(row.trackingToken ?? row.id).slice(0, 6)}`}
+                <TableCell className="font-medium text-foreground tabular-nums">
+                  {orderNumberLabel(row)}
+                </TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">
+                  {trackingNumberLabel(row)}
                 </TableCell>
                 <TableCell className="hidden text-foreground/80 sm:table-cell">
                   {orderSourceLabel(row.sourceType)}
@@ -321,11 +333,12 @@ function OrdersTable({
                   <Button
                     type="button"
                     variant="ghost"
-                    className="h-8 gap-1 px-2 text-muted-foreground hover:text-foreground"
+                    size="sm"
+                    className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
                     onClick={() => onView(row)}
                   >
-                    Action menu
-                    <ChevronDown className="h-3.5 w-3.5" />
+                    <Eye className="h-4 w-4" />
+                    View
                   </Button>
                 </TableCell>
               </TableRow>
@@ -467,55 +480,43 @@ export function SalesOrdersTabs() {
         : stats.kiosk;
   const activeLabel =
     activeTab === 'online' ? 'Online' : activeTab === 'pos' ? 'POS' : 'Kiosk';
-
-  const combinedStats = {
-    totalOrders:
-      stats.online.totalOrders + stats.pos.totalOrders + stats.kiosk.totalOrders,
-    totalRevenue:
-      stats.online.revenueAmount +
-      stats.pos.revenueAmount +
-      stats.kiosk.revenueAmount,
-    pending:
-      stats.online.pending.count +
-      stats.pos.pending.count +
-      stats.kiosk.pending.count,
-    canceled:
-      stats.online.canceled.count +
-      stats.pos.canceled.count +
-      stats.kiosk.canceled.count,
-  };
+  const activeAccent = TAB_ACCENT[activeTab];
 
   return (
     <div className="space-y-6">
-      <div className="grid w-full gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <OrdersKpiCard
+          tabName={activeLabel}
           label="Total Orders"
-          value={combinedStats.totalOrders}
-          sparklineData={kpiSparklineFromValue(combinedStats.totalOrders)}
-          accentColor="#ed6e40"
+          value={activeStats.totalOrders}
+          sparklineData={kpiSparklineFromValue(activeStats.totalOrders)}
+          accentColor={activeAccent}
           icon={ShoppingBag}
           loading={loading}
         />
         <OrdersKpiCard
+          tabName={activeLabel}
           label="Total Revenue"
-          value={`€${formatMoney(combinedStats.totalRevenue)}`}
-          sparklineData={kpiSparklineFromValue(combinedStats.totalRevenue)}
+          value={`€${formatMoney(activeStats.revenueAmount)}`}
+          sparklineData={kpiSparklineFromValue(activeStats.revenueAmount)}
           accentColor="#22c55e"
           icon={CircleDollarSign}
           loading={loading}
         />
         <OrdersKpiCard
+          tabName={activeLabel}
           label="Pending Orders"
-          value={combinedStats.pending}
-          sparklineData={kpiSparklineFromValue(combinedStats.pending)}
+          value={activeStats.pending.count}
+          sparklineData={kpiSparklineFromValue(activeStats.pending.count)}
           accentColor="#f59e0b"
           icon={Clock3}
           loading={loading}
         />
         <OrdersKpiCard
+          tabName={activeLabel}
           label="Cancelled Orders"
-          value={combinedStats.canceled}
-          sparklineData={kpiSparklineFromValue(combinedStats.canceled)}
+          value={activeStats.canceled.count}
+          sparklineData={kpiSparklineFromValue(activeStats.canceled.count)}
           accentColor="#ef4444"
           icon={Ban}
           loading={loading}
@@ -619,13 +620,25 @@ export function SalesOrdersTabs() {
       </div>
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold text-foreground">
-            Orders Table
-          </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span
+              className="h-3 w-3 shrink-0 rounded-full"
+              style={{ backgroundColor: activeAccent }}
+              aria-hidden
+            />
+            <h2 className="text-lg font-semibold text-foreground">
+              {activeLabel}
+            </h2>
+            <Badge
+              variant="secondary"
+              className="rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums"
+            >
+              {loading ? '…' : activeStats.totalOrders} total
+            </Badge>
+          </div>
           <p className="text-xs text-muted-foreground">
-            {activeLabel} · {periodFilter === 'today' ? 'Today' : 'Overall'} ·{' '}
-            {loading ? '…' : activeStats.totalOrders} orders
+            {periodFilter === 'today' ? 'Today' : 'Overall'} · Orders table
           </p>
         </div>
 

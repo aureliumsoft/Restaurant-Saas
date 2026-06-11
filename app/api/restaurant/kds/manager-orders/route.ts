@@ -48,14 +48,32 @@ export async function GET(_req: NextRequest) {
         customer: { select: { name: true, phone: true } },
         items: {
           select: {
+            id: true,
             quantity: true,
             menuItem: { select: { name: true } },
+            modifiers: { select: { name: true, quantity: true } },
           },
+        },
+        payments: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { status: true, method: true, amount: true },
         },
       },
     });
 
-    return NextResponse.json({ data: pending }, { status: 200 });
+    const data = pending.map((order) => {
+      const latestPayment = order.payments[0] ?? null;
+      const { payments: _payments, ...rest } = order;
+      return {
+        ...rest,
+        paymentStatus: latestPayment?.status ?? null,
+        paymentMethod: latestPayment?.method ?? null,
+        paymentAmount: latestPayment?.amount ?? null,
+      };
+    });
+
+    return NextResponse.json({ data }, { status: 200 });
   } catch (e) {
     console.error('kds manager-orders', e);
     return NextResponse.json(

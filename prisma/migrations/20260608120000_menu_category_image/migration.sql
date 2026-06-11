@@ -1,1 +1,0 @@
-ALTER TABLE "MenuCategory" ADD COLUMN IF NOT EXISTS "imageUrl" TEXT;
