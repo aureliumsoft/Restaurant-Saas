@@ -204,7 +204,9 @@ export async function POST(
             multipleMode: data.multipleMode!,
             freeQuantity:
               data.multipleMode === "QUANTITY"
-                ? (data.freeQuantity ?? 0)
+                ? data.freeQuantity === undefined
+                  ? 0
+                  : data.freeQuantity
                 : null,
             minItems: data.variationLimits?.length ? null : data.minItems!,
             maxItems: data.variationLimits?.length ? null : data.maxItems!,

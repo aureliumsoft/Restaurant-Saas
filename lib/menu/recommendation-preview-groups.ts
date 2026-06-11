@@ -1,7 +1,9 @@
 import {
   categoryUsesVariationLimits,
   DEFAULT_CATEGORY_MIN_MAX,
-  DEFAULT_FREE_QUANTITY,
+  nextRecommendationSortOrderBase,
+  resolveCategoryFreeQuantity,
+  resolveProductFreeQuantity,
 } from '@/lib/menu/recommendation-category-limits';
 import {
   configurationGroupHasItemsForParentVariation,
@@ -25,12 +27,57 @@ export type RecommendationFormVariant =
   | 'product-single'
   | 'product-multiple';
 
+/** Multiple-selection sections sort before single-selection (matches typical setup flow). */
 export const RECOMMENDATION_FORM_VARIANTS: RecommendationFormVariant[] = [
-  'category-single',
   'category-multiple',
-  'product-single',
   'product-multiple',
+  'category-single',
+  'product-single',
 ];
+
+export function recommendationDraftKey(
+  variant: RecommendationFormVariant,
+  entityId: string
+): string {
+  return `${variant}-${entityId}`;
+}
+
+/** Assign continuous sort orders across saved groups and all pending drafts. */
+export function buildRecommendationSortPlan(
+  savedGroups: AttrGroupRow[],
+  drafts: Partial<Record<RecommendationFormVariant, RecommendationRuleDraft>>
+): Map<string, number> {
+  const plan = new Map<string, number>();
+  let cursor = nextRecommendationSortOrderBase(savedGroups);
+
+  for (const variant of RECOMMENDATION_FORM_VARIANTS) {
+    const draft = drafts[variant];
+    if (!draft || !draftHasContent(variant, draft)) continue;
+
+    if (variant === 'category-single' || variant === 'category-multiple') {
+      for (const catId of draft.ruleCategoryIds) {
+        plan.set(recommendationDraftKey(variant, catId), cursor++);
+      }
+      continue;
+    }
+
+    if (variant === 'product-single' && draft.linkedProductId) {
+      plan.set(
+        recommendationDraftKey(variant, draft.linkedProductId),
+        cursor++
+      );
+      continue;
+    }
+
+    if (variant === 'product-multiple') {
+      for (const productId of draft.linkedProductIds) {
+        plan.set(recommendationDraftKey(variant, productId), cursor++);
+      }
+    }
+  }
+
+  return plan;
+}
 
 export const RECOMMENDATION_SECTION_LABELS: Record<
   RecommendationFormVariant,
@@ -100,10 +147,10 @@ export function buildDraftPreviewGroups(
   localCategories: MenuCategoryRow[],
   allProducts: (MenuItemRow & { categoryName: string })[],
   baseProduct: MenuItemRow,
-  sortOrderBase = 0
+  savedGroups: AttrGroupRow[] = []
 ): PreviewAttrGroup[] {
+  const sortPlan = buildRecommendationSortPlan(savedGroups, drafts);
   const out: PreviewAttrGroup[] = [];
-  let sortCursor = sortOrderBase;
 
   const pushCategoryDrafts = (
     variant: 'category-single' | 'category-multiple',
@@ -134,12 +181,12 @@ export function buildDraftPreviewGroups(
         multipleMode: draft.multipleMode,
         freeQuantity:
           draft.multipleMode === 'QUANTITY'
-            ? (draft.categoryFreeQuantity[catId] ?? DEFAULT_FREE_QUANTITY)
+            ? resolveCategoryFreeQuantity(draft.categoryFreeQuantity, catId)
             : null,
         required: draft.required,
         minItems: useCatVariationLimits ? null : catMinMax.minItems,
         maxItems: useCatVariationLimits ? null : catMinMax.maxItems,
-        sortOrder: sortCursor++,
+        sortOrder: sortPlan.get(recommendationDraftKey(variant, catId)) ?? 0,
         linkedCategory: { id: cat.id, name: cat.name },
         defaultLinkedMenuItemId: draft.categoryDefaults[catId] ?? null,
         defaultLinkedMenuItem: defaultItem
@@ -163,9 +210,9 @@ export function buildDraftPreviewGroups(
   ) => {
     const product = allProducts.find((p) => p.id === productId);
     if (!product) return;
-    const catNames = draft.productCategoryIds
-      .map((id) => localCategories.find((c) => c.id === id)?.name)
-      .filter((name): name is string => Boolean(name));
+    const catNames = localCategories
+      .filter((c) => draft.productCategoryIds.includes(c.id))
+      .map((c) => c.name);
     const productMinMax =
       draft.productMinMax[productId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
     out.push({
@@ -178,12 +225,13 @@ export function buildDraftPreviewGroups(
       multipleMode: draft.multipleMode,
       freeQuantity:
         draft.multipleMode === 'QUANTITY'
-          ? (draft.productFreeQuantity[productId] ?? DEFAULT_FREE_QUANTITY)
+          ? resolveProductFreeQuantity(draft.productFreeQuantity, productId)
           : null,
       required: draft.required,
       minItems: productMinMax.minItems,
       maxItems: productMinMax.maxItems,
-      sortOrder: sortCursor++,
+      sortOrder:
+        sortPlan.get(recommendationDraftKey(variant, productId)) ?? 0,
       linkedProduct: {
         id: product.id,
         name: product.name,
@@ -196,21 +244,21 @@ export function buildDraftPreviewGroups(
     });
   };
 
-  const catSingle = drafts['category-single'];
-  if (catSingle) pushCategoryDrafts('category-single', catSingle);
-
-  const catMulti = drafts['category-multiple'];
-  if (catMulti) pushCategoryDrafts('category-multiple', catMulti);
-
-  const prodSingle = drafts['product-single'];
-  if (prodSingle?.linkedProductId) {
-    pushProductDraft('product-single', prodSingle, prodSingle.linkedProductId);
-  }
-
-  const prodMulti = drafts['product-multiple'];
-  if (prodMulti) {
-    for (const pid of prodMulti.linkedProductIds) {
-      pushProductDraft('product-multiple', prodMulti, pid);
+  for (const variant of RECOMMENDATION_FORM_VARIANTS) {
+    const draft = drafts[variant];
+    if (!draft) continue;
+    if (variant === 'category-single' || variant === 'category-multiple') {
+      pushCategoryDrafts(variant, draft);
+      continue;
+    }
+    if (variant === 'product-single' && draft.linkedProductId) {
+      pushProductDraft(variant, draft, draft.linkedProductId);
+      continue;
+    }
+    if (variant === 'product-multiple') {
+      for (const pid of draft.linkedProductIds) {
+        pushProductDraft(variant, draft, pid);
+      }
     }
   }
 

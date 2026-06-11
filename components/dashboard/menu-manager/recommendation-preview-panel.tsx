@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import {
   configurationAddonPriceLabel,
+  configurationDefaultListUnitPrice,
   configurationGroupDisplayTitle,
   configurationItemListUnitPrice,
   type ParentVariationContext,
@@ -34,26 +35,33 @@ function previewDefaultListUnit(
   visibleItems: MenuItemRow[],
   parentVariation: ParentVariationContext | null
 ): number | null {
-  const useVariationPricing = group.useVariationPricing ?? false;
-  const defaultId =
-    group.defaultLinkedMenuItemId ?? group.defaultLinkedMenuItem?.id;
-  if (defaultId) {
-    const defaultItem = visibleItems.find((i) => i.id === defaultId);
-    if (defaultItem) {
-      return configurationItemListUnitPrice(
-        defaultItem,
-        parentVariation,
-        useVariationPricing
-      );
-    }
-  }
-  if (!useVariationPricing && group.defaultLinkedMenuItem) {
-    return effectiveMenuItemUnitPrice(
-      group.defaultLinkedMenuItem.price,
-      group.defaultLinkedMenuItem.salePrice
-    );
-  }
-  return null;
+  return configurationDefaultListUnitPrice(
+    {
+      defaultMenuItemId:
+        group.defaultLinkedMenuItemId ?? group.defaultLinkedMenuItem?.id,
+      defaultUnitPrice:
+        group.defaultLinkedMenuItem && !(group.useVariationPricing ?? false)
+          ? effectiveMenuItemUnitPrice(
+              group.defaultLinkedMenuItem.price,
+              group.defaultLinkedMenuItem.salePrice
+            )
+          : null,
+      useVariationPricing: group.useVariationPricing,
+      items: visibleItems.map((item) => ({
+        menuItemId: item.id,
+        price: item.price,
+        salePrice: item.salePrice,
+        variations: item.variations,
+      })),
+    },
+    parentVariation,
+    visibleItems.map((item) => ({
+      menuItemId: item.id,
+      price: item.price,
+      salePrice: item.salePrice,
+      variations: item.variations,
+    }))
+  );
 }
 
 function multiSelectionHint(
@@ -453,6 +461,9 @@ function PreviewGroupCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="tabular-nums text-[10px]">
+              Step {(group.sortOrder ?? 0) + 1}
+            </Badge>
             <Label className="text-sm font-semibold">{groupTitle}</Label>
             {group.isDraft ? (
               <Badge variant="outline" className="text-[10px] uppercase">

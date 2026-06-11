@@ -1,4 +1,52 @@
+import { getMinVariationPrice } from '@/lib/menu-item-pricing';
 import { shouldShowQuantityGroupPickerPrices } from '@/lib/menu/recommendation-limits';
+
+/** Product-type recommendations: base item included; only variation uplift may bill. */
+export const PRODUCT_RECOMMENDATION_UNIT_PRICE = 0;
+
+export type ProductRecommendationItemLike = {
+  price: number;
+  salePrice: number | null;
+  variations?: Array<{ id: string; priceDelta: number }> | null;
+};
+
+/** Cheapest variation (or list price) baseline for a recommended product. */
+export function productRecommendationListBaseline(
+  item: ProductRecommendationItemLike
+): number {
+  return variationPickerBaselineUnitPrice(
+    effectiveMenuItemUnitPrice(item.price, item.salePrice),
+    item.variations
+  );
+}
+
+/** Cart unit for a recommended product: uplift above cheapest variation only. */
+export function productRecommendationVariationUnitPrice(
+  item: ProductRecommendationItemLike,
+  selectedVariationId: string | null | undefined
+): number {
+  const variations = item.variations ?? [];
+  if (variations.length === 0 || !selectedVariationId) {
+    return PRODUCT_RECOMMENDATION_UNIT_PRICE;
+  }
+  const pv = variations.find((v) => v.id === selectedVariationId);
+  if (!pv) return PRODUCT_RECOMMENDATION_UNIT_PRICE;
+  return chargeableVariationUnitPrice(
+    pv.priceDelta,
+    productRecommendationListBaseline(item)
+  );
+}
+
+/** Guest-facing (+€delta) for a recommended product variation picker. */
+export function productRecommendationVariationPriceLabel(
+  item: ProductRecommendationItemLike,
+  variationUnitPrice: number
+): string | null {
+  return formatVariationAddonDisplay(
+    variationUnitPrice,
+    productRecommendationListBaseline(item)
+  );
+}
 
 /** Effective sell price for a menu item (sale when valid, else list). */
 export function effectiveMenuItemUnitPrice(
@@ -78,6 +126,14 @@ export function chargeableRecommendationUnitPrice(
   return Math.max(0, Math.round((unit - defaultUnitPrice) * 100) / 100);
 }
 
+/** Baseline for variation picker labels and uplift (cheapest variation, else list price). */
+export function variationPickerBaselineUnitPrice(
+  listUnitPrice: number,
+  variations: Array<{ priceDelta: number }> | null | undefined
+): number {
+  return getMinVariationPrice(variations) ?? listUnitPrice;
+}
+
 /**
  * Variation addon above parent list price (absolute unit).
  * Null when variation price is at or below that price (included in product).
@@ -124,14 +180,16 @@ export function chargeableVariationUnitPrice(
  */
 export function productUnitPriceWithVariation(
   productBaseUnitPrice: number,
-  selectedVariationPriceDelta: number | null | undefined
+  selectedVariationPriceDelta: number | null | undefined,
+  allVariations?: Array<{ priceDelta: number }> | null
 ): number {
-  if (selectedVariationPriceDelta == null) return productBaseUnitPrice;
+  const baseline = variationPickerBaselineUnitPrice(
+    productBaseUnitPrice,
+    allVariations
+  );
+  if (selectedVariationPriceDelta == null) return baseline;
   return (
-    productBaseUnitPrice +
-    chargeableVariationUnitPrice(
-      selectedVariationPriceDelta,
-      productBaseUnitPrice
-    )
+    baseline +
+    chargeableVariationUnitPrice(selectedVariationPriceDelta, baseline)
   );
 }

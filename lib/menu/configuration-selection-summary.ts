@@ -1,12 +1,9 @@
 import { buildModifierSelectionsForGroups } from '@/lib/menu/build-modifier-selections';
 import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
-import {
-  effectiveMenuItemUnitPrice,
-  productUnitPriceWithVariation,
-} from '@/lib/menu/recommendation-addon-price';
+import { productRecommendationVariationPriceLabel } from '@/lib/menu/recommendation-addon-price';
 import {
   optionSelectionKey,
-  resolveCategoryItemVariationId,
+  resolveProductRecommendationVariationId,
 } from '@/lib/menu/recommendation-option-utils';
 import type { ParentVariationContext } from '@/lib/menu/configuration-variation-price';
 
@@ -102,26 +99,27 @@ export function buildProductRecSelectionSummary(
   if (!item) return [];
 
   const pvId =
-    config?.productVariationId ||
-    preselectedVariationId ||
-    resolveCategoryItemVariationId(item, parentVariation, group) ||
-    undefined;
+    resolveProductRecommendationVariationId(item, group, {
+      configProductVariationId: config?.productVariationId,
+      preselectedVariationId,
+      parentVariation,
+    }) ?? undefined;
   if (!pvId && !config) return [];
 
   const pv = (item.variations ?? []).find((v) => v.id === pvId);
-  const itemBase = effectiveMenuItemUnitPrice(item.price, item.salePrice);
-  const unit = pv
-    ? productUnitPriceWithVariation(itemBase, pv.priceDelta)
-    : itemBase;
   const pvName = pv?.name ?? pv?.title;
   const name = pvName ? `${item.name} (${pvName})` : item.name;
+  const priceLabel =
+    pv != null
+      ? productRecommendationVariationPriceLabel(item, pv.priceDelta)
+      : null;
 
   const { personalize, nested } = splitModsToSummaryLines(config?.mods ?? []);
 
   return [
     {
       name,
-      priceLabel: formatSelectionPriceLabel(unit),
+      priceLabel,
       personalize,
       nested,
     },

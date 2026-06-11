@@ -60,7 +60,8 @@ import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import {
   categoryUsesVariationLimits,
   DEFAULT_CATEGORY_MIN_MAX,
-  DEFAULT_FREE_QUANTITY,
+  resolveCategoryFreeQuantity,
+  resolveProductFreeQuantity,
 } from '@/lib/menu/recommendation-category-limits';
 import { filterCategoriesWithProducts } from '@/lib/menu/category-visibility';
 import { menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
@@ -68,7 +69,9 @@ import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-pric
 
 import {
   buildDraftPreviewGroups,
+  buildRecommendationSortPlan,
   draftHasContent,
+  recommendationDraftKey,
   RECOMMENDATION_FORM_VARIANTS,
   RECOMMENDATION_SECTION_LABELS,
   variantFromDraft,
@@ -175,10 +178,11 @@ function buildRecommendationPayloads(
     selected: MenuItemRow & { categoryName: string };
     localCategories: MenuCategoryRow[];
     allProducts: (MenuItemRow & { categoryName: string })[];
-    sortOrderBase: number;
+    sortOrderByKey: Map<string, number>;
   }
 ): Record<string, unknown>[] {
-  const { selected, localCategories, allProducts, sortOrderBase } = context;
+  const { selected, localCategories, allProducts, sortOrderByKey } = context;
+  const variant = variantFromDraft(draft);
   const payloads: Record<string, unknown>[] = [];
   const linkedProductIds =
     draft.linkedProductIds.length > 0
@@ -212,14 +216,17 @@ function buildRecommendationPayloads(
         linkedCategoryId: cat.id,
         defaultLinkedMenuItemId: draft.categoryDefaults[cat.id] ?? null,
         useVariationPricing: draft.categoryVariationPricing[cat.id] ?? false,
-        sortOrder: sortOrderBase + index,
+        sortOrder:
+          sortOrderByKey.get(recommendationDraftKey(variant, cat.id)) ?? index,
         ...(draft.selectionType === 'MULTIPLE'
           ? {
               multipleMode: draft.multipleMode,
               freeQuantity:
                 draft.multipleMode === 'QUANTITY'
-                  ? (draft.categoryFreeQuantity[cat.id] ??
-                    DEFAULT_FREE_QUANTITY)
+                  ? resolveCategoryFreeQuantity(
+                      draft.categoryFreeQuantity,
+                      cat.id
+                    )
                   : null,
               ...(useCatVariationLimits
                 ? { variationLimits: catVariationLimits }
@@ -232,9 +239,9 @@ function buildRecommendationPayloads(
       });
     }
   } else {
-    const catNames = draft.productCategoryIds
-      .map((id) => localCategories.find((c) => c.id === id)?.name)
-      .filter((name): name is string => Boolean(name));
+    const catNames = localCategories
+      .filter((c) => draft.productCategoryIds.includes(c.id))
+      .map((c) => c.name);
     linkedProductIds.forEach((productId, index) => {
       const product = allProducts.find((p) => p.id === productId);
       payloads.push({
@@ -250,14 +257,18 @@ function buildRecommendationPayloads(
         required: draft.required,
         linkedProductId: productId,
         productCategoryIds: draft.productCategoryIds,
-        sortOrder: sortOrderBase + index,
+        sortOrder:
+          sortOrderByKey.get(recommendationDraftKey(variant, productId)) ??
+          index,
         ...(draft.selectionType === 'MULTIPLE'
           ? {
               multipleMode: draft.multipleMode,
               freeQuantity:
                 draft.multipleMode === 'QUANTITY'
-                  ? (draft.productFreeQuantity[productId] ??
-                    DEFAULT_FREE_QUANTITY)
+                  ? resolveProductFreeQuantity(
+                      draft.productFreeQuantity,
+                      productId
+                    )
                   : null,
               minItems: (
                 draft.productMinMax[productId] ?? DEFAULT_CATEGORY_MIN_MAX
@@ -279,7 +290,7 @@ async function persistRecommendationDraft(
     selected: MenuItemRow & { categoryName: string };
     localCategories: MenuCategoryRow[];
     allProducts: (MenuItemRow & { categoryName: string })[];
-    sortOrderBase: number;
+    sortOrderByKey: Map<string, number>;
   }
 ): Promise<AttrGroupRow[]> {
   const payloads = buildRecommendationPayloads(draft, context);
@@ -784,11 +795,16 @@ export function RecommendationsTab({
 
     setSavingRules(true);
     try {
+      const variant = variantFromDraft(draft);
+      const sortOrderByKey = buildRecommendationSortPlan(
+        selected.attributeGroups,
+        { ...draftByVariant, [variant]: draft }
+      );
       const createdGroups = await persistRecommendationDraft(draft, {
         selected,
         localCategories,
         allProducts,
-        sortOrderBase: selected.attributeGroups.length,
+        sortOrderByKey,
       });
       updateSelectedItem((item) => ({
         ...item,
@@ -798,7 +814,7 @@ export function RecommendationsTab({
             (group) =>
               !item.attributeGroups.some((existing) => existing.id === group.id)
           ),
-        ].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+        ],
       }));
       if (options?.resetAfter !== false) {
         const variant = variantFromDraft(draft);
@@ -1020,7 +1036,10 @@ export function RecommendationsTab({
 
     setSavingAll(true);
     try {
-      let sortOrderBase = selected.attributeGroups.length;
+      const sortOrderByKey = buildRecommendationSortPlan(
+        selected.attributeGroups,
+        draftByVariant
+      );
       const allCreatedGroups: AttrGroupRow[] = [];
 
       for (const draft of draftsToSave) {
@@ -1028,10 +1047,9 @@ export function RecommendationsTab({
           selected,
           localCategories,
           allProducts,
-          sortOrderBase,
+          sortOrderByKey,
         });
         allCreatedGroups.push(...created);
-        sortOrderBase += created.length;
       }
 
       let createdOffers: NonNullable<MenuItemRow['offersFromThis']> = [];
@@ -1086,7 +1104,7 @@ export function RecommendationsTab({
             (group) =>
               !item.attributeGroups.some((existing) => existing.id === group.id)
           ),
-        ].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+        ],
         ...(hasOffers
           ? {
               offersFromThis: [
@@ -1185,19 +1203,13 @@ export function RecommendationsTab({
 
   const previewGroups = useMemo((): PreviewAttrGroup[] => {
     if (!selected) return [];
-    const saved = [...(selected.attributeGroups as PreviewAttrGroup[])].sort(
-      (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
-    );
-    const maxSavedSort = saved.reduce(
-      (max, group) => Math.max(max, group.sortOrder ?? 0),
-      -1
-    );
+    const saved = selected.attributeGroups as PreviewAttrGroup[];
     const drafts = buildDraftPreviewGroups(
       draftByVariant,
       localCategories,
       allProducts,
       selected,
-      maxSavedSort + 1
+      saved
     );
     return [...saved, ...drafts].sort(
       (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
@@ -1249,30 +1261,20 @@ export function RecommendationsTab({
         productMultiple: [] as AttrGroupRow[],
       };
     }
-    const bySort = (a: AttrGroupRow, b: AttrGroupRow) =>
-      (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-    const groups = [...selected.attributeGroups].sort(bySort);
+    const groups = selected.attributeGroups;
     return {
-      categorySingle: groups
-        .filter(
-          (g) => g.sourceType !== 'PRODUCT' && g.selectionType === 'SINGLE'
-        )
-        .sort(bySort),
-      categoryMultiple: groups
-        .filter(
-          (g) => g.sourceType !== 'PRODUCT' && g.selectionType === 'MULTIPLE'
-        )
-        .sort(bySort),
-      productSingle: groups
-        .filter(
-          (g) => g.sourceType === 'PRODUCT' && g.selectionType === 'SINGLE'
-        )
-        .sort(bySort),
-      productMultiple: groups
-        .filter(
-          (g) => g.sourceType === 'PRODUCT' && g.selectionType === 'MULTIPLE'
-        )
-        .sort(bySort),
+      categorySingle: groups.filter(
+        (g) => g.sourceType !== 'PRODUCT' && g.selectionType === 'SINGLE'
+      ),
+      categoryMultiple: groups.filter(
+        (g) => g.sourceType !== 'PRODUCT' && g.selectionType === 'MULTIPLE'
+      ),
+      productSingle: groups.filter(
+        (g) => g.sourceType === 'PRODUCT' && g.selectionType === 'SINGLE'
+      ),
+      productMultiple: groups.filter(
+        (g) => g.sourceType === 'PRODUCT' && g.selectionType === 'MULTIPLE'
+      ),
     };
   }, [selected]);
 

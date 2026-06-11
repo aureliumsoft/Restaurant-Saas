@@ -47,14 +47,14 @@ export type RecommendationRuleDraft = {
   productCategoryIds: string[];
   linkedProductId: string;
   linkedProductIds: string[];
-  /** categoryId → free quantity (QUANTITY mode) */
-  categoryFreeQuantity: Record<string, number>;
+  /** categoryId → free quantity (QUANTITY mode); null = no free items */
+  categoryFreeQuantity: Record<string, number | null>;
   /** categoryId → min/max when base product has no variations */
   categoryMinMax: Record<string, CategoryMinMaxDraft>;
   /** categoryId → min/max per base-product variation */
   categoryVariationLimits: Record<string, VariationLimitDraft[]>;
-  /** linkedProductId → free quantity (product MULTIPLE + QUANTITY) */
-  productFreeQuantity: Record<string, number>;
+  /** linkedProductId → free quantity (QUANTITY mode); null = no free items */
+  productFreeQuantity: Record<string, number | null>;
   /** linkedProductId → min/max */
   productMinMax: Record<string, CategoryMinMaxDraft>;
   /** categoryId → price add-ons by product variation */
@@ -110,7 +110,7 @@ export function RecommendationRuleForm({
   const [sourceType] = useState<'CATEGORY' | 'PRODUCT'>(locked.sourceType);
   const [selectionType] = useState<'SINGLE' | 'MULTIPLE'>(locked.selectionType);
   const [multipleMode, setMultipleMode] = useState<'CHECKBOX' | 'QUANTITY'>('CHECKBOX');
-  const [required, setRequired] = useState(false);
+  const [required, setRequired] = useState(true);
   const [ruleCategoryIds, setRuleCategoryIds] = useState<string[]>([]);
   const [categoryDefaults, setCategoryDefaults] = useState<
     Record<string, string>
@@ -119,7 +119,7 @@ export function RecommendationRuleForm({
   const [linkedProductId, setLinkedProductId] = useState('');
   const [linkedProductIds, setLinkedProductIds] = useState<string[]>([]);
   const [categoryFreeQuantity, setCategoryFreeQuantity] = useState<
-    Record<string, number>
+    Record<string, number | null>
   >({});
   const [categoryMinMax, setCategoryMinMax] = useState<
     Record<string, CategoryMinMaxDraft>
@@ -128,7 +128,7 @@ export function RecommendationRuleForm({
     Record<string, VariationLimitDraft[]>
   >({});
   const [productFreeQuantity, setProductFreeQuantity] = useState<
-    Record<string, number>
+    Record<string, number | null>
   >({});
   const [productMinMax, setProductMinMax] = useState<
     Record<string, CategoryMinMaxDraft>
@@ -227,7 +227,7 @@ export function RecommendationRuleForm({
   const initCategoryLimitDefaults = (categoryId: string) => {
     setCategoryFreeQuantity((prev) => ({
       ...prev,
-      [categoryId]: prev[categoryId] ?? DEFAULT_FREE_QUANTITY,
+      [categoryId]: prev[categoryId] ?? null,
     }));
     setCategoryMinMax((prev) => ({
       ...prev,
@@ -264,7 +264,7 @@ export function RecommendationRuleForm({
   const initProductLimitDefaults = (productId: string) => {
     setProductFreeQuantity((prev) => ({
       ...prev,
-      [productId]: prev[productId] ?? DEFAULT_FREE_QUANTITY,
+      [productId]: prev[productId] ?? null,
     }));
     setProductMinMax((prev) => ({
       ...prev,
@@ -332,7 +332,7 @@ export function RecommendationRuleForm({
     () =>
       ruleCategoryIds
         .map((id) => localCategories.find((c) => c.id === id))
-        .filter((c): c is MenuCategoryRow => Boolean(c)),
+        .filter((c): c is MenuCategoryRow => c != null),
     [localCategories, ruleCategoryIds]
   );
 
@@ -450,32 +450,62 @@ export function RecommendationRuleForm({
                 </p>
               </div>
               <div className="space-y-2">
-                {selectedCategories.map((cat) => (
-                  <div
-                    key={`free-qty-${cat.id}`}
-                    className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]"
-                  >
-                    <span className="self-center text-sm font-medium">
-                      {cat.name}
-                    </span>
-                    <Input
-                      type="number"
-                      min={0}
-                      className="h-10"
-                      value={categoryFreeQuantity[cat.id] ?? DEFAULT_FREE_QUANTITY}
-                      onChange={(e) => {
-                        const val = Math.max(
-                          0,
-                          Number.parseInt(e.target.value, 10) || 0
-                        );
-                        setCategoryFreeQuantity((prev) => ({
-                          ...prev,
-                          [cat.id]: val,
-                        }));
-                      }}
-                    />
-                  </div>
-                ))}
+                {selectedCategories.map((cat, index) => {
+                  const noFreeItems = categoryFreeQuantity[cat.id] === null;
+                  return (
+                    <div
+                      key={`free-qty-${cat.id}`}
+                      className="space-y-2 rounded-md border border-border/60 bg-background p-2"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="tabular-nums">
+                          #{index + 1}
+                        </Badge>
+                        <span className="text-sm font-medium">{cat.name}</span>
+                      </div>
+                     
+                      {!noFreeItems ? (
+                        <Input
+                          type="number"
+                          min={1}
+                          className="h-10"
+                          value={
+                            categoryFreeQuantity[cat.id] ??
+                            DEFAULT_FREE_QUANTITY
+                          }
+                          onChange={(e) => {
+                            const val = Math.max(
+                              1,
+                              Number.parseInt(e.target.value, 10) ||
+                                DEFAULT_FREE_QUANTITY
+                            );
+                            setCategoryFreeQuantity((prev) => ({
+                              ...prev,
+                              [cat.id]: val,
+                            }));
+                          }}
+                        />
+                      ) : null}
+
+                       <label className="flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary"
+                          checked={noFreeItems}
+                          onChange={(e) => {
+                            setCategoryFreeQuantity((prev) => ({
+                              ...prev,
+                              [cat.id]: e.target.checked
+                                ? null
+                                : DEFAULT_FREE_QUANTITY,
+                            }));
+                          }}
+                        />
+                        <span>No free items for this category</span>
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : null}
@@ -487,6 +517,7 @@ export function RecommendationRuleForm({
         <input
           type="checkbox"
           className="h-4 w-4 accent-primary"
+          defaultChecked={true}
           checked={required}
           onChange={(e) => setRequired(e.target.checked)}
         />
@@ -535,17 +566,17 @@ export function RecommendationRuleForm({
                         checked={checked}
                         onChange={() => toggleCategory(cat.id)}
                       />
-                      <span className="min-w-0 flex-1 truncate font-medium">
-                        {cat.name}
-                      </span>
-                      {checked && selectionOrder >= 0 ? (
+                      {checked ? (
                         <Badge
                           variant="secondary"
-                          className="shrink-0 text-[10px] font-semibold tabular-nums"
+                          className="shrink-0 tabular-nums text-[10px]"
                         >
                           #{selectionOrder + 1}
                         </Badge>
                       ) : null}
+                      <span className="min-w-0 flex-1 truncate font-medium">
+                        {cat.name}
+                      </span>
                       <Badge
                         variant="outline"
                         className="shrink-0 text-[10px] font-normal"
@@ -703,6 +734,7 @@ export function RecommendationRuleForm({
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {productsFromSelectedCategories.map((p) => {
                 const checked = linkedProductIds.includes(p.id);
+                const selectionOrder = linkedProductIds.indexOf(p.id);
                 return (
                   <label
                     key={`rec-product-${p.id}`}
@@ -736,6 +768,11 @@ export function RecommendationRuleForm({
                             No photo
                           </div>
                         )}
+                        {checked ? (
+                          <span className="absolute left-2 top-2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground shadow-sm">
+                            #{selectionOrder + 1}
+                          </span>
+                        ) : null}
                         <span
                           className={cn(
                             'absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border-2 bg-background/90 text-xs font-bold shadow-sm backdrop-blur-sm transition',
@@ -916,32 +953,51 @@ export function RecommendationRuleForm({
                 {linkedProductIds.map((productId) => {
                   const product = allProducts.find((p) => p.id === productId);
                   if (!product) return null;
+                  const noFreeItems = productFreeQuantity[productId] === null;
                   return (
                     <div
                       key={`free-qty-product-${productId}`}
-                      className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]"
+                      className="space-y-2 rounded-md border border-border/60 bg-background p-2"
                     >
-                      <span className="self-center text-sm font-medium">
-                        {product.name}
-                      </span>
-                      <Input
-                        type="number"
-                        min={0}
-                        className="h-10"
-                        value={
-                          productFreeQuantity[productId] ?? DEFAULT_FREE_QUANTITY
-                        }
-                        onChange={(e) => {
-                          const val = Math.max(
-                            0,
-                            Number.parseInt(e.target.value, 10) || 0
-                          );
-                          setProductFreeQuantity((prev) => ({
-                            ...prev,
-                            [productId]: val,
-                          }));
-                        }}
-                      />
+                      <span className="text-sm font-medium">{product.name}</span>
+                      <label className="flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary"
+                          checked={noFreeItems}
+                          onChange={(e) => {
+                            setProductFreeQuantity((prev) => ({
+                              ...prev,
+                              [productId]: e.target.checked
+                                ? null
+                                : DEFAULT_FREE_QUANTITY,
+                            }));
+                          }}
+                        />
+                        <span>No free items for this product</span>
+                      </label>
+                      {!noFreeItems ? (
+                        <Input
+                          type="number"
+                          min={1}
+                          className="h-10"
+                          value={
+                            productFreeQuantity[productId] ??
+                            DEFAULT_FREE_QUANTITY
+                          }
+                          onChange={(e) => {
+                            const val = Math.max(
+                              1,
+                              Number.parseInt(e.target.value, 10) ||
+                                DEFAULT_FREE_QUANTITY
+                            );
+                            setProductFreeQuantity((prev) => ({
+                              ...prev,
+                              [productId]: val,
+                            }));
+                          }}
+                        />
+                      ) : null}
                     </div>
                   );
                 })}

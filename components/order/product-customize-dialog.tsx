@@ -40,12 +40,14 @@ import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import {
   chargeableUnitsForOption,
   getRecommendationLimits,
+  hasQuantityFreeTier,
   totalSelectedUnits,
 } from '@/lib/menu/recommendation-limits';
 import {
   chargeableConfigurationItemUnitPrice,
+  configurationDefaultListUnitPriceForSelection,
   configurationGroupDisplayTitle,
-  configurationItemListUnitPrice,
+  configurationItemResolvedListUnit,
   filterConfigurationItemsForParentVariation,
   configurationAddonPriceLabel,
   isConfigurationGroupVisibleForParentVariation,
@@ -55,7 +57,10 @@ import {
 import {
   chargeableVariationUnitPrice,
   formatVariationAddonDisplay,
+  productRecommendationVariationPriceLabel,
+  productRecommendationVariationUnitPrice,
   productUnitPriceWithVariation,
+  variationPickerBaselineUnitPrice,
 } from '@/lib/menu/recommendation-addon-price';
 import {
   clearOptionDataForGroup,
@@ -67,6 +72,7 @@ import {
   recommendedProductNeedsSheet,
   recommendationOptionNeedsSheet,
   resolveCategoryItemVariationId,
+  resolveProductRecommendationVariationId,
   shouldAutoOpenOptionFlow,
   syncParentVariationOptionSelections,
 } from '@/lib/menu/recommendation-option-utils';
@@ -150,35 +156,36 @@ function visibleConfigurationItems(
   );
 }
 
-function configurationDefaultListUnit(
-  group: AttributeGroup,
-  parentVariation: ParentVariationContext | null
-): number | null {
-  const visible = visibleConfigurationItems(group, parentVariation);
-  const defaultItem = group.defaultMenuItemId
-    ? visible.find((i) => i.menuItemId === group.defaultMenuItemId)
-    : null;
-  if (defaultItem) {
-    return configurationItemListUnitPrice(
-      defaultItem,
-      parentVariation,
-      group.useVariationPricing ?? false
-    );
-  }
-  return group.defaultUnitPrice ?? null;
-}
-
 function configurationItemPickerPrice(
   item: AttributeGroup['items'][number],
   group: AttributeGroup,
   parentVariation: ParentVariationContext | null,
-  groupSelectedIds: string[]
+  groupSelectedIds: string[],
+  selectedNestedVariationByOption: Record<string, string>
 ) {
-  const defaultListUnit = configurationDefaultListUnit(group, parentVariation);
-  const listUnit = configurationItemListUnitPrice(
+  const visible = visibleConfigurationItems(group, parentVariation);
+  const optionKey = optionSelectionKey(group.id, item.menuItemId);
+  const nestedVariationId = effectiveOptionVariationId(
+    item,
+    optionKey,
+    selectedNestedVariationByOption,
+    {},
+    { group, parentVariation }
+  );
+  const nestedVariation = nestedVariationId
+    ? (item.variations ?? []).find((v) => v.id === nestedVariationId)
+    : undefined;
+  const listUnit = configurationItemResolvedListUnit(
     item,
     parentVariation,
-    group.useVariationPricing ?? false
+    group.useVariationPricing ?? false,
+    nestedVariationId
+  );
+  const defaultListUnit = configurationDefaultListUnitPriceForSelection(
+    group,
+    parentVariation,
+    visible,
+    nestedVariation ?? null
   );
   const itemQty = groupSelectedIds.filter(
     (id) => id === item.menuItemId
@@ -254,6 +261,11 @@ export function ProductCustomizeDialog({
   onOpenChange,
   onConfirm,
 }: Props) {
+  const variationPickerBaseline = useMemo(
+    () => variationPickerBaselineUnitPrice(productBaseUnitPrice, variations),
+    [productBaseUnitPrice, variations]
+  );
+
   const [selectedByGroup, setSelectedByGroup] = useState<
     Record<string, string[]>
   >({});
@@ -951,13 +963,15 @@ export function ProductCustomizeDialog({
       const config = nestedConfigs[g.id];
       if (!config && g.required && recommendedProductNeedsSheet(g)) continue;
 
-      const pv = (item.variations ?? []).find(
-        (v) => v.id === config?.productVariationId
-      );
-      const itemBase = effectiveUnitPrice(item.price, item.salePrice);
-      const unit = pv
-        ? productUnitPriceWithVariation(itemBase, pv.priceDelta)
-        : itemBase;
+      const pvId = resolveProductRecommendationVariationId(item, g, {
+        configProductVariationId: config?.productVariationId,
+        preselectedVariationId:
+          preselectedRecommendationVariationByGroup[g.id],
+        parentVariation: baseProductVariationContext.parent,
+      });
+      const pv = pvId
+        ? (item.variations ?? []).find((v) => v.id === pvId)
+        : undefined;
       const pvName = pv?.name ?? pv?.title;
       const selectionName = pvName ? `${item.name} (${pvName})` : item.name;
 
@@ -970,7 +984,7 @@ export function ProductCustomizeDialog({
             name: selectionName,
             description: item.description,
             imageUrl: item.imageUrl,
-            unitPrice: unit,
+            unitPrice: productRecommendationVariationUnitPrice(item, pvId),
           },
         ],
       });
@@ -993,7 +1007,8 @@ export function ProductCustomizeDialog({
           swatchHex: selectedVariation.swatchHex,
           priceDelta: productUnitPriceWithVariation(
             productBaseUnitPrice,
-            selectedVariation.priceDelta
+            selectedVariation.priceDelta,
+            variations
           ),
         }
       : null;
@@ -1048,7 +1063,8 @@ export function ProductCustomizeDialog({
     );
     const base = productUnitPriceWithVariation(
       productBaseUnitPrice,
-      selectedVariation?.priceDelta
+      selectedVariation?.priceDelta,
+      variations
     );
     const categoryAddons = modifierSelectionsUnitTotal(
       buildModifierSelectionsForGroups(
@@ -1064,15 +1080,19 @@ export function ProductCustomizeDialog({
       const item = g.items[0];
       if (!item) return sum;
       const config = nestedConfigs[g.id];
-      if (!config) return sum;
-      const pv = (item.variations ?? []).find(
-        (v) => v.id === config.productVariationId
+      const pvId = resolveProductRecommendationVariationId(item, g, {
+        configProductVariationId: config?.productVariationId,
+        preselectedVariationId:
+          preselectedRecommendationVariationByGroup[g.id],
+        parentVariation: baseProductVariationContext.parent,
+      });
+      const variationCharge = productRecommendationVariationUnitPrice(
+        item,
+        pvId
       );
-      const itemBase = effectiveUnitPrice(item.price, item.salePrice);
-      const unit = pv
-        ? productUnitPriceWithVariation(itemBase, pv.priceDelta)
-        : itemBase;
-      return sum + unit + modifierSelectionsUnitTotal(config.mods);
+      return (
+        sum + variationCharge + modifierSelectionsUnitTotal(config?.mods ?? [])
+      );
       }, 0);
 
     return base + categoryAddons + productRecAddons;
@@ -1081,6 +1101,7 @@ export function ProductCustomizeDialog({
     visibleCategoryGroups,
     visibleProductRecommendationGroups,
     nestedConfigs,
+    preselectedRecommendationVariationByGroup,
     productBaseUnitPrice,
     selectedByGroup,
     selectedNestedVariationByOption,
@@ -1214,11 +1235,11 @@ export function ProductCustomizeDialog({
         name: v.name,
         price: chargeableVariationUnitPrice(
           v.priceDelta,
-          productBaseUnitPrice
+          variationPickerBaseline
         ),
         priceLabel: formatVariationAddonDisplay(
           v.priceDelta,
-          productBaseUnitPrice
+          variationPickerBaseline
         ),
         imageUrl: v.imageUrl ?? productImageUrl ?? null,
         selected: selectedVariationId === v.id,
@@ -1243,12 +1264,14 @@ export function ProductCustomizeDialog({
       );
       const item = group?.items[0];
       if (!group || !item) return [];
-      const recItemBase = effectiveUnitPrice(item.price, item.salePrice);
       return (item.variations ?? []).map((v) => ({
         id: v.id,
         name: v.name ?? v.title ?? 'Variation',
-        price: chargeableVariationUnitPrice(v.priceDelta, recItemBase),
-        priceLabel: formatVariationAddonDisplay(v.priceDelta, recItemBase),
+        price: productRecommendationVariationUnitPrice(item, v.id),
+        priceLabel: productRecommendationVariationPriceLabel(
+          item,
+          v.priceDelta
+        ),
         imageUrl: v.imageUrl ?? item.imageUrl ?? null,
         selected: preselectedRecommendationVariationByGroup[group.id] === v.id,
         quantity: undefined,
@@ -1277,7 +1300,8 @@ export function ProductCustomizeDialog({
           it,
           group,
           baseProductVariationContext.parent,
-          groupSelectedIds
+          groupSelectedIds,
+          selectedNestedVariationByOption
         );
         return {
         id: it.menuItemId,
@@ -1378,7 +1402,8 @@ export function ProductCustomizeDialog({
           it,
           group,
           baseProductVariationContext.parent,
-          selected
+          selected,
+          selectedNestedVariationByOption
         );
         return {
         id: it.menuItemId,
@@ -1418,12 +1443,21 @@ export function ProductCustomizeDialog({
         return [];
       }
       const key = optionSelectionKey(picker.groupId, picker.optionId);
-      const optionItemBase = effectiveUnitPrice(item.price, item.salePrice);
+      const optionVariationBaseline = variationPickerBaselineUnitPrice(
+        effectiveUnitPrice(item.price, item.salePrice),
+        item.variations
+      );
     return (item.variations ?? []).map((v) => ({
       id: v.id,
       name: v.name ?? v.title ?? 'Variation',
-      price: chargeableVariationUnitPrice(v.priceDelta, optionItemBase),
-      priceLabel: formatVariationAddonDisplay(v.priceDelta, optionItemBase),
+      price: chargeableVariationUnitPrice(
+        v.priceDelta,
+        optionVariationBaseline
+      ),
+      priceLabel: formatVariationAddonDisplay(
+        v.priceDelta,
+        optionVariationBaseline
+      ),
       imageUrl: v.imageUrl ?? item.imageUrl ?? null,
       selected: selectedNestedVariationByOption[key] === v.id,
       quantity: undefined,
@@ -1692,7 +1726,7 @@ export function ProductCustomizeDialog({
                           <p className="mt-1 text-xs text-muted-foreground">
                             Selected {count} / {limits.maxItems}
                             {g.multipleMode === 'QUANTITY' &&
-                            (g.freeQuantity ?? 0) > 0
+                            hasQuantityFreeTier(g.freeQuantity)
                               ? ` · first ${g.freeQuantity} free`
                                   : ''}
                           </p>

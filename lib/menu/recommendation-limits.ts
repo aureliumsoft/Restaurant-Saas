@@ -39,34 +39,31 @@ export function totalSelectedUnits(selectedIds: string[]): number {
   return selectedIds.length;
 }
 
+/** Whether QUANTITY mode applies a free tier (null/0 = none, prices always visible). */
+export function hasQuantityFreeTier(
+  freeQuantity: number | null | undefined
+): boolean {
+  return freeQuantity != null && freeQuantity > 0;
+}
+
 /** Chargeable units after freeQuantity (QUANTITY mode). */
 export function chargeableUnitsForOption(
   quantity: number,
   freeQuantity: number | null | undefined
 ): number {
-  const free = Math.max(0, freeQuantity ?? 0);
-  return Math.max(0, quantity - free);
+  if (!hasQuantityFreeTier(freeQuantity)) return quantity;
+  return Math.max(0, quantity - freeQuantity!);
 }
 
 /**
- * QUANTITY groups with a free tier: hide picker prices until the guest adds at
- * least `freeQuantity` of one option (e.g. 1 free → first + shows all prices).
+ * QUANTITY picker price labels: no free tier → always show; with free tier →
+ * show once the guest has selected at least `freeQuantity` units in the group.
  */
 export function shouldShowQuantityGroupPickerPrices(
   selectedIds: string[],
   freeQuantity: number | null | undefined
 ): boolean {
+  if (!hasQuantityFreeTier(freeQuantity)) return true;
   if (selectedIds.length === 0) return false;
-
-  const free = Math.max(0, freeQuantity ?? 0);
-  if (free === 0) return true;
-
-  const qtyByOption = new Map<string, number>();
-  for (const id of selectedIds) {
-    qtyByOption.set(id, (qtyByOption.get(id) ?? 0) + 1);
-  }
-  for (const qty of qtyByOption.values()) {
-    if (qty >= free) return true;
-  }
-  return false;
+  return totalSelectedUnits(selectedIds) >= freeQuantity!;
 }

@@ -54,6 +54,32 @@ export function optionNeedsManualVariationPicker(
   );
 }
 
+/** Resolved variation id for a linked product recommendation selection. */
+export function resolveProductRecommendationVariationId(
+  item: OptionItemLike,
+  group: OptionConfigGroup | undefined,
+  options: {
+    configProductVariationId?: string | null;
+    preselectedVariationId?: string | null;
+    parentVariation?: ParentVariationContext | null;
+  }
+): string | null {
+  const fromConfig =
+    options.configProductVariationId &&
+    options.configProductVariationId.length > 0
+      ? options.configProductVariationId
+      : null;
+  const fromPreselect = options.preselectedVariationId || null;
+  if (optionNeedsManualVariationPicker(item, group)) {
+    return fromConfig || fromPreselect;
+  }
+  return (
+    fromConfig ||
+    resolveCategoryItemVariationId(item, options.parentVariation, group) ||
+    fromPreselect
+  );
+}
+
 /** Linked product configuration group needs variation picker and/or nested sheet. */
 export function recommendedProductNeedsSheet(group: {
   required?: boolean;

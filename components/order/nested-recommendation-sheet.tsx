@@ -28,13 +28,15 @@ import {
   recommendedProductNeedsSheet,
   recommendationOptionNeedsSheet,
   resolveCategoryItemVariationId,
+  resolveProductRecommendationVariationId,
   syncParentVariationOptionSelections,
 } from '@/lib/menu/recommendation-option-utils';
 import {
-  configurationGroupDisplayTitle,
-  configurationItemListUnitPrice,
-  filterConfigurationItemsForParentVariation,
   configurationAddonPriceLabel,
+  configurationDefaultListUnitPriceForSelection,
+  configurationGroupDisplayTitle,
+  configurationItemResolvedListUnit,
+  filterConfigurationItemsForParentVariation,
   isConfigurationGroupVisibleForParentVariation,
   isConfigurationItemAvailableForParentVariation,
   parentVariationFromItemVariation,
@@ -43,7 +45,10 @@ import {
 import {
   effectiveMenuItemUnitPrice,
   formatVariationAddonDisplay,
+  productRecommendationVariationPriceLabel,
+  productRecommendationVariationUnitPrice,
   productUnitPriceWithVariation,
+  variationPickerBaselineUnitPrice,
 } from '@/lib/menu/recommendation-addon-price';
 
 import {
@@ -667,23 +672,30 @@ function InlineRecommendationGroups({
                   );
                 }
                 return visibleItems.map((it) => {
-                  const defaultItem = g.defaultMenuItemId
-                    ? visibleItems.find(
-                        (i) => i.menuItemId === g.defaultMenuItemId
-                      )
-                    : null;
-                  const defaultListUnit = defaultItem
-                    ? configurationItemListUnitPrice(
-                        defaultItem,
-                        baseProductVariation,
-                        g.useVariationPricing ?? false
-                      )
-                    : g.defaultUnitPrice;
-                  const listUnit = configurationItemListUnitPrice(
+                  const optionKey = optionSelectionKey(g.id, it.menuItemId);
+                  const nestedVariationId = effectiveOptionVariationId(
+                    it,
+                    optionKey,
+                    selectedNestedVariationByOption,
+                    optionNestedConfigs,
+                    { group: g, parentVariation: baseProductVariation }
+                  );
+                  const nestedVariation = nestedVariationId
+                    ? (it.variations ?? []).find((v) => v.id === nestedVariationId)
+                    : undefined;
+                  const listUnit = configurationItemResolvedListUnit(
                     it,
                     baseProductVariation,
-                    g.useVariationPricing ?? false
+                    g.useVariationPricing ?? false,
+                    nestedVariationId
                   );
+                  const defaultListUnit =
+                    configurationDefaultListUnitPriceForSelection(
+                      g,
+                      baseProductVariation,
+                      visibleItems,
+                      nestedVariation ?? null
+                    );
                   const qty = selectedIds.filter(
                     (id) => id === it.menuItemId
                   ).length;
@@ -1498,15 +1510,14 @@ export function NestedRecommendationSheet({
       const config = productGroupConfigs[g.id];
       if (!config && !isProductGroupConfigured(g, item)) continue;
 
-      const pvId = optionNeedsManualVariationPicker(item, g)
-        ? preselectedProductVariationByGroup[g.id]
-        : resolveCategoryItemVariationId(item, baseProductVariation, g) ??
-          config?.productVariationId;
-      const pv = (item.variations ?? []).find((v) => v.id === pvId);
-      const itemBase = effectiveMenuItemUnitPrice(item.price, item.salePrice);
-      const unit = pv
-        ? productUnitPriceWithVariation(itemBase, pv.priceDelta)
-        : itemBase;
+      const pvId = resolveProductRecommendationVariationId(item, g, {
+        configProductVariationId: config?.productVariationId,
+        preselectedVariationId: preselectedProductVariationByGroup[g.id],
+        parentVariation: baseProductVariation,
+      });
+      const pv = pvId
+        ? (item.variations ?? []).find((v) => v.id === pvId)
+        : undefined;
       const pvName = pv?.name ?? pv?.title;
       const selectionName = pvName ? `${item.name} (${pvName})` : item.name;
 
@@ -1519,7 +1530,7 @@ export function NestedRecommendationSheet({
             name: selectionName,
             description: item.description,
             imageUrl: item.imageUrl,
-            unitPrice: unit,
+            unitPrice: productRecommendationVariationUnitPrice(item, pvId),
           },
         ],
       });
@@ -1724,13 +1735,13 @@ export function NestedRecommendationSheet({
             <div className="max-h-[45vh] space-y-2 overflow-y-auto pb-2">
               {(product.variations ?? []).map((v) => {
                 const selected = productVariationId === v.id;
-                const itemBase = effectiveMenuItemUnitPrice(
-                  product.price,
-                  product.salePrice
+                const variationBaseline = variationPickerBaselineUnitPrice(
+                  effectiveMenuItemUnitPrice(product.price, product.salePrice),
+                  product.variations
                 );
                 const variationPriceLabel = formatVariationAddonDisplay(
                   v.priceDelta,
-                  itemBase
+                  variationBaseline
                 );
                 return (
                   <button
@@ -1800,14 +1811,11 @@ export function NestedRecommendationSheet({
             <div className="max-h-[45vh] space-y-2 overflow-y-auto pb-2">
               {(productRecVariationTarget.item.variations ?? []).map((v) => {
                 const selected = productRecVariationTarget.selectedId === v.id;
-                const itemBase = effectiveMenuItemUnitPrice(
-                  productRecVariationTarget.item.price,
-                  productRecVariationTarget.item.salePrice
-                );
-                const variationPriceLabel = formatVariationAddonDisplay(
-                  v.priceDelta,
-                  itemBase
-                );
+                const variationPriceLabel =
+                  productRecommendationVariationPriceLabel(
+                    productRecVariationTarget.item,
+                    v.priceDelta
+                  );
                 return (
                   <button
                     key={v.id}
@@ -1882,13 +1890,16 @@ export function NestedRecommendationSheet({
             <div className="max-h-[45vh] space-y-2 overflow-y-auto pb-2">
               {(optionVariationTarget.item.variations ?? []).map((v) => {
                 const selected = optionVariationTarget.selectedId === v.id;
-                const optionItemBase = effectiveMenuItemUnitPrice(
-                  optionVariationTarget.item.price,
-                  optionVariationTarget.item.salePrice
+                const optionVariationBaseline = variationPickerBaselineUnitPrice(
+                  effectiveMenuItemUnitPrice(
+                    optionVariationTarget.item.price,
+                    optionVariationTarget.item.salePrice
+                  ),
+                  optionVariationTarget.item.variations
                 );
                 const variationPriceLabel = formatVariationAddonDisplay(
                   v.priceDelta,
-                  optionItemBase
+                  optionVariationBaseline
                 );
                 return (
                   <button

@@ -1,14 +1,13 @@
 import {
   chargeableConfigurationItemUnitPrice,
+  configurationDefaultListUnitPriceForSelection,
   configurationGroupDisplayTitle,
-  configurationItemListUnitPrice,
+  configurationItemResolvedListUnit,
   filterConfigurationItemsForParentVariation,
   type ParentVariationContext,
 } from '@/lib/menu/configuration-variation-price';
 import { chargeableUnitsForOption } from '@/lib/menu/recommendation-limits';
 import { effectiveOptionVariationId } from '@/lib/menu/recommendation-option-utils';
-import { productUnitPriceWithVariation } from '@/lib/menu/recommendation-addon-price';
-
 import type {
   AttributeGroup,
   MenuOption,
@@ -63,32 +62,22 @@ export function buildModifierSelectionsForGroups(
         const finalName = nestedVariationName
           ? `${it.name} (${nestedVariationName})`
           : it.name;
-        const defaultItem = g.defaultMenuItemId
-          ? visibleItems.find((i) => i.menuItemId === g.defaultMenuItemId)
-          : null;
-        const defaultListUnit = defaultItem
-          ? configurationItemListUnitPrice(
-              defaultItem,
-              parentVariation,
-              g.useVariationPricing ?? false
-            )
-          : g.defaultUnitPrice;
-        const listUnit = configurationItemListUnitPrice(
+        const listUnit = configurationItemResolvedListUnit(
           it,
           parentVariation,
-          g.useVariationPricing ?? false
+          g.useVariationPricing ?? false,
+          nestedVariationId
         );
-        const itemBase = chargeableConfigurationItemUnitPrice(
+        const defaultListUnit = configurationDefaultListUnitPriceForSelection(
+          g,
+          parentVariation,
+          visibleItems,
+          nestedVariation ?? null
+        );
+        const unit = chargeableConfigurationItemUnitPrice(
           listUnit,
           defaultListUnit ?? null
         );
-        const unit =
-          (g.useVariationPricing ?? false) || nestedVariation == null
-            ? itemBase
-            : productUnitPriceWithVariation(
-                itemBase,
-                nestedVariation.priceDelta
-              );
         const chargeable =
           g.selectionType === 'MULTIPLE' && g.multipleMode === 'QUANTITY'
             ? chargeableUnitsForOption(qty, g.freeQuantity)

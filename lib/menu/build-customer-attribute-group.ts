@@ -39,9 +39,10 @@ export function buildCustomerAttributeGroup(
       : group.sourceType === 'CATEGORY' && group.defaultLinkedMenuItemId
         ? rawItems.find((r) => r.id === group.defaultLinkedMenuItemId)
         : null;
-  const defaultUnitPrice = defaultItem
-    ? effectiveMenuItemUnitPrice(defaultItem.price, defaultItem.salePrice)
-    : null;
+  const defaultUnitPrice =
+    defaultItem && !(group.useVariationPricing ?? false)
+      ? effectiveMenuItemUnitPrice(defaultItem.price, defaultItem.salePrice)
+      : null;
 
   const items = mapAttributeGroupItems(group, baseProductId);
   return {
