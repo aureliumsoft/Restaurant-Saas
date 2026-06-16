@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/pagination';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { salesOrderMethodLabel } from '@/lib/order-fulfillment';
+import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
 import { salesOrderStatusBucket } from '@/lib/sales-order-status';
 import {
   Sheet,
@@ -86,6 +87,8 @@ type MenuOrderDetail = {
   sourceType: string;
   address: string | null;
   tableLabel?: string | null;
+  cutleryRequested?: boolean;
+  customerComment?: string | null;
   taxAmount: number;
   discountAmount: number;
   createdAt: string;
@@ -274,12 +277,12 @@ function OrdersTable({
               Order Type
             </TableHead>
             <TableHead className="hidden text-muted-foreground md:table-cell">
-              Payment Method
+              Payment Status
             </TableHead>
             <TableHead className="text-right text-muted-foreground">
               Amount
             </TableHead>
-            <TableHead className="text-muted-foreground">Status</TableHead>
+            <TableHead className="text-muted-foreground">Order Status</TableHead>
             <TableHead className="hidden text-muted-foreground lg:table-cell">
               Date & Time
             </TableHead>
@@ -780,6 +783,11 @@ export function SalesOrdersTabs() {
                       </pre>
                     </div>
                   ) : null}
+
+                  <OrderCustomerExtras
+                    cutleryRequested={menuDetail.cutleryRequested}
+                    customerComment={menuDetail.customerComment}
+                  />
 
                   <div>
                     <p className="mb-2 font-medium">Line items</p>

@@ -5,6 +5,8 @@ export type TransactionHistoryRow = {
   kind: TransactionHistoryKind;
   transactionId: string;
   referenceId: string | null;
+  shortOrderId?: string | null;
+  ticketNumber?: number | null;
   amount: number | null;
   currency: string;
   status: string;

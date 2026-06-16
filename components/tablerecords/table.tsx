@@ -59,6 +59,16 @@ function kindBadge(kind: TransactionHistoryKind) {
   return 'Register';
 }
 
+function trackingNumberLabel(row: TransactionHistoryRow): string {
+  if (row.kind !== 'ORDER') return '—';
+  const token = (row.shortOrderId ?? row.referenceId ?? '').replace(
+    /[^a-zA-Z0-9]/g,
+    ''
+  );
+  if (!token) return '—';
+  return token.length <= 8 ? token.toUpperCase() : token.slice(0, 6).toUpperCase();
+}
+
 export function Records() {
   const { activeBranchId, loading: branchLoading } = useBranchContext();
   const [rows, setRows] = useState<TransactionHistoryRow[]>([]);
@@ -147,7 +157,7 @@ export function Records() {
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
             <Input
-              placeholder="Search by transaction/order/subscription id..."
+              placeholder="Search by tracking number, order id, or status..."
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -209,6 +219,7 @@ export function Records() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Type</TableHead>
+                      <TableHead>Tracking #</TableHead>
                       {/* <TableHead>Transaction ID</TableHead> */}
                       {/* <TableHead className="hidden md:table-cell">
                         Order / Subscription
@@ -228,7 +239,7 @@ export function Records() {
                     {loading ? (
                       <TableRow>
                         <TableCell
-                          colSpan={8}
+                          colSpan={9}
                           className="text-center text-muted-foreground"
                         >
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -237,7 +248,7 @@ export function Records() {
                     ) : error ? (
                       <TableRow>
                         <TableCell
-                          colSpan={8}
+                          colSpan={9}
                           className="text-center text-destructive"
                         >
                           {error}
@@ -246,7 +257,7 @@ export function Records() {
                     ) : rows.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={8}
+                          colSpan={9}
                           className="text-center text-muted-foreground"
                         >
                           No records found.
@@ -259,6 +270,9 @@ export function Records() {
                             <Badge variant="secondary">
                               {kindBadge(row.kind)}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {trackingNumberLabel(row)}
                           </TableCell>
                           {/* <TableCell className="font-mono text-xs">
                         {row.transactionId}
@@ -358,6 +372,16 @@ export function Records() {
                   <p className="text-xs text-muted-foreground">Method</p>
                   <p>{active.method ?? '—'}</p>
                 </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Tracking #</p>
+                  <p className="font-mono text-xs">{trackingNumberLabel(active)}</p>
+                </div>
+                {active.kind === 'ORDER' && active.ticketNumber != null ? (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Order #</p>
+                    <p>#{active.ticketNumber}</p>
+                  </div>
+                ) : null}
                 <div>
                   <p className="text-xs text-muted-foreground">Source</p>
                   <p>{active.source}</p>

@@ -1,4 +1,9 @@
 import { db } from '@/lib/db';
+import {
+  parseRestaurantServiceCharges,
+  RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+  type RestaurantServiceChargeRow,
+} from '@/lib/restaurant-service-charge';
 import { applyProductRecommendationPools } from '@/lib/menu/apply-product-recommendation-pools';
 import {
   buildCustomerMenuAttributeGroupsSelect,
@@ -80,10 +85,11 @@ const restaurantPublicSelect = {
   themePrimaryColor: true,
   subdomain: true,
   slug: true,
+  ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
 } as const;
 
 async function enrichRestaurantMenuForCustomer<
-  T extends { id: string; menus: unknown },
+  T extends { id: string; menus: unknown } & RestaurantServiceChargeRow,
 >(restaurant: T, mode: CustomerMenuSelectMode) {
   const allCategories = await loadRestaurantMenuCategories({
     restaurantId: restaurant.id,
@@ -91,12 +97,15 @@ async function enrichRestaurantMenuForCustomer<
     itemSelect: buildRecommendationPoolItemSelect(mode),
     categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
   });
-  return sanitizeCustomerMenuPayload(
-    applyProductRecommendationPools(
-      restaurant as Parameters<typeof applyProductRecommendationPools>[0],
-      allCategories
-    )
-  );
+  return {
+    ...sanitizeCustomerMenuPayload(
+      applyProductRecommendationPools(
+        restaurant as Parameters<typeof applyProductRecommendationPools>[0],
+        allCategories
+      )
+    ),
+    serviceCharges: parseRestaurantServiceCharges(restaurant),
+  };
 }
 
 async function loadBySlugWithMode(slug: string, mode: CustomerMenuSelectMode) {

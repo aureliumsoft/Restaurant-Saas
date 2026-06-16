@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2, UtensilsCrossed } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -18,6 +18,17 @@ import { orderPathWithQuery } from '@/lib/order-search-params';
 import { submitCustomerOrder } from '@/lib/offline/submit-order';
 import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
 import { PayPalCheckoutButtons } from '@/components/payments/paypal-checkout-buttons';
+import { StripeCheckoutButton } from '@/components/payments/stripe-checkout-button';
+import { CutleryOption } from '@/components/order/cutlery-option';
+import { OrderPreferencesSummary } from '@/components/order/order-preferences-summary';
+import { useRestaurantServiceCharges } from '@/hooks/use-restaurant-service-charges';
+import {
+  clearOnlineOrderPreferences,
+  readCutleryPreference,
+  readOrderCommentPreference,
+  writeCutleryPreference,
+  writeOrderCommentPreference,
+} from '@/lib/online-order-preferences';
 
 function formatOrderApiError(body: unknown): string {
   if (!body || typeof body !== 'object') {
@@ -39,8 +50,6 @@ function formatOrderApiError(body: unknown): string {
   }
   return 'Could not place order. Please try again.';
 }
-
-const SERVICE_FEE = 0.99;
 
 type CheckoutPageProps = {
   orderType: 'delivery' | 'pickUp';
@@ -162,17 +171,76 @@ export default function CheckoutPageClient({
   const [cutlery, setCutlery] = useState(false);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [paymentConfig, setPaymentConfig] = useState<{
+    provider: 'NONE' | 'PAYPAL' | 'STRIPE';
+    ready: boolean;
+  } | null>(null);
+  const [paymentConfigLoading, setPaymentConfigLoading] = useState(true);
+
+  useEffect(() => {
+    const slug = orderInfo?.restaurantSlug?.trim();
+    if (!slug) {
+      setPaymentConfig(null);
+      setPaymentConfigLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/customer/payment-config?restaurantSlug=${encodeURIComponent(slug)}`,
+          { cache: 'no-store' }
+        );
+        const body = (await res.json().catch(() => ({}))) as {
+          data?: { provider?: 'NONE' | 'PAYPAL' | 'STRIPE'; ready?: boolean };
+        };
+        if (!cancelled) {
+          setPaymentConfig(
+            body.data
+              ? {
+                  provider: body.data.provider ?? 'NONE',
+                  ready: body.data.ready === true,
+                }
+              : { provider: 'NONE', ready: false }
+          );
+        }
+      } catch {
+        if (!cancelled) setPaymentConfig({ provider: 'NONE', ready: false });
+      } finally {
+        if (!cancelled) setPaymentConfigLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orderInfo?.restaurantSlug]);
 
   useEffect(() => {
     setCart(parseCartFromStorage(localStorage.getItem(`cart-${orderId}`)));
+    setCutlery(readCutleryPreference(orderId));
+    setComment(readOrderCommentPreference(orderId));
     setCartHydrated(true);
   }, [orderId]);
+
+  const setCutleryChoice = (next: boolean) => {
+    setCutlery(next);
+    writeCutleryPreference(orderId, next);
+  };
+
+  const setCommentChoice = (next: string) => {
+    setComment(next);
+    writeOrderCommentPreference(orderId, next);
+  };
 
   const total = useMemo(
     () => cart.reduce((sum, item) => sum + lineTotal(item), 0),
     [cart]
   );
-  const grandTotal = total + SERVICE_FEE;
+  const { serviceChargeAmount } = useRestaurantServiceCharges(
+    orderInfo?.restaurantSlug,
+    'online'
+  );
+  const grandTotal = total + serviceChargeAmount;
 
   const placeOrder = async () => {
     const slug = orderInfo?.restaurantSlug?.trim();
@@ -228,6 +296,7 @@ export default function CheckoutPageClient({
           : 'Order placed successfully.'
       );
       localStorage.removeItem(`cart-${orderId}`);
+      clearOnlineOrderPreferences(orderId);
       router.push(
         orderPathWithQuery(
           `/order/${orderType}/${encodeURIComponent(orderId)}`,
@@ -246,7 +315,7 @@ export default function CheckoutPageClient({
     }
   };
 
-  const buildPaypalPayload = () => {
+  const buildPaidOrderPayload = (paymentMethod: 'PayPal' | 'Stripe') => {
     const slug = orderInfo?.restaurantSlug?.trim();
     if (!slug) return null;
     return {
@@ -277,7 +346,7 @@ export default function CheckoutPageClient({
       cutlery,
       comment: comment.trim() || undefined,
       paymentStatus: 'completed' as const,
-      paymentMethod: 'PayPal',
+      paymentMethod,
     };
   };
 
@@ -437,29 +506,17 @@ export default function CheckoutPageClient({
 
             <Card>
               <CardHeader>
-                <CardTitle>{t('orderDetailsCard')}</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  {t('orderDetailsCard')}
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <h3 className="text-sm font-semibold">{t('cutlery')}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {t('cutleryHint')}
-                    </p>
-                  </div>
-                  <Button
-                    variant={cutlery ? 'default' : 'outline'}
-                    onClick={() => setCutlery((prev) => !prev)}
-                    type="button"
-                  >
-                    {cutlery ? t('yes') : t('no')}
-                  </Button>
-                </div>
+                <CutleryOption value={cutlery} onChange={setCutleryChoice} />
                 <div className="mt-4">
                   <p className="text-sm font-semibold">{t('comment')}</p>
                   <textarea
                     value={comment}
-                    onChange={(e) => setComment(e.target.value)}
+                    onChange={(e) => setCommentChoice(e.target.value)}
                     className="mt-2 w-full rounded-lg border border-border bg-background p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder={t('commentPlaceholder')}
                     rows={4}
@@ -533,15 +590,23 @@ export default function CheckoutPageClient({
                   })}
                 </div>
 
+                <OrderPreferencesSummary
+                  className="mt-3"
+                  cutlery={cutlery}
+                  comment={comment}
+                />
+
                 <div className="mt-4 space-y-2 border-t border-border pt-2 text-sm">
                   <div className="flex justify-between">
                     <span>{t('subtotal')}</span>
                     <span>€{total.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>{t('serviceFees')}</span>
-                    <span>€{SERVICE_FEE.toFixed(2)}</span>
-                  </div>
+                  {serviceChargeAmount > 0 ? (
+                    <div className="flex justify-between">
+                      <span>{t('serviceFees')}</span>
+                      <span>€{serviceChargeAmount.toFixed(2)}</span>
+                    </div>
+                  ) : null}
                   <div className="flex justify-between font-bold">
                     <span>{t('total')}</span>
                     <span>€{grandTotal.toFixed(2)}</span>
@@ -550,49 +615,93 @@ export default function CheckoutPageClient({
 
                 <div className="mt-4 space-y-2">
                   {orderInfo?.restaurantSlug ? (
-                    <PayPalCheckoutButtons
-                      amount={grandTotal}
-                      title={`Online order (${
-                        orderType === 'delivery' ? 'Delivery' : 'Pick-up'
-                      })`}
-                      source="online"
-                      endpoint="/api/customer/orders"
-                      payload={buildPaypalPayload()}
-                      metadata={{
-                        source: 'online',
-                        restaurantSlug: orderInfo.restaurantSlug,
-                        orderType,
-                      }}
-                      disabled={submitting}
-                      onProcessingChange={setSubmitting}
-                      onApproved={async ({ capture }) => {
-                        const slug = orderInfo?.restaurantSlug ?? '';
-                        const ref =
-                          capture.shortOrderId ?? capture.orderId ?? '';
-                        localStorage.removeItem(`cart-${orderId}`);
-                        if (!ref) {
-                          toast.warn(
-                            'Payment captured but order reference missing. Contact support.'
+                    paymentConfigLoading ? (
+                      <div className="flex items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      </div>
+                    ) : paymentConfig?.ready &&
+                      paymentConfig.provider === 'PAYPAL' ? (
+                      <PayPalCheckoutButtons
+                        amount={grandTotal}
+                        restaurantSlug={orderInfo.restaurantSlug}
+                        title={`Online order (${
+                          orderType === 'delivery' ? 'Delivery' : 'Pick-up'
+                        })`}
+                        source="online"
+                        endpoint="/api/customer/orders"
+                        payload={buildPaidOrderPayload('PayPal')}
+                        metadata={{
+                          source: 'online',
+                          restaurantSlug: orderInfo.restaurantSlug,
+                          orderType,
+                        }}
+                        disabled={submitting}
+                        onProcessingChange={setSubmitting}
+                        onApproved={async ({ capture }) => {
+                          const slug = orderInfo?.restaurantSlug ?? '';
+                          const ref =
+                            capture.shortOrderId ?? capture.orderId ?? '';
+                          localStorage.removeItem(`cart-${orderId}`);
+                          clearOnlineOrderPreferences(orderId);
+                          if (!ref) {
+                            toast.warn(
+                              'Payment captured but order reference missing. Contact support.'
+                            );
+                            return;
+                          }
+                          toast.success('Payment received. Order placed.');
+                          const qs = new URLSearchParams({
+                            orderId: ref,
+                            ...(slug ? { restaurantSlug: slug } : {}),
+                            ...(typeof capture.ticketNumber === 'number'
+                              ? { ticket: String(capture.ticketNumber) }
+                              : {}),
+                          });
+                          router.push(
+                            `/order/${orderType}/${encodeURIComponent(
+                              orderId
+                            )}/success?${qs.toString()}`
                           );
-                          return;
-                        }
-                        toast.success('Payment received. Order placed.');
-                        const qs = new URLSearchParams({
-                          orderId: ref,
-                          ...(slug ? { restaurantSlug: slug } : {}),
-                          ...(typeof capture.ticketNumber === 'number'
-                            ? { ticket: String(capture.ticketNumber) }
-                            : {}),
-                        });
-                        router.push(
-                          `/order/${orderType}/${encodeURIComponent(
-                            orderId
-                          )}/success?${qs.toString()}`
-                        );
-                      }}
-                      onError={(msg) => toast.error(msg)}
-                      onCancel={() => toast.info('Payment cancelled.')}
-                    />
+                        }}
+                        onError={(msg) => toast.error(msg)}
+                        onCancel={() => toast.info('Payment cancelled.')}
+                      />
+                    ) : paymentConfig?.ready &&
+                      paymentConfig.provider === 'STRIPE' ? (
+                      <StripeCheckoutButton
+                        amount={grandTotal}
+                        restaurantSlug={orderInfo.restaurantSlug}
+                        title={`Online order (${
+                          orderType === 'delivery' ? 'Delivery' : 'Pick-up'
+                        })`}
+                        source="online"
+                        endpoint="/api/customer/orders"
+                        payload={buildPaidOrderPayload('Stripe')}
+                        metadata={{
+                          source: 'online',
+                          restaurantSlug: orderInfo.restaurantSlug,
+                          orderType,
+                        }}
+                        successPath={`/order/${orderType}/${encodeURIComponent(
+                          orderId
+                        )}/success?session_id={CHECKOUT_SESSION_ID}&restaurantSlug=${encodeURIComponent(
+                          orderInfo.restaurantSlug
+                        )}`}
+                        cancelPath={orderPathWithQuery(
+                          `/order/${orderType}/${encodeURIComponent(orderId)}`,
+                          orderInfo
+                        )}
+                        disabled={submitting}
+                        onProcessingChange={setSubmitting}
+                        onError={(msg) => toast.error(msg)}
+                      />
+                    ) : (
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        Online card payments are not available for this
+                        restaurant yet. The owner must configure PayPal or
+                        Stripe in settings.
+                      </p>
+                    )
                   ) : (
                     <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                       Missing store link. Reopen the menu from your restaurant

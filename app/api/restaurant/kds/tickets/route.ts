@@ -61,6 +61,8 @@ type TicketRow = {
   // the customer-facing display reference the same identifiers.
   shortOrderId: string | null;
   ticketNumber: number | null;
+  cutleryRequested: boolean;
+  customerComment: string | null;
 };
 
 type TicketItemRow = {
@@ -106,6 +108,8 @@ export async function GET(req: NextRequest) {
           o."total" AS "orderTotal",
           o."shortOrderId",
           o."ticketNumber",
+          o."cutleryRequested",
+          o."customerComment",
           c."name" AS "customerName"
         FROM "KitchenTicket" kt
         JOIN "Order" o ON o."id" = kt."orderId"

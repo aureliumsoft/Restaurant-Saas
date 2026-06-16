@@ -10,6 +10,8 @@ import {
   type PayPalOrderMetadata,
 } from '@/lib/paypal-server';
 import { getRequestOrigin } from '@/lib/request-origin';
+import { getRestaurantPayPalRuntimeConfigBySlug } from '@/lib/restaurant-payment-credentials';
+import { createRestaurantPayPalOrder } from '@/lib/restaurant-paypal-client';
 
 export const runtime = 'nodejs';
 
@@ -24,21 +26,16 @@ const bodySchema = z.object({
   metadata: z.record(z.string(), z.string()).optional(),
 });
 
+function isMerchantOrderSource(source: string | undefined): boolean {
+  return source === 'online' || source === 'kiosk';
+}
+
 /**
  * Creates a PayPal order for the inline JS-SDK Buttons flow.
- * Returns `{ id }` only — the JS SDK uses that id to open the
- * PayPal-hosted popup and runs `onApprove` after the buyer confirms.
- * The popup supports both **PayPal account** and **Pay with Debit or
- * Credit Card** (Visa / Mastercard / Amex) via PayPal guest checkout.
+ * Customer orders use each restaurant's own PayPal credentials.
+ * SaaS subscription checkout uses the platform account only.
  */
 export async function POST(req: NextRequest) {
-  if (!isPayPalConfigured()) {
-    return NextResponse.json(
-      { error: getPayPalConfigError() ?? 'PayPal is not configured' },
-      { status: 503 }
-    );
-  }
-
   let json: unknown;
   try {
     json = await req.json();
@@ -56,21 +53,48 @@ export async function POST(req: NextRequest) {
 
   const origin = await getRequestOrigin();
   const currency = (parsed.data.currency ?? 'EUR').toUpperCase();
+  const source = parsed.data.source;
+  const restaurantSlug = parsed.data.metadata?.restaurantSlug?.trim();
 
-  // PayPal `custom_id` has a hard ~127 char limit, which truncates large
-  // metadata payloads (e.g. a restaurantId UUID + plan + email). To work
-  // around this we always persist the full metadata + optional intent
-  // payload server-side under a short id, then pass only that id to PayPal.
   const intentId =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
       : `intent-${Date.now()}`;
+
+  let restaurantPayPal:
+    | Awaited<ReturnType<typeof getRestaurantPayPalRuntimeConfigBySlug>>
+    | null = null;
+
+  if (isMerchantOrderSource(source)) {
+    if (!restaurantSlug) {
+      return NextResponse.json(
+        { error: 'restaurantSlug is required for customer order payments.' },
+        { status: 400 }
+      );
+    }
+    restaurantPayPal = await getRestaurantPayPalRuntimeConfigBySlug(restaurantSlug);
+    if (!restaurantPayPal) {
+      return NextResponse.json(
+        {
+          error:
+            'This restaurant cannot accept PayPal payments yet. The owner must configure PayPal in settings.',
+        },
+        { status: 403 }
+      );
+    }
+  } else if (!isPayPalConfigured()) {
+    return NextResponse.json(
+      { error: getPayPalConfigError() ?? 'PayPal is not configured' },
+      { status: 503 }
+    );
+  }
 
   const intentValue = JSON.stringify({
     source: parsed.data.source ?? null,
     metadata: parsed.data.metadata ?? {},
     endpoint: parsed.data.endpoint ?? null,
     payload: parsed.data.payload ?? null,
+    restaurantId: restaurantPayPal?.restaurantId ?? null,
     status: 'pending',
     createdAt: new Date().toISOString(),
   });
@@ -83,18 +107,25 @@ export async function POST(req: NextRequest) {
 
   const metadata: PayPalOrderMetadata = { intentId };
 
+  const orderParams = {
+    amount: parsed.data.amount,
+    currency,
+    title: parsed.data.title ?? 'Payment',
+    returnUrl: `${origin}/`,
+    cancelUrl: `${origin}/`,
+    metadata,
+  };
+
   try {
-    const order = await createPayPalOrder({
-      amount: parsed.data.amount,
-      currency,
-      title: parsed.data.title ?? 'Payment',
-      // return_url / cancel_url are required by PayPal but in the JS-SDK
-      // popup flow the buyer never gets redirected here. Provide stable
-      // origin-relative fallbacks so the order body validates.
-      returnUrl: `${origin}/`,
-      cancelUrl: `${origin}/`,
-      metadata,
-    });
+    if (restaurantPayPal) {
+      const order = await createRestaurantPayPalOrder(
+        restaurantPayPal.config,
+        orderParams
+      );
+      return NextResponse.json({ id: order.id }, { status: 200 });
+    }
+
+    const order = await createPayPalOrder(orderParams);
     return NextResponse.json({ id: order.id }, { status: 200 });
   } catch (e) {
     console.error('PayPal create-order failed:', e);

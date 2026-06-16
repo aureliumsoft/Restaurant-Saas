@@ -29,6 +29,11 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import {
+  parseRestaurantServiceCharges,
+  resolveServiceChargeAmount,
+  type RestaurantServiceCharges,
+} from '@/lib/restaurant-service-charge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -221,6 +226,7 @@ type Category = {
 type RestaurantMenuApi = {
   data?: {
     themePrimaryColor?: string | null;
+    serviceCharges?: RestaurantServiceCharges;
     menus?: Array<{
       id: string;
       name: string;
@@ -436,6 +442,9 @@ export function PosScreen() {
     name: 'Restaurant',
     logoUrl: null,
   });
+  const [serviceCharges, setServiceCharges] = useState<RestaurantServiceCharges>(
+    () => parseRestaurantServiceCharges(undefined)
+  );
 
   const [srChPct, setSrChPct] = useState('0');
   const [taxPct, setTaxPct] = useState('0');
@@ -565,6 +574,9 @@ export function PosScreen() {
 
         if (!isMounted) return;
         setThemePrimaryColor(json.data?.themePrimaryColor?.trim() || null);
+        setServiceCharges(
+          json.data?.serviceCharges ?? parseRestaurantServiceCharges(undefined)
+        );
         setCategories(nextCategories);
         setProducts(nextProducts);
       } catch {
@@ -804,7 +816,14 @@ export function PosScreen() {
   const afterSr = subtotal + srChAmount;
   const taxAmount = afterSr * (txPct / 100);
   const disAmount = subtotal * (dcPct / 100);
-  const grandTotal = Math.max(0, afterSr + taxAmount - disAmount);
+  const posServiceChargeAmount = resolveServiceChargeAmount(
+    serviceCharges,
+    'pos'
+  );
+  const grandTotal = Math.max(
+    0,
+    afterSr + taxAmount - disAmount + posServiceChargeAmount
+  );
 
   const isTableMode = orderMode === 'tables';
   const isDeliveryMode = orderMode === 'delivery';
@@ -909,6 +928,7 @@ export function PosScreen() {
     <div class="sep"></div>
     <div class="totals">
       <div><span>Subtotal</span><span>€${formatMoney(subtotal)}</span></div>
+      ${posServiceChargeAmount > 0 ? `<div><span>Service charge</span><span>€${formatMoney(posServiceChargeAmount)}</span></div>` : ''}
       <div><span>Tax</span><span>€${formatMoney(taxAmount)}</span></div>
       <div><span>Discount</span><span>€${formatMoney(disAmount)}</span></div>
       <div><span>Paid</span><span>€${formatMoney(paidAmount)}</span></div>
@@ -1372,6 +1392,7 @@ export function PosScreen() {
         address: addressTrim || undefined,
         taxAmount,
         discountAmount: disAmount,
+        serviceChargeAmount: posServiceChargeAmount,
         customerName: nameTrim || undefined,
         customerPhone: phoneTrim || undefined,
         tableId: tableTrim || undefined,
@@ -1850,6 +1871,14 @@ export function PosScreen() {
                 </span>
                 <span className="tabular-nums">€{formatMoney(disAmount)}</span>
               </div>
+              {posServiceChargeAmount > 0 ? (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Service charge</span>
+                  <span className="tabular-nums">
+                    €{formatMoney(posServiceChargeAmount)}
+                  </span>
+                </div>
+              ) : null}
               <div className="mt-2 flex justify-between border-t pt-2 text-lg font-semibold">
                 <span>Total</span>
                 <span className="tabular-nums">€{formatMoney(grandTotal)}</span>
@@ -2303,7 +2332,19 @@ export function PosScreen() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="tabular-nums">€{formatMoney(subtotal)}</span>
+                  </div>
+                  {posServiceChargeAmount > 0 ? (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Service charge</span>
+                      <span className="tabular-nums">
+                        €{formatMoney(posServiceChargeAmount)}
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Total</span>
                     <span className="font-semibold tabular-nums">

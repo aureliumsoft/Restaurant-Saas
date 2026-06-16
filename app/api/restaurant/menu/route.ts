@@ -2,6 +2,10 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
+import {
+  RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+  withServiceChargesPayload,
+} from '@/lib/restaurant-service-charge';
 import { applyProductRecommendationPools } from '@/lib/menu/apply-product-recommendation-pools';
 import {
   buildCustomerMenuAttributeGroupsSelect,
@@ -83,6 +87,7 @@ export async function GET(req: NextRequest) {
         name: true,
         logoUrl: true,
         themePrimaryColor: true,
+        ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
       },
     });
 
@@ -122,7 +127,10 @@ export async function GET(req: NextRequest) {
       allCategories
     );
 
-    return NextResponse.json({ data: enriched }, { status: 200 });
+    return NextResponse.json(
+      { data: withServiceChargesPayload(enriched) },
+      { status: 200 }
+    );
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: 'Failed to load menu' }, { status: 500 });

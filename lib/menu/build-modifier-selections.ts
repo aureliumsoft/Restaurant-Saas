@@ -13,6 +13,26 @@ import type {
   MenuOption,
 } from '@/components/order/product-customize-dialog';
 
+export type ModifierGroupSelection = {
+  attributeGroupId: string;
+  groupName: string;
+  selections: MenuOption[];
+};
+
+export function orderedUniqueOptionIds(
+  ids: string[],
+  selectionType: 'SINGLE' | 'MULTIPLE'
+): string[] {
+  if (selectionType === 'SINGLE') {
+    return ids.length > 0 ? [ids[0]!] : [];
+  }
+  const result: string[] = [];
+  for (const id of ids) {
+    if (!result.includes(id)) result.push(id);
+  }
+  return result;
+}
+
 export function buildModifierSelectionsForGroups(
   groups: AttributeGroup[],
   selectedByGroup: Record<string, string[]>,
@@ -39,12 +59,16 @@ export function buildModifierSelectionsForGroups(
       parentVariation,
       g.useVariationPricing ?? false
     );
-    const selectedItems = visibleItems
-      .filter((it) => ids.includes(it.menuItemId))
-      .map((it) => {
+    const itemById = new Map(
+      visibleItems.map((it) => [it.menuItemId, it] as const)
+    );
+    const selectedItems = orderedUniqueOptionIds(ids, g.selectionType)
+      .map((optionId) => {
+        const it = itemById.get(optionId);
+        if (!it) return null;
         const qty =
           g.selectionType === 'MULTIPLE'
-            ? ids.filter((x) => x === it.menuItemId).length
+            ? ids.filter((x) => x === optionId).length
             : 1;
         const key = `${g.id}:${it.menuItemId}`;
         const nestedVariationId = effectiveOptionVariationId(
@@ -89,7 +113,8 @@ export function buildModifierSelectionsForGroups(
           imageUrl: it.imageUrl,
           unitPrice: unit * chargeable,
         };
-      });
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry != null);
 
     if (selectedItems.length > 0) {
       mods.push({

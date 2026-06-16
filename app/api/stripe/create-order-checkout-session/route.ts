@@ -3,8 +3,9 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
-import { createPayPalOrder, getPayPalConfigError, isPayPalConfigured } from '@/lib/paypal-server';
 import { getRequestOrigin } from '@/lib/request-origin';
+import { getRestaurantStripeRuntimeConfigBySlug } from '@/lib/restaurant-payment-credentials';
+import { createRestaurantStripeCheckoutSession } from '@/lib/restaurant-stripe-client';
 
 export const runtime = 'nodejs';
 
@@ -22,13 +23,6 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  if (!isPayPalConfigured()) {
-    return NextResponse.json(
-      { error: getPayPalConfigError() ?? 'PayPal is not configured' },
-      { status: 503 }
-    );
-  }
-
   let json: unknown;
   try {
     json = await req.json();
@@ -44,9 +38,25 @@ export async function POST(req: NextRequest) {
   const origin = await getRequestOrigin();
   const currency = (parsed.data.currency ?? 'EUR').toUpperCase();
   if (parsed.data.amount <= 0) {
+    return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+  }
+
+  const restaurantSlug = parsed.data.metadata?.restaurantSlug?.trim();
+  if (!restaurantSlug) {
     return NextResponse.json(
-      { error: 'Invalid amount' },
+      { error: 'restaurantSlug is required for customer order payments.' },
       { status: 400 }
+    );
+  }
+
+  const row = await getRestaurantStripeRuntimeConfigBySlug(restaurantSlug);
+  if (!row) {
+    return NextResponse.json(
+      {
+        error:
+          'This restaurant cannot accept Stripe payments yet. The owner must configure Stripe in settings.',
+      },
+      { status: 403 }
     );
   }
 
@@ -59,8 +69,9 @@ export async function POST(req: NextRequest) {
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
         : `intent-${Date.now()}`;
+
     if (shouldStoreIntent) {
-      const intentKey = `paypal_order_intent:${intentId}`;
+      const intentKey = `stripe_order_intent:${intentId}`;
       await db.platformSetting.upsert({
         where: { key: intentKey },
         create: {
@@ -69,6 +80,7 @@ export async function POST(req: NextRequest) {
             source: parsed.data.source,
             endpoint: parsed.data.endpoint,
             payload: parsed.data.payload,
+            metadata: parsed.data.metadata ?? {},
             status: 'pending',
             createdAt: new Date().toISOString(),
           }),
@@ -78,6 +90,7 @@ export async function POST(req: NextRequest) {
             source: parsed.data.source,
             endpoint: parsed.data.endpoint,
             payload: parsed.data.payload,
+            metadata: parsed.data.metadata ?? {},
             status: 'pending',
             createdAt: new Date().toISOString(),
           }),
@@ -85,23 +98,25 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const checkout = await createPayPalOrder({
+    const checkout = await createRestaurantStripeCheckoutSession(row.config, {
       amount: parsed.data.amount,
       currency,
       title: parsed.data.title ?? 'Order payment',
-      returnUrl: successUrl,
+      successUrl,
       cancelUrl,
       metadata: {
         ...(parsed.data.metadata ?? {}),
         source: parsed.data.source,
+        restaurantSlug,
         ...(shouldStoreIntent ? { intentId } : {}),
       },
     });
 
     return NextResponse.json({ url: checkout.url, id: checkout.id }, { status: 200 });
   } catch (e) {
-    console.error('Create order checkout failed:', e);
-    return NextResponse.json({ error: 'Could not start PayPal checkout' }, { status: 502 });
+    console.error('Create Stripe checkout failed:', e);
+    const msg =
+      e instanceof Error ? e.message : 'Could not start Stripe checkout';
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 }
-

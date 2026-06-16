@@ -113,9 +113,21 @@ export async function POST(
           currentPeriodEnd: periodEnd,
         },
         update: setActive
-          ? { status: 'ACTIVE', currentPeriodEnd: periodEnd }
-          : { currentPeriodEnd: periodEnd },
-        select: { id: true, status: true, currentPeriodEnd: true },
+          ? {
+              status: 'ACTIVE',
+              currentPeriodEnd: periodEnd,
+              adminPeriodEndAt: null,
+            }
+          : {
+              currentPeriodEnd: periodEnd,
+            },
+        select: {
+          id: true,
+          status: true,
+          currentPeriodEnd: true,
+          plan: true,
+          paypalSubscriptionId: true,
+        },
       });
 
       const recordedBy =

@@ -50,3 +50,25 @@ export function evaluateSubscriptionAccess(input: {
 
   return { allowed: false, reason: 'inactive_status', warning: null };
 }
+
+/** True while trial or paid period end is still in the future (for pricing / renew UI). */
+export function isSubscriptionPeriodActive(input: {
+  status: string;
+  trialEndsAt: Date | null;
+  currentPeriodEnd: Date | null;
+} | null): boolean {
+  if (!input) return false;
+
+  const now = Date.now();
+  const status = String(input.status ?? '').toUpperCase();
+
+  if (status === 'TRIAL') {
+    return input.trialEndsAt != null && input.trialEndsAt.getTime() >= now;
+  }
+
+  if (input.currentPeriodEnd != null) {
+    return input.currentPeriodEnd.getTime() >= now;
+  }
+
+  return status === 'ACTIVE';
+}

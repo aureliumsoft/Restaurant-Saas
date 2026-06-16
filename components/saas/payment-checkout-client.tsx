@@ -8,7 +8,7 @@ import { toast } from 'react-toastify';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { PayPalCheckoutButtons } from '@/components/payments/paypal-checkout-buttons';
+import { PayPalSubscriptionButtons } from '@/components/payments/paypal-subscription-buttons';
 import { useState } from 'react';
 
 type Props = {
@@ -60,8 +60,8 @@ export function PaymentCheckoutClient({
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Checkout</h1>
             <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-              Secure payment powered by PayPal. Pay with your PayPal account
-              or with Visa / Mastercard / Amex through PayPal Guest Checkout.
+              Subscribe with PayPal. Monthly billing and renewals are handled
+              securely by PayPal.
             </p>
           </div>
 
@@ -115,8 +115,8 @@ export function PaymentCheckoutClient({
             <Separator />
             <div className="text-xs text-muted-foreground">
               <p>
-                Billing uses the price from your catalog for plan <strong>{plan}</strong>. Choose
-                PayPal or a card; both options appear below.
+                Monthly billing for plan <strong>{plan}</strong>. PayPal manages
+                your subscription and renewals.
               </p>
             </div>
             {signedIn && userEmail ? (
@@ -130,33 +130,41 @@ export function PaymentCheckoutClient({
               </p>
             )}
             {stripeReady && amount > 0 && restaurantId ? (
-              <PayPalCheckoutButtons
-                amount={amount}
-                title={`${planName} subscription`}
-                source="subscription"
+              <PayPalSubscriptionButtons
+                plan={plan}
                 disabled={loading}
-                metadata={{
-                  plan,
-                  restaurantId,
-                  ...(userEmail ? { userEmail } : {}),
-                }}
                 onProcessingChange={setLoading}
-                onApproved={async ({ capture }) => {
+                onApproved={async ({ subscriptionId }) => {
                   try {
-                    if (capture && capture.planSynced) {
-                      toast.success('Subscription updated. Welcome to Dashboard!');
-                      router.replace('/dashboard');
-                      router.refresh();
-                      return;
+                    const res = await fetch('/api/paypal/activate-subscription', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ subscriptionId, plan }),
+                    });
+                    const body = (await res.json().catch(() => ({}))) as {
+                      data?: { synced?: boolean };
+                      error?: unknown;
+                    };
+                    if (!res.ok || !body.data?.synced) {
+                      throw new Error(
+                        typeof body.error === 'string'
+                          ? body.error
+                          : 'Subscription could not be activated.'
+                      );
                     }
-                    toast.error(
-                      'Payment captured but subscription could not be updated. Contact support.'
-                    );
-                  } catch (error) {
+                    toast.success('Subscription active. Welcome to Dashboard!');
+                    router.replace('/dashboard');
+                    router.refresh();
+                  } catch (err) {
                     setError(
-                      error instanceof Error
-                        ? error.message
+                      err instanceof Error
+                        ? err.message
                         : 'An unknown error occurred'
+                    );
+                    toast.error(
+                      err instanceof Error
+                        ? err.message
+                        : 'Subscription activation failed.'
                     );
                   }
                 }}

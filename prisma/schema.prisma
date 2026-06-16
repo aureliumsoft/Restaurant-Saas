@@ -138,6 +138,15 @@ model Restaurant {
   mainBannerUrl  String?
   themePrimaryColor String?
   menuBannerUrls String[] @default([])
+  /// Flat system service charge for POS checkout (when enabled).
+  posServiceChargeEnabled    Boolean @default(false)
+  posServiceChargeAmount     Float   @default(0)
+  /// Flat system service charge for kiosk checkout (when enabled).
+  kioskServiceChargeEnabled  Boolean @default(false)
+  kioskServiceChargeAmount   Float   @default(0)
+  /// Flat system service charge for online checkout (when enabled).
+  onlineServiceChargeEnabled Boolean @default(false)
+  onlineServiceChargeAmount  Float   @default(0)
   ownerId        String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -158,6 +167,74 @@ model Restaurant {
   kitchenTickets       KitchenTicket[]
   diningTables         DiningTable[]
   variationDefinitions RestaurantVariation[]
+  paypalIntegration    RestaurantPayPalIntegration?
+  customerPaymentProvider CustomerPaymentProvider @default(NONE)
+  paypalCredentials      RestaurantPayPalCredentials?
+  stripeCredentials      RestaurantStripeCredentials?
+}
+
+enum CustomerPaymentProvider {
+  NONE
+  PAYPAL
+  STRIPE
+}
+
+/// Restaurant-owned PayPal REST API credentials for customer order payments.
+model RestaurantPayPalCredentials {
+  id              String   @id @default(uuid())
+  restaurantId    String   @unique
+  clientId        String
+  clientSecretEnc String
+  webhookId       String?
+  mode            String   @default("sandbox")
+  currency        String   @default("EUR")
+  /// ISO 3166-1 alpha-2 — pre-selects country in PayPal card / guest checkout.
+  countryCode     String   @default("DE")
+  isVerified      Boolean  @default(false)
+  lastVerifiedAt  DateTime?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Restaurant-owned Stripe API credentials for customer order payments.
+model RestaurantStripeCredentials {
+  id               String   @id @default(uuid())
+  restaurantId     String   @unique
+  publishableKey   String
+  secretKeyEnc     String
+  webhookSecretEnc String?
+  mode             String   @default("test")
+  isVerified       Boolean  @default(false)
+  lastVerifiedAt   DateTime?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Connected PayPal merchant account for customer order payments (Partner Referrals).
+model RestaurantPayPalIntegration {
+  id                 String    @id @default(uuid())
+  restaurantId       String    @unique
+  trackingId         String    @unique
+  paypalMerchantId   String?
+  permissionsGranted Boolean   @default(false)
+  accountStatus      String?
+  paymentsReceivable Boolean   @default(false)
+  primaryEmail       String?
+  countryCode        String?
+  currencyCode       String?
+  onboardedAt        DateTime?
+  lastStatusCheckAt  DateTime?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// Seating labels for POS / kiosk dine-in (scoped per branch).
@@ -197,13 +274,20 @@ model Branch {
 }
 
 model RestaurantSubscription {
-  id               String             @id @default(uuid())
-  restaurantId     String             @unique
-  plan             SubscriptionPlan   @default(STARTER)
-  status           SubscriptionStatus @default(TRIAL)
-  trialEndsAt      DateTime?
-  currentPeriodEnd DateTime?
-  notes            String?
+  id                   String             @id @default(uuid())
+  restaurantId         String             @unique
+  plan                 SubscriptionPlan   @default(STARTER)
+  status               SubscriptionStatus @default(TRIAL)
+  trialEndsAt          DateTime?
+  currentPeriodEnd     DateTime?
+  notes                String?
+  /// PayPal Billing Subscriptions API id (I-…)
+  paypalSubscriptionId String?            @unique
+  paypalPlanId         String?
+  /// When true, PayPal charges the saved payment method and renews after period end.
+  autoRenew            Boolean            @default(true)
+  /// Admin-set period end; PayPal refresh won't overwrite until renewal payment clears it.
+  adminPeriodEndAt     DateTime?
 
   restaurant Restaurant            @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   payments   SubscriptionPayment[]
@@ -213,15 +297,17 @@ model RestaurantSubscription {
 }
 
 model SubscriptionCatalog {
-  id          String           @id @default(uuid())
-  plan        SubscriptionPlan @unique
-  name        String
-  price       Int
-  priceLabel  String
-  description String
-  features    String[]         @default([])
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id              String           @id @default(uuid())
+  plan            SubscriptionPlan @unique
+  name            String
+  price           Int
+  priceLabel      String
+  description     String
+  features        String[]         @default([])
+  paypalProductId String?
+  paypalPlanId    String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 }
 
 model SubscriptionPayment {
@@ -565,6 +651,12 @@ model Order {
   taxAmount      Float           @default(0)
   /// Order-level discount amount (not line-item discounts).
   discountAmount Float           @default(0)
+  /// Flat system service charge applied at checkout (POS / kiosk / online).
+  serviceChargeAmount Float      @default(0)
+  /// Online order: customer requested cutlery.
+  cutleryRequested   Boolean     @default(false)
+  /// Online order: customer comment / special request.
+  customerComment    String?
   /// POS dine-in: linked `DiningTable` while it exists.
   diningTableId  String?
   /// Snapshot of table name at checkout (kept if the table row is removed).

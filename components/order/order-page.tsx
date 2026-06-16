@@ -43,7 +43,7 @@ import { setUiLanguage } from '@/lib/i18n/client';
 import type { UiLanguage } from '@/lib/i18n/resources';
 import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
 import { cn } from '@/lib/utils';
-import { ArrowUp, Loader2, Pencil, Search, Trash2, X } from 'lucide-react';
+import { ArrowUp, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 
 export type OrderPageProps = {
   orderType: 'delivery' | 'pickUp';
@@ -367,8 +367,8 @@ function ProductCard({
             ) : null}
             €{priceDisplay.amount.toFixed(2)}
           </span>
-          <Button size="sm" onClick={onAdd} type="button">
-            {showCustomizeIndicator ? t('customizePlus') : t('addPlus')}
+          <Button size="icon" type="button">
+            <Plus className="h-4 w-4" />
           </Button>
         </div>
       </CardContent>

@@ -1,19 +1,41 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
+
+import React, { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
+
 import RolesCard from './components/roles';
 import RestaurantUsersCard from './components/restaurant-users';
 import { CustomerEntryLinks } from './components/customer-entry-links';
 import { RestaurantBrandingCard } from './components/restaurant-branding';
-import eventBus from '@/lib/even';
+import { RestaurantPaymentProviderCard } from './components/restaurant-payment-provider-card';
+import { RestaurantBillingCard } from './components/restaurant-billing-card';
+import { RestaurantServiceChargesCard } from './components/restaurant-service-charges-card';
+import { SettingsSectionNav } from './settings-section-nav';
+import {
+  parseSettingsSection,
+  SETTINGS_SECTIONS,
+  type SettingsSectionId,
+} from '@/constant/settingsNav';
+
 export function Setting() {
-  const [storeName, setStoreName] = useState<string | null>(null);
-  const [storeId, setStoreId] = useState<string | null>(null);
-  const [taxRate, setTaxRate] = useState<number>(0);
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [brandingAllowed, setBrandingAllowed] = useState(true);
   const [roleBasedSettingsAllowed, setRoleBasedSettingsAllowed] =
     useState(true);
+
+  const section = useMemo(
+    () => parseSettingsSection(searchParams.get('section')),
+    [searchParams]
+  );
+
+  const activeSection = useMemo(() => {
+    if (section === 'access' && !roleBasedSettingsAllowed) return 'basic';
+    return section;
+  }, [roleBasedSettingsAllowed, section]);
+
+  const activeMeta = SETTINGS_SECTIONS.find((item) => item.id === activeSection);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,59 +63,77 @@ export function Setting() {
   }, []);
 
   useEffect(() => {
-    const fetchShopData = async () => {
-      try {
-        const isOnline = navigator.onLine;
+    if (section === 'access' && !roleBasedSettingsAllowed) {
+      router.replace('/settings?section=basic');
+    }
+  }, [roleBasedSettingsAllowed, router, section]);
 
-        if (!isOnline) {
-          toast.error(
-            'You are offline. Please check your internet connection.'
-          );
-          return;
-        }
-
-        // const response = await axios.get('/api/shopdata');
-        // const shopdata = response.data.data;
-
-        // if (response.status === 200) {
-        // } else {
-        //   toast.error('Failed to fetch data: ' + shopdata.error);
-        // }
-      } catch (error: any) {
-        toast.error(
-          'Failed to fetch data: ' +
-            (error.response?.data.error || error.message)
-        );
-      }
-    };
-
-    fetchShopData();
-
-    const handleEventBusEvent = () => {
-      fetchShopData();
-    };
-
-    eventBus.on('fetchStoreData', handleEventBusEvent);
-
-    // Clean up event listener
-    return () => {
-      eventBus.removeListener('fetchStoreData', handleEventBusEvent);
-    };
-  }, []);
+  const selectSection = (id: SettingsSectionId) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (id === 'basic') {
+      params.delete('section');
+    } else {
+      params.set('section', id);
+    }
+    const query = params.toString();
+    router.replace(query ? `/settings?${query}` : '/settings');
+  };
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <div className="flex min-h-[calc(100vh_-_theme(spacing.16))] flex-1 flex-col gap-4 bg-muted/40 p-4 md:gap-8 md:p-10">
-        <div className="mx-auto grid w-full max-w-6xl items-start gap-6 ">
-          <div className="grid gap-6">
-            <CustomerEntryLinks />
-            <RestaurantBrandingCard brandingAllowed={brandingAllowed} />
-            {/* <ShopnameCard storeName={storeName} storeId={storeId} />
-            <TaxrateCard tax={taxRate} storeId={storeId} /> */}
-            <RestaurantUsersCard
-              roleBasedSettingsAllowed={roleBasedSettingsAllowed}
+      <div className="flex min-h-[calc(100vh_-_theme(spacing.16))] flex-1 flex-col bg-muted/40 md:gap-8 md:p-10">
+        <div className="mx-auto grid w-full max-w-6xl items-start gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
+          <aside className="lg:sticky lg:top-6 lg:self-start">
+            <p className="mb-3 hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:block">
+              Settings
+            </p>
+            <SettingsSectionNav
+              active={activeSection}
+              onSelect={selectSection}
+              accessAllowed={roleBasedSettingsAllowed}
             />
-            <RolesCard roleBasedSettingsAllowed={roleBasedSettingsAllowed} />
+          </aside>
+
+          <div className="min-w-0">
+            {activeMeta ? (
+              <header className="mb-6">
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  {activeMeta.title}
+                </h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {activeMeta.description}
+                </p>
+              </header>
+            ) : null}
+
+            <div className="grid gap-6">
+              {activeSection === 'basic' ? (
+                <>
+                  <CustomerEntryLinks />
+                  <RestaurantBrandingCard brandingAllowed={brandingAllowed} />
+                </>
+              ) : null}
+
+              {activeSection === 'access' && roleBasedSettingsAllowed ? (
+                <>
+                  <RestaurantUsersCard
+                    roleBasedSettingsAllowed={roleBasedSettingsAllowed}
+                  />
+                  <RolesCard
+                    roleBasedSettingsAllowed={roleBasedSettingsAllowed}
+                  />
+                </>
+              ) : null}
+
+              {activeSection === 'payments' ? (
+                <>
+                  <RestaurantServiceChargesCard />
+                  <RestaurantPaymentProviderCard />
+                </>
+              ) : null}
+
+              {activeSection === 'billing' ? <RestaurantBillingCard /> : null}
+            </div>
           </div>
         </div>
       </div>

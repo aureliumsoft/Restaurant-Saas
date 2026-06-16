@@ -25,6 +25,12 @@ import {
   isTicketNumberConflict,
   utcTicketDateFromNow,
 } from '@/lib/order-ticket-number';
+import {
+  computeCheckoutTotal,
+  parseRestaurantServiceCharges,
+  RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+  totalsMatch,
+} from '@/lib/restaurant-service-charge';
 
 const SELECTED_MINUTES_KIOSK = 25;
 
@@ -138,7 +144,7 @@ export async function POST(req: NextRequest) {
   const slug = restaurantSlug.trim();
   const restaurant = await db.restaurant.findUnique({
     where: { slug },
-    select: { id: true },
+    select: { id: true, ...RESTAURANT_SERVICE_CHARGE_DB_SELECT },
   });
 
   if (!restaurant) {
@@ -157,9 +163,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Subtotal does not match cart lines' }, { status: 400 });
   }
 
-  if (Math.abs(computedSubtotal - total) > 0.02) {
+  const serviceCharges = parseRestaurantServiceCharges(restaurant);
+  const { serviceChargeAmount, total: computedTotal } = computeCheckoutTotal(
+    computedSubtotal,
+    serviceCharges,
+    'kiosk'
+  );
+  if (!totalsMatch(computedTotal, total)) {
     return NextResponse.json(
-      { error: 'Total must match subtotal for kiosk checkout' },
+      { error: 'Total does not match subtotal plus service charge' },
       { status: 400 }
     );
   }
@@ -259,13 +271,14 @@ export async function POST(req: NextRequest) {
               ticketDate,
               ticketNumber,
               status: 'pending',
-              total: computedSubtotal,
+              total: computedTotal,
               sourceType: OrderSourceType.KIOSK,
               address: addressSnapshot || null,
               diningTableId: selectedTableId ?? undefined,
               tableLabel: selectedTableName ?? undefined,
               taxAmount: 0,
               discountAmount: 0,
+              serviceChargeAmount,
               idempotencyKey: idempotencyKey ?? undefined,
             },
           });
@@ -326,7 +339,7 @@ export async function POST(req: NextRequest) {
       await tx.payment.create({
         data: {
           orderId: order.id,
-          amount: computedSubtotal,
+          amount: computedTotal,
           status: paymentStatus ?? 'completed',
           method: paymentMethod?.trim() || 'Kiosk',
           restaurantId: restaurant.id,

@@ -13,7 +13,6 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-
 import type {
   OrderDisplayPayload,
   OrderDisplayTicket,
@@ -37,19 +36,18 @@ function buildAnnouncement(ticket: OrderDisplayTicket): string {
   if (typeof ticket.ticketNumber === 'number' && ticket.ticketNumber > 0) {
     tokenSpoken = String(ticket.ticketNumber);
   } else {
-    const id = (ticket.shortOrderId ?? ticket.orderId.slice(0, 6)).toUpperCase();
+    const id = (
+      ticket.shortOrderId ?? ticket.orderId.slice(0, 6)
+    ).toUpperCase();
     tokenSpoken = id.split('').join(' ');
   }
-  return `Order number ${tokenSpoken} completed. ${name}, please come to the counter to pick up your order.`;
+  return `Pedido número ${tokenSpoken} completado. ${name}, por favor, acérquese al mostrador para recoger su pedido.`;
 }
 
-function speakUtterance(
-  synth: SpeechSynthesis,
-  text: string
-): Promise<void> {
+function speakUtterance(synth: SpeechSynthesis, text: string): Promise<void> {
   return new Promise((resolve) => {
     const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'en-US';
+    utter.lang = 'es-ES';
     utter.rate = 0.95;
     utter.pitch = 1;
     utter.volume = 1;
@@ -163,10 +161,7 @@ export function OrderDisplayScreen() {
       const next = !prev;
       voiceEnabledRef.current = next;
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem(
-          VOICE_STORAGE_KEY,
-          next ? 'on' : 'off'
-        );
+        window.localStorage.setItem(VOICE_STORAGE_KEY, next ? 'on' : 'off');
         // Cancel any in-flight speech when muting.
         if (!next && window.speechSynthesis) {
           window.speechSynthesis.cancel();
@@ -350,7 +345,9 @@ export function OrderDisplayScreen() {
             ) : !featured ? (
               <EmptyState
                 className="h-full"
-                icon={<CheckCircle2 className="h-12 w-12 text-emerald-500/60" />}
+                icon={
+                  <CheckCircle2 className="h-12 w-12 text-emerald-500/60" />
+                }
                 title="No orders ready yet"
                 subtitle="Completed orders will appear here."
               />
@@ -378,9 +375,7 @@ export function OrderDisplayScreen() {
               </div>
             ) : recentOthers.length === 0 ? (
               <EmptyState
-                icon={
-                  <CheckCircle2 className="h-8 w-8 text-emerald-500/50" />
-                }
+                icon={<CheckCircle2 className="h-8 w-8 text-emerald-500/50" />}
                 title="No older ready orders"
                 subtitle="Older completed orders will queue here."
               />
@@ -484,7 +479,10 @@ function FeaturedReadyCard({
       </span>
       <CardContent className="flex flex-1 flex-col items-center justify-center gap-6 p-6 text-center md:p-10">
         <div className="flex h-32 w-32 flex-none items-center justify-center rounded-full bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 md:h-44 md:w-44">
-          <CheckCircle2 className="h-20 w-20 md:h-28 md:w-28" strokeWidth={2.5} />
+          <CheckCircle2
+            className="h-20 w-20 md:h-28 md:w-28"
+            strokeWidth={2.5}
+          />
         </div>
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-400">

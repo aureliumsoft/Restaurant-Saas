@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { evaluateSubscriptionAccess } from '@/lib/subscription-access';
 import { getPlanFeatures } from '@/lib/subscription-plan-features';
+import { processSubscriptionLifecycle } from '@/lib/subscription-lifecycle';
+import { isPeriodExpired } from '@/lib/subscription-period';
 
 export async function GET(req: NextRequest) {
   const auth = await getRestaurantIdForRequest(req);
@@ -32,17 +34,46 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
     }
 
-    const access = evaluateSubscriptionAccess(restaurant.subscription);
-    const plan = restaurant.subscription?.plan ?? null;
+    const pre = await db.restaurantSubscription.findUnique({
+      where: { restaurantId: auth.restaurantId },
+      select: {
+        autoRenew: true,
+        currentPeriodEnd: true,
+        status: true,
+      },
+    });
+
+    const shouldRenew =
+      pre?.autoRenew === true &&
+      (isPeriodExpired(pre.currentPeriodEnd) || pre.status === 'PAST_DUE');
+
+    await processSubscriptionLifecycle(auth.restaurantId, {
+      syncPayPal: shouldRenew,
+    });
+
+    const subscription = await db.restaurantSubscription.findUnique({
+      where: { restaurantId: auth.restaurantId },
+      select: {
+        status: true,
+        trialEndsAt: true,
+        currentPeriodEnd: true,
+        plan: true,
+        autoRenew: true,
+      },
+    });
+
+    const access = evaluateSubscriptionAccess(subscription);
+    const plan = subscription?.plan ?? null;
     const limits = getPlanFeatures(plan);
     return NextResponse.json(
       {
         data: {
           ...access,
           plan,
-          status: restaurant.subscription?.status ?? null,
-          trialEndsAt: restaurant.subscription?.trialEndsAt?.toISOString() ?? null,
-          currentPeriodEnd: restaurant.subscription?.currentPeriodEnd?.toISOString() ?? null,
+          status: subscription?.status ?? null,
+          trialEndsAt: subscription?.trialEndsAt?.toISOString() ?? null,
+          currentPeriodEnd: subscription?.currentPeriodEnd?.toISOString() ?? null,
+          autoRenew: subscription?.autoRenew ?? true,
           limits: {
             maxBranches: Number.isFinite(limits.maxBranches)
               ? limits.maxBranches

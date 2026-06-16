@@ -14,6 +14,8 @@ type HistoryRow = {
   kind: HistoryKind;
   transactionId: string;
   referenceId: string | null;
+  shortOrderId: string | null;
+  ticketNumber: number | null;
   amount: number | null;
   currency: string;
   status: string;
@@ -63,6 +65,8 @@ export async function GET(req: NextRequest) {
         where: { restaurantId, ...orderBranchFilter },
         select: {
           id: true,
+          shortOrderId: true,
+          ticketNumber: true,
           total: true,
           status: true,
           sourceType: true,
@@ -109,6 +113,8 @@ export async function GET(req: NextRequest) {
           kind: 'ORDER' as const,
           transactionId: payment?.id ?? o.id,
           referenceId: o.id,
+          shortOrderId: o.shortOrderId,
+          ticketNumber: o.ticketNumber,
           amount: payment?.amount ?? o.total ?? null,
           currency: 'EUR',
           status: payment?.status ?? o.status,
@@ -124,6 +130,8 @@ export async function GET(req: NextRequest) {
         kind: 'SUBSCRIPTION' as const,
         transactionId: p.id,
         referenceId: p.restaurantSubscriptionId ?? null,
+        shortOrderId: null,
+        ticketNumber: null,
         amount: p.amount,
         currency: p.currency || 'EUR',
         status: 'completed',
@@ -138,6 +146,8 @@ export async function GET(req: NextRequest) {
         kind: 'REGISTER' as const,
         transactionId: t.id,
         referenceId: null,
+        shortOrderId: null,
+        ticketNumber: null,
         amount: t.totalAmount != null ? Number(t.totalAmount) : null,
         currency: 'EUR',
         status: t.isComplete ? 'completed' : 'open',
@@ -156,6 +166,8 @@ export async function GET(req: NextRequest) {
         return (
           row.transactionId.toLowerCase().includes(q) ||
           (row.referenceId ?? '').toLowerCase().includes(q) ||
+          (row.shortOrderId ?? '').toLowerCase().includes(q) ||
+          (row.ticketNumber != null ? String(row.ticketNumber) : '').includes(q) ||
           row.kind.toLowerCase().includes(q) ||
           row.source.toLowerCase().includes(q) ||
           row.status.toLowerCase().includes(q) ||

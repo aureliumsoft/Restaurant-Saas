@@ -32,7 +32,12 @@ type OrderIntentPayload = {
 export async function processOrderIntentFromSession(
   session: Stripe.Checkout.Session,
   baseUrl: string
-): Promise<{ status: 'skipped' | 'completed' | 'already_completed'; orderId?: string }> {
+): Promise<{
+  status: 'skipped' | 'completed' | 'already_completed';
+  orderId?: string;
+  shortOrderId?: string;
+  ticketNumber?: number | null;
+}> {
   if (session.payment_status !== 'paid') return { status: 'skipped' };
   const intentId =
     typeof session.metadata?.intentId === 'string' ? session.metadata.intentId.trim() : '';
@@ -54,17 +59,38 @@ export async function processOrderIntentFromSession(
 
   if (!parsed?.endpoint || !parsed.payload) return { status: 'skipped' };
   if (parsed.status === 'completed') {
-    const parsedCompleted = JSON.parse(row.value) as { orderId?: string };
+    const parsedCompleted = JSON.parse(row.value) as {
+      orderId?: string;
+      shortOrderId?: string;
+      ticketNumber?: number | null;
+    };
     return {
       status: 'already_completed',
-      orderId: typeof parsedCompleted.orderId === 'string' ? parsedCompleted.orderId : undefined,
+      orderId:
+        typeof parsedCompleted.orderId === 'string'
+          ? parsedCompleted.orderId
+          : undefined,
+      shortOrderId:
+        typeof parsedCompleted.shortOrderId === 'string'
+          ? parsedCompleted.shortOrderId
+          : undefined,
+      ticketNumber:
+        typeof parsedCompleted.ticketNumber === 'number'
+          ? parsedCompleted.ticketNumber
+          : null,
     };
   }
 
   const res = await fetch(`${baseUrl}${parsed.endpoint}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(parsed.payload),
+    body: JSON.stringify({
+      ...(typeof parsed.payload === 'object' && parsed.payload !== null
+        ? parsed.payload
+        : {}),
+      paymentStatus: 'completed',
+      paymentMethod: 'Stripe',
+    }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -86,9 +112,15 @@ export async function processOrderIntentFromSession(
     );
   }
 
-  const body = (await res.json().catch(() => ({}))) as { data?: { orderId?: string } };
+  const body = (await res.json().catch(() => ({}))) as {
+    data?: { orderId?: string; shortOrderId?: string; ticketNumber?: number | null };
+  };
   const orderId =
     typeof body?.data?.orderId === 'string' ? body.data.orderId : undefined;
+  const shortOrderId =
+    typeof body?.data?.shortOrderId === 'string' ? body.data.shortOrderId : undefined;
+  const ticketNumber =
+    typeof body?.data?.ticketNumber === 'number' ? body.data.ticketNumber : null;
 
   await db.platformSetting.update({
     where: { key },
@@ -98,12 +130,14 @@ export async function processOrderIntentFromSession(
         status: 'completed',
         stripeSessionId: session.id,
         orderId,
+        shortOrderId,
+        ticketNumber,
         completedAt: new Date().toISOString(),
       }),
     },
   });
 
-  return { status: 'completed', orderId };
+  return { status: 'completed', orderId, shortOrderId, ticketNumber };
 }
 
 export async function markExistingOrderPaidFromSession(

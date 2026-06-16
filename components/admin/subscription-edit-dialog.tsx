@@ -31,6 +31,7 @@ type Sub = {
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
   notes: string | null;
+  paypalSubscriptionId?: string | null;
 } | null;
 
 type PaymentRow = {
@@ -118,7 +119,14 @@ export function SubscriptionEditDialog({
   const save = async () => {
     setSaving(true);
     try {
-      await axios.patch(`/api/admin/subscriptions/${restaurantId}`, {
+      const res = await axios.patch<{
+        data?: unknown;
+        sync?: {
+          paypal?: { ok?: boolean; messages?: string[] };
+          paymentPeriodEndUpdated?: boolean;
+          periodEndChanged?: boolean;
+        };
+      }>(`/api/admin/subscriptions/${restaurantId}`, {
         plan,
         status,
         trialEndsAt: trialEndsAt || null,
@@ -126,6 +134,21 @@ export function SubscriptionEditDialog({
         notes: notes.trim() || null,
       });
       toast.success('Subscription updated');
+      const sync = res.data?.sync;
+      if (sync?.periodEndChanged) {
+        toast.info('Period end saved. PayPal will follow auto-renew settings.');
+      }
+      if (sync?.paymentPeriodEndUpdated) {
+        toast.info('Latest payment record period end updated.');
+      }
+      const paypalMessages = sync?.paypal?.messages ?? [];
+      for (const msg of paypalMessages) {
+        if (sync.paypal?.ok === false) {
+          toast.warn(msg);
+        } else {
+          toast.info(msg);
+        }
+      }
       setShowConfirmation(false);
       onOpenChange(false);
       onSaved();
@@ -225,6 +248,11 @@ export function SubscriptionEditDialog({
                 value={currentPeriodEnd}
                 onChange={(e) => setCurrentPeriodEnd(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                Saved to the database and shown in restaurant billing. PayPal
+                billing date cannot be changed via API; plan/status sync to
+                PayPal when linked.
+              </p>
             </div>
             <div className="grid gap-2">
               <Label>Notes</Label>

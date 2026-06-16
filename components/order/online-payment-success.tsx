@@ -7,6 +7,7 @@ import { ArrowRight, Check, Copy, Home, TrainTrack } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
+import { clearOnlineOrderPreferences } from '@/lib/online-order-preferences';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { OrderInfo } from '@/components/order/order-types';
@@ -40,24 +41,30 @@ export function OnlinePaymentSuccess({
   const [paid, setPaid] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
   const [ticket, setTicket] = useState<number | null>(ticketFromQuery);
+  const [resolvedTrackingId, setResolvedTrackingId] = useState<string | null>(
+    trackingOrderId
+  );
+
+  const displayTrackingId = resolvedTrackingId ?? trackingOrderId;
 
   const copyTrackingId = useCallback(async () => {
-    if (!trackingOrderId) return;
+    if (!displayTrackingId) return;
     try {
-      await navigator.clipboard.writeText(trackingOrderId);
+      await navigator.clipboard.writeText(displayTrackingId);
       setCopied(true);
       toast.success('Tracking ID copied');
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Could not copy tracking ID');
     }
-  }, [trackingOrderId]);
+  }, [displayTrackingId]);
   const restaurantSlug = orderInfo?.restaurantSlug?.trim() || '';
   const storefrontHome = `/web-app/${encodeURIComponent(restaurantSlug)}`;
 
   useEffect(() => {
     try {
       localStorage.removeItem(`cart-${flowOrderId}`);
+      clearOnlineOrderPreferences(flowOrderId);
     } catch {
       // ignore storage errors
     }
@@ -68,13 +75,17 @@ export function OnlinePaymentSuccess({
   }, [ticketFromQuery]);
 
   useEffect(() => {
-    if (!trackingOrderId) return;
+    setResolvedTrackingId(trackingOrderId);
+  }, [trackingOrderId]);
+
+  useEffect(() => {
+    if (!displayTrackingId) return;
     if (ticket != null) return;
     let cancelled = false;
     (async () => {
       try {
         const params = new URLSearchParams({
-          orderId: trackingOrderId,
+          orderId: displayTrackingId,
         });
         if (restaurantSlug) {
           params.set('restaurantSlug', restaurantSlug);
@@ -98,7 +109,7 @@ export function OnlinePaymentSuccess({
     return () => {
       cancelled = true;
     };
-  }, [trackingOrderId, restaurantSlug, ticket]);
+  }, [displayTrackingId, restaurantSlug, ticket]);
 
   useEffect(() => {
     const paymentToken = sessionId ?? token ?? null;
@@ -106,11 +117,29 @@ export function OnlinePaymentSuccess({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `/api/stripe/verify-session?token=${encodeURIComponent(paymentToken)}`
-        );
-        const body = (await res.json().catch(() => ({}))) as { paid?: boolean };
-        if (!cancelled) setPaid(res.ok && body.paid === true);
+        const isStripeSession = Boolean(sessionId?.trim());
+        const verifyUrl = isStripeSession && restaurantSlug
+          ? `/api/stripe/verify-order-session?session_id=${encodeURIComponent(
+              paymentToken
+            )}&restaurantSlug=${encodeURIComponent(restaurantSlug)}`
+          : `/api/stripe/verify-session?token=${encodeURIComponent(paymentToken)}`;
+        const res = await fetch(verifyUrl);
+        const body = (await res.json().catch(() => ({}))) as {
+          paid?: boolean;
+          shortOrderId?: string;
+          orderId?: string;
+          ticketNumber?: number | null;
+        };
+        if (!cancelled) {
+          setPaid(res.ok && body.paid === true);
+          const ref = body.shortOrderId ?? body.orderId;
+          if (typeof ref === 'string' && ref.trim()) {
+            setResolvedTrackingId(ref.trim());
+          }
+          if (typeof body.ticketNumber === 'number' && ticket == null) {
+            setTicket(body.ticketNumber);
+          }
+        }
       } catch {
         if (!cancelled) setPaid(false);
       }
@@ -118,7 +147,7 @@ export function OnlinePaymentSuccess({
     return () => {
       cancelled = true;
     };
-  }, [sessionId, token]);
+  }, [sessionId, token, restaurantSlug, ticket]);
 
   return (
     <div className="min-h-screen bg-background px-4 py-12">
@@ -152,14 +181,14 @@ export function OnlinePaymentSuccess({
               <p className="text-xs text-muted-foreground">Tracking ID</p>
               <div className="mt-1 flex items-center justify-between gap-3">
                 <p className="min-w-0 break-all font-mono text-lg font-semibold">
-                  {trackingOrderId ?? 'Unavailable'}
+                  {displayTrackingId ?? 'Unavailable'}
                 </p>
                 <Button
                   type="button"
                   variant="outline"
                   className="shrink-0"
                   onClick={copyTrackingId}
-                  disabled={!trackingOrderId}
+                  disabled={!displayTrackingId}
                   aria-label="Copy tracking ID"
                 >
                   {copied ? (
@@ -185,8 +214,8 @@ export function OnlinePaymentSuccess({
               <Button asChild>
                 <Link
                   href={`/web-app/${encodeURIComponent(restaurantSlug)}/track-order${
-                    trackingOrderId
-                      ? `?orderId=${encodeURIComponent(trackingOrderId)}`
+                    displayTrackingId
+                      ? `?orderId=${encodeURIComponent(displayTrackingId)}`
                       : ''
                   }`}
                 >

@@ -1,4 +1,4 @@
-import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, OrderSourceType } from '@prisma/client';
+import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, OrderSourceType, CustomerPaymentProvider } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import Decimal from 'decimal.js';
 
@@ -84,7 +84,93 @@ export function fakeRestaurantComplete() {
     mainBannerUrl: undefined,
     themePrimaryColor: undefined,
     menuBannerUrls: [],
+    posServiceChargeEnabled: false,
+    posServiceChargeAmount: 0,
+    kioskServiceChargeEnabled: false,
+    kioskServiceChargeAmount: 0,
+    onlineServiceChargeEnabled: false,
+    onlineServiceChargeAmount: 0,
     ownerId: faker.string.uuid(),
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+    customerPaymentProvider: CustomerPaymentProvider.NONE,
+  };
+}
+export function fakeRestaurantPayPalCredentials() {
+  return {
+    clientId: faker.lorem.words(5),
+    clientSecretEnc: faker.lorem.words(5),
+    webhookId: undefined,
+    lastVerifiedAt: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeRestaurantPayPalCredentialsComplete() {
+  return {
+    id: faker.string.uuid(),
+    restaurantId: faker.string.uuid(),
+    clientId: faker.lorem.words(5),
+    clientSecretEnc: faker.lorem.words(5),
+    webhookId: undefined,
+    mode: 'sandbox',
+    currency: 'EUR',
+    countryCode: 'DE',
+    isVerified: false,
+    lastVerifiedAt: undefined,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeRestaurantStripeCredentials() {
+  return {
+    publishableKey: faker.lorem.words(5),
+    secretKeyEnc: faker.lorem.words(5),
+    webhookSecretEnc: undefined,
+    lastVerifiedAt: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeRestaurantStripeCredentialsComplete() {
+  return {
+    id: faker.string.uuid(),
+    restaurantId: faker.string.uuid(),
+    publishableKey: faker.lorem.words(5),
+    secretKeyEnc: faker.lorem.words(5),
+    webhookSecretEnc: undefined,
+    mode: 'test',
+    isVerified: false,
+    lastVerifiedAt: undefined,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeRestaurantPayPalIntegration() {
+  return {
+    trackingId: faker.lorem.words(5),
+    paypalMerchantId: undefined,
+    accountStatus: undefined,
+    primaryEmail: undefined,
+    countryCode: undefined,
+    currencyCode: undefined,
+    onboardedAt: undefined,
+    lastStatusCheckAt: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeRestaurantPayPalIntegrationComplete() {
+  return {
+    id: faker.string.uuid(),
+    restaurantId: faker.string.uuid(),
+    trackingId: faker.lorem.words(5),
+    paypalMerchantId: undefined,
+    permissionsGranted: false,
+    accountStatus: undefined,
+    paymentsReceivable: false,
+    primaryEmail: undefined,
+    countryCode: undefined,
+    currencyCode: undefined,
+    onboardedAt: undefined,
+    lastStatusCheckAt: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -130,6 +216,9 @@ export function fakeRestaurantSubscription() {
     trialEndsAt: undefined,
     currentPeriodEnd: undefined,
     notes: undefined,
+    paypalSubscriptionId: undefined,
+    paypalPlanId: undefined,
+    adminPeriodEndAt: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -142,6 +231,10 @@ export function fakeRestaurantSubscriptionComplete() {
     trialEndsAt: undefined,
     currentPeriodEnd: undefined,
     notes: undefined,
+    paypalSubscriptionId: undefined,
+    paypalPlanId: undefined,
+    autoRenew: true,
+    adminPeriodEndAt: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -153,6 +246,8 @@ export function fakeSubscriptionCatalog() {
     price: faker.number.int(),
     priceLabel: faker.lorem.words(5),
     description: faker.lorem.words(5),
+    paypalProductId: undefined,
+    paypalPlanId: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -165,6 +260,8 @@ export function fakeSubscriptionCatalogComplete() {
     priceLabel: faker.lorem.words(5),
     description: faker.lorem.words(5),
     features: [],
+    paypalProductId: undefined,
+    paypalPlanId: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -495,6 +592,7 @@ export function fakeOrder() {
     status: faker.lorem.words(5),
     total: faker.number.float(),
     address: undefined,
+    customerComment: undefined,
     tableLabel: undefined,
     updatedAt: faker.date.anytime(),
   };
@@ -515,6 +613,9 @@ export function fakeOrderComplete() {
     address: undefined,
     taxAmount: 0,
     discountAmount: 0,
+    serviceChargeAmount: 0,
+    cutleryRequested: false,
+    customerComment: undefined,
     diningTableId: undefined,
     tableLabel: undefined,
     createdAt: new Date(),

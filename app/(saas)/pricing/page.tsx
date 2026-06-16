@@ -5,12 +5,26 @@ import { Button } from '@/components/ui/button';
 import { db } from '@/lib/db';
 import { getAppSession } from '@/lib/auth/app-session';
 import { getRestaurantForUser } from '@/lib/restaurant-owner';
+import { isSubscriptionPeriodActive } from '@/lib/subscription-access';
+import { processSubscriptionLifecycle } from '@/lib/subscription-lifecycle';
+
+function formatPeriodEnd(iso: Date | null): string {
+  if (!iso) return '';
+  return iso.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
 
 export default async function PricingPage() {
   const session = await getAppSession();
   const isLoggedIn = Boolean(session?.user?.email);
 
   let currentPlanSlug: string | null = null;
+  let subscriptionPeriodActive = false;
+  let periodEndLabel: string | null = null;
+
   if (session?.user?.email) {
     const user = await db.user.findUnique({
       where: { email: session.user.email },
@@ -19,12 +33,22 @@ export default async function PricingPage() {
     if (user) {
       const restaurant = await getRestaurantForUser(user.id);
       if (restaurant) {
+        await processSubscriptionLifecycle(restaurant.id);
         const sub = await db.restaurantSubscription.findUnique({
           where: { restaurantId: restaurant.id },
-          select: { plan: true },
+          select: {
+            plan: true,
+            status: true,
+            trialEndsAt: true,
+            currentPeriodEnd: true,
+          },
         });
         if (sub?.plan) {
           currentPlanSlug = sub.plan;
+          subscriptionPeriodActive = isSubscriptionPeriodActive(sub);
+          const end =
+            sub.status === 'TRIAL' ? sub.trialEndsAt : sub.currentPeriodEnd;
+          periodEndLabel = formatPeriodEnd(end);
         }
       }
     }
@@ -108,10 +132,18 @@ export default async function PricingPage() {
         ) : (
           <div className="grid gap-5 md:grid-cols-3">
             {plans.map((plan) => {
-              const isCurrentPlan =
+              const planMatches =
                 currentPlanSlug !== null &&
                 plan.plan.toUpperCase() === currentPlanSlug.toUpperCase();
+              const isCurrentPlan = planMatches && subscriptionPeriodActive;
+              const isExpiredCurrentPlan = planMatches && !subscriptionPeriodActive;
               const isFeatured = plan.plan.toUpperCase() === 'GROWTH';
+
+              const paymentHref = isLoggedIn
+                ? `/payment?plan=${encodeURIComponent(plan.plan)}`
+                : `/login?callbackUrl=${encodeURIComponent(
+                    `/payment?plan=${encodeURIComponent(plan.plan)}`
+                  )}`;
 
               return (
               <article
@@ -144,7 +176,34 @@ export default async function PricingPage() {
                 {isCurrentPlan ? (
                   <p className="mt-6 rounded-lg border border-fire-300 bg-fire-100 px-4 py-3 text-center text-sm font-medium text-fire-700 dark:border-fire-500/40 dark:bg-fire-500/15 dark:text-fire-100">
                     Your current plan
+                    {periodEndLabel ? (
+                      <span className="mt-1 block text-xs font-normal opacity-90">
+                        Active until {periodEndLabel}
+                      </span>
+                    ) : null}
                   </p>
+                ) : isExpiredCurrentPlan ? (
+                  <>
+                    <p className="mt-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+                      Your plan has expired
+                      {periodEndLabel ? (
+                        <span className="mt-1 block text-xs font-normal opacity-90">
+                          Period ended {periodEndLabel}
+                        </span>
+                      ) : null}
+                    </p>
+                    <Button
+                      className="mt-3 w-full bg-gradient-to-r from-fire-500 to-fire-600 text-white hover:from-fire-400 hover:to-fire-500"
+                      asChild
+                    >
+                      <Link href={paymentHref}>
+                        <>
+                          <span>Renew {plan.name}</span>
+                          <RefreshCcw className="ml-1 h-4 w-4" />
+                        </>
+                      </Link>
+                    </Button>
+                  </>
                 ) : (
                   <>
                     <Button
@@ -155,15 +214,7 @@ export default async function PricingPage() {
                       }`}
                       asChild
                     >
-                      <Link
-                        href={
-                          isLoggedIn
-                            ? `/payment?plan=${encodeURIComponent(plan.plan)}`
-                            : `/login?callbackUrl=${encodeURIComponent(
-                                `/payment?plan=${encodeURIComponent(plan.plan)}`
-                              )}`
-                        }
-                      >
+                      <Link href={paymentHref}>
                         <>
                           <span>Choose {plan.name}</span>
                           <ArrowRight className="h-4 w-4 ml-1" />

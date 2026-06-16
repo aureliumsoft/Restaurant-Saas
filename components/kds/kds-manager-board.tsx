@@ -21,6 +21,7 @@ import {
   KdsOrderActionDialog,
   type KdsOrderActionKind,
 } from '@/components/kds/kds-order-action-dialog';
+import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
 import { kdsFetchErrorMessage } from '@/lib/kds-api-errors';
 
 type PendingOrder = {
@@ -32,6 +33,8 @@ type PendingOrder = {
   status: string;
   total: number;
   sourceType: string;
+  cutleryRequested: boolean;
+  customerComment: string | null;
   createdAt: string;
   paymentStatus: string | null;
   paymentMethod: string | null;
@@ -339,6 +342,11 @@ export function KdsManagerBoard() {
                     <p className="text-xs text-muted-foreground">
                       {new Date(o.createdAt).toLocaleString()}
                     </p>
+                    <OrderCustomerExtras
+                      cutleryRequested={o.cutleryRequested}
+                      customerComment={o.customerComment}
+                      compact
+                    />
                     <div className="space-y-1">
                       {o.items.map((it) => {
                         const base = normalizeLineName(

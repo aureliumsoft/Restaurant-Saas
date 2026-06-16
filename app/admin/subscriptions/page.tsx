@@ -61,6 +61,21 @@ type CatalogPlan = {
   features: string[] | null;
 };
 
+function formatPeriodEnd(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '—';
+  }
+}
+
 export default function AdminSubscriptionsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -174,6 +189,7 @@ export default function AdminSubscriptionsPage() {
                 <TableHead>Owner</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Period ends</TableHead>
                 <TableHead className="w-24 text-right">Edit</TableHead>
               </TableRow>
             </TableHeader>
@@ -214,6 +230,11 @@ export default function AdminSubscriptionsPage() {
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {r.subscription?.status === 'TRIAL'
+                      ? formatPeriodEnd(r.subscription.trialEndsAt)
+                      : formatPeriodEnd(r.subscription?.currentPeriodEnd ?? null)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button

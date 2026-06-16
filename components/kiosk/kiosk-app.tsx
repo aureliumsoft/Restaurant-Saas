@@ -77,6 +77,11 @@ import {
   kioskSuccessPath,
 } from '@/lib/kiosk-path';
 import { submitKioskOrder } from '@/lib/offline/submit-order';
+import {
+  parseRestaurantServiceCharges,
+  resolveServiceChargeAmount,
+  type RestaurantServiceCharges,
+} from '@/lib/restaurant-service-charge';
 
 function formatKioskOrderApiError(body: unknown): string {
   if (!body || typeof body !== 'object') {
@@ -202,6 +207,7 @@ type MenuRestaurant = {
   themePrimaryColor?: string | null;
   slug: string;
   menus: CustomerMenuCategory[];
+  serviceCharges?: RestaurantServiceCharges;
 };
 
 type DiningTableOption = {
@@ -332,9 +338,9 @@ export function KioskApp({
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedTableId, setSelectedTableId] = useState('');
   const [diningTables, setDiningTables] = useState<DiningTableOption[]>([]);
-  const [pendingFulfillment, setPendingFulfillment] = useState<'dine_in' | null>(
-    null
-  );
+  const [pendingFulfillment, setPendingFulfillment] = useState<
+    'dine_in' | null
+  >(null);
   const [placing, setPlacing] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'cash' | 'card'>('cash');
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
@@ -562,9 +568,18 @@ export function KioskApp({
     () => cart.reduce((s, l) => s + lineTotal(l), 0),
     [cart]
   );
+  const serviceChargeAmount = useMemo(
+    () =>
+      resolveServiceChargeAmount(
+        menu?.serviceCharges ?? parseRestaurantServiceCharges(undefined),
+        'kiosk'
+      ),
+    [menu?.serviceCharges]
+  );
+  const cartGrandTotal = cartSubtotal + serviceChargeAmount;
 
   const cardPayment = useCardPaymentFlow({
-    amount: cartSubtotal,
+    amount: cartGrandTotal,
     orderIdPrefix: 'KIOSK-PRE',
     formatMoney,
   });
@@ -720,7 +735,7 @@ export function KioskApp({
         fulfillment === 'dine_in' ? selectedTableId || undefined : undefined,
       lines,
       subtotal: cartSubtotal,
-      total: cartSubtotal,
+      total: cartGrandTotal,
       cookingNote: cookingNote.trim() || undefined,
       customerName: customerName.trim() || undefined,
       customerPhone: customerPhone.trim() || undefined,
@@ -974,15 +989,17 @@ export function KioskApp({
               <div className="min-w-0">
                 <p className="truncate font-semibold">{menu.name}</p>
                 {branchName ? (
-                  <p className="truncate text-xs text-[#64748b]">{branchName}</p>
+                  <p className="truncate text-xs text-[#64748b]">
+                    {branchName}
+                  </p>
                 ) : null}
                 {fulfillment ? (
                   <p className="text-xs text-[#64748b]">
                     {fulfillment === 'dine_in' ? 'Dine in' : 'Take away'}
                     {fulfillment === 'dine_in' && selectedTableId
                       ? ` · Table ${
-                          diningTables.find((t) => t.id === selectedTableId)?.name ??
-                          selectedTableId
+                          diningTables.find((t) => t.id === selectedTableId)
+                            ?.name ?? selectedTableId
                         }`
                       : ''}
                     {' · '}
@@ -1092,9 +1109,7 @@ export function KioskApp({
                 className="flex flex-col items-center gap-3 rounded-2xl border-2 border-primary bg-gradient-to-b from-primary to-primary/90 p-8 text-white shadow-lg transition hover:opacity-95"
               >
                 <ShoppingBag className="h-10 w-10" />
-                <span className="font-semibold">
-                  {t('takeAway')}
-                </span>
+                <span className="font-semibold">{t('takeAway')}</span>
               </button>
             </div>
           </div>
@@ -1242,9 +1257,7 @@ export function KioskApp({
                   disabled={cartCount === 0}
                   onClick={() => setStep('cart')}
                 >
-                  <ShoppingCart
-                  className="mr-2 h-4 w-4"
-                />
+                  <ShoppingCart className="mr-2 h-4 w-4" />
                   {t('viewCart')}
                 </Button>
               </div>
@@ -1256,22 +1269,23 @@ export function KioskApp({
           <div className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 py-6">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-bold">Cart</h1>
-             
             </div>
             {cart.length === 0 ? (
               <>
-              <div className="flex flex-col items-center justify-start gap-2">
-              <p className="text-[#64748b] w-full text-center">Your cart is empty.</p>
-              <Button
-                type="button"
-                variant="default"
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 p-2"
-                onClick={() => setStep('menu')}
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                {t('backToMenu')}
-              </Button>
-              </div>
+                <div className="flex flex-col items-center justify-start gap-2">
+                  <p className="text-[#64748b] w-full text-center">
+                    Your cart is empty.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90 p-2"
+                    onClick={() => setStep('menu')}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    {t('backToMenu')}
+                  </Button>
+                </div>
               </>
             ) : (
               <>
@@ -1280,87 +1294,92 @@ export function KioskApp({
                     const personalizeNames = cartPersonalizeSelectionNames(
                       line.modifiers
                     );
-                    const addonNames = cartModifierSelectionNames(line.modifiers);
+                    const addonNames = cartModifierSelectionNames(
+                      line.modifiers
+                    );
                     return (
-                    <li
-                      key={line.lineId}
-                      className="flex gap-3 rounded-xl border border-[#e2e8f0] bg-white p-3 shadow-sm"
-                    >
-                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-[#f1f5f9]">
-                        {line.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={line.imageUrl}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : null}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium leading-snug">
-                          {cartLineTitle(line.productName, line.variationName)}
-                        </p>
-                        {personalizeNames.length > 0 ? (
-                          <div className="mt-1 space-y-0.5">
-                            {personalizeNames.map((name, index) => (
-                              <p
-                                key={`${line.lineId}-personalize-${index}`}
-                                className="text-xs font-medium text-[#334155]"
-                              >
-                                {name}
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
-                        {addonNames.length > 0 ? (
-                          <div className="mt-1 space-y-0.5">
-                            {addonNames.map((name, index) => (
-                              <p
-                                key={`${line.lineId}-sel-${index}`}
-                                className="text-xs text-[#64748b]"
-                              >
-                                - {name}
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
-                        <p className="mt-1 text-xs text-[#64748b]">
-                          €{formatMoney(lineUnitTotal(line))} each
-                        </p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="outline"
-                            className="h-8 w-8"
-                            onClick={() => adjustLine(line.lineId, -1)}
-                          >
-                            <Minus className="h-3.5 w-3.5" />
-                          </Button>
-                          <span className="w-6 text-center text-sm">
-                            {line.quantity}
-                          </span>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="outline"
-                            className="h-8 w-8"
-                            onClick={() => adjustLine(line.lineId, 1)}
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="ml-auto h-8 w-8 text-[#dc2626]"
-                            onClick={() => removeLine(line.lineId)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                      <li
+                        key={line.lineId}
+                        className="flex gap-3 rounded-xl border border-[#e2e8f0] bg-white p-3 shadow-sm"
+                      >
+                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-[#f1f5f9]">
+                          {line.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={line.imageUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
                         </div>
-                      </div>
-                    </li>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium leading-snug">
+                            {cartLineTitle(
+                              line.productName,
+                              line.variationName
+                            )}
+                          </p>
+                          {personalizeNames.length > 0 ? (
+                            <div className="mt-1 space-y-0.5">
+                              {personalizeNames.map((name, index) => (
+                                <p
+                                  key={`${line.lineId}-personalize-${index}`}
+                                  className="text-xs font-medium text-[#334155]"
+                                >
+                                  {name}
+                                </p>
+                              ))}
+                            </div>
+                          ) : null}
+                          {addonNames.length > 0 ? (
+                            <div className="mt-1 space-y-0.5">
+                              {addonNames.map((name, index) => (
+                                <p
+                                  key={`${line.lineId}-sel-${index}`}
+                                  className="text-xs text-[#64748b]"
+                                >
+                                  - {name}
+                                </p>
+                              ))}
+                            </div>
+                          ) : null}
+                          <p className="mt-1 text-xs text-[#64748b]">
+                            €{formatMoney(lineUnitTotal(line))} each
+                          </p>
+                          <div className="mt-2 flex items-center gap-2">
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              className="h-8 w-8"
+                              onClick={() => adjustLine(line.lineId, -1)}
+                            >
+                              <Minus className="h-3.5 w-3.5" />
+                            </Button>
+                            <span className="w-6 text-center text-sm">
+                              {line.quantity}
+                            </span>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              className="h-8 w-8"
+                              onClick={() => adjustLine(line.lineId, 1)}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="ml-auto h-8 w-8 text-[#dc2626]"
+                              onClick={() => removeLine(line.lineId)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </li>
                     );
                   })}
                 </ul>
@@ -1392,7 +1411,9 @@ export function KioskApp({
                       {t('customerDetails')}
                     </p>
                     <div className="space-y-2">
-                      <Label htmlFor="kiosk-customer-name">{t('yourName')}</Label>
+                      <Label htmlFor="kiosk-customer-name">
+                        {t('yourName')}
+                      </Label>
                       <Input
                         id="kiosk-customer-name"
                         placeholder={t('yourName')}
@@ -1449,22 +1470,18 @@ export function KioskApp({
                     setStep('checkout');
                   }}
                 >
-                  <CheckCircle
-                  className="mr-2 h-4 w-4"
-                />
+                  <CheckCircle className="mr-2 h-4 w-4" />
                   Checkout
                 </Button>
 
                 <Button
-                type="button"
-                className="w-full bg-black text-white"
-                onClick={() => setStep('menu')}
-              >
-                <ArrowLeft
-                className="mr-2 h-4 w-4"
-                />
-                {t('backToMenu')}
-              </Button>
+                  type="button"
+                  className="w-full bg-black text-white"
+                  onClick={() => setStep('menu')}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  {t('backToMenu')}
+                </Button>
               </>
             )}
           </div>
@@ -1492,52 +1509,64 @@ export function KioskApp({
                   );
                   const addonNames = cartModifierSelectionNames(line.modifiers);
                   return (
-                  <li
-                    key={line.lineId}
-                    className="border-b border-[#e2e8f0]/80 py-2 last:border-0"
-                  >
-                    <div className="flex justify-between gap-2">
-                      <p className="min-w-0 font-medium">
-                        {cartLineTitle(line.productName, line.variationName)}
+                    <li
+                      key={line.lineId}
+                      className="border-b border-[#e2e8f0]/80 py-2 last:border-0"
+                    >
+                      <div className="flex justify-between gap-2">
+                        <p className="min-w-0 font-medium">
+                          {cartLineTitle(line.productName, line.variationName)}
+                        </p>
+                        <span className="shrink-0 tabular-nums text-[#64748b]">
+                          €{formatMoney(lineTotal(line))}
+                        </span>
+                      </div>
+                      {personalizeNames.length > 0 ? (
+                        <div className="mt-0.5 space-y-0.5">
+                          {personalizeNames.map((name, index) => (
+                            <p
+                              key={`${line.lineId}-personalize-${index}`}
+                              className="text-xs font-medium text-[#334155]"
+                            >
+                              {name}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+                      {addonNames.length > 0 ? (
+                        <div className="mt-0.5 space-y-0.5">
+                          {addonNames.map((name, index) => (
+                            <p
+                              key={`${line.lineId}-sel-${index}`}
+                              className="text-xs text-[#64748b]"
+                            >
+                              - {name}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+                      <p className="mt-0.5 text-xs text-[#64748b]">
+                        x{line.quantity}
                       </p>
-                      <span className="shrink-0 tabular-nums text-[#64748b]">
-                        €{formatMoney(lineTotal(line))}
-                      </span>
-                    </div>
-                    {personalizeNames.length > 0 ? (
-                      <div className="mt-0.5 space-y-0.5">
-                        {personalizeNames.map((name, index) => (
-                          <p
-                            key={`${line.lineId}-personalize-${index}`}
-                            className="text-xs font-medium text-[#334155]"
-                          >
-                            {name}
-                          </p>
-                        ))}
-                      </div>
-                    ) : null}
-                    {addonNames.length > 0 ? (
-                      <div className="mt-0.5 space-y-0.5">
-                        {addonNames.map((name, index) => (
-                          <p
-                            key={`${line.lineId}-sel-${index}`}
-                            className="text-xs text-[#64748b]"
-                          >
-                            - {name}
-                          </p>
-                        ))}
-                      </div>
-                    ) : null}
-                    <p className="mt-0.5 text-xs text-[#64748b]">
-                      x{line.quantity}
-                    </p>
-                  </li>
+                    </li>
                   );
                 })}
               </ul>
-              <div className="flex justify-between border-t border-[#e2e8f0] pt-2 font-semibold">
-                <span>Total due</span>
-                <span>€{formatMoney(cartSubtotal)}</span>
+              <div className="space-y-1 border-t border-[#e2e8f0] pt-2 text-sm">
+                <div className="flex justify-between text-[#64748b]">
+                  <span>Subtotal</span>
+                  <span>€{formatMoney(cartSubtotal)}</span>
+                </div>
+                {serviceChargeAmount > 0 ? (
+                  <div className="flex justify-between text-[#64748b]">
+                    <span>Service charge</span>
+                    <span>€{formatMoney(serviceChargeAmount)}</span>
+                  </div>
+                ) : null}
+                <div className="flex justify-between font-semibold text-[#0f172a]">
+                  <span>Total due</span>
+                  <span>€{formatMoney(cartGrandTotal)}</span>
+                </div>
               </div>
             </div>
             <div className="space-y-3">
@@ -1592,7 +1621,7 @@ export function KioskApp({
                         cardPayment.cardPaymentStatus === 'cancelled' ? (
                         <>
                           <XCircle className="h-4 w-4" />
-                          Pay €{formatMoney(cartSubtotal)}
+                          Pay €{formatMoney(cartGrandTotal)}
                         </>
                       ) : cardPayment.cardPaymentStatus === 'processing' ? (
                         <>
@@ -1602,7 +1631,7 @@ export function KioskApp({
                       ) : (
                         <>
                           <CreditCard className="h-4 w-4" />
-                          Pay €{formatMoney(cartSubtotal)}
+                          Pay €{formatMoney(cartGrandTotal)}
                         </>
                       )}
                     </Button>
@@ -1614,8 +1643,8 @@ export function KioskApp({
                   </div>
                 ) : (
                   <p className="mt-3 text-xs text-[#64748b]">
-                    Pay with cash at the counter. Your order will be created with
-                    payment pending until staff sends it to the kitchen.
+                    Pay with cash at the counter. Your order will be created
+                    with payment pending until staff sends it to the kitchen.
                   </p>
                 )}
               </div>
@@ -1659,7 +1688,7 @@ export function KioskApp({
             </div>
 
             <CardPaymentDialogs
-              amount={cartSubtotal}
+              amount={cartGrandTotal}
               cardPaymentStatus={cardPayment.cardPaymentStatus}
               cardTransactionId={cardPayment.cardTransactionId}
               cardProcessingOpen={cardPayment.cardProcessingOpen}

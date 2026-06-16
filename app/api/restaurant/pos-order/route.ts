@@ -13,6 +13,11 @@ import {
   isTicketNumberConflict,
   utcTicketDateFromNow,
 } from '@/lib/order-ticket-number';
+import {
+  parseRestaurantServiceCharges,
+  RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+  resolveServiceChargeAmount,
+} from '@/lib/restaurant-service-charge';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
 type LineInput = {
@@ -129,6 +134,27 @@ export async function POST(req: NextRequest) {
     const discRaw = Number(body.discountAmount);
     const discountAmount =
       Number.isFinite(discRaw) && discRaw >= 0 ? discRaw : 0;
+
+    const serviceChargeRaw = Number(body.serviceChargeAmount);
+    const claimedServiceCharge =
+      Number.isFinite(serviceChargeRaw) && serviceChargeRaw >= 0
+        ? serviceChargeRaw
+        : 0;
+
+    const restaurantCharges = await db.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+    });
+    const expectedServiceCharge = resolveServiceChargeAmount(
+      parseRestaurantServiceCharges(restaurantCharges),
+      'pos'
+    );
+    if (Math.abs(claimedServiceCharge - expectedServiceCharge) > 0.02) {
+      return NextResponse.json(
+        { error: 'Service charge does not match restaurant settings' },
+        { status: 400 }
+      );
+    }
 
     const customerNameTrim =
       typeof body.customerName === 'string' ? body.customerName.trim() : '';
@@ -254,6 +280,7 @@ export async function POST(req: NextRequest) {
                 address,
                 taxAmount,
                 discountAmount,
+                serviceChargeAmount: expectedServiceCharge,
                 diningTableId,
                 tableLabel,
               },

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 
 import { AcceptedPaymentMethods } from '@/components/payments/accepted-payment-methods';
+import { defaultPayPalCountryForCurrency } from '@/lib/paypal-buyer-countries';
 
 declare global {
   interface Window {
@@ -31,6 +32,8 @@ export type PayPalCheckoutButtonsProps = {
   amount: number;
   currency?: string;
   title: string;
+  /** Required for customer order checkout (multiparty payments to restaurant). */
+  restaurantSlug?: string;
   source?: 'online' | 'kiosk' | 'subscription';
   endpoint?: '/api/customer/orders' | '/api/kiosk/orders';
   payload?: unknown;
@@ -51,22 +54,37 @@ type PayPalSdkConfig = {
   clientId: string;
   currency: string;
   mode: 'live' | 'sandbox';
+  merchantId?: string;
+  multiparty?: boolean;
+  buyerCountry?: string;
 };
 
 type PaymentPhase = 'idle' | 'capture' | 'complete';
 
-let cachedConfig: PayPalSdkConfig | null = null;
-let configPromise: Promise<PayPalSdkConfig> | null = null;
+const configCache = new Map<string, PayPalSdkConfig>();
+const configPromises = new Map<string, Promise<PayPalSdkConfig>>();
 
-async function fetchPayPalConfig(): Promise<PayPalSdkConfig> {
-  if (cachedConfig) return cachedConfig;
-  if (configPromise) return configPromise;
-  configPromise = fetch('/api/paypal/sdk-config', { cache: 'no-store' })
+async function fetchPayPalConfig(restaurantSlug?: string): Promise<PayPalSdkConfig> {
+  const cacheKey = restaurantSlug?.trim() || '__platform__';
+  const cached = configCache.get(cacheKey);
+  if (cached) return cached;
+
+  const existing = configPromises.get(cacheKey);
+  if (existing) return existing;
+
+  const url = restaurantSlug?.trim()
+    ? `/api/paypal/sdk-config?restaurantSlug=${encodeURIComponent(restaurantSlug.trim())}`
+    : '/api/paypal/sdk-config';
+
+  const promise = fetch(url, { cache: 'no-store' })
     .then(async (res) => {
       const body = (await res.json().catch(() => ({}))) as {
         clientId?: string;
+        merchantId?: string;
         currency?: string;
         mode?: string;
+        multiparty?: boolean;
+        buyerCountry?: string;
         error?: unknown;
       };
       if (!res.ok || !body.clientId) {
@@ -76,18 +94,24 @@ async function fetchPayPalConfig(): Promise<PayPalSdkConfig> {
             : 'PayPal is not configured.'
         );
       }
-      cachedConfig = {
+      const config: PayPalSdkConfig = {
         clientId: body.clientId,
         currency: (body.currency ?? 'EUR').toUpperCase(),
         mode: body.mode === 'live' ? 'live' : 'sandbox',
+        merchantId: body.merchantId,
+        multiparty: body.multiparty === true,
+        buyerCountry: body.buyerCountry?.trim().toUpperCase(),
       };
-      return cachedConfig;
+      configCache.set(cacheKey, config);
+      return config;
     })
     .catch((e) => {
-      configPromise = null;
+      configPromises.delete(cacheKey);
       throw e;
     });
-  return configPromise;
+
+  configPromises.set(cacheKey, promise);
+  return promise;
 }
 
 const sdkPromises = new Map<string, Promise<void>>();
@@ -110,9 +134,16 @@ function buyerCountryForCurrency(currency: string): string | undefined {
   }
 }
 
-function loadPayPalSdk(clientId: string, currency: string): Promise<void> {
-  const buyerCountry = buyerCountryForCurrency(currency);
-  const key = `${clientId}:${currency}:${buyerCountry ?? 'auto'}`;
+function loadPayPalSdk(
+  clientId: string,
+  currency: string,
+  merchantId?: string,
+  buyerCountryOverride?: string
+): Promise<void> {
+  const buyerCountry =
+    buyerCountryOverride?.trim().toUpperCase() ||
+    buyerCountryForCurrency(currency);
+  const key = `${clientId}:${currency}:${merchantId ?? 'platform'}:${buyerCountry ?? 'auto'}`;
   const existing = sdkPromises.get(key);
   if (existing) return existing;
   const p = new Promise<void>((resolve, reject) => {
@@ -120,7 +151,8 @@ function loadPayPalSdk(clientId: string, currency: string): Promise<void> {
       reject(new Error('PayPal SDK can only load in the browser.'));
       return;
     }
-    if (window.paypal) {
+    const scriptSelector = `script[data-paypal-sdk-key="${key}"]`;
+    if (document.querySelector(scriptSelector) && window.paypal) {
       resolve();
       return;
     }
@@ -133,12 +165,16 @@ function loadPayPalSdk(clientId: string, currency: string): Promise<void> {
       'disable-funding': 'paylater,credit',
       intent: 'capture',
     });
+    if (merchantId) {
+      params.set('merchant-id', merchantId);
+    }
     if (buyerCountry) {
       params.set('buyer-country', buyerCountry);
     }
     script.src = `https://www.paypal.com/sdk/js?${params.toString()}`;
     script.async = true;
     script.dataset.paypalSdk = 'true';
+    script.dataset.paypalSdkKey = key;
     script.onload = () => resolve();
     script.onerror = () => reject(new Error('Failed to load PayPal SDK.'));
     document.head.appendChild(script);
@@ -196,6 +232,7 @@ export function PayPalCheckoutButtons({
   amount,
   currency,
   title,
+  restaurantSlug,
   source,
   endpoint,
   payload,
@@ -261,12 +298,18 @@ export function PayPalCheckoutButtons({
     let cancelled = false;
     setError(null);
     setSdkLoading(true);
+    setReady(false);
     (async () => {
       try {
-        const config = await fetchPayPalConfig();
+        const config = await fetchPayPalConfig(restaurantSlug);
         if (!config) throw new Error('Missing PayPal configuration.');
         const wantedCurrency = (currency ?? config.currency).toUpperCase();
-        await loadPayPalSdk(config.clientId, wantedCurrency);
+        await loadPayPalSdk(
+          config.clientId,
+          wantedCurrency,
+          config.merchantId,
+          config.buyerCountry
+        );
         if (cancelled) return;
         setResolvedCurrency(wantedCurrency);
         setReady(true);
@@ -282,7 +325,7 @@ export function PayPalCheckoutButtons({
     return () => {
       cancelled = true;
     };
-  }, [currency, onError]);
+  }, [currency, onError, restaurantSlug]);
 
   useEffect(() => {
     if (!ready) return;
@@ -336,10 +379,16 @@ export function PayPalCheckoutButtons({
     const onApprove = async (data: { orderID: string }) => {
       setProcessingState(true, 'capture');
       try {
+        const slug = latestRef.current.metadata?.restaurantSlug;
         const res = await fetch('/api/paypal/capture-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: data.orderID }),
+          body: JSON.stringify({
+            id: data.orderID,
+            ...(typeof slug === 'string' && slug.trim()
+              ? { restaurantSlug: slug.trim() }
+              : {}),
+          }),
         });
         const body = (await res.json().catch(() => ({}))) as PayPalCaptureResponse;
         if (!res.ok || !body.paid) {

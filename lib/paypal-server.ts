@@ -1,6 +1,18 @@
+import { buildPayPalAuthAssertion } from '@/lib/paypal-auth-assertion';
+
 type PayPalConfigValidation =
   | { ok: true; clientId: string; clientSecret: string; baseUrl: string }
   | { ok: false; reason: string };
+
+export type PayPalPlatformConfig = {
+  clientId: string;
+  clientSecret: string;
+  baseUrl: string;
+  partnerMerchantId: string | null;
+  bnCode: string | null;
+  mode: 'live' | 'sandbox';
+  currency: string;
+};
 
 export type PayPalOrderMetadata = {
   plan?: string;
@@ -29,8 +41,34 @@ function validatePayPalConfig(): PayPalConfigValidation {
   return { ok: true, clientId, clientSecret, baseUrl };
 }
 
+export function getPayPalPlatformConfig(): PayPalPlatformConfig {
+  const validated = validatePayPalConfig();
+  if (!validated.ok) {
+    throw new Error(validated.reason);
+  }
+  const mode =
+    (process.env.PAYPAL_MODE ?? 'sandbox').trim().toLowerCase() === 'live'
+      ? 'live'
+      : 'sandbox';
+  return {
+    clientId: validated.clientId,
+    clientSecret: validated.clientSecret,
+    baseUrl: validated.baseUrl,
+    partnerMerchantId: process.env.PAYPAL_PARTNER_MERCHANT_ID?.trim() || null,
+    bnCode: process.env.PAYPAL_BN_CODE?.trim() || null,
+    mode,
+    currency: (process.env.PAYPAL_CURRENCY ?? 'EUR').toUpperCase(),
+  };
+}
+
 export function isPayPalConfigured(): boolean {
   return validatePayPalConfig().ok;
+}
+
+export function isPayPalPartnerConfigured(): boolean {
+  const v = validatePayPalConfig();
+  if (!v.ok) return false;
+  return Boolean(process.env.PAYPAL_PARTNER_MERCHANT_ID?.trim());
 }
 
 export function getPayPalConfigError(): string | null {
@@ -40,7 +78,7 @@ export function getPayPalConfigError(): string | null {
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
-async function getPayPalAccessToken(): Promise<string> {
+export async function getPayPalAccessToken(): Promise<string> {
   const validated = validatePayPalConfig();
   if (!validated.ok) throw new Error(validated.reason);
 
@@ -78,7 +116,6 @@ async function getPayPalAccessToken(): Promise<string> {
 }
 
 function metadataToCustomId(metadata: PayPalOrderMetadata): string {
-  // Keep compact. custom_id max length on PayPal is limited.
   return JSON.stringify(metadata).slice(0, 120);
 }
 
@@ -91,6 +128,37 @@ function customIdToMetadata(raw: string | null | undefined): PayPalOrderMetadata
   }
 }
 
+function multipartyHeaders(sellerMerchantId: string) {
+  const config = getPayPalPlatformConfig();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Prefer: 'return=representation',
+    'PayPal-Auth-Assertion': buildPayPalAuthAssertion(
+      config.clientId,
+      sellerMerchantId
+    ),
+  };
+  if (config.bnCode) {
+    headers['PayPal-Partner-Attribution-Id'] = config.bnCode;
+  }
+  return headers;
+}
+
+async function authorizeHeaders(sellerMerchantId?: string) {
+  const token = await getPayPalAccessToken();
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    Prefer: 'return=representation',
+  };
+  if (sellerMerchantId) {
+    Object.assign(headers, multipartyHeaders(sellerMerchantId));
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+/** Platform-only order (SaaS subscription checkout). */
 export async function createPayPalOrder(params: {
   amount: number;
   currency: string;
@@ -99,11 +167,10 @@ export async function createPayPalOrder(params: {
   cancelUrl: string;
   metadata?: PayPalOrderMetadata;
 }) {
-  const validated = validatePayPalConfig();
-  if (!validated.ok) throw new Error(validated.reason);
+  const config = getPayPalPlatformConfig();
   const token = await getPayPalAccessToken();
 
-  const res = await fetch(`${validated.baseUrl}/v2/checkout/orders`, {
+  const res = await fetch(`${config.baseUrl}/v2/checkout/orders`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -148,19 +215,86 @@ export async function createPayPalOrder(params: {
   return { id: json.id, url: approveUrl };
 }
 
-export async function capturePayPalOrder(orderId: string) {
-  const validated = validatePayPalConfig();
-  if (!validated.ok) throw new Error(validated.reason);
-  const token = await getPayPalAccessToken();
-  const res = await fetch(
-    `${validated.baseUrl}/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
+/** Multiparty order — funds go to connected restaurant merchant (100%). */
+export async function createPayPalOrderForMerchant(params: {
+  amount: number;
+  currency: string;
+  title: string;
+  returnUrl: string;
+  cancelUrl: string;
+  sellerMerchantId: string;
+  metadata?: PayPalOrderMetadata;
+}) {
+  const config = getPayPalPlatformConfig();
+  const headers = await authorizeHeaders(params.sellerMerchantId);
+
+  const res = await fetch(`${config.baseUrl}/v2/checkout/orders`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      intent: 'CAPTURE',
+      purchase_units: [
+        {
+          reference_id: 'default',
+          description: params.title.slice(0, 127),
+          custom_id: metadataToCustomId(params.metadata ?? {}),
+          amount: {
+            currency_code: params.currency.toUpperCase(),
+            value: params.amount.toFixed(2),
+          },
+          payee: {
+            merchant_id: params.sellerMerchantId,
+          },
+          payment_instruction: {
+            disbursement_mode: 'INSTANT',
+          },
+        },
+      ],
+      application_context: {
+        return_url: params.returnUrl,
+        cancel_url: params.cancelUrl,
+        user_action: 'PAY_NOW',
+        shipping_preference: 'NO_SHIPPING',
+        landing_page: 'NO_PREFERENCE',
+      },
+    }),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(
+      `PayPal merchant order create failed (${res.status}): ${text.slice(0, 500)}`
+    );
+  }
+  const json = (await res.json()) as {
+    id: string;
+    links?: Array<{ rel?: string; href?: string }>;
+  };
+  const approveUrl =
+    json.links?.find((l) => l.rel === 'approve')?.href ??
+    json.links?.find((l) => l.rel === 'payer-action')?.href;
+  if (!json.id || !approveUrl) throw new Error('PayPal approval link missing');
+  return { id: json.id, url: approveUrl };
+}
+
+export async function capturePayPalOrder(
+  orderId: string,
+  sellerMerchantId?: string
+) {
+  const config = getPayPalPlatformConfig();
+  const headers = sellerMerchantId
+    ? await authorizeHeaders(sellerMerchantId)
+    : {
+        Authorization: `Bearer ${await getPayPalAccessToken()}`,
         'Content-Type': 'application/json',
         Prefer: 'return=representation',
-      },
+      };
+
+  const res = await fetch(
+    `${config.baseUrl}/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`,
+    {
+      method: 'POST',
+      headers,
       body: '{}',
       cache: 'no-store',
     }
@@ -169,30 +303,38 @@ export async function capturePayPalOrder(orderId: string) {
     const text = await res.text().catch(() => '');
     throw new Error(`PayPal capture failed (${res.status}): ${text.slice(0, 500)}`);
   }
-  return (await res.json()) as {
-    id: string;
-    status?: string;
-    purchase_units?: Array<{
-      custom_id?: string;
-      payments?: {
-        captures?: Array<{
-          id?: string;
-          status?: string;
-          amount?: { value?: string; currency_code?: string };
-        }>;
-      };
-    }>;
-  };
+  return (await res.json()) as PayPalCaptureResponse;
 }
 
-export async function getPayPalOrder(orderId: string) {
-  const validated = validatePayPalConfig();
-  if (!validated.ok) throw new Error(validated.reason);
-  const token = await getPayPalAccessToken();
+export type PayPalCaptureResponse = {
+  id: string;
+  status?: string;
+  purchase_units?: Array<{
+    custom_id?: string;
+    payee?: { merchant_id?: string; email_address?: string };
+    payments?: {
+      captures?: Array<{
+        id?: string;
+        status?: string;
+        amount?: { value?: string; currency_code?: string };
+      }>;
+    };
+  }>;
+};
+
+export async function getPayPalOrder(
+  orderId: string,
+  sellerMerchantId?: string
+) {
+  const config = getPayPalPlatformConfig();
+  const headers = sellerMerchantId
+    ? await authorizeHeaders(sellerMerchantId)
+    : { Authorization: `Bearer ${await getPayPalAccessToken()}` };
+
   const res = await fetch(
-    `${validated.baseUrl}/v2/checkout/orders/${encodeURIComponent(orderId)}`,
+    `${config.baseUrl}/v2/checkout/orders/${encodeURIComponent(orderId)}`,
     {
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
       cache: 'no-store',
     }
   );
@@ -203,7 +345,10 @@ export async function getPayPalOrder(orderId: string) {
   return (await res.json()) as {
     id: string;
     status?: string;
-    purchase_units?: Array<{ custom_id?: string }>;
+    purchase_units?: Array<{
+      custom_id?: string;
+      payee?: { merchant_id?: string };
+    }>;
   };
 }
 

@@ -30,7 +30,16 @@ import {
 } from '@/lib/cart-line-display';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
+import { CutleryOption } from '@/components/order/cutlery-option';
+import { OrderPreferencesSummary } from '@/components/order/order-preferences-summary';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
+import { useRestaurantServiceCharges } from '@/hooks/use-restaurant-service-charges';
+import {
+  readCutleryPreference,
+  readOrderCommentPreference,
+  writeCutleryPreference,
+  writeOrderCommentPreference,
+} from '@/lib/online-order-preferences';
 
 type CartModifierSelection = {
   attributeGroupId: string;
@@ -183,11 +192,25 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
   const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [cutlery, setCutlery] = useState(false);
+  const [comment, setComment] = useState('');
   const router = useRouter();
 
   useEffect(() => {
     setCart(parseCartFromStorage(localStorage.getItem(`cart-${orderId}`)));
+    setCutlery(readCutleryPreference(orderId));
+    setComment(readOrderCommentPreference(orderId));
   }, [orderId]);
+
+  const setCutleryChoice = (next: boolean) => {
+    setCutlery(next);
+    writeCutleryPreference(orderId, next);
+  };
+
+  const setCommentChoice = (next: string) => {
+    setComment(next);
+    writeOrderCommentPreference(orderId, next);
+  };
 
   useEffect(() => {
     setCustomerName(orderInfo?.addressName?.trim() ?? '');
@@ -258,6 +281,11 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
   };
 
   const total = useMemo(() => cart.reduce((sum, item) => sum + lineTotal(item), 0), [cart]);
+  const { serviceChargeAmount } = useRestaurantServiceCharges(
+    orderInfo?.restaurantSlug,
+    'online'
+  );
+  const grandTotal = total + serviceChargeAmount;
 
   const offeredProducts: OfferedProduct[] = useMemo(() => {
     if (!menuRestaurant || cart.length === 0) return [];
@@ -592,9 +620,31 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
 
             <Card>
               <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
+                <CutleryOption value={cutlery} onChange={setCutleryChoice} />
+                <div>
+                  <p className="text-sm font-semibold">{t('comment')}</p>
+                  <textarea
+                    value={comment}
+                    onChange={(e) => setCommentChoice(e.target.value)}
+                    className="mt-2 w-full rounded-lg border border-border bg-background p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder={t('commentPlaceholder')}
+                    rows={3}
+                  />
+                </div>
+                <OrderPreferencesSummary cutlery={cutlery} comment={comment} />
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{t('subtotal')}</span>
+                  <span>€{total.toFixed(2)}</span>
+                </div>
+                {serviceChargeAmount > 0 ? (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('serviceFees')}</span>
+                    <span>€{serviceChargeAmount.toFixed(2)}</span>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between border-t border-border pt-2">
                   <span className="text-lg font-semibold">{t('total')}</span>
-                  <span className="text-lg font-bold">€{total.toFixed(2)}</span>
+                  <span className="text-lg font-bold">€{grandTotal.toFixed(2)}</span>
                 </div>
                 {offeredProducts.length > 0 ? (
                   <Button

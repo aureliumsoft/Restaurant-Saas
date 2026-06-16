@@ -2,6 +2,10 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import {
+  RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+  withServiceChargesPayload,
+} from "@/lib/restaurant-service-charge";
 
 function getSubdomainFromHost(hostname: string) {
   if (hostname.endsWith(".localhost")) {
@@ -33,6 +37,7 @@ export async function GET(req: NextRequest) {
       themePrimaryColor: true,
       subdomain: true,
       slug: true,
+      ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
     } as const;
 
     if (slug) {
@@ -41,7 +46,7 @@ export async function GET(req: NextRequest) {
         select,
       });
       return NextResponse.json(
-        { data: restaurant },
+        { data: restaurant ? withServiceChargesPayload(restaurant) : null },
         { status: 200 }
       );
     }
@@ -59,7 +64,12 @@ export async function GET(req: NextRequest) {
       select,
     });
 
-    return NextResponse.json({ data: restaurant ?? null }, { status: 200 });
+    return NextResponse.json(
+      {
+        data: restaurant ? withServiceChargesPayload(restaurant) : null,
+      },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Error fetching customer restaurant:", error);
     return NextResponse.json(

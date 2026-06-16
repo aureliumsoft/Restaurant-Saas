@@ -1,12 +1,10 @@
-import { SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
-
 import { db } from '@/lib/db';
+import { parsePayPalCustomId, type PayPalOrderMetadata } from '@/lib/paypal-server';
 import {
-  capturePayPalOrder,
-  getPayPalOrder,
-  parsePayPalCustomId,
-  type PayPalOrderMetadata,
-} from '@/lib/paypal-server';
+  captureRestaurantPayPalOrder,
+  getRestaurantPayPalOrder,
+} from '@/lib/restaurant-paypal-client';
+import { getRestaurantPayPalRuntimeConfigBySlug } from '@/lib/restaurant-payment-credentials';
 
 export type PayPalPostCaptureResult = {
   paid: boolean;
@@ -20,19 +18,27 @@ export type PayPalPostCaptureResult = {
   planSynced: boolean;
 };
 
+async function resolveRestaurantPayPalConfig(
+  meta: PayPalOrderMetadata,
+  intentMetadata?: Record<string, string>
+) {
+  const slug =
+    (typeof meta.restaurantSlug === 'string' && meta.restaurantSlug.trim()) ||
+    (typeof intentMetadata?.restaurantSlug === 'string' &&
+      intentMetadata.restaurantSlug.trim()) ||
+    '';
+  if (!slug) return null;
+  return getRestaurantPayPalRuntimeConfigBySlug(slug);
+}
+
 /**
  * Captures a PayPal order (or reads it if already captured) and applies the
- * resulting metadata (`source`, `intentId`, `plan`, `restaurantId`) to:
- *   - existing direct orders (mark payment completed),
- *   - stored "intent" payloads (POST to /api/customer/orders or /api/kiosk/orders),
- *   - restaurant subscriptions (activate + record payment).
- *
- * Returns a stable summary used by both the legacy redirect verify endpoint
- * and the new inline button capture endpoint.
+ * resulting metadata to orders / stored intents / subscriptions.
  */
 export async function applyPayPalPostCapture(opts: {
   orderToken: string;
   baseUrl: string;
+  restaurantSlug?: string;
 }): Promise<PayPalPostCaptureResult> {
   const { orderToken, baseUrl } = opts;
 
@@ -41,22 +47,27 @@ export async function applyPayPalPostCapture(opts: {
   let captureCurrency = 'EUR';
   let customIdRaw = '';
 
-  try {
-    const capture = await capturePayPalOrder(orderToken);
-    const pu = capture.purchase_units?.[0];
-    const cap = pu?.payments?.captures?.[0];
-    customIdRaw = pu?.custom_id ?? '';
-    captured = String(cap?.status ?? '').toUpperCase() === 'COMPLETED';
-    captureAmount = Number(cap?.amount?.value ?? 0) || 0;
-    captureCurrency = String(cap?.amount?.currency_code ?? 'EUR').toUpperCase();
-  } catch {
-    const order = await getPayPalOrder(orderToken);
-    const pu = order.purchase_units?.[0];
-    customIdRaw = pu?.custom_id ?? '';
-    captured = String(order.status ?? '').toUpperCase() === 'COMPLETED';
+  let meta: PayPalOrderMetadata = opts.restaurantSlug
+    ? { restaurantSlug: opts.restaurantSlug }
+    : {};
+
+  const earlyRow = opts.restaurantSlug
+    ? await getRestaurantPayPalRuntimeConfigBySlug(opts.restaurantSlug)
+    : null;
+
+  if (earlyRow) {
+    const preOrder = await getRestaurantPayPalOrder(
+      earlyRow.config,
+      orderToken
+    ).catch(() => null);
+    if (preOrder?.purchase_units?.[0]?.custom_id) {
+      meta = {
+        ...meta,
+        ...parsePayPalCustomId(preOrder.purchase_units[0].custom_id),
+      };
+    }
   }
 
-  let meta: PayPalOrderMetadata = parsePayPalCustomId(customIdRaw);
   let orderSync: PayPalPostCaptureResult['orderSync'] = 'skipped';
   let orderId: string | undefined;
   let shortOrderId: string | undefined;
@@ -64,13 +75,11 @@ export async function applyPayPalPostCapture(opts: {
   let restaurantIdResult: string | undefined;
   let planSynced = false;
 
-  // Newer flows (subscription / online / kiosk inline buttons) put only a
-  // short `intentId` in PayPal `custom_id` to avoid the 127-char limit and
-  // store the full metadata + payload server-side. Merge those fields in.
   let intent: {
     endpoint?: '/api/customer/orders' | '/api/kiosk/orders' | null;
     payload?: unknown;
     metadata?: Record<string, string>;
+    restaurantId?: string | null;
     status?: string;
   } | null = null;
   let intentKey: string | null = null;
@@ -89,6 +98,43 @@ export async function applyPayPalPostCapture(opts: {
       } catch {
         intent = null;
       }
+    }
+  }
+
+  const restaurantPayPal =
+    earlyRow ?? (await resolveRestaurantPayPalConfig(
+      meta,
+      intent?.metadata as Record<string, string> | undefined
+    ));
+
+  if (!restaurantPayPal) {
+    throw new Error('Restaurant PayPal credentials are not configured.');
+  }
+
+  try {
+    const capture = await captureRestaurantPayPalOrder(
+      restaurantPayPal.config,
+      orderToken
+    );
+    const pu = capture.purchase_units?.[0];
+    const cap = pu?.payments?.captures?.[0];
+    customIdRaw = pu?.custom_id ?? customIdRaw;
+    captured = String(cap?.status ?? '').toUpperCase() === 'COMPLETED';
+    captureAmount = Number(cap?.amount?.value ?? 0) || 0;
+    captureCurrency = String(cap?.amount?.currency_code ?? 'EUR').toUpperCase();
+    if (!meta.intentId) {
+      meta = { ...meta, ...parsePayPalCustomId(customIdRaw) };
+    }
+  } catch {
+    const order = await getRestaurantPayPalOrder(
+      restaurantPayPal.config,
+      orderToken
+    );
+    const pu = order.purchase_units?.[0];
+    customIdRaw = pu?.custom_id ?? customIdRaw;
+    captured = String(order.status ?? '').toUpperCase() === 'COMPLETED';
+    if (!meta.intentId) {
+      meta = { ...meta, ...parsePayPalCustomId(customIdRaw) };
     }
   }
 
@@ -136,7 +182,13 @@ export async function applyPayPalPostCapture(opts: {
           const res = await fetch(`${baseUrl}${intent.endpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(intent.payload),
+            body: JSON.stringify({
+              ...(typeof intent.payload === 'object' && intent.payload !== null
+                ? intent.payload
+                : {}),
+              paymentStatus: 'completed',
+              paymentMethod: 'PayPal',
+            }),
           });
           if (res.ok) {
             const body = (await res.json().catch(() => ({}))) as {
@@ -185,57 +237,8 @@ export async function applyPayPalPostCapture(opts: {
       }
     }
 
-    const rawPlan =
-      typeof meta.plan === 'string' ? meta.plan.toUpperCase().trim() : '';
-    const validPlans = Object.values(SubscriptionPlan) as string[];
-    if (validPlans.includes(rawPlan)) {
-      const plan = rawPlan as SubscriptionPlan;
-      const restaurantId =
-        typeof meta.restaurantId === 'string' ? meta.restaurantId.trim() : '';
-      if (restaurantId) {
-        const periodStart = new Date();
-        const periodEnd = new Date(periodStart);
-        periodEnd.setDate(periodEnd.getDate() + 30);
-        const idempotencyKey = `paypal_order:${orderToken}`;
-        const existing = await db.subscriptionPayment.findFirst({
-          where: { restaurantId, notes: idempotencyKey },
-          select: { id: true },
-        });
-        if (!existing) {
-          await db.$transaction(async (tx) => {
-            const sub = await tx.restaurantSubscription.upsert({
-              where: { restaurantId },
-              create: {
-                restaurantId,
-                plan,
-                status: SubscriptionStatus.ACTIVE,
-                trialEndsAt: null,
-                currentPeriodEnd: periodEnd,
-              },
-              update: {
-                plan,
-                status: SubscriptionStatus.ACTIVE,
-                trialEndsAt: null,
-                currentPeriodEnd: periodEnd,
-              },
-              select: { id: true },
-            });
-            await tx.subscriptionPayment.create({
-              data: {
-                restaurantId,
-                restaurantSubscriptionId: sub.id,
-                amount: captureAmount,
-                currency: captureCurrency,
-                paidAt: periodStart,
-                periodStart,
-                periodEnd,
-                notes: idempotencyKey,
-              },
-            });
-          });
-        }
-        planSynced = true;
-      }
+    if (meta.source === 'subscription') {
+      planSynced = false;
     }
   }
 
@@ -247,7 +250,7 @@ export async function applyPayPalPostCapture(opts: {
     orderId,
     shortOrderId,
     ticketNumber,
-    restaurantId: restaurantIdResult,
+    restaurantId: restaurantIdResult ?? restaurantPayPal.restaurantId,
     planSynced,
   };
 }

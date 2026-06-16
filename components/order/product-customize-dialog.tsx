@@ -31,6 +31,13 @@ import {
   buildModifierSelectionsForGroups,
   modifierSelectionsUnitTotal,
 } from '@/lib/menu/build-modifier-selections';
+import { buildConfirmModifierSelections } from '@/lib/menu/build-confirm-modifier-selections';
+import {
+  appendSelectionTimeline,
+  removeSelectionTimeline,
+  removeSelectionTimelinePrefix,
+  selectionTimelineKeys,
+} from '@/lib/menu/selection-timeline';
 import { buildPersonalizeModifierSelections } from '@/lib/menu/personalize-modifiers';
 import {
   PersonalizeOptionsSection,
@@ -301,6 +308,7 @@ export function ProductCustomizeDialog({
     groupId: string;
     optionId: string;
   } | null>(null);
+  const [selectionTimeline, setSelectionTimeline] = useState<string[]>([]);
 
   const categoryGroups = useMemo(
     () => attributeGroups.filter((g) => g.sourceType !== 'PRODUCT'),
@@ -701,6 +709,7 @@ export function ProductCustomizeDialog({
     setActiveProductGroupId(null);
     setNestedOptionConfigs({});
     setActiveCategoryOption(null);
+    setSelectionTimeline([]);
     const autoNested: Record<string, NestedRecommendationResult> = {};
     for (const g of productRecommendationGroups) {
       if (!recommendedProductNeedsSheet(g)) {
@@ -782,6 +791,9 @@ export function ProductCustomizeDialog({
   ]);
 
   const clearCategoryGroupOptionData = useCallback((groupId: string) => {
+    setSelectionTimeline((prev) =>
+      removeSelectionTimelinePrefix(prev, `cat:${groupId}:`)
+    );
     setNestedOptionConfigs(
       (prev) => clearOptionDataForGroup(groupId, prev, {}).configs
     );
@@ -797,10 +809,30 @@ export function ProductCustomizeDialog({
 
   const setSingle = (groupId: string, optionId: string) => {
     clearCategoryGroupOptionData(groupId);
-    setSelectedByGroup((prev) => ({
-      ...prev,
-      [groupId]: prev[groupId]?.[0] === optionId ? [] : [optionId],
-    }));
+    setSelectedByGroup((prev) => {
+      const previousOption = prev[groupId]?.[0];
+      const isDeselect = previousOption === optionId;
+      setSelectionTimeline((timeline) => {
+        let next = timeline;
+        if (previousOption) {
+          next = removeSelectionTimeline(
+            next,
+            selectionTimelineKeys.categoryOption(groupId, previousOption)
+          );
+        }
+        if (!isDeselect) {
+          next = appendSelectionTimeline(
+            next,
+            selectionTimelineKeys.categoryOption(groupId, optionId)
+          );
+        }
+        return next;
+      });
+      return {
+        ...prev,
+        [groupId]: isDeselect ? [] : [optionId],
+      };
+    });
   };
 
   const toggleMultiCheckbox = (group: AttributeGroup, optionId: string) => {
@@ -820,6 +852,12 @@ export function ProductCustomizeDialog({
           curOpt?.groupId === group.id && curOpt?.optionId === optionId
             ? null
             : curOpt
+        );
+        setSelectionTimeline((timeline) =>
+          removeSelectionTimeline(
+            timeline,
+            selectionTimelineKeys.categoryOption(group.id, optionId)
+          )
         );
         return {
           ...prev,
@@ -846,6 +884,12 @@ export function ProductCustomizeDialog({
       if (item && recommendationOptionNeedsSheet(item, group)) {
         queueMicrotask(() => openCategoryOptionFlow(group.id, optionId));
       }
+      setSelectionTimeline((timeline) =>
+        appendSelectionTimeline(
+          timeline,
+          selectionTimelineKeys.categoryOption(group.id, optionId)
+        )
+      );
       if (totalSelectedUnits(next[group.id]!) >= limits.maxItems) {
         queueMicrotask(() => advanceAfterGroupComplete(group.id, next));
       }
@@ -880,6 +924,14 @@ export function ProductCustomizeDialog({
       if (isFirstUnit && item && recommendationOptionNeedsSheet(item, group)) {
         queueMicrotask(() => openCategoryOptionFlow(group.id, optionId));
       }
+      if (isFirstUnit) {
+        setSelectionTimeline((timeline) =>
+          appendSelectionTimeline(
+            timeline,
+            selectionTimelineKeys.categoryOption(group.id, optionId)
+          )
+        );
+      }
       if (totalSelectedUnits(next[group.id]!) >= limits.maxItems) {
         queueMicrotask(() => advanceAfterGroupComplete(group.id, next));
       }
@@ -893,12 +945,24 @@ export function ProductCustomizeDialog({
     setSelectedPersonalizeByGroup((prev) => {
       const cur = prev[groupId] ?? [];
       if (cur.includes(optionId)) {
+        setSelectionTimeline((timeline) =>
+          removeSelectionTimeline(
+            timeline,
+            selectionTimelineKeys.personalize(groupId, optionId)
+          )
+        );
         return {
           ...prev,
           [groupId]: cur.filter((id) => id !== optionId),
         };
       }
       if (cur.length >= group.maxItems) return prev;
+      setSelectionTimeline((timeline) =>
+        appendSelectionTimeline(
+          timeline,
+          selectionTimelineKeys.personalize(groupId, optionId)
+        )
+      );
       return { ...prev, [groupId]: [...cur, optionId] };
     });
   };
@@ -924,6 +988,12 @@ export function ProductCustomizeDialog({
             ? null
             : curOpt
         );
+        setSelectionTimeline((timeline) =>
+          removeSelectionTimeline(
+            timeline,
+            selectionTimelineKeys.categoryOption(groupId, optionId)
+          )
+        );
       }
       return { ...prev, [groupId]: current };
     });
@@ -932,71 +1002,21 @@ export function ProductCustomizeDialog({
   const handleConfirm = () => {
     if (requiredMissing) return;
 
-    const mods = buildModifierSelectionsForGroups(
+    const mods = buildConfirmModifierSelections({
       visibleCategoryGroups,
       selectedByGroup,
       selectedNestedVariationByOption,
-      baseProductVariationContext.parent,
-      baseProductVariationContext.shortLabel
-    );
-
-    for (const config of Object.values(nestedOptionConfigs)) {
-      for (const child of config.mods) {
-        mods.push({
-          attributeGroupId: child.attributeGroupId,
-          groupName: child.groupName,
-          selections: child.selections,
-        });
-      }
-    }
-
-    mods.push(
-      ...buildPersonalizeModifierSelections(
-        personalizeGroups,
-        selectedPersonalizeByGroup
-      )
-    );
-
-    for (const g of visibleProductRecommendationGroups) {
-      const item = g.items[0];
-      if (!item) continue;
-      const config = nestedConfigs[g.id];
-      if (!config && g.required && recommendedProductNeedsSheet(g)) continue;
-
-      const pvId = resolveProductRecommendationVariationId(item, g, {
-        configProductVariationId: config?.productVariationId,
-        preselectedVariationId:
-          preselectedRecommendationVariationByGroup[g.id],
-        parentVariation: baseProductVariationContext.parent,
-      });
-      const pv = pvId
-        ? (item.variations ?? []).find((v) => v.id === pvId)
-        : undefined;
-      const pvName = pv?.name ?? pv?.title;
-      const selectionName = pvName ? `${item.name} (${pvName})` : item.name;
-
-        mods.push({
-          attributeGroupId: g.id,
-          groupName: g.name,
-        selections: [
-          {
-            menuItemId: item.menuItemId,
-            name: selectionName,
-            description: item.description,
-            imageUrl: item.imageUrl,
-            unitPrice: productRecommendationVariationUnitPrice(item, pvId),
-          },
-        ],
-      });
-
-      for (const child of config?.mods ?? []) {
-        mods.push({
-          attributeGroupId: child.attributeGroupId,
-          groupName: `${g.name} — ${child.groupName}`,
-          selections: child.selections,
-        });
-      }
-    }
+      nestedOptionConfigs,
+      visibleProductRecommendationGroups,
+      nestedConfigs,
+      preselectedRecommendationVariationByGroup,
+      personalizeGroups,
+      selectedPersonalizeByGroup,
+      parentVariation: baseProductVariationContext.parent,
+      parentVariationShortLabel: baseProductVariationContext.shortLabel,
+      selectionTimeline,
+      allGroupsFlat: attributeGroups,
+    });
 
     const selectedVariation =
       variations.find((v) => v.id === selectedVariationId) ?? null;
@@ -1032,6 +1052,12 @@ export function ProductCustomizeDialog({
       return;
     }
     const removeId = selectedIds[selectedIds.length - 1]!;
+    setSelectionTimeline((timeline) =>
+      removeSelectionTimeline(
+        timeline,
+        selectionTimelineKeys.categoryOption(group.id, removeId)
+      )
+    );
     setSelectedByGroup((prev) => ({
       ...prev,
       [group.id]: (prev[group.id] ?? []).filter((id) => id !== removeId),
@@ -1345,6 +1371,20 @@ export function ProductCustomizeDialog({
             ...prev,
             [group.id]: [it.menuItemId],
           }));
+          setSelectionTimeline((timeline) => {
+            const previousOption = selectedByGroup[group.id]?.[0];
+            let next = timeline;
+            if (previousOption && previousOption !== it.menuItemId) {
+              next = removeSelectionTimeline(
+                next,
+                selectionTimelineKeys.categoryOption(group.id, previousOption)
+              );
+            }
+            return appendSelectionTimeline(
+              next,
+              selectionTimelineKeys.categoryOption(group.id, it.menuItemId)
+            );
+          });
           if (optionNeedsManualVariationPicker(it, group)) {
             setPicker({
               kind: 'nested',
@@ -2066,6 +2106,12 @@ export function ProductCustomizeDialog({
                   }
                   setNestedConfigs((prev) => {
                     const nextNested = { ...prev, [groupId]: result };
+                    setSelectionTimeline((timeline) =>
+                      appendSelectionTimeline(
+                        timeline,
+                        selectionTimelineKeys.productRec(groupId)
+                      )
+                    );
                     queueMicrotask(() => {
                       applyNextPendingPicker(
                         selectedVariationId,

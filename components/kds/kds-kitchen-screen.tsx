@@ -20,6 +20,7 @@ import {
   KdsOrderActionDialog,
   type KdsOrderActionKind,
 } from '@/components/kds/kds-order-action-dialog';
+import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
 import { kdsAxiosErrorMessage } from '@/lib/kds-api-errors';
 
 type Ticket = {
@@ -32,6 +33,8 @@ type Ticket = {
   sourceType: string;
   orderTotal: number;
   customerName: string | null;
+  cutleryRequested?: boolean;
+  customerComment?: string | null;
   /** Daily token number (resets per restaurant per day). */
   ticketNumber: number | null;
   /** 6-char public tracking id from the order. */
@@ -449,6 +452,12 @@ export function KdsKitchenScreen() {
                           {t.sourceType}
                         </Badge>
                       </div>
+
+                      <OrderCustomerExtras
+                        cutleryRequested={t.cutleryRequested}
+                        customerComment={t.customerComment}
+                        compact
+                      />
 
                       <div className="space-y-1">
                         {t.items.map((it) => {

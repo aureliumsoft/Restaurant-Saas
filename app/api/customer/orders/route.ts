@@ -21,7 +21,13 @@ import {
   utcTicketDateFromNow,
 } from '@/lib/order-ticket-number';
 
-const SERVICE_FEE = 0.99;
+import {
+  computeCheckoutTotal,
+  parseRestaurantServiceCharges,
+  RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+  totalsMatch,
+} from '@/lib/restaurant-service-charge';
+
 const SELECTED_MINUTES_ONLINE = 30;
 
 const modifierSelectionSchema = z.object({
@@ -132,7 +138,9 @@ function buildAddressSnapshot(
     if (info.storeAddress?.trim()) lines.push(`Store address: ${info.storeAddress.trim()}`);
   }
 
-  lines.push(`Cutlery requested: ${cutlery ? 'yes' : 'no'}`);
+  if (cutlery) {
+    lines.push('Cutlery requested: yes');
+  }
   if (comment?.trim()) {
     lines.push(`Customer note: ${comment.trim()}`);
   }
@@ -182,7 +190,7 @@ export async function POST(req: NextRequest) {
   const slug = restaurantSlug.trim();
   const restaurant = await db.restaurant.findUnique({
     where: { slug },
-    select: { id: true },
+    select: { id: true, ...RESTAURANT_SERVICE_CHARGE_DB_SELECT },
   });
 
   if (!restaurant) {
@@ -201,9 +209,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Subtotal does not match cart lines' }, { status: 400 });
   }
 
-  const computedTotal = computedSubtotal + SERVICE_FEE;
-  if (Math.abs(computedTotal - total) > 0.02) {
-    return NextResponse.json({ error: 'Total does not match subtotal plus service fee' }, { status: 400 });
+  const serviceCharges = parseRestaurantServiceCharges(restaurant);
+  const { serviceChargeAmount, total: computedTotal } = computeCheckoutTotal(
+    computedSubtotal,
+    serviceCharges,
+    'online'
+  );
+  if (!totalsMatch(computedTotal, total)) {
+    return NextResponse.json(
+      { error: 'Total does not match subtotal plus service charge' },
+      { status: 400 }
+    );
   }
 
   const menuIds = new Set<string>();
@@ -270,8 +286,11 @@ export async function POST(req: NextRequest) {
               total: computedTotal,
               sourceType: OrderSourceType.ONLINE,
               address: addressSnapshot || null,
+              cutleryRequested: cutlery,
+              customerComment: comment?.trim() || null,
               taxAmount: 0,
               discountAmount: 0,
+              serviceChargeAmount,
               idempotencyKey: idempotencyKey ?? undefined,
             },
           });
