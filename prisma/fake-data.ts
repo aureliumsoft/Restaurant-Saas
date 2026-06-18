@@ -1,5 +1,7 @@
-import { AttributeSelectionType, RecommendationSourceType, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, OrderSourceType, CustomerPaymentProvider } from '@prisma/client';
+import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, OrderSourceType, CustomerPaymentProvider } from '@prisma/client';
 import { faker } from '@faker-js/faker';
+import Decimal from 'decimal.js';
+
 
 
 export function fakeUser() {

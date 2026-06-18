@@ -2,13 +2,8 @@
 
 ALTER TABLE "Role" ADD COLUMN IF NOT EXISTS "slug" TEXT;
 
-DO $$ BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_indexes WHERE schemaname = 'current_schema()' AND indexname = 'Role_restaurantId_slug_key'
-  ) THEN
-    CREATE UNIQUE INDEX "Role_restaurantId_slug_key" ON "Role"("restaurantId", "slug");
-  END IF;
-END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS "Role_restaurantId_slug_key"
+  ON "Role"("restaurantId", "slug");
 
 ALTER TABLE "Restaurant" ADD COLUMN IF NOT EXISTS "themePrimaryColor" TEXT;
 ALTER TABLE "Restaurant" ADD COLUMN IF NOT EXISTS "menuBannerUrls" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
