@@ -10,7 +10,18 @@ import { seedDefaultGlobalRoles } from './seed-roles';
 
 const prisma = new PrismaClient();
 
+async function assertSchemaReady() {
+  try {
+    await prisma.$queryRaw`SELECT "posServiceChargeEnabled" FROM "Restaurant" LIMIT 0`;
+  } catch {
+    throw new Error(
+      'Database schema is out of date. Run migrations first:\n  npx prisma migrate deploy\nOr on deploy:\n  npm run db:setup'
+    );
+  }
+}
+
 async function main() {
+  await assertSchemaReady();
   await seedDefaultGlobalRoles(prisma);
   await seedPlatformAdminUser(prisma);
   await ensureAllRestaurantsOwnerRoles(prisma);

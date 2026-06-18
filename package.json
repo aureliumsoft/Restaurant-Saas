@@ -9,7 +9,10 @@
     "dev": "next dev",
     "build": "next build",
     "vercel-build": "prisma migrate deploy && next build",
-    "start": "next start",
+    "start": "prisma migrate deploy && next start",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "prisma db seed",
+    "db:setup": "prisma migrate deploy && prisma db seed",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "seed:admin": "ts-node -O \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/seed-admin-user.ts"
