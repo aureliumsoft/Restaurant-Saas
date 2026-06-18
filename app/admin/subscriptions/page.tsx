@@ -33,6 +33,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
+import {
+  formatInTimezone,
+  getClientSubscriptionAdminTimezone,
+} from '@/lib/subscription-timezone-client';
 
 type Subscription = {
   id: string;
@@ -61,19 +65,10 @@ type CatalogPlan = {
   features: string[] | null;
 };
 
+const ADMIN_TZ = getClientSubscriptionAdminTimezone();
+
 function formatPeriodEnd(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return '—';
-  }
+  return formatInTimezone(iso, ADMIN_TZ);
 }
 
 export default function AdminSubscriptionsPage() {

@@ -18,7 +18,7 @@ export type SandboxDemoCard = {
 /** Official PayPal sandbox Visa — works better than overused 403203… cards. */
 export const PAYPAL_SANDBOX_DEMO_CARD: SandboxDemoCard = {
   brand: 'Visa',
-  number: '4012888888881881',
+  number: '4111111111111111',
   expiry: '12/2030',
   cvv: '123',
   name: 'John Doe',

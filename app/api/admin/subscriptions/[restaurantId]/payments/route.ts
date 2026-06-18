@@ -5,21 +5,22 @@ import { z } from 'zod';
 
 import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import { db } from '@/lib/db';
+import { parseSubscriptionDateInput } from '@/lib/subscription-timezone';
 
 const postSchema = z.object({
   amount: z.number().positive(),
   currency: z.string().trim().min(2).max(10).optional(),
-  paidAt: z.string().datetime().optional(),
-  periodStart: z.string().datetime().nullable().optional(),
-  periodEnd: z.string().datetime().nullable().optional(),
+  paidAt: z.string().max(40).optional(),
+  periodStart: z.string().max(40).nullable().optional(),
+  periodEnd: z.string().max(40).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
   setStatusActive: z.boolean().optional(),
 });
 
 function toDateOrNull(input: string | null | undefined): Date | null {
-  if (input == null || input === '') return null;
-  const d = new Date(input);
-  return Number.isNaN(d.getTime()) ? null : d;
+  const parsed = parseSubscriptionDateInput(input ?? undefined);
+  if (parsed === undefined || parsed === null) return null;
+  return parsed;
 }
 
 export async function GET(

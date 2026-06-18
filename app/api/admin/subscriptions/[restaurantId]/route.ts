@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import { db } from '@/lib/db';
 import { applyAdminSubscriptionUpdate } from '@/lib/subscription-admin-update';
+import { parseSubscriptionDateInput } from '@/lib/subscription-timezone';
 
 const patchSchema = z.object({
   plan: z.enum(['STARTER', 'GROWTH', 'SCALE']),
@@ -16,10 +17,7 @@ const patchSchema = z.object({
 });
 
 function parseDate(s: string | null | undefined): Date | null | undefined {
-  if (s === undefined) return undefined;
-  if (s === null || s === '') return null;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return parseSubscriptionDateInput(s);
 }
 
 export async function PATCH(
@@ -69,6 +67,9 @@ export async function PATCH(
           paypal: result.paypal,
           paymentPeriodEndUpdated: result.paymentPeriodEndUpdated,
           periodEndChanged: result.periodEndChanged,
+          adminTimezone: result.adminTimezone,
+          paypalBillingTimezone: result.paypalBillingTimezone,
+          paypalPeriodEndAt: result.paypalPeriodEndAt,
         },
       },
       { status: 200 }

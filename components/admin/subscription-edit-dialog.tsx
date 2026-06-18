@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
@@ -22,6 +22,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
+import {
+  formatInTimezone,
+  getClientPayPalBillingTimezone,
+  getClientSubscriptionAdminTimezone,
+  mirrorWallClockToTimezone,
+  parseDatetimeLocalInTimezone,
+  subscriptionDateInputToIso,
+  utcToDatetimeLocalInTimezone,
+} from '@/lib/subscription-timezone-client';
 import { Loader2, Plus, Save } from 'lucide-react';
 
 type Sub = {
@@ -53,12 +62,14 @@ type Props = {
   onSaved: () => void;
 };
 
-function toLocalInput(iso: string | null | undefined) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const ADMIN_TZ = getClientSubscriptionAdminTimezone();
+const PAYPAL_TZ = getClientPayPalBillingTimezone();
+
+function formatPayPalPreview(localValue: string): string | null {
+  const parsed = parseDatetimeLocalInTimezone(localValue, ADMIN_TZ);
+  if (!parsed) return null;
+  const mirrored = mirrorWallClockToTimezone(parsed, ADMIN_TZ, PAYPAL_TZ);
+  return formatInTimezone(mirrored.toISOString(), PAYPAL_TZ);
 }
 
 export function SubscriptionEditDialog({
@@ -87,11 +98,15 @@ export function SubscriptionEditDialog({
     if (!open) return;
     setPlan(subscription?.plan ?? 'STARTER');
     setStatus(subscription?.status ?? 'TRIAL');
-    setTrialEndsAt(toLocalInput(subscription?.trialEndsAt ?? null));
-    setCurrentPeriodEnd(toLocalInput(subscription?.currentPeriodEnd ?? null));
+    setTrialEndsAt(utcToDatetimeLocalInTimezone(subscription?.trialEndsAt ?? null, ADMIN_TZ));
+    setCurrentPeriodEnd(
+      utcToDatetimeLocalInTimezone(subscription?.currentPeriodEnd ?? null, ADMIN_TZ)
+    );
     setNotes(subscription?.notes ?? '');
     setPaymentAmount('');
-    setPaymentPeriodEnd(toLocalInput(subscription?.currentPeriodEnd ?? null));
+    setPaymentPeriodEnd(
+      utcToDatetimeLocalInTimezone(subscription?.currentPeriodEnd ?? null, ADMIN_TZ)
+    );
     setPaymentNotes('');
     setPayments([]);
   }, [open, subscription]);
@@ -116,6 +131,16 @@ export function SubscriptionEditDialog({
     };
   }, [open, restaurantId]);
 
+  const periodEndPayPalPreview = useMemo(
+    () => formatPayPalPreview(currentPeriodEnd),
+    [currentPeriodEnd]
+  );
+
+  const paymentPeriodEndPayPalPreview = useMemo(
+    () => formatPayPalPreview(paymentPeriodEnd),
+    [paymentPeriodEnd]
+  );
+
   const save = async () => {
     setSaving(true);
     try {
@@ -125,12 +150,19 @@ export function SubscriptionEditDialog({
           paypal?: { ok?: boolean; messages?: string[] };
           paymentPeriodEndUpdated?: boolean;
           periodEndChanged?: boolean;
+          adminTimezone?: string;
+          paypalBillingTimezone?: string;
+          paypalPeriodEndAt?: string | null;
         };
       }>(`/api/admin/subscriptions/${restaurantId}`, {
         plan,
         status,
-        trialEndsAt: trialEndsAt || null,
-        currentPeriodEnd: currentPeriodEnd || null,
+        trialEndsAt: trialEndsAt
+          ? subscriptionDateInputToIso(trialEndsAt, ADMIN_TZ)
+          : null,
+        currentPeriodEnd: currentPeriodEnd
+          ? subscriptionDateInputToIso(currentPeriodEnd, ADMIN_TZ)
+          : null,
         notes: notes.trim() || null,
       });
       toast.success('Subscription updated');
@@ -140,6 +172,11 @@ export function SubscriptionEditDialog({
       }
       if (sync?.paymentPeriodEndUpdated) {
         toast.info('Latest payment record period end updated.');
+      }
+      if (sync?.paypalPeriodEndAt) {
+        toast.info(
+          `PayPal billing schedule (${sync.paypalBillingTimezone ?? PAYPAL_TZ}): ${formatInTimezone(sync.paypalPeriodEndAt, sync.paypalBillingTimezone ?? PAYPAL_TZ)}`
+        );
       }
       const paypalMessages = sync?.paypal?.messages ?? [];
       for (const msg of paypalMessages) {
@@ -179,7 +216,9 @@ export function SubscriptionEditDialog({
       await axios.post(`/api/admin/subscriptions/${restaurantId}/payments`, {
         amount,
         currency: 'EUR',
-        periodEnd: paymentPeriodEnd ? new Date(paymentPeriodEnd).toISOString() : null,
+        periodEnd: paymentPeriodEnd
+          ? subscriptionDateInputToIso(paymentPeriodEnd, ADMIN_TZ)
+          : null,
         notes: paymentNotes.trim() || null,
         setStatusActive: true,
       });
@@ -236,7 +275,7 @@ export function SubscriptionEditDialog({
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Trial ends</Label>
+              <Label>Trial ends ({ADMIN_TZ})</Label>
               <Input
                 type="datetime-local"
                 value={trialEndsAt}
@@ -244,16 +283,20 @@ export function SubscriptionEditDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label>Current period ends</Label>
+              <Label>Current period ends ({ADMIN_TZ})</Label>
               <Input
                 type="datetime-local"
                 value={currentPeriodEnd}
                 onChange={(e) => setCurrentPeriodEnd(e.target.value)}
               />
+              {periodEndPayPalPreview ? (
+                <p className="text-xs text-muted-foreground">
+                  PayPal billing ({PAYPAL_TZ}): {periodEndPayPalPreview}
+                </p>
+              ) : null}
               <p className="text-xs text-muted-foreground">
-                Saved to the database and shown in restaurant billing. PayPal
-                billing date cannot be changed via API; plan/status sync to
-                PayPal when linked.
+                Enter your local time above. The same clock time is applied for
+                PayPal in {PAYPAL_TZ} (e.g. 9:00 AM here → 9:00 AM US Eastern).
               </p>
             </div>
             <div className="grid gap-2">
@@ -277,12 +320,17 @@ export function SubscriptionEditDialog({
                 />
               </div>
               <div className="mt-2 grid gap-2">
-                <Label>Expire on (current period end)</Label>
+                <Label>Expire on ({ADMIN_TZ})</Label>
                 <Input
                   type="datetime-local"
                   value={paymentPeriodEnd}
                   onChange={(e) => setPaymentPeriodEnd(e.target.value)}
                 />
+                {paymentPeriodEndPayPalPreview ? (
+                  <p className="text-xs text-muted-foreground">
+                    PayPal billing ({PAYPAL_TZ}): {paymentPeriodEndPayPalPreview}
+                  </p>
+                ) : null}
               </div>
               <div className="mt-2 grid gap-2">
                 <Label>Payment notes</Label>
@@ -316,11 +364,11 @@ export function SubscriptionEditDialog({
                           Transaction ID: <span className="font-mono">{p.id}</span>
                         </div>
                         <div className="text-muted-foreground">
-                          Paid: {new Date(p.paidAt).toLocaleString()}
+                          Paid: {formatInTimezone(p.paidAt, ADMIN_TZ)}
                         </div>
                         {p.periodEnd && (
                           <div className="text-muted-foreground">
-                            Expires: {new Date(p.periodEnd).toLocaleString()}
+                            Expires: {formatInTimezone(p.periodEnd, ADMIN_TZ)}
                           </div>
                         )}
                       </div>

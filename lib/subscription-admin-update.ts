@@ -6,6 +6,11 @@ import {
   type PayPalAdminSyncResult,
 } from '@/lib/paypal-subscriptions';
 import { syncPayPalAfterAdminPeriodChange } from '@/lib/subscription-lifecycle';
+import {
+  getPayPalBillingTimezone,
+  getSubscriptionAdminTimezone,
+  mirrorWallClockToTimezone,
+} from '@/lib/subscription-timezone';
 
 export type AdminSubscriptionPatch = {
   plan: SubscriptionPlan;
@@ -20,6 +25,9 @@ export type AdminSubscriptionUpdateResult = {
   paypal: PayPalAdminSyncResult;
   paymentPeriodEndUpdated: boolean;
   periodEndChanged: boolean;
+  adminTimezone: string;
+  paypalBillingTimezone: string;
+  paypalPeriodEndAt: string | null;
 };
 
 function datesDiffer(a: Date | null | undefined, b: Date | null | undefined) {
@@ -145,5 +153,14 @@ export async function applyAdminSubscriptionUpdate(
     paypal,
     paymentPeriodEndUpdated,
     periodEndChanged: periodChanged,
+    adminTimezone: getSubscriptionAdminTimezone(),
+    paypalBillingTimezone: getPayPalBillingTimezone(),
+    paypalPeriodEndAt: currentPeriodEnd
+      ? mirrorWallClockToTimezone(
+          currentPeriodEnd,
+          getSubscriptionAdminTimezone(),
+          getPayPalBillingTimezone()
+        ).toISOString()
+      : null,
   };
 }
