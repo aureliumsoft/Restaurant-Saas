@@ -22,6 +22,9 @@ CREATE TYPE "CatProduct" AS ENUM ('ELECTRO', 'DRINK', 'FOOD', 'FASHION');
 -- CreateEnum
 CREATE TYPE "OrderSourceType" AS ENUM ('POS', 'ONLINE', 'WALK_IN', 'KIOSK', 'OTHER');
 
+-- CreateEnum
+CREATE TYPE "CustomerPaymentProvider" AS ENUM ('NONE', 'PAYPAL', 'STRIPE');
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -72,11 +75,72 @@ CREATE TABLE "Restaurant" (
     "mainBannerUrl" TEXT,
     "themePrimaryColor" TEXT,
     "menuBannerUrls" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "posServiceChargeEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "posServiceChargeAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "kioskServiceChargeEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "kioskServiceChargeAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "onlineServiceChargeEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "onlineServiceChargeAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "ownerId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "customerPaymentProvider" "CustomerPaymentProvider" NOT NULL DEFAULT 'NONE',
 
     CONSTRAINT "Restaurant_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RestaurantPayPalCredentials" (
+    "id" TEXT NOT NULL,
+    "restaurantId" TEXT NOT NULL,
+    "clientId" TEXT NOT NULL,
+    "clientSecretEnc" TEXT NOT NULL,
+    "webhookId" TEXT,
+    "mode" TEXT NOT NULL DEFAULT 'sandbox',
+    "currency" TEXT NOT NULL DEFAULT 'EUR',
+    "countryCode" TEXT NOT NULL DEFAULT 'DE',
+    "isVerified" BOOLEAN NOT NULL DEFAULT false,
+    "lastVerifiedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RestaurantPayPalCredentials_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RestaurantStripeCredentials" (
+    "id" TEXT NOT NULL,
+    "restaurantId" TEXT NOT NULL,
+    "publishableKey" TEXT NOT NULL,
+    "secretKeyEnc" TEXT NOT NULL,
+    "webhookSecretEnc" TEXT,
+    "mode" TEXT NOT NULL DEFAULT 'test',
+    "isVerified" BOOLEAN NOT NULL DEFAULT false,
+    "lastVerifiedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RestaurantStripeCredentials_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RestaurantPayPalIntegration" (
+    "id" TEXT NOT NULL,
+    "restaurantId" TEXT NOT NULL,
+    "trackingId" TEXT NOT NULL,
+    "paypalMerchantId" TEXT,
+    "permissionsGranted" BOOLEAN NOT NULL DEFAULT false,
+    "accountStatus" TEXT,
+    "paymentsReceivable" BOOLEAN NOT NULL DEFAULT false,
+    "primaryEmail" TEXT,
+    "countryCode" TEXT,
+    "currencyCode" TEXT,
+    "onboardedAt" TIMESTAMP(3),
+    "lastStatusCheckAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RestaurantPayPalIntegration_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -114,6 +178,10 @@ CREATE TABLE "RestaurantSubscription" (
     "trialEndsAt" TIMESTAMP(3),
     "currentPeriodEnd" TIMESTAMP(3),
     "notes" TEXT,
+    "paypalSubscriptionId" TEXT,
+    "paypalPlanId" TEXT,
+    "autoRenew" BOOLEAN NOT NULL DEFAULT true,
+    "adminPeriodEndAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -129,6 +197,8 @@ CREATE TABLE "SubscriptionCatalog" (
     "priceLabel" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "features" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "paypalProductId" TEXT,
+    "paypalPlanId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -388,6 +458,9 @@ CREATE TABLE "Order" (
     "address" TEXT,
     "taxAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "discountAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "serviceChargeAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "cutleryRequested" BOOLEAN NOT NULL DEFAULT false,
+    "customerComment" TEXT,
     "diningTableId" TEXT,
     "tableLabel" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -536,6 +609,18 @@ CREATE UNIQUE INDEX "Restaurant_slug_key" ON "Restaurant"("slug");
 CREATE UNIQUE INDEX "Restaurant_subdomain_key" ON "Restaurant"("subdomain");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "RestaurantPayPalCredentials_restaurantId_key" ON "RestaurantPayPalCredentials"("restaurantId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RestaurantStripeCredentials_restaurantId_key" ON "RestaurantStripeCredentials"("restaurantId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RestaurantPayPalIntegration_restaurantId_key" ON "RestaurantPayPalIntegration"("restaurantId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RestaurantPayPalIntegration_trackingId_key" ON "RestaurantPayPalIntegration"("trackingId");
+
+-- CreateIndex
 CREATE INDEX "DiningTable_restaurantId_idx" ON "DiningTable"("restaurantId");
 
 -- CreateIndex
@@ -549,6 +634,9 @@ CREATE INDEX "Branch_restaurantId_idx" ON "Branch"("restaurantId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "RestaurantSubscription_restaurantId_key" ON "RestaurantSubscription"("restaurantId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RestaurantSubscription_paypalSubscriptionId_key" ON "RestaurantSubscription"("paypalSubscriptionId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "SubscriptionCatalog_plan_key" ON "SubscriptionCatalog"("plan");
@@ -690,6 +778,15 @@ ALTER TABLE "Permission" ADD CONSTRAINT "Permission_roleId_fkey" FOREIGN KEY ("r
 
 -- AddForeignKey
 ALTER TABLE "Restaurant" ADD CONSTRAINT "Restaurant_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RestaurantPayPalCredentials" ADD CONSTRAINT "RestaurantPayPalCredentials_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "Restaurant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RestaurantStripeCredentials" ADD CONSTRAINT "RestaurantStripeCredentials_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "Restaurant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RestaurantPayPalIntegration" ADD CONSTRAINT "RestaurantPayPalIntegration_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "Restaurant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "DiningTable" ADD CONSTRAINT "DiningTable_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "Restaurant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
