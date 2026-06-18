@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -12,16 +11,26 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
+  IconBike,
   IconChevronLeft,
   IconChevronRight,
-  IconHeart,
-  IconMapPin,
-  IconMenu2,
+  IconCrosshair,
   IconShoppingBag,
   IconShoppingCart,
   IconTruck,
 } from '@tabler/icons-react';
-import { Loader2, User2Icon, UserIcon } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { WEB_CUSTOMER_TAKEAWAY_NAME } from '@/lib/web-customer';
+
+function splitAddressLines(address: string): [string, string] {
+  const parts = address
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) return [address, ''];
+  return [parts[0] ?? address, parts.slice(1).join(', ')];
+}
 
 type Store = {
   id: string;
@@ -29,7 +38,6 @@ type Store = {
   address: string;
   phone?: string;
   collectionFrom?: string;
-  isFavorite?: boolean;
 };
 
 type SidebarProps = {
@@ -47,9 +55,9 @@ type SidebarProps = {
   setCustomerPhone: (value: string) => void;
   selectedStoreId: string | null;
   setSelectedStoreId: (id: string | null) => void;
-  /** When set (e.g. `/web-app/{slug}`), order flow loads menu via `restaurantSlug` query. */
   restaurantSlug?: string;
   className?: string;
+  variant?: 'storefront' | 'default';
 };
 
 export function Sidebar({
@@ -69,6 +77,7 @@ export function Sidebar({
   setSelectedStoreId,
   restaurantSlug,
   className,
+  variant = 'default',
 }: SidebarProps) {
   const { t } = useTranslation();
   const [activeStores, setActiveStores] = useState<Store[]>();
@@ -77,6 +86,7 @@ export function Sidebar({
   const [menuBanners, setMenuBanners] = useState<string[]>([]);
   const [bannerIndex, setBannerIndex] = useState(0);
   const [deliveryInfoOpen, setDeliveryInfoOpen] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
 
   const selectDeliveryBranch = (storeId: string) => {
     setSelectedStoreId(storeId);
@@ -88,9 +98,6 @@ export function Sidebar({
     deliveryAddress.trim().length > 0 &&
     addressName.trim().length > 0 &&
     customerPhone.trim().length > 0;
-
-  const canProceedTakeaway =
-    Boolean(selectedStoreId) && addressName.trim().length > 0;
 
   useEffect(() => {
     if (!restaurantSlug?.trim()) return;
@@ -109,7 +116,7 @@ export function Sidebar({
           return;
         }
         setActiveStores(
-          rows.map((b: any) => ({
+          rows.map((b: { id: unknown; name?: unknown; address?: unknown; phone?: unknown }) => ({
             id: String(b.id),
             name: String(b.name || 'Branch'),
             address: String(b.address || 'No address'),
@@ -164,7 +171,7 @@ export function Sidebar({
     if (menuBanners.length <= 1) return;
     const interval = setInterval(() => {
       setBannerIndex((prev) => (prev + 1) % menuBanners.length);
-    }, 4000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [menuBanners]);
 
@@ -184,8 +191,9 @@ export function Sidebar({
       address: deliveryAddress,
       apartment: apartmentDoorNumber,
       gateCode,
-      addressName,
-      customerPhone,
+      addressName:
+        mode === 'takeaway' ? WEB_CUSTOMER_TAKEAWAY_NAME : addressName,
+      customerPhone: mode === 'takeaway' ? '' : customerPhone,
     };
     if (restaurantSlug?.trim()) {
       paramsObj.restaurantSlug = restaurantSlug.trim();
@@ -204,323 +212,424 @@ export function Sidebar({
     window.location.href = path;
   };
 
-  return (
-    <section
-      className={`md:sticky max-w-2xl md:top-20 md:z-50 flex flex-col gap-6 self-start rounded-3xl border border-[#e2e8f0] bg-white p-6 text-[#0f172a] shadow-[0_10px_40px_-10px_rgba(15,23,42,0.12)] ${className ?? ''}`}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-xl font-bold text-primary-foreground">
-            <User2Icon className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold text-primary">{t('hiUser')}</p>
-            <p className="text-xs text-[#64748b]">{t('welcomeToApp')}</p>
-          </div>
-        </div>
-      </div>
+  const handleGeolocate = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+            { headers: { Accept: 'application/json' } }
+          );
+          const data = await res.json().catch(() => null);
+          const label =
+            typeof data?.display_name === 'string'
+              ? data.display_name
+              : `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+          setDeliveryAddress(label);
+        } catch {
+          setDeliveryAddress(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+        } finally {
+          setGeoLoading(false);
+        }
+      },
+      () => setGeoLoading(false),
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  };
+
+  const bannerCarousel = (
+    <>
       {menuBanners.length > 0 ? (
-        <>
-          <div className="relative overflow-hidden rounded-2xl border border-[#e2e8f0]">
-            <img
-              src={menuBanners[bannerIndex]}
-              alt={`Menu banner ${bannerIndex + 1}`}
-              className="h-32 w-full object-cover"
+        <div className="relative overflow-hidden rounded-xl bg-[#f8fafc]">
+          <img
+            src={menuBanners[bannerIndex]}
+            alt={`Promotion ${bannerIndex + 1}`}
+            className="h-36 w-full object-cover sm:h-40"
+          />
+          {menuBanners.length > 1 && (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="absolute left-2 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-white/90 shadow"
+                onClick={() =>
+                  setBannerIndex((prev) =>
+                    prev === 0 ? menuBanners.length - 1 : prev - 1
+                  )
+                }
+              >
+                <IconChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="absolute right-2 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-white/90 shadow"
+                onClick={() =>
+                  setBannerIndex((prev) => (prev + 1) % menuBanners.length)
+                }
+              >
+                <IconChevronRight className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
+      ) : null}
+      {menuBanners.length > 1 && (
+        <div className="flex items-center justify-center gap-1.5">
+          {menuBanners.map((_, idx) => (
+            <button
+              key={idx}
+              type="button"
+              className={`h-1.5 rounded-full transition-all ${
+                idx === bannerIndex ? 'w-5 bg-primary' : 'w-1.5 bg-[#cbd5e1]'
+              }`}
+              onClick={() => setBannerIndex(idx)}
+              aria-label={`Go to promotion ${idx + 1}`}
             />
-            {menuBanners.length > 1 && (
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  const modeToggle = (
+    <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f8fafc] p-1">
+      <button
+        type="button"
+        onClick={() => {
+          setMode('delivery');
+          setDeliveryInfoOpen(false);
+        }}
+        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition ${
+          mode === 'delivery'
+            ? 'bg-primary text-primary-foreground shadow-sm'
+            : 'text-[#64748b] hover:bg-white'
+        }`}
+      >
+        <IconTruck className="h-5 w-5 shrink-0" />
+        {t('delivery')}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setMode('takeaway');
+          setDeliveryInfoOpen(false);
+        }}
+        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition ${
+          mode === 'takeaway'
+            ? 'bg-primary text-primary-foreground shadow-sm'
+            : 'text-[#64748b] hover:bg-white'
+        }`}
+      >
+        <IconShoppingBag className="h-5 w-5 shrink-0" />
+        {t('takeAwayLabel')}
+      </button>
+    </div>
+  );
+
+  const branchList = (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#64748b]">
+        {t('selectBranch')}
+      </p>
+      <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+        {branchesLoading && (
+          <Loader2 className="mx-auto h-4 w-4 animate-spin text-primary" />
+        )}
+        {!branchesLoading && activeStores?.length === 0 && (
+          <p className="text-xs text-[#64748b]">{t('noBranchesTakeaway')}</p>
+        )}
+        {activeStores?.map((store) => (
+          <button
+            key={store.id}
+            type="button"
+            onClick={() =>
+              mode === 'delivery'
+                ? selectDeliveryBranch(store.id)
+                : setSelectedStoreId(store.id)
+            }
+            className={`flex w-full items-start justify-between rounded-xl border px-3 py-3 text-left transition ${
+              selectedStoreId === store.id
+                ? 'border-primary bg-primary/5'
+                : 'border-[#e5e7eb] bg-white hover:border-primary/40'
+            }`}
+          >
+            <div className="min-w-0 flex-1 pr-2">
+              <p className="text-sm font-semibold text-[#0f172a]">{store.name}</p>
+              <p className="mt-0.5 text-xs text-[#64748b]">{store.address}</p>
+            </div>
+            <IconChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[#94a3b8]" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const deliveryDialog = (
+    <Dialog open={deliveryInfoOpen} onOpenChange={setDeliveryInfoOpen}>
+      <DialogContent className="web-app-customer max-w-md rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] shadow-xl">
+        <DialogHeader>
+          <DialogTitle className="text-[#0f172a]">{t('customerDetails')}</DialogTitle>
+          <DialogDescription className="text-[#64748b]">
+            {t('deliveryInfoHint')}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input
+            placeholder={t('yourName')}
+            value={addressName}
+            onChange={(event) => setAddressName(event.target.value)}
+            className="rounded-xl border-[#e2e8f0]"
+          />
+          <Input
+            type="tel"
+            placeholder={t('phoneNumber')}
+            value={customerPhone}
+            onChange={(event) => {
+              const value = event.target.value.replace(/\D/g, '');
+              setCustomerPhone(value);
+            }}
+            className="rounded-xl border-[#e2e8f0]"
+          />
+          <Input
+            placeholder={t('apartmentOrDoor')}
+            value={apartmentDoorNumber}
+            onChange={(event) => setApartmentDoorNumber(event.target.value)}
+            className="rounded-xl border-[#e2e8f0]"
+          />
+        </div>
+        <DialogFooter className="w-full border-t border-[#e2e8f0] pt-4">
+          <Button
+            className="w-full bg-primary text-primary-foreground hover:brightness-95"
+            onClick={createOrder}
+            disabled={!canProceedDelivery}
+          >
+            <IconShoppingCart className="mr-2 h-4 w-4" />
+            {t('proceedOrder')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+
+  if (variant === 'storefront') {
+    const handleTakeawayProceed = () => {
+      if (!selectedStoreId) return;
+      createOrder();
+    };
+
+    return (
+      <section
+        className={cn(
+          'flex flex-col gap-5 bg-white px-4 pb-8 pt-3 sm:gap-6 sm:px-5 sm:pb-10 sm:pt-4 lg:p-6',
+          className
+        )}
+      >
+        <p className="text-[1.65rem] font-bold leading-tight text-primary">
+          {t('storefrontHi')}
+        </p>
+
+        {menuBanners.length > 0 ? (
+          <div className="relative">
+            <div className="overflow-hidden">
+              <div
+                className="flex gap-3 transition-transform duration-300 ease-out"
+                style={{
+                  transform: `translateX(calc(-${bannerIndex} * (88% + 0.75rem)))`,
+                }}
+              >
+                {menuBanners.map((url, idx) => (
+                  <div key={url + idx} className="w-[88%] shrink-0">
+                    <img
+                      src={url}
+                      alt={`Promotion ${idx + 1}`}
+                      className="h-[168px] w-full rounded-2xl object-cover sm:h-48"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            {menuBanners.length > 1 ? (
               <>
-                <Button
+                <button
                   type="button"
-                  variant="secondary"
-                  size="icon"
-                  className="absolute left-2 top-1/2 h-7 w-7 -translate-y-1/2"
+                  className="absolute left-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105"
                   onClick={() =>
                     setBannerIndex((prev) =>
                       prev === 0 ? menuBanners.length - 1 : prev - 1
                     )
                   }
+                  aria-label="Previous promotion"
                 >
-                  <IconChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
+                  <IconChevronLeft className="h-5 w-5" />
+                </button>
+                <button
                   type="button"
-                  variant="secondary"
-                  size="icon"
-                  className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
+                  className="absolute right-6 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105"
                   onClick={() =>
                     setBannerIndex((prev) => (prev + 1) % menuBanners.length)
                   }
+                  aria-label="Next promotion"
                 >
-                  <IconChevronRight className="h-4 w-4" />
-                </Button>
+                  <IconChevronRight className="h-5 w-5" />
+                </button>
               </>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setMode('delivery');
+              setDeliveryInfoOpen(false);
+            }}
+            className={cn(
+              'flex flex-col items-center justify-center gap-2.5 rounded-2xl px-3 py-7 transition-colors sm:gap-3 sm:py-8',
+              mode === 'delivery'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'bg-[#f4f4f6] text-primary hover:bg-[#ececf0]'
             )}
-          </div>
-          {menuBanners.length > 1 && (
-            <div className="flex items-center justify-center gap-1.5">
-              {menuBanners.map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className={`h-2 rounded-full transition-all ${
-                    idx === bannerIndex
-                      ? 'w-5 bg-primary'
-                      : 'w-2 bg-[#94a3b8]/50'
-                  }`}
-                  onClick={() => setBannerIndex(idx)}
-                  aria-label={`Go to banner ${idx + 1}`}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="flex items-center justify-between rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-center">
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-lg font-semibold text-[#0f172a]">
-              {t('noMenuBanners')}
-            </p>
-            <p className="text-base font-bold text-[#64748b]">
-              {t('addBannersInSettings')}
-            </p>
-          </div>
+          >
+            <IconBike className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" stroke={1.5} />
+            <span className="text-sm font-semibold">{t('delivery')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('takeaway');
+              setDeliveryInfoOpen(false);
+            }}
+            className={cn(
+              'flex flex-col items-center justify-center gap-2.5 rounded-2xl px-3 py-7 transition-colors sm:gap-3 sm:py-8',
+              mode === 'takeaway'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'bg-[#f4f4f6] text-primary hover:bg-[#ececf0]'
+            )}
+          >
+            <IconShoppingBag className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" stroke={1.5} />
+            <span className="text-sm font-semibold">{t('takeAwayLabel')}</span>
+          </button>
         </div>
-      )}
 
-      <Card className="overflow-hidden rounded-3xl border border-primary/50 bg-white shadow-xl ">
-        <CardContent className="space-y-4 ">
-          <div className="flex items-center justify-center gap-2 py-5">
-            <Button
-              variant={mode === 'delivery' ? 'default' : 'outline'}
-              onClick={() => {
-                setMode('delivery');
-                setDeliveryInfoOpen(false);
-              }}
-            >
-              <IconTruck className="mr-2" />
-              {t('delivery')}
-            </Button>
-            <Button
-              variant={mode === 'takeaway' ? 'default' : 'outline'}
-              onClick={() => {
-                setMode('takeaway');
-                setDeliveryInfoOpen(false);
-              }}
-            >
-              <IconShoppingBag className="mr-2" />
-              {t('takeAwayLabel')}
-            </Button>
-          </div>
+        {mode === 'delivery' ? (
+          <div className="space-y-3">
+            <p className="text-sm font-bold leading-snug text-primary">
+              {t('storefrontDeliveryAddressHint')}
+            </p>
 
-          {mode === 'delivery' && (
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#64748b]">
-                {t('selectBranch')}
-              </p>
-              <div className="max-h-56 space-y-3 overflow-y-auto pr-1">
-                {branchesLoading && (
-                  <Loader2 className="mx-auto h-4 w-4 animate-spin text-primary" />
-                )}
-                {!branchesLoading && activeStores?.length === 0 && (
-                  <p className="text-xs text-[#64748b]">
-                    {t('noBranchesTakeaway')}
-                  </p>
-                )}
-                {activeStores?.map((store) => (
-                  <div
-                    key={store.id}
-                    className={`flex items-start justify-between rounded-3xl border bg-[#f8fafc] p-4 transition ${
-                      selectedStoreId === store.id
-                        ? 'border-primary bg-primary/10'
-                        : 'border-[#e2e8f0]'
-                    }`}
-                  >
-                    <div className="flex flex-1 flex-col gap-1">
-                      <p className="text-sm font-semibold text-[#0f172a]">
-                        {store.name}
-                      </p>
-                      <p className="text-xs text-[#64748b]">{store.address}</p>
-                    </div>
-                    <Button
-                      variant={
-                        selectedStoreId === store.id ? 'default' : 'outline'
-                      }
-                      onClick={() => selectDeliveryBranch(store.id)}
-                    >
-                      {selectedStoreId === store.id ? t('selected') : t('select')}
-                      <IconChevronRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-
-              {selectedStoreId ? (
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  onClick={() => setDeliveryInfoOpen(true)}
-                >
-                  <UserIcon className="mr-2 h-4 w-4" />
-                  {t('enterDeliveryDetails')}
-                </Button>
-              ) : null}
-            </div>
-          )}
-
-          <Dialog open={deliveryInfoOpen} onOpenChange={setDeliveryInfoOpen}>
-            <DialogContent className="web-app-customer max-w-md rounded-3xl border-[#e2e8f0] bg-white text-[#0f172a] shadow-xl">
-              <DialogHeader>
-                <DialogTitle className="text-[#0f172a]">
-                  {t('customerDetails')}
-                </DialogTitle>
-                <DialogDescription className="text-[#64748b]">
-                  {t('deliveryInfoHint')}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3">
-                <Input
-                  placeholder={t('yourName')}
-                  value={addressName}
-                  onChange={(event) => setAddressName(event.target.value)}
-                  className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
-                />
-                <Input
-                  type="tel"
-                  placeholder={t('phoneNumber')}
-                  value={customerPhone}
-                  onChange={(event) => {
-                    const value = event.target.value.replace(/\D/g, '');
-                    setCustomerPhone(value);
-                  }}
-                  className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
-                />
-                <Input
-                  placeholder={t('yourAddressRequired')}
-                  value={deliveryAddress}
-                  onChange={(event) => setDeliveryAddress(event.target.value)}
-                  required
-                  autoComplete="street-address"
-                  className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
-                />
-                <Input
-                  placeholder={t('apartmentOrDoor')}
-                  value={apartmentDoorNumber}
-                  onChange={(event) =>
-                    setApartmentDoorNumber(event.target.value)
-                  }
-                  className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
-                />
-              </div>
-              <DialogFooter className="border-t border-[#e2e8f0] pt-4 w-full">
-                <div className="flex justify-end gap-2 w-full">
-                  
-                <Button
-                  className="w-full bg-primary text-primary-foreground hover:brightness-95"
-                  onClick={createOrder}
-                  disabled={!canProceedDelivery}
-                >
-                  <IconShoppingCart className="mr-2 h-4 w-4" />
-                  {t('proceedOrder')}
-                </Button>
-                </div>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {mode === 'takeaway' && (
-            <div className="space-y-3">
-              <Input
-                placeholder={t('yourName')}
-                value={addressName}
-                onChange={(event) => setAddressName(event.target.value)}
-                className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
+            <div className="flex overflow-hidden rounded-2xl bg-[#f4f4f6]">
+              <input
+                type="text"
+                placeholder={t('storefrontAddAddress')}
+                value={deliveryAddress}
+                onChange={(event) => setDeliveryAddress(event.target.value)}
+                autoComplete="street-address"
+                className="min-w-0 flex-1 border-0 bg-transparent px-4 py-3.5 text-sm text-[#1f1f2e] outline-none placeholder:text-[#9ca3af]"
               />
-              <Input
-                type="tel"
-                placeholder={`${t('phoneNumber')} (${t('optional')})`}
-                value={customerPhone}
-                onChange={(event) => {
-                  const value = event.target.value.replace(/\D/g, '');
-                  setCustomerPhone(value);
-                }}
-                className="rounded-2xl border-[#e2e8f0] bg-white text-[#0f172a] placeholder:text-[#94a3b8]"
-              />
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#64748b]">
-                {t('selectBranch')}
-              </p>
-              <div className="max-h-56 space-y-3 overflow-y-auto pr-1">
-                {branchesLoading && (
-                  <Loader2 className="h-4 w-4 animate-spin text-primary text-center mx-auto" />
-                )}
-                {!branchesLoading && activeStores?.length === 0 && (
-                  <p className="text-xs text-[#64748b]">
-                    {t('noBranchesTakeaway')}
-                  </p>
-                )}
-                {activeStores?.map((store) => (
-                  <div
-                    key={store.id}
-                    className={`flex items-start justify-between rounded-3xl border bg-[#f8fafc] p-4 transition ${
-                      selectedStoreId === store.id
-                        ? 'border-primary bg-primary/10'
-                        : 'border-[#e2e8f0]'
-                    }`}
-                  >
-                    <div className="flex flex-1 flex-col gap-1">
-                      <p className="text-sm font-semibold text-[#0f172a]">
-                        {store.name}
-                      </p>
-                      <p className="text-xs text-[#64748b]">{store.address}</p>
-                      {store.phone ? (
-                        <p className="text-xs text-[#64748b]">
-                          {t('phoneLabel')}: {store.phone}
-                        </p>
-                      ) : null}
-                      <p className="text-xs text-[#64748b]">
-                        {store.collectionFrom
-                          ? t('orderCollectionFrom', {
-                              time: store.collectionFrom,
-                            })
-                          : t('takeawayCollectionAvailable')}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <Button
-                        variant={
-                          selectedStoreId === store.id ? 'default' : 'outline'
-                        }
-                        className={
-                          selectedStoreId === store.id
-                            ? 'bg-primary text-primary-foreground hover:brightness-95'
-                            : 'border-[#e2e8f0] text-[#334155] hover:bg-[#f1f5f9]'
-                        }
-                        onClick={() => setSelectedStoreId(store.id)}
-                      >
-                        {selectedStoreId === store.id
-                          ? t('selected')
-                          : t('select')}
-                        <IconChevronRight className="ml-2 h-4 w-4" />
-                      </Button>
-                      <span className="flex items-center gap-1 text-xs text-[#64748b]">
-                        <IconHeart className="h-3.5 w-3.5 text-primary" />
-                        {store.isFavorite ? t('favorite') : t('addToFavorites')}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Button
-                className="w-full"
-                onClick={createOrder}
-                disabled={!canProceedTakeaway}
+              <button
+                type="button"
+                className="flex w-14 shrink-0 items-center justify-center bg-primary text-primary-foreground transition hover:brightness-95 disabled:opacity-60"
+                onClick={handleGeolocate}
+                disabled={geoLoading}
+                aria-label={t('storefrontGeolocate')}
               >
-                <IconShoppingCart className="w-4 h-4 mr-2" />
-                {t('proceedOrder')}
-              </Button>
+                {geoLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <IconCrosshair className="h-5 w-5" stroke={1.75} />
+                )}
+              </button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        ) : null}
+
+        <div className="space-y-3">
+          {branchesLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : null}
+          {!branchesLoading && activeStores?.length === 0 ? (
+            <p className="py-4 text-center text-sm text-[#8e8e9a]">
+              {t('noBranchesTakeaway')}
+            </p>
+          ) : null}
+          {activeStores?.map((store) => {
+            const [line1, line2] = splitAddressLines(store.address);
+            const selected = selectedStoreId === store.id;
+
+            return (
+              <button
+                key={store.id}
+                type="button"
+                onClick={() =>
+                  mode === 'delivery'
+                    ? selectDeliveryBranch(store.id)
+                    : setSelectedStoreId(store.id)
+                }
+                className={cn(
+                  'w-full rounded-2xl border bg-white p-4 text-left transition',
+                  selected
+                    ? 'border-primary shadow-[0_0_0_1px_var(--primary)]'
+                    : 'border-[#ececf0] hover:border-primary/30'
+                )}
+              >
+                <p className="text-base font-bold text-primary">{store.name}</p>
+                <p className="mt-2 text-sm leading-relaxed text-[#8e8e9a]">
+                  {line1}
+                </p>
+                {line2 ? (
+                  <p className="text-sm leading-relaxed text-[#8e8e9a]">{line2}</p>
+                ) : null}
+                <div className="mt-3 flex items-center gap-2 text-sm text-[#8e8e9a]">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                  <span>{t('takeawayCollectionAvailable')}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {mode === 'delivery' && selectedStoreId && deliveryAddress.trim() ? (
+          <Button
+            className="h-12 w-full rounded-2xl text-sm font-semibold"
+            onClick={() => setDeliveryInfoOpen(true)}
+          >
+            {t('enterDeliveryDetails')}
+          </Button>
+        ) : null}
+
+        {mode === 'takeaway' && selectedStoreId ? (
+          <Button
+            className="h-12 w-full rounded-2xl text-sm font-semibold"
+            onClick={handleTakeawayProceed}
+          >
+            <IconShoppingCart className="mr-2 h-4 w-4" />
+            {t('proceedOrder')}
+          </Button>
+        ) : null}
+
+        {deliveryDialog}
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className={`md:sticky flex max-w-2xl flex-col gap-6 self-start rounded-3xl border border-[#e2e8f0] bg-white p-6 text-[#0f172a] shadow-[0_10px_40px_-10px_rgba(15,23,42,0.12)] md:top-20 md:z-50 ${className ?? ''}`}
+    >
+      {bannerCarousel}
+      {modeToggle}
+      {branchList}
+      {deliveryDialog}
     </section>
   );
 }

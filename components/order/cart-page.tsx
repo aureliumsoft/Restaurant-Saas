@@ -23,6 +23,7 @@ import {
   buildCustomerMenuRequestUrl,
   inferHostSubdomainForMenu,
 } from '@/lib/customer-menu-client';
+import { resolveWebCustomerName } from '@/lib/web-customer';
 import {
   cartLineTitle,
   cartModifierSelectionNames,
@@ -217,8 +218,10 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
     setCustomerPhone(orderInfo?.customerPhone?.trim() ?? '');
   }, [orderInfo?.addressName, orderInfo?.customerPhone, orderId]);
 
-  const resolvedCustomerName =
-    customerName.trim() || orderInfo?.addressName?.trim() || '';
+  const resolvedCustomerName = resolveWebCustomerName(
+    orderType,
+    customerName.trim() || orderInfo?.addressName
+  );
   const resolvedCustomerPhone =
     customerPhone.trim() || orderInfo?.customerPhone?.trim() || '';
 
@@ -232,11 +235,11 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
   }, [orderInfo, resolvedCustomerName, resolvedCustomerPhone]);
 
   const customerDetailsValid = useMemo(() => {
-    if (!resolvedCustomerName) return false;
     if (orderType === 'pickUp') {
       return true;
     }
     return (
+      resolvedCustomerName.length > 0 &&
       resolvedCustomerPhone.length > 0 &&
       Boolean(orderInfo?.address?.trim())
     );
@@ -249,11 +252,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
 
   const proceedToCheckout = () => {
     if (!customerDetailsValid) {
-      toast.error(
-        orderType === 'pickUp'
-          ? 'Please enter your name to continue.'
-          : t('customerDetailsRequired')
-      );
+      toast.error(t('customerDetailsRequired'));
       return;
     }
     router.push(
@@ -466,7 +465,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                 </div>
                 <div>
                   <strong>{t('name')}:</strong>{' '}
-                  {customerName.trim() || orderInfo.addressName || 'N/A'}
+                  {resolvedCustomerName || 'N/A'}
                 </div>
                 <div>
                   <strong>{t('phoneLabel')}:</strong>{' '}

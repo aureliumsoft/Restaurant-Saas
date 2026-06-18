@@ -5,7 +5,8 @@ import { Check, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { setUiLanguage } from '@/lib/i18n/client';
-import type { UiLanguage } from '@/lib/i18n/resources';
+import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
+import { DEFAULT_UI_LANGUAGE, type UiLanguage } from '@/lib/i18n/resources';
 import { cn } from '@/lib/utils';
 
 const LANGUAGES: { code: UiLanguage; nativeLabel: string; short: string }[] = [
@@ -14,8 +15,8 @@ const LANGUAGES: { code: UiLanguage; nativeLabel: string; short: string }[] = [
 ];
 
 type LanguageSwitcherProps = {
-  /** Floating action button (marketing) vs inline in a toolbar (customer header). */
-  variant?: 'fab' | 'inline';
+  /** Floating action button (marketing) vs inline dropdown vs segmented toggle (web-app). */
+  variant?: 'fab' | 'inline' | 'toggle';
   /** Styles for primary-colored headers (web-app). */
   tone?: 'default' | 'onPrimary';
   className?: string;
@@ -29,11 +30,20 @@ export function LanguageSwitcher({
   const { t, i18n } = useTranslation();
   const [open, setOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
+  const [activeLang, setActiveLang] = React.useState<UiLanguage>(DEFAULT_UI_LANGUAGE);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     setMounted(true);
-  }, []);
+    const sync = () => {
+      setActiveLang(normalizeUiLanguage(i18n.resolvedLanguage ?? i18n.language));
+    };
+    sync();
+    i18n.on('languageChanged', sync);
+    return () => {
+      i18n.off('languageChanged', sync);
+    };
+  }, [i18n]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -54,10 +64,12 @@ export function LanguageSwitcher({
     };
   }, [open]);
 
-  const currentCode: UiLanguage = mounted && i18n.resolvedLanguage === 'en' ? 'en' : 'es';
+  const currentCode: UiLanguage = mounted ? activeLang : DEFAULT_UI_LANGUAGE;
   const current = LANGUAGES.find((l) => l.code === currentCode) ?? LANGUAGES[1];
 
   const apply = (lang: UiLanguage) => {
+    if (lang === currentCode) return;
+    setActiveLang(lang);
     setUiLanguage(lang);
     void i18n.changeLanguage(lang);
     setOpen(false);
@@ -66,7 +78,29 @@ export function LanguageSwitcher({
   const label = t('marketing.languageSwitcher.label');
 
   const isFab = variant === 'fab';
+  const isToggle = variant === 'toggle';
   const onPrimary = tone === 'onPrimary';
+
+  if (isToggle) {
+    const nextLang: UiLanguage = currentCode === 'en' ? 'es' : 'en';
+
+    return (
+      <button
+        type="button"
+        aria-label={`${label}: ${current.nativeLabel}. Switch to ${LANGUAGES.find((l) => l.code === nextLang)?.nativeLabel ?? nextLang}.`}
+        onClick={() => apply(nextLang)}
+        className={cn(
+          'inline-flex h-9 min-w-[3rem] items-center justify-center rounded-lg px-3 text-xs font-bold uppercase tracking-wide transition-colors',
+          onPrimary
+            ? 'border-0 bg-white text-[#1a1033] shadow-sm hover:bg-white/90'
+            : 'border border-zinc-200 bg-white text-zinc-900 shadow-sm hover:border-primary/40 hover:text-primary dark:border-zinc-700 dark:bg-zinc-950 dark:text-white',
+          className
+        )}
+      >
+        {current.short}
+      </button>
+    );
+  }
 
   return (
     <div

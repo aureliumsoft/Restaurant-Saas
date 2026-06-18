@@ -1,9 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { Suspense } from 'react';
 
-import { Header } from '@/components/customer-app/header';
-import { Footer } from '@/components/customer-app/footer';
+import { WebAppLayoutShell } from '@/components/customer-app/web-app-layout-shell';
 
 import './web-app-customer.css';
 
@@ -16,25 +14,5 @@ export const metadata: Metadata = {
 };
 
 export default function CustomerLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="web-app-customer min-h-screen bg-gradient-to-b from-[#f5f3ff] via-[#ffffff] to-[#e8eef5] text-[#0f172a] antialiased">
-      <div className="flex min-h-screen flex-col">
-        <div className="relative z-50">
-          <Suspense
-            fallback={
-              <header className="sticky top-0 z-50 h-[72px] border-b border-primary bg-primary px-6 py-4 shadow-md" />
-            }
-          >
-            <Header />
-          </Suspense>
-        </div>
-
-        <main className="relative z-10 flex min-h-0 flex-1 flex-col">
-          {children}
-        </main>
-
-        <Footer />
-      </div>
-    </div>
-  );
+  return <WebAppLayoutShell>{children}</WebAppLayoutShell>;
 }

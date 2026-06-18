@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import { adminCardClass } from '@/components/admin/admin-surface';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,16 +19,16 @@ const KEYS = [
     label: 'Default trial length (days)',
     description: 'Shown to operators as guidance; enforce in billing when integrated.',
   },
-  {
-    key: 'support_email',
-    label: 'Platform support email',
-    description: 'Contact for billing and account issues.',
-  },
-  {
-    key: 'billing_notice',
-    label: 'Billing notice',
-    description: 'Optional message shown in owner dashboards or invoices later.',
-  },
+  // {
+  //   key: 'support_email',
+  //   label: 'Platform support email',
+  //   description: 'Contact for billing and account issues.',
+  // },
+  // {
+  //   key: 'billing_notice',
+  //   label: 'Billing notice',
+  //   description: 'Optional message shown in owner dashboards or invoices later.',
+  // },
 ] as const;
 
 export default function AdminSettingsPage() {
@@ -63,13 +65,14 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Platform settings</h1>
-        <p className="text-sm text-muted-foreground">Key–value configuration for the whole SaaS product.</p>
-      </div>
+    <div className="space-y-8">
+      <AdminPageHeader
+        eyebrow="System"
+        title="Platform settings"
+        description="Key–value configuration for the whole SaaS product."
+      />
 
-      <Card>
+      <Card className={adminCardClass}>
         <CardHeader>
           <CardTitle>Globals</CardTitle>
           <CardDescription>Stored in the database; safe to change anytime.</CardDescription>

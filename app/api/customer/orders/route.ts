@@ -27,6 +27,7 @@ import {
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
   totalsMatch,
 } from '@/lib/restaurant-service-charge';
+import { resolveWebCustomerName } from '@/lib/web-customer';
 
 const SELECTED_MINUTES_ONLINE = 30;
 
@@ -80,7 +81,7 @@ const postSchema = z.object({
   const name = data.orderInfo.addressName?.trim() ?? '';
   const phone = data.orderInfo.customerPhone?.trim() ?? '';
   const address = data.orderInfo.address?.trim() ?? '';
-  if (!name) {
+  if (!name && data.orderType === 'delivery') {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['orderInfo', 'addressName'],
@@ -132,7 +133,7 @@ function buildAddressSnapshot(
     if (info.apartment?.trim()) lines.push(`Apartment / door: ${info.apartment.trim()}`);
     if (info.gateCode?.trim()) lines.push(`Gate code: ${info.gateCode.trim()}`);
   } else {
-    if (info.addressName?.trim()) lines.push(`Name: ${info.addressName.trim()}`);
+    lines.push(`Name: ${resolveWebCustomerName(orderType, info.addressName)}`);
     if (info.customerPhone?.trim()) lines.push(`Phone: ${info.customerPhone.trim()}`);
     if (info.storeName?.trim()) lines.push(`Pickup location: ${info.storeName.trim()}`);
     if (info.storeAddress?.trim()) lines.push(`Store address: ${info.storeAddress.trim()}`);
@@ -248,7 +249,7 @@ export async function POST(req: NextRequest) {
   }
 
   const addressSnapshot = buildAddressSnapshot(orderType, orderInfo, cutlery, comment);
-  const customerName = orderInfo.addressName?.trim() ?? '';
+  const customerName = resolveWebCustomerName(orderType, orderInfo.addressName);
   const customerPhone =
     orderInfo.customerPhone?.trim() ||
     (orderType === 'pickUp' ? 'N/A' : '');

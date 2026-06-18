@@ -22,6 +22,36 @@ function selectionNames(
   return names;
 }
 
+export type CartModifierDisplayLine = {
+  prefix: 'branch' | 'dash';
+  name: string;
+  unitPrice: number;
+};
+
+/** Cart sidebar lines with ↳ personalize vs - addon prefixes. */
+export function cartModifierDisplayLines(
+  modifiers: Array<{
+    selections: { name: string; menuItemId?: string; unitPrice?: number }[];
+  }>
+): CartModifierDisplayLine[] {
+  const lines: CartModifierDisplayLine[] = [];
+  for (const mod of modifiers) {
+    for (const sel of mod.selections) {
+      const name = sel.name.trim();
+      if (!name) continue;
+      const isPersonalize = sel.menuItemId
+        ? isPersonalizeModifierMenuItemId(sel.menuItemId)
+        : false;
+      lines.push({
+        prefix: isPersonalize ? 'branch' : 'dash',
+        name,
+        unitPrice: sel.unitPrice ?? 0,
+      });
+    }
+  }
+  return lines;
+}
+
 /** Personalize selections — shown below the product name. */
 export function cartPersonalizeSelectionNames(
   modifiers: CartModifierSelectionLike[]

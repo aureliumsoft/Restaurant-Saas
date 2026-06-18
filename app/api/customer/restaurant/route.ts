@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import {
+  RESTAURANT_BRANDING_DB_SELECT,
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+  isPrismaUnknownFieldError,
+  withDefaultServiceChargesPayload,
   withServiceChargesPayload,
 } from "@/lib/restaurant-service-charge";
 
@@ -21,6 +24,32 @@ function getSubdomainFromHost(hostname: string) {
   return null;
 }
 
+async function findCustomerRestaurant(
+  where: { slug: string } | { subdomain: string }
+) {
+  const selectWithCharges = {
+    ...RESTAURANT_BRANDING_DB_SELECT,
+    ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+  } as const;
+
+  try {
+    const restaurant = await db.restaurant.findUnique({
+      where,
+      select: selectWithCharges,
+    });
+    if (!restaurant) return null;
+    return withServiceChargesPayload(restaurant);
+  } catch (error) {
+    if (!isPrismaUnknownFieldError(error)) throw error;
+    const restaurant = await db.restaurant.findUnique({
+      where,
+      select: RESTAURANT_BRANDING_DB_SELECT,
+    });
+    if (!restaurant) return null;
+    return withDefaultServiceChargesPayload(restaurant);
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const slug = req.nextUrl.searchParams.get("slug")?.trim();
@@ -28,27 +57,9 @@ export async function GET(req: NextRequest) {
     const host = (req.headers.get("host") || "").split(":")[0];
     const fromHost = getSubdomainFromHost(host);
 
-    const select = {
-      id: true,
-      name: true,
-      logoUrl: true,
-      mainBannerUrl: true,
-      menuBannerUrls: true,
-      themePrimaryColor: true,
-      subdomain: true,
-      slug: true,
-      ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
-    } as const;
-
     if (slug) {
-      const restaurant = await db.restaurant.findUnique({
-        where: { slug },
-        select,
-      });
-      return NextResponse.json(
-        { data: restaurant ? withServiceChargesPayload(restaurant) : null },
-        { status: 200 }
-      );
+      const data = await findCustomerRestaurant({ slug });
+      return NextResponse.json({ data }, { status: 200 });
     }
 
     const subdomain = fromQuery || fromHost;
@@ -59,17 +70,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const restaurant = await db.restaurant.findUnique({
-      where: { subdomain },
-      select,
-    });
-
-    return NextResponse.json(
-      {
-        data: restaurant ? withServiceChargesPayload(restaurant) : null,
-      },
-      { status: 200 }
-    );
+    const data = await findCustomerRestaurant({ subdomain });
+    return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
     console.error("Error fetching customer restaurant:", error);
     return NextResponse.json(

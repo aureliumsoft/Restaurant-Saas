@@ -16,6 +16,7 @@ import {
   i18n,
 } from "@/lib/i18n/client";
 import type { UiLanguage } from "@/lib/i18n/resources";
+import { DEFAULT_UI_LANGUAGE } from "@/lib/i18n/resources";
 import { OfflineBootstrap } from "@/components/offline/offline-bootstrap";
 import { RestaurantBrandingProvider } from "@/components/layout/restaurant-branding-provider";
 
@@ -47,7 +48,7 @@ function UiLanguageHydrator() {
 }
 
 export default function Providers({
-  initialLanguage = "es",
+  initialLanguage = DEFAULT_UI_LANGUAGE,
   children,
 }: {
   initialLanguage?: UiLanguage;

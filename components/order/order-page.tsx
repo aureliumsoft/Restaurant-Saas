@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,6 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 
 import { MenuOfferChoiceDialog } from '@/components/order/menu-offer-choice-dialog';
 import {
@@ -35,15 +34,24 @@ import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import {
   cartLineTitle,
-  cartModifierSelectionNames,
-  cartPersonalizeSelectionNames,
+  cartModifierDisplayLines,
 } from '@/lib/cart-line-display';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { setUiLanguage } from '@/lib/i18n/client';
 import type { UiLanguage } from '@/lib/i18n/resources';
-import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
+import { buildStorefrontThemeVars } from '@/lib/restaurant-theme';
+import {
+  ORDER_CATEGORY_BAR_HEIGHT_PX,
+  ORDER_MENU_HEADER_HEIGHT_PX,
+  ORDER_PAGE_MAX_WIDTH_PX,
+  ORDER_SIDEBAR_WIDTH_PX,
+  ORDER_TOP_OFFSET_PX,
+  OrderCartCheckoutButton,
+  OrderCartPanel,
+  OrderMenuHeader,
+} from '@/components/order/order-menu-header';
 import { cn } from '@/lib/utils';
-import { ArrowUp, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowUp, Loader2, Minus, Pencil, Plus, Search, X } from 'lucide-react';
 
 export type OrderPageProps = {
   orderType: 'delivery' | 'pickUp';
@@ -289,27 +297,99 @@ function OfferSlider({
   onPrev: () => void;
   onNext: () => void;
 }) {
-  const item = items[current] ?? items[0];
-  if (!item) return null;
+  const { t } = useTranslation();
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [slideStep, setSlideStep] = useState(0);
+
+  const measureSlides = useCallback(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const firstSlide = track.querySelector(
+      '[data-offer-slide]'
+    ) as HTMLElement | null;
+    if (!firstSlide) return;
+    const gap = items.length > 1 ? 12 : 0;
+    setSlideStep(firstSlide.offsetWidth + gap);
+  }, [items.length]);
+
+  useLayoutEffect(() => {
+    measureSlides();
+    const track = trackRef.current;
+    if (!track) return;
+    const observer = new ResizeObserver(() => measureSlides());
+    observer.observe(track);
+    return () => observer.disconnect();
+  }, [items, measureSlides]);
+
+  if (items.length === 0) return null;
+
+  const multi = items.length > 1;
+  const slideWidthClass =
+    items.length === 1
+      ? 'w-full'
+      : items.length === 2
+        ? 'w-[calc((100%-0.75rem)/2)]'
+        : 'w-[88%] sm:w-[46%]';
+
   return (
-    <div className="relative mx-auto mb-8 max-w-7xl overflow-hidden rounded-2xl border border-border bg-card">
-      <img
-        src={item.image}
-        alt={item.id}
-        className="h-56 w-full object-cover"
-      />
-      <div className="absolute inset-0 bg-black/30 p-6"></div>
-      <div className="absolute left-2 top-1/2 -translate-y-1/2">
-        <Button variant="outline" size="icon" onClick={onPrev} type="button">
-          <IconChevronLeft className="h-5 w-5" />
-        </Button>
+    <section className="mb-8">
+      <h2 className="mb-4 text-xl font-bold text-primary">
+        {t('orderCurrentOffers')}
+      </h2>
+      <div className="relative">
+        <div className="overflow-hidden">
+          <div
+            ref={trackRef}
+            className={cn(
+              'flex gap-3 transition-transform duration-300 ease-out will-change-transform',
+              !multi && 'gap-0'
+            )}
+            style={
+              multi && slideStep > 0
+                ? { transform: `translateX(-${current * slideStep}px)` }
+                : undefined
+            }
+          >
+            {items.map((item) => (
+              <div
+                key={item.id}
+                data-offer-slide
+                className={cn(
+                  'shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm',
+                  slideWidthClass
+                )}
+              >
+                <img
+                  src={item.image}
+                  alt=""
+                  className="h-36 w-full object-cover"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+        {multi ? (
+          <>
+            <button
+              type="button"
+              className="absolute left-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105 sm:left-3"
+              onClick={onPrev}
+              aria-label="Previous offer"
+            >
+              <IconChevronLeft className="h-5 w-5 stroke-[2.5]" />
+            </button>
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105 sm:right-3"
+              onClick={onNext}
+              aria-label="Next offer"
+            >
+              <IconChevronRight className="h-5 w-5 stroke-[2.5]" />
+            </button>
+          </>
+        ) : null}
       </div>
-      <div className="absolute right-2 top-1/2 -translate-y-1/2">
-        <Button variant="outline" size="icon" onClick={onNext} type="button">
-          <IconChevronRight className="h-5 w-5" />
-        </Button>
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -321,58 +401,66 @@ type OfferItem = {
 function ProductCard({
   product,
   onAdd,
-  showCustomizeIndicator,
 }: {
   product: CustomerMenuProduct;
   onAdd: () => void;
-  showCustomizeIndicator: boolean;
+  showCustomizeIndicator?: boolean;
 }) {
-  const { t } = useTranslation();
   const priceDisplay = getMenuItemDisplayPrice(product);
   const hasSale = priceDisplay.compareAt != null;
 
   return (
-    <Card className="bg-card cursor-pointer" onClick={onAdd}>
-      {product.imageUrl ? (
-        <img
-          src={product.imageUrl}
-          alt={product.name}
-          className="h-40 w-full object-cover rounded-t-lg"
-        />
-      ) : (
-        <div className="flex h-40 w-full items-center justify-center bg-muted text-muted-foreground">
-          <IconShoppingBag className="h-10 w-10" />
-        </div>
-      )}
-      <CardContent className="space-y-2">
-        <h3 className="text-lg font-semibold line-clamp-1 mt-5">
+    <button
+      type="button"
+      onClick={onAdd}
+      aria-label={`Add ${product.name}`}
+      className="flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+    >
+      <div className="relative">
+        {product.imageUrl ? (
+          <img
+            src={product.imageUrl}
+            alt=""
+            className="h-44 w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-44 w-full items-center justify-center bg-[#f4f4f6] text-muted-foreground">
+            <IconShoppingBag className="h-10 w-10" />
+          </div>
+        )}
+        <span
+          className="pointer-events-none absolute bottom-3 right-3 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md"
+          aria-hidden
+        >
+          <Plus className="h-5 w-5" />
+        </span>
+      </div>
+      <div className="flex flex-1 flex-col p-4">
+        <h3 className="line-clamp-2 text-base font-bold text-primary">
           {product.name}
         </h3>
         {product.description ? (
-          <p className="text-sm text-muted-foreground">
-            {product.description.slice(0, 60)}...
+          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[#8e8e9a]">
+            {product.description}
           </p>
-        ) : null}
-        <div className="flex items-center justify-between">
-          <span className="font-bold">
-            {priceDisplay.prefix ? (
-              <span className="mr-1 text-sm font-normal text-muted-foreground">
-                {priceDisplay.prefix}
-              </span>
-            ) : null}
-            {hasSale ? (
-              <span className="mr-2 text-sm font-normal text-muted-foreground line-through">
-                €{priceDisplay.compareAt!.toFixed(2)}
-              </span>
-            ) : null}
-            €{priceDisplay.amount.toFixed(2)}
-          </span>
-          <Button size="icon" type="button">
-            <Plus className="h-4 w-4" />
-          </Button>
+        ) : (
+          <span className="mt-1.5 block flex-1" />
+        )}
+        <div className="mt-3 text-base font-bold text-primary">
+          {priceDisplay.prefix ? (
+            <span className="mr-1 text-xs font-normal text-[#8e8e9a]">
+              {priceDisplay.prefix}
+            </span>
+          ) : null}
+          {hasSale ? (
+            <span className="mr-2 text-sm font-normal text-[#8e8e9a] line-through">
+              €{priceDisplay.compareAt!.toFixed(2)}
+            </span>
+          ) : null}
+          €{priceDisplay.amount.toFixed(2)}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </button>
   );
 }
 
@@ -404,6 +492,7 @@ export default function OrderPageClient({
   const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
     null
   );
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const { t, i18n } = useTranslation();
   const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
 
@@ -539,6 +628,11 @@ export default function OrderPageClient({
             ? json.data.themePrimaryColor.trim()
             : '';
         setThemePrimaryColor(themeColor || null);
+        const logo =
+          typeof json?.data?.logoUrl === 'string' && json.data.logoUrl.trim()
+            ? json.data.logoUrl.trim()
+            : '';
+        setLogoUrl(logo || null);
         const urls = Array.isArray(json?.data?.menuBannerUrls)
           ? (json.data.menuBannerUrls as string[]).filter(
               (u) => typeof u === 'string' && u.trim() !== ''
@@ -673,6 +767,11 @@ export default function OrderPageClient({
     [cart]
   );
 
+  const cartItemCount = useMemo(
+    () => cart.reduce((sum, line) => sum + line.quantity, 0),
+    [cart]
+  );
+
   const adjustQuantity = (lineId: string, delta: number) => {
     setCart((current) =>
       current
@@ -685,24 +784,18 @@ export default function OrderPageClient({
     );
   };
 
-  const removeFromCart = (lineId: string) => {
-    setCart((current) => current.filter((x) => x.lineId !== lineId));
-  };
-
   const onCategoryClick = (id: string) => {
     setSelectedCategory(id);
   };
 
   const categoryStripItems = useMemo(
-    () => [
-      { id: ALL_CATEGORY_ID, name: t('all'), imageUrl: null as string | null },
-      ...categories.map((category) => ({
+    () =>
+      categories.map((category) => ({
         id: category.id,
         name: category.name,
         imageUrl: getCategoryDisplayImageUrl(category),
       })),
-    ],
-    [categories, t]
+    [categories]
   );
 
   const categoryStripIdsKey = useMemo(
@@ -846,418 +939,351 @@ export default function OrderPageClient({
   // Important: this must be AFTER all hooks to keep React Hook order stable.
   if (!mounted) return null;
 
-  const cartPanel = (
-    <div className="flex min-h-[32rem] max-h-[calc(100dvh-2rem)] flex-col rounded-2xl border border-border bg-card p-4">
-      <h3 className="text-lg font-semibold">
-        {orderType === 'delivery' ? t('delivery') : t('takeAway')} /{' '}
-        {t('orderInfo')}
-      </h3>
-      <p className="mt-2 text-sm text-muted-foreground">
-        {t('orderType')}: {orderType}. {t('estimated')}{' '}
-        {orderType === 'delivery' ? t('delivery') : t('takeAway')}{' '}
-        {t('time20to30Mins')}
-      </p>
+  const cartFooter = (
+    <OrderCartCheckoutButton
+      itemCount={cartItemCount}
+      total={total}
+      label={t('orderSeeMyOrder')}
+      onClick={() =>
+        router.push(
+          orderPathWithQuery(`/order/${orderType}/${orderId}/cart`, orderInfo)
+        )
+      }
+    />
+  );
 
-      <h4 className="mt-5 text-lg font-bold">{t('cart')}</h4>
-      <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
-        {cart.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">{t('cartEmpty')}</p>
-        ) : (
-          <div className="space-y-3">
-            {cart.map((line) => (
-              <div
-                key={line.lineId}
-                className="flex items-start justify-between gap-2 text-sm"
-              >
-                <div className="min-w-0 flex-1">
-                  {(() => {
-                    const isCustomized =
-                      Boolean(line.variationId) || line.modifiers.length > 0;
-                    const personalizeNames = cartPersonalizeSelectionNames(
-                      line.modifiers
-                    );
-                    const addonNames = cartModifierSelectionNames(
-                      line.modifiers
-                    );
-                    return (
-                      <>
-                        <p className="truncate font-medium">
-                          {cartLineTitle(line.productName, line.variationName)}
-                        </p>
-                        {personalizeNames.length > 0 ? (
-                          <div className="mt-1 space-y-0.5">
-                            {personalizeNames.map((name, index) => (
-                              <p
-                                key={`${line.lineId}-personalize-${index}`}
-                                className="truncate text-xs font-medium text-foreground/90"
-                              >
-                                {name}
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
-                        {addonNames.length > 0 ? (
-                          <div className="mt-1 space-y-0.5">
-                            {addonNames.map((name, index) => (
-                              <p
-                                key={`${line.lineId}-sel-${index}`}
-                                className="truncate text-xs text-muted-foreground"
-                              >
-                                - {name}
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => adjustQuantity(line.lineId, -1)}
-                            disabled={line.quantity <= 1}
-                            type="button"
-                          >
-                            -
-                          </Button>
-                          <span>{line.quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => adjustQuantity(line.lineId, 1)}
-                            type="button"
-                          >
-                            +
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => removeFromCart(line.lineId)}
-                            type="button"
-                          >
-                            {<Trash2 className="mr-1 h-3 w-3" />} {t('remove')}
-                          </Button>
-                          {isCustomized ? (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => openModifyForLine(line)}
-                              type="button"
-                            >
-                              {<Pencil className="mr-1 h-3 w-3" />} {t('modify')}
-                            </Button>
-                          ) : null}
-                        </div>
-                      </>
-                    );
-                  })()}
+  const cartPanel = (
+    <OrderCartPanel
+      isEmpty={cart.length === 0}
+      footer={cart.length > 0 ? cartFooter : undefined}
+    >
+      {cart.length === 0 ? (
+        <div className="text-center">
+          <p className="text-xl font-bold leading-snug text-primary sm:text-2xl">
+            {t('cartEmptyTitle')}
+          </p>
+          <p className="mt-3 text-sm font-normal text-[#8e8e9a]">
+            {t('orderCartEmptyHint')}
+          </p>
+        </div>
+      ) : (
+        <div className="divide-y divide-[#ececf0]">
+          {cart.map((line) => {
+            const modifierLines = cartModifierDisplayLines(line.modifiers);
+            const canModify =
+              Boolean(line.variationId) || line.modifiers.length > 0;
+
+            return (
+              <div key={line.lineId} className="py-4 first:pt-1 last:pb-1">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 flex-1 text-sm font-bold leading-snug text-primary">
+                    {cartLineTitle(line.productName, line.variationName)}
+                  </p>
+                  <span className="shrink-0 text-sm font-bold text-primary">
+                    €{lineTotal(line).toFixed(2)}
+                  </span>
                 </div>
-                <span className="shrink-0 text-sm font-medium">
-                  €{lineTotal(line).toFixed(2)}
-                </span>
+
+                {modifierLines.length > 0 ? (
+                  <div className="mt-2 space-y-0.5">
+                    {modifierLines.map((modLine, index) => (
+                      <p
+                        key={`${line.lineId}-mod-${index}`}
+                        className={cn(
+                          'text-xs leading-relaxed text-primary/75',
+                          modLine.prefix === 'dash' && 'pl-3'
+                        )}
+                      >
+                        {modLine.prefix === 'branch' ? '↳ ' : '- '}
+                        {modLine.name}
+                        {modLine.unitPrice > 0
+                          ? ` (+€${modLine.unitPrice.toFixed(2)})`
+                          : ''}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="mt-3 flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center bg-primary text-sm font-bold text-primary-foreground transition hover:brightness-95 disabled:opacity-40"
+                      onClick={() => adjustQuantity(line.lineId, -1)}
+                      aria-label="Decrease quantity"
+                    >
+                      <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                    </button>
+                    <span className="min-w-[1.75rem] text-center text-sm font-bold text-[#1f1f2e]">
+                      {String(line.quantity).padStart(2, '0')}
+                    </span>
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center bg-primary text-sm font-bold text-primary-foreground transition hover:brightness-95"
+                      onClick={() => adjustQuantity(line.lineId, 1)}
+                      aria-label="Increase quantity"
+                    >
+                      <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                    </button>
+                  </div>
+                  {canModify ? (
+                    <button
+                      type="button"
+                      className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:brightness-95"
+                      onClick={() => openModifyForLine(line)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" strokeWidth={2.25} />
+                      {t('modify')}
+                    </button>
+                  ) : null}
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2 text-sm font-bold">
-        <span>{t('total')}</span>
-        <span>€{total.toFixed(2)}</span>
-      </div>
-      <Button
-        className="mt-2 w-full"
-        onClick={() =>
-          router.push(
-            orderPathWithQuery(`/order/${orderType}/${orderId}/cart`, orderInfo)
-          )
-        }
+            );
+          })}
+        </div>
+      )}
+    </OrderCartPanel>
+  );
+
+  const renderCategoryBar = () => (
+    <div className="flex h-full min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
+      <button
         type="button"
-        disabled={cart.length === 0}
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d8dce6] bg-white text-primary transition hover:bg-[#fafafa] disabled:opacity-35"
+        disabled={!categoryStripScroll.back}
+        aria-label="Scroll categories back"
+        onClick={() => scrollCategoryStrip('back')}
       >
-        {t('viewCart')}
-      </Button>
+        <IconChevronLeft className="h-4 w-4" strokeWidth={2} />
+      </button>
+      <div
+        ref={categoryStripRef}
+        onScroll={syncCategoryStripScroll}
+        className="min-h-0 min-w-0 flex-1 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="flex w-max items-center gap-2.5 py-1">
+          {categoryStripItems.map((category) => {
+            const isActive = selectedCategory === category.id;
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => onCategoryClick(category.id)}
+                className={cn(
+                  'inline-flex h-10 max-w-[11.5rem] shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-3.5 text-left text-sm font-semibold text-primary transition sm:max-w-[12.5rem]',
+                  isActive
+                    ? 'bg-[#ebe8f2] ring-1 ring-primary/20'
+                    : 'bg-[#f4f4f6] hover:bg-[#ebe8f2]/80'
+                )}
+              >
+                {category.imageUrl ? (
+                  <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-white">
+                    <img
+                      src={category.imageUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  </span>
+                ) : (
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-bold text-primary/50 ring-1 ring-white">
+                    {category.id === ALL_CATEGORY_ID
+                      ? '★'
+                      : category.name.charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <span className="min-w-0 truncate leading-none">
+                  {category.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <button
+        type="button"
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d8dce6] bg-white text-primary transition hover:bg-[#fafafa] disabled:opacity-35"
+        disabled={!categoryStripScroll.forward}
+        aria-label="Scroll categories forward"
+        onClick={() => scrollCategoryStrip('forward')}
+      >
+        <IconChevronRight className="h-4 w-4" strokeWidth={2} />
+      </button>
+      <button
+        type="button"
+        className={cn(
+          'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition',
+          searchOpen
+            ? 'border border-primary bg-white text-primary'
+            : 'bg-primary text-primary-foreground hover:brightness-95'
+        )}
+        aria-label={t('searchProducts')}
+        aria-pressed={searchOpen}
+        onClick={() => setSearchOpen((open) => !open)}
+      >
+        <Search className="h-4 w-4" strokeWidth={2.25} />
+      </button>
     </div>
   );
 
+  const themeVars = buildStorefrontThemeVars(themePrimaryColor);
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-7xl px-4 pb-10 pt-6 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-wrap items-center justify-center gap-4">
-          <WebAppRestaurantTitle
-            restaurantName={orderInfo?.restaurantName}
-            subtitle={
-              <>
-                {orderType === 'delivery' ? t('delivery') : t('pickUp')}{' '}
-                {t('order')} · {orderId}
-              </>
+    <div
+      className="web-app-customer min-h-screen bg-[#f4f4f6] text-foreground"
+      style={themeVars as CSSProperties}
+    >
+      <OrderMenuHeader
+        orderId={orderId}
+        restaurantName={orderInfo?.restaurantName}
+        logoUrl={logoUrl}
+        orderType={orderType}
+        storeName={orderInfo?.storeName}
+        storeAddress={orderInfo?.storeAddress}
+        deliveryAddress={orderInfo?.address}
+        backHref={storefrontPath}
+      />
+
+      <div
+        className="fixed inset-x-0 z-40 border-b border-[#ececf0] bg-white"
+        style={{
+          top: ORDER_MENU_HEADER_HEIGHT_PX,
+          height: ORDER_CATEGORY_BAR_HEIGHT_PX,
+        }}
+      >
+        <div className="mx-auto flex h-full w-full max-w-[1280px] items-center px-4 sm:px-6">
+          {renderCategoryBar()}
+        </div>
+      </div>
+
+      {searchOpen ? (
+        <div
+          className="fixed inset-x-0 z-30 flex justify-center"
+          style={{ top: ORDER_TOP_OFFSET_PX }}
+        >
+          <div
+            className="w-full max-w-full border-b border-[#ececf0] bg-white px-4 py-2 sm:max-w-[min(100%,var(--order-page-max-width))] sm:px-6"
+            style={
+              {
+                '--order-page-max-width': `${ORDER_PAGE_MAX_WIDTH_PX}px`,
+              } as CSSProperties
             }
-          />
-          <div className="flex items-center gap-2">
+          >
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              ref={searchInputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('searchProducts')}
+              className="min-w-0 w-full"
+            />
             <Button
+              className="shrink-0 whitespace-nowrap"
+              onClick={() => {
+                setSearch('');
+                setSearchOpen(false);
+              }}
+              variant="outline"
               type="button"
-              variant="default"
-              onClick={() => router.push(storefrontPath)}
+              aria-label={t('clear')}
             >
-              <IconShoppingCart className="w-4 h-4 mr-2" />
-              {t('switchOrderTypeNewOrder')}
+              <X className="h-4 w-4 sm:me-1" />
+              <span className="hidden sm:inline">{t('clear')}</span>
             </Button>
           </div>
+          </div>
         </div>
+      ) : null}
 
-        <OfferSlider
-          items={bannerOffers}
-          current={currentOffer}
-          onPrev={() =>
-            setCurrentOffer(
-              (p) => (p - 1 + bannerOffers.length) % bannerOffers.length
-            )
-          }
-          onNext={() => setCurrentOffer((p) => (p + 1) % bannerOffers.length)}
-        />
+      <div
+        className="mx-auto flex min-h-screen w-full max-w-full flex-col sm:max-w-[min(100%,var(--order-page-max-width))] lg:flex-row"
+        style={{
+          paddingTop: searchOpen
+            ? ORDER_TOP_OFFSET_PX + 56
+            : ORDER_TOP_OFFSET_PX,
+          ['--order-page-max-width' as string]: `${ORDER_PAGE_MAX_WIDTH_PX}px`,
+        }}
+      >
+        <main className="min-w-0 flex-1 px-4 py-5 sm:px-6">
+          {bannerOffers.length > 0 ? (
+            <OfferSlider
+              items={bannerOffers}
+              current={currentOffer}
+              onPrev={() =>
+                setCurrentOffer(
+                  (p) => (p - 1 + bannerOffers.length) % bannerOffers.length
+                )
+              }
+              onNext={() =>
+                setCurrentOffer((p) => (p + 1) % bannerOffers.length)
+              }
+            />
+          ) : null}
 
-<div
-              className="mb-4 min-w-0 w-full max-w-full min-h-0 overflow-x-clip"
-              aria-label={t('allCategories')}
-            >
-             
-              <div className="relative isolate w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-card">
-                <div className="grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-1 py-1.5 sm:gap-2 sm:px-1.5">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-9 w-9 shrink-0 rounded-full border-border bg-background shadow-sm"
-                    disabled={!categoryStripScroll.back}
-                    aria-label="Scroll categories back"
-                    onClick={() => scrollCategoryStrip('back')}
-                  >
-                    <IconChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <div
-                    ref={categoryStripRef}
-                    onScroll={syncCategoryStripScroll}
-                    className="min-h-0 min-w-0 max-w-full touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                  >
-                    <div className="flex w-max items-center gap-2 py-0.5 pe-0.5 ps-0.5">
-                      {categoryStripItems.map((category) => {
-                        const isActive = selectedCategory === category.id;
-                        return (
-                          <button
-                            key={category.id}
-                            type="button"
-                            onClick={() => onCategoryClick(category.id)}
-                            className={cn(
-                              'inline-flex h-9 max-w-[11rem] shrink-0 items-center gap-2 rounded-full border px-1.5 py-0.5 text-left text-sm font-medium shadow-sm outline-none ring-offset-background transition sm:max-w-[12.5rem]',
-                              'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                              'active:scale-[0.98]',
-                              isActive
-                                ? 'border-primary bg-primary text-primary-foreground shadow-md shadow-primary/20'
-                                : 'border-border bg-card text-primary hover:border-primary/45 hover:bg-primary/5'
-                            )}
-                          >
-                            {category.imageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element -- customer menu URLs
-                              <span className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full bg-muted">
-                                <img
-                                  src={category.imageUrl}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                />
-                              </span>
-                            ) : (
-                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] text-muted-foreground">
-                                —
-                              </span>
-                            )}
-                            <span className="min-w-0 flex-1 truncate pr-1 leading-tight">
-                              {category.name}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-9 w-9 shrink-0 rounded-full border-border bg-background shadow-sm"
-                    disabled={!categoryStripScroll.forward}
-                    aria-label="Scroll categories forward"
-                    onClick={() => scrollCategoryStrip('forward')}
-                  >
-                    <IconChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={searchOpen ? 'outline' : 'default'}
-                    size="icon"
-                    className="h-9 w-9 shrink-0  shadow-sm"
-                    aria-label={t('searchProducts')}
-                    aria-pressed={searchOpen}
-                    onClick={() => setSearchOpen((open) => !open)}
-                  >
-                    <Search className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              {searchOpen ? (
-                <div className="mt-2 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-                  <Input
-                    ref={searchInputRef}
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder={t('searchProducts')}
-                    className="min-w-0 w-full"
-                  />
-                  <Button
-                    className="shrink-0 whitespace-nowrap"
-                    onClick={() => {
-                      setSearch('');
-                      setSearchOpen(false);
-                    }}
-                    variant="outline"
-                    type="button"
-                    aria-label={t('clear')}
-                  >
-                    <X className="h-4 w-4 sm:me-1" />
-                    <span className="hidden sm:inline">{t('clear')}</span>
-                  </Button>
-                </div>
-              ) : null}
+          {menuLoading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
+          ) : (
+            <section className="min-w-0">
+              {displayedCategories.length > 0 ? (
+                displayedCategories.map((category) => {
+                  const categoryProducts = category.items;
 
-        <div className="flex min-w-0 w-full max-w-full flex-col gap-6 md:flex-row md:items-start">
-          <div className="min-w-0 w-full md:w-[70%] md:max-w-[70%]">
-
-          {orderInfo && (
-          <section className="mb-6 rounded-2xl border border-border bg-card p-4">
-            <h4 className="text-sm font-semibold mb-2">{t('orderDetails')}</h4>
-            <div className="grid gap-2 text-sm text-muted-foreground">
-              <div>
-                <strong className="text-foreground">{t('mode')}:</strong>{' '}
-                {orderInfo.mode}
-              </div>
-              {orderInfo.mode === 'delivery' ? (
-                <>
-                  <div>
-                    <strong className="text-foreground">{t('address')}:</strong>{' '}
-                    {orderInfo.address || 'N/A'}
-                  </div>
-                  <div>
-                    <strong className="text-foreground">{t('name')}:</strong>{' '}
-                    {orderInfo.addressName || 'N/A'}
-                  </div>
-                  <div>
-                    <strong className="text-foreground">
-                      {t('phoneLabel')}:
-                    </strong>{' '}
-                    {orderInfo.customerPhone || 'N/A'}
-                  </div>
-                  <div>
-                    <strong className="text-foreground">
-                      {t('apartment')}:
-                    </strong>{' '}
-                    {orderInfo.apartment || 'N/A'}
-                  </div>
-                  <div>
-                    <strong className="text-foreground">
-                      {t('gateCode')}:
-                    </strong>{' '}
-                    {orderInfo.gateCode || 'N/A'}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <strong className="text-foreground">{t('store')}:</strong>{' '}
-                    {orderInfo.storeName || 'N/A'}
-                  </div>
-                  <div>
-                    <strong className="text-foreground">
-                      {t('storeAddress')}:
-                    </strong>{' '}
-                    {orderInfo.storeAddress || 'N/A'}
-                  </div>
-                  <div>
-                    <strong className="text-foreground">{t('name')}:</strong>{' '}
-                    {orderInfo.addressName || 'N/A'}
-                  </div>
-                  <div>
-                    <strong className="text-foreground">
-                      {t('phoneLabel')}:
-                    </strong>{' '}
-                    {orderInfo.customerPhone || 'N/A'}
-                  </div>
-                </>
-              )}
-            </div>
-          </section>
-        )}
-        
-           
-
-            {menuLoading ? (
-              <Loader2 className="animate-spin text-primary text-center mx-auto" />
-            ) : (
-              <section className="mb-8 min-w-0">
-                <h2 className="mb-4 text-xl font-semibold">
-                  {selectedCategory === ALL_CATEGORY_ID
-                    ? t('allCategories')
-                    : categories.find((c) => c.id === selectedCategory)
-                        ?.name ?? t('selectedCategory')}
-                </h2>
-
-                {displayedCategories.length > 0 ? (
-                  displayedCategories.map((category) => {
-                    const categoryProducts = category.items;
-
-                    if (categoryProducts.length === 0)
-                      return (
-                        <div key={category.id} className="mb-10">
-                          <p className="text-sm text-muted-foreground">
-                            {t('noProductsFoundInCategory')}
-                          </p>
-                        </div>
-                      );
-
+                  if (categoryProducts.length === 0) {
                     return (
-                      <div
-                        key={category.id}
-                        id={category.id}
-                        className="mb-10 min-w-0"
-                      >
-                        <h3 className="mb-3 text-lg font-bold">
-                          {category.name}
-                        </h3>
-                        <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                          {categoryProducts.map((product) => (
-                            <ProductCard
-                              key={product.id}
-                              product={product}
-                              showCustomizeIndicator={productNeedsCustomizeDialog(
-                                product
-                              )}
-                              onAdd={() => handleProductSelect(product)}
-                            />
-                          ))}
-                        </div>
+                      <div key={category.id} className="mb-10">
+                        <p className="text-sm text-[#8e8e9a]">
+                          {t('noProductsFoundInCategory')}
+                        </p>
                       </div>
                     );
-                  })
-                ) : (
-                  <div className="mb-10">
-                    <p className="text-sm text-muted-foreground">
-                      {t('noCategoriesFound')}
-                    </p>
-                  </div>
-                )}
-              </section>
-            )}
-          </div>
+                  }
 
-          <aside className="min-w-0 w-full shrink-0 md:sticky md:top-4 md:z-10 md:w-[30%] md:max-w-[30%] md:self-start">
-            {cartPanel}
-          </aside>
-        </div>
+                  return (
+                    <div
+                      key={category.id}
+                      id={category.id}
+                      className="mb-10 min-w-0"
+                    >
+                      <h3 className="mb-4 text-xl font-bold text-primary">
+                        {category.name}
+                      </h3>
+                      <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {categoryProducts.map((product) => (
+                          <ProductCard
+                            key={product.id}
+                            product={product}
+                            onAdd={() => handleProductSelect(product)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="mb-10">
+                  <p className="text-sm text-[#8e8e9a]">
+                    {t('noCategoriesFound')}
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+        </main>
+
+        <aside
+          className="hidden shrink-0 flex-col bg-[#f4f4f6] p-3 lg:sticky lg:flex lg:self-start"
+          style={{
+            width: ORDER_SIDEBAR_WIDTH_PX,
+            top: ORDER_TOP_OFFSET_PX,
+            height: `calc(100dvh - ${ORDER_TOP_OFFSET_PX}px)`,
+          }}
+        >
+          {cartPanel}
+        </aside>
+
+        <aside className="shrink-0 bg-[#f4f4f6] p-3 lg:hidden">{cartPanel}</aside>
+      </div>
 
         <ProductCustomizeDialog
         open={customizeOpen}
@@ -1360,14 +1386,13 @@ export default function OrderPageClient({
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-6 right-6 z-500 h-11 w-11 rounded-full shadow-lg"
+          className="fixed bottom-6 z-40 h-11 w-11 rounded-full shadow-lg right-6 lg:right-[max(1.5rem,calc((100vw-1280px)/2+320px+1rem))]"
           onClick={scrollToTop}
           aria-label="Scroll to top"
         >
           <ArrowUp className="h-5 w-5" />
         </Button>
       ) : null}
-      </div>
     </div>
   );
 }

@@ -94,3 +94,31 @@ export function withServiceChargesPayload<T extends RestaurantServiceChargeRow>(
     serviceCharges: parseRestaurantServiceCharges(row),
   };
 }
+
+export const RESTAURANT_BRANDING_DB_SELECT = {
+  id: true,
+  name: true,
+  logoUrl: true,
+  mainBannerUrl: true,
+  menuBannerUrls: true,
+  themePrimaryColor: true,
+  subdomain: true,
+  slug: true,
+} as const;
+
+export function withDefaultServiceChargesPayload<
+  T extends Record<string, unknown>,
+>(row: T): T & { serviceCharges: RestaurantServiceCharges } {
+  return {
+    ...row,
+    serviceCharges: parseRestaurantServiceCharges(null),
+  };
+}
+
+export function isPrismaUnknownFieldError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes('Unknown field') ||
+    error.message.includes('Unknown arg')
+  );
+}

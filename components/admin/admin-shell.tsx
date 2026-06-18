@@ -3,17 +3,26 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { Loader2, Menu, PanelLeft, PanelLeftClose, Shield } from 'lucide-react';
+import {
+  ExternalLink,
+  Loader2,
+  Menu,
+  PanelLeft,
+  PanelLeftClose,
+  Shield,
+} from 'lucide-react';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
+import { AdminBreadcrumb } from '@/components/admin/admin-breadcrumb';
+import { AdminSidebarFooter } from '@/components/admin/admin-sidebar-footer';
+import { AdminSidebarNav } from '@/components/admin/admin-sidebar-nav';
+import { AdminAppShell } from '@/components/layout/admin-app-shell';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { ModeToggle } from '@/components/darkmode/darkmode';
 import UserMenu from '@/components/dashboard/UserMenu';
-import { AdminSidebarNav } from '@/components/admin/admin-sidebar-nav';
-import { DashboardAppShell } from '@/components/layout/dashboard-app-shell';
-import { ADMIN_NAV_ITEMS } from '@/constant/adminNav';
+import { ADMIN_NAV_GROUPS } from '@/constant/adminNav';
 import { cn } from '@/lib/utils';
 import { isPlatformAdminSession } from '@/lib/auth/admin';
 
@@ -25,32 +34,69 @@ function AdminMobileNav({
   onOpenChange: (o: boolean) => void;
 }) {
   const pathname = usePathname();
+
   return (
-    <SheetContent side="left" className="flex w-[min(100vw,15rem)] flex-col">
-      <div className="mb-4 flex items-center gap-2 font-semibold">
-        <Shield className="h-5 w-5" />
-        Foodluk Admin
+    <SheetContent
+      side="left"
+      className="flex w-[min(100vw,18rem)] flex-col bg-white p-0 dark:bg-zinc-900"
+    >
+      <div className="px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-fire-500/10 ring-1 ring-fire-500/20">
+            <Image src="/Logo.png" alt="Foodluk Admin" width={22} height={22} />
+          </div>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-sm font-semibold">Foodluk Admin</p>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-fire-600 dark:text-fire-400">
+              Platform
+            </p>
+          </div>
+        </div>
       </div>
-      <nav className="grid flex-1 gap-1">
-        {ADMIN_NAV_ITEMS.map((item) => (
-          <Link
-            key={item.path}
-            href={item.path}
-            onClick={() => onOpenChange(false)}
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2',
-              pathname === item.path
-                ? 'bg-muted'
-                : 'text-muted-foreground hover:bg-muted/80'
-            )}
-          >
-            {item.icon}
-            {item.title}
-          </Link>
+
+      <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
+        {ADMIN_NAV_GROUPS.map((group) => (
+          <div key={group.label}>
+            <p className="mb-2 px-3 text-xs font-medium text-muted-foreground">
+              {group.label}
+            </p>
+            <div className="grid gap-0.5">
+              {group.items.map((item) => {
+                const active =
+                  pathname === item.path || pathname.startsWith(`${item.path}/`);
+                return (
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    onClick={() => onOpenChange(false)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                      active
+                        ? 'bg-fire-500 text-white shadow-md shadow-fire-500/20'
+                        : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                        active
+                          ? 'bg-white/20 text-white'
+                          : 'bg-muted/50'
+                      )}
+                    >
+                      {item.icon}
+                    </span>
+                    <span className="truncate">{item.title}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         ))}
       </nav>
-      <div className="mt-auto border-t pt-4">
-        <UserMenu className="w-full justify-start" />
+
+      <div className="p-3">
+        <AdminSidebarFooter />
       </div>
     </SheetContent>
   );
@@ -93,52 +139,62 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   if (status === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#eef0f3] text-sm text-muted-foreground dark:bg-[#0d0d0d]">
-        <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary" />
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-950">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-10 w-10 animate-spin text-fire-500" />
+          <p className="text-sm text-muted-foreground">Loading admin panel…</p>
+        </div>
       </div>
     );
   }
 
   if (!canAccessAdmin) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-[#eef0f3] p-6 text-center dark:bg-[#0d0d0d]">
-        <p className="font-medium">Access denied</p>
-        <p className="max-w-md text-sm text-muted-foreground">
-          Sign in with an email listed in{' '}
-          <code className="rounded bg-muted px-1">ADMIN_EMAIL</code> or{' '}
-          <code className="rounded bg-muted px-1">ADMIN_EMAILS</code> in your
-          environment file.
-        </p>
-        <Link href="/" className="mt-2 text-sm text-primary underline">
-          Back to home
-        </Link>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-100 p-6 text-center dark:bg-zinc-950">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-fire-500/10">
+          <Shield className="h-7 w-7 text-fire-600 dark:text-fire-400" />
+        </div>
+        <div className="space-y-2">
+          <p className="text-lg font-semibold">Access denied</p>
+          <p className="max-w-md text-sm text-muted-foreground">
+            Sign in with an email listed in{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ADMIN_EMAIL</code> or{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ADMIN_EMAILS</code> in your
+            environment file.
+          </p>
+        </div>
+        <Button variant="outline" asChild>
+          <Link href="/">Back to home</Link>
+        </Button>
       </div>
     );
   }
 
   return (
-    <DashboardAppShell
+    <AdminAppShell
       sidebarOpen={sidebarOpen}
       sidebarHeader={
-        <div className="flex items-center gap-2 font-semibold">
-          <Image src="/Logo.png" alt="Foodluk Admin" width={28} height={28} />
+        <Link href="/admin/dashboard" className="flex items-center gap-3 transition-opacity hover:opacity-90">
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-fire-500/10">
+            <Image src="/Logo.png" alt="Foodluk Admin" width={24} height={24} />
+          </div>
           <div className="min-w-0 flex flex-col leading-tight">
-            <span className="truncate text-sm">Foodluk Admin</span>
-            <span className="text-[10px] font-normal text-muted-foreground">
-              Platform
+            <span className="truncate text-sm font-semibold tracking-tight">Foodluk</span>
+            <span className="text-xs font-medium text-fire-600 dark:text-fire-400">
+              Admin
             </span>
           </div>
-        </div>
+        </Link>
       }
       sidebarNav={<AdminSidebarNav />}
-      sidebarFooter={<UserMenu className="w-full justify-start" />}
+      sidebarFooter={<AdminSidebarFooter />}
       header={
         <>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="icon"
-            className="shrink-0"
+            className="shrink-0 rounded-xl text-muted-foreground hover:bg-muted/80 hover:text-foreground"
             aria-label="Toggle navigation"
             onClick={toggleDesktop}
           >
@@ -158,30 +214,29 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <AdminMobileNav onOpenChange={setMobileOpen} />
           </Sheet>
 
-          <div
-            className={cn(
-              'flex min-w-0 shrink items-center gap-2',
-              sidebarOpen && 'md:hidden'
-            )}
-          >
-            <Shield className="h-5 w-5 shrink-0 text-primary" />
-            <span className="truncate text-sm font-semibold">Foodluk Admin</span>
-          </div>
+          <AdminBreadcrumb className="min-w-0 flex-1" />
 
-          <div className="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">
-            Platform administration
-          </div>
-
-          <ModeToggle />
-          <div
-            className={cn('flex items-center', sidebarOpen && 'md:hidden')}
-          >
-            <UserMenu />
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hidden rounded-xl text-muted-foreground hover:text-foreground lg:inline-flex"
+              asChild
+            >
+              <Link href="/" target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                Site
+              </Link>
+            </Button>
+            <ModeToggle />
+            <div className={cn('hidden items-center', !sidebarOpen && 'md:flex')}>
+              <UserMenu confirmLogout />
+            </div>
           </div>
         </>
       }
     >
       {children}
-    </DashboardAppShell>
+    </AdminAppShell>
   );
 }

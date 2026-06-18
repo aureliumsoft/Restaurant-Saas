@@ -2,17 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { format } from 'date-fns';
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import { adminCardClass } from '@/components/admin/admin-surface';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  AdminTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableEmpty,
+  AdminTableHead,
+  AdminTableHeader,
+  AdminTableLead,
+  AdminTableMuted,
+  AdminTableRow,
+  AdminTableWrapper,
+} from '@/components/admin/admin-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 type RequestRow = {
   id: string;
@@ -46,47 +54,54 @@ export default function AdminRequestsPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Requests</h1>
-        <p className="text-sm text-muted-foreground">
-          All demo requests submitted from the public site.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <AdminPageHeader
+        eyebrow="Management"
+        title="Demo requests"
+        description="All demo requests submitted from the public marketing site."
+      />
 
-      <Card>
+      <Card className={cn(adminCardClass, 'min-w-0 max-w-full')}>
         <CardHeader>
           <CardTitle>Demo requests</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0 p-0">
+          <AdminTableWrapper>
           {loading ? (
             <Loader2 className="text-primary animate-spin text-center mx-auto" />
           ) : error ? (
-            <p className="text-sm text-destructive">{error}</p>
+            <p className="px-4 text-sm text-destructive">{error}</p>
           ) : rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No requests yet.</p>
+            <AdminTableEmpty>No requests yet.</AdminTableEmpty>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Restaurant</TableHead>
-                  <TableHead>Requested At</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <AdminTable minWidth={600}>
+              <AdminTableHeader>
+                <AdminTableRow>
+                  <AdminTableHead>Contact</AdminTableHead>
+                  <AdminTableHead>Restaurant</AdminTableHead>
+                  <AdminTableHead>Requested</AdminTableHead>
+                </AdminTableRow>
+              </AdminTableHeader>
+              <AdminTableBody>
                 {rows.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-medium">{r.name}</TableCell>
-                    <TableCell>{r.email}</TableCell>
-                    <TableCell>{r.restaurantName}</TableCell>
-                    <TableCell>{new Date(r.createdAt).toLocaleString()}</TableCell>
-                  </TableRow>
+                  <AdminTableRow key={r.id}>
+                    <AdminTableCell>
+                      <AdminTableLead title={r.name} subtitle={r.email} accent="#0ea5e9" />
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <span className="font-medium">{r.restaurantName}</span>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <AdminTableMuted>
+                        {format(new Date(r.createdAt), 'MMM d, yyyy · h:mm a')}
+                      </AdminTableMuted>
+                    </AdminTableCell>
+                  </AdminTableRow>
                 ))}
-              </TableBody>
-            </Table>
+              </AdminTableBody>
+            </AdminTable>
           )}
+          </AdminTableWrapper>
         </CardContent>
       </Card>
     </div>

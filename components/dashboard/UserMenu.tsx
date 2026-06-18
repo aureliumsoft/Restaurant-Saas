@@ -6,15 +6,25 @@ import { signOut, useSession } from 'next-auth/react';
 import { Loader2, LogIn, LogOut, User } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { LogoutConfirmation } from '@/components/ui/confirmation-dialogs';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-export default function UserMenu({ className }: { className?: string }) {
+export default function UserMenu({
+  className,
+  confirmLogout = false,
+}: {
+  className?: string;
+  confirmLogout?: boolean;
+}) {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [logoutOpen, setLogoutOpen] = React.useState(false);
+  const [loggingOut, setLoggingOut] = React.useState(false);
 
   const user = session?.user as any | undefined;
   const name = user?.name ?? user?.email ?? 'User';
@@ -44,8 +54,23 @@ export default function UserMenu({ className }: { className?: string }) {
     );
   }
 
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    await signOut({ callbackUrl: '/' });
+  };
+
+  const requestLogout = () => {
+    if (confirmLogout) {
+      setMenuOpen(false);
+      setLogoutOpen(true);
+      return;
+    }
+    void handleLogout();
+  };
+
   return (
-    <DropdownMenu>
+    <>
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="default" className={className}>
           <User className="mr-2 h-4 w-4" />
@@ -69,7 +94,7 @@ export default function UserMenu({ className }: { className?: string }) {
         <button
           type="button"
           className="relative flex w-full items-center rounded-sm px-2 py-1.5 text-sm text-red-500 outline-none transition-colors hover:bg-accent"
-          onClick={() => signOut({ callbackUrl: '/' })}
+          onClick={requestLogout}
         >
           <>
             <LogOut className="mr-2 h-4 w-4" />
@@ -78,5 +103,17 @@ export default function UserMenu({ className }: { className?: string }) {
         </button>
       </DropdownMenuContent>
     </DropdownMenu>
+
+    {confirmLogout ? (
+      <LogoutConfirmation
+        open={logoutOpen}
+        loading={loggingOut}
+        title="Sign out of admin?"
+        description="You will be signed out of the platform admin area and returned to the home page."
+        onCancel={() => setLogoutOpen(false)}
+        onConfirm={handleLogout}
+      />
+    ) : null}
+    </>
   );
 }
