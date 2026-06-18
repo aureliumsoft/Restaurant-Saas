@@ -143,10 +143,12 @@ export function SubscriptionEditDialog({
       }
       const paypalMessages = sync?.paypal?.messages ?? [];
       for (const msg of paypalMessages) {
-        if (sync.paypal?.ok === false) {
+        if (typeof msg === 'string' && sync?.paypal?.ok === false) {
+          console.warn(msg);
           toast.warn(msg);
         } else {
-          toast.info(msg);
+          toast.info(typeof msg === 'string' ? msg : 'Unknown PayPal message');
+          console.info(typeof msg === 'string' ? msg : 'Unknown PayPal message');
         }
       }
       setShowConfirmation(false);

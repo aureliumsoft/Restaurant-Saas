@@ -2,6 +2,7 @@ import {
   defaultPayPalCountryForCurrency,
   normalizePayPalCountryCode,
 } from '@/lib/paypal-buyer-countries';
+import { PayPalOrderMetadata } from './paypal-server';
 
 export type RestaurantPayPalRuntimeConfig = {
   clientId: string;
