@@ -6,6 +6,8 @@ import { db } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
 import { legacyRoleFromAccountRole } from "@/lib/auth/account-role";
 import { isPlatformAdmin, jwtRoleFromAccount } from "@/lib/auth/admin";
+import { ensureGlobalSignupRolesExist } from "@/lib/ensure-global-signup-roles";
+import { GLOBAL_ROLE_SLUG, getGlobalRoleIdBySlug } from "@/lib/global-roles";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -106,12 +108,18 @@ export const authOptions: NextAuthOptions = {
             .toString(36)
             .slice(2, 6)}`;
 
+          await ensureGlobalSignupRolesExist();
+          const pendingOwnerId = await getGlobalRoleIdBySlug(
+            GLOBAL_ROLE_SLUG.PENDING_OWNER
+          );
+
           await db.user.create({
             data: {
               name: name || email,
               username,
               email,
               image: picture ?? null,
+              roleId: pendingOwnerId,
             },
           });
         }
