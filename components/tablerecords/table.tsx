@@ -6,12 +6,12 @@ import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+  DashboardCard,
+  DashboardCardContent,
+  DashboardCardHeader,
+  DashboardCardTitle,
+  DashboardStatCard,
+} from '@/components/dashboard/dashboard-card';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -21,13 +21,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  DashboardTable as Table,
+  DashboardTableBody as TableBody,
+  DashboardTableCell as TableCell,
+  DashboardTableHead as TableHead,
+  DashboardTableHeader as TableHeader,
+  DashboardTableRow as TableRow,
+  DashboardTableWrapper as TableWrapper,
+} from '@/components/dashboard/dashboard-table';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import {
   Sheet,
@@ -150,11 +151,11 @@ export function Records() {
           )}
         </Button>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Transactions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <DashboardCard>
+        <DashboardCardHeader>
+          <DashboardCardTitle>Transactions</DashboardCardTitle>
+        </DashboardCardHeader>
+        <DashboardCardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
             <Input
               placeholder="Search by tracking number, order id, or status..."
@@ -188,33 +189,33 @@ export function Records() {
           ) : (
             <>
               <div className="grid gap-3 md:grid-cols-3">
-                <Card>
-                  <CardContent className="p-4">
+                <DashboardStatCard>
+                  <DashboardCardContent className="p-4">
                     <p className="text-xs text-muted-foreground">
                       Orders in current page
                     </p>
                     <p className="text-2xl font-semibold">{stats.orderCount}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
+                  </DashboardCardContent>
+                </DashboardStatCard>
+                <DashboardStatCard>
+                  <DashboardCardContent className="p-4">
                     <p className="text-xs text-muted-foreground">
                       Subscriptions in current page
                     </p>
                     <p className="text-2xl font-semibold">{stats.subCount}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
+                  </DashboardCardContent>
+                </DashboardStatCard>
+                <DashboardStatCard>
+                  <DashboardCardContent className="p-4">
                     <p className="text-xs text-muted-foreground">
                       Register in current page
                     </p>
                     <p className="text-2xl font-semibold">{stats.regCount}</p>
-                  </CardContent>
-                </Card>
+                  </DashboardCardContent>
+                </DashboardStatCard>
               </div>
 
-              <div className="rounded-md border">
+              <TableWrapper>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -307,7 +308,7 @@ export function Records() {
                     )}
                   </TableBody>
                 </Table>
-              </div>
+              </TableWrapper>
 
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
@@ -334,8 +335,8 @@ export function Records() {
               </div>
             </>
           )}
-        </CardContent>
-      </Card>
+        </DashboardCardContent>
+      </DashboardCard>
 
       <Sheet
         open={detailOpen}

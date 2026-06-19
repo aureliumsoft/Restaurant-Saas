@@ -33,14 +33,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { dashboardCardClass } from '@/components/dashboard/dashboard-surface';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  DashboardTable as Table,
+  DashboardTableBody as TableBody,
+  DashboardTableCell as TableCell,
+  DashboardTableHead as TableHead,
+  DashboardTableHeader as TableHeader,
+  DashboardTableRow as TableRow,
+  DashboardTableWrapper as TableWrapper,
+} from '@/components/dashboard/dashboard-table';
 
 type RoleOption = { id: string; name: string; slug?: string | null };
 type BranchOption = { id: string; name: string };
@@ -540,7 +542,7 @@ export default function RestaurantUsersCard({
             {pendingInvites.length > 0 ? (
               <div className="space-y-2">
                 <h3 className="text-sm font-medium">Pending invitations</h3>
-                <div className="overflow-x-auto rounded-md border">
+                <TableWrapper>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -590,7 +592,7 @@ export default function RestaurantUsersCard({
                       ))}
                     </TableBody>
                   </Table>
-                </div>
+                </TableWrapper>
               </div>
             ) : null}
 
@@ -601,7 +603,7 @@ export default function RestaurantUsersCard({
                   No employees loaded.
                 </p>
               ) : (
-                <div className="overflow-x-auto rounded-md border">
+                <TableWrapper>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -721,7 +723,7 @@ export default function RestaurantUsersCard({
                       ))}
                     </TableBody>
                   </Table>
-                </div>
+                </TableWrapper>
               )}
             </div>
           </>

@@ -6,7 +6,22 @@ import { Loader2, Pencil, Plus, RefreshCcw, RefreshCw, Save, Trash2 } from 'luci
 import { toast } from 'react-toastify';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DashboardCard,
+  DashboardCardContent,
+  DashboardCardDescription,
+  DashboardCardHeader,
+  DashboardCardTitle,
+} from '@/components/dashboard/dashboard-card';
+import {
+  DashboardTable,
+  DashboardTableBody,
+  DashboardTableCell,
+  DashboardTableHead,
+  DashboardTableHeader,
+  DashboardTableRow,
+  DashboardTableWrapper,
+} from '@/components/dashboard/dashboard-table';
 import {
   Dialog,
   DialogContent,
@@ -26,14 +41,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   useBranchContext,
   withBranchQuery,
@@ -155,16 +162,16 @@ export function TablesModule() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Dining tables</CardTitle>
-        <CardDescription>
+    <DashboardCard>
+      <DashboardCardHeader>
+        <DashboardCardTitle>Dining tables</DashboardCardTitle>
+        <DashboardCardDescription>
           {activeBranchName
             ? `Tables for ${activeBranchName} — shown in POS and kiosk dine-in for this branch. Names must be unique per branch.`
             : 'Select a branch to manage dining tables for POS and kiosk dine-in.'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        </DashboardCardDescription>
+      </DashboardCardHeader>
+      <DashboardCardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />
@@ -182,26 +189,27 @@ export function TablesModule() {
             No tables yet. Add one so staff can select it on the POS screen.
           </p>
         ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead className="w-28 text-right">Sort</TableHead>
-                  <TableHead className="w-32 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          <DashboardTableWrapper>
+            <DashboardTable>
+              <DashboardTableHeader>
+                <DashboardTableRow>
+                  <DashboardTableHead>Name</DashboardTableHead>
+                  <DashboardTableHead className="text-right">Sort</DashboardTableHead>
+                  <DashboardTableHead className="text-right">Actions</DashboardTableHead>
+                </DashboardTableRow>
+              </DashboardTableHeader>
+              <DashboardTableBody>
                 {rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.name}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.sortOrder}</TableCell>
-                    <TableCell className="text-right">
+                  <DashboardTableRow key={row.id}>
+                    <DashboardTableCell className="font-medium">{row.name}</DashboardTableCell>
+                    <DashboardTableCell className="text-right tabular-nums">{row.sortOrder}</DashboardTableCell>
+                    <DashboardTableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button
                           type="button"
                           size="icon"
                           variant="ghost"
+                          className="rounded-lg"
                           aria-label={`Edit ${row.name}`}
                           onClick={() => openEdit(row)}
                         >
@@ -211,19 +219,19 @@ export function TablesModule() {
                           type="button"
                           size="icon"
                           variant="ghost"
-                          className="text-destructive"
+                          className="rounded-lg text-destructive"
                           aria-label={`Delete ${row.name}`}
                           onClick={() => setDeleteTarget(row)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
+                    </DashboardTableCell>
+                  </DashboardTableRow>
                 ))}
-              </TableBody>
-            </Table>
-          </div>
+              </DashboardTableBody>
+            </DashboardTable>
+          </DashboardTableWrapper>
         )}
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -291,7 +299,7 @@ export function TablesModule() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </CardContent>
-    </Card>
+      </DashboardCardContent>
+    </DashboardCard>
   );
 }

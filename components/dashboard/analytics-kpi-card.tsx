@@ -35,7 +35,7 @@ export function AnalyticsKpiCard({
       href={href}
       className="group block rounded-2xl outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-4 shadow-sm transition-all group-hover:border-primary/30 group-hover:shadow-md">
+      <div className="relative h-full overflow-hidden rounded-2xl border border-border/50 bg-card p-4 shadow-[0_2px_16px_-4px_rgba(0,0,0,0.06)] transition-all group-hover:border-primary/30 group-hover:shadow-md dark:shadow-[0_2px_16px_-4px_rgba(0,0,0,0.35)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <p className="text-sm font-semibold text-foreground">{title}</p>

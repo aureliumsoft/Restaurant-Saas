@@ -4,8 +4,48 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 
 import { NAVBAR_ITEMS } from '@/constant/navbarMenu';
-import { navItemsForPermissions } from '@/lib/dashboard-nav';
+import {
+  navGroupsForPermissions,
+  navItemsForPermissions,
+  type DashboardNavGroup,
+} from '@/lib/dashboard-nav';
 import type { NavItem } from '@/types/Navbar';
+
+export function useDashboardNavGroups(): DashboardNavGroup[] {
+  const [groups, setGroups] = useState<DashboardNavGroup[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    axios
+      .get<{
+        permissions?: string[];
+        plan?: { recommendations?: boolean };
+      }>('/api/me/dashboard-permissions')
+      .then((res) => {
+        if (cancelled) return;
+        const perms = res.data.permissions ?? [];
+        setGroups(
+          navGroupsForPermissions(perms, {
+            hideRecommendations: res.data.plan?.recommendations === false,
+          })
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setGroups(
+          navGroupsForPermissions(
+            NAVBAR_ITEMS.map((item) => `${item.moduleKey}:access`)
+          )
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return groups;
+}
 
 export function useDashboardNavItems(): NavItem[] {
   // Render nothing until permissions are loaded to avoid a visible "all modules"

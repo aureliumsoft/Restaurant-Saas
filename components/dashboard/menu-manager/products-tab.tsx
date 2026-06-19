@@ -15,7 +15,21 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DashboardCard,
+  DashboardCardContent,
+  DashboardCardHeader,
+  DashboardCardTitle,
+} from '@/components/dashboard/dashboard-card';
+import {
+  DashboardTable,
+  DashboardTableBody,
+  DashboardTableCell,
+  DashboardTableHead,
+  DashboardTableHeader,
+  DashboardTableRow,
+  DashboardTableWrapper,
+} from '@/components/dashboard/dashboard-table';
 import { DeleteConfirmation } from '@/components/ui/confirmation-dialogs';
 import { Input } from '@/components/ui/input';
 import {
@@ -197,15 +211,15 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle>Products</CardTitle>
+    <DashboardCard>
+      <DashboardCardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <DashboardCardTitle>Products</DashboardCardTitle>
         <InventoryQuickActions
           onMenuRefresh={onRefresh}
           className="flex flex-wrap gap-2"
         />
-      </CardHeader>
-      <CardContent className="space-y-4 pt-4">
+      </DashboardCardHeader>
+      <DashboardCardContent className="space-y-4 pt-4">
         {loading ? (
           <p className="text-sm text-muted-foreground">
             <Loader2 className="animate-spin text-primary text-center mx-auto" />
@@ -305,31 +319,28 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
 
                 {filteredRows.length === 0 ? null : (
                   <>
-                    <div className="overflow-x-auto rounded-md border border-border">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border bg-muted/50 text-left">
-                            <th className="p-3 font-medium w-16">Photo</th>
-                            <th className="p-3 font-medium">Name</th>
-                            <th className="p-3 font-medium">Category</th>
-                            <th className="p-3 font-medium">Price</th>
-                            <th className="p-3 font-medium">Sale</th>
-                            <th className="hidden p-3 font-medium md:table-cell">
+                    <DashboardTableWrapper>
+                      <DashboardTable minWidth={900}>
+                        <DashboardTableHeader>
+                          <DashboardTableRow>
+                            <DashboardTableHead className="w-16">Photo</DashboardTableHead>
+                            <DashboardTableHead>Name</DashboardTableHead>
+                            <DashboardTableHead>Category</DashboardTableHead>
+                            <DashboardTableHead>Price</DashboardTableHead>
+                            <DashboardTableHead>Sale</DashboardTableHead>
+                            <DashboardTableHead className="hidden md:table-cell">
                               Modified
-                            </th>
-                            <th className="p-3 w-28" />
-                          </tr>
-                        </thead>
-                        <tbody>
+                            </DashboardTableHead>
+                            <DashboardTableHead className="w-28" />
+                          </DashboardTableRow>
+                        </DashboardTableHeader>
+                        <DashboardTableBody>
                           {paginatedRows.map(({ item, categoryName, categoryNames }) => {
                             const display = getMenuItemDisplayPrice(item);
                             const variationCount = item.variations?.length ?? 0;
                             return (
-                              <tr
-                                key={item.id}
-                                className="border-b border-border last:border-0"
-                              >
-                                <td className="p-3">
+                              <DashboardTableRow key={item.id}>
+                                <DashboardTableCell>
                                   <div
                                     className={cn(
                                       'relative h-12 w-12 overflow-hidden rounded-md border border-border bg-muted',
@@ -348,8 +359,8 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                                       '—'
                                     )}
                                   </div>
-                                </td>
-                                <td className="p-3">
+                                </DashboardTableCell>
+                                <DashboardTableCell>
                                   <div className="font-medium">{item.name}</div>
                                   {item.description ? (
                                     <div className="line-clamp-2 text-xs text-muted-foreground">
@@ -362,13 +373,13 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                                       {variationCount === 1 ? '' : 's'}
                                     </div>
                                   ) : null}
-                                </td>
-                                <td className="p-3 text-muted-foreground">
+                                </DashboardTableCell>
+                                <DashboardTableCell className="text-muted-foreground">
                                   {categoryNames.length > 1
                                     ? categoryNames.join(', ')
                                     : categoryName}
-                                </td>
-                                <td className="p-3 tabular-nums">
+                                </DashboardTableCell>
+                                <DashboardTableCell className="tabular-nums">
                                   {display.hasVariations ? (
                                     <>
                                       <span className="text-xs text-muted-foreground">
@@ -387,8 +398,8 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                                       €{display.amount.toFixed(2)}
                                     </span>
                                   )}
-                                </td>
-                                <td className="p-3 tabular-nums">
+                                </DashboardTableCell>
+                                <DashboardTableCell className="tabular-nums">
                                   {display.hasVariations ? (
                                     <span className="text-xs text-muted-foreground">
                                       via variations
@@ -400,11 +411,11 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                                   ) : (
                                     '—'
                                   )}
-                                </td>
-                                <td className="hidden p-3 text-xs text-muted-foreground md:table-cell">
+                                </DashboardTableCell>
+                                <DashboardTableCell className="hidden text-xs text-muted-foreground md:table-cell">
                                   {formatUpdatedAt(item.updatedAt)}
-                                </td>
-                                <td className="p-3">
+                                </DashboardTableCell>
+                                <DashboardTableCell>
                                   <div className="flex gap-1">
                                     {canEditProducts ? (
                                       <Button
@@ -436,13 +447,13 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                                       </Button>
                                     ) : null}
                                   </div>
-                                </td>
-                              </tr>
+                                </DashboardTableCell>
+                              </DashboardTableRow>
                             );
                           })}
-                        </tbody>
-                      </table>
-                    </div>
+                        </DashboardTableBody>
+                      </DashboardTable>
+                    </DashboardTableWrapper>
 
                     {totalPages > 1 ? (
                       <Pagination className="justify-end">
@@ -489,7 +500,7 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
             )}
           </>
         )}
-      </CardContent>
+      </DashboardCardContent>
 
       <DeleteConfirmation
         open={deleteConfirmOpen}
@@ -503,6 +514,6 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
           setDeletingProduct(null);
         }}
       />
-    </Card>
+    </DashboardCard>
   );
 }

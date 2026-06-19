@@ -27,14 +27,16 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { dashboardCardClass } from '@/components/dashboard/dashboard-surface';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  DashboardTable as Table,
+  DashboardTableBody as TableBody,
+  DashboardTableCell as TableCell,
+  DashboardTableHead as TableHead,
+  DashboardTableHeader as TableHeader,
+  DashboardTableRow as TableRow,
+  DashboardTableWrapper as TableWrapper,
+} from '@/components/dashboard/dashboard-table';
 import {
   rowsFromPermissions,
   toggleModuleAction,
@@ -365,7 +367,7 @@ export default function RolesCard({
                                   }
                                 />
                               </div>
-                              <div className="overflow-x-auto rounded-md border">
+                              <TableWrapper>
                                 <Table>
                                   <TableHeader>
                                     <TableRow>
@@ -431,7 +433,7 @@ export default function RolesCard({
                                     })()}
                                   </TableBody>
                                 </Table>
-                              </div>
+                              </TableWrapper>
                               <p className="mt-2 text-xs text-muted-foreground">
                                 Access lets the role open the module. Edit and
                                 delete are enforced when you wire employee

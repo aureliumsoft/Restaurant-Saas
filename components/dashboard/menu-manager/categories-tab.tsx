@@ -294,7 +294,7 @@ function CategoryCard({
   };
 
   return (
-    <Card className="flex flex-col overflow-hidden transition-shadow hover:shadow-md">
+    <Card className="dashboard-grid-card flex flex-col overflow-hidden transition-shadow">
       {category.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img

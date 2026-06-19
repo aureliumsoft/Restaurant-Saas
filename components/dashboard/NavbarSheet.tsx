@@ -1,12 +1,11 @@
 'use client';
-import Link from 'next/link';
-import { TriangleAlert } from 'lucide-react';
-import { ScrollAreaDemo } from '../scrollarea/scrollarea';
+
+import { DashboardSidebarNav } from '@/components/dashboard/dashboard-sidebar-nav';
+import { ScrollAreaDemo } from '@/components/scrollarea/scrollarea';
 import { SheetContent } from '@/components/ui/sheet';
-import { usePathname } from 'next/navigation';
+import { useRestaurantBranding } from '@/components/layout/restaurant-branding-provider';
+
 import UserMenu from './UserMenu';
-import { isDashboardNavItemActive } from '@/lib/dashboard-nav';
-import { useDashboardNavItems } from './use-dashboard-nav-items';
 
 type NavbarSheetProps = {
   /** Called when a nav link is used (e.g. to close the mobile sheet). */
@@ -14,53 +13,43 @@ type NavbarSheetProps = {
 };
 
 export function NavbarSheet({ onNavigate }: NavbarSheetProps) {
-  const pathname = usePathname();
-  const navItems = useDashboardNavItems();
+  const { restaurantName, logoUrl, logoFailed, setLogoFailed } =
+    useRestaurantBranding();
 
   return (
-    <SheetContent side="left" className="flex flex-col">
-      {/* Navigation container */}
-      <nav className="grid gap-2 text-lg font-medium">
-        {/* Link for the top section with an icon */}
-        <Link
-          href="#"
-          className="flex items-center gap-2 text-lg font-semibold"
-        >
-          <TriangleAlert className="h-6 w-6" />
-        </Link>
+    <SheetContent
+      side="left"
+      className="flex w-[min(100vw,18rem)] flex-col bg-white p-0 dark:bg-zinc-900"
+    >
+      <div className="border-b border-border/40 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/10 text-sm font-semibold uppercase ring-1 ring-primary/15">
+            {logoUrl && !logoFailed ? (
+              <img
+                src={logoUrl}
+                alt={restaurantName}
+                className="h-full w-full object-cover"
+                onError={() => setLogoFailed(true)}
+              />
+            ) : (
+              <span>{restaurantName.charAt(0)}</span>
+            )}
+          </div>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-sm font-semibold">{restaurantName}</p>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-primary">
+              Dashboard
+            </p>
+          </div>
+        </div>
+      </div>
 
-        {/* Map through NAVBAR_ITEMS to create navigation links */}
-        {navItems.map((item) => (
-          <Link
-            key={item.path}
-            href={item.path}
-            target={
-              item.path.startsWith('/pos') || item.path.startsWith('/kds')
-                ? '_blank'
-                : undefined
-            }
-            onClick={() =>
-              item.path.startsWith('/pos') || item.path.startsWith('/kds')
-                ? onNavigate?.()
-                : undefined
-            }
-            className={`mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 ${
-              isDashboardNavItemActive(pathname ?? '', item.path)
-                ? 'bg-primary/10 text-foreground'
-                : 'text-muted-foreground hover:text-foreground bg-primary/10'
-            } transition-all hover:text-primary hover:bg-primary/20`}
-          >
-            {/* Render the icon and title for each navigation item */}
-            {item.icon}
-            {item.title}
-          </Link>
-        ))}
-
-        {/* Include ScrollAreaDemo component */}
+      <div className="flex-1 space-y-4 overflow-y-auto px-2 py-4">
+        <DashboardSidebarNav onNavigate={onNavigate} />
         <ScrollAreaDemo />
-      </nav>
+      </div>
 
-      <div className="mt-auto p-2">
+      <div className="border-t border-border/40 p-3">
         <UserMenu className="w-full justify-start" />
       </div>
     </SheetContent>

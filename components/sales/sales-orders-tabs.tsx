@@ -48,13 +48,14 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  DashboardTable as Table,
+  DashboardTableBody as TableBody,
+  DashboardTableCell as TableCell,
+  DashboardTableHead as TableHead,
+  DashboardTableHeader as TableHeader,
+  DashboardTableRow as TableRow,
+  DashboardTableWrapper as TableWrapper,
+} from '@/components/dashboard/dashboard-table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { orderSourceLabel } from '@/lib/order-source-label';
 import eventBus from '@/lib/even';
@@ -267,8 +268,8 @@ function OrdersTable({
   onView: (row: SalesOrderRow) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
-      <Table>
+    <TableWrapper>
+      <Table minWidth={960}>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead className="text-muted-foreground">Order #</TableHead>
@@ -349,7 +350,7 @@ function OrdersTable({
           )}
         </TableBody>
       </Table>
-    </div>
+    </TableWrapper>
   );
 }
 

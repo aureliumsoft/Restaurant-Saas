@@ -302,7 +302,7 @@ function VariationCard({
   };
 
   return (
-    <Card className="flex flex-col overflow-hidden transition-shadow hover:shadow-md">
+    <Card className="dashboard-grid-card flex flex-col overflow-hidden transition-shadow">
       <CardHeader className="space-y-3 pb-3">
         <div className="flex items-start justify-between gap-2">
           {!editing && variation.shortLabel ? (

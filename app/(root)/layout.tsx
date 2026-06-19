@@ -181,7 +181,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
 
   if (sessionStatus === 'loading' || sessionStatus === 'unauthenticated') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-300 text-sm text-muted-foreground dark:bg-black">
+      <div className="flex min-h-screen items-center justify-center bg-[#f4f4f5] text-sm text-muted-foreground dark:bg-zinc-950">
         <Loader2 className="h-10 w-10 mx-auto animate-spin text-primary" />
       </div>
     );
@@ -189,7 +189,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
 
   if (!subscriptionChecked) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-300 text-sm text-muted-foreground dark:bg-black">
+      <div className="flex min-h-screen items-center justify-center bg-[#f4f4f5] text-sm text-muted-foreground dark:bg-zinc-950">
         <Loader2 className="h-10 w-10 mx-auto animate-spin text-primary" />
       </div>
     );
@@ -201,7 +201,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
 
   if (!permissionsChecked) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-300 text-sm text-muted-foreground dark:bg-black">
+      <div className="flex min-h-screen items-center justify-center bg-[#f4f4f5] text-sm text-muted-foreground dark:bg-zinc-950">
         <Loader2 className="h-10 w-10 mx-auto animate-spin text-primary" />
       </div>
     );
@@ -215,9 +215,9 @@ const RootLayout = ({ children }: RootLayoutProps) => {
           <Link
             href={restaurantSlug ? `/web-app/${restaurantSlug}` : '/'}
             target={restaurantSlug ? '_blank' : undefined}
-            className="flex items-center gap-2 font-semibold"
+            className="flex items-center gap-2 font-semibold transition-opacity hover:opacity-90"
           >
-            <div className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-xs font-semibold uppercase">
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/10 text-xs font-semibold uppercase ring-1 ring-primary/15">
               {restaurantLogoUrl && !logoFailed ? (
                 <img
                   src={restaurantLogoUrl}
@@ -238,9 +238,9 @@ const RootLayout = ({ children }: RootLayoutProps) => {
           <>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="icon"
-              className="shrink-0"
+              className="shrink-0 rounded-xl text-muted-foreground hover:bg-muted/80 hover:text-foreground"
               aria-label="Toggle navigation"
               title="Show or hide the sidebar with navigation links"
               onClick={toggleNav}
@@ -299,7 +299,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
         }
       >
         {subscriptionWarning && (
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
             {subscriptionWarning}
           </div>
         )}

@@ -7,13 +7,14 @@ import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  DashboardTable as Table,
+  DashboardTableBody as TableBody,
+  DashboardTableCell as TableCell,
+  DashboardTableHead as TableHead,
+  DashboardTableHeader as TableHeader,
+  DashboardTableRow as TableRow,
+  DashboardTableWrapper as TableWrapper,
+} from '@/components/dashboard/dashboard-table';
 import { orderSourceLabel } from '@/lib/order-source-label';
 import eventBus from '@/lib/even';
 import type { SalesOrderRow, SalesOrdersApiResponse } from '@/types/sales-order';
@@ -100,7 +101,7 @@ export function SalesOrdersList({
       {error && (
         <p className="text-sm text-destructive">{error}</p>
       )}
-      <div className="rounded-md border">
+      <TableWrapper>
         <Table>
           <TableHeader>
             <TableRow>
@@ -171,7 +172,7 @@ export function SalesOrdersList({
             )}
           </TableBody>
         </Table>
-      </div>
+      </TableWrapper>
       <p className="text-xs text-muted-foreground">
         Menu orders come from checkout (online). Sale rows are register / POS. Click a
         sale row to open line items below.

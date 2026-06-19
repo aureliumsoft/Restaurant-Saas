@@ -12,7 +12,7 @@ const AdminTable = React.forwardRef<HTMLTableElement, AdminTableProps>(
     <div className="relative w-full min-w-0 max-w-full">
       <div
         className={cn(
-          'admin-table-scroll overflow-x-auto overscroll-x-contain lg:overflow-x-visible',
+          'admin-table-scroll overflow-x-auto overscroll-x-contain',
           'scroll-smooth [-webkit-overflow-scrolling:touch]',
           'rounded-xl pb-1'
         )}

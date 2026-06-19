@@ -300,3 +300,99 @@
 .apexcharts-tooltip-series-group {
   @apply !pl-1.5;
 }
+
+@layer components {
+  /* Restaurant dashboard — modern card surfaces (plain CSS; @apply cannot use border/50 modifiers) */
+  .dashboard-content
+    .border.bg-card.text-card-foreground:not(.dashboard-stat-card):not(
+      .dashboard-nested-card
+    ) {
+    border-radius: 1rem;
+    border-color: color-mix(in oklch, var(--border) 50%, transparent);
+    box-shadow: 0 2px 16px -4px rgba(0, 0, 0, 0.06);
+    transition:
+      box-shadow 200ms,
+      border-color 200ms;
+  }
+
+  .dark
+    .dashboard-content
+    .border.bg-card.text-card-foreground:not(.dashboard-stat-card):not(
+      .dashboard-nested-card
+    ) {
+    box-shadow: 0 2px 16px -4px rgba(0, 0, 0, 0.35);
+  }
+
+  .dashboard-content .dashboard-grid-card {
+    overflow: hidden;
+    transition:
+      box-shadow 200ms,
+      border-color 200ms;
+  }
+
+  .dashboard-content .dashboard-grid-card:hover {
+    border-color: color-mix(in oklch, var(--primary) 20%, transparent);
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.1),
+      0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+
+  .dashboard-content .dashboard-nested-card {
+    border-radius: 0.75rem;
+    border-color: color-mix(in oklch, var(--border) 40%, transparent);
+    background-color: color-mix(in oklch, var(--muted) 25%, transparent);
+    box-shadow: none;
+  }
+
+  .dark .dashboard-content .dashboard-nested-card {
+    background-color: color-mix(in oklch, var(--muted) 15%, transparent);
+  }
+
+  .dashboard-content .dashboard-stat-card {
+    border-radius: 0.75rem;
+    border-color: color-mix(in oklch, var(--border) 50%, transparent);
+    background-image: linear-gradient(
+      to bottom right,
+      var(--card),
+      color-mix(in oklch, var(--muted) 30%, transparent)
+    );
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    transition:
+      box-shadow 200ms,
+      border-color 200ms;
+  }
+
+  .dark .dashboard-content .dashboard-stat-card {
+    background-image: linear-gradient(
+      to bottom right,
+      var(--card),
+      color-mix(in oklch, var(--muted) 20%, transparent)
+    );
+  }
+
+  .dashboard-content .border.bg-card > .flex.flex-col.space-y-1\.5.p-6:has(h3) {
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+    border-bottom-color: color-mix(in oklch, var(--border) 40%, transparent);
+    background-color: color-mix(in oklch, var(--muted) 20%, transparent);
+    padding-bottom: 1.25rem;
+  }
+
+  .dark
+    .dashboard-content
+    .border.bg-card
+    > .flex.flex-col.space-y-1\.5.p-6:has(h3) {
+    background-color: color-mix(in oklch, var(--muted) 10%, transparent);
+  }
+
+  .dashboard-content .border.bg-card > .flex.items-center.border-t.p-6.pt-0 {
+    background-color: color-mix(in oklch, var(--muted) 10%, transparent);
+  }
+
+  .dark
+    .dashboard-content
+    .border.bg-card
+    > .flex.items-center.border-t.p-6.pt-0 {
+    background-color: color-mix(in oklch, var(--muted) 5%, transparent);
+  }
+}

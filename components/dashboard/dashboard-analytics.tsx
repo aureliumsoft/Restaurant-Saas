@@ -42,8 +42,7 @@ import { kioskBasePath } from '@/lib/kiosk-path';
 import { canAccessDashboardModule } from '@/lib/restaurant-roles';
 import { cn } from '@/lib/utils';
 import { IconExternalLink } from '@tabler/icons-react';
-import { TooltipContent } from '../ui/tooltip';
-import { Loader, Loader2Icon } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 type AnalyticsCounts = {
   branches: number;
@@ -143,6 +142,37 @@ function formatMoney(n: number): string {
   return n.toFixed(0);
 }
 
+function AnalyticsChartLoader({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        'flex w-full items-center justify-center rounded-xl bg-muted/20',
+        className ?? 'h-[340px]'
+      )}
+    >
+      <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
+      <span className="sr-only">Loading chart…</span>
+    </div>
+  );
+}
+
+function AnalyticsKpiSkeleton() {
+  return (
+    <div className="relative h-full overflow-hidden rounded-2xl border border-border/50 bg-card p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-2">
+          <div className="h-4 w-24 rounded-md bg-muted animate-pulse" />
+          <div className="h-3 w-32 rounded-md bg-muted/80 animate-pulse" />
+        </div>
+        <div className="h-10 w-10 shrink-0 rounded-xl bg-muted animate-pulse" />
+      </div>
+      <div className="mt-6 flex h-[88px] items-center justify-center">
+        <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden />
+      </div>
+    </div>
+  );
+}
+
 function moduleMetric(
   key: DashboardModuleKey,
   data: AnalyticsPayload | null
@@ -209,13 +239,14 @@ export default function DashboardAnalytics() {
   const [error, setError] = useState<string | null>(null);
   const [slug, setSlug] = useState<string | null>(null);
   const [permissionsLoaded, setPermissionsLoaded] = useState(false);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [planRecommendations, setPlanRecommendations] = useState(true);
   const [selectedDays, setSelectedDays] = useState<7 | 14 | 30>(7);
 
   const load = useCallback(
     async (days: 7 | 14 | 30, branchId: string | null) => {
       setError(null);
-      setPermissionsLoaded(false);
+      setAnalyticsLoading(true);
       try {
         const [permRes, dashRes] = await Promise.all([
           axios.get<{
@@ -238,6 +269,7 @@ export default function DashboardAnalytics() {
         setPlanRecommendations(true);
         setAnalytics(null);
       } finally {
+        setAnalyticsLoading(false);
         setPermissionsLoaded(true);
       }
     },
@@ -310,6 +342,11 @@ export default function DashboardAnalytics() {
     [revenuePieData]
   );
 
+  const isLoading = branchLoading || analyticsLoading;
+  const analyticsTier = analytics?.analyticsTier ?? 'advanced';
+  const showBasicCharts = analyticsTier === 'basic';
+  const kpiSkeletonCount = modules.length > 0 ? modules.length : 6;
+
   return (
     <div className="w-full space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -362,17 +399,11 @@ export default function DashboardAnalytics() {
         </p>
       ) : null}
 
-      {!permissionsLoaded ? (
-        <p className="text-sm text-muted-foreground">
-          <Loader2Icon className="animate-spin text-primary mx-auto" />
-        </p>
-      ) : null}
-
-      {analytics ? (
+      {permissionsLoaded && !error ? (
         <div className="space-y-4">
-          {analytics.analyticsTier === 'basic' ? (
+          {showBasicCharts ? (
             <>
-              <Card className="rounded-2xl border-border/60 shadow-sm">
+              <Card>
                 <CardHeader>
                   <CardTitle className="text-base font-semibold">
                     Active orders (last 7 days)
@@ -382,7 +413,10 @@ export default function DashboardAnalytics() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <div className="h-[340px] w-full">
+                  {isLoading || !analytics ? (
+                    <AnalyticsChartLoader />
+                  ) : (
+                    <div className="h-[340px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={analytics.series}>
                         <defs>
@@ -433,11 +467,12 @@ export default function DashboardAnalytics() {
                         />
                       </AreaChart>
                     </ResponsiveContainer>
-                  </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              <Card className="rounded-2xl border-border/60 shadow-sm">
+              <Card>
                 <CardHeader>
                   <CardTitle className="text-base font-semibold">
                     Completed revenue (last 7 days)
@@ -447,7 +482,10 @@ export default function DashboardAnalytics() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <div className="h-[340px] w-full">
+                  {isLoading || !analytics ? (
+                    <AnalyticsChartLoader />
+                  ) : (
+                    <div className="h-[340px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={analytics.series}>
                         <CartesianGrid
@@ -472,18 +510,19 @@ export default function DashboardAnalytics() {
                         />
                       </BarChart>
                     </ResponsiveContainer>
-                  </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </>
           ) : (
             <>
-              <Card className="rounded-2xl border-border/60 shadow-sm">
+              <Card>
                 <CardHeader className="gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <CardTitle className="text-base font-semibold">
-                      Completed orders trend ({analytics.days ?? selectedDays}{' '}
-                      days)
+                      Completed orders trend (
+                      {analytics?.days ?? selectedDays} days)
                     </CardTitle>
                     <CardDescription>
                       Online, POS, and Kiosk active orders over time.
@@ -495,8 +534,9 @@ export default function DashboardAnalytics() {
                       <button
                         key={d}
                         type="button"
+                        disabled={isLoading}
                         className={cn(
-                          'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                          'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
                           selectedDays === d
                             ? 'bg-primary text-primary-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground'
@@ -509,7 +549,10 @@ export default function DashboardAnalytics() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <div className="h-[340px] w-full">
+                  {isLoading || !analytics ? (
+                    <AnalyticsChartLoader />
+                  ) : (
+                    <div className="h-[340px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={analytics.series}>
                         <defs>
@@ -614,15 +657,17 @@ export default function DashboardAnalytics() {
                         />
                       </AreaChart>
                     </ResponsiveContainer>
-                  </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
               <div className="grid gap-4 lg:grid-cols-2">
-                <Card className="rounded-2xl border-border/60 shadow-sm">
+                <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold">
-                      Revenue by channel ({analytics.days ?? selectedDays} days)
+                      Revenue by channel ({analytics?.days ?? selectedDays}{' '}
+                      days)
                     </CardTitle>
                     <CardDescription>
                       Multiple bar chart for Online, POS, and Kiosk totals per
@@ -630,6 +675,10 @@ export default function DashboardAnalytics() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0">
+                    {isLoading || !analytics ? (
+                      <AnalyticsChartLoader className="h-[360px]" />
+                    ) : (
+                      <>
                     <div className="mb-3 grid grid-cols-3 overflow-hidden rounded-lg border text-xs">
                       <div className="border-r px-3 py-2">
                         <p className="text-muted-foreground">Online</p>
@@ -694,10 +743,12 @@ export default function DashboardAnalytics() {
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
 
-                <Card className="rounded-2xl border-border/60 shadow-sm">
+                <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold">
                       Channel mix
@@ -707,6 +758,9 @@ export default function DashboardAnalytics() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0">
+                    {isLoading || !analytics ? (
+                      <AnalyticsChartLoader className="h-[320px]" />
+                    ) : (
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="h-[280px] w-full">
                         <p className="mb-2 text-sm font-medium">Orders split</p>
@@ -842,16 +896,51 @@ export default function DashboardAnalytics() {
                         </ResponsiveContainer>
                       </div>
                     </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
             </>
           )}
         </div>
+      ) : isLoading ? (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="h-5 w-48 rounded-md bg-muted animate-pulse" />
+              <div className="mt-2 h-4 w-64 rounded-md bg-muted/80 animate-pulse" />
+            </CardHeader>
+            <CardContent className="pt-0">
+              <AnalyticsChartLoader />
+            </CardContent>
+          </Card>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <div className="h-5 w-40 rounded-md bg-muted animate-pulse" />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <AnalyticsChartLoader className="h-[320px]" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <div className="h-5 w-32 rounded-md bg-muted animate-pulse" />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <AnalyticsChartLoader className="h-[320px]" />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {modules.map((m) => {
+        {isLoading || !permissionsLoaded
+          ? Array.from({ length: kpiSkeletonCount }).map((_, index) => (
+              <AnalyticsKpiSkeleton key={`kpi-skeleton-${index}`} />
+            ))
+          : modules.map((m) => {
           const Icon = MODULE_ICONS[m.moduleKey];
           const { value, hint } = moduleMetric(m.moduleKey, analytics);
           const allowed = can(m.moduleKey);
