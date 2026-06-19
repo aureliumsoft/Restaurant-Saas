@@ -133,13 +133,20 @@ function buildCategoryOptionModifiers(
   const optionIds = allIds.filter((id) => id === optionId);
   if (optionIds.length === 0) return [];
 
-  return buildModifierSelectionsForGroups(
+  const groupMods = buildModifierSelectionsForGroups(
     [group],
-    { [group.id]: optionIds },
+    { [group.id]: allIds },
     selectedNestedVariationByOption,
     parentVariation,
     parentVariationShortLabel
   );
+
+  return groupMods
+    .map((mod) => ({
+      ...mod,
+      selections: mod.selections.filter((sel) => sel.menuItemId === optionId),
+    }))
+    .filter((mod) => mod.selections.length > 0);
 }
 
 function appendFallbackCategoryOptions(

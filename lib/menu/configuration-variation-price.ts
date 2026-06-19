@@ -2,7 +2,10 @@ import {
   effectiveMenuItemUnitPrice,
   productUnitPriceWithVariation,
 } from '@/lib/menu/recommendation-addon-price';
-import { shouldShowQuantityGroupPickerPrices } from '@/lib/menu/recommendation-limits';
+import {
+  shouldShowOptionQuantityPrice,
+  shouldShowQuantityGroupPickerPrices,
+} from '@/lib/menu/recommendation-limits';
 
 export type VariationLinkRef = {
   id: string;
@@ -321,13 +324,23 @@ export function configurationAddonPriceLabel(
     multipleMode?: 'CHECKBOX' | 'QUANTITY' | null;
     /** All selected option ids in the group (with duplicates for qty). */
     groupSelectedIds?: string[];
+    /** When set, free tier is allocated across the whole group in selection order. */
+    optionId?: string;
   }
 ): string | null {
   if (options?.multipleMode === 'QUANTITY') {
-    const show = shouldShowQuantityGroupPickerPrices(
-      options.groupSelectedIds ?? [],
-      options.freeQuantity
-    );
+    const groupSelectedIds = options.groupSelectedIds ?? [];
+    const show =
+      options.optionId != null
+        ? shouldShowOptionQuantityPrice(
+            groupSelectedIds,
+            options.optionId,
+            options.freeQuantity
+          )
+        : shouldShowQuantityGroupPickerPrices(
+            groupSelectedIds,
+            options.freeQuantity
+          );
     if (!show) return null;
   }
   return formatConfigurationAddonDisplay(resolvedListUnit, defaultUnitPrice);

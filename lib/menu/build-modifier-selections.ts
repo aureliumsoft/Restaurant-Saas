@@ -6,7 +6,7 @@ import {
   filterConfigurationItemsForParentVariation,
   type ParentVariationContext,
 } from '@/lib/menu/configuration-variation-price';
-import { chargeableUnitsForOption } from '@/lib/menu/recommendation-limits';
+import { chargeableUnitsByOptionInGroup } from '@/lib/menu/recommendation-limits';
 import { effectiveOptionVariationId } from '@/lib/menu/recommendation-option-utils';
 import type {
   AttributeGroup,
@@ -62,6 +62,10 @@ export function buildModifierSelectionsForGroups(
     const itemById = new Map(
       visibleItems.map((it) => [it.menuItemId, it] as const)
     );
+    const chargeableByOption =
+      g.selectionType === 'MULTIPLE' && g.multipleMode === 'QUANTITY'
+        ? chargeableUnitsByOptionInGroup(ids, g.freeQuantity)
+        : null;
     const selectedItems = orderedUniqueOptionIds(ids, g.selectionType)
       .map((optionId) => {
         const it = itemById.get(optionId);
@@ -102,10 +106,9 @@ export function buildModifierSelectionsForGroups(
           listUnit,
           defaultListUnit ?? null
         );
-        const chargeable =
-          g.selectionType === 'MULTIPLE' && g.multipleMode === 'QUANTITY'
-            ? chargeableUnitsForOption(qty, g.freeQuantity)
-            : qty;
+        const chargeable = chargeableByOption
+          ? (chargeableByOption.get(optionId) ?? 0)
+          : qty;
         return {
           menuItemId: it.menuItemId,
           name: qty > 1 ? `${finalName} x${qty}` : finalName,

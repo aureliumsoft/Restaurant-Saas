@@ -789,13 +789,19 @@ export default function OrderPageClient({
   };
 
   const categoryStripItems = useMemo(
-    () =>
-      categories.map((category) => ({
+    () => [
+      {
+        id: ALL_CATEGORY_ID,
+        name: t('allCategories'),
+        imageUrl: null as string | null,
+      },
+      ...categories.map((category) => ({
         id: category.id,
         name: category.name,
         imageUrl: getCategoryDisplayImageUrl(category),
       })),
-    [categories]
+    ],
+    [categories, t]
   );
 
   const categoryStripIdsKey = useMemo(
@@ -1070,14 +1076,21 @@ export default function OrderPageClient({
                 type="button"
                 onClick={() => onCategoryClick(category.id)}
                 className={cn(
-                  'inline-flex h-10 max-w-[11.5rem] shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-3.5 text-left text-sm font-semibold text-primary transition sm:max-w-[12.5rem]',
+                  'inline-flex h-10 max-w-[11.5rem] shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-3.5 text-left text-sm font-semibold transition sm:max-w-[12.5rem]',
                   isActive
-                    ? 'bg-[#ebe8f2] ring-1 ring-primary/20'
-                    : 'bg-[#f4f4f6] hover:bg-[#ebe8f2]/80'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-[#f4f4f6] text-primary hover:bg-[#ebe8f2]/80'
                 )}
               >
                 {category.imageUrl ? (
-                  <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-white">
+                  <span
+                    className={cn(
+                      'relative h-8 w-8 shrink-0 overflow-hidden rounded-full ring-1',
+                      isActive
+                        ? 'bg-white/15 ring-primary-foreground/25'
+                        : 'bg-white ring-white'
+                    )}
+                  >
                     <img
                       src={category.imageUrl}
                       alt=""
@@ -1085,7 +1098,14 @@ export default function OrderPageClient({
                     />
                   </span>
                 ) : (
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-bold text-primary/50 ring-1 ring-white">
+                  <span
+                    className={cn(
+                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-1',
+                      isActive
+                        ? 'bg-white/20 text-primary-foreground ring-primary-foreground/25'
+                        : 'bg-white text-primary/50 ring-white'
+                    )}
+                  >
                     {category.id === ALL_CATEGORY_ID
                       ? '★'
                       : category.name.charAt(0).toUpperCase()}
@@ -1136,6 +1156,7 @@ export default function OrderPageClient({
         orderId={orderId}
         restaurantName={orderInfo?.restaurantName}
         logoUrl={logoUrl}
+        themePrimaryColor={themePrimaryColor}
         orderType={orderType}
         storeName={orderInfo?.storeName}
         storeAddress={orderInfo?.storeAddress}

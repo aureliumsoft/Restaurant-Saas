@@ -26,8 +26,7 @@ import {
 import { resolveWebCustomerName } from '@/lib/web-customer';
 import {
   cartLineTitle,
-  cartModifierSelectionNames,
-  cartPersonalizeSelectionNames,
+  cartModifierDisplayLines,
 } from '@/lib/cart-line-display';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
@@ -524,10 +523,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
           <>
             <div className="mb-6 space-y-4">
               {cart.map((line) => {
-                const personalizeNames = cartPersonalizeSelectionNames(
-                  line.modifiers
-                );
-                const addonNames = cartModifierSelectionNames(line.modifiers);
+                const modifierLines = cartModifierDisplayLines(line.modifiers);
                 return (
                 <Card key={line.lineId}>
                   <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -543,26 +539,20 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                         <h3 className="font-semibold">
                           {cartLineTitle(line.productName, line.variationName)}
                         </h3>
-                        {personalizeNames.length > 0 ? (
+                        {modifierLines.length > 0 ? (
                           <div className="mt-2 space-y-0.5">
-                            {personalizeNames.map((name, index) => (
+                            {modifierLines.map((modLine, index) => (
                               <p
-                                key={`${line.lineId}-personalize-${index}`}
-                                className="truncate text-xs font-medium text-foreground/90"
+                                key={`${line.lineId}-mod-${index}`}
+                                className={`truncate text-xs text-muted-foreground${
+                                  modLine.prefix === 'dash' ? ' pl-3' : ''
+                                }`}
                               >
-                                {name}
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
-                        {addonNames.length > 0 ? (
-                          <div className="mt-2 space-y-0.5">
-                            {addonNames.map((name, index) => (
-                              <p
-                                key={`${line.lineId}-sel-${index}`}
-                                className="truncate text-xs text-muted-foreground"
-                              >
-                                - {name}
+                                {modLine.prefix === 'branch' ? '↳ ' : '- '}
+                                {modLine.name}
+                                {modLine.unitPrice > 0
+                                  ? ` (+€${modLine.unitPrice.toFixed(2)})`
+                                  : ''}
                               </p>
                             ))}
                           </div>

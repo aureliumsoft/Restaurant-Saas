@@ -114,3 +114,31 @@ export function buildStorefrontThemeVars(primaryRaw?: string | null): ThemeCssVa
     '--restaurant-hero-muted': foreground === '#ffffff' ? 'rgba(255,255,255,0.82)' : '#64748b',
   };
 }
+
+/**
+ * Light surface tokens for portaled customer UI (Sheet/Dialog). Keeps storefront,
+ * order, and kiosk overlays readable when the app root is in dark mode.
+ */
+export function buildCustomerLightSurfaceVars(
+  primaryRaw?: string | null
+): ThemeCssVars {
+  const primaryVars = buildThemeCssVars(primaryRaw);
+  return {
+    ...primaryVars,
+    '--background': 'oklch(0.9383 0.0042 236.4993)',
+    '--foreground': 'oklch(0.3211 0 0)',
+    '--card': 'oklch(1 0 0)',
+    '--card-foreground': 'oklch(0.3211 0 0)',
+    '--popover': 'oklch(1 0 0)',
+    '--popover-foreground': 'oklch(0.3211 0 0)',
+    '--secondary': 'oklch(0.967 0.0029 264.5419)',
+    '--secondary-foreground': 'oklch(0.4461 0.0263 256.8018)',
+    '--muted': 'oklch(0.9846 0.0017 247.8389)',
+    '--muted-foreground': 'oklch(0.551 0.0234 264.3637)',
+    '--accent': 'oklch(0.9119 0.0222 243.8174)',
+    '--accent-foreground': 'oklch(0.3791 0.1378 265.5222)',
+    '--border': 'oklch(0.9022 0.0052 247.8822)',
+    '--input': 'oklch(0.97 0.0029 264.542)',
+    colorScheme: 'light',
+  };
+}

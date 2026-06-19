@@ -1,4 +1,4 @@
-import { buildModifierSelectionsForGroups, orderedUniqueOptionIds } from '@/lib/menu/build-modifier-selections';
+import { buildModifierSelectionsForGroups } from '@/lib/menu/build-modifier-selections';
 import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
 import { productRecommendationVariationPriceLabel } from '@/lib/menu/recommendation-addon-price';
 import {
@@ -64,28 +64,26 @@ export function buildCategoryGroupSelectionSummary(
 ): ConfigurationSummaryLine[] {
   if (selectedIds.length === 0) return [];
 
-  const lines: ConfigurationSummaryLine[] = [];
-  for (const optionId of orderedUniqueOptionIds(selectedIds, group.selectionType)) {
-    const mainMods = buildModifierSelectionsForGroups(
-      [group],
-      { [group.id]: selectedIds.filter((id) => id === optionId) },
-      selectedNestedVariationByOption,
-      parentVariation,
-      parentVariationShortLabel
-    );
+  const mainMods = buildModifierSelectionsForGroups(
+    [group],
+    { [group.id]: selectedIds },
+    selectedNestedVariationByOption,
+    parentVariation,
+    parentVariationShortLabel
+  );
 
-    for (const mod of mainMods) {
-      for (const sel of mod.selections) {
-        const key = optionSelectionKey(group.id, sel.menuItemId);
-        const nestedConfigMods = nestedOptionConfigs[key]?.mods ?? [];
-        const { personalize, nested } = splitModsToSummaryLines(nestedConfigMods);
-        lines.push({
-          name: sel.name,
-          priceLabel: formatSelectionPriceLabel(sel.unitPrice),
-          personalize,
-          nested,
-        });
-      }
+  const lines: ConfigurationSummaryLine[] = [];
+  for (const mod of mainMods) {
+    for (const sel of mod.selections) {
+      const key = optionSelectionKey(group.id, sel.menuItemId);
+      const nestedConfigMods = nestedOptionConfigs[key]?.mods ?? [];
+      const { personalize, nested } = splitModsToSummaryLines(nestedConfigMods);
+      lines.push({
+        name: sel.name,
+        priceLabel: formatSelectionPriceLabel(sel.unitPrice),
+        personalize,
+        nested,
+      });
     }
   }
   return lines;

@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +20,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import '@/lib/i18n/client';
-import { buildThemeCssVars } from '@/lib/restaurant-theme';
+import { buildCustomerLightSurfaceVars, buildThemeCssVars } from '@/lib/restaurant-theme';
 import type { UiLanguage } from '@/lib/i18n/resources';
 
 const WELCOME_BY_LANG: Record<UiLanguage, string> = {
@@ -140,6 +141,11 @@ export function Header() {
     return `/login?callbackUrl=${encodeURIComponent(callback)}`;
   }, [pathname]);
 
+  const menuSheetStyle = useMemo(
+    () => buildCustomerLightSurfaceVars(brand.themePrimaryColor) as CSSProperties,
+    [brand.themePrimaryColor]
+  );
+
   const logoBlock = (
     <div className="flex min-w-0 items-center gap-2.5">
       {normalizedLogoUrl && !logoLoadFailed ? (
@@ -207,7 +213,11 @@ export function Header() {
                   {t('storefrontMenu')}
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-[min(100vw-2rem,320px)]">
+              <SheetContent
+                side="right"
+                className="w-[min(100vw-2rem,320px)] border-border bg-background text-foreground"
+                style={menuSheetStyle}
+              >
                 <SheetHeader>
                   <SheetTitle>{brand.name ?? 'Restaurant'}</SheetTitle>
                 </SheetHeader>

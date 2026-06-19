@@ -528,6 +528,7 @@ function PreviewGroupCard({
                   freeQuantity: group.freeQuantity,
                   multipleMode: group.multipleMode,
                   groupSelectedIds: previewIds,
+                  optionId: it.id,
                 }
               );
               return (
@@ -576,6 +577,7 @@ function PreviewGroupCard({
                   freeQuantity: group.freeQuantity,
                   multipleMode: group.multipleMode,
                   groupSelectedIds: previewIds,
+                  optionId: it.id,
                 }
               );
               const atMax =

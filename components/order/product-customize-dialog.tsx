@@ -27,10 +27,7 @@ import {
   buildCategoryGroupSelectionSummary,
   buildProductRecSelectionSummary,
 } from '@/lib/menu/configuration-selection-summary';
-import {
-  buildModifierSelectionsForGroups,
-  modifierSelectionsUnitTotal,
-} from '@/lib/menu/build-modifier-selections';
+import { modifierSelectionsUnitTotal } from '@/lib/menu/build-modifier-selections';
 import { buildConfirmModifierSelections } from '@/lib/menu/build-confirm-modifier-selections';
 import {
   appendSelectionTimeline,
@@ -43,9 +40,9 @@ import {
   PersonalizeOptionsSection,
   type PersonalizeGroup,
 } from '@/components/order/personalize-options-section';
-import { buildThemeCssVars } from '@/lib/restaurant-theme';
+import { buildCustomerLightSurfaceVars } from '@/lib/restaurant-theme';
 import {
-  chargeableUnitsForOption,
+  chargeableUnitsForOptionInGroup,
   getRecommendationLimits,
   hasQuantityFreeTier,
   totalSelectedUnits,
@@ -203,7 +200,11 @@ function configurationItemPickerPrice(
   );
   const chargeableQty =
     group.multipleMode === 'QUANTITY'
-      ? chargeableUnitsForOption(itemQty, group.freeQuantity)
+      ? chargeableUnitsForOptionInGroup(
+          groupSelectedIds,
+          item.menuItemId,
+          group.freeQuantity
+        )
       : itemQty > 0
         ? 1
         : 0;
@@ -213,6 +214,7 @@ function configurationItemPickerPrice(
       freeQuantity: group.freeQuantity,
       multipleMode: group.multipleMode,
       groupSelectedIds,
+      optionId: item.menuItemId,
     }),
   };
 }
@@ -1092,68 +1094,45 @@ export function ProductCustomizeDialog({
       selectedVariation?.priceDelta,
       variations
     );
-    const categoryAddons = modifierSelectionsUnitTotal(
-      buildModifierSelectionsForGroups(
-        visibleCategoryGroups,
-        selectedByGroup,
-        selectedNestedVariationByOption,
-        baseProductVariationContext.parent,
-        baseProductVariationContext.shortLabel
-      )
-    );
+    const mods = buildConfirmModifierSelections({
+      visibleCategoryGroups,
+      selectedByGroup,
+      selectedNestedVariationByOption,
+      nestedOptionConfigs,
+      visibleProductRecommendationGroups,
+      nestedConfigs,
+      preselectedRecommendationVariationByGroup,
+      personalizeGroups,
+      selectedPersonalizeByGroup,
+      parentVariation: baseProductVariationContext.parent,
+      parentVariationShortLabel: baseProductVariationContext.shortLabel,
+      selectionTimeline,
+      allGroupsFlat: attributeGroups,
+    });
 
-    const productRecAddons = visibleProductRecommendationGroups.reduce((sum, g) => {
-      const item = g.items[0];
-      if (!item) return sum;
-      const config = nestedConfigs[g.id];
-      const pvId = resolveProductRecommendationVariationId(item, g, {
-        configProductVariationId: config?.productVariationId,
-        preselectedVariationId:
-          preselectedRecommendationVariationByGroup[g.id],
-        parentVariation: baseProductVariationContext.parent,
-      });
-      const variationCharge = productRecommendationVariationUnitPrice(
-        item,
-        pvId
-      );
-      return (
-        sum + variationCharge + modifierSelectionsUnitTotal(config?.mods ?? [])
-      );
-      }, 0);
-
-    return base + categoryAddons + productRecAddons;
+    return base + modifierSelectionsUnitTotal(mods);
   }, [
+    attributeGroups,
     baseProductVariationContext,
-    visibleCategoryGroups,
-    visibleProductRecommendationGroups,
     nestedConfigs,
+    nestedOptionConfigs,
+    personalizeGroups,
     preselectedRecommendationVariationByGroup,
     productBaseUnitPrice,
     selectedByGroup,
     selectedNestedVariationByOption,
+    selectedPersonalizeByGroup,
     selectedVariationId,
+    selectionTimeline,
     variations,
+    visibleCategoryGroups,
+    visibleProductRecommendationGroups,
   ]);
 
-  const dialogVars = useMemo(() => {
-    const primaryVars = buildThemeCssVars(themePrimaryColor);
-    return {
-      ...primaryVars,
-      '--background': 'oklch(0.9383 0.0042 236.4993)',
-      '--foreground': 'oklch(0.3211 0 0)',
-      '--card': 'oklch(1 0 0)',
-      '--card-foreground': 'oklch(0.3211 0 0)',
-      '--popover': 'oklch(1 0 0)',
-      '--popover-foreground': 'oklch(0.3211 0 0)',
-      '--secondary': 'oklch(0.967 0.0029 264.5419)',
-      '--secondary-foreground': 'oklch(0.4461 0.0263 256.8018)',
-      '--muted': 'oklch(0.9846 0.0017 247.8389)',
-      '--muted-foreground': 'oklch(0.551 0.0234 264.3637)',
-      '--border': 'oklch(0.9022 0.0052 247.8822)',
-      '--input': 'oklch(0.97 0.0029 264.542)',
-      colorScheme: 'light',
-    } as CSSProperties;
-  }, [themePrimaryColor]);
+  const dialogVars = useMemo(
+    () => buildCustomerLightSurfaceVars(themePrimaryColor) as CSSProperties,
+    [themePrimaryColor]
+  );
 
   const basePriceLabel = `€${productBaseUnitPrice.toFixed(2)}`;
 

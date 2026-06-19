@@ -33,6 +33,7 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
+import { menuItemBelongsToCategory, menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
 import { cn } from '@/lib/utils';
 import { useDashboardPermissions } from '@/hooks/use-dashboard-permissions';
 
@@ -44,8 +45,64 @@ const ALL_CATEGORIES = 'all';
 
 type ProductRow = {
   item: MenuItemRow;
+  /** Primary category label (first linked category). */
   categoryName: string;
+  /** All category names this product is linked to. */
+  categoryNames: string[];
+  /** Category ids where this product appears in the menu tree. */
+  listedCategoryIds: string[];
 };
+
+function categoryNamesForItem(
+  item: MenuItemRow,
+  categories: MenuCategoryRow[]
+): string[] {
+  return menuItemCategoryIds(item)
+    .map((id) => categories.find((c) => c.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+}
+
+function buildProductRows(categories: MenuCategoryRow[]): ProductRow[] {
+  const byId = new Map<string, ProductRow>();
+
+  for (const category of categories) {
+    for (const item of category.items) {
+      const existing = byId.get(item.id);
+      if (existing) {
+        if (!existing.listedCategoryIds.includes(category.id)) {
+          existing.listedCategoryIds.push(category.id);
+          if (!existing.categoryNames.includes(category.name)) {
+            existing.categoryNames.push(category.name);
+          }
+        }
+        continue;
+      }
+
+      const categoryNames = categoryNamesForItem(item, categories);
+      const primaryCategory = categories.find((c) => c.id === item.categoryId);
+
+      byId.set(item.id, {
+        item,
+        categoryName: primaryCategory?.name ?? categoryNames[0] ?? category.name,
+        categoryNames:
+          categoryNames.length > 0 ? categoryNames : [category.name],
+        listedCategoryIds: [category.id],
+      });
+    }
+  }
+
+  return Array.from(byId.values());
+}
+
+function productMatchesCategoryFilter(
+  row: ProductRow,
+  categoryFilter: string
+): boolean {
+  return (
+    row.listedCategoryIds.includes(categoryFilter) ||
+    menuItemBelongsToCategory(row.item, categoryFilter)
+  );
+}
 
 function formatUpdatedAt(iso: string | undefined) {
   if (!iso) return '—';
@@ -77,10 +134,7 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
   const [deleting, setDeleting] = useState(false);
 
   const allRows = useMemo<ProductRow[]>(
-    () =>
-      categories.flatMap((c) =>
-        c.items.map((item) => ({ item, categoryName: c.name }))
-      ),
+    () => buildProductRows(categories),
     [categories]
   );
 
@@ -88,14 +142,15 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
     const q = search.trim().toLowerCase();
     let list = allRows;
     if (categoryFilter !== ALL_CATEGORIES) {
-      list = list.filter(({ item }) => item.categoryId === categoryFilter);
+      list = list.filter((row) => productMatchesCategoryFilter(row, categoryFilter));
     }
     if (q) {
       list = list.filter(
-        ({ item, categoryName }) =>
+        ({ item, categoryName, categoryNames }) =>
           item.name.toLowerCase().includes(q) ||
           (item.description ?? '').toLowerCase().includes(q) ||
-          categoryName.toLowerCase().includes(q)
+          categoryName.toLowerCase().includes(q) ||
+          categoryNames.some((name) => name.toLowerCase().includes(q))
       );
     }
     return [...list].sort((a, b) => {
@@ -266,7 +321,7 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                           </tr>
                         </thead>
                         <tbody>
-                          {paginatedRows.map(({ item, categoryName }) => {
+                          {paginatedRows.map(({ item, categoryName, categoryNames }) => {
                             const display = getMenuItemDisplayPrice(item);
                             const variationCount = item.variations?.length ?? 0;
                             return (
@@ -309,7 +364,9 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                                   ) : null}
                                 </td>
                                 <td className="p-3 text-muted-foreground">
-                                  {categoryName}
+                                  {categoryNames.length > 1
+                                    ? categoryNames.join(', ')
+                                    : categoryName}
                                 </td>
                                 <td className="p-3 tabular-nums">
                                   {display.hasVariations ? (

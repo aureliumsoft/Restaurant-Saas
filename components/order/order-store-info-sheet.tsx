@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Clock, MapPin, X } from 'lucide-react';
 
@@ -10,6 +11,7 @@ import {
   SheetContent,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { buildCustomerLightSurfaceVars } from '@/lib/restaurant-theme';
 
 const ORDER_ACCENT_GOLD = '#f5d76e';
 
@@ -106,11 +108,17 @@ export function OrderStoreInfoSheet({
       )}`
     : null;
 
+  const sheetStyle = useMemo(
+    () => buildCustomerLightSurfaceVars() as CSSProperties,
+    []
+  );
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="flex w-full max-w-[min(100vw,480px)] flex-col gap-0 border-0 p-0 sm:max-w-[480px]"
+        className="flex w-full max-w-[min(100vw,480px)] flex-col gap-0 border-0 bg-background p-0 text-foreground sm:max-w-[480px]"
+        style={sheetStyle}
       >
         <div className="flex items-center justify-between border-b border-[#ececf0] bg-white px-5 py-4">
           <SheetTitle className="text-base font-bold uppercase tracking-wide text-[#1f1f2e]">

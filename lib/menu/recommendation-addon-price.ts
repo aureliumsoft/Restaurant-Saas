@@ -1,5 +1,8 @@
 import { getMinVariationPrice } from '@/lib/menu-item-pricing';
-import { shouldShowQuantityGroupPickerPrices } from '@/lib/menu/recommendation-limits';
+import {
+  shouldShowOptionQuantityPrice,
+  shouldShowQuantityGroupPickerPrices,
+} from '@/lib/menu/recommendation-limits';
 
 /** Product-type recommendations: base item included; only variation uplift may bill. */
 export const PRODUCT_RECOMMENDATION_UNIT_PRICE = 0;
@@ -99,13 +102,22 @@ export function recommendationAddonPriceLabel(
     multipleMode?: 'CHECKBOX' | 'QUANTITY' | null;
     /** All selected option ids in the group (with duplicates for qty). */
     groupSelectedIds?: string[];
+    optionId?: string;
   }
 ): string | null {
   if (options?.multipleMode === 'QUANTITY') {
-    const show = shouldShowQuantityGroupPickerPrices(
-      options.groupSelectedIds ?? [],
-      options.freeQuantity
-    );
+    const groupSelectedIds = options.groupSelectedIds ?? [];
+    const show =
+      options.optionId != null
+        ? shouldShowOptionQuantityPrice(
+            groupSelectedIds,
+            options.optionId,
+            options.freeQuantity
+          )
+        : shouldShowQuantityGroupPickerPrices(
+            groupSelectedIds,
+            options.freeQuantity
+          );
     if (!show) return null;
   }
   return formatRecommendationAddonDisplay(

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +36,7 @@ import { LanguageSwitcher } from '@/components/main/language-switcher';
 import { OrderTimePickerDialog } from '@/components/order/order-time-picker-dialog';
 import { OrderStoreInfoSheet } from '@/components/order/order-store-info-sheet';
 import { cn } from '@/lib/utils';
+import { buildCustomerLightSurfaceVars } from '@/lib/restaurant-theme';
 import {
   generateOrderTimeSlots,
   readOrderSchedule,
@@ -60,6 +62,7 @@ type OrderMenuHeaderProps = {
   orderId: string;
   restaurantName?: string | null;
   logoUrl?: string | null;
+  themePrimaryColor?: string | null;
   orderType: 'delivery' | 'pickUp';
   storeName?: string | null;
   storeAddress?: string | null;
@@ -72,6 +75,7 @@ export function OrderMenuHeader({
   orderId,
   restaurantName,
   logoUrl,
+  themePrimaryColor,
   orderType,
   storeName,
   storeAddress,
@@ -145,6 +149,11 @@ export function OrderMenuHeader({
   const normalizedLogoUrl =
     logoUrl && logoUrl.trim().length > 0 ? logoUrl.trim() : null;
 
+  const menuSheetStyle = useMemo(
+    () => buildCustomerLightSurfaceVars(themePrimaryColor) as CSSProperties,
+    [themePrimaryColor]
+  );
+
   const menuSheet = (
     <Sheet>
       <SheetTrigger asChild>
@@ -165,7 +174,11 @@ export function OrderMenuHeader({
           {t('storefrontMenu')}
         </Button>
       </SheetTrigger>
-      <SheetContent side="right" className="w-[min(100vw-2rem,320px)]">
+      <SheetContent
+        side="right"
+        className="w-[min(100vw-2rem,320px)] border-border bg-background text-foreground"
+        style={menuSheetStyle}
+      >
         <SheetHeader>
           <SheetTitle>{brandLabel}</SheetTitle>
         </SheetHeader>

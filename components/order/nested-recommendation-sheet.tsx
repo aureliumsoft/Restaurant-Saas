@@ -14,7 +14,7 @@ import { Check, ChevronDown, Minus, Plus, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { buildModifierSelectionsForGroups } from '@/lib/menu/build-modifier-selections';
+import { modifierSelectionsUnitTotal } from '@/lib/menu/build-modifier-selections';
 import { buildConfirmModifierSelections } from '@/lib/menu/build-confirm-modifier-selections';
 import {
   appendSelectionTimeline,
@@ -750,6 +750,7 @@ function InlineRecommendationGroups({
                       freeQuantity: g.freeQuantity,
                       multipleMode: g.multipleMode,
                       groupSelectedIds: selectedIds,
+                      optionId: it.menuItemId,
                     }
                   );
                   const radioSelected = selectedIds[0] === it.menuItemId;
@@ -1480,6 +1481,40 @@ export function NestedRecommendationSheet({
     selectedNestedVariationByOption,
     visibleProductRecommendationGroups,
     isProductGroupConfigured,
+  ]);
+
+  const selectedUnitTotal = useMemo(() => {
+    const mods = buildConfirmModifierSelections({
+      visibleCategoryGroups,
+      selectedByGroup,
+      selectedNestedVariationByOption,
+      nestedOptionConfigs: optionNestedConfigs,
+      visibleProductRecommendationGroups,
+      nestedConfigs: productGroupConfigs,
+      preselectedRecommendationVariationByGroup: preselectedProductVariationByGroup,
+      personalizeGroups,
+      selectedPersonalizeByGroup,
+      parentVariation: configurationParentVariation,
+      parentVariationShortLabel: baseProductVariationShortLabel,
+      selectionTimeline,
+      allGroupsFlat,
+      productRecChildGroupNamePrefix: false,
+    });
+    return modifierSelectionsUnitTotal(mods);
+  }, [
+    allGroupsFlat,
+    baseProductVariationShortLabel,
+    configurationParentVariation,
+    optionNestedConfigs,
+    personalizeGroups,
+    preselectedProductVariationByGroup,
+    productGroupConfigs,
+    selectedByGroup,
+    selectedNestedVariationByOption,
+    selectedPersonalizeByGroup,
+    selectionTimeline,
+    visibleCategoryGroups,
+    visibleProductRecommendationGroups,
   ]);
 
   const advanceAfterGroupComplete = useCallback(
