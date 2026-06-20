@@ -105,4 +105,6 @@ export type MenuCategoryRow = {
 export type RestaurantMenuData = {
   id: string;
   menus: MenuCategoryRow[];
+  /** All products sorted by most recent activity (updatedAt, then createdAt). */
+  inventoryItems?: MenuItemRow[];
 };

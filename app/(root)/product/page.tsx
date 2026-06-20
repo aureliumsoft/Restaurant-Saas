@@ -6,7 +6,7 @@ import { useRestaurantMenu } from '@/components/dashboard/menu-manager/use-resta
 import ErrorBoundary from '@/components/toaster/toaster';
 
 export default function ProductPage() {
-  const { loading, categories, load } = useRestaurantMenu();
+  const { loading, categories, inventoryItems, load } = useRestaurantMenu();
 
   return (
     <div className="w-full">
@@ -17,7 +17,12 @@ export default function ProductPage() {
           loading={false}
         >
          
-          <ProductsTab categories={categories} onRefresh={load} loading={loading} />
+          <ProductsTab
+            categories={categories}
+            inventoryItems={inventoryItems}
+            onRefresh={load}
+            loading={loading}
+          />
         </MenuPageShell>
       </ErrorBoundary>
     </div>

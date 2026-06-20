@@ -20,6 +20,7 @@ export function useRestaurantMenu() {
           ? {
               id: payload.id,
               menus: payload.menus ?? [],
+              inventoryItems: payload.inventoryItems ?? [],
             }
           : null
       );
@@ -39,6 +40,7 @@ export function useRestaurantMenu() {
   return {
     loading,
     categories: data?.menus ?? [],
+    inventoryItems: data?.inventoryItems ?? [],
     load,
     restaurantId: data?.id ?? null,
   };

@@ -19,6 +19,8 @@ import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 const menuItemSelect = {
   ...customerMenuItemCoreSelect,
   categoryId: true,
+  createdAt: true,
+  updatedAt: true,
   attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
   personalizeGroups: personalizeGroupsSelect,
   offersFromThis: {
@@ -127,8 +129,16 @@ export async function GET(req: NextRequest) {
       allCategories
     );
 
+    const inventoryItems = (
+      await db.menuItem.findMany({
+        where: { restaurantId: auth.restaurant.id },
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        select: menuItemSelect,
+      })
+    ).map((item) => mapMenuItemWithCategoryIds(item, categoryIdsByItem));
+
     return NextResponse.json(
-      { data: withServiceChargesPayload(enriched) },
+      { data: withServiceChargesPayload({ ...enriched, inventoryItems }) },
       { status: 200 }
     );
   } catch (e) {

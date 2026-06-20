@@ -76,36 +76,49 @@ function categoryNamesForItem(
     .filter((name): name is string => Boolean(name));
 }
 
-function buildProductRows(categories: MenuCategoryRow[]): ProductRow[] {
-  const byId = new Map<string, ProductRow>();
+function buildProductRows(
+  categories: MenuCategoryRow[],
+  inventoryItems?: MenuItemRow[]
+): ProductRow[] {
+  const items =
+    inventoryItems && inventoryItems.length > 0
+      ? inventoryItems
+      : dedupeItemsFromCategories(categories);
 
+  return items.map((item) => {
+    const categoryNames = categoryNamesForItem(item, categories);
+    const primaryCategory = categories.find((c) => c.id === item.categoryId);
+
+    return {
+      item,
+      categoryName:
+        primaryCategory?.name ?? categoryNames[0] ?? '—',
+      categoryNames: categoryNames.length > 0 ? categoryNames : ['—'],
+      listedCategoryIds: menuItemCategoryIds(item),
+    };
+  });
+}
+
+function dedupeItemsFromCategories(categories: MenuCategoryRow[]): MenuItemRow[] {
+  const byId = new Map<string, MenuItemRow>();
   for (const category of categories) {
     for (const item of category.items) {
-      const existing = byId.get(item.id);
-      if (existing) {
-        if (!existing.listedCategoryIds.includes(category.id)) {
-          existing.listedCategoryIds.push(category.id);
-          if (!existing.categoryNames.includes(category.name)) {
-            existing.categoryNames.push(category.name);
-          }
-        }
-        continue;
+      if (!byId.has(item.id)) {
+        byId.set(item.id, item);
       }
-
-      const categoryNames = categoryNamesForItem(item, categories);
-      const primaryCategory = categories.find((c) => c.id === item.categoryId);
-
-      byId.set(item.id, {
-        item,
-        categoryName: primaryCategory?.name ?? categoryNames[0] ?? category.name,
-        categoryNames:
-          categoryNames.length > 0 ? categoryNames : [category.name],
-        listedCategoryIds: [category.id],
-      });
     }
   }
+  return Array.from(byId.values()).sort(compareProductActivity);
+}
 
-  return Array.from(byId.values());
+function productActivityTime(item: MenuItemRow): number {
+  const updated = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+  const created = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+  return Math.max(updated, created);
+}
+
+function compareProductActivity(a: MenuItemRow, b: MenuItemRow): number {
+  return productActivityTime(b) - productActivityTime(a);
 }
 
 function productMatchesCategoryFilter(
@@ -118,7 +131,7 @@ function productMatchesCategoryFilter(
   );
 }
 
-function formatUpdatedAt(iso: string | undefined) {
+function formatMenuItemDate(iso: string | undefined) {
   if (!iso) return '—';
   try {
     return format(new Date(iso), 'MMM d, yyyy · HH:mm');
@@ -129,11 +142,17 @@ function formatUpdatedAt(iso: string | undefined) {
 
 type Props = {
   categories: MenuCategoryRow[];
+  inventoryItems?: MenuItemRow[];
   onRefresh: () => Promise<void>;
   loading: boolean;
 };
 
-export function ProductsTab({ categories, onRefresh, loading }: Props) {
+export function ProductsTab({
+  categories,
+  inventoryItems,
+  onRefresh,
+  loading,
+}: Props) {
   const { canEdit, canDelete } = useDashboardPermissions();
   const canEditProducts = canEdit('product');
   const canDeleteProducts = canDelete('product');
@@ -148,8 +167,8 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
   const [deleting, setDeleting] = useState(false);
 
   const allRows = useMemo<ProductRow[]>(
-    () => buildProductRows(categories),
-    [categories]
+    () => buildProductRows(categories, inventoryItems),
+    [categories, inventoryItems]
   );
 
   const filteredRows = useMemo(() => {
@@ -167,11 +186,9 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
           categoryNames.some((name) => name.toLowerCase().includes(q))
       );
     }
-    return [...list].sort((a, b) => {
-      const aTime = a.item.updatedAt ? new Date(a.item.updatedAt).getTime() : 0;
-      const bTime = b.item.updatedAt ? new Date(b.item.updatedAt).getTime() : 0;
-      return bTime - aTime;
-    });
+    return list.sort(
+      (a, b) => productActivityTime(b.item) - productActivityTime(a.item)
+    );
   }, [allRows, search, categoryFilter]);
 
   const totalPages = Math.max(
@@ -314,13 +331,13 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                 <p className="text-xs text-muted-foreground">
                   {filteredRows.length === 0
                     ? 'No products match your search or filter.'
-                    : `Showing ${paginatedRows.length} of ${filteredRows.length} product${filteredRows.length === 1 ? '' : 's'} · sorted by last modified`}
+                    : `Showing ${paginatedRows.length} of ${filteredRows.length} product${filteredRows.length === 1 ? '' : 's'} · sorted by newest or recently updated`}
                 </p>
 
                 {filteredRows.length === 0 ? null : (
                   <>
                     <DashboardTableWrapper>
-                      <DashboardTable minWidth={900}>
+                      <DashboardTable minWidth={1040}>
                         <DashboardTableHeader>
                           <DashboardTableRow>
                             <DashboardTableHead className="w-16">Photo</DashboardTableHead>
@@ -328,6 +345,9 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                             <DashboardTableHead>Category</DashboardTableHead>
                             <DashboardTableHead>Price</DashboardTableHead>
                             <DashboardTableHead>Sale</DashboardTableHead>
+                            <DashboardTableHead className="hidden lg:table-cell">
+                              Created
+                            </DashboardTableHead>
                             <DashboardTableHead className="hidden md:table-cell">
                               Modified
                             </DashboardTableHead>
@@ -363,7 +383,7 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                                 <DashboardTableCell>
                                   <div className="font-medium">{item.name}</div>
                                   {item.description ? (
-                                    <div className="line-clamp-2 text-xs text-muted-foreground">
+                                    <div className="line-clamp-2  text-xs text-muted-foreground font-light text-wrap">
                                       {item.description}
                                     </div>
                                   ) : null}
@@ -412,8 +432,11 @@ export function ProductsTab({ categories, onRefresh, loading }: Props) {
                                     '—'
                                   )}
                                 </DashboardTableCell>
+                                <DashboardTableCell className="hidden text-xs text-muted-foreground lg:table-cell">
+                                  {formatMenuItemDate(item.createdAt)}
+                                </DashboardTableCell>
                                 <DashboardTableCell className="hidden text-xs text-muted-foreground md:table-cell">
-                                  {formatUpdatedAt(item.updatedAt)}
+                                  {formatMenuItemDate(item.updatedAt)}
                                 </DashboardTableCell>
                                 <DashboardTableCell>
                                   <div className="flex gap-1">
