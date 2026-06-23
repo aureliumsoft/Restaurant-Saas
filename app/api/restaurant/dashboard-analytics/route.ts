@@ -5,11 +5,18 @@ import { OrderSourceType } from '@prisma/client';
 import {
   getBranchScopeFromRequest,
   orderBranchWhere,
+  userIsOwnerOrAdmin,
 } from '@/lib/branch/branch-scope';
 import { countDiningTables } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { analyticsActiveOrderStatusWhere } from '@/lib/sales-order-status';
+import {
+  enforceAnalyticsDays,
+  getTodayCreatedAtBounds,
+  getTodayDayKeyInTimezone,
+  salesOrderFilterTimezone,
+} from '@/lib/sales-order-period';
 import { getRestaurantPlanFeatures } from '@/lib/subscription-plan-enforcement';
 
 function utcDayKey(d: Date): string {
@@ -46,11 +53,16 @@ async function resolveRestaurantId(req: NextRequest) {
   const activeBranchId = branchScope?.activeBranchId ?? null;
   const activeBranchName =
     branchScope?.branches.find((b) => b.id === activeBranchId)?.name ?? null;
+  const canViewHistorical = await userIsOwnerOrAdmin(
+    auth.userId,
+    auth.restaurantId
+  );
   return {
     restaurantId: auth.restaurantId,
     activeBranchId,
     activeBranchName,
     orderBranchFilter: orderBranchWhere(activeBranchId),
+    canViewHistorical,
   };
 }
 
@@ -59,21 +71,38 @@ export async function GET(_req: NextRequest) {
     const auth = await resolveRestaurantId(_req);
     if ('error' in auth) return auth.error;
 
-    const { restaurantId, activeBranchId, activeBranchName, orderBranchFilter } =
+    const { restaurantId, activeBranchId, activeBranchName, orderBranchFilter, canViewHistorical } =
       auth;
     const branchId = orderBranchFilter.branchId ?? null;
     const planFeatures = await getRestaurantPlanFeatures(restaurantId);
     const url = new URL(_req.url);
     const rawDays = Number(url.searchParams.get('days') ?? 7);
     const requestedDays = rawDays === 14 || rawDays === 30 ? rawDays : 7;
-    const days = planFeatures.advancedAnalytics ? requestedDays : 7;
-    const dayKeys = lastNDayKeys(days);
-    const from = new Date(`${dayKeys[0]}T00:00:00.000Z`);
+    const days = enforceAnalyticsDays(
+      requestedDays,
+      canViewHistorical,
+      planFeatures.advancedAnalytics
+    );
+    const filterTz = salesOrderFilterTimezone();
+    const todayBounds = canViewHistorical
+      ? null
+      : await getTodayCreatedAtBounds(db, filterTz);
+    const dayKeys =
+      days === 1
+        ? [await getTodayDayKeyInTimezone(db, filterTz)]
+        : lastNDayKeys(days);
+    const from =
+      todayBounds?.gte ??
+      new Date(`${dayKeys[0]}T00:00:00.000Z`);
     const activeOrderStatus = analyticsActiveOrderStatusWhere();
+    const orderDateFilter = todayBounds
+      ? { createdAt: { gte: todayBounds.gte, lt: todayBounds.lt } }
+      : {};
     const orderScope = {
       restaurantId,
       ...orderBranchFilter,
       ...activeOrderStatus,
+      ...orderDateFilter,
     };
 
     const [
@@ -140,7 +169,7 @@ export async function GET(_req: NextRequest) {
       db.order.findMany({
         where: {
           ...orderScope,
-          createdAt: { gte: from },
+          ...(todayBounds ? {} : { createdAt: { gte: from } }),
         },
         select: { createdAt: true, total: true, sourceType: true },
       }),
@@ -176,7 +205,10 @@ export async function GET(_req: NextRequest) {
       revenue: { online: 0, pos: 0, kiosk: 0 },
     };
     for (const row of ordersWindow) {
-      const k = utcDayKey(new Date(row.createdAt));
+      const k =
+        days === 1
+          ? dayKeys[0]
+          : utcDayKey(new Date(row.createdAt));
       const bucket = byDay.get(k);
       if (!bucket) continue;
       const total = Number(row.total) || 0;
@@ -239,6 +271,8 @@ export async function GET(_req: NextRequest) {
         activeBranchId,
         activeBranchName,
         branchScoped: Boolean(branchId),
+        canViewHistorical,
+        dataScope: canViewHistorical ? ('all' as const) : ('today' as const),
       });
     }
 
@@ -264,6 +298,8 @@ export async function GET(_req: NextRequest) {
       activeBranchId,
       activeBranchName,
       branchScoped: Boolean(branchId),
+      canViewHistorical,
+      dataScope: canViewHistorical ? ('all' as const) : ('today' as const),
     });
   } catch (e) {
     console.error(e);

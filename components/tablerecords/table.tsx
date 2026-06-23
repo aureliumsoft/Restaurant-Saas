@@ -71,7 +71,8 @@ function trackingNumberLabel(row: TransactionHistoryRow): string {
 }
 
 export function Records() {
-  const { activeBranchId, loading: branchLoading } = useBranchContext();
+  const { activeBranchId, loading: branchLoading, isOwnerOrAdmin } =
+    useBranchContext();
   const [rows, setRows] = useState<TransactionHistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export function Records() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [dataScope, setDataScope] = useState<'all' | 'today'>('all');
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [active, setActive] = useState<TransactionHistoryRow | null>(null);
@@ -103,6 +105,7 @@ export function Records() {
       setRows(res.data.data ?? []);
       setTotalPages(res.data.meta?.totalPages ?? 1);
       setTotal(res.data.meta?.total ?? 0);
+      setDataScope(res.data.meta?.dataScope ?? 'all');
     } catch {
       setRows([]);
       setError('Could not load transaction history.');
@@ -134,8 +137,9 @@ export function Records() {
         <div className="flex flex-col justify-center items-start gap-2">
           <h1 className="text-2xl font-bold">Records</h1>{' '}
           <p className="text-sm text-muted-foreground">
-            Unified transaction records for orders, subscriptions, and register
-            sales.
+            {dataScope === 'today' || !isOwnerOrAdmin
+              ? 'Transaction records for today only.'
+              : 'Unified transaction records for orders, subscriptions, and register sales.'}
           </p>
         </div>
         <Button type="button" variant="outline" onClick={() => void load()}>

@@ -37,3 +37,50 @@ export function buildCustomerMenuRequestUrl(
   if (!sub) return null;
   return `/api/customer/menu?subdomain=${encodeURIComponent(sub)}`;
 }
+
+function customerMenuQueryString(
+  restaurantSlug: string | null | undefined,
+  storeId: string | null | undefined,
+  hostSubdomain: string | null
+): string | null {
+  const slug = restaurantSlug?.trim();
+  if (slug) return `slug=${encodeURIComponent(slug)}`;
+  const sub = (hostSubdomain?.trim() || storeId?.trim() || '') || null;
+  if (!sub) return null;
+  return `subdomain=${encodeURIComponent(sub)}`;
+}
+
+/** Progressive menu: category metadata only. */
+export function buildCustomerMenuCategoriesUrl(
+  restaurantSlug: string | null | undefined,
+  storeId: string | null | undefined,
+  hostSubdomain: string | null
+): string | null {
+  const query = customerMenuQueryString(restaurantSlug, storeId, hostSubdomain);
+  if (!query) return null;
+  return `/api/customer/menu/categories?${query}`;
+}
+
+/** Progressive menu: products for one category. */
+export function buildCustomerMenuCategoryItemsUrl(
+  categoryId: string,
+  restaurantSlug: string | null | undefined,
+  storeId: string | null | undefined,
+  hostSubdomain: string | null
+): string | null {
+  const query = customerMenuQueryString(restaurantSlug, storeId, hostSubdomain);
+  if (!query) return null;
+  return `/api/customer/menu/categories/${encodeURIComponent(categoryId)}?${query}`;
+}
+
+/** Kiosk progressive menu helpers (slug-only). */
+export function buildKioskMenuCategoriesUrl(slug: string): string {
+  return `/api/customer/menu/categories?slug=${encodeURIComponent(slug)}`;
+}
+
+export function buildKioskMenuCategoryItemsUrl(
+  slug: string,
+  categoryId: string
+): string {
+  return `/api/customer/menu/categories/${encodeURIComponent(categoryId)}?slug=${encodeURIComponent(slug)}`;
+}

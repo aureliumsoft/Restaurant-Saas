@@ -2,9 +2,14 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 
-import { getBranchScopeFromRequest, orderBranchSql } from '@/lib/branch/branch-scope';
+import {
+  getBranchScopeFromRequest,
+  orderBranchSql,
+  userIsOwnerOrAdmin,
+} from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import {
+  enforceSalesOrdersPeriod,
   parseSalesOrdersPeriod,
   salesOrderFilterTimezone,
   salesOrderPeriodMenuSql,
@@ -150,7 +155,14 @@ export async function GET(req: NextRequest) {
     const tab = parseTab(url.searchParams.get('tab'));
     const page = Math.max(1, Number(url.searchParams.get('page') ?? 1) || 1);
     const statusFilter = parseStatusFilter(url.searchParams.get('status'));
-    const period = parseSalesOrdersPeriod(url.searchParams.get('period'));
+    const canViewHistorical = await userIsOwnerOrAdmin(
+      auth.userId,
+      auth.restaurantId
+    );
+    const period = enforceSalesOrdersPeriod(
+      parseSalesOrdersPeriod(url.searchParams.get('period')),
+      canViewHistorical
+    );
     const search = (url.searchParams.get('search') ?? '').trim();
     const offset = (page - 1) * PAGE_SIZE;
     const filterTz = salesOrderFilterTimezone();

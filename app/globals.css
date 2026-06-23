@@ -396,3 +396,21 @@
     background-color: color-mix(in oklch, var(--muted) 5%, transparent);
   }
 }
+
+/* Marketing / SaaS shell — fixed header (py-3 + h-16 inner bar = 5.5rem) */
+.marketing-site-shell {
+  --marketing-header-offset: 5.5rem;
+}
+
+.marketing-site-header[data-pinned='true'] {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+}
+
+.marketing-site-main {
+  padding-top: var(--marketing-header-offset);
+  min-height: 100vh;
+}

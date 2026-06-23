@@ -1,0 +1,160 @@
+import {
+  buildThermalReceiptHeaderHtml,
+  escapeHtml,
+  getThermalReceiptDocumentCss,
+} from '@/lib/thermal-receipt-html';
+
+function formatMoney(n: number) {
+  return n.toLocaleString('en-IE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export type PosOrderReceiptLine = {
+  name: string;
+  qty: number;
+  lineTotal: number;
+};
+
+export type PrintPosOrderReceiptOptions = {
+  orderRef: string;
+  ticketNumber?: number | null;
+  brandName: string;
+  branchName?: string | null;
+  logoUrl?: string | null;
+  orderMode?: string;
+  paymentMethodLabel: string;
+  tableLabel?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  address?: string | null;
+  note?: string | null;
+  lines: PosOrderReceiptLine[];
+  subtotal: number;
+  serviceChargeAmount?: number;
+  taxAmount: number;
+  discountAmount: number;
+  grandTotal: number;
+  paidAmount: number;
+  paymentMode?: string;
+};
+
+export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
+  if (typeof window === 'undefined') return false;
+
+  const {
+    orderRef,
+    ticketNumber,
+    brandName,
+    branchName,
+    logoUrl,
+    orderMode = 'pos',
+    paymentMethodLabel,
+    tableLabel,
+    customerName,
+    customerPhone,
+    address,
+    note,
+    lines,
+    subtotal,
+    serviceChargeAmount = 0,
+    taxAmount,
+    discountAmount,
+    grandTotal,
+    paidAmount,
+    paymentMode = 'cash',
+  } = options;
+
+  const changeAmount =
+    paymentMode === 'cash' ? Math.max(0, paidAmount - grandTotal) : 0;
+
+  const rows = lines
+    .map(
+      (line) => `<tr>
+          <td>${escapeHtml(line.name)}</td>
+          <td class="qty">${line.qty}</td>
+          <td class="amt">€${formatMoney(line.lineTotal)}</td>
+        </tr>`
+    )
+    .join('');
+
+  const receiptHeader = buildThermalReceiptHeaderHtml({
+    logoUrl,
+    brandName,
+    branchName,
+    dateTime: new Date().toLocaleString(),
+  });
+
+  const html = `<!doctype html>
+<html>
+  <head>
+    <title>Order Receipt</title>
+    <style>${getThermalReceiptDocumentCss()}</style>
+  </head>
+  <body>
+    <div class="r">
+      ${receiptHeader}
+      <div class="sep"></div>
+      ${ticketNumber != null ? `<div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Ticket:</strong> #${ticketNumber}</div>` : ''}
+      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Tracking ID:</strong> ${escapeHtml(orderRef)}</div>
+      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Mode:</strong> ${escapeHtml(orderMode)}</div>
+      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Payment:</strong> ${escapeHtml(paymentMethodLabel)}</div>
+      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Status:</strong> paid</div>
+      ${tableLabel ? `<div><strong>Table:</strong> ${escapeHtml(tableLabel)}</div>` : ''}
+      ${customerName ? `<div><strong>Customer:</strong> ${escapeHtml(customerName)}</div>` : ''}
+      ${customerPhone ? `<div><strong>Phone:</strong> ${escapeHtml(customerPhone)}</div>` : ''}
+      ${address ? `<div><strong>Address:</strong> ${escapeHtml(address)}</div>` : ''}
+      ${note ? `<div><strong>Note:</strong> ${escapeHtml(note)}</div>` : ''}
+      <div class="sep"></div>
+      <table>
+        <thead>
+          <tr><th>Item</th><th class="qty">Qty</th><th class="amt">Amt</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="sep"></div>
+      <div class="totals">
+        <div><span>Subtotal</span><span>€${formatMoney(subtotal)}</span></div>
+        ${serviceChargeAmount > 0 ? `<div><span>Service charge</span><span>€${formatMoney(serviceChargeAmount)}</span></div>` : ''}
+        <div><span>Tax</span><span>€${formatMoney(taxAmount)}</span></div>
+        <div><span>Discount</span><span>€${formatMoney(discountAmount)}</span></div>
+        <div><span>Paid</span><span>€${formatMoney(paidAmount)}</span></div>
+        <div><span>Change</span><span>€${formatMoney(changeAmount)}</span></div>
+        <div class="grand"><span>Total</span><span>€${formatMoney(grandTotal)}</span></div>
+      </div>
+      <div class="sep"></div>
+      <div class="center muted">Thank you!</div>
+    </div>
+  </body>
+</html>`;
+
+  const frame = document.createElement('iframe');
+  frame.style.position = 'fixed';
+  frame.style.right = '0';
+  frame.style.bottom = '0';
+  frame.style.width = '0';
+  frame.style.height = '0';
+  frame.style.border = '0';
+  frame.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(frame);
+
+  const doc = frame.contentWindow?.document;
+  if (!doc || !frame.contentWindow) {
+    return false;
+  }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+  frame.onload = () => {
+    try {
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+    } finally {
+      window.setTimeout(() => frame.remove(), 1000);
+    }
+  };
+
+  return true;
+}

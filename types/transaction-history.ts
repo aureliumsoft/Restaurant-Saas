@@ -26,6 +26,8 @@ export type TransactionHistoryResponse = {
     totalPages: number;
     hasNextPage: boolean;
     hasPrevPage: boolean;
+    canViewHistorical?: boolean;
+    dataScope?: 'all' | 'today';
   };
 };
 

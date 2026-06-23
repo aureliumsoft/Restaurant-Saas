@@ -77,6 +77,11 @@ enum OrderSourceType {
   OTHER
 }
 
+enum PosShiftStatus {
+  OPEN
+  CLOSED
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String
@@ -95,6 +100,8 @@ model User {
   employees            Employee[]
   employeeInvitesSent  EmployeeInvite[]      @relation("EmployeeInvitesSent")
   subscriptionPayments SubscriptionPayment[] @relation("SubscriptionPaymentRecordedBy")
+  posShiftsOpened      PosShift[]            @relation("PosShiftOpenedBy")
+  posShiftsClosed      PosShift[]            @relation("PosShiftClosedBy")
 }
 
 model Role {
@@ -171,6 +178,7 @@ model Restaurant {
   customerPaymentProvider CustomerPaymentProvider @default(NONE)
   paypalCredentials      RestaurantPayPalCredentials?
   stripeCredentials      RestaurantStripeCredentials?
+  posShifts              PosShift[]
 }
 
 enum CustomerPaymentProvider {
@@ -269,8 +277,37 @@ model Branch {
   orders       Order[]
   employees    EmployeeBranch[]
   diningTables DiningTable[]
+  posShifts    PosShift[]
 
   @@index([restaurantId])
+}
+
+/// POS register shift — tracks completed sales and end-of-shift cash count.
+model PosShift {
+  id                  String         @id @default(uuid())
+  restaurantId        String
+  branchId            String?
+  openedByUserId      String
+  closedByUserId      String?
+  startedAt           DateTime       @default(now())
+  endedAt             DateTime?
+  /// Cash left in the drawer / money locker when the shift ends.
+  closingCashInLocker Float?
+  status              PosShiftStatus @default(OPEN)
+  notes               String?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branch     Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  openedBy   User       @relation("PosShiftOpenedBy", fields: [openedByUserId], references: [id])
+  closedBy   User?      @relation("PosShiftClosedBy", fields: [closedByUserId], references: [id])
+  orders     Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId, status])
+  @@index([restaurantId, branchId, status])
+  @@index([startedAt])
 }
 
 model RestaurantSubscription {
@@ -661,6 +698,8 @@ model Order {
   diningTableId  String?
   /// Snapshot of table name at checkout (kept if the table row is removed).
   tableLabel     String?
+  /// POS register shift this order belongs to.
+  posShiftId     String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -671,11 +710,13 @@ model Order {
   branch         Branch?         @relation(fields: [branchId], references: [id], onDelete: SetNull)
   customer       Customer?       @relation(fields: [customerId], references: [id])
   diningTable    DiningTable?    @relation(fields: [diningTableId], references: [id], onDelete: SetNull)
+  posShift       PosShift?       @relation(fields: [posShiftId], references: [id], onDelete: SetNull)
 
   @@index([restaurantId])
   @@index([branchId])
   @@index([sourceType])
   @@index([diningTableId])
+  @@index([posShiftId])
   @@index([restaurantId, ticketDate])
   @@index([restaurantId, branchId, ticketDate])
   @@unique([restaurantId, branchId, ticketDate, ticketNumber])

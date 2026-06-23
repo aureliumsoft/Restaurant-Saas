@@ -18,17 +18,34 @@ import {
   CreditCard,
   Banknote,
   X,
-  LayoutDashboard,
+  LogOut,
+  History,
+  Monitor,
   Archive,
   ChefHat,
   ChefHatIcon,
-  CrossIcon,
   Loader2,
   ArrowLeft,
   CheckCircle2,
   XCircle,
+  ChevronLeft,
 } from 'lucide-react';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useProgressiveRestaurantMenu } from '@/hooks/use-progressive-restaurant-menu';
+import {
+  ProductCardSkeletonGrid,
+  CategoryPillSkeleton,
+} from '@/components/menu/product-card-skeleton';
+import {
+  fetchPosShiftSummary,
+  PosShiftSheet,
+} from '@/components/pos/pos-shift-sheet';
+import {
+  PosRecentOrdersSheet,
+  type PosOrderDetail,
+} from '@/components/pos/pos-recent-orders-sheet';
+import { PosKioskOrdersSheet } from '@/components/pos/pos-kiosk-orders-sheet';
+import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
 import {
   parseRestaurantServiceCharges,
   resolveServiceChargeAmount,
@@ -78,10 +95,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import {
-  buildThermalReceiptHeaderHtml,
-  getThermalReceiptDocumentCss,
-} from '@/lib/thermal-receipt-html';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import eventBus from '@/lib/even';
@@ -109,7 +122,12 @@ import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 
 export type OrderMode = 'new' | 'tables' | 'delivery' | 'takeaway' | 'queue';
 
-type CardPaymentStatus = 'idle' | 'processing' | 'success' | 'error' | 'cancelled';
+type CardPaymentStatus =
+  | 'idle'
+  | 'processing'
+  | 'success'
+  | 'error'
+  | 'cancelled';
 
 type PosMenuProduct = {
   id: string;
@@ -408,6 +426,8 @@ function PosCartLineSummary({
 }
 
 const POS_ARCHIVED_ORDERS_KEY = 'pos_archived_orders_v1';
+/** Poll pending kiosk cash orders (picks up DB trigger / external updates). */
+const KIOSK_PENDING_POLL_MS = 5000;
 
 export function PosScreen() {
   const router = useRouter();
@@ -420,14 +440,9 @@ export function PosScreen() {
   } = useBranchContext();
   const [orderMode, setOrderMode] = useState<OrderMode>('tables');
   const [categoryId, setCategoryId] = useState<string>('all');
-  const [categories, setCategories] = useState<Category[]>([
-    { id: 'all', label: 'ALL' },
-  ]);
-  const [products, setProducts] = useState<PosMenuProduct[]>([]);
   const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
     null
   );
-  const [loadingMenu, setLoadingMenu] = useState(true);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartLine[]>([]);
   const [tableId, setTableId] = useState<string>('');
@@ -442,9 +457,10 @@ export function PosScreen() {
     name: 'Restaurant',
     logoUrl: null,
   });
-  const [serviceCharges, setServiceCharges] = useState<RestaurantServiceCharges>(
-    () => parseRestaurantServiceCharges(undefined)
-  );
+  const [serviceCharges, setServiceCharges] =
+    useState<RestaurantServiceCharges>(() =>
+      parseRestaurantServiceCharges(undefined)
+    );
 
   const [srChPct, setSrChPct] = useState('0');
   const [taxPct, setTaxPct] = useState('0');
@@ -481,6 +497,23 @@ export function PosScreen() {
   const cardPaymentResolvedRef = useRef(false);
   const [archivedOrdersOpen, setArchivedOrdersOpen] = useState(false);
   const [archivedOrders, setArchivedOrders] = useState<ArchivedOrder[]>([]);
+  const [shiftSheetOpen, setShiftSheetOpen] = useState(false);
+  const [recentOrdersOpen, setRecentOrdersOpen] = useState(false);
+  const [kioskOrdersOpen, setKioskOrdersOpen] = useState(false);
+  const [kioskPendingCount, setKioskPendingCount] = useState(0);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [editingOrderLabel, setEditingOrderLabel] = useState<string | null>(
+    null
+  );
+  const [editingOrderSource, setEditingOrderSource] = useState<
+    'pos' | 'kiosk' | null
+  >(null);
+  const [shiftOrderCount, setShiftOrderCount] = useState(0);
+  const [lastClosingCashInLocker, setLastClosingCashInLocker] = useState<
+    number | null
+  >(null);
+  const [lastShiftEndedAt, setLastShiftEndedAt] = useState<string | null>(null);
+  const shiftSummaryBranchRef = useRef('');
 
   const KITCHEN_PREP_PRESETS = [10, 15, 30] as const;
   const KITCHEN_PREP_MIN = 1;
@@ -505,6 +538,58 @@ export function PosScreen() {
     useState<PosPendingKitchenOrder | null>(null);
   const [cancellingKitchenOrder, setCancellingKitchenOrder] = useState(false);
 
+  const {
+    meta: menuMeta,
+    categories: progressiveCategories,
+    categoriesLoading,
+    error: menuLoadError,
+    anyCategoryLoading,
+  } = useProgressiveRestaurantMenu<
+    PosMenuProduct & { categoryIds?: string[] }
+  >();
+
+  const categories = useMemo<Category[]>(() => {
+    const next: Category[] = [{ id: 'all', label: 'ALL' }];
+    for (const menu of progressiveCategories) {
+      next.push({
+        id: menu.id,
+        label: String(menu.name || 'UNNAMED').toUpperCase(),
+        imageUrl: getCategoryDisplayImageUrl(menu),
+      });
+    }
+    return next;
+  }, [progressiveCategories]);
+
+  const products = useMemo<PosMenuProduct[]>(() => {
+    const next: PosMenuProduct[] = [];
+    for (const menu of progressiveCategories) {
+      for (const item of menu.items) {
+        const base = Number(item.price);
+        const saleRaw = item.salePrice;
+        const sale =
+          saleRaw != null && Number.isFinite(Number(saleRaw))
+            ? Number(saleRaw)
+            : null;
+        next.push({
+          ...item,
+          description: item.description ?? null,
+          imageUrl: item.imageUrl ?? null,
+          price: Number.isFinite(base) ? base : 0,
+          salePrice: sale,
+          categoryId: menu.id,
+          attributeGroups: item.attributeGroups ?? [],
+          variations: (item.variations ?? []).map((v) => ({
+            ...v,
+            priceDelta: Number(v.priceDelta ?? 0),
+          })),
+        });
+      }
+    }
+    return next;
+  }, [progressiveCategories]);
+
+  const loadingMenu = categoriesLoading && progressiveCategories.length === 0;
+
   const loadPendingKitchenOrders = useCallback(async () => {
     setLoadingPendingKitchen(true);
     try {
@@ -525,75 +610,22 @@ export function PosScreen() {
   }, [selectedBranchId, activeBranchId]);
 
   useEffect(() => {
-    let isMounted = true;
+    if (!menuMeta) return;
+    setThemePrimaryColor(menuMeta.themePrimaryColor?.trim() || null);
+    setServiceCharges(
+      (menuMeta.serviceCharges as RestaurantServiceCharges | undefined) ??
+        parseRestaurantServiceCharges(undefined)
+    );
+  }, [menuMeta]);
 
-    async function loadMenu() {
-      setLoadingMenu(true);
-      try {
-        const res = await fetch('/api/restaurant/menu', {
-          method: 'GET',
-          cache: 'no-store',
-        });
-        if (!res.ok) throw new Error('Failed to load menu');
-        const json = (await res.json()) as RestaurantMenuApi;
-        const menus = (json.data?.menus ?? []).filter(
-          (menu) => menu.showInFront !== false && (menu.items?.length ?? 0) > 0
-        );
-
-        const nextCategories: Category[] = [{ id: 'all', label: 'ALL' }];
-        const nextProducts: PosMenuProduct[] = [];
-
-        for (const menu of menus) {
-          nextCategories.push({
-            id: menu.id,
-            label: String(menu.name || 'UNNAMED').toUpperCase(),
-            imageUrl: getCategoryDisplayImageUrl(menu),
-          });
-          for (const item of menu.items ?? []) {
-            const base = Number(item.price);
-            const saleRaw = item.salePrice;
-            const sale =
-              saleRaw != null && Number.isFinite(Number(saleRaw))
-                ? Number(saleRaw)
-                : null;
-            nextProducts.push({
-              ...item,
-              description: item.description ?? null,
-              imageUrl: item.imageUrl ?? null,
-              price: Number.isFinite(base) ? base : 0,
-              salePrice: sale,
-              categoryId: menu.id,
-              attributeGroups: item.attributeGroups ?? [],
-              variations: (item.variations ?? []).map((v) => ({
-                ...v,
-                priceDelta: Number(v.priceDelta ?? 0),
-              })),
-            });
-          }
-        }
-
-        if (!isMounted) return;
-        setThemePrimaryColor(json.data?.themePrimaryColor?.trim() || null);
-        setServiceCharges(
-          json.data?.serviceCharges ?? parseRestaurantServiceCharges(undefined)
-        );
-        setCategories(nextCategories);
-        setProducts(nextProducts);
-      } catch {
-        if (!isMounted) return;
-        setCategories([{ id: 'all', label: 'ALL' }]);
-        setProducts([]);
-        toast.error('Failed to load menu products for POS.');
-      } finally {
-        if (isMounted) setLoadingMenu(false);
-      }
+  useEffect(() => {
+    if (menuLoadError) {
+      toast.error('Failed to load menu products for POS.');
     }
+  }, [menuLoadError]);
 
-    void loadMenu();
+  useEffect(() => {
     void loadPendingKitchenOrders();
-    return () => {
-      isMounted = false;
-    };
   }, [loadPendingKitchenOrders]);
 
   useEffect(() => {
@@ -791,6 +823,33 @@ export function PosScreen() {
     });
   }, [categoryId, products, search]);
 
+  const showProductSkeletons = useMemo(() => {
+    if (search.trim()) {
+      return anyCategoryLoading && filteredProducts.length === 0;
+    }
+    if (categoryId === 'all') {
+      return (
+        categoriesLoading ||
+        (anyCategoryLoading && filteredProducts.length === 0)
+      );
+    }
+    const active = progressiveCategories.find((c) => c.id === categoryId);
+    return (
+      Boolean(active?.loading) ||
+      Boolean(active && !active.loaded && filteredProducts.length === 0)
+    );
+  }, [
+    categoryId,
+    categoriesLoading,
+    progressiveCategories,
+    filteredProducts.length,
+    search,
+    anyCategoryLoading,
+  ]);
+
+  const showCategorySections =
+    categoryId === 'all' && !search.trim() && !categoriesLoading;
+
   const itemsCount = useMemo(() => cart.reduce((s, l) => s + l.qty, 0), [cart]);
 
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
@@ -816,14 +875,17 @@ export function PosScreen() {
   const afterSr = subtotal + srChAmount;
   const taxAmount = afterSr * (txPct / 100);
   const disAmount = subtotal * (dcPct / 100);
-  const posServiceChargeAmount = resolveServiceChargeAmount(
+  const serviceChargeChannel = editingOrderSource === 'kiosk' ? 'kiosk' : 'pos';
+  const activeServiceChargeAmount = resolveServiceChargeAmount(
     serviceCharges,
-    'pos'
+    serviceChargeChannel
   );
   const grandTotal = Math.max(
     0,
-    afterSr + taxAmount - disAmount + posServiceChargeAmount
+    afterSr + taxAmount - disAmount + activeServiceChargeAmount
   );
+  const isEditingKioskOrder =
+    Boolean(editingOrderId) && editingOrderSource === 'kiosk';
 
   const isTableMode = orderMode === 'tables';
   const isDeliveryMode = orderMode === 'delivery';
@@ -844,6 +906,119 @@ export function PosScreen() {
       'You have unsaved POS data (cart or archived holds). If you leave now, current POS progress will be lost.',
   });
 
+  const applyShiftSummary = useCallback(
+    (summary: {
+      orderCount: number;
+      lastClosingCashInLocker: number | null;
+      lastShiftEndedAt: string | null;
+    }) => {
+      setShiftOrderCount((prev) =>
+        prev === summary.orderCount ? prev : summary.orderCount
+      );
+      setLastClosingCashInLocker((prev) =>
+        prev === summary.lastClosingCashInLocker
+          ? prev
+          : summary.lastClosingCashInLocker
+      );
+      setLastShiftEndedAt((prev) =>
+        prev === summary.lastShiftEndedAt ? prev : summary.lastShiftEndedAt
+      );
+    },
+    []
+  );
+
+  const refreshShiftSummary = useCallback(
+    async (branchId: string) => {
+      try {
+        const summary = await fetchPosShiftSummary(branchId);
+        applyShiftSummary(summary);
+      } catch {
+        applyShiftSummary({
+          orderCount: 0,
+          lastClosingCashInLocker: null,
+          lastShiftEndedAt: null,
+        });
+      }
+    },
+    [applyShiftSummary]
+  );
+
+  const refreshKioskPendingCount = useCallback(async (branchId: string) => {
+    try {
+      const res = await axios.get<{ count?: number }>(
+        '/api/restaurant/kiosk-order/pending-cash',
+        { params: { branchId, count: '1' } }
+      );
+      const count = res.data.count ?? 0;
+      setKioskPendingCount((prev) => (prev === count ? prev : count));
+    } catch {
+      setKioskPendingCount((prev) => (prev === 0 ? prev : 0));
+    }
+  }, []);
+
+  const handleShiftUpdated = useCallback(
+    (shift: { orderCount: number } | null) => {
+      setShiftOrderCount((prev) => {
+        const count = shift?.orderCount ?? 0;
+        return prev === count ? prev : count;
+      });
+    },
+    []
+  );
+
+  const handleShiftClosed = useCallback(
+    (summary: {
+      lastClosingCashInLocker: number | null;
+      lastShiftEndedAt: string | null;
+    }) => {
+      applyShiftSummary({
+        orderCount: 0,
+        ...summary,
+      });
+    },
+    [applyShiftSummary]
+  );
+
+  useEffect(() => {
+    const branchId = selectedBranchId || activeBranchId || '';
+    if (!branchId) {
+      setShiftOrderCount(0);
+      setLastClosingCashInLocker(null);
+      setLastShiftEndedAt(null);
+      setKioskPendingCount(0);
+      shiftSummaryBranchRef.current = '';
+      return;
+    }
+    if (shiftSummaryBranchRef.current === branchId) return;
+    shiftSummaryBranchRef.current = branchId;
+    void refreshShiftSummary(branchId);
+  }, [selectedBranchId, activeBranchId, refreshShiftSummary]);
+
+  useEffect(() => {
+    const branchId = selectedBranchId || activeBranchId || '';
+    if (!branchId) {
+      setKioskPendingCount(0);
+      return;
+    }
+
+    const refresh = () => void refreshKioskPendingCount(branchId);
+    refresh();
+
+    const intervalId = window.setInterval(refresh, KIOSK_PENDING_POLL_MS);
+
+    const onBranchChanged = () => refresh();
+    const onKioskOrdersChanged = () => refresh();
+
+    window.addEventListener('branch-changed', onBranchChanged);
+    eventBus.on('refreshKioskOrders', onKioskOrdersChanged);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('branch-changed', onBranchChanged);
+      eventBus.removeListener('refreshKioskOrders', onKioskOrdersChanged);
+    };
+  }, [selectedBranchId, activeBranchId, refreshKioskPendingCount]);
+
   function printOrderReceipt(
     orderRef: string,
     ticketNumber?: number | null,
@@ -851,121 +1026,53 @@ export function PosScreen() {
   ) {
     if (typeof window === 'undefined') return;
 
-    const rows = cart
-      .map((line) => {
-        const gross = lineUnitTotal(line) * line.qty;
-        const discAmt = gross * (line.lineDiscPct / 100);
-        const lineTotal = gross - discAmt;
-        const baseName = cartLineTitle(line.productName, line.variationName);
-        const addonNames = cartModifierSelectionNames(line.modifiers);
-        const nestedRows = addonNames
-          .map(
-            (part) => `<tr>
-          <td style="padding-left:10px;color:#555;">${part}</td>
-          <td class="qty">1</td>
-          <td class="amt">—</td>
-        </tr>`
-          )
-          .join('');
-        return `<tr>
-          <td>${baseName}</td>
-          <td class="qty">${line.qty}</td>
-          <td class="amt">€${formatMoney(lineTotal)}</td>
-        </tr>${nestedRows}`;
-      })
-      .join('');
-
     const receiptMode = receiptPayment?.mode ?? paymentMode;
     const paidAmount =
       receiptPayment?.paid ??
       (receiptMode === 'card_terminal'
         ? grandTotal
         : Math.max(0, Number(payment) || 0));
-    const changeAmount =
-      receiptMode === 'cash' ? Math.max(0, paidAmount - grandTotal) : 0;
     const paymentMethodLabel =
       receiptMode === 'card_terminal'
         ? 'Card Terminal'
-        : receiptMode.charAt(0).toUpperCase() + receiptMode.slice(1);
-    const receiptHeader = buildThermalReceiptHeaderHtml({
-      logoUrl: branding.logoUrl,
+        : receiptMode === 'card'
+          ? 'Card'
+          : receiptMode === 'split'
+            ? 'Split'
+            : receiptMode.charAt(0).toUpperCase() + receiptMode.slice(1);
+
+    const ok = printPosOrderReceipt({
+      orderRef,
+      ticketNumber,
       brandName: branding.name || 'Restaurant',
       branchName: selectedBranchName,
-      dateTime: new Date().toLocaleString(),
+      logoUrl: branding.logoUrl,
+      orderMode,
+      paymentMethodLabel,
+      tableLabel:
+        diningTables.find((t) => t.id === tableId)?.name ?? (tableId || null),
+      customerName: customerName || null,
+      customerPhone: customerPhone || null,
+      address: orderAddress || null,
+      note: kotNote || null,
+      lines: cart.map((line) => {
+        const gross = lineUnitTotal(line) * line.qty;
+        const discAmt = gross * (line.lineDiscPct / 100);
+        return {
+          name: posCartLineDisplayName(line),
+          qty: line.qty,
+          lineTotal: gross - discAmt,
+        };
+      }),
+      subtotal,
+      serviceChargeAmount: activeServiceChargeAmount,
+      taxAmount,
+      discountAmount: disAmount,
+      grandTotal,
+      paidAmount,
+      paymentMode: receiptMode,
     });
-
-    const html = `<!doctype html>
-<html>
-  <head>
-    <title>Order Receipt</title>
-    <style>${getThermalReceiptDocumentCss()}</style>
-  </head>
-  <body>
-    <div class="r">
-      ${receiptHeader}
-      <div class="sep"></div>
-      ${ticketNumber != null ? `<div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Ticket:</strong> #${ticketNumber}</div>` : ''}
-      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Tracking ID:</strong> ${orderRef}</div>
-      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Mode:</strong> ${orderMode}</div>
-      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Payment:</strong> ${paymentMethodLabel}</div>
-      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Status:</strong> paid</div>
-    ${
-      tableId
-        ? `<div><strong>Table:</strong> ${diningTables.find((t) => t.id === tableId)?.name ?? tableId}</div>`
-        : ''
-    }
-    ${customerName ? `<div><strong>Customer:</strong> ${customerName}</div>` : ''}
-    ${customerPhone ? `<div><strong>Phone:</strong> ${customerPhone}</div>` : ''}
-    ${orderAddress ? `<div><strong>Address:</strong> ${orderAddress}</div>` : ''}
-    ${kotNote ? `<div><strong>Note:</strong> ${kotNote}</div>` : ''}
-    <div class="sep"></div>
-    <table>
-      <thead>
-        <tr><th>Item</th><th class="qty">Qty</th><th class="amt">Amt</th></tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="sep"></div>
-    <div class="totals">
-      <div><span>Subtotal</span><span>€${formatMoney(subtotal)}</span></div>
-      ${posServiceChargeAmount > 0 ? `<div><span>Service charge</span><span>€${formatMoney(posServiceChargeAmount)}</span></div>` : ''}
-      <div><span>Tax</span><span>€${formatMoney(taxAmount)}</span></div>
-      <div><span>Discount</span><span>€${formatMoney(disAmount)}</span></div>
-      <div><span>Paid</span><span>€${formatMoney(paidAmount)}</span></div>
-      <div><span>Change</span><span>€${formatMoney(changeAmount)}</span></div>
-      <div class="grand"><span>Total</span><span>€${formatMoney(grandTotal)}</span></div>
-    </div>
-    <div class="sep"></div>
-    <div class="center muted">Thank you!</div>
-    </div>
-  </body>
-</html>`;
-    const frame = document.createElement('iframe');
-    frame.style.position = 'fixed';
-    frame.style.right = '0';
-    frame.style.bottom = '0';
-    frame.style.width = '0';
-    frame.style.height = '0';
-    frame.style.border = '0';
-    frame.setAttribute('aria-hidden', 'true');
-    document.body.appendChild(frame);
-
-    const doc = frame.contentWindow?.document;
-    if (!doc || !frame.contentWindow) {
-      toast.error('Could not open print preview.');
-      return;
-    }
-
-    doc.open();
-    doc.write(html);
-    doc.close();
-    frame.onload = () => {
-      try {
-        frame.contentWindow?.focus();
-        frame.contentWindow?.print();
-      } finally {
-      }
-    };
+    if (!ok) toast.error('Could not open print preview.');
   }
 
   const addToCart = (
@@ -1005,6 +1112,7 @@ export function PosScreen() {
         menuItemId: product.id,
         productName: product.name,
         imageUrl: product.imageUrl ?? null,
+
         baseUnitPrice,
         unitPrice,
         qty: 1,
@@ -1062,6 +1170,78 @@ export function PosScreen() {
 
   function clearCart() {
     setCart([]);
+    setEditingOrderId(null);
+    setEditingOrderLabel(null);
+    setEditingOrderSource(null);
+  }
+
+  function cancelEditingOrder() {
+    clearCart();
+    setPayment('');
+    setAmountPaid('');
+    setCustomerName('');
+    setCustomerPhone('');
+    setOrderAddress('');
+    setTableId('');
+    setCheckoutOpen(false);
+    toast.info('Order edit canceled.');
+  }
+
+  function loadOrderForEdit(
+    detail: PosOrderDetail,
+    source: 'pos' | 'kiosk' = 'pos'
+  ) {
+    const lines: CartLine[] = detail.items.map((item) =>
+      normalizeCartLine({
+        lineId:
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `edit-${item.id}`,
+        menuItemId: item.menuItemId,
+        name: item.name,
+        unitPrice: item.unitPrice,
+        qty: item.quantity,
+        lineDiscPct: 0,
+        imageUrl: item.imageUrl,
+      })
+    );
+    const loadedSubtotal = lines.reduce(
+      (sum, line) => sum + lineUnitTotal(line) * line.qty,
+      0
+    );
+    setCart(lines);
+    setEditingOrderId(detail.id);
+    setEditingOrderSource(source);
+    const editLabel =
+      detail.ticketNumber != null
+        ? `#${String(detail.ticketNumber).padStart(2, '0')}`
+        : detail.shortOrderId;
+    setEditingOrderLabel(editLabel);
+    setCustomerName(detail.customerName ?? '');
+    setCustomerPhone(detail.customerPhone ?? '');
+    setOrderAddress(detail.address ?? '');
+    setTableId(detail.tableId ?? '');
+    if (detail.tableId) setOrderMode('tables');
+    else if (detail.address?.trim()) setOrderMode('delivery');
+    else setOrderMode('takeaway');
+    setTaxPct(
+      loadedSubtotal > 0
+        ? String(((detail.taxAmount / loadedSubtotal) * 100).toFixed(2))
+        : '0'
+    );
+    setDisPct(
+      loadedSubtotal > 0
+        ? String(((detail.discountAmount / loadedSubtotal) * 100).toFixed(2))
+        : '0'
+    );
+    setPaymentMode(detail.paymentMode || 'cash');
+    setPayment(String(detail.paymentAmount || detail.total));
+    setAmountPaid(String(detail.paymentAmount || detail.total));
+    toast.success(
+      source === 'kiosk'
+        ? `Editing kiosk order ${editLabel}`
+        : `Editing order ${editLabel}`
+    );
   }
 
   function requestDashboard() {
@@ -1188,6 +1368,9 @@ export function PosScreen() {
       setCancelKitchenOrder(null);
       void loadPendingKitchenOrders();
       eventBus.emit('refreshSalesOrders');
+      eventBus.emit('refreshRecentOrders');
+      const branchId = selectedBranchId || activeBranchId || '';
+      if (branchId) void refreshShiftSummary(branchId);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Could not cancel order.';
       toast.error(msg);
@@ -1315,8 +1498,7 @@ export function PosScreen() {
     setCardPaymentStatus('processing');
 
     const terminalBase =
-      process.env.NEXT_PUBLIC_POS_TERMINAL_API?.trim().replace(/\/$/, '') ||
-      '';
+      process.env.NEXT_PUBLIC_POS_TERMINAL_API?.trim().replace(/\/$/, '') || '';
     if (!terminalBase) return;
 
     const result = await runTerminalCardCharge();
@@ -1348,11 +1530,13 @@ export function PosScreen() {
   async function saveOrder(opts?: { paymentMode?: string; payment?: string }) {
     const effectivePaymentMode = opts?.paymentMode ?? paymentMode;
     const effectivePayment = opts?.payment ?? payment;
+    const isEditingKiosk =
+      Boolean(editingOrderId) && editingOrderSource === 'kiosk';
     if (cart.length === 0) {
       toast.warn('Add at least one product to the cart.');
       return;
     }
-    if (!effectivePayment.trim()) {
+    if (!isEditingKiosk && !effectivePayment.trim()) {
       toast.warn('Enter the payment amount before saving.');
       return;
     }
@@ -1360,31 +1544,30 @@ export function PosScreen() {
     const phoneTrim = customerPhone.trim();
     const tableTrim = tableId.trim();
     const addressTrim = orderAddress.trim();
-    if (nameTrim && !phoneTrim) {
-      toast.warn(
-        'Enter customer phone to save customer details, or clear the name.'
-      );
-      return;
-    }
-    if (isTableMode && !tableTrim) {
-      toast.warn('Select a table for table orders.');
-      return;
-    }
-    if (isDeliveryMode && (!addressTrim || !phoneTrim)) {
-      toast.warn('Delivery requires customer phone and address.');
-      return;
+    if (!isEditingKiosk) {
+      if (nameTrim && !phoneTrim) {
+        toast.warn(
+          'Enter customer phone to save customer details, or clear the name.'
+        );
+        return;
+      }
+      if (isTableMode && !tableTrim) {
+        toast.warn('Select a table for table orders.');
+        return;
+      }
+      if (isDeliveryMode && (!addressTrim || !phoneTrim)) {
+        toast.warn('Delivery requires customer phone and address.');
+        return;
+      }
     }
     setSavingOrder(true);
     try {
+      const isEditing = Boolean(editingOrderId);
       const isTerminal = effectivePaymentMode === 'card_terminal';
       const paymentAmount = isTerminal
         ? grandTotal.toFixed(2)
         : effectivePayment.trim();
-      const res = await axios.post<{
-        id?: string;
-        shortOrderId?: string;
-        ticketNumber?: number | null;
-      }>('/api/restaurant/pos-order', {
+      const orderPayload = {
         grandTotal,
         payment: paymentAmount,
         paymentMode: effectivePaymentMode,
@@ -1392,7 +1575,7 @@ export function PosScreen() {
         address: addressTrim || undefined,
         taxAmount,
         discountAmount: disAmount,
-        serviceChargeAmount: posServiceChargeAmount,
+        serviceChargeAmount: activeServiceChargeAmount,
         customerName: nameTrim || undefined,
         customerPhone: phoneTrim || undefined,
         tableId: tableTrim || undefined,
@@ -1405,10 +1588,67 @@ export function PosScreen() {
           unitPrice: lineUnitTotal(l),
           lineDiscPct: l.lineDiscPct,
         })),
-      });
-      const dbOrderId = res.data?.id || `POS-${Date.now()}`;
-      const trackingId = res.data?.shortOrderId || dbOrderId;
-      if (isTerminal) {
+      };
+      let savedOrder: {
+        id?: string;
+        shortOrderId?: string;
+        ticketNumber?: number | null;
+      };
+      if (isEditing && isEditingKiosk) {
+        const patchRes = await axios.patch<{
+          data: {
+            id: string;
+            shortOrderId: string;
+            ticketNumber: number | null;
+          };
+        }>(
+          `/api/restaurant/kiosk-order/${encodeURIComponent(editingOrderId!)}`,
+          {
+            grandTotal,
+            taxAmount,
+            discountAmount: disAmount,
+            serviceChargeAmount: activeServiceChargeAmount,
+            items: orderPayload.items,
+          }
+        );
+        savedOrder = patchRes.data.data;
+        toast.success(
+          `Kiosk order updated — ${itemsCount} items · €${formatMoney(grandTotal)}`
+        );
+        clearCart();
+        setPayment('');
+        setAmountPaid('');
+        setCheckoutOpen(false);
+        const branchId = selectedBranchId || activeBranchId || '';
+        if (branchId) void refreshKioskPendingCount(branchId);
+        eventBus.emit('refreshKioskOrders');
+        return;
+      }
+      if (isEditing) {
+        const patchRes = await axios.patch<{
+          data: {
+            id: string;
+            shortOrderId: string;
+            ticketNumber: number | null;
+          };
+        }>(
+          `/api/restaurant/pos-order/${encodeURIComponent(editingOrderId!)}`,
+          orderPayload
+        );
+        savedOrder = patchRes.data.data;
+      } else {
+        const postRes = await axios.post<{
+          id?: string;
+          shortOrderId?: string;
+          ticketNumber?: number | null;
+        }>('/api/restaurant/pos-order', orderPayload);
+        savedOrder = postRes.data;
+      }
+      const dbOrderId = savedOrder.id || editingOrderId || `POS-${Date.now()}`;
+      const trackingId =
+        savedOrder.shortOrderId || editingOrderLabel || dbOrderId;
+      const ticketNumber = savedOrder.ticketNumber ?? null;
+      if (!isEditing && isTerminal) {
         const terminalBase =
           process.env.NEXT_PUBLIC_POS_TERMINAL_API?.trim().replace(/\/$/, '') ||
           '';
@@ -1476,9 +1716,11 @@ export function PosScreen() {
         }
       }
       toast.success(
-        `Order saved — ${itemsCount} items · €${formatMoney(grandTotal)} · ${effectivePaymentMode}`
+        isEditing
+          ? `Order updated — ${itemsCount} items · €${formatMoney(grandTotal)}`
+          : `Order saved — ${itemsCount} items · €${formatMoney(grandTotal)} · ${effectivePaymentMode}`
       );
-      printOrderReceipt(trackingId, res.data?.ticketNumber ?? null, {
+      printOrderReceipt(trackingId, ticketNumber, {
         mode: effectivePaymentMode,
         paid: Number(paymentAmount) || 0,
       });
@@ -1493,12 +1735,16 @@ export function PosScreen() {
       setCustomerPhone('');
       setTableId('');
       setCheckoutOpen(false);
-      openKitchenSendDialog({
-        id: dbOrderId,
-        shortOrderId: trackingId,
-        ticketNumber: res.data?.ticketNumber ?? null,
-      });
-      void loadPendingKitchenOrders();
+      if (!isEditing) {
+        openKitchenSendDialog({
+          id: dbOrderId,
+          shortOrderId: trackingId,
+          ticketNumber,
+        });
+        void loadPendingKitchenOrders();
+      }
+      const branchId = selectedBranchId || activeBranchId || '';
+      if (branchId) void refreshShiftSummary(branchId);
     } catch (e: unknown) {
       const msg =
         axios.isAxiosError(e) && e.response?.data?.error
@@ -1521,10 +1767,49 @@ export function PosScreen() {
     { id: 'takeaway', label: 'Take-away', icon: ShoppingBag },
   ];
 
+  const renderPosProductButton = (p: PosMenuProduct) => (
+    <button
+      key={p.id}
+      type="button"
+      onClick={() => handleProductSelect(p)}
+      className="group flex flex-col items-center gap-2 rounded-xl border bg-background p-3 text-center transition hover:border-primary/40 hover:bg-muted/40"
+    >
+      <div className="h-14 w-14 overflow-hidden rounded-full bg-muted ring-2 ring-primary/20 transition group-hover:scale-[1.02]">
+        {p.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- POS accepts external image URLs
+          <img
+            src={p.imageUrl}
+            alt={p.name}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-primary/90 text-xs font-bold text-primary-foreground">
+            {p.name.charAt(0).toUpperCase()}
+          </div>
+        )}
+      </div>
+      <span className="line-clamp-2 text-[11px] font-semibold leading-tight">
+        {p.name}
+      </span>
+      <span className="text-sm font-medium tabular-nums text-muted-foreground">
+        {formatMoney(effectiveUnitPrice(p.price, p.salePrice))}
+      </span>
+    </button>
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
       {/* Header */}
       <div className="flex shrink-0 items-center gap-3 border-b bg-muted/30 px-4 py-3">
+        <Button
+          type="button"
+          variant="destructive"
+          size="icon"
+          onClick={requestDashboard}
+        >
+          <ChevronLeft />
+        </Button>
+
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 overflow-hidden rounded-full bg-muted ring-1 ring-border">
             {branding.logoUrl ? (
@@ -1544,7 +1829,7 @@ export function PosScreen() {
             <div className="truncate text-sm font-semibold">
               {branding.name || 'Restaurant'}
             </div>
-            <div className="text-[11px] text-muted-foreground">
+            <div className="text-[11px] text-muted-foreground ">
               {selectedBranchName}
             </div>
           </div>
@@ -1568,22 +1853,56 @@ export function PosScreen() {
           <Button
             type="button"
             variant="outline"
-            className="hidden h-10 gap-2 md:inline-flex"
-            onClick={requestDashboard}
+            className="h-10 gap-2"
+            onClick={() => setRecentOrdersOpen(true)}
           >
-            <LayoutDashboard className="h-4 w-4" />
-            Dashboard
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">Recent</span>
           </Button>
 
-          <div className="hidden items-center gap-2 rounded-lg border bg-background px-3 py-2 text-xs text-muted-foreground md:flex">
-            <Clock className="h-4 w-4" />
-            <span className="tabular-nums">
-              {now.toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 gap-2"
+            onClick={() => setKioskOrdersOpen(true)}
+          >
+            <Monitor className="h-4 w-4" />
+            <span className="hidden sm:inline">Kiosk</span>
+            {kioskPendingCount > 0 ? (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-400">
+                {kioskPendingCount}
+              </span>
+            ) : null}
+          </Button>
+
+          <Button
+            type="button"
+            variant="destructive"
+            className="h-10 gap-2"
+            onClick={() => setShiftSheetOpen(true)}
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline">Shift End</span>
+          </Button>
+
+          {lastClosingCashInLocker != null ? (
+            <div
+              className="flex max-w-[9rem] items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-2 py-1.5 text-xs sm:max-w-none sm:gap-2 sm:px-3 sm:py-2"
+              title={
+                lastShiftEndedAt
+                  ? `Left in locker at last shift end · ${new Date(lastShiftEndedAt).toLocaleString()}`
+                  : 'Cash left in locker from last shift end'
+              }
+            >
+              <Banknote className="h-4 w-4 shrink-0 text-emerald-600" />
+              <div className="min-w-0 leading-tight">
+                <p className="truncate font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                  €{formatMoney(lastClosingCashInLocker)}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           <ModeToggle />
           <UserMenu className="h-10" />
         </div>
@@ -1626,94 +1945,139 @@ export function PosScreen() {
             )}
             <div className="text-sm font-semibold">Categories</div>
             <div className="space-y-2">
-              {categories.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={cn(
-                    'flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition',
-                    categoryId === c.id
-                      ? 'border-primary/40 bg-primary/10 text-primary'
-                      : 'bg-background hover:bg-muted/40'
-                  )}
-                  onClick={() => setCategoryId(c.id)}
-                >
-                  {c.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={c.imageUrl}
-                      alt=""
-                      className="h-8 w-8 shrink-0 rounded-md object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] text-muted-foreground">
-                      —
+              {categoriesLoading && progressiveCategories.length === 0 ? (
+                <>
+                  <CategoryPillSkeleton className="h-12 w-full rounded-xl" />
+                  <CategoryPillSkeleton className="h-12 w-full rounded-xl" />
+                  <CategoryPillSkeleton className="h-12 w-full rounded-xl" />
+                </>
+              ) : (
+                categories.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition',
+                      categoryId === c.id
+                        ? 'border-primary/40 bg-primary/10 text-primary'
+                        : 'bg-background hover:bg-muted/40'
+                    )}
+                    onClick={() => setCategoryId(c.id)}
+                  >
+                    {c.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={c.imageUrl}
+                        alt=""
+                        className="h-8 w-8 shrink-0 rounded-md object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] text-muted-foreground">
+                        —
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 font-medium">
+                      {c.label}
                     </span>
-                  )}
-                  <span className="min-w-0 flex-1 font-medium">{c.label}</span>
-                  {categoryId === c.id ? (
-                    <Check className="h-4 w-4 shrink-0" aria-hidden />
-                  ) : null}
-                </button>
-              ))}
+                    {categoryId === c.id ? (
+                      <Check className="h-4 w-4 shrink-0" aria-hidden />
+                    ) : null}
+                  </button>
+                ))
+              )}
             </div>
           </div>
         </ScrollArea>
 
         {/* Products */}
         <ScrollArea className="min-h-0 max-h-[50dvh] border-b lg:h-full lg:max-h-full lg:border-b-0 lg:border-r">
-          <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 md:grid-cols-4  2xl:grid-cols-6">
-            {filteredProducts.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => handleProductSelect(p)}
-                className="group flex flex-col items-center gap-2 rounded-xl border bg-background p-3 text-center transition hover:border-primary/40 hover:bg-muted/40"
-              >
-                <div className="h-14 w-14 overflow-hidden rounded-full bg-muted ring-2 ring-primary/20 transition group-hover:scale-[1.02]">
-                  {p.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- POS accepts external image URLs
-                    <img
-                      src={p.imageUrl}
-                      alt={p.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-primary/90 text-primary-foreground text-xs font-bold">
-                      {p.name.charAt(0).toUpperCase()}
+          <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-6">
+            {showCategorySections ? (
+              progressiveCategories.map((category) => {
+                const categoryProducts = category.items.map((item) => {
+                  const base = Number(item.price);
+                  const saleRaw = item.salePrice;
+                  const sale =
+                    saleRaw != null && Number.isFinite(Number(saleRaw))
+                      ? Number(saleRaw)
+                      : null;
+                  return {
+                    ...item,
+                    description: item.description ?? null,
+                    imageUrl: item.imageUrl ?? null,
+                    price: Number.isFinite(base) ? base : 0,
+                    salePrice: sale,
+                    categoryId: category.id,
+                    attributeGroups: item.attributeGroups ?? [],
+                    variations: (item.variations ?? []).map((v) => ({
+                      ...v,
+                      priceDelta: Number(v.priceDelta ?? 0),
+                    })),
+                  } satisfies PosMenuProduct;
+                });
+                const isCategoryLoading =
+                  category.loading ||
+                  (!category.loaded && category.items.length === 0);
+
+                if (isCategoryLoading) {
+                  return (
+                    <div key={category.id} className="col-span-full space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {category.name}
+                      </p>
+                      <ProductCardSkeletonGrid
+                        count={6}
+                        variant="pos"
+                        gridClassName="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-6"
+                      />
                     </div>
-                  )}
-                </div>
-                <span className="line-clamp-2 text-[11px] font-semibold leading-tight">
-                  {p.name}
-                </span>
-                <span className="text-sm font-medium tabular-nums text-muted-foreground">
-                  {formatMoney(effectiveUnitPrice(p.price, p.salePrice))}
-                </span>
-              </button>
-            ))}
-            {loadingMenu ? (
-              <div className="col-span-full py-16 text-center text-sm text-muted-foreground">
-                <Loader2 className="animate-spin text-primary text-center mx-auto" />
-              </div>
+                  );
+                }
+
+                if (categoryProducts.length === 0) return null;
+
+                return (
+                  <div key={category.id} className="col-span-full space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {category.name}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-6">
+                      {categoryProducts.map((p) => renderPosProductButton(p))}
+                    </div>
+                  </div>
+                );
+              })
             ) : (
-              filteredProducts.length === 0 && (
-                <div className="col-span-full py-16 text-center text-sm text-muted-foreground">
-                  <p className="text-[#64748b]">
-                    No products match this category or search.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="default"
-                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90 p-2"
-                    onClick={() => setCategoryId('all')}
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to all products
-                  </Button>
-                </div>
-              )
+              <>
+                {filteredProducts.map((p) => renderPosProductButton(p))}
+                {showProductSkeletons ? (
+                  <ProductCardSkeletonGrid
+                    count={8}
+                    variant="pos"
+                    gridClassName="contents"
+                  />
+                ) : null}
+              </>
             )}
+            {!showCategorySections &&
+            !showProductSkeletons &&
+            !loadingMenu &&
+            filteredProducts.length === 0 ? (
+              <div className="col-span-full py-16 text-center text-sm text-muted-foreground">
+                <p className="text-[#64748b]">
+                  No products match this category or search.
+                </p>
+                <Button
+                  type="button"
+                  variant="default"
+                  className="w-full bg-primary p-2 text-primary-foreground hover:bg-primary/90"
+                  onClick={() => setCategoryId('all')}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to all products
+                </Button>
+              </div>
+            ) : null}
           </div>
         </ScrollArea>
         {/* Checkout */}
@@ -1742,20 +2106,38 @@ export function PosScreen() {
           </div>
 
           <div className="rounded-xl border bg-background p-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <h3 className="text-2xl font-semibold leading-none">
                 Order Ticket
               </h3>
+              {editingOrderId ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 shrink-0 px-2 text-xs"
+                  onClick={cancelEditingOrder}
+                >
+                  Cancel edit
+                </Button>
+              ) : null}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {orderMode === 'tables'
-                ? 'Table order'
-                : orderMode === 'delivery'
-                  ? 'Delivery order'
-                  : orderMode === 'takeaway'
-                    ? 'Take-away order'
-                    : 'New order'}
-            </p>
+            {editingOrderId ? (
+              <p className="mt-1 text-xs font-medium text-primary">
+                {isEditingKioskOrder ? 'Editing kiosk order' : 'Editing order'}{' '}
+                {editingOrderLabel}
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {orderMode === 'tables'
+                  ? 'Table order'
+                  : orderMode === 'delivery'
+                    ? 'Delivery order'
+                    : orderMode === 'takeaway'
+                      ? 'Take-away order'
+                      : 'New order'}
+              </p>
+            )}
 
             <ScrollArea className="mt-3 h-[250px] max-h-[250px] border-y">
               <div className="space-y-3 py-3">
@@ -1871,11 +2253,11 @@ export function PosScreen() {
                 </span>
                 <span className="tabular-nums">€{formatMoney(disAmount)}</span>
               </div>
-              {posServiceChargeAmount > 0 ? (
+              {activeServiceChargeAmount > 0 ? (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Service charge</span>
                   <span className="tabular-nums">
-                    €{formatMoney(posServiceChargeAmount)}
+                    €{formatMoney(activeServiceChargeAmount)}
                   </span>
                 </div>
               ) : null}
@@ -1972,11 +2354,13 @@ export function PosScreen() {
                 onClick={() => {
                   resetCardPayment();
                   setPaymentMode('cash');
-                  setAmountPaid('');
+                  setAmountPaid(
+                    isEditingKioskOrder ? grandTotal.toFixed(2) : ''
+                  );
                   setCheckoutOpen(true);
                 }}
               >
-                Proceed Order
+                {editingOrderId ? 'Update order' : 'Proceed Order'}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -2245,7 +2629,13 @@ export function PosScreen() {
           )}
         >
           <DialogHeader className="shrink-0 space-y-1.5 pb-2 text-left">
-            <DialogTitle>Checkout</DialogTitle>
+            <DialogTitle>
+              {isEditingKioskOrder
+                ? 'Update kiosk order'
+                : editingOrderId
+                  ? 'Update order'
+                  : 'Checkout'}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-1 [-webkit-overflow-scrolling:touch]">
@@ -2335,13 +2725,17 @@ export function PosScreen() {
                 <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="tabular-nums">€{formatMoney(subtotal)}</span>
+                    <span className="tabular-nums">
+                      €{formatMoney(subtotal)}
+                    </span>
                   </div>
-                  {posServiceChargeAmount > 0 ? (
+                  {activeServiceChargeAmount > 0 ? (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Service charge</span>
+                      <span className="text-muted-foreground">
+                        Service charge
+                      </span>
                       <span className="tabular-nums">
-                        €{formatMoney(posServiceChargeAmount)}
+                        €{formatMoney(activeServiceChargeAmount)}
                       </span>
                     </div>
                   ) : null}
@@ -2352,114 +2746,124 @@ export function PosScreen() {
                     </span>
                   </div>
                   <div className="mt-2 grid gap-2">
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">
-                        Payment method
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button
-                          type="button"
-                          variant={
-                            paymentMode === 'cash' ? 'default' : 'outline'
-                          }
-                          className="justify-start gap-2"
-                          onClick={() => handleSelectPaymentMode('cash')}
-                        >
-                          <Banknote className="h-4 w-4" />
-                          Cash
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={
-                            paymentMode === 'card' ? 'default' : 'outline'
-                          }
-                          className="justify-start gap-2"
-                          onClick={() => handleSelectPaymentMode('card')}
-                        >
-                          <CreditCard className="h-4 w-4" />
-                          Card
-                        </Button>
-                      </div>
-                      {isCardMode ? (
-                        <Button
-                          type="button"
-                          className={cn(
-                            'w-full gap-2',
-                            cardPaymentStatus === 'success' &&
-                              'bg-emerald-600 hover:bg-emerald-600/90',
-                            (cardPaymentStatus === 'error' ||
-                              cardPaymentStatus === 'cancelled') &&
-                              'bg-destructive hover:bg-destructive/90'
-                          )}
-                          disabled={
-                            cardPaymentStatus === 'processing' ||
-                            cardPaymentStatus === 'success'
-                          }
-                          onClick={() => void handleCardPayClick()}
-                        >
-                          {cardPaymentStatus === 'success' ? (
-                            <>
-                              <CheckCircle2 className="h-4 w-4" />
-                              Paid
-                            </>
-                          ) : cardPaymentStatus === 'error' ||
-                            cardPaymentStatus === 'cancelled' ? (
-                            <>
-                              <XCircle className="h-4 w-4" />
-                              Pay
-                            </>
-                          ) : cardPaymentStatus === 'processing' ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Processing…
-                            </>
-                          ) : (
-                            <>
-                              <CreditCard className="h-4 w-4" />
-                              Pay €{formatMoney(grandTotal)}
-                            </>
-                          )}
-                        </Button>
-                      ) : null}
-                    </div>
-
-                    {isCardMode ? (
-                      <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                        {isCardPaymentComplete ? (
-                          <span className="text-emerald-700 dark:text-emerald-400">
-                            Card payment completed — you can place the order.
-                          </span>
-                        ) : (
-                          <span>
-                            Complete card payment before placing the order.
-                          </span>
-                        )}
+                    {isEditingKioskOrder ? (
+                      <div className="rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                        Cash payment stays pending until you collect payment
+                        from Kiosk orders.
                       </div>
                     ) : (
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground">
-                          Total payment
-                        </label>
-                        <Input
-                          className="h-9 bg-background"
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          value={amountPaid}
-                          onChange={(e) => setAmountPaid(e.target.value)}
-                        />
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Change</span>
-                          <span className="tabular-nums text-foreground">
-                            €
-                            {formatMoney(
-                              Math.max(
-                                0,
-                                (Number(amountPaid) || 0) - grandTotal
-                              )
-                            )}
-                          </span>
+                      <>
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">
+                            Payment method
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              type="button"
+                              variant={
+                                paymentMode === 'cash' ? 'default' : 'outline'
+                              }
+                              className="justify-start gap-2"
+                              onClick={() => handleSelectPaymentMode('cash')}
+                            >
+                              <Banknote className="h-4 w-4" />
+                              Cash
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={
+                                paymentMode === 'card' ? 'default' : 'outline'
+                              }
+                              className="justify-start gap-2"
+                              onClick={() => handleSelectPaymentMode('card')}
+                            >
+                              <CreditCard className="h-4 w-4" />
+                              Card
+                            </Button>
+                          </div>
+                          {isCardMode ? (
+                            <Button
+                              type="button"
+                              className={cn(
+                                'w-full gap-2',
+                                cardPaymentStatus === 'success' &&
+                                  'bg-emerald-600 hover:bg-emerald-600/90',
+                                (cardPaymentStatus === 'error' ||
+                                  cardPaymentStatus === 'cancelled') &&
+                                  'bg-destructive hover:bg-destructive/90'
+                              )}
+                              disabled={
+                                cardPaymentStatus === 'processing' ||
+                                cardPaymentStatus === 'success'
+                              }
+                              onClick={() => void handleCardPayClick()}
+                            >
+                              {cardPaymentStatus === 'success' ? (
+                                <>
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  Paid
+                                </>
+                              ) : cardPaymentStatus === 'error' ||
+                                cardPaymentStatus === 'cancelled' ? (
+                                <>
+                                  <XCircle className="h-4 w-4" />
+                                  Pay
+                                </>
+                              ) : cardPaymentStatus === 'processing' ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Processing…
+                                </>
+                              ) : (
+                                <>
+                                  <CreditCard className="h-4 w-4" />
+                                  Pay €{formatMoney(grandTotal)}
+                                </>
+                              )}
+                            </Button>
+                          ) : null}
                         </div>
-                      </div>
+
+                        {isCardMode ? (
+                          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                            {isCardPaymentComplete ? (
+                              <span className="text-emerald-700 dark:text-emerald-400">
+                                Card payment completed — you can place the
+                                order.
+                              </span>
+                            ) : (
+                              <span>
+                                Complete card payment before placing the order.
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground">
+                              Total payment
+                            </label>
+                            <Input
+                              className="h-9 bg-background"
+                              inputMode="decimal"
+                              placeholder="0.00"
+                              value={amountPaid}
+                              onChange={(e) => setAmountPaid(e.target.value)}
+                            />
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>Change</span>
+                              <span className="tabular-nums text-foreground">
+                                €
+                                {formatMoney(
+                                  Math.max(
+                                    0,
+                                    (Number(amountPaid) || 0) - grandTotal
+                                  )
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -2533,11 +2937,20 @@ export function PosScreen() {
                 savingOrder ||
                 terminalProcessing ||
                 cardPaymentStatus === 'processing' ||
-                (isCardMode
-                  ? !isCardPaymentComplete
-                  : amountPaid.trim() === '')
+                (isEditingKioskOrder
+                  ? false
+                  : isCardMode
+                    ? !isCardPaymentComplete
+                    : amountPaid.trim() === '')
               }
               onClick={() => {
+                if (isEditingKioskOrder) {
+                  void saveOrder({
+                    paymentMode: 'cash',
+                    payment: grandTotal.toFixed(2),
+                  });
+                  return;
+                }
                 const pm = isCardMode ? 'card' : 'cash';
                 const pay = isCardMode
                   ? grandTotal.toFixed(2)
@@ -2555,7 +2968,10 @@ export function PosScreen() {
                   </>
                 ) : (
                   <>
-                    <Check className="h-4 w-4 mr-2" /> <span>Place Order</span>
+                    <Check className="h-4 w-4 mr-2" />{' '}
+                    <span>
+                      {editingOrderId ? 'Update order' : 'Place Order'}
+                    </span>
                   </>
                 )}
               </>
@@ -2640,9 +3056,7 @@ export function PosScreen() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction
-              onClick={() => setCardPaymentOutcomeOpen(null)}
-            >
+            <AlertDialogAction onClick={() => setCardPaymentOutcomeOpen(null)}>
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -2668,9 +3082,7 @@ export function PosScreen() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction
-              onClick={() => setCardPaymentOutcomeOpen(null)}
-            >
+            <AlertDialogAction onClick={() => setCardPaymentOutcomeOpen(null)}>
               OK
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -2854,6 +3266,46 @@ export function PosScreen() {
           setCustomizeOpen(false);
           setCustomizeProduct(null);
         }}
+      />
+
+      <PosRecentOrdersSheet
+        open={recentOrdersOpen}
+        onOpenChange={setRecentOrdersOpen}
+        branchId={selectedBranchId || activeBranchId || null}
+        brandName={branding.name || 'Restaurant'}
+        branchName={selectedBranchName}
+        logoUrl={branding.logoUrl}
+        onEditOrder={(order) => loadOrderForEdit(order, 'pos')}
+      />
+
+      <PosKioskOrdersSheet
+        open={kioskOrdersOpen}
+        onOpenChange={setKioskOrdersOpen}
+        branchId={selectedBranchId || activeBranchId || null}
+        brandName={branding.name || 'Restaurant'}
+        branchName={selectedBranchName}
+        logoUrl={branding.logoUrl}
+        onEditOrder={(order) => loadOrderForEdit(order, 'kiosk')}
+        onOrdersChanged={() => {
+          eventBus.emit('refreshKioskOrders');
+          eventBus.emit('refreshRecentOrders');
+          const branchId = selectedBranchId || activeBranchId || '';
+          if (branchId) {
+            void refreshKioskPendingCount(branchId);
+            void refreshShiftSummary(branchId);
+          }
+        }}
+      />
+
+      <PosShiftSheet
+        open={shiftSheetOpen}
+        onOpenChange={setShiftSheetOpen}
+        branchId={selectedBranchId || activeBranchId || null}
+        brandName={branding.name || 'Restaurant'}
+        branchName={selectedBranchName}
+        logoUrl={branding.logoUrl}
+        onShiftUpdated={handleShiftUpdated}
+        onShiftClosed={handleShiftClosed}
       />
     </div>
   );

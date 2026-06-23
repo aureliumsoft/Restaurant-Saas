@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 
+import type { db } from '@/lib/db';
 import { getOrderDisplayTimezone } from '@/lib/order-display-timezone';
 import type { SalesOrdersPeriodFilter } from '@/types/sales-order';
 
@@ -9,8 +10,61 @@ export function parseSalesOrdersPeriod(
   return value === 'today' ? 'today' : 'overall';
 }
 
+/** Non-owner/admin users are limited to today's data. */
+export function enforceSalesOrdersPeriod(
+  requested: SalesOrdersPeriodFilter,
+  canViewHistorical: boolean
+): SalesOrdersPeriodFilter {
+  return canViewHistorical ? requested : 'today';
+}
+
+export function enforceAnalyticsDays(
+  requested: number,
+  canViewHistorical: boolean,
+  advancedAnalytics: boolean
+): number {
+  if (!canViewHistorical) return 1;
+  if (!advancedAnalytics) return 7;
+  return requested === 14 || requested === 30 ? requested : 7;
+}
+
 export function salesOrderFilterTimezone(): string {
   return getOrderDisplayTimezone();
+}
+
+/** Calendar date (YYYY-MM-DD) for "now" in the given IANA timezone. */
+export async function getTodayDayKeyInTimezone(
+  database: typeof db,
+  tz: string
+): Promise<string> {
+  const rows = await database.$queryRaw<Array<{ d: string }>>(
+    Prisma.sql`SELECT (timezone(${tz}::text, now()))::date::text AS d`
+  );
+  return rows[0]?.d ?? new Date().toISOString().slice(0, 10);
+}
+
+/** UTC instants for the start (inclusive) and end (exclusive) of today in `tz`. */
+export async function getTodayCreatedAtBounds(
+  database: typeof db,
+  tz: string
+): Promise<{ gte: Date; lt: Date }> {
+  const rows = await database.$queryRaw<Array<{ gte: Date; lt: Date }>>(
+    Prisma.sql`
+      SELECT
+        (date_trunc('day', timezone(${tz}::text, now())) AT TIME ZONE ${tz}::text) AS gte,
+        ((date_trunc('day', timezone(${tz}::text, now())) + interval '1 day') AT TIME ZONE ${tz}::text) AS lt
+    `
+  );
+  const row = rows[0];
+  if (!row) {
+    const now = new Date();
+    return { gte: now, lt: now };
+  }
+  return row;
+}
+
+export function prismaCreatedAtTodayWhere(bounds: { gte: Date; lt: Date }) {
+  return { createdAt: { gte: bounds.gte, lt: bounds.lt } };
 }
 
 /** Filter menu orders to the restaurant's current calendar day. */

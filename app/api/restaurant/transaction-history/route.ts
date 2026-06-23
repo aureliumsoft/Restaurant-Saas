@@ -3,9 +3,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   getBranchScopeFromRequest,
   orderBranchWhere,
+  userIsOwnerOrAdmin,
 } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import {
+  getTodayCreatedAtBounds,
+  prismaCreatedAtTodayWhere,
+  salesOrderFilterTimezone,
+} from '@/lib/sales-order-period';
 
 type HistoryKind = 'ORDER' | 'SUBSCRIPTION' | 'REGISTER';
 
@@ -42,12 +48,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
     const restaurantId = auth.restaurantId;
+    const canViewHistorical = await userIsOwnerOrAdmin(
+      auth.userId,
+      restaurantId
+    );
     const branchScope = await getBranchScopeFromRequest(
       req,
       auth.userId,
       restaurantId
     );
     const orderBranchFilter = orderBranchWhere(branchScope?.activeBranchId ?? null);
+    const filterTz = salesOrderFilterTimezone();
+    const todayBounds = canViewHistorical
+      ? null
+      : await getTodayCreatedAtBounds(db, filterTz);
+    const todayCreatedAt = todayBounds
+      ? prismaCreatedAtTodayWhere(todayBounds)
+      : {};
+    const todayPaidAt = todayBounds
+      ? { paidAt: { gte: todayBounds.gte, lt: todayBounds.lt } }
+      : {};
 
     const q = req.nextUrl.searchParams.get('q')?.trim().toLowerCase() ?? '';
     const kindFilterRaw = req.nextUrl.searchParams.get('kind');
@@ -62,7 +82,7 @@ export async function GET(req: NextRequest) {
 
     const [orders, subscriptions, registerTxns] = await Promise.all([
       db.order.findMany({
-        where: { restaurantId, ...orderBranchFilter },
+        where: { restaurantId, ...orderBranchFilter, ...todayCreatedAt },
         select: {
           id: true,
           shortOrderId: true,
@@ -81,7 +101,7 @@ export async function GET(req: NextRequest) {
         },
       }),
       db.subscriptionPayment.findMany({
-        where: { restaurantId },
+        where: { restaurantId, ...todayPaidAt },
         orderBy: { paidAt: 'desc' },
         select: {
           id: true,
@@ -93,7 +113,7 @@ export async function GET(req: NextRequest) {
         },
       }),
       db.transaction.findMany({
-        where: { restaurantId },
+        where: { restaurantId, ...todayCreatedAt },
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
@@ -195,6 +215,8 @@ export async function GET(req: NextRequest) {
         totalPages,
         hasNextPage: safePage < totalPages,
         hasPrevPage: safePage > 1,
+        canViewHistorical,
+        dataScope: canViewHistorical ? 'all' : 'today',
       },
     });
   } catch (error) {

@@ -19,6 +19,11 @@ export function isCompletedSalesStatus(status: string): boolean {
   return salesOrderStatusBucket(status) === 'completed';
 }
 
+export function isCanceledOrderStatus(status: string): boolean {
+  const s = status.trim().toLowerCase();
+  return s === 'canceled' || s === 'cancelled';
+}
+
 /** Prisma filter: active orders for dashboard charts (excludes canceled/failed). */
 export function analyticsActiveOrderStatusWhere() {
   return {

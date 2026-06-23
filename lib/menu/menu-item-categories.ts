@@ -108,6 +108,33 @@ export async function loadCategoriesWithLinkedItems<
     itemsByCategory.set(link.categoryId, list);
   }
 
+  const categoryIds = categories.map((c) => (c as { id: string }).id);
+  if (categoryIds.length > 0) {
+    const legacyItems = await db.menuItem.findMany({
+      where: {
+        restaurantId: options.restaurantId,
+        categoryId: { in: categoryIds },
+      },
+      orderBy: options.itemOrderBy ?? { name: 'asc' },
+      select: {
+        ...(options.itemSelect as object),
+        categoryId: true,
+      } as TItemSelect,
+    });
+
+    for (const item of legacyItems) {
+      const categoryId = (item as { categoryId: string }).categoryId;
+      const list = itemsByCategory.get(categoryId) ?? [];
+      const seen = itemIdsByCategory.get(categoryId) ?? new Set<string>();
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        list.push(item);
+      }
+      itemIdsByCategory.set(categoryId, seen);
+      itemsByCategory.set(categoryId, list);
+    }
+  }
+
   return categories.map((category) => {
     const categoryId = (category as { id: string }).id;
     return {
@@ -115,6 +142,76 @@ export async function loadCategoriesWithLinkedItems<
       items: itemsByCategory.get(categoryId) ?? [],
     };
   }) as Result[];
+}
+
+export async function loadSingleCategoryWithLinkedItems<
+  TCategorySelect extends Prisma.MenuCategorySelect & { id: true },
+  TItemSelect extends Prisma.MenuItemSelect,
+>(options: {
+  restaurantId: string;
+  categoryId: string;
+  categorySelect: TCategorySelect;
+  itemSelect: TItemSelect;
+  categoryWhere?: Prisma.MenuCategoryWhereInput;
+  itemOrderBy?: Prisma.MenuItemOrderByWithRelationInput;
+}): Promise<
+  | (Prisma.MenuCategoryGetPayload<{ select: TCategorySelect }> & {
+      items: Prisma.MenuItemGetPayload<{ select: TItemSelect }>[];
+    })
+  | null
+> {
+  type MenuItem = Prisma.MenuItemGetPayload<{ select: TItemSelect }>;
+
+  const category = await db.menuCategory.findFirst({
+    where: {
+      id: options.categoryId,
+      restaurantId: options.restaurantId,
+      ...options.categoryWhere,
+    },
+    select: options.categorySelect,
+  });
+  if (!category) return null;
+
+  const links = await db.menuItemCategory.findMany({
+    where: {
+      categoryId: options.categoryId,
+      category: { restaurantId: options.restaurantId },
+    },
+    orderBy: [{ sortOrder: 'asc' }, { menuItem: { name: 'asc' } }],
+    select: {
+      menuItemId: true,
+      menuItem: { select: options.itemSelect },
+    },
+  });
+
+  const items: MenuItem[] = [];
+  const seen = new Set<string>();
+  for (const link of links) {
+    if (seen.has(link.menuItemId)) continue;
+    seen.add(link.menuItemId);
+    items.push(link.menuItem);
+  }
+
+  const legacyItems = await db.menuItem.findMany({
+    where: {
+      restaurantId: options.restaurantId,
+      categoryId: options.categoryId,
+    },
+    orderBy: options.itemOrderBy ?? { name: 'asc' },
+    select: options.itemSelect,
+  });
+  for (const item of legacyItems) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    items.push(item);
+  }
+
+  return {
+    ...category,
+    items,
+  } as Prisma.MenuCategoryGetPayload<{ select: TCategorySelect }> & {
+    items: MenuItem[];
+  };
 }
 
 export async function getMenuItemCategoryIds(

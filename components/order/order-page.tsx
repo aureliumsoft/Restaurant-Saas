@@ -25,9 +25,15 @@ import {
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import type { OrderInfo } from '@/components/order/order-types';
 import {
-  buildCustomerMenuRequestUrl,
+  buildCustomerMenuCategoriesUrl,
+  buildCustomerMenuCategoryItemsUrl,
   inferHostSubdomainForMenu,
 } from '@/lib/customer-menu-client';
+import { useProgressiveCustomerMenu } from '@/hooks/use-progressive-customer-menu';
+import {
+  CategoryPillSkeleton,
+  ProductCardSkeletonGrid,
+} from '@/components/menu/product-card-skeleton';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
@@ -51,7 +57,7 @@ import {
   OrderMenuHeader,
 } from '@/components/order/order-menu-header';
 import { cn } from '@/lib/utils';
-import { ArrowUp, Loader2, Minus, Pencil, Plus, Search, X } from 'lucide-react';
+import { ArrowUp, Minus, Pencil, Plus, Search, X } from 'lucide-react';
 
 export type OrderPageProps = {
   orderType: 'delivery' | 'pickUp';
@@ -475,9 +481,6 @@ export default function OrderPageClient({
     ? `/web-app/${encodeURIComponent(restaurantSlug)}`
     : '/web-app';
 
-  const [categories, setCategories] = useState<CustomerMenuCategory[]>([]);
-  const [products, setProducts] = useState<CustomerMenuProduct[]>([]);
-
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [cart, setCart] = useState<CartLine[]>([]);
   const [search, setSearch] = useState('');
@@ -488,13 +491,60 @@ export default function OrderPageClient({
   const [bannerOffers, setBannerOffers] = useState<OfferItem[]>([]);
   const [mounted, setMounted] = useState(false);
 
-  const [menuLoading, setMenuLoading] = useState(false);
   const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
     null
   );
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const { t, i18n } = useTranslation();
   const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
+
+  const hostSubdomain = inferHostSubdomainForMenu();
+  const categoriesUrl = buildCustomerMenuCategoriesUrl(
+    orderInfo?.restaurantSlug,
+    orderInfo?.storeId,
+    hostSubdomain
+  );
+  const categoryItemsUrl = useCallback(
+    (categoryId: string) =>
+      buildCustomerMenuCategoryItemsUrl(
+        categoryId,
+        orderInfo?.restaurantSlug,
+        orderInfo?.storeId,
+        hostSubdomain
+      ),
+    [orderInfo?.restaurantSlug, orderInfo?.storeId, hostSubdomain]
+  );
+
+  const {
+    restaurantMeta,
+    categories: progressiveCategories,
+    categoriesLoading,
+  } = useProgressiveCustomerMenu<CustomerMenuProduct>({
+    categoriesUrl: mounted ? categoriesUrl : null,
+    categoryItemsUrl,
+    enabled: mounted && Boolean(categoriesUrl),
+  });
+
+  const categories = useMemo<CustomerMenuCategory[]>(
+    () =>
+      progressiveCategories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        imageUrl: c.imageUrl,
+        items: c.items,
+      })),
+    [progressiveCategories]
+  );
+
+  const products = useMemo(
+    () =>
+      progressiveCategories.flatMap((c) =>
+        c.items.map((item) => ({ ...item, categoryId: c.id }))
+      ),
+    [progressiveCategories]
+  );
+
+  const menuLoading = categoriesLoading && categories.length === 0;
 
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [customizeProduct, setCustomizeProduct] =
@@ -856,66 +906,12 @@ export default function OrderPageClient({
   }, []);
 
   useEffect(() => {
-    if (!mounted) return;
-
-    const loadMenu = async () => {
-      try {
-        setMenuLoading(true);
-
-        const hostSubdomain = inferHostSubdomainForMenu();
-        const queryStoreId =
-          orderInfo?.storeId && orderInfo.storeId.trim().length > 0
-            ? orderInfo.storeId.trim()
-            : null;
-        const menuUrl = buildCustomerMenuRequestUrl(
-          orderInfo?.restaurantSlug,
-          queryStoreId,
-          hostSubdomain
-        );
-
-        if (!menuUrl) {
-          setCategories([]);
-          setProducts([]);
-          return;
-        }
-
-        const res = await fetch(menuUrl);
-
-        if (!res.ok) {
-          console.error('Failed to load menu', await res.text());
-          setCategories([]);
-          setProducts([]);
-          return;
-        }
-
-        const payload = (await res.json()) as CustomerMenuResponse;
-        const restaurant =
-          'data' in payload
-            ? payload.data ?? null
-            : (payload as CustomerMenuRestaurant);
-        const menus =
-          restaurant && Array.isArray(restaurant.menus) ? restaurant.menus : [];
-
-        setCategories(menus);
-        setProducts(
-          menus.flatMap((cat) =>
-            cat.items.map((item) => ({
-              ...item,
-              categoryId: cat.id,
-            }))
-          )
-        );
-      } catch (err) {
-        console.error('Error loading customer menu', err);
-        setCategories([]);
-        setProducts([]);
-      } finally {
-        setMenuLoading(false);
-      }
-    };
-
-    void loadMenu();
-  }, [mounted, orderInfo?.storeId]);
+    if (!restaurantMeta) return;
+    setThemePrimaryColor(
+      (restaurantMeta.themePrimaryColor as string | null) ?? null
+    );
+    setLogoUrl((restaurantMeta.logoUrl as string | null) ?? null);
+  }, [restaurantMeta]);
 
   useEffect(() => {
     if (categories.length === 0) {
@@ -1068,7 +1064,14 @@ export default function OrderPageClient({
         className="min-h-0 min-w-0 flex-1 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className="flex w-max items-center gap-2.5 py-1">
-          {categoryStripItems.map((category) => {
+          {menuLoading ? (
+            <>
+              <CategoryPillSkeleton />
+              <CategoryPillSkeleton />
+              <CategoryPillSkeleton />
+            </>
+          ) : (
+            categoryStripItems.map((category) => {
             const isActive = selectedCategory === category.id;
             return (
               <button
@@ -1116,7 +1119,8 @@ export default function OrderPageClient({
                 </span>
               </button>
             );
-          })}
+          })
+          )}
         </div>
       </div>
       <button
@@ -1240,56 +1244,80 @@ export default function OrderPageClient({
             />
           ) : null}
 
-          {menuLoading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <section className="min-w-0">
-              {displayedCategories.length > 0 ? (
-                displayedCategories.map((category) => {
-                  const categoryProducts = category.items;
+          <section className="min-w-0">
+            {menuLoading ? (
+              <ProductCardSkeletonGrid
+                count={6}
+                variant="online"
+                gridClassName="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+              />
+            ) : displayedCategories.length > 0 ? (
+              displayedCategories.map((category) => {
+                const progressive = progressiveCategories.find(
+                  (c) => c.id === category.id
+                );
+                const isCategoryLoading =
+                  progressive?.loading ||
+                  (progressive &&
+                    !progressive.loaded &&
+                    category.items.length === 0);
 
-                  if (categoryProducts.length === 0) {
-                    return (
-                      <div key={category.id} className="mb-10">
-                        <p className="text-sm text-[#8e8e9a]">
-                          {t('noProductsFoundInCategory')}
-                        </p>
-                      </div>
-                    );
-                  }
-
+                if (isCategoryLoading) {
                   return (
-                    <div
-                      key={category.id}
-                      id={category.id}
-                      className="mb-10 min-w-0"
-                    >
+                    <div key={category.id} id={category.id} className="mb-10 min-w-0">
                       <h3 className="mb-4 text-xl font-bold text-primary">
                         {category.name}
                       </h3>
-                      <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {categoryProducts.map((product) => (
-                          <ProductCard
-                            key={product.id}
-                            product={product}
-                            onAdd={() => handleProductSelect(product)}
-                          />
-                        ))}
-                      </div>
+                      <ProductCardSkeletonGrid
+                        count={3}
+                        variant="online"
+                        gridClassName="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                      />
                     </div>
                   );
-                })
-              ) : (
-                <div className="mb-10">
-                  <p className="text-sm text-[#8e8e9a]">
-                    {t('noCategoriesFound')}
-                  </p>
-                </div>
-              )}
-            </section>
-          )}
+                }
+
+                const categoryProducts = category.items;
+
+                if (categoryProducts.length === 0) {
+                  return (
+                    <div key={category.id} className="mb-10">
+                      <p className="text-sm text-[#8e8e9a]">
+                        {t('noProductsFoundInCategory')}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={category.id}
+                    id={category.id}
+                    className="mb-10 min-w-0"
+                  >
+                    <h3 className="mb-4 text-xl font-bold text-primary">
+                      {category.name}
+                    </h3>
+                    <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {categoryProducts.map((product) => (
+                        <ProductCard
+                          key={product.id}
+                          product={product}
+                          onAdd={() => handleProductSelect(product)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="mb-10">
+                <p className="text-sm text-[#8e8e9a]">
+                  {t('noCategoriesFound')}
+                </p>
+              </div>
+            )}
+          </section>
         </main>
 
         <aside

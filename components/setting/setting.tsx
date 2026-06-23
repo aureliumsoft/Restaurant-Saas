@@ -80,10 +80,10 @@ export function Setting() {
   };
 
   return (
-    <div className="flex min-h-screen w-full flex-col">
-      <div className="flex min-h-[calc(100vh_-_theme(spacing.16))] flex-1 flex-col bg-muted/40 md:gap-8 md:p-10">
-        <div className="mx-auto grid w-full max-w-6xl items-start gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
-          <aside className="lg:sticky lg:top-6 lg:self-start">
+    <div className="flex w-full min-w-0 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col bg-muted/40 px-4 pb-8 pt-2">
+        <div className="mx-auto grid w-full min-w-0 max-w-6xl items-start gap-2 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
+          <aside className="min-w-0 lg:sticky lg:top-6 lg:self-start">
             <p className="mb-3 hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:block">
               Settings
             </p>
@@ -106,7 +106,7 @@ export function Setting() {
               </header>
             ) : null}
 
-            <div className="grid gap-6">
+            <div className="grid min-w-0 gap-6">
               {activeSection === 'basic' ? (
                 <>
                   <CustomerEntryLinks />

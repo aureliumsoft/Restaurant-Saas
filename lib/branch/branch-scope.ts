@@ -49,7 +49,10 @@ export async function userIsOwnerOrAdmin(
     where: { userId_restaurantId: { userId, restaurantId } },
     select: { role: { select: { slug: true } } },
   });
-  return employee?.role.slug === RESTAURANT_ROLE_SLUG.ADMIN;
+  return (
+    employee?.role.slug === RESTAURANT_ROLE_SLUG.ADMIN ||
+    employee?.role.slug === RESTAURANT_ROLE_SLUG.OWNER
+  );
 }
 
 export async function getEmployeeAssignedBranchIds(

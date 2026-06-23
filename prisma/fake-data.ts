@@ -1,4 +1,4 @@
-import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, OrderSourceType, CustomerPaymentProvider } from '@prisma/client';
+import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, OrderSourceType, PosShiftStatus, CustomerPaymentProvider } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import Decimal from 'decimal.js';
 
@@ -207,6 +207,30 @@ export function fakeBranchComplete() {
     name: faker.person.fullName(),
     address: undefined,
     phone: undefined,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakePosShift() {
+  return {
+    endedAt: undefined,
+    closingCashInLocker: undefined,
+    notes: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakePosShiftComplete() {
+  return {
+    id: faker.string.uuid(),
+    restaurantId: faker.string.uuid(),
+    branchId: undefined,
+    openedByUserId: faker.string.uuid(),
+    closedByUserId: undefined,
+    startedAt: new Date(),
+    endedAt: undefined,
+    closingCashInLocker: undefined,
+    status: PosShiftStatus.OPEN,
+    notes: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -618,6 +642,7 @@ export function fakeOrderComplete() {
     customerComment: undefined,
     diningTableId: undefined,
     tableLabel: undefined,
+    posShiftId: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };

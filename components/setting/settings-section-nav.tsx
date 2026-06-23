@@ -23,7 +23,7 @@ export function SettingsSectionNav({
 
   return (
     <nav
-      className="flex flex-row gap-1 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:pb-0"
+      className="flex max-w-full flex-row gap-1 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] lg:flex-col lg:gap-0.5 lg:overflow-visible lg:pb-0"
       aria-label="Settings sections"
     >
       {sections.map((section) => {

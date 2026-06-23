@@ -74,7 +74,7 @@ type SeriesPoint = {
 type AnalyticsPayload = {
   counts: AnalyticsCounts;
   series: SeriesPoint[];
-  days?: 7 | 14 | 30;
+  days?: 7 | 14 | 30 | 1;
   channelTotals?: {
     orders: { online: number; pos: number; kiosk: number };
     revenue: { online: number; pos: number; kiosk: number };
@@ -83,6 +83,8 @@ type AnalyticsPayload = {
   activeBranchId?: string | null;
   activeBranchName?: string | null;
   branchScoped?: boolean;
+  canViewHistorical?: boolean;
+  dataScope?: 'all' | 'today';
 };
 
 const DAY_OPTIONS: Array<7 | 14 | 30> = [7, 14, 30];
@@ -180,17 +182,27 @@ function moduleMetric(
   if (!data) return { value: '—', hint: 'Loading…' };
   const c = data.counts;
   const ordersWindow = data.series.reduce((s, p) => s + p.orders, 0);
+  const todayOnly = data.dataScope === 'today';
+  const periodHint = todayOnly
+    ? 'Today only'
+    : `Active orders (${data.days ?? 7} days)`;
 
   switch (key) {
     case 'dashboard':
       return {
         value: String(ordersWindow),
-        hint: `Active orders (${data.days ?? 7} days)`,
+        hint: periodHint,
       };
     case 'sales':
-      return { value: String(c.orders), hint: 'Active orders at branch' };
+      return {
+        value: String(c.orders),
+        hint: todayOnly ? 'Active orders today' : 'Active orders at branch',
+      };
     case 'pos':
-      return { value: String(c.posOrders), hint: 'POS orders' };
+      return {
+        value: String(c.posOrders),
+        hint: todayOnly ? 'POS orders today' : 'POS orders',
+      };
     case 'kds':
       return { value: String(c.kdsOpen), hint: 'Open kitchen tickets' };
     case 'order-display':
@@ -233,7 +245,8 @@ function moduleMetric(
 }
 
 export default function DashboardAnalytics() {
-  const { activeBranchId, loading: branchLoading } = useBranchContext();
+  const { activeBranchId, loading: branchLoading, isOwnerOrAdmin } =
+    useBranchContext();
   const [permissions, setPermissions] = useState<string[] | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -242,9 +255,10 @@ export default function DashboardAnalytics() {
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [planRecommendations, setPlanRecommendations] = useState(true);
   const [selectedDays, setSelectedDays] = useState<7 | 14 | 30>(7);
+  const queryDays = isOwnerOrAdmin ? selectedDays : 1;
 
   const load = useCallback(
-    async (days: 7 | 14 | 30, branchId: string | null) => {
+    async (days: number, branchId: string | null) => {
       setError(null);
       setAnalyticsLoading(true);
       try {
@@ -278,8 +292,8 @@ export default function DashboardAnalytics() {
 
   useEffect(() => {
     if (branchLoading) return;
-    void load(selectedDays, activeBranchId);
-  }, [load, selectedDays, activeBranchId, branchLoading]);
+    void load(queryDays, activeBranchId);
+  }, [load, queryDays, activeBranchId, branchLoading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -345,6 +359,8 @@ export default function DashboardAnalytics() {
   const isLoading = branchLoading || analyticsLoading;
   const analyticsTier = analytics?.analyticsTier ?? 'advanced';
   const showBasicCharts = analyticsTier === 'basic';
+  const todayOnly = !isOwnerOrAdmin || analytics?.dataScope === 'today';
+  const chartDaysLabel = todayOnly ? 'today' : `${analytics?.days ?? selectedDays} days`;
   const kpiSkeletonCount = modules.length > 0 ? modules.length : 6;
 
   return (
@@ -353,9 +369,11 @@ export default function DashboardAnalytics() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard Overview</h1>
           <p className="text-sm text-muted-foreground">
-            {analytics?.branchScoped && analytics.activeBranchName
-              ? `Showing data for ${analytics.activeBranchName} — active orders and revenue (online, POS, kiosk).`
-              : 'Active orders and revenue — online, POS, and kiosk with selectable day ranges.'}
+            {todayOnly
+              ? 'Showing today’s orders and revenue only.'
+              : analytics?.branchScoped && analytics.activeBranchName
+                ? `Showing data for ${analytics.activeBranchName} — active orders and revenue (online, POS, kiosk).`
+                : 'Active orders and revenue — online, POS, and kiosk with selectable day ranges.'}
           </p>
         </div>
         {slug ? (
@@ -406,7 +424,7 @@ export default function DashboardAnalytics() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base font-semibold">
-                    Active orders (last 7 days)
+                    Active orders ({chartDaysLabel})
                   </CardTitle>
                   <CardDescription>
                     Daily active orders for Starter plan.
@@ -475,7 +493,7 @@ export default function DashboardAnalytics() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base font-semibold">
-                    Completed revenue (last 7 days)
+                    Completed revenue ({chartDaysLabel})
                   </CardTitle>
                   <CardDescription>
                     Revenue from active orders (Starter plan).
@@ -521,32 +539,33 @@ export default function DashboardAnalytics() {
                 <CardHeader className="gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <CardTitle className="text-base font-semibold">
-                      Completed orders trend (
-                      {analytics?.days ?? selectedDays} days)
+                      Completed orders trend ({chartDaysLabel})
                     </CardTitle>
                     <CardDescription>
                       Online, POS, and Kiosk active orders over time.
                     </CardDescription>
                   </div>
 
-                  <div className="inline-flex rounded-xl border bg-muted/30 p-1">
-                    {DAY_OPTIONS.map((d) => (
-                      <button
-                        key={d}
-                        type="button"
-                        disabled={isLoading}
-                        className={cn(
-                          'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
-                          selectedDays === d
-                            ? 'bg-primary text-primary-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground'
-                        )}
-                        onClick={() => setSelectedDays(d)}
-                      >
-                        {d}D
-                      </button>
-                    ))}
-                  </div>
+                  {isOwnerOrAdmin ? (
+                    <div className="inline-flex rounded-xl border bg-muted/30 p-1">
+                      {DAY_OPTIONS.map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          disabled={isLoading}
+                          className={cn(
+                            'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
+                            selectedDays === d
+                              ? 'bg-primary text-primary-foreground shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground'
+                          )}
+                          onClick={() => setSelectedDays(d)}
+                        >
+                          {d}D
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </CardHeader>
                 <CardContent className="pt-0">
                   {isLoading || !analytics ? (
@@ -666,8 +685,7 @@ export default function DashboardAnalytics() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold">
-                      Revenue by channel ({analytics?.days ?? selectedDays}{' '}
-                      days)
+                      Revenue by channel ({chartDaysLabel})
                     </CardTitle>
                     <CardDescription>
                       Multiple bar chart for Online, POS, and Kiosk totals per
@@ -958,7 +976,7 @@ export default function DashboardAnalytics() {
               }
               icon={Icon}
               href={m.path}
-              daysLabel={`${analytics?.days ?? selectedDays} days`}
+              daysLabel={todayOnly ? 'Today' : `${analytics?.days ?? selectedDays} days`}
             />
           );
         })}

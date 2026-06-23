@@ -44,6 +44,8 @@ import {
   DashboardTableWrapper as TableWrapper,
 } from '@/components/dashboard/dashboard-table';
 
+const settingsCardClass = `${dashboardCardClass} my-5 min-w-0 w-full max-w-full overflow-hidden`;
+
 type RoleOption = { id: string; name: string; slug?: string | null };
 type BranchOption = { id: string; name: string };
 
@@ -408,8 +410,8 @@ export default function RestaurantUsersCard({
   }
 
   return (
-    <Card className="my-5">
-      <CardHeader>
+    <Card className={settingsCardClass}>
+      <CardHeader className="min-w-0">
         <CardTitle>Team members</CardTitle>
         <CardDescription>
           Add people by email and set a password they can use to sign in. If the
@@ -424,8 +426,8 @@ export default function RestaurantUsersCard({
           </p>
         ) : null}
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid gap-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+      <CardContent className="min-w-0 space-y-6">
+        <div className="grid min-w-0 gap-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
           <div className="space-y-2 sm:col-span-2">
             <label className="text-sm font-medium" htmlFor="member-email">
               Email
@@ -515,10 +517,11 @@ export default function RestaurantUsersCard({
               </select>
             </div>
           ) : null}
-          
+
+          <div className="sm:col-span-2 lg:col-span-1">
             <Button
               type="button"
-              className="text-white"
+              className="w-full text-white"
               disabled={submitting || roles.length === 0}
               onClick={() => void handleAdd()}
             >
@@ -531,6 +534,7 @@ export default function RestaurantUsersCard({
                 </>
               )}
             </Button>
+          </div>
         </div>
 
         {loading ? (
@@ -543,27 +547,30 @@ export default function RestaurantUsersCard({
               <div className="space-y-2">
                 <h3 className="text-sm font-medium">Pending invitations</h3>
                 <TableWrapper>
-                  <Table>
+                  <Table minWidth={640}>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Email</TableHead>
                         <TableHead>Role</TableHead>
-                        <TableHead>Branches</TableHead>
+                        <TableHead className="hidden sm:table-cell">Branches</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pendingInvites.map((p) => (
                         <TableRow key={p.id}>
-                          <TableCell>{p.email}</TableCell>
+                          <TableCell className="max-w-[10rem] whitespace-normal break-all sm:max-w-none">
+                            {p.email}
+                          </TableCell>
                           <TableCell>{p.role.name}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
+                          <TableCell className="hidden text-sm text-muted-foreground sm:table-cell">
                             {pendingInviteBranchLabel(p)}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button
                               type="button"
                               variant="ghost"
+                              size="sm"
                               className="text-destructive"
                               disabled={
                                 cancellingInviteId === p.id || confirmLoading
@@ -576,16 +583,11 @@ export default function RestaurantUsersCard({
                               }
                             >
                               {cancellingInviteId === p.id ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  <span>Cancelling…</span>
-                                </>
+                                <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                <>
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  <span>Cancel</span>
-                                </>
+                                <Trash2 className="h-4 w-4" />
                               )}
+                              <span className="sr-only">Cancel invitation</span>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -604,28 +606,35 @@ export default function RestaurantUsersCard({
                 </p>
               ) : (
                 <TableWrapper>
-                  <Table>
+                  <Table minWidth={720}>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
+                        <TableHead className="hidden md:table-cell">Email</TableHead>
                         <TableHead>Role</TableHead>
-                        <TableHead>Branches</TableHead>
+                        <TableHead className="hidden sm:table-cell">Branches</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {employees.map((emp) => (
                         <TableRow key={emp.id}>
-                          <TableCell className="font-medium">
-                            {emp.name}
-                            {emp.isOwner ? (
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                (owner)
-                              </span>
-                            ) : null}
+                          <TableCell className="whitespace-normal font-medium">
+                            <div className="min-w-0">
+                              <div>{emp.name}</div>
+                              <div className="mt-0.5 text-xs text-muted-foreground md:hidden">
+                                {emp.email ?? '—'}
+                              </div>
+                              {emp.isOwner ? (
+                                <span className="text-xs text-muted-foreground">
+                                  (owner)
+                                </span>
+                              ) : null}
+                            </div>
                           </TableCell>
-                          <TableCell>{emp.email ?? '—'}</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {emp.email ?? '—'}
+                          </TableCell>
                           <TableCell>
                             {emp.isOwner ? (
                               <span className="text-sm text-muted-foreground">
@@ -633,7 +642,7 @@ export default function RestaurantUsersCard({
                               </span>
                             ) : (
                               <select
-                                className="h-9 max-w-[220px] rounded-md border border-input bg-background px-2 text-sm"
+                                className="h-9 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-2 text-sm sm:max-w-[11rem]"
                                 value={emp.role.id}
                                 disabled={
                                   savingEmployeeId === emp.id ||
@@ -664,9 +673,9 @@ export default function RestaurantUsersCard({
                               </select>
                             )}
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-muted-foreground">
+                          <TableCell className="hidden sm:table-cell">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="min-w-0 text-sm text-muted-foreground">
                                 {employeeBranchLabel(emp)}
                               </span>
                               {canEditEmployeeBranches(emp) ? (
@@ -693,6 +702,7 @@ export default function RestaurantUsersCard({
                               <Button
                                 type="button"
                                 variant="ghost"
+                                size="sm"
                                 className="text-destructive"
                                 disabled={
                                   removingEmployeeId === emp.id ||
@@ -706,16 +716,11 @@ export default function RestaurantUsersCard({
                                 }
                               >
                                 {removingEmployeeId === emp.id ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    <span>Removing…</span>
-                                  </>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                  <>
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    <span>Remove</span>
-                                  </>
+                                  <Trash2 className="h-4 w-4" />
                                 )}
+                                <span className="sr-only">Remove team member</span>
                               </Button>
                             )}
                           </TableCell>
@@ -758,7 +763,7 @@ export default function RestaurantUsersCard({
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Change branch assignment</DialogTitle>
           </DialogHeader>

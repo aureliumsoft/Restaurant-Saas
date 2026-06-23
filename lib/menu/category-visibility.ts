@@ -6,7 +6,7 @@ export const MENU_CATEGORY_FRONT_FILTER = {
 /** Storefront / kiosk / POS: must be shown in front and have at least one product. */
 export const CUSTOMER_MENU_CATEGORY_WHERE = {
   showInFront: true,
-  itemLinks: { some: {} },
+  OR: [{ itemLinks: { some: {} } }, { items: { some: {} } }],
 } as const;
 
 /** Categories usable as recommendation sources (on-menu and add-on only), non-empty. */

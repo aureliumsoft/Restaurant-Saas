@@ -355,7 +355,8 @@ function OrdersTable({
 }
 
 export function SalesOrdersTabs() {
-  const { activeBranchId, loading: branchLoading } = useBranchContext();
+  const { activeBranchId, loading: branchLoading, isOwnerOrAdmin } =
+    useBranchContext();
   const [orders, setOrders] = useState<SalesOrderRow[]>([]);
   const [stats, setStats] = useState<SalesOrdersStats>(emptyStats);
   const [pagination, setPagination] = useState<SalesOrdersPagination>({
@@ -374,6 +375,13 @@ export function SalesOrdersTabs() {
     useState<SalesOrdersStatusFilter>('all');
   const [periodFilter, setPeriodFilter] =
     useState<SalesOrdersPeriodFilter>('overall');
+
+  useEffect(() => {
+    if (branchLoading) return;
+    if (!isOwnerOrAdmin) {
+      setPeriodFilter('today');
+    }
+  }, [isOwnerOrAdmin, branchLoading]);
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [activeRow, setActiveRow] = useState<SalesOrderRow | null>(null);
@@ -592,21 +600,23 @@ export function SalesOrdersTabs() {
             </SelectContent>
           </Select>
 
-          <Button
-            type="button"
-            variant={periodFilter === 'today' ? 'default' : 'outline'}
-            className="gap-2 rounded-xl"
-            disabled={loading}
-            onClick={() => {
-              setPeriodFilter((current) =>
-                current === 'today' ? 'overall' : 'today'
-              );
-              setPage(1);
-            }}
-          >
-            <Calendar className="h-4 w-4" />
-            {periodFilter === 'today' ? 'All Time' : 'Today'}
-          </Button>
+          {isOwnerOrAdmin ? (
+            <Button
+              type="button"
+              variant={periodFilter === 'today' ? 'default' : 'outline'}
+              className="gap-2 rounded-xl"
+              disabled={loading}
+              onClick={() => {
+                setPeriodFilter((current) =>
+                  current === 'today' ? 'overall' : 'today'
+                );
+                setPage(1);
+              }}
+            >
+              <Calendar className="h-4 w-4" />
+              {periodFilter === 'today' ? 'All Time' : 'Today'}
+            </Button>
+          ) : null}
 
           <Button
             type="button"
@@ -642,7 +652,9 @@ export function SalesOrdersTabs() {
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            {periodFilter === 'today' ? 'Today' : 'Overall'} · Orders table
+            {isOwnerOrAdmin
+              ? `${periodFilter === 'today' ? 'Today' : 'Overall'} · Orders table`
+              : 'Today only · Orders table'}
           </p>
         </div>
 

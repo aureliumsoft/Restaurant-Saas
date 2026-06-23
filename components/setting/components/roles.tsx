@@ -48,6 +48,8 @@ import {
 } from '@/components/ui/confirmation-dialogs';
 import type { PermissionAction } from '@/constant/dashboardModules';
 
+const settingsCardClass = `${dashboardCardClass} my-5 min-w-0 w-full max-w-full overflow-hidden`;
+
 type RoleRow = {
   id: string;
   name: string;
@@ -235,15 +237,15 @@ export default function RolesCard({
 
   return (
     <>
-      <Card className="my-5">
-        <CardHeader>
+      <Card className={settingsCardClass}>
+        <CardHeader className="min-w-0">
           <CardTitle>Roles &amp; module access</CardTitle>
           <CardDescription>
             Add roles below for staff, assign them under Employees when that
             flow is connected.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="min-w-0 space-y-6">
           {!roleBasedSettingsAllowed ? (
             <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
               Custom roles and per-module permissions are included on Growth and
@@ -299,18 +301,20 @@ export default function RolesCard({
                   Create a custom role above to configure staff access.
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="min-w-0 space-y-3">
                   {editableRoles.map((r) => {
                     const draft = drafts[r.id];
                     if (!draft) return null;
                     const dirty = isDirty(r.id);
                     return (
                       <Collapsible key={r.id} defaultOpen={false}>
-                        <div className="rounded-lg border bg-card">
-                          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                            <CollapsibleTrigger className="flex w-full items-center gap-2 text-left font-medium hover:underline sm:w-auto [&[data-state=open]_svg]:rotate-180">
+                        <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
+                          <div className="flex min-w-0 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                            <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left font-medium hover:underline [&[data-state=open]_svg]:rotate-180">
                               <ChevronDown className="h-4 w-4 shrink-0 transition-transform" />
-                              <span>{draft.name || 'Untitled role'}</span>
+                              <span className="min-w-0 truncate">
+                                {draft.name || 'Untitled role'}
+                              </span>
                               {r.slug ? (
                                 <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
                                   Preset
@@ -322,7 +326,7 @@ export default function RolesCard({
                                 </span>
                               ) : null}
                             </CollapsibleTrigger>
-                            <div className="flex flex-wrap gap-2 pl-6 sm:pl-0">
+                            <div className="flex shrink-0 flex-wrap gap-2">
                               {!r.slug ? (
                                 <Button
                                   type="button"
@@ -355,8 +359,8 @@ export default function RolesCard({
                             </div>
                           </div>
                           <CollapsibleContent>
-                            <div className="border-t px-4 pb-4 pt-2">
-                              <div className="mb-4 max-w-md space-y-2">
+                            <div className="min-w-0 border-t px-4 pb-4 pt-2">
+                              <div className="mb-4 min-w-0 space-y-2 sm:max-w-md">
                                 <label className="text-sm font-medium">
                                   Role name
                                 </label>
@@ -368,10 +372,12 @@ export default function RolesCard({
                                 />
                               </div>
                               <TableWrapper>
-                                <Table>
+                                <Table minWidth={420}>
                                   <TableHeader>
                                     <TableRow>
-                                      <TableHead>Module</TableHead>
+                                      <TableHead className="min-w-[8rem]">
+                                        Module
+                                      </TableHead>
                                       <TableHead className="text-center">
                                         Access
                                       </TableHead>
@@ -392,7 +398,7 @@ export default function RolesCard({
                                         const row = permRows.get(m.moduleKey)!;
                                         return (
                                           <TableRow key={m.moduleKey}>
-                                            <TableCell className="font-medium">
+                                            <TableCell className="whitespace-normal font-medium">
                                               {m.title}
                                             </TableCell>
                                             {(

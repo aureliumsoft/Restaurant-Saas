@@ -78,6 +78,12 @@ import {
 } from '@/lib/kiosk-path';
 import { submitKioskOrder } from '@/lib/offline/submit-order';
 import {
+  buildKioskMenuCategoriesUrl,
+  buildKioskMenuCategoryItemsUrl,
+} from '@/lib/customer-menu-client';
+import { useProgressiveCustomerMenu } from '@/hooks/use-progressive-customer-menu';
+import { ProductCardSkeletonGrid, CategoryPillSkeleton } from '@/components/menu/product-card-skeleton';
+import {
   parseRestaurantServiceCharges,
   resolveServiceChargeAmount,
   type RestaurantServiceCharges,
@@ -320,9 +326,6 @@ export function KioskApp({
     'dine_in' | 'take_away' | null
   >(null);
   const [categoryId, setCategoryId] = useState<string>('all');
-  const [menu, setMenu] = useState<MenuRestaurant | null>(null);
-  const [menuLoading, setMenuLoading] = useState(true);
-  const [menuError, setMenuError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [customizeProduct, setCustomizeProduct] =
     useState<CustomerMenuProduct | null>(null);
@@ -349,6 +352,47 @@ export function KioskApp({
   const [branchValid, setBranchValid] = useState<boolean | null>(null);
   const { t, i18n } = useTranslation();
   const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
+
+  const categoryItemsUrl = useCallback(
+    (id: string) => buildKioskMenuCategoryItemsUrl(slug, id),
+    [slug]
+  );
+
+  const {
+    restaurantMeta,
+    categories: progressiveCategories,
+    categoriesLoading,
+    error: menuError,
+  } = useProgressiveCustomerMenu<CustomerMenuProduct>({
+    categoriesUrl: buildKioskMenuCategoriesUrl(slug),
+    categoryItemsUrl,
+    enabled: Boolean(slug),
+  });
+
+  const menu = useMemo((): MenuRestaurant | null => {
+    if (!restaurantMeta) return null;
+    const menus: CustomerMenuCategory[] = progressiveCategories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      imageUrl: c.imageUrl,
+      items: c.items.map((item) => ({ ...item, categoryId: c.id })),
+    }));
+    return {
+      id: String(restaurantMeta.id ?? ''),
+      name: String(restaurantMeta.name ?? ''),
+      logoUrl: (restaurantMeta.logoUrl as string | null) ?? null,
+      mainBannerUrl: (restaurantMeta.mainBannerUrl as string | null) ?? null,
+      themePrimaryColor:
+        (restaurantMeta.themePrimaryColor as string | null) ?? null,
+      slug: String(restaurantMeta.slug ?? slug),
+      menus,
+      serviceCharges: restaurantMeta.serviceCharges as
+        | RestaurantServiceCharges
+        | undefined,
+    };
+  }, [restaurantMeta, progressiveCategories, slug]);
+
+  const menuLoading = categoriesLoading;
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id')?.trim();
@@ -442,44 +486,6 @@ export function KioskApp({
       cancelled = true;
     };
   }, [slug, branchId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setMenuLoading(true);
-      setMenuError(null);
-      try {
-        const res = await fetch(
-          `/api/customer/menu?slug=${encodeURIComponent(slug)}`
-        );
-        const body = (await res.json().catch(() => ({}))) as {
-          data?: MenuRestaurant | null;
-          error?: string;
-        };
-        if (cancelled) return;
-        if (!res.ok) {
-          setMenu(null);
-          setMenuError(
-            typeof body.error === 'string'
-              ? body.error
-              : 'Could not load menu. Please try again.'
-          );
-          return;
-        }
-        setMenu(body.data ?? null);
-        if (!body.data) {
-          setMenuError('Restaurant not found for this link.');
-        }
-      } catch {
-        if (!cancelled) setMenuError('Could not load menu.');
-      } finally {
-        if (!cancelled) setMenuLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
 
   useEffect(() => {
     let cancelled = false;
@@ -917,10 +923,14 @@ export function KioskApp({
     );
   };
 
-  if ((menuLoading && !menu) || branchValid === null) {
+  if (branchValid === null) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f8fafc] p-6">
-        <Loader2 className="h-10 w-10 animate-spin text-primary text-center mx-auto" />
+        <ProductCardSkeletonGrid
+          count={6}
+          variant="kiosk"
+          gridClassName="grid w-full max-w-5xl grid-cols-2 gap-3 sm:grid-cols-3"
+        />
       </div>
     );
   }
@@ -942,7 +952,7 @@ export function KioskApp({
     );
   }
 
-  if (menuError || !menu) {
+  if (!menuLoading && menuError) {
     const notFound = menuError === 'Restaurant not found for this link.';
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f8fafc] p-6">
@@ -958,10 +968,25 @@ export function KioskApp({
     );
   }
 
-  const bannerSrc = menu.mainBannerUrl?.trim() ?? '';
+  const displayMenu: MenuRestaurant = menu ?? {
+    id: '',
+    name: '',
+    logoUrl: null,
+    mainBannerUrl: null,
+    themePrimaryColor: null,
+    slug,
+    menus: progressiveCategories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      imageUrl: c.imageUrl,
+      items: [],
+    })),
+  };
+
+  const bannerSrc = displayMenu.mainBannerUrl?.trim() ?? '';
   const hasBanner = Boolean(bannerSrc);
   const kioskThemeVars = buildThemeCssVars(
-    menu.themePrimaryColor
+    displayMenu.themePrimaryColor
   ) as CSSProperties;
 
   return (
@@ -978,16 +1003,16 @@ export function KioskApp({
         <header className="sticky top-0 z-2000 border-b border-[#e2e8f0] bg-white/95 px-4 py-3 text-[#0f172a] backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              {menu.logoUrl ? (
+              {displayMenu.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={menu.logoUrl}
+                  src={displayMenu.logoUrl}
                   alt=""
                   className="h-11 w-11 shrink-0 rounded-full border border-[#e2e8f0] object-cover"
                 />
               ) : null}
               <div className="min-w-0">
-                <p className="truncate font-semibold">{menu.name}</p>
+                <p className="truncate font-semibold">{displayMenu.name}</p>
                 {branchName ? (
                   <p className="truncate text-xs text-[#64748b]">
                     {branchName}
@@ -1121,6 +1146,14 @@ export function KioskApp({
               <aside className="hidden w-36 shrink-0 border-r border-[#e2e8f0] bg-[#fafafa] py-4 md:block">
                 <ScrollArea className="h-[calc(100vh-8rem)]">
                   <nav className="flex flex-col gap-1 px-2">
+                    {menuLoading ? (
+                      <>
+                        <CategoryPillSkeleton className="h-14 w-full rounded-lg" />
+                        <CategoryPillSkeleton className="h-14 w-full rounded-lg" />
+                        <CategoryPillSkeleton className="h-14 w-full rounded-lg" />
+                      </>
+                    ) : (
+                      <>
                     <button
                       type="button"
                       onClick={() => setCategoryId('all')}
@@ -1134,7 +1167,7 @@ export function KioskApp({
                       <Store className="mb-1 h-5 w-5" />
                       All
                     </button>
-                    {menu.menus.map((c) => {
+                    {displayMenu.menus.map((c) => {
                       const thumb = getCategoryDisplayImageUrl(c);
                       return (
                         <button
@@ -1162,12 +1195,22 @@ export function KioskApp({
                         </button>
                       );
                     })}
+                      </>
+                    )}
                   </nav>
                 </ScrollArea>
               </aside>
 
               <main className="min-w-0 flex-1 px-4 py-4 pb-28">
                 <div className="mb-4 flex gap-2 overflow-x-auto pb-2 md:hidden">
+                  {menuLoading ? (
+                    <>
+                      <CategoryPillSkeleton className="h-10 w-24 rounded-full" />
+                      <CategoryPillSkeleton className="h-10 w-28 rounded-full" />
+                      <CategoryPillSkeleton className="h-10 w-24 rounded-full" />
+                    </>
+                  ) : (
+                    <>
                   <Button
                     type="button"
                     variant={categoryId === 'all' ? 'default' : 'outline'}
@@ -1175,7 +1218,7 @@ export function KioskApp({
                   >
                     All
                   </Button>
-                  {menu.menus.map((c) => {
+                  {displayMenu.menus.map((c) => {
                     const thumb = getCategoryDisplayImageUrl(c);
                     return (
                       <Button
@@ -1197,8 +1240,18 @@ export function KioskApp({
                       </Button>
                     );
                   })}
+                    </>
+                  )}
                 </div>
 
+                {menuLoading ? (
+                  <ProductCardSkeletonGrid
+                    count={6}
+                    variant="kiosk"
+                    gridClassName="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                  />
+                ) : (
+                  <>
                 <HorizontalRow
                   title={t('recommended')}
                   products={recommended}
@@ -1208,24 +1261,73 @@ export function KioskApp({
                   products={offeredPool}
                 />
 
-                <section>
-                  <h2 className="mb-3 text-lg font-bold">
-                    {categoryId === 'all'
-                      ? t('allCategories')
-                      : menu.menus.find((c) => c.id === categoryId)?.name}
-                  </h2>
-                  {displayedProducts.length === 0 ? (
-                    <p className="text-sm text-[#64748b]">
-                      {t('noProductsInCategory')}
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {displayedProducts.map((p) => (
-                        <ProductCard key={p.id} p={p} />
-                      ))}
-                    </div>
-                  )}
-                </section>
+                {categoryId === 'all' ? (
+                  progressiveCategories.map((category) => (
+                    <section key={category.id} className="mb-6">
+                      <h2 className="mb-3 text-lg font-bold">{category.name}</h2>
+                      {category.loading ||
+                      (!category.loaded && category.items.length === 0) ? (
+                        <ProductCardSkeletonGrid
+                          count={4}
+                          variant="kiosk"
+                          gridClassName="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                        />
+                      ) : category.items.length === 0 ? (
+                        <p className="text-sm text-[#64748b]">
+                          {t('noProductsInCategory')}
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {category.items.map((p) => (
+                            <ProductCard
+                              key={p.id}
+                              p={{ ...p, categoryId: category.id }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  ))
+                ) : (
+                  <section>
+                    <h2 className="mb-3 text-lg font-bold">
+                      {displayMenu.menus.find((c) => c.id === categoryId)?.name}
+                    </h2>
+                    {(() => {
+                      const active = progressiveCategories.find(
+                        (c) => c.id === categoryId
+                      );
+                      if (
+                        active?.loading ||
+                        (active && !active.loaded && active.items.length === 0)
+                      ) {
+                        return (
+                          <ProductCardSkeletonGrid
+                            count={4}
+                            variant="kiosk"
+                            gridClassName="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                          />
+                        );
+                      }
+                      if (displayedProducts.length === 0) {
+                        return (
+                          <p className="text-sm text-[#64748b]">
+                            {t('noProductsInCategory')}
+                          </p>
+                        );
+                      }
+                      return (
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {displayedProducts.map((p) => (
+                            <ProductCard key={p.id} p={p} />
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </section>
+                )}
+                  </>
+                )}
               </main>
             </div>
 
@@ -1810,7 +1912,7 @@ export function KioskApp({
           }}
           product={menuOfferProduct}
           bundleProducts={menuOfferBundles}
-          themePrimaryColor={menu?.themePrimaryColor ?? null}
+          themePrimaryColor={displayMenu?.themePrimaryColor ?? null}
           onChooseSingle={() => {
             const p = menuOfferProduct;
             setMenuOfferOpen(false);
@@ -1831,7 +1933,7 @@ export function KioskApp({
           productName={customizeProduct?.name ?? ''}
           productImageUrl={customizeProduct?.imageUrl ?? null}
           productDescription={customizeProduct?.description ?? null}
-          themePrimaryColor={menu?.themePrimaryColor ?? null}
+          themePrimaryColor={displayMenu?.themePrimaryColor ?? null}
           productBaseUnitPrice={
             customizeProduct
               ? effectiveUnitPrice(

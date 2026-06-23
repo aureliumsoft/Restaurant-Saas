@@ -19,14 +19,13 @@ import {
   resolveServiceChargeAmount,
 } from '@/lib/restaurant-service-charge';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { getOrOpenPosShift } from '@/lib/pos-shift';
 
-type LineInput = {
-  productId: string;
-  name?: string;
-  qty: number;
-  unitPrice: number;
-  lineDiscPct: number;
-};
+import {
+  normalizePosOrderLines,
+  paymentModeToMethodLabel,
+  type PosOrderLineInput,
+} from '@/lib/pos-order-lines';
 
 export async function POST(req: NextRequest) {
   try {
@@ -76,7 +75,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid total' }, { status: 400 });
     }
 
-    const items = Array.isArray(body.items) ? (body.items as LineInput[]) : [];
+    const items = Array.isArray(body.items) ? (body.items as PosOrderLineInput[]) : [];
     if (items.length === 0) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
     }
@@ -112,14 +111,7 @@ export async function POST(req: NextRequest) {
       paymentStatusRaw === 'cancelled'
         ? paymentStatusRaw
         : 'completed';
-    const methodLabel =
-      paymentMode === 'card'
-        ? 'Card'
-        : paymentMode === 'card_terminal'
-          ? 'Card Terminal'
-        : paymentMode === 'split'
-          ? 'Split'
-          : 'Cash';
+    const methodLabel = paymentModeToMethodLabel(paymentMode);
 
     const addressRaw = body.address;
     const address =
@@ -180,44 +172,12 @@ export async function POST(req: NextRequest) {
       tableLabel = diningTable.name;
     }
 
-    const baseProductIds = items.map((line) =>
-      String(line.productId).split('::sw:')[0] ?? String(line.productId)
-    );
-    const menuItems = await db.menuItem.findMany({
-      where: {
-        restaurantId,
-        id: { in: baseProductIds },
-      },
-      select: { id: true, name: true },
+    const normalizedItems = await normalizePosOrderLines({
+      restaurantId,
+      items,
+      db,
     });
-    const menuMap = new Map(menuItems.map((m) => [m.id, m]));
-
-    const normalizedItems = items
-      .map((line) => {
-        const baseProductId =
-          String(line.productId).split('::sw:')[0] ?? String(line.productId);
-        const menu = menuMap.get(baseProductId);
-        if (!menu) return null;
-
-        const qty = Math.max(1, Math.floor(Number(line.qty) || 0));
-        const unit = Number(line.unitPrice);
-        const discPct = Math.min(100, Math.max(0, Number(line.lineDiscPct) || 0));
-        if (Number.isNaN(unit)) return null;
-
-        const unitAfterDisc = unit * (1 - discPct / 100);
-        return {
-          menuItemId: menu.id,
-          productName:
-            typeof line.name === 'string' && line.name.trim() !== ''
-              ? line.name.trim()
-              : menu.name,
-          quantity: qty,
-          price: unitAfterDisc,
-        };
-      })
-      .filter((line): line is NonNullable<typeof line> => line !== null);
-
-    if (normalizedItems.length === 0) {
+    if (!normalizedItems) {
       return NextResponse.json(
         { error: 'No valid menu items found in cart' },
         { status: 400 }
@@ -257,6 +217,12 @@ export async function POST(req: NextRequest) {
 
     const result = await db.$transaction(
       async (tx) => {
+        const activeShift = await getOrOpenPosShift({
+          restaurantId,
+          branchId,
+          userId: auth.userId,
+        });
+
         const ticketDate = utcTicketDateFromNow();
         let ticketNumber = await allocateTicketNumber(tx, {
           restaurantId,
@@ -283,6 +249,7 @@ export async function POST(req: NextRequest) {
                 serviceChargeAmount: expectedServiceCharge,
                 diningTableId,
                 tableLabel,
+                posShiftId: activeShift.id,
               },
             });
             break;

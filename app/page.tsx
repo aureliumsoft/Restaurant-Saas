@@ -33,9 +33,10 @@ import Header from '@/components/main/header';
 
 export default function Home() {
   return (
-    <main className="relative min-h-screen w-full overflow-hidden bg-white text-zinc-900 transition-colors dark:bg-black dark:text-white">
-      <Header />
+    <div className="marketing-site-shell relative min-h-screen w-full overflow-x-hidden bg-white text-zinc-900 transition-colors dark:bg-black dark:text-white">
+      <Header pinToViewport />
 
+      <main className="marketing-site-main relative w-full overflow-x-hidden">
       <HeroSection />
       <FeaturesSection />
       <StatsSection />
@@ -43,7 +44,8 @@ export default function Home() {
       <RecommendationsSection />
 
       <Footer />
-    </main>
+      </main>
+    </div>
   );
 }
 
