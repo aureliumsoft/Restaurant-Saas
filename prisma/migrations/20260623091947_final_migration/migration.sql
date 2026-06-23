@@ -23,6 +23,9 @@ CREATE TYPE "CatProduct" AS ENUM ('ELECTRO', 'DRINK', 'FOOD', 'FASHION');
 CREATE TYPE "OrderSourceType" AS ENUM ('POS', 'ONLINE', 'WALK_IN', 'KIOSK', 'OTHER');
 
 -- CreateEnum
+CREATE TYPE "PosShiftStatus" AS ENUM ('OPEN', 'CLOSED');
+
+-- CreateEnum
 CREATE TYPE "CustomerPaymentProvider" AS ENUM ('NONE', 'PAYPAL', 'STRIPE');
 
 -- CreateTable
@@ -167,6 +170,24 @@ CREATE TABLE "Branch" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Branch_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PosShift" (
+    "id" TEXT NOT NULL,
+    "restaurantId" TEXT NOT NULL,
+    "branchId" TEXT,
+    "openedByUserId" TEXT NOT NULL,
+    "closedByUserId" TEXT,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+    "closingCashInLocker" DOUBLE PRECISION,
+    "status" "PosShiftStatus" NOT NULL DEFAULT 'OPEN',
+    "notes" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PosShift_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -463,6 +484,7 @@ CREATE TABLE "Order" (
     "customerComment" TEXT,
     "diningTableId" TEXT,
     "tableLabel" TEXT,
+    "posShiftId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -633,6 +655,15 @@ CREATE UNIQUE INDEX "DiningTable_restaurantId_branchId_name_key" ON "DiningTable
 CREATE INDEX "Branch_restaurantId_idx" ON "Branch"("restaurantId");
 
 -- CreateIndex
+CREATE INDEX "PosShift_restaurantId_status_idx" ON "PosShift"("restaurantId", "status");
+
+-- CreateIndex
+CREATE INDEX "PosShift_restaurantId_branchId_status_idx" ON "PosShift"("restaurantId", "branchId", "status");
+
+-- CreateIndex
+CREATE INDEX "PosShift_startedAt_idx" ON "PosShift"("startedAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "RestaurantSubscription_restaurantId_key" ON "RestaurantSubscription"("restaurantId");
 
 -- CreateIndex
@@ -732,6 +763,9 @@ CREATE INDEX "Order_sourceType_idx" ON "Order"("sourceType");
 CREATE INDEX "Order_diningTableId_idx" ON "Order"("diningTableId");
 
 -- CreateIndex
+CREATE INDEX "Order_posShiftId_idx" ON "Order"("posShiftId");
+
+-- CreateIndex
 CREATE INDEX "Order_restaurantId_ticketDate_idx" ON "Order"("restaurantId", "ticketDate");
 
 -- CreateIndex
@@ -796,6 +830,18 @@ ALTER TABLE "DiningTable" ADD CONSTRAINT "DiningTable_branchId_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "Branch" ADD CONSTRAINT "Branch_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "Restaurant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PosShift" ADD CONSTRAINT "PosShift_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "Restaurant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PosShift" ADD CONSTRAINT "PosShift_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PosShift" ADD CONSTRAINT "PosShift_openedByUserId_fkey" FOREIGN KEY ("openedByUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PosShift" ADD CONSTRAINT "PosShift_closedByUserId_fkey" FOREIGN KEY ("closedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "RestaurantSubscription" ADD CONSTRAINT "RestaurantSubscription_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "Restaurant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -901,6 +947,9 @@ ALTER TABLE "Order" ADD CONSTRAINT "Order_customerId_fkey" FOREIGN KEY ("custome
 
 -- AddForeignKey
 ALTER TABLE "Order" ADD CONSTRAINT "Order_diningTableId_fkey" FOREIGN KEY ("diningTableId") REFERENCES "DiningTable"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Order" ADD CONSTRAINT "Order_posShiftId_fkey" FOREIGN KEY ("posShiftId") REFERENCES "PosShift"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
