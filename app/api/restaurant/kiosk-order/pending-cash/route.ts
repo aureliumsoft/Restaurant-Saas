@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { OrderSourceType } from '@prisma/client';
+import { OrderSourceType, type Prisma } from '@prisma/client';
 
 import {
   getBranchScopeFromRequest,
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
       branchId = branchIdFromQuery;
     }
 
-    const pendingCashWhere = {
+    const pendingCashWhere: Prisma.OrderWhereInput = {
       restaurantId: auth.restaurantId,
       ...orderBranchWhere(branchId),
       sourceType: OrderSourceType.KIOSK,

@@ -1,4 +1,4 @@
-import { OrderSourceType, PosShiftStatus } from '@prisma/client';
+import { OrderSourceType, PosShiftStatus, type Prisma } from '@prisma/client';
 
 import { db } from '@/lib/db';
 import { isCanceledOrderStatus } from '@/lib/sales-order-status';
@@ -47,7 +47,7 @@ const completedPaymentWhere = {
       status: { in: ['completed', 'complete'] },
     },
   },
-} as const;
+} satisfies Prisma.OrderWhereInput;
 
 function isCashPayment(method: string | null): boolean {
   if (!method) return false;

@@ -1,18 +1,21 @@
+import type { Prisma } from '@prisma/client';
+
 /** Categories visible on web storefront, kiosk browse, and POS category tabs. */
-export const MENU_CATEGORY_FRONT_FILTER = {
+export const MENU_CATEGORY_FRONT_FILTER: Prisma.MenuCategoryWhereInput = {
   showInFront: true,
-} as const;
+};
 
 /** Storefront / kiosk / POS: must be shown in front and have at least one product. */
-export const CUSTOMER_MENU_CATEGORY_WHERE = {
+export const CUSTOMER_MENU_CATEGORY_WHERE: Prisma.MenuCategoryWhereInput = {
   showInFront: true,
   OR: [{ itemLinks: { some: {} } }, { items: { some: {} } }],
-} as const;
+};
 
 /** Categories usable as recommendation sources (on-menu and add-on only), non-empty. */
-export const RECOMMENDATION_SOURCE_CATEGORY_WHERE = {
-  itemLinks: { some: {} },
-} as const;
+export const RECOMMENDATION_SOURCE_CATEGORY_WHERE: Prisma.MenuCategoryWhereInput =
+  {
+    itemLinks: { some: {} },
+  };
 
 export function categoryHasProducts(
   category: { items?: unknown[] | null } | null | undefined

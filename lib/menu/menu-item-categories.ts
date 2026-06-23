@@ -122,8 +122,9 @@ export async function loadCategoriesWithLinkedItems<
       } as TItemSelect,
     });
 
-    for (const item of legacyItems) {
-      const categoryId = (item as { categoryId: string }).categoryId;
+    for (const row of legacyItems) {
+      const item = row as MenuItem & { categoryId: string; id: string };
+      const categoryId = item.categoryId;
       const list = itemsByCategory.get(categoryId) ?? [];
       const seen = itemIdsByCategory.get(categoryId) ?? new Set<string>();
       if (!seen.has(item.id)) {
@@ -200,7 +201,8 @@ export async function loadSingleCategoryWithLinkedItems<
     orderBy: options.itemOrderBy ?? { name: 'asc' },
     select: options.itemSelect,
   });
-  for (const item of legacyItems) {
+  for (const row of legacyItems) {
+    const item = row as MenuItem & { id: string };
     if (seen.has(item.id)) continue;
     seen.add(item.id);
     items.push(item);
