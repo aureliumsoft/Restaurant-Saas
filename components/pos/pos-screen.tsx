@@ -3304,6 +3304,7 @@ export function PosScreen() {
         brandName={branding.name || 'Restaurant'}
         branchName={selectedBranchName}
         logoUrl={branding.logoUrl}
+        isOwnerOrAdmin={isOwnerOrAdmin}
         onShiftUpdated={handleShiftUpdated}
         onShiftClosed={handleShiftClosed}
       />

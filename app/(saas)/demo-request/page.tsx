@@ -1,18 +1,74 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import axios from 'axios';
+import {
+  CheckCircle2,
+  Home,
+  Loader2,
+  LogIn,
+  PlusCircle,
+  SendHorizonal,
+} from 'lucide-react';
+import { toast } from 'react-toastify';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'react-toastify';
-import { Loader2, SendHorizonal } from 'lucide-react';
+import {
+  DEMO_OWNER_EMAIL,
+  DEMO_OWNER_PASSWORD,
+} from '@/lib/demo-restaurant';
+
+function DemoCredentialsBanner() {
+  return (
+    <div className="mb-6 rounded-2xl border border-fire-200/80 bg-fire-50/80 p-4 dark:border-fire-500/30 dark:bg-fire-500/10">
+      <p className="text-sm font-semibold text-fire-800 dark:text-fire-200">
+        Demo restaurant access
+      </p>
+      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+        Use these credentials to explore the product before or after your demo
+        request.
+      </p>
+      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+            Email
+          </dt>
+          <dd className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
+            {DEMO_OWNER_EMAIL}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+            Password
+          </dt>
+          <dd className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
+            {DEMO_OWNER_PASSWORD}
+          </dd>
+        </div>
+      </dl>
+      <Button
+        asChild
+        size="sm"
+        className="mt-4 bg-gradient-to-r from-fire-500 to-fire-600 text-white hover:from-fire-400 hover:to-fire-500"
+      >
+        <Link href="/login">
+          <LogIn className="mr-2 h-4 w-4" />
+          Sign in to demo
+        </Link>
+      </Button>
+    </div>
+  );
+}
 
 export default function DemoRequestPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [restaurant, setRestaurant] = useState('');
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,10 +79,7 @@ export default function DemoRequestPage() {
         email: email.trim(),
         restaurant: restaurant.trim(),
       });
-      toast.success('Demo request submitted. We will contact you soon.');
-      setName('');
-      setEmail('');
-      setRestaurant('');
+      setSubmitted(true);
     } catch (error: unknown) {
       const msg =
         axios.isAxiosError(error) && error.response?.data?.error
@@ -40,65 +93,108 @@ export default function DemoRequestPage() {
     }
   }
 
+  function startNewRequest() {
+    setSubmitted(false);
+    setName('');
+    setEmail('');
+    setRestaurant('');
+  }
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-white px-6 py-16 text-zinc-900 dark:bg-black dark:text-white">
       <div className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-fire-500/20 blur-3xl dark:bg-fire-500/25" />
       <div className="pointer-events-none absolute -bottom-20 right-0 h-72 w-72 rounded-full bg-fire-300/20 blur-3xl dark:bg-fire-700/20" />
       <div className="relative mx-auto max-w-xl rounded-3xl border border-zinc-200/80 bg-white/95 p-8 shadow-[0_30px_80px_-30px] shadow-black/20 backdrop-blur-sm dark:border-zinc-800/80 dark:bg-zinc-950/80 dark:shadow-black/60">
-        <h1 className="text-3xl font-bold md:text-4xl">Request a Demo</h1>
-        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-          See how Foodluk SaaS can fit your operation in a guided product
-          walkthrough.
-        </p>
 
-        <form className="mt-8 space-y-4" onSubmit={onSubmit}>
-          <div className="space-y-2">
-            <Label htmlFor="name">Your name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
+        {submitted ? (
+          <div className="text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-9 w-9" strokeWidth={2.5} />
+            </div>
+            <h1 className="mt-5 text-3xl font-bold md:text-4xl">Request sent</h1>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+              Your demo request was submitted successfully. Check your email to
+              stay updated about your request.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={startNewRequest}
+              >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                New request
+              </Button>
+              <Button
+                asChild
+                className="w-full bg-gradient-to-r from-fire-500 via-fire-600 to-fire-500 text-white hover:from-fire-400 hover:to-fire-500 sm:w-auto"
+              >
+                <Link href="/">
+                  <Home className="mr-2 h-4 w-4" />
+                  Back to homepage
+                </Link>
+              </Button>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Business email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="restaurant">Restaurant / brand name</Label>
-            <Input
-              id="restaurant"
-              value={restaurant}
-              onChange={(e) => setRestaurant(e.target.value)}
-              required
-            />
-          </div>
+        ) : (
+          <>
+            <h1 className="text-3xl font-bold md:text-4xl">Request a Demo</h1>
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+              See how Foodluk SaaS can fit your operation in a guided product
+              walkthrough.
+            </p>
 
-          <Button
-            type="submit"
-            disabled={loading}
-            className="bg-gradient-to-r from-fire-500 via-fire-600 to-fire-500 text-white hover:from-fire-400 hover:to-fire-500"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                <span>Submitting...</span>
-              </>
-            ) : (
-              <>
-                <span>Submit Demo Request</span>
-                <SendHorizonal className="h-4 w-4 ml-1" />
-              </>
-            )}
-          </Button>
-        </form>
+            <form className="mt-8 space-y-4" onSubmit={onSubmit}>
+              <div className="space-y-2">
+                <Label htmlFor="name">Your name</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Business email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="restaurant">Restaurant / brand name</Label>
+                <Input
+                  id="restaurant"
+                  value={restaurant}
+                  onChange={(e) => setRestaurant(e.target.value)}
+                  required
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={loading}
+                className="bg-gradient-to-r from-fire-500 via-fire-600 to-fire-500 text-white hover:from-fire-400 hover:to-fire-500"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Submit Demo Request</span>
+                    <SendHorizonal className="ml-1 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </form>
+          </>
+        )}
       </div>
     </main>
   );

@@ -125,11 +125,7 @@ function LoginForm() {
       if (!result?.ok) {
         const err = (result as any)?.error;
         const statusCode = (result as any)?.status;
-        console.log('[login][credentials] signIn response:', {
-          ok: (result as any)?.ok,
-          error: err,
-          status: statusCode,
-        });
+      
         toast.error(
           err === 'CredentialsSignin'
             ? 'Invalid email or password.'

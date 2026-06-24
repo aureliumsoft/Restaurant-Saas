@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { useRouter } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import { Banknote, Loader2, Printer, Receipt } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -21,6 +23,7 @@ import { printPosShiftRecord } from '@/lib/pos-shift-print';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { isCanceledOrderStatus } from '@/lib/sales-order-status';
 import { cn } from '@/lib/utils';
+import { LogoutConfirmation } from '@/components/ui/confirmation-dialogs';
 
 function formatMoney(n: number) {
   return n.toLocaleString('en-IE', {
@@ -41,6 +44,7 @@ type Props = {
   brandName?: string;
   branchName?: string | null;
   logoUrl?: string | null;
+  isOwnerOrAdmin?: boolean;
   onShiftUpdated?: (shift: PosShiftPayload | null) => void;
   onShiftClosed?: (summary: Pick<
     PosShiftSummary,
@@ -55,12 +59,15 @@ export function PosShiftSheet({
   brandName = 'Restaurant',
   branchName,
   logoUrl,
+  isOwnerOrAdmin = false,
   onShiftUpdated,
   onShiftClosed,
 }: Props) {
+  const router = useRouter();
   const [shift, setShift] = useState<PosShiftPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [cashInLocker, setCashInLocker] = useState('');
   const onShiftUpdatedRef = useRef(onShiftUpdated);
   const onShiftClosedRef = useRef(onShiftClosed);
@@ -114,8 +121,28 @@ export function PosShiftSheet({
   }, [open, branchId, loadShift]);
 
   useEffect(() => {
-    if (!open) setCashInLocker('');
+    if (!open) {
+      setCashInLocker('');
+      setEndConfirmOpen(false);
+    }
   }, [open]);
+
+  const handleAfterShiftEnded = useCallback(async () => {
+    if (isOwnerOrAdmin) {
+      router.push('/dashboard');
+      return;
+    }
+    await signOut({ callbackUrl: '/login' });
+  }, [isOwnerOrAdmin, router]);
+
+  const requestEndShift = () => {
+    if (!shift || ending) return;
+    if (cashLeftInLocker == null) {
+      toast.warn('Enter the cash left in the money locker for this shift.');
+      return;
+    }
+    setEndConfirmOpen(true);
+  };
 
   const handlePrint = () => {
     if (!shift) return;
@@ -148,7 +175,11 @@ export function PosShiftSheet({
         branchId: branchId || undefined,
       });
       const { closedShift, nextShift } = res.data.data;
-      toast.success('Shift ended. A new shift has started.');
+      toast.success(
+        isOwnerOrAdmin
+          ? 'Shift ended. Returning to dashboard.'
+          : 'Shift ended. Signing you out.'
+      );
       setCashInLocker('');
       setShift(nextShift);
       onShiftUpdatedRef.current?.(nextShift);
@@ -161,7 +192,9 @@ export function PosShiftSheet({
           lastShiftEndedAt: closedShift.endedAt,
         });
       }
+      setEndConfirmOpen(false);
       onOpenChange(false);
+      await handleAfterShiftEnded();
     } catch (error) {
       toast.error(apiErrorMessage(error, 'Could not end shift.'));
     } finally {
@@ -379,7 +412,7 @@ export function PosShiftSheet({
                   type="button"
                   className="w-full"
                   disabled={ending || cashLeftInLocker == null}
-                  onClick={() => void endShift()}
+                  onClick={requestEndShift}
                 >
                   {ending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -397,6 +430,21 @@ export function PosShiftSheet({
           </div>
         )}
       </SheetContent>
+
+      <LogoutConfirmation
+        open={endConfirmOpen}
+        loading={ending}
+        title="End shift?"
+        description={
+          isOwnerOrAdmin
+            ? 'This will close your current shift and return you to the dashboard.'
+            : 'This will close your current shift and sign you out of POS.'
+        }
+        confirmText="End shift"
+        cancelText="Cancel"
+        onCancel={() => setEndConfirmOpen(false)}
+        onConfirm={() => void endShift()}
+      />
     </Sheet>
   );
 }

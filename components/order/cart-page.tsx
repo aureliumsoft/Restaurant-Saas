@@ -674,9 +674,11 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
           ) : (
             <div className="max-h-80 space-y-3 overflow-y-auto py-1">
               {offeredProducts.map((p) => (
+              
                 <div
                   key={p.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border p-2 text-sm"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border p-2 text-sm cursor-pointer"
+                  onClick={() => handleAddOffered(p)}
                 >
                   <div className="flex items-center gap-3">
                     {p.imageUrl ? (
@@ -707,7 +709,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                       size="sm"
                       type="button"
                       onClick={() => handleAddOffered(p)}
-                    >
+                      >
                       {t('add')}
                     </Button>
                   </div>

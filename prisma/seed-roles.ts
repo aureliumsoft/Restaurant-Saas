@@ -71,7 +71,6 @@ async function upsertGlobalRole(
       where: { id: existing.id },
       data: { name },
     });
-    console.log(`[seed] Updated global role "${name}" (${slug})`);
     return;
   }
 

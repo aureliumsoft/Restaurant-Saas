@@ -105,11 +105,7 @@ export default function RegisterPage() {
       if (!login?.ok) {
         const err = (login as any)?.error;
         const status = (login as any)?.status;
-        console.log('[register][credentials] signIn response:', {
-          ok: (login as any)?.ok,
-          error: err,
-          status,
-        });
+       
         toast.error(
           err === 'CredentialsSignin'
             ? 'Invalid email or password after signup.'

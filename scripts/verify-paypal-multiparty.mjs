@@ -26,4 +26,3 @@ if (payload.iss !== 'PLATFORM_CLIENT_ID' || payload.payer_id !== 'SELLER_MERCHAN
   throw new Error('Auth assertion payload mismatch');
 }
 
-console.log('PayPal multiparty helper checks passed.');

@@ -1,15 +1,17 @@
 import type { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
-import { DEMO_RESTAURANT_SLUG } from '../lib/demo-restaurant';
+import {
+  DEMO_OWNER_EMAIL,
+  DEMO_OWNER_PASSWORD,
+  DEMO_RESTAURANT_SLUG,
+} from '../lib/demo-restaurant';
 import {
   ensureRestaurantOwnerEmployee,
   refreshAllRestaurantOwnerRoles,
 } from './seed-restaurant-roles';
 import { SEED_GLOBAL_ROLE_SLUG } from './seed-roles';
 
-const DEMO_OWNER_EMAIL = 'demo-store-owner@local.dev';
-const DEMO_OWNER_PASSWORD = '123456789';
 const SALT_ROUNDS = 10;
 
 async function seedDemoMenu(prisma: PrismaClient, restaurantId: string) {

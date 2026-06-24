@@ -31,7 +31,6 @@ function AuthErrorToasts({ children }: { children: React.ReactNode }) {
     const msg = getErrorMessage(error);
     if (!msg) return;
     // Helps verify the layout is mounted and `?error=` is being read.
-    console.log('[auth][toast] error param:', error);
     if (lastShownRef.current === error) return; // avoid double toast in dev
     lastShownRef.current = error;
     toast.error(msg);

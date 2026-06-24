@@ -42,9 +42,6 @@ async function upsertPlatformAdminUser(
         emailVerified: new Date(),
       },
     });
-    console.log(
-      `[seed] Updated platform admin: ${email} (role: ${adminRoleName}, password reset)`
-    );
     return;
   }
 
@@ -59,7 +56,6 @@ async function upsertPlatformAdminUser(
     },
   });
 
-  console.log(`[seed] Created platform admin: ${email} (role: ${adminRoleName})`);
 }
 
 export async function seedPlatformAdminUser(prisma: PrismaClient) {
@@ -84,9 +80,7 @@ async function main() {
   try {
     await seedDefaultGlobalRoles(prisma);
     await seedPlatformAdminUser(prisma);
-    console.log(
-      `[seed] Login at /login with any seeded admin email / ${ADMIN_PASSWORD} → /admin/dashboard`
-    );
+    
   } finally {
     await prisma.$disconnect();
   }
