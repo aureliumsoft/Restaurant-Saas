@@ -23,6 +23,7 @@ import {
 } from '@/components/kds/kds-order-action-dialog';
 import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
 import { kdsFetchErrorMessage } from '@/lib/kds-api-errors';
+import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 
 type PendingOrder = {
   id: string;
@@ -189,6 +190,13 @@ export function KdsManagerBoard() {
   }
 
   async function proceed(orderId: string): Promise<boolean> {
+    const order = orders.find((o) => o.id === orderId);
+    if (order && isPendingPaymentStatus(order.paymentStatus)) {
+      toast.warn(
+        'Payment is still pending. Complete payment in POS before proceeding.'
+      );
+      return false;
+    }
     const minutes = resolveMinutesForOrder(orderId);
     if (minutes === null) {
       toast.warn(
@@ -299,7 +307,9 @@ export function KdsManagerBoard() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {orders.map((o) => (
+          {orders.map((o) => {
+            const paymentPending = isPendingPaymentStatus(o.paymentStatus);
+            return (
             <Card key={o.id}>
               <CardHeader className="pb-3">
                 <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -323,7 +333,7 @@ export function KdsManagerBoard() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    {o.paymentStatus?.toLowerCase() === 'pending' ? (
+                    {paymentPending ? (
                       <Badge className="bg-amber-500/15 text-amber-800 hover:bg-amber-500/20 dark:text-amber-300">
                         Payment pending
                         {o.paymentMethod ? ` · ${o.paymentMethod}` : ''}
@@ -451,11 +461,19 @@ export function KdsManagerBoard() {
                       </div>
                     </div>
 
+                    {paymentPending ? (
+                      <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                        Collect payment at POS before sending this order to the
+                        kitchen.
+                      </p>
+                    ) : null}
+
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <Button
                         className="w-full"
                         type="button"
                         disabled={
+                          paymentPending ||
                           (activeSubmitCount > 0 &&
                             activeSubmittingOrderId !== o.id) ||
                           (activeSubmittingOrderId !== null &&
@@ -464,6 +482,12 @@ export function KdsManagerBoard() {
                             activeCancelOrderId === o.id)
                         }
                         onClick={() => {
+                          if (paymentPending) {
+                            toast.warn(
+                              'Payment is still pending. Complete payment in POS before proceeding.'
+                            );
+                            return;
+                          }
                           const minutes = resolveMinutesForOrder(o.id);
                           if (minutes === null) {
                             toast.warn(
@@ -536,7 +560,8 @@ export function KdsManagerBoard() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
       <KdsOrderActionDialog

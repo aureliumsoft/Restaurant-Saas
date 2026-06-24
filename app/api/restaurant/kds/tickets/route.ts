@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { getBranchScopeFromRequest, orderBranchSql } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 
 const MIN_PREP_MINUTES = 1;
 const MAX_PREP_MINUTES = 240;
@@ -185,6 +186,11 @@ export async function POST(req: NextRequest) {
       where: { id: orderId, restaurantId },
       select: {
         id: true,
+        payments: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { status: true },
+        },
         items: {
           select: {
             quantity: true,
@@ -196,6 +202,16 @@ export async function POST(req: NextRequest) {
     });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    if (isPendingPaymentStatus(order.payments[0]?.status)) {
+      return NextResponse.json(
+        {
+          error:
+            'Payment is still pending. Complete payment in POS before sending this order to the kitchen.',
+        },
+        { status: 409 }
+      );
     }
 
     const existing = await db.$queryRaw<{ id: string; status: string }[]>(
@@ -242,11 +258,6 @@ export async function POST(req: NextRequest) {
           where: { id: order.id },
           data: { status: 'making' },
         });
-
-        await tx.payment.updateMany({
-          where: { orderId: order.id, status: 'pending' },
-          data: { status: 'completed' },
-        });
       }, KDS_TX_OPTIONS);
 
       return NextResponse.json({ data: { id: activeTicket.id } }, { status: 200 });
@@ -276,11 +287,6 @@ export async function POST(req: NextRequest) {
       await tx.order.update({
         where: { id: order.id },
         data: { status: 'making' },
-      });
-
-      await tx.payment.updateMany({
-        where: { orderId: order.id, status: 'pending' },
-        data: { status: 'completed' },
       });
 
       return created;

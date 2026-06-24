@@ -22,6 +22,45 @@ import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
 const REFRESH_INTERVAL_MS = 5000;
 const VOICE_STORAGE_KEY = 'order-display:voice-enabled';
 const COMPLETED_ANNOUNCEMENT_REPEATS = 3;
+const IN_PROGRESS_DISPLAY_LIMIT = 8;
+
+const FEMALE_VOICE_HINT =
+  /female|mujer|woman|helena|monica|paulina|lucia|laura|sabina|elena|sofia|isabel|maria|español.*femenin/i;
+const MALE_VOICE_HINT =
+  /male|hombre|man\b|pablo|jorge|diego|carlos|daniel|enrique|rodrigo|español(?!.*femenin)/i;
+
+let cachedSpanishFemaleVoice: SpeechSynthesisVoice | null | undefined;
+
+function pickSpanishFemaleVoice(
+  synth: SpeechSynthesis
+): SpeechSynthesisVoice | null {
+  const voices = synth.getVoices();
+  const spanish = voices.filter(
+    (v) =>
+      v.lang.toLowerCase().startsWith('es') || /spanish|español/i.test(v.name)
+  );
+  if (spanish.length === 0) return null;
+
+  const female = spanish.find((v) => FEMALE_VOICE_HINT.test(v.name));
+  if (female) return female;
+
+  const notMale = spanish.find((v) => !MALE_VOICE_HINT.test(v.name));
+  return notMale ?? null;
+}
+
+function getSpanishFemaleVoice(
+  synth: SpeechSynthesis
+): SpeechSynthesisVoice | null {
+  if (cachedSpanishFemaleVoice !== undefined) {
+    return cachedSpanishFemaleVoice;
+  }
+  cachedSpanishFemaleVoice = pickSpanishFemaleVoice(synth);
+  return cachedSpanishFemaleVoice;
+}
+
+function resetSpanishFemaleVoiceCache() {
+  cachedSpanishFemaleVoice = undefined;
+}
 
 /**
  * Build the speech string for a newly-ready order.
@@ -49,8 +88,14 @@ function speakUtterance(synth: SpeechSynthesis, text: string): Promise<void> {
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = 'es-ES';
     utter.rate = 0.95;
-    utter.pitch = 1;
+    utter.pitch = 1.05;
     utter.volume = 1;
+    const femaleVoice = getSpanishFemaleVoice(synth);
+    if (femaleVoice) {
+      utter.voice = femaleVoice;
+    } else {
+      utter.pitch = 1.15;
+    }
     const done = () => resolve();
     utter.onend = done;
     utter.onerror = done;
@@ -148,6 +193,15 @@ export function OrderDisplayScreen() {
   const initializedRef = useRef(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const synth = window.speechSynthesis;
+    const onVoicesChanged = () => resetSpanishFemaleVoiceCache();
+    synth.addEventListener('voiceschanged', onVoicesChanged);
+    resetSpanishFemaleVoiceCache();
+    return () => synth.removeEventListener('voiceschanged', onVoicesChanged);
+  }, []);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     const stored = window.localStorage.getItem(VOICE_STORAGE_KEY);
     if (stored === 'off') {
@@ -172,6 +226,8 @@ export function OrderDisplayScreen() {
         if (next && window.speechSynthesis) {
           const warm = new SpeechSynthesisUtterance(' ');
           warm.volume = 0;
+          const femaleVoice = getSpanishFemaleVoice(window.speechSynthesis);
+          if (femaleVoice) warm.voice = femaleVoice;
           window.speechSynthesis.speak(warm);
         }
       }
@@ -360,9 +416,9 @@ export function OrderDisplayScreen() {
           </div>
         </section>
 
-        {/* RIGHT HALF — top: 2 recent ready cards, bottom: 4 in-progress (2x2). */}
-        <section className="flex min-h-0 flex-col gap-3 overflow-hidden">
-          <div className="flex min-h-0 flex-col gap-2">
+        {/* RIGHT HALF — compact rows: recent ready (2) + in-progress (up to 8). */}
+        <section className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+          <div className="flex shrink-0 flex-col gap-2">
             <SectionTitle
               title="Recently Completed"
               subtitle="Picked up next"
@@ -397,28 +453,29 @@ export function OrderDisplayScreen() {
             )}
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-2">
+          <div className="flex shrink-0 flex-col gap-2">
             <SectionTitle
               title="In Preparation"
-              subtitle="We’re cooking your food"
+              subtitle="Working on your order"
               accent="amber"
             />
             {loading ? (
-              <div className="grid min-h-0 flex-1 grid-cols-2 gap-3">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <SkeletonCard key={i} className="h-full" />
-                ))}
+              <div className="grid grid-cols-2 grid-rows-4 gap-2 sm:gap-3">
+                {Array.from({ length: IN_PROGRESS_DISPLAY_LIMIT }).map(
+                  (_, i) => (
+                    <SkeletonCard key={i} className="h-24" />
+                  )
+                )}
               </div>
             ) : inProgress.length === 0 ? (
               <EmptyState
-                className="flex-1"
-                icon={<Utensils className="h-10 w-10 text-amber-500/60" />}
+                icon={<Utensils className="h-8 w-8 text-amber-500/50" />}
                 title="No orders being prepared"
-                subtitle="New orders will appear here."
+                subtitle="Orders being worked on will appear here."
               />
             ) : (
-              <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 [&>*]:min-h-0">
-                {inProgress.slice(0, 4).map((t) => (
+              <div className="grid grid-cols-2 grid-rows-4 gap-2 sm:gap-3">
+                {inProgress.slice(0, IN_PROGRESS_DISPLAY_LIMIT).map((t) => (
                   <InProgressCard key={t.ticketId} ticket={t} />
                 ))}
               </div>
@@ -543,29 +600,26 @@ function RecentReadyCard({
   );
 }
 
-/** In-progress card in the bottom-right 2x2 grid. */
+/** Compact in-progress card — same horizontal layout as recently completed. */
 function InProgressCard({ ticket }: { ticket: OrderDisplayTicket }) {
   return (
-    <Card className="flex h-full flex-col overflow-hidden border-amber-500/30 bg-amber-500/[0.04] shadow-sm">
-      <CardContent className="flex flex-1 items-start gap-3 p-3 md:p-4">
-        <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300">
-          <Clock3 className="h-6 w-6" />
+    <Card className="relative overflow-hidden border-amber-500/30 bg-amber-500/[0.05] shadow-sm">
+      <CardContent className="flex items-center gap-3 p-3 md:p-4">
+        <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-amber-500 text-white shadow-md shadow-amber-500/40">
+          <Clock3 className="h-7 w-7" strokeWidth={2.5} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400">
             Token
           </p>
-          <p className="font-mono text-3xl font-extrabold leading-none tracking-tight text-amber-700 dark:text-amber-200">
+          <p className="font-mono text-3xl font-extrabold leading-none tracking-tight text-amber-700 dark:text-amber-300">
             {tokenLabel(ticket)}
           </p>
-          <p className="mt-1 truncate text-sm font-semibold">
+          <p className="mt-0.5 truncate text-sm font-semibold">
             {ticket.customerName?.trim() || 'Walk-in customer'}
           </p>
           <p className="truncate text-xs text-muted-foreground">
-            {maskPhone(ticket.customerPhone)}
-          </p>
-          <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            Tracking · {trackingId(ticket)}
+            {maskPhone(ticket.customerPhone)} · {trackingId(ticket)}
           </p>
         </div>
       </CardContent>

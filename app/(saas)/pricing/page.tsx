@@ -2,6 +2,10 @@ import Link from 'next/link';
 import { Prisma } from '@prisma/client';
 import { ArrowRight, Headphones, Lock, RefreshCcw, SendHorizonal, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  PricingComparisonTable,
+  PricingPlanFeatureList,
+} from '@/components/saas/pricing-comparison';
 import { db } from '@/lib/db';
 import { getAppSession } from '@/lib/auth/app-session';
 import { getRestaurantForUser } from '@/lib/restaurant-owner';
@@ -164,15 +168,10 @@ export default async function PricingPage() {
                 <p className="mt-2 min-h-10 text-sm text-zinc-600 dark:text-zinc-300">
                   {plan.description}
                 </p>
-                <div className="mt-5 text-sm font-medium text-zinc-800 dark:text-zinc-100">What&apos;s included:</div>
-                <ul className="mt-3 flex-1 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2">
-                      <span className="mt-0.5 text-fire-500 dark:text-fire-400">✓</span>
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-5 text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                  Features
+                </div>
+                <PricingPlanFeatureList plan={plan.plan} />
                 {isCurrentPlan ? (
                   <p className="mt-6 rounded-lg border border-fire-300 bg-fire-100 px-4 py-3 text-center text-sm font-medium text-fire-700 dark:border-fire-500/40 dark:bg-fire-500/15 dark:text-fire-100">
                     Your current plan
@@ -235,6 +234,12 @@ export default async function PricingPage() {
             })}
           </div>
         )}
+
+        {plans.length > 0 ? (
+          <PricingComparisonTable
+            plans={plans.map((p) => ({ plan: p.plan, name: p.name }))}
+          />
+        ) : null}
 
         <div className="mt-10 grid gap-3 rounded-2xl border border-zinc-200/80 bg-[#fff7ef] p-4 sm:grid-cols-2 lg:grid-cols-4 dark:border-zinc-700 dark:bg-zinc-900/60">
           <TrustFeature

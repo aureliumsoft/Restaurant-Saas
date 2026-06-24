@@ -24,6 +24,11 @@ export function isCanceledOrderStatus(status: string): boolean {
   return s === 'canceled' || s === 'cancelled';
 }
 
+export function isPendingPaymentStatus(status: string | null | undefined): boolean {
+  const s = String(status ?? '').trim().toLowerCase();
+  return s === 'pending' || s === 'pedding';
+}
+
 /** Prisma filter: active orders for dashboard charts (excludes canceled/failed). */
 export function analyticsActiveOrderStatusWhere() {
   return {

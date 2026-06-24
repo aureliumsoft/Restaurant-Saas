@@ -13,7 +13,7 @@ export const runtime = 'nodejs';
 // shown big, with 2 additional recent ready orders rendered above it. We
 // fetch 3 here and let the client pick the most recent as the featured one.
 const COMPLETED_LIMIT = 3;
-const IN_PROGRESS_LIMIT = 4;
+const IN_PROGRESS_LIMIT = 8;
 
 type DisplayRow = {
   id: string;
@@ -159,7 +159,7 @@ export async function GET(req: NextRequest) {
         LEFT JOIN "Customer" c ON c."id" = o."customerId"
         WHERE kt."restaurantId" = ${restaurant.id}
           ${branchSql}
-          AND lower(kt."status") = 'making'
+          AND lower(kt."status") IN ('making', 'working')
           AND o."sourceType" IN (
             ${OrderSourceType.POS}::"OrderSourceType",
             ${OrderSourceType.KIOSK}::"OrderSourceType"
