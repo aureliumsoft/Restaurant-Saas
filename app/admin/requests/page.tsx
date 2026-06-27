@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
-import { Copy, Loader2, Mail } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { Loader2, Mail } from 'lucide-react';
 
+import { DemoRequestEmailDialog } from '@/components/admin/demo-request-email-dialog';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { adminCardClass } from '@/components/admin/admin-surface';
 import {
@@ -22,10 +22,6 @@ import {
 } from '@/components/admin/admin-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  buildDemoReplyEmailHtml,
-  buildDemoReplyMailto,
-} from '@/lib/demo-request-email';
 import {
   DEMO_OWNER_EMAIL,
   DEMO_OWNER_PASSWORD,
@@ -73,6 +69,8 @@ export default function AdminRequestsPage() {
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [emailRequest, setEmailRequest] = useState<RequestRow | null>(null);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -92,19 +90,10 @@ export default function AdminRequestsPage() {
     };
   }, []);
 
-  const copyHtmlTemplate = useCallback(async (row: RequestRow) => {
-    const html = buildDemoReplyEmailHtml({
-      name: row.name,
-      email: row.email,
-      restaurantName: row.restaurantName,
-    });
-    try {
-      await navigator.clipboard.writeText(html);
-      toast.success('HTML email template copied. Paste into your email client.');
-    } catch {
-      toast.error('Could not copy email template.');
-    }
-  }, []);
+  const openEmailDialog = (row: RequestRow) => {
+    setEmailRequest(row);
+    setEmailDialogOpen(true);
+  };
 
   return (
     <div className="space-y-8">
@@ -139,67 +128,53 @@ export default function AdminRequestsPage() {
                   </AdminTableRow>
                 </AdminTableHeader>
                 <AdminTableBody>
-                  {rows.map((r) => {
-                    const mailto = buildDemoReplyMailto({
-                      name: r.name,
-                      email: r.email,
-                      restaurantName: r.restaurantName,
-                    });
-
-                    return (
-                      <AdminTableRow key={r.id}>
-                        <AdminTableCell>
-                          <AdminTableLead
-                            title={r.name}
-                            subtitle={r.email}
-                            accent="#0ea5e9"
-                          />
-                        </AdminTableCell>
-                        <AdminTableCell>
-                          <span className="font-medium">{r.restaurantName}</span>
-                        </AdminTableCell>
-                        <AdminTableCell>
-                          <AdminTableMuted>
-                            {format(new Date(r.createdAt), 'MMM d, yyyy · h:mm a')}
-                          </AdminTableMuted>
-                        </AdminTableCell>
-                        <AdminTableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                              title="Email requester (includes sign-in link and demo credentials)"
-                              asChild
-                            >
-                              <a href={mailto}>
-                                <Mail className="h-4 w-4" />
-                                <span className="sr-only">Email requester</span>
-                              </a>
-                            </Button>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                              title="Copy HTML email with sign-in button"
-                              onClick={() => void copyHtmlTemplate(r)}
-                            >
-                              <Copy className="h-4 w-4" />
-                              <span className="sr-only">Copy HTML email</span>
-                            </Button>
-                          </div>
-                        </AdminTableCell>
-                      </AdminTableRow>
-                    );
-                  })}
+                  {rows.map((r) => (
+                    <AdminTableRow key={r.id}>
+                      <AdminTableCell>
+                        <AdminTableLead
+                          title={r.name}
+                          subtitle={r.email}
+                          accent="#0ea5e9"
+                        />
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        <span className="font-medium">{r.restaurantName}</span>
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        <AdminTableMuted>
+                          {format(new Date(r.createdAt), 'MMM d, yyyy · h:mm a')}
+                        </AdminTableMuted>
+                      </AdminTableCell>
+                      <AdminTableCell className="text-right">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                          title="Preview and send demo access email"
+                          onClick={() => openEmailDialog(r)}
+                        >
+                          <Mail className="h-4 w-4" />
+                          <span className="sr-only">Email requester</span>
+                        </Button>
+                      </AdminTableCell>
+                    </AdminTableRow>
+                  ))}
                 </AdminTableBody>
               </AdminTable>
             )}
           </AdminTableWrapper>
         </CardContent>
       </Card>
+
+      <DemoRequestEmailDialog
+        request={emailRequest}
+        open={emailDialogOpen}
+        onOpenChange={(open) => {
+          setEmailDialogOpen(open);
+          if (!open) setEmailRequest(null);
+        }}
+      />
     </div>
   );
 }

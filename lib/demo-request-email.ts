@@ -15,6 +15,15 @@ export function getDemoLoginUrl(origin?: string): string {
   return `${base}/login`;
 }
 
+export const DEMO_REPLY_EMAIL_SUBJECT = 'Your FoodLuk demo access';
+
+export function buildDemoReplyPlainText(
+  params: DemoReplyEmailParams,
+  origin?: string
+): string {
+  return buildPlainBody(params, getDemoLoginUrl(origin));
+}
+
 function buildPlainBody(
   params: DemoReplyEmailParams,
   loginUrl: string
@@ -42,7 +51,7 @@ export function buildDemoReplyMailto(
   origin?: string
 ): string {
   const loginUrl = getDemoLoginUrl(origin);
-  const subject = encodeURIComponent('Your FoodLuk demo access');
+  const subject = encodeURIComponent(DEMO_REPLY_EMAIL_SUBJECT);
   const body = encodeURIComponent(buildPlainBody(params, loginUrl));
   return `mailto:${encodeURIComponent(params.email)}?subject=${subject}&body=${body}`;
 }
