@@ -29,6 +29,9 @@ import {
   CheckCircle2,
   XCircle,
   ChevronLeft,
+  ChevronRight,
+  LayoutDashboard,
+  List,
 } from 'lucide-react';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useProgressiveRestaurantMenu } from '@/hooks/use-progressive-restaurant-menu';
@@ -119,6 +122,26 @@ import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
+
+const POS_PANEL_CLASS =
+  'rounded-2xl border border-border bg-card text-card-foreground shadow-md dark:shadow-[0_8px_30px_rgba(0,0,0,0.25)]';
+const POS_ACCENT_BTN =
+  'bg-fire-500 text-white shadow-md shadow-fire-500/20 hover:bg-fire-600';
+const POS_ACCENT_TEXT = 'text-fire-600 dark:text-fire-400';
+const POS_INPUT_CLASS =
+  'border-border bg-muted/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-fire-500/40 dark:bg-background/80';
+const POS_INSET_SURFACE =
+  'rounded-xl border border-border bg-muted/40 dark:bg-background/80';
+const POS_GHOST_ICON_BTN =
+  'text-muted-foreground hover:bg-accent hover:text-foreground';
+const POS_OUTLINE_BTN =
+  'border-border bg-transparent text-foreground hover:bg-accent';
+const POS_PRODUCT_CARD =
+  'group flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-2.5 text-left text-card-foreground transition-all duration-200 hover:border-fire-500/35 hover:shadow-lg hover:shadow-fire-500/10 active:scale-[0.98]';
+const POS_CATEGORY_ACTIVE =
+  'bg-fire-500 text-white shadow-md shadow-fire-500/25';
+const POS_CATEGORY_INACTIVE =
+  'border border-border bg-card text-foreground/90 hover:border-fire-500/30 hover:bg-accent';
 
 export type OrderMode = 'new' | 'tables' | 'delivery' | 'takeaway' | 'queue';
 
@@ -514,6 +537,31 @@ export function PosScreen() {
   >(null);
   const [lastShiftEndedAt, setLastShiftEndedAt] = useState<string | null>(null);
   const shiftSummaryBranchRef = useRef('');
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+  const [clockLabel, setClockLabel] = useState('');
+
+  useEffect(() => {
+    const tick = () => {
+      setClockLabel(
+        new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      );
+    };
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const scrollCategories = (direction: 'left' | 'right') => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    el.scrollBy({
+      left: direction === 'left' ? -240 : 240,
+      behavior: 'smooth',
+    });
+  };
 
   const KITCHEN_PREP_PRESETS = [10, 15, 30] as const;
   const KITCHEN_PREP_MIN = 1;
@@ -1761,7 +1809,6 @@ export function PosScreen() {
     label: string;
     icon: ComponentType<{ className?: string }>;
   }[] = [
-    { id: 'new', label: 'New', icon: UtensilsCrossed },
     { id: 'tables', label: 'Table', icon: TableIcon },
     { id: 'delivery', label: 'Delivery', icon: Truck },
     { id: 'takeaway', label: 'Take-away', icon: ShoppingBag },
@@ -1772,46 +1819,59 @@ export function PosScreen() {
       key={p.id}
       type="button"
       onClick={() => handleProductSelect(p)}
-      className="group flex flex-col items-center gap-2 rounded-xl border bg-background p-3 text-center transition hover:border-primary/40 hover:bg-muted/40"
+      className={POS_PRODUCT_CARD}
     >
-      <div className="h-14 w-14 overflow-hidden rounded-full bg-muted ring-2 ring-primary/20 transition group-hover:scale-[1.02]">
+      <div className="aspect-square w-full overflow-hidden rounded-xl bg-muted">
         {p.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- POS accepts external image URLs
           <img
             src={p.imageUrl}
             alt={p.name}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-primary/90 text-xs font-bold text-primary-foreground">
+          <div className="flex h-full w-full items-center justify-center bg-fire-500/90 text-2xl font-bold text-white">
             {p.name.charAt(0).toUpperCase()}
           </div>
         )}
       </div>
-      <span className="line-clamp-2 text-[11px] font-semibold leading-tight">
-        {p.name}
-      </span>
-      <span className="text-sm font-medium tabular-nums text-muted-foreground">
-        {formatMoney(effectiveUnitPrice(p.price, p.salePrice))}
-      </span>
+      <div className="mt-2.5 flex min-h-[3.25rem] flex-col justify-between px-0.5">
+        <span className="line-clamp-2 text-sm font-semibold leading-snug">
+          {p.name}
+        </span>
+        <span className="mt-1 text-xs font-medium tabular-nums text-muted-foreground">
+          €{formatMoney(effectiveUnitPrice(p.price, p.salePrice))}
+        </span>
+      </div>
     </button>
   );
 
-  return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
-      {/* Header */}
-      <div className="flex shrink-0 items-center gap-3 border-b bg-muted/30 px-4 py-3">
-        <Button
-          type="button"
-          variant="destructive"
-          size="icon"
-          onClick={requestDashboard}
-        >
-          <ChevronLeft />
-        </Button>
+  const orderModeLabel =
+    orderMode === 'tables'
+      ? 'Table order'
+      : orderMode === 'delivery'
+        ? 'Delivery order'
+        : orderMode === 'takeaway'
+          ? 'Take-away order'
+          : 'New order';
 
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 overflow-hidden rounded-full bg-muted ring-1 ring-border">
+  return (
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-background text-foreground shadow-xl">
+      {/* Header */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
+        <div>
+          <Button
+            type="button"
+            variant="destructive"
+            size="icon"
+            onClick={requestDashboard}
+          >
+            <ChevronLeft />
+          </Button>
+        </div>
+
+        <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-card ring-1 ring-border sm:h-11 sm:w-11">
             {branding.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- POS accepts external image URLs
               <img
@@ -1820,136 +1880,156 @@ export function PosScreen() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center bg-primary text-sm font-bold text-primary-foreground">
+              <div className="flex h-full w-full items-center justify-center bg-fire-500 text-sm font-bold text-white">
                 {(branding.name || 'R').slice(0, 1).toUpperCase()}
               </div>
             )}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">
+            <div className="truncate text-sm font-semibold sm:text-base">
               {branding.name || 'Restaurant'}
             </div>
-            <div className="text-[11px] text-muted-foreground ">
-              {selectedBranchName}
+            <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground sm:text-xs">
+              {isOwnerOrAdmin ? (
+                <Select
+                  value={selectedBranchId}
+                  onValueChange={(value) => {
+                    setSelectedBranchId(value);
+                    void setActiveBranch(value);
+                  }}
+                >
+                  <SelectTrigger className="h-7 max-w-[10rem] border-0 bg-transparent px-0 text-xs text-muted-foreground shadow-none focus:ring-0 sm:max-w-[12rem]">
+                    <span className="mr-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                    <SelectValue placeholder="Select branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {posBranches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <>
+                  <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                  <span className="truncate">{selectedBranchName}</span>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="relative ml-2 w-full max-w-2xl">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="relative order-last w-full min-w-0 flex-1 sm:order-none sm:max-w-2xl">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder={
               categoryId === 'all'
-                ? 'Search all products…'
-                : 'Search in this category…'
+                ? 'Search all products...'
+                : 'Search in this category...'
             }
-            className="h-10 bg-background pl-9"
+            className={cn('h-10 rounded-xl pl-9', POS_INPUT_CLASS)}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
           <Button
             type="button"
-            variant="outline"
-            className="h-10 gap-2"
+            variant="ghost"
+            size="icon"
+            className={cn('h-9 w-9 rounded-xl', POS_GHOST_ICON_BTN)}
+            title="Recent orders"
             onClick={() => setRecentOrdersOpen(true)}
           >
             <History className="h-4 w-4" />
-            <span className="hidden sm:inline">Recent</span>
           </Button>
-
           <Button
             type="button"
-            variant="outline"
-            className="h-10 gap-2"
+            variant="ghost"
+            size="icon"
+            className={cn('relative h-9 w-9 rounded-xl', POS_GHOST_ICON_BTN)}
+            title="Kiosk orders"
             onClick={() => setKioskOrdersOpen(true)}
           >
             <Monitor className="h-4 w-4" />
-            <span className="hidden sm:inline">Kiosk</span>
             {kioskPendingCount > 0 ? (
-              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-400">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
                 {kioskPendingCount}
               </span>
             ) : null}
           </Button>
-
           <Button
             type="button"
-            variant="destructive"
-            className="h-10 gap-2"
+            variant="ghost"
+            size="icon"
+            className={cn('h-9 w-9 rounded-xl', POS_GHOST_ICON_BTN)}
+            title="End shift"
             onClick={() => setShiftSheetOpen(true)}
           >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Shift End</span>
+            <LogOut className="h-4 w-4 text-destructive" />
           </Button>
-
           {lastClosingCashInLocker != null ? (
             <div
-              className="flex max-w-[9rem] items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-2 py-1.5 text-xs sm:max-w-none sm:gap-2 sm:px-3 sm:py-2"
+              className="hidden items-center gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2 py-1.5 text-xs lg:flex"
               title={
                 lastShiftEndedAt
                   ? `Left in locker at last shift end · ${new Date(lastShiftEndedAt).toLocaleString()}`
                   : 'Cash left in locker from last shift end'
               }
             >
-              <Banknote className="h-4 w-4 shrink-0 text-emerald-600" />
-              <div className="min-w-0 leading-tight">
-                <p className="truncate font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                  €{formatMoney(lastClosingCashInLocker)}
-                </p>
-              </div>
+              <Banknote className="h-4 w-4 shrink-0 text-emerald-400" />
+              <span className="font-semibold tabular-nums text-emerald-300">
+                €{formatMoney(lastClosingCashInLocker)}
+              </span>
             </div>
           ) : null}
-
+          <div
+            className="hidden h-9 items-center rounded-xl border border-border bg-card px-3 text-sm font-medium tabular-nums text-foreground sm:flex"
+            aria-live="polite"
+          >
+            <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+            {clockLabel || '—'}
+          </div>
           <ModeToggle />
-          <UserMenu className="h-10" />
+          <UserMenu />
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[240px_1fr_minmax(320px,400px)] lg:grid-rows-1">
-        {/* Categories */}
-        <ScrollArea className="min-h-0 max-h-[40dvh] border-b bg-muted/10 lg:h-full lg:max-h-full lg:border-b-0 lg:border-r">
-          <div className="space-y-2 p-3">
-            {isOwnerOrAdmin && (
-              <>
-                <div className="text-sm font-semibold">Branch</div>
-                <div className="mb-2">
-                  {isOwnerOrAdmin ? (
-                    <Select
-                      value={selectedBranchId}
-                      onValueChange={(value) => {
-                        setSelectedBranchId(value);
-                        void setActiveBranch(value);
-                      }}
-                    >
-                      <SelectTrigger className="h-7 w-full text-xs">
-                        <SelectValue placeholder="Select branch" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {posBranches.map((b) => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {b.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="rounded-md border bg-background px-2 py-1.5 text-xs text-muted-foreground">
-                      {selectedBranchName}
-                    </p>
-                  )}
-                </div>
-              </>
-            )}
-            <div className="text-sm font-semibold">Categories</div>
-            <div className="space-y-2">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 pt-2 lg:grid-cols-[minmax(0,1fr)_minmax(300px,400px)] lg:grid-rows-1">
+        {/* Menu area */}
+        <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
+          <div className="relative shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute left-0 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 rounded-full border border-border bg-card/95 text-foreground hover:bg-accent sm:flex"
+              onClick={() => scrollCategories('left')}
+              aria-label="Scroll categories left"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 rounded-full border border-border bg-card/95 text-foreground hover:bg-accent sm:flex"
+              onClick={() => scrollCategories('right')}
+              aria-label="Scroll categories right"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <div
+              ref={categoryScrollRef}
+              className="flex gap-2 overflow-x-auto scroll-smooth px-1 py-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:px-9 [&::-webkit-scrollbar]:hidden"
+            >
               {categoriesLoading && progressiveCategories.length === 0 ? (
                 <>
-                  <CategoryPillSkeleton className="h-12 w-full rounded-xl" />
-                  <CategoryPillSkeleton className="h-12 w-full rounded-xl" />
-                  <CategoryPillSkeleton className="h-12 w-full rounded-xl" />
+                  <CategoryPillSkeleton className="h-10 w-24 shrink-0 rounded-full" />
+                  <CategoryPillSkeleton className="h-10 w-28 shrink-0 rounded-full" />
+                  <CategoryPillSkeleton className="h-10 w-24 shrink-0 rounded-full" />
                 </>
               ) : (
                 categories.map((c) => (
@@ -1957,413 +2037,434 @@ export function PosScreen() {
                     key={c.id}
                     type="button"
                     className={cn(
-                      'flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition',
+                      'shrink-0 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition-all duration-200 sm:text-sm',
                       categoryId === c.id
-                        ? 'border-primary/40 bg-primary/10 text-primary'
-                        : 'bg-background hover:bg-muted/40'
+                        ? POS_CATEGORY_ACTIVE
+                        : POS_CATEGORY_INACTIVE
                     )}
                     onClick={() => setCategoryId(c.id)}
                   >
-                    {c.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={c.imageUrl}
-                        alt=""
-                        className="h-8 w-8 shrink-0 rounded-md object-cover"
-                      />
-                    ) : (
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] text-muted-foreground">
-                        —
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1 font-medium">
-                      {c.label}
-                    </span>
-                    {categoryId === c.id ? (
-                      <Check className="h-4 w-4 shrink-0" aria-hidden />
-                    ) : null}
+                    {c.label}
                   </button>
                 ))
               )}
             </div>
           </div>
-        </ScrollArea>
 
-        {/* Products */}
-        <ScrollArea className="min-h-0 max-h-[50dvh] border-b lg:h-full lg:max-h-full lg:border-b-0 lg:border-r">
-          <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-6">
-            {showCategorySections ? (
-              progressiveCategories.map((category) => {
-                const categoryProducts = category.items.map((item) => {
-                  const base = Number(item.price);
-                  const saleRaw = item.salePrice;
-                  const sale =
-                    saleRaw != null && Number.isFinite(Number(saleRaw))
-                      ? Number(saleRaw)
-                      : null;
-                  return {
-                    ...item,
-                    description: item.description ?? null,
-                    imageUrl: item.imageUrl ?? null,
-                    price: Number.isFinite(base) ? base : 0,
-                    salePrice: sale,
-                    categoryId: category.id,
-                    attributeGroups: item.attributeGroups ?? [],
-                    variations: (item.variations ?? []).map((v) => ({
-                      ...v,
-                      priceDelta: Number(v.priceDelta ?? 0),
-                    })),
-                  } satisfies PosMenuProduct;
-                });
-                const isCategoryLoading =
-                  category.loading ||
-                  (!category.loaded && category.items.length === 0);
+          <ScrollArea className={cn('min-h-0 flex-1', POS_INSET_SURFACE)}>
+            <div className="grid grid-cols-2 gap-2.5 p-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 xl:grid-cols-5">
+              {showCategorySections ? (
+                progressiveCategories.map((category) => {
+                  const categoryProducts = category.items.map((item) => {
+                    const base = Number(item.price);
+                    const saleRaw = item.salePrice;
+                    const sale =
+                      saleRaw != null && Number.isFinite(Number(saleRaw))
+                        ? Number(saleRaw)
+                        : null;
+                    return {
+                      ...item,
+                      description: item.description ?? null,
+                      imageUrl: item.imageUrl ?? null,
+                      price: Number.isFinite(base) ? base : 0,
+                      salePrice: sale,
+                      categoryId: category.id,
+                      attributeGroups: item.attributeGroups ?? [],
+                      variations: (item.variations ?? []).map((v) => ({
+                        ...v,
+                        priceDelta: Number(v.priceDelta ?? 0),
+                      })),
+                    } satisfies PosMenuProduct;
+                  });
+                  const isCategoryLoading =
+                    category.loading ||
+                    (!category.loaded && category.items.length === 0);
 
-                if (isCategoryLoading) {
+                  if (isCategoryLoading) {
+                    return (
+                      <div
+                        key={category.id}
+                        className="col-span-full space-y-2"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {category.name}
+                        </p>
+                        <ProductCardSkeletonGrid
+                          count={6}
+                          variant="pos"
+                          gridClassName="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 xl:grid-cols-5"
+                        />
+                      </div>
+                    );
+                  }
+
+                  if (categoryProducts.length === 0) return null;
+
                   return (
                     <div key={category.id} className="col-span-full space-y-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {category.name}
                       </p>
-                      <ProductCardSkeletonGrid
-                        count={6}
-                        variant="pos"
-                        gridClassName="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-6"
-                      />
+                      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 xl:grid-cols-5">
+                        {categoryProducts.map((p) => renderPosProductButton(p))}
+                      </div>
                     </div>
                   );
-                }
-
-                if (categoryProducts.length === 0) return null;
-
-                return (
-                  <div key={category.id} className="col-span-full space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {category.name}
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-6">
-                      {categoryProducts.map((p) => renderPosProductButton(p))}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <>
-                {filteredProducts.map((p) => renderPosProductButton(p))}
-                {showProductSkeletons ? (
-                  <ProductCardSkeletonGrid
-                    count={8}
-                    variant="pos"
-                    gridClassName="contents"
-                  />
-                ) : null}
-              </>
-            )}
-            {!showCategorySections &&
-            !showProductSkeletons &&
-            !loadingMenu &&
-            filteredProducts.length === 0 ? (
-              <div className="col-span-full py-16 text-center text-sm text-muted-foreground">
-                <p className="text-[#64748b]">
-                  No products match this category or search.
-                </p>
-                <Button
-                  type="button"
-                  variant="default"
-                  className="w-full bg-primary p-2 text-primary-foreground hover:bg-primary/90"
-                  onClick={() => setCategoryId('all')}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to all products
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        </ScrollArea>
-        {/* Checkout */}
-        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-t bg-muted/20 p-3 lg:h-full lg:border-t-0">
-          <div className="grid grid-cols-4 gap-2">
-            {modeButtons.map((b) => {
-              const active = orderMode === b.id;
-              const Icon = b.icon;
-              return (
-                <button
-                  key={b.id}
-                  type="button"
-                  className={cn(
-                    'flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border bg-background text-xs font-medium transition',
-                    active
-                      ? 'border-primary/40 bg-primary/10 text-primary'
-                      : 'hover:bg-muted/40'
-                  )}
-                  onClick={() => setOrderMode(b.id)}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span>{b.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="rounded-xl border bg-background p-3">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-2xl font-semibold leading-none">
-                Order Ticket
-              </h3>
-              {editingOrderId ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 shrink-0 px-2 text-xs"
-                  onClick={cancelEditingOrder}
-                >
-                  Cancel edit
-                </Button>
+                })
+              ) : (
+                <>
+                  {filteredProducts.map((p) => renderPosProductButton(p))}
+                  {showProductSkeletons ? (
+                    <ProductCardSkeletonGrid
+                      count={8}
+                      variant="pos"
+                      gridClassName="contents"
+                    />
+                  ) : null}
+                </>
+              )}
+              {!showCategorySections &&
+              !showProductSkeletons &&
+              !loadingMenu &&
+              filteredProducts.length === 0 ? (
+                <div className="col-span-full py-16 text-center text-sm text-muted-foreground">
+                  <p>No products match this category or search.</p>
+                  <Button
+                    type="button"
+                    className={cn('mt-4 rounded-xl px-4', POS_ACCENT_BTN)}
+                    onClick={() => setCategoryId('all')}
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back to all products
+                  </Button>
+                </div>
               ) : null}
             </div>
-            {editingOrderId ? (
-              <p className="mt-1 text-xs font-medium text-primary">
-                {isEditingKioskOrder ? 'Editing kiosk order' : 'Editing order'}{' '}
-                {editingOrderLabel}
-              </p>
-            ) : (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {orderMode === 'tables'
-                  ? 'Table order'
-                  : orderMode === 'delivery'
-                    ? 'Delivery order'
-                    : orderMode === 'takeaway'
-                      ? 'Take-away order'
-                      : 'New order'}
-              </p>
-            )}
+          </ScrollArea>
+        </div>
 
-            <ScrollArea className="mt-3 h-[250px] max-h-[250px] border-y">
-              <div className="space-y-3 py-3">
-                {cart.length === 0 ? (
-                  <p className="text-center text-sm text-muted-foreground">
-                    No Products in Cart!
-                  </p>
-                ) : (
-                  cart.map((line) => {
-                    const gross = lineUnitTotal(line) * line.qty;
-                    const discAmt = gross * (line.lineDiscPct / 100);
-                    const lineTotal = gross - discAmt;
-                    return (
-                      <div
-                        key={line.lineId}
-                        className="space-y-1 border-b px-1 pb-2 last:border-b-0"
-                      >
-                        <div className="flex items-start gap-2 text-sm">
-                          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
-                            {line.imageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element -- POS accepts external image URLs
-                              <img
-                                src={line.imageUrl}
-                                alt=""
-                                className="h-full w-full object-cover"
+        {/* Order ticket */}
+        <div
+          className={cn(
+            'flex min-h-0 max-h-[52dvh] flex-col gap-3 overflow-hidden lg:max-h-full',
+            POS_PANEL_CLASS
+          )}
+        >
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-4">
+            <div className="shrink-0">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="flex items-center gap-2 text-xl font-semibold leading-none sm:text-2xl">
+                  <List className={cn('h-5 w-5', POS_ACCENT_TEXT)} />
+                  Order Ticket
+                </h3>
+                {editingOrderId ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 shrink-0 rounded-lg px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                    onClick={cancelEditingOrder}
+                  >
+                    Cancel edit
+                  </Button>
+                ) : null}
+              </div>
+              {editingOrderId ? (
+                <p className={cn('mt-1 text-xs font-medium', POS_ACCENT_TEXT)}>
+                  {isEditingKioskOrder
+                    ? 'Editing kiosk order'
+                    : 'Editing order'}{' '}
+                  {editingOrderLabel}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {orderModeLabel}
+                </p>
+              )}
+
+              <div className="mt-3 flex gap-1 overflow-x-auto rounded-xl bg-muted p-1 dark:bg-background [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {modeButtons.map((b) => {
+                  const active = orderMode === b.id;
+                  const Icon = b.icon;
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      className={cn(
+                        'flex min-w-[4.5rem] flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-semibold transition-all duration-200 sm:min-w-0 sm:text-xs',
+                        active
+                          ? POS_CATEGORY_ACTIVE
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      )}
+                      onClick={() => setOrderMode(b.id)}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{b.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div
+              className={cn(
+                'min-h-[10rem] flex-1 overflow-hidden',
+                POS_INSET_SURFACE
+              )}
+            >
+              <ScrollArea className="h-full max-h-[min(280px,32dvh)] lg:max-h-[min(320px,40dvh)]">
+                <div className="space-y-3 p-3">
+                  {cart.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                      <Trash2 className="h-10 w-10 text-muted-foreground/50" />
+                      <p className="mt-3 text-sm font-medium">
+                        No Products in Cart!
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Add products to get started
+                      </p>
+                    </div>
+                  ) : (
+                    cart.map((line) => {
+                      const gross = lineUnitTotal(line) * line.qty;
+                      const discAmt = gross * (line.lineDiscPct / 100);
+                      const lineTotal = gross - discAmt;
+                      return (
+                        <div
+                          key={line.lineId}
+                          className="space-y-2 border-b border-border pb-3 last:border-b-0"
+                        >
+                          <div className="flex items-start gap-2 text-sm">
+                            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted">
+                              {line.imageUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element -- POS accepts external image URLs
+                                <img
+                                  src={line.imageUrl}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : null}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <PosCartLineSummary
+                                line={line}
+                                titleClassName="text-sm font-medium leading-snug"
+                                subItemClassName="text-[11px] text-muted-foreground"
                               />
-                            ) : null}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <PosCartLineSummary
-                              line={line}
-                              titleClassName="text-sm font-medium leading-snug"
-                              subItemClassName="text-[11px] text-muted-foreground"
-                            />
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {line.qty}x · €{formatMoney(lineUnitTotal(line))}{' '}
-                              each
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {line.qty}x · €
+                                {formatMoney(lineUnitTotal(line))} each
+                              </p>
+                            </div>
+                            <p className="shrink-0 tabular-nums">
+                              €{formatMoney(lineTotal)}
                             </p>
                           </div>
-                          <p className="shrink-0 tabular-nums">
-                            €{formatMoney(lineTotal)}
-                          </p>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className={cn(
+                                'h-7 w-7 rounded-lg bg-transparent',
+                                POS_OUTLINE_BTN
+                              )}
+                              onClick={() => setQty(line.lineId, line.qty - 1)}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span className="w-6 text-center text-xs tabular-nums">
+                              {line.qty}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className={cn(
+                                'h-7 w-7 rounded-lg bg-transparent',
+                                POS_OUTLINE_BTN
+                              )}
+                              onClick={() => setQty(line.lineId, line.qty + 1)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                            <Input
+                              className={cn(
+                                'ml-1 h-7 w-16 rounded-lg px-1 text-center text-xs',
+                                POS_INPUT_CLASS
+                              )}
+                              inputMode="decimal"
+                              value={line.lineDiscPct || ''}
+                              placeholder="%"
+                              onChange={(e) =>
+                                setLineDisc(
+                                  line.lineId,
+                                  Number(e.target.value) || 0
+                                )
+                              }
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="ml-auto h-7 w-7 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                              onClick={() =>
+                                setCart((prev) =>
+                                  prev.filter((l) => l.lineId !== line.lineId)
+                                )
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => setQty(line.lineId, line.qty - 1)}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="w-5 text-center text-xs tabular-nums">
-                            {line.qty}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => setQty(line.lineId, line.qty + 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <Input
-                            className="ml-1 h-6 w-16 px-1 text-center text-xs"
-                            inputMode="decimal"
-                            value={line.lineDiscPct || ''}
-                            placeholder="%"
-                            onChange={(e) =>
-                              setLineDisc(
-                                line.lineId,
-                                Number(e.target.value) || 0
-                              )
-                            }
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="ml-auto h-6 w-6 text-destructive"
-                            onClick={() =>
-                              setCart((prev) =>
-                                prev.filter((l) => l.lineId !== line.lineId)
-                              )
-                            }
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </ScrollArea>
+                      );
+                    })
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
 
-            <div className="mt-3 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="tabular-nums">€{formatMoney(subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  Tax ({taxPct || '0'}%)
+            <div className="shrink-0 space-y-2 text-sm">
+              <div className="flex justify-between text-muted-foreground">
+                <span>Subtotal</span>
+                <span className="tabular-nums text-foreground">
+                  €{formatMoney(subtotal)}
                 </span>
-                <span className="tabular-nums">€{formatMoney(taxAmount)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  Discount ({disPct || '0'}%)
+              <div className="flex justify-between text-muted-foreground">
+                <span>Tax ({taxPct || '0'}%)</span>
+                <span className="tabular-nums text-foreground">
+                  €{formatMoney(taxAmount)}
                 </span>
-                <span className="tabular-nums">€{formatMoney(disAmount)}</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Discount ({disPct || '0'}%)</span>
+                <span className="tabular-nums text-foreground">
+                  €{formatMoney(disAmount)}
+                </span>
               </div>
               {activeServiceChargeAmount > 0 ? (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Service charge</span>
-                  <span className="tabular-nums">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Service charge</span>
+                  <span className="tabular-nums text-foreground">
                     €{formatMoney(activeServiceChargeAmount)}
                   </span>
                 </div>
               ) : null}
-              <div className="mt-2 flex justify-between border-t pt-2 text-lg font-semibold">
+              <div className="mt-2 flex justify-between border-t border-dashed border-border pt-3 text-lg font-semibold">
                 <span>Total</span>
-                <span className="tabular-nums">€{formatMoney(grandTotal)}</span>
+                <span className={cn('tabular-nums', POS_ACCENT_TEXT)}>
+                  €{formatMoney(grandTotal)}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid shrink-0 grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Tax %
+                </label>
+                <Input
+                  className={cn('h-9 rounded-xl text-xs', POS_INPUT_CLASS)}
+                  value={taxPct}
+                  onChange={(e) => setTaxPct(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Discount %
+                </label>
+                <Input
+                  className={cn('h-9 rounded-xl text-xs', POS_INPUT_CLASS)}
+                  value={disPct}
+                  onChange={(e) => setDisPct(e.target.value)}
+                />
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 rounded-lg border bg-muted/10 p-2">
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase text-muted-foreground">
-                Tax %
-              </label>
-              <Input
-                className="h-8 text-xs"
-                value={taxPct}
-                onChange={(e) => setTaxPct(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase text-muted-foreground">
-                Discount %
-              </label>
-              <Input
-                className="h-8 text-xs"
-                value={disPct}
-                onChange={(e) => setDisPct(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="mt-auto space-y-2 pt-1">
-            <div className="flex items-center justify-between gap-2 w-full">
+          <div className="shrink-0 space-y-2 border-t border-border p-3 sm:p-4">
+            <div className="flex items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
-                className="w-full"
+                className={cn('h-10 flex-1 rounded-xl text-destructive', POS_OUTLINE_BTN)}
                 disabled={
                   cart.length === 0 || savingOrder || terminalProcessing
                 }
                 onClick={clearCart}
               >
-                <Trash2 className="h-4 w-4 mr-2" /> <span>Clear Cart</span>
+                <Trash2 className="mr-2 h-4 w-4 text-destructive" />
+                Clear Cart
               </Button>
-              <div className="flex items-center justify-end gap-1">
-                <Button
-                  type="button"
-                  variant="default"
-                  className="w-full"
-                  disabled={
-                    cart.length === 0 || savingOrder || terminalProcessing
-                  }
-                  onClick={holdCurrentOrder}
-                >
-                  <Clock className="h-4 w-4 mr-2" /> <span>Hold Order</span>
-                </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                className={cn('h-10 flex-1 rounded-xl text-primary', POS_OUTLINE_BTN)}
+                disabled={
+                  cart.length === 0 || savingOrder || terminalProcessing
+                }
+                onClick={holdCurrentOrder}
+              >
+                <Clock className="mr-2 h-4 w-4 text-primary" />
+                Hold Order
+              </Button>
+
+              <div className="flex items-center gap-0">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
+                  className="relative"
+                  title="Archived orders"
                   onClick={() => setArchivedOrdersOpen(true)}
                 >
-                  <Archive className="h-5 w-5" />
-                  <span className="text-xs font-medium mb-2 bg-primary/10 text-primary rounded-full p-0.5">
-                    {archivedOrders.length}
-                  </span>
+                  <Archive className="h-4 w-4" />
+                  {archivedOrders.length > 0 ? (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
+                      {archivedOrders.length}
+                    </span>
+                  ) : null}
                 </Button>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
+                  className="relative"
+                  title="Not sent to kitchen"
                   onClick={() => {
                     setPendingKitchenOpen(true);
                     void loadPendingKitchenOrders();
                   }}
                 >
-                  <ChefHat className="h-5 w-5 " />
-                  <span className="text-xs font-medium mb-2 bg-primary/10 text-primary rounded-full p-0.5">
-                    {pendingKitchenOrders.length}
-                  </span>
+                  <ChefHat className="h-4 w-4" />
+                  {pendingKitchenOrders.length > 0 ? (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
+                      {pendingKitchenOrders.length}
+                    </span>
+                  ) : null}
                 </Button>
               </div>
             </div>
-            <div>
-              <Button
-                type="button"
-                variant="default"
-                className="w-full"
-                disabled={
-                  cart.length === 0 || savingOrder || terminalProcessing
-                }
-                onClick={() => {
-                  resetCardPayment();
-                  setPaymentMode('cash');
-                  setAmountPaid(
-                    isEditingKioskOrder ? grandTotal.toFixed(2) : ''
-                  );
-                  setCheckoutOpen(true);
-                }}
-              >
-                {editingOrderId ? 'Update order' : 'Proceed Order'}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
+            <Button
+              type="button"
+              className={cn(
+                'h-12 w-full rounded-xl text-base font-semibold',
+                POS_ACCENT_BTN
+              )}
+              disabled={cart.length === 0 || savingOrder || terminalProcessing}
+              onClick={() => {
+                resetCardPayment();
+                setPaymentMode('cash');
+                setAmountPaid(isEditingKioskOrder ? grandTotal.toFixed(2) : '');
+                setCheckoutOpen(true);
+              }}
+            >
+              {editingOrderId ? 'Update order' : 'Proceed Order'}
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </div>
         </div>
       </div>

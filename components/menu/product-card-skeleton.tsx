@@ -1,5 +1,6 @@
 'use client';
 
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 type ProductCardSkeletonVariant = 'kiosk' | 'online' | 'pos';
@@ -9,10 +10,6 @@ type ProductCardSkeletonProps = {
   className?: string;
 };
 
-function Pulse({ className }: { className?: string }) {
-  return <div className={cn('animate-pulse rounded-md bg-muted', className)} />;
-}
-
 export function ProductCardSkeleton({
   variant = 'online',
   className,
@@ -21,13 +18,19 @@ export function ProductCardSkeleton({
     return (
       <div
         className={cn(
-          'flex flex-col items-center gap-2 rounded-xl border bg-background p-3 text-center',
+          'flex flex-col overflow-hidden rounded-2xl p-2.5 text-left text-foreground',
           className
         )}
+        aria-hidden
       >
-        <Pulse className="h-14 w-14 rounded-full" />
-        <Pulse className="h-3 w-20" />
-        <Pulse className="h-4 w-12" />
+        <Skeleton className="aspect-square w-full rounded-xl" />
+        <div className="mt-2.5 flex min-h-[3.25rem] flex-col justify-between px-0.5">
+          <div className="space-y-1.5">
+            <Skeleton className="h-3.5 w-full rounded-sm" />
+            <Skeleton className="h-3.5 w-[88%] rounded-sm" />
+          </div>
+          <Skeleton className="mt-1 h-3 w-[36%] rounded-sm" />
+        </div>
       </div>
     );
   }
@@ -36,14 +39,15 @@ export function ProductCardSkeleton({
     return (
       <div
         className={cn(
-          'overflow-hidden rounded-lg border border-[#e2e8f0] bg-white p-3 shadow-sm',
+          'overflow-hidden rounded-lg  p-3 shadow-sm',
           className
         )}
+        aria-hidden
       >
-        <Pulse className="aspect-square w-full rounded-lg" />
-        <Pulse className="mt-2 h-4 w-3/4" />
-        <Pulse className="mt-2 h-4 w-1/3" />
-        <Pulse className="mt-3 h-9 w-full rounded-md" />
+        <Skeleton className="aspect-square w-full rounded-lg" />
+        <Skeleton className="mt-2 h-4 w-3/4" />
+        <Skeleton className="mt-2 h-4 w-1/3" />
+        <Skeleton className="mt-3 h-9 w-full rounded-md" />
       </div>
     );
   }
@@ -51,16 +55,17 @@ export function ProductCardSkeleton({
   return (
     <div
       className={cn(
-        'flex h-full w-full flex-col overflow-hidden rounded-2xl bg-white shadow-sm',
+        'flex h-full w-full flex-col overflow-hidden rounded-2xl shadow-sm',
         className
       )}
+      aria-hidden
     >
-      <Pulse className="h-44 w-full rounded-none" />
+      <Skeleton className="h-44 w-full rounded-none" />
       <div className="flex flex-1 flex-col p-4">
-        <Pulse className="h-5 w-4/5" />
-        <Pulse className="mt-2 h-3 w-full" />
-        <Pulse className="mt-2 h-3 w-2/3" />
-        <Pulse className="mt-4 h-5 w-1/4" />
+        <Skeleton className="h-5 w-4/5" />
+        <Skeleton className="mt-2 h-3 w-full" />
+        <Skeleton className="mt-2 h-3 w-2/3" />
+        <Skeleton className="mt-4 h-5 w-1/4" />
       </div>
     </div>
   );
@@ -92,8 +97,9 @@ export function ProductCardSkeletonGrid({
 
 export function CategoryPillSkeleton({ className }: { className?: string }) {
   return (
-    <Pulse
+    <Skeleton
       className={cn('h-10 w-28 shrink-0 rounded-full', className)}
+      aria-hidden
     />
   );
 }
