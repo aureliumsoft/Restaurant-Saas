@@ -27,6 +27,7 @@ export const PAYPAL_BUYER_COUNTRIES = [
   { code: 'NL', label: 'Netherlands' },
   { code: 'NZ', label: 'New Zealand' },
   { code: 'NO', label: 'Norway' },
+  { code: 'PK', label: 'Pakistan' },
   { code: 'PL', label: 'Poland' },
   { code: 'PT', label: 'Portugal' },
   { code: 'RO', label: 'Romania' },
@@ -55,7 +56,9 @@ export function normalizePayPalCountryCode(
 export function defaultPayPalCountryForCurrency(currency: string): string {
   switch (currency.trim().toUpperCase()) {
     case 'EUR':
-      return 'DE';
+      return 'ES';
+    case 'PKR':
+      return 'PK';
     case 'GBP':
       return 'GB';
     case 'USD':
@@ -65,7 +68,7 @@ export function defaultPayPalCountryForCurrency(currency: string): string {
     case 'CAD':
       return 'CA';
     default:
-      return 'DE';
+      return 'ES';
   }
 }
 

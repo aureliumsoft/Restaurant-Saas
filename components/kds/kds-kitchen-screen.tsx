@@ -22,6 +22,7 @@ import {
 } from '@/components/kds/kds-order-action-dialog';
 import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
 import { kdsAxiosErrorMessage } from '@/lib/kds-api-errors';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 
 type Ticket = {
   id: string;
@@ -234,13 +235,6 @@ function recommendedItemNames(menu: MenuPayload | null | undefined): string[] {
   return [...byId.values()].sort((a, b) => a.localeCompare(b));
 }
 
-function fmt(v: number) {
-  return v.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 function remainingSeconds(
   startedAtIso: string,
   selectedMinutes: number,
@@ -263,6 +257,7 @@ function formatCountdown(sec: number) {
 }
 
 export function KdsKitchenScreen() {
+  const { formatMoney } = useOwnerRestaurantRegional();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [recommendedNames, setRecommendedNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -492,7 +487,7 @@ export function KdsKitchenScreen() {
                       </div>
 
                       <p className="text-xs font-semibold">
-                        €{fmt(t.orderTotal)}
+                        {formatMoney(t.orderTotal)}
                       </p>
                     </div>
 

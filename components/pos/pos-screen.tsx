@@ -34,6 +34,7 @@ import {
   List,
 } from 'lucide-react';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useProgressiveRestaurantMenu } from '@/hooks/use-progressive-restaurant-menu';
 import {
   ProductCardSkeletonGrid,
@@ -320,13 +321,6 @@ type ArchivedOrder = {
   total: number;
 };
 
-function formatMoney(n: number) {
-  return n.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 function effectiveUnitPrice(price: number, salePrice: number | null) {
   if (salePrice != null && salePrice > 0 && salePrice < price) return salePrice;
   return price;
@@ -449,11 +443,12 @@ function PosCartLineSummary({
 }
 
 const POS_ARCHIVED_ORDERS_KEY = 'pos_archived_orders_v1';
-/** Poll pending kiosk cash orders (picks up DB trigger / external updates). */
-const KIOSK_PENDING_POLL_MS = 5000;
+/** Poll pending kiosk cash badge when the kiosk sheet is closed. */
+const KIOSK_PENDING_POLL_MS = 15_000;
 
 export function PosScreen() {
   const router = useRouter();
+  const { regional, formatMoney } = useOwnerRestaurantRegional();
   const { setPosCartHasItems } = usePosCartGuard();
   const {
     branches: scopedBranches,
@@ -537,6 +532,7 @@ export function PosScreen() {
   >(null);
   const [lastShiftEndedAt, setLastShiftEndedAt] = useState<string | null>(null);
   const shiftSummaryBranchRef = useRef('');
+  const kioskPendingInFlightRef = useRef(false);
   const categoryScrollRef = useRef<HTMLDivElement>(null);
   const [clockLabel, setClockLabel] = useState('');
 
@@ -992,6 +988,8 @@ export function PosScreen() {
   );
 
   const refreshKioskPendingCount = useCallback(async (branchId: string) => {
+    if (kioskPendingInFlightRef.current) return;
+    kioskPendingInFlightRef.current = true;
     try {
       const res = await axios.get<{ count?: number }>(
         '/api/restaurant/kiosk-order/pending-cash',
@@ -1001,6 +999,8 @@ export function PosScreen() {
       setKioskPendingCount((prev) => (prev === count ? prev : count));
     } catch {
       setKioskPendingCount((prev) => (prev === 0 ? prev : 0));
+    } finally {
+      kioskPendingInFlightRef.current = false;
     }
   }, []);
 
@@ -1048,8 +1048,13 @@ export function PosScreen() {
       setKioskPendingCount(0);
       return;
     }
+    // Kiosk sheet polls the full list while open; avoid duplicate API calls.
+    if (kioskOrdersOpen) return;
 
-    const refresh = () => void refreshKioskPendingCount(branchId);
+    const refresh = () => {
+      if (document.hidden) return;
+      void refreshKioskPendingCount(branchId);
+    };
     refresh();
 
     const intervalId = window.setInterval(refresh, KIOSK_PENDING_POLL_MS);
@@ -1059,13 +1064,20 @@ export function PosScreen() {
 
     window.addEventListener('branch-changed', onBranchChanged);
     eventBus.on('refreshKioskOrders', onKioskOrdersChanged);
+    document.addEventListener('visibilitychange', refresh);
 
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener('branch-changed', onBranchChanged);
       eventBus.removeListener('refreshKioskOrders', onKioskOrdersChanged);
+      document.removeEventListener('visibilitychange', refresh);
     };
-  }, [selectedBranchId, activeBranchId, refreshKioskPendingCount]);
+  }, [
+    selectedBranchId,
+    activeBranchId,
+    refreshKioskPendingCount,
+    kioskOrdersOpen,
+  ]);
 
   function printOrderReceipt(
     orderRef: string,
@@ -1119,6 +1131,8 @@ export function PosScreen() {
       grandTotal,
       paidAmount,
       paymentMode: receiptMode,
+      currencyCode: regional.currencyCode,
+      countryCode: regional.countryCode,
     });
     if (!ok) toast.error('Could not open print preview.');
   }
@@ -1509,7 +1523,7 @@ export function PosScreen() {
         {
           orderId: `POS-PRE-${Date.now()}`,
           amount: grandTotal,
-          currency: 'EUR',
+          currency: regional.currencyCode,
         },
         { timeout: 120000 }
       );
@@ -1661,7 +1675,7 @@ export function PosScreen() {
         );
         savedOrder = patchRes.data.data;
         toast.success(
-          `Kiosk order updated — ${itemsCount} items · €${formatMoney(grandTotal)}`
+          `Kiosk order updated — ${itemsCount} items · ${formatMoney(grandTotal)}`
         );
         clearCart();
         setPayment('');
@@ -1722,7 +1736,7 @@ export function PosScreen() {
             {
               orderId: dbOrderId,
               amount: grandTotal,
-              currency: 'EUR',
+              currency: regional.currencyCode,
             },
             { timeout: 120000 }
           );
@@ -1765,8 +1779,8 @@ export function PosScreen() {
       }
       toast.success(
         isEditing
-          ? `Order updated — ${itemsCount} items · €${formatMoney(grandTotal)}`
-          : `Order saved — ${itemsCount} items · €${formatMoney(grandTotal)} · ${effectivePaymentMode}`
+          ? `Order updated — ${itemsCount} items · ${formatMoney(grandTotal)}`
+          : `Order saved — ${itemsCount} items · ${formatMoney(grandTotal)} · ${effectivePaymentMode}`
       );
       printOrderReceipt(trackingId, ticketNumber, {
         mode: effectivePaymentMode,
@@ -1840,7 +1854,7 @@ export function PosScreen() {
           {p.name}
         </span>
         <span className="mt-1 text-xs font-medium tabular-nums text-muted-foreground">
-          €{formatMoney(effectiveUnitPrice(p.price, p.salePrice))}
+          {formatMoney(effectiveUnitPrice(p.price, p.salePrice))}
         </span>
       </div>
     </button>
@@ -1981,7 +1995,7 @@ export function PosScreen() {
             >
               <Banknote className="h-4 w-4 shrink-0 text-emerald-400" />
               <span className="font-semibold tabular-nums text-emerald-300">
-                €{formatMoney(lastClosingCashInLocker)}
+                {formatMoney(lastClosingCashInLocker)}
               </span>
             </div>
           ) : null}
@@ -2252,12 +2266,11 @@ export function PosScreen() {
                                 subItemClassName="text-[11px] text-muted-foreground"
                               />
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {line.qty}x · €
-                                {formatMoney(lineUnitTotal(line))} each
+                                {line.qty}x · {formatMoney(lineUnitTotal(line))} each
                               </p>
                             </div>
                             <p className="shrink-0 tabular-nums">
-                              €{formatMoney(lineTotal)}
+                              {formatMoney(lineTotal)}
                             </p>
                           </div>
                           <div className="flex items-center gap-1">
@@ -2329,33 +2342,33 @@ export function PosScreen() {
               <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal</span>
                 <span className="tabular-nums text-foreground">
-                  €{formatMoney(subtotal)}
+                  {formatMoney(subtotal)}
                 </span>
               </div>
               <div className="flex justify-between text-muted-foreground">
                 <span>Tax ({taxPct || '0'}%)</span>
                 <span className="tabular-nums text-foreground">
-                  €{formatMoney(taxAmount)}
+                  {formatMoney(taxAmount)}
                 </span>
               </div>
               <div className="flex justify-between text-muted-foreground">
                 <span>Discount ({disPct || '0'}%)</span>
                 <span className="tabular-nums text-foreground">
-                  €{formatMoney(disAmount)}
+                  {formatMoney(disAmount)}
                 </span>
               </div>
               {activeServiceChargeAmount > 0 ? (
                 <div className="flex justify-between text-muted-foreground">
                   <span>Service charge</span>
                   <span className="tabular-nums text-foreground">
-                    €{formatMoney(activeServiceChargeAmount)}
+                    {formatMoney(activeServiceChargeAmount)}
                   </span>
                 </div>
               ) : null}
               <div className="mt-2 flex justify-between border-t border-dashed border-border pt-3 text-lg font-semibold">
                 <span>Total</span>
                 <span className={cn('tabular-nums', POS_ACCENT_TEXT)}>
-                  €{formatMoney(grandTotal)}
+                  {formatMoney(grandTotal)}
                 </span>
               </div>
             </div>
@@ -2538,7 +2551,7 @@ export function PosScreen() {
                           : order.shortOrderId}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(order.createdAt).toLocaleString()} · €
+                        {new Date(order.createdAt).toLocaleString()} ·{' '}
                         {formatMoney(order.total)}
                       </p>
                       {order.tableLabel ? (
@@ -2657,7 +2670,7 @@ export function PosScreen() {
                           </p>
                         </div>
                         <p className="text-sm font-semibold tabular-nums">
-                          €{formatMoney(order.total)}
+                          {formatMoney(order.total)}
                         </p>
                       </div>
                       <div className="mt-2 space-y-1 text-xs text-muted-foreground">
@@ -2693,7 +2706,7 @@ export function PosScreen() {
                               ) : null}
                             </span>
                             <span className="tabular-nums">
-                              €{formatMoney(line.unitPrice * line.qty)}
+                              {formatMoney(line.unitPrice * line.qty)}
                             </span>
                           </div>
                         ))}
@@ -2770,7 +2783,7 @@ export function PosScreen() {
                             {line.qty}
                           </TableCell>
                           <TableCell className="text-right text-xs tabular-nums">
-                            €{formatMoney(lineTotal)}
+                            {formatMoney(lineTotal)}
                           </TableCell>
                         </TableRow>
                       );
@@ -2827,7 +2840,7 @@ export function PosScreen() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
                     <span className="tabular-nums">
-                      €{formatMoney(subtotal)}
+                      {formatMoney(subtotal)}
                     </span>
                   </div>
                   {activeServiceChargeAmount > 0 ? (
@@ -2836,14 +2849,14 @@ export function PosScreen() {
                         Service charge
                       </span>
                       <span className="tabular-nums">
-                        €{formatMoney(activeServiceChargeAmount)}
+                        {formatMoney(activeServiceChargeAmount)}
                       </span>
                     </div>
                   ) : null}
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Total</span>
                     <span className="font-semibold tabular-nums">
-                      €{formatMoney(grandTotal)}
+                      {formatMoney(grandTotal)}
                     </span>
                   </div>
                   <div className="mt-2 grid gap-2">
@@ -2918,7 +2931,7 @@ export function PosScreen() {
                               ) : (
                                 <>
                                   <CreditCard className="h-4 w-4" />
-                                  Pay €{formatMoney(grandTotal)}
+                                  Pay {formatMoney(grandTotal)}
                                 </>
                               )}
                             </Button>
@@ -2953,7 +2966,6 @@ export function PosScreen() {
                             <div className="flex justify-between text-xs text-muted-foreground">
                               <span>Change</span>
                               <span className="tabular-nums text-foreground">
-                                €
                                 {formatMoney(
                                   Math.max(
                                     0,
@@ -3114,7 +3126,7 @@ export function PosScreen() {
               Insert or tap card on the terminal…
             </p>
             <p className="text-lg font-semibold tabular-nums">
-              €{formatMoney(grandTotal)}
+              {formatMoney(grandTotal)}
             </p>
           </div>
           <DialogFooter className="flex-col gap-2 sm:flex-col">
@@ -3151,7 +3163,7 @@ export function PosScreen() {
               Payment successful
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Card payment of €{formatMoney(grandTotal)} was approved
+              Card payment of {formatMoney(grandTotal)} was approved
               {cardTransactionId ? ` (${cardTransactionId})` : ''}. You can now
               place the order.
             </AlertDialogDescription>
@@ -3387,12 +3399,11 @@ export function PosScreen() {
         branchName={selectedBranchName}
         logoUrl={branding.logoUrl}
         onEditOrder={(order) => loadOrderForEdit(order, 'kiosk')}
+        onPendingCountChange={setKioskPendingCount}
         onOrdersChanged={() => {
-          eventBus.emit('refreshKioskOrders');
           eventBus.emit('refreshRecentOrders');
           const branchId = selectedBranchId || activeBranchId || '';
           if (branchId) {
-            void refreshKioskPendingCount(branchId);
             void refreshShiftSummary(branchId);
           }
         }}

@@ -37,6 +37,7 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { salesOrderMethodLabel } from '@/lib/order-fulfillment';
 import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
 import { salesOrderStatusBucket } from '@/lib/sales-order-status';
@@ -71,14 +72,6 @@ import type {
 } from '@/types/sales-order';
 import type { TransactionData } from '@/types/transaction';
 import { cn } from '@/lib/utils';
-
-function formatMoney(n: number | null) {
-  if (n == null || Number.isNaN(n)) return '—';
-  return n.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 type MenuOrderDetail = {
   id: string;
@@ -263,9 +256,11 @@ function SalesOrdersPaginationBar({
 function OrdersTable({
   rows,
   onView,
+  formatMoney,
 }: {
   rows: SalesOrderRow[];
   onView: (row: SalesOrderRow) => void;
+  formatMoney: (n: number | null) => string;
 }) {
   return (
     <TableWrapper>
@@ -325,7 +320,7 @@ function OrdersTable({
                       : '—'}
                 </TableCell>
                 <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                  €{formatMoney(row.total)}
+                  {formatMoney(row.total)}
                 </TableCell>
                 <TableCell>
                   <StatusBadge status={row.status} />
@@ -355,6 +350,9 @@ function OrdersTable({
 }
 
 export function SalesOrdersTabs() {
+  const { formatMoney: formatCurrencyAmount } = useOwnerRestaurantRegional();
+  const formatMoney = (n: number | null) =>
+    n == null || Number.isNaN(n) ? '—' : formatCurrencyAmount(n);
   const { activeBranchId, loading: branchLoading, isOwnerOrAdmin } =
     useBranchContext();
   const [orders, setOrders] = useState<SalesOrderRow[]>([]);
@@ -500,8 +498,9 @@ export function SalesOrdersTabs() {
         <OrdersKpiCard
           tabName={activeLabel}
           label="Total Orders"
-          value={activeStats.totalOrders}
-          sparklineData={kpiSparklineFromValue(activeStats.totalOrders)}
+          subtitle={formatMoney(activeStats.totalAmount)}
+          value={`${activeStats.totalOrders.toLocaleString()}`}
+          sparklineData={kpiSparklineFromValue(activeStats.totalAmount)}
           accentColor={activeAccent}
           icon={ShoppingBag}
           loading={loading}
@@ -509,7 +508,8 @@ export function SalesOrdersTabs() {
         <OrdersKpiCard
           tabName={activeLabel}
           label="Total Revenue"
-          value={`€${formatMoney(activeStats.revenueAmount)}`}
+          value={formatMoney(activeStats.revenueAmount)}
+          subtitle={`${activeStats.revenueOrders.toLocaleString()} Complete Orders`}
           sparklineData={kpiSparklineFromValue(activeStats.revenueAmount)}
           accentColor="#22c55e"
           icon={CircleDollarSign}
@@ -518,8 +518,9 @@ export function SalesOrdersTabs() {
         <OrdersKpiCard
           tabName={activeLabel}
           label="Pending Orders"
-          value={activeStats.pending.count}
-          sparklineData={kpiSparklineFromValue(activeStats.pending.count)}
+          subtitle={formatMoney(activeStats.pending.amount)}
+          value={`${activeStats.pending.count.toLocaleString()}`}
+          sparklineData={kpiSparklineFromValue(activeStats.pending.amount)}
           accentColor="#f59e0b"
           icon={Clock3}
           loading={loading}
@@ -527,8 +528,9 @@ export function SalesOrdersTabs() {
         <OrdersKpiCard
           tabName={activeLabel}
           label="Cancelled Orders"
-          value={activeStats.canceled.count}
-          sparklineData={kpiSparklineFromValue(activeStats.canceled.count)}
+          subtitle={formatMoney(activeStats.canceled.amount)}
+          value={`${activeStats.canceled.count.toLocaleString()}`}
+          sparklineData={kpiSparklineFromValue(activeStats.canceled.amount)}
           accentColor="#ef4444"
           icon={Ban}
           loading={loading}
@@ -664,7 +666,7 @@ export function SalesOrdersTabs() {
           </div>
         ) : (
           <>
-            <OrdersTable rows={orders} onView={openDetail} />
+            <OrdersTable rows={orders} onView={openDetail} formatMoney={formatMoney} />
             <SalesOrdersPaginationBar
               pagination={pagination}
               page={page}
@@ -730,7 +732,7 @@ export function SalesOrdersTabs() {
                     <div>
                       <p className="text-muted-foreground">Total</p>
                       <p className="font-semibold tabular-nums">
-                        €{formatMoney(menuDetail.total)}
+                        {formatMoney(menuDetail.total)}
                       </p>
                     </div>
                     <div>
@@ -765,8 +767,8 @@ export function SalesOrdersTabs() {
                     <p className="text-xs font-medium text-muted-foreground">
                       Financial summary
                     </p>
-                    <p>Tax: €{formatMoney(menuDetail.taxAmount)}</p>
-                    <p>Discount: €{formatMoney(menuDetail.discountAmount)}</p>
+                    <p>Tax: {formatMoney(menuDetail.taxAmount)}</p>
+                    <p>Discount: {formatMoney(menuDetail.discountAmount)}</p>
                   </div>
 
                   {menuDetail.customer && (
@@ -844,7 +846,7 @@ export function SalesOrdersTabs() {
                                 {it.quantity}
                               </TableCell>
                               <TableCell className="text-right tabular-nums">
-                                €{formatMoney(it.price)}
+                                {formatMoney(it.price)}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -859,7 +861,7 @@ export function SalesOrdersTabs() {
                       <ul className="space-y-1 text-muted-foreground">
                         {menuDetail.payments.map((p) => (
                           <li key={p.id}>
-                            €{formatMoney(p.amount)} · {p.method} · {p.status}{' '}
+                            {formatMoney(p.amount)} · {p.method} · {p.status}{' '}
                             <span className="text-xs">
                               ({new Date(p.createdAt).toLocaleString()})
                             </span>
@@ -883,7 +885,7 @@ export function SalesOrdersTabs() {
                     <div>
                       <p className="text-xs text-muted-foreground">Total</p>
                       <p className="font-semibold tabular-nums">
-                        €{formatMoney(activeRow.total)}
+                        {formatMoney(activeRow.total)}
                       </p>
                     </div>
                     <div>
@@ -935,7 +937,7 @@ export function SalesOrdersTabs() {
                               {line.quantity}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              €{formatMoney(amt)}
+                              {formatMoney(amt)}
                             </TableCell>
                           </TableRow>
                         );

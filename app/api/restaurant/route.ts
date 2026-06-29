@@ -8,6 +8,10 @@ import { ensurePresetRolesAndOwnerEmployee } from "@/lib/restaurant-roles";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 import { normalizeThemePrimaryColor } from "@/lib/restaurant-theme";
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from "@/lib/subscription-plan-enforcement";
+import {
+  parseRestaurantRegionalSettings,
+  RESTAURANT_REGIONAL_DB_SELECT,
+} from "@/lib/restaurant-regional";
 
 function assertHttpUrl(label: string, raw: string, ctx: z.RefinementCtx, path: (string | number)[]) {
   const t = raw.trim();
@@ -86,6 +90,7 @@ export async function GET(req: NextRequest) {
         subdomain: true,
         slug: true,
         ownerId: true,
+        ...RESTAURANT_REGIONAL_DB_SELECT,
       },
     });
 
@@ -93,7 +98,14 @@ export async function GET(req: NextRequest) {
       await ensurePresetRolesAndOwnerEmployee(full.id, auth.user.id);
     }
 
-    return NextResponse.json({ data: full }, { status: 200 });
+    const data = full
+      ? {
+          ...full,
+          regional: parseRestaurantRegionalSettings(full),
+        }
+      : null;
+
+    return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
     console.error("Error fetching restaurant:", error);
     return NextResponse.json(

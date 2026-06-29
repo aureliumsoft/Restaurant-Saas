@@ -8,6 +8,7 @@ import RolesCard from './components/roles';
 import RestaurantUsersCard from './components/restaurant-users';
 import { CustomerEntryLinks } from './components/customer-entry-links';
 import { RestaurantBrandingCard } from './components/restaurant-branding';
+import { RestaurantRegionalSettingsCard } from './components/restaurant-regional-settings-card';
 import { RestaurantPaymentProviderCard } from './components/restaurant-payment-provider-card';
 import { RestaurantBillingCard } from './components/restaurant-billing-card';
 import { RestaurantServiceChargesCard } from './components/restaurant-service-charges-card';
@@ -110,6 +111,7 @@ export function Setting() {
               {activeSection === 'basic' ? (
                 <>
                   <CustomerEntryLinks />
+                  <RestaurantRegionalSettingsCard />
                   <RestaurantBrandingCard brandingAllowed={brandingAllowed} />
                 </>
               ) : null}

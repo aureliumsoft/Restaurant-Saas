@@ -34,6 +34,7 @@ import { CutleryOption } from '@/components/order/cutlery-option';
 import { OrderPreferencesSummary } from '@/components/order/order-preferences-summary';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import { useRestaurantServiceCharges } from '@/hooks/use-restaurant-service-charges';
+import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import {
   readCutleryPreference,
   readOrderCommentPreference,
@@ -283,6 +284,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
     orderInfo?.restaurantSlug,
     'online'
   );
+  const { formatMoney } = useRestaurantRegional(orderInfo?.restaurantSlug);
   const grandTotal = total + serviceChargeAmount;
 
   const offeredProducts: OfferedProduct[] = useMemo(() => {
@@ -551,7 +553,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                                 {modLine.prefix === 'branch' ? '↳ ' : '- '}
                                 {modLine.name}
                                 {modLine.unitPrice > 0
-                                  ? ` (+€${modLine.unitPrice.toFixed(2)})`
+                                  ? ` (+${formatMoney(modLine.unitPrice)})`
                                   : ''}
                               </p>
                             ))}
@@ -588,7 +590,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                       </div>
                       <div className="flex w-full items-center justify-between gap-3">
                       <span className="text-right font-semibold">
-                          €{lineTotal(line).toFixed(2)}
+                          {formatMoney(lineTotal(line))}
                         </span>
                         <Button
                           variant="destructive"
@@ -623,17 +625,17 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                 <OrderPreferencesSummary cutlery={cutlery} comment={comment} />
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{t('subtotal')}</span>
-                  <span>€{total.toFixed(2)}</span>
+                  <span>{formatMoney(total)}</span>
                 </div>
                 {serviceChargeAmount > 0 ? (
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{t('serviceFees')}</span>
-                    <span>€{serviceChargeAmount.toFixed(2)}</span>
+                    <span>{formatMoney(serviceChargeAmount)}</span>
                   </div>
                 ) : null}
                 <div className="flex items-center justify-between border-t border-border pt-2">
                   <span className="text-lg font-semibold">{t('total')}</span>
-                  <span className="text-lg font-bold">€{grandTotal.toFixed(2)}</span>
+                  <span className="text-lg font-bold">{formatMoney(grandTotal)}</span>
                 </div>
                 {offeredProducts.length > 0 ? (
                   <Button
@@ -703,7 +705,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold">
-                      €{p.unitPrice.toFixed(2)}
+                      {formatMoney(p.unitPrice)}
                     </span>
                     <Button
                       size="sm"

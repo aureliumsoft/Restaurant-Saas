@@ -16,10 +16,7 @@ import {
   UtensilsCrossed,
   XCircle,
 } from 'lucide-react';
-import {
-  CardPaymentDialogs,
-  useCardPaymentFlow,
-} from '@/components/payments/card-payment-flow';
+import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import {
   useCallback,
   useEffect,
@@ -88,6 +85,7 @@ import {
   resolveServiceChargeAmount,
   type RestaurantServiceCharges,
 } from '@/lib/restaurant-service-charge';
+import { CardPaymentDialogs, useCardPaymentFlow } from '../payments/card-payment-flow';
 
 function formatKioskOrderApiError(body: unknown): string {
   if (!body || typeof body !== 'object') {
@@ -283,13 +281,6 @@ function saveCart(slug: string, branchId: string, lines: CartLine[]) {
   );
 }
 
-function formatMoney(n: number) {
-  return n.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 /** Single-line label for cart / kitchen (matches server `ticketProductName` shape). */
 function cartLineDisplayName(line: CartLine): string {
   const base = line.variationName
@@ -320,6 +311,7 @@ export function KioskApp({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { formatMoney, regional } = useRestaurantRegional(slug);
   const kioskPath = kioskBasePath(slug, branchId);
   const [step, setStep] = useState<Step>('mode');
   const [fulfillment, setFulfillment] = useState<
@@ -588,6 +580,7 @@ export function KioskApp({
     amount: cartGrandTotal,
     orderIdPrefix: 'KIOSK-PRE',
     formatMoney,
+    currency: regional.currencyCode,
   });
 
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
@@ -853,7 +846,7 @@ export function KioskApp({
           </h3>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-sm font-bold text-primary">
-              €{formatMoney(unit)}
+              {formatMoney(unit)}
             </span>
             {showStrike ? (
               <span className="text-xs text-[#94a3b8] line-through">
@@ -1335,7 +1328,7 @@ export function KioskApp({
               <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-lg font-bold tabular-nums">
-                    €{formatMoney(cartSubtotal)}
+                    {formatMoney(cartSubtotal)}
                   </p>
                   <p className="text-xs opacity-90">
                     {cartCount} {t('items')}
@@ -1446,7 +1439,7 @@ export function KioskApp({
                             </div>
                           ) : null}
                           <p className="mt-1 text-xs text-[#64748b]">
-                            €{formatMoney(lineUnitTotal(line))} each
+                            {formatMoney(lineUnitTotal(line))} each
                           </p>
                           <div className="mt-2 flex items-center gap-2">
                             <Button
@@ -1497,13 +1490,13 @@ export function KioskApp({
                   <div className="flex justify-between">
                     <span>Subtotal</span>
                     <span className="font-medium tabular-nums">
-                      €{formatMoney(cartSubtotal)}
+                      {formatMoney(cartSubtotal)}
                     </span>
                   </div>
                   <div className="flex justify-between font-semibold">
                     <span>Total</span>
                     <span className="tabular-nums">
-                      €{formatMoney(cartSubtotal)}
+                      {formatMoney(cartSubtotal)}
                     </span>
                   </div>
                 </div>
@@ -1620,7 +1613,7 @@ export function KioskApp({
                           {cartLineTitle(line.productName, line.variationName)}
                         </p>
                         <span className="shrink-0 tabular-nums text-[#64748b]">
-                          €{formatMoney(lineTotal(line))}
+                          {formatMoney(lineTotal(line))}
                         </span>
                       </div>
                       {personalizeNames.length > 0 ? (
@@ -1657,17 +1650,17 @@ export function KioskApp({
               <div className="space-y-1 border-t border-[#e2e8f0] pt-2 text-sm">
                 <div className="flex justify-between text-[#64748b]">
                   <span>Subtotal</span>
-                  <span>€{formatMoney(cartSubtotal)}</span>
+                  <span>{formatMoney(cartSubtotal)}</span>
                 </div>
                 {serviceChargeAmount > 0 ? (
                   <div className="flex justify-between text-[#64748b]">
                     <span>Service charge</span>
-                    <span>€{formatMoney(serviceChargeAmount)}</span>
+                    <span>{formatMoney(serviceChargeAmount)}</span>
                   </div>
                 ) : null}
                 <div className="flex justify-between font-semibold text-[#0f172a]">
                   <span>Total due</span>
-                  <span>€{formatMoney(cartGrandTotal)}</span>
+                  <span>{formatMoney(cartGrandTotal)}</span>
                 </div>
               </div>
             </div>
@@ -1723,7 +1716,7 @@ export function KioskApp({
                         cardPayment.cardPaymentStatus === 'cancelled' ? (
                         <>
                           <XCircle className="h-4 w-4" />
-                          Pay €{formatMoney(cartGrandTotal)}
+                          Pay {formatMoney(cartGrandTotal)}
                         </>
                       ) : cardPayment.cardPaymentStatus === 'processing' ? (
                         <>
@@ -1733,7 +1726,7 @@ export function KioskApp({
                       ) : (
                         <>
                           <CreditCard className="h-4 w-4" />
-                          Pay €{formatMoney(cartGrandTotal)}
+                          Pay {formatMoney(cartGrandTotal)}
                         </>
                       )}
                     </Button>

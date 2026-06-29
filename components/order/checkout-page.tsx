@@ -21,6 +21,7 @@ import { StripeCheckoutButton } from '@/components/payments/stripe-checkout-butt
 import { CutleryOption } from '@/components/order/cutlery-option';
 import { OrderPreferencesSummary } from '@/components/order/order-preferences-summary';
 import { useRestaurantServiceCharges } from '@/hooks/use-restaurant-service-charges';
+import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import {
   clearOnlineOrderPreferences,
   readCutleryPreference,
@@ -173,6 +174,7 @@ export default function CheckoutPageClient({
   const [paymentConfig, setPaymentConfig] = useState<{
     provider: 'NONE' | 'PAYPAL' | 'STRIPE';
     ready: boolean;
+    currencyCode?: string;
   } | null>(null);
   const [paymentConfigLoading, setPaymentConfigLoading] = useState(true);
 
@@ -191,7 +193,11 @@ export default function CheckoutPageClient({
           { cache: 'no-store' }
         );
         const body = (await res.json().catch(() => ({}))) as {
-          data?: { provider?: 'NONE' | 'PAYPAL' | 'STRIPE'; ready?: boolean };
+          data?: {
+            provider?: 'NONE' | 'PAYPAL' | 'STRIPE';
+            ready?: boolean;
+            currencyCode?: string;
+          };
         };
         if (!cancelled) {
           setPaymentConfig(
@@ -199,6 +205,7 @@ export default function CheckoutPageClient({
               ? {
                   provider: body.data.provider ?? 'NONE',
                   ready: body.data.ready === true,
+                  currencyCode: body.data.currencyCode,
                 }
               : { provider: 'NONE', ready: false }
           );
@@ -239,6 +246,7 @@ export default function CheckoutPageClient({
     orderInfo?.restaurantSlug,
     'online'
   );
+  const { formatMoney, regional } = useRestaurantRegional(orderInfo?.restaurantSlug);
   const grandTotal = total + serviceChargeAmount;
 
   const placeOrder = async () => {
@@ -552,7 +560,7 @@ export default function CheckoutPageClient({
                         <p className="font-medium">
                           {cartLineTitle(line.productName, line.variationName)}
                         </p>
-                        <p>€{lineTotal(line).toFixed(2)}</p>
+                        <p>{formatMoney(lineTotal(line))}</p>
                       </div>
                       {modifierLines.length > 0 ? (
                         <div className="space-y-0.5">
@@ -566,7 +574,7 @@ export default function CheckoutPageClient({
                               {modLine.prefix === 'branch' ? '↳ ' : '- '}
                               {modLine.name}
                               {modLine.unitPrice > 0
-                                ? ` (+€${modLine.unitPrice.toFixed(2)})`
+                                ? ` (+${formatMoney(modLine.unitPrice)})`
                                 : ''}
                             </p>
                           ))}
@@ -589,17 +597,17 @@ export default function CheckoutPageClient({
                 <div className="mt-4 space-y-2 border-t border-border pt-2 text-sm">
                   <div className="flex justify-between">
                     <span>{t('subtotal')}</span>
-                    <span>€{total.toFixed(2)}</span>
+                    <span>{formatMoney(total)}</span>
                   </div>
                   {serviceChargeAmount > 0 ? (
                     <div className="flex justify-between">
                       <span>{t('serviceFees')}</span>
-                      <span>€{serviceChargeAmount.toFixed(2)}</span>
+                      <span>{formatMoney(serviceChargeAmount)}</span>
                     </div>
                   ) : null}
                   <div className="flex justify-between font-bold">
                     <span>{t('total')}</span>
-                    <span>€{grandTotal.toFixed(2)}</span>
+                    <span>{formatMoney(grandTotal)}</span>
                   </div>
                 </div>
 
@@ -613,6 +621,7 @@ export default function CheckoutPageClient({
                       paymentConfig.provider === 'PAYPAL' ? (
                       <PayPalCheckoutButtons
                         amount={grandTotal}
+                        currency={paymentConfig.currencyCode ?? regional.currencyCode}
                         restaurantSlug={orderInfo.restaurantSlug}
                         title={`Online order (${
                           orderType === 'delivery' ? 'Delivery' : 'Pick-up'
@@ -660,6 +669,7 @@ export default function CheckoutPageClient({
                       paymentConfig.provider === 'STRIPE' ? (
                       <StripeCheckoutButton
                         amount={grandTotal}
+                        currency={paymentConfig.currencyCode ?? regional.currencyCode}
                         restaurantSlug={orderInfo.restaurantSlug}
                         title={`Online order (${
                           orderType === 'delivery' ? 'Delivery' : 'Pick-up'

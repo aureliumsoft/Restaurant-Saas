@@ -11,6 +11,11 @@ import {
   resolvePayPalBuyerCountry,
 } from '@/lib/paypal-buyer-countries';
 import {
+  parseRestaurantRegionalSettings,
+  RESTAURANT_REGIONAL_DB_SELECT,
+} from '@/lib/restaurant-regional';
+import { toPayPalCurrencyCode } from '@/lib/format-money';
+import {
   normalizePayPalMode,
   toRestaurantPayPalRuntimeConfig,
   type RestaurantPayPalRuntimeConfig,
@@ -51,6 +56,8 @@ export type RestaurantPaymentProviderDto = {
 export type PublicRestaurantPaymentConfig = {
   provider: CustomerPaymentProvider;
   ready: boolean;
+  currencyCode: string;
+  countryCode: string;
   paypal?: {
     clientId: string;
     currency: string;
@@ -60,6 +67,7 @@ export type PublicRestaurantPaymentConfig = {
   stripe?: {
     publishableKey: string;
     mode: 'test' | 'live';
+    currency: string;
   };
 };
 
@@ -209,6 +217,7 @@ export async function getRestaurantPayPalRuntimeConfigBySlug(
       slug: true,
       customerPaymentProvider: true,
       paypalCredentials: true,
+      ...RESTAURANT_REGIONAL_DB_SELECT,
     },
   });
   if (
@@ -219,6 +228,7 @@ export async function getRestaurantPayPalRuntimeConfigBySlug(
     return null;
   }
   const creds = restaurant.paypalCredentials!;
+  const regional = parseRestaurantRegionalSettings(restaurant);
   return {
     restaurantId: restaurant.id,
     slug: restaurant.slug,
@@ -227,8 +237,8 @@ export async function getRestaurantPayPalRuntimeConfigBySlug(
       clientId: creds.clientId,
       clientSecret: decryptSecret(creds.clientSecretEnc),
       mode: creds.mode,
-      currency: creds.currency,
-      countryCode: creds.countryCode,
+      currency: creds.currency || regional.currencyCode,
+      countryCode: creds.countryCode || regional.countryCode,
     }),
   };
 }
@@ -315,26 +325,44 @@ export async function getPublicRestaurantPaymentConfigBySlug(
       customerPaymentProvider: true,
       paypalCredentials: true,
       stripeCredentials: true,
+      ...RESTAURANT_REGIONAL_DB_SELECT,
     },
   });
   if (!restaurant) return null;
+
+  const regional = parseRestaurantRegionalSettings(restaurant);
+  const restaurantCurrency = toPayPalCurrencyCode(regional.currencyCode);
+  const restaurantCountry = regional.countryCode;
 
   const provider = restaurant.customerPaymentProvider;
   if (provider === CustomerPaymentProvider.PAYPAL) {
     const creds = restaurant.paypalCredentials;
     if (!isRestaurantPayPalCredentialsReady(creds)) {
-      return { provider, ready: false };
+      return {
+        provider,
+        ready: false,
+        currencyCode: restaurantCurrency,
+        countryCode: restaurantCountry,
+      };
     }
+    const paypalCurrency = toPayPalCurrencyCode(
+      creds!.currency || restaurantCurrency
+    );
     return {
       provider,
       ready: true,
+      currencyCode: paypalCurrency,
+      countryCode: resolvePayPalBuyerCountry(
+        creds!.countryCode || restaurantCountry,
+        paypalCurrency
+      ),
       paypal: {
         clientId: creds!.clientId,
-        currency: creds!.currency,
+        currency: paypalCurrency,
         mode: normalizePayPalMode(creds!.mode),
         buyerCountry: resolvePayPalBuyerCountry(
-          creds!.countryCode,
-          creds!.currency
+          creds!.countryCode || restaurantCountry,
+          paypalCurrency
         ),
       },
     };
@@ -343,11 +371,18 @@ export async function getPublicRestaurantPaymentConfigBySlug(
   if (provider === CustomerPaymentProvider.STRIPE) {
     const creds = restaurant.stripeCredentials;
     if (!isRestaurantStripeCredentialsReady(creds)) {
-      return { provider, ready: false };
+      return {
+        provider,
+        ready: false,
+        currencyCode: restaurantCurrency,
+        countryCode: restaurantCountry,
+      };
     }
     return {
       provider,
       ready: true,
+      currencyCode: restaurantCurrency,
+      countryCode: restaurantCountry,
       stripe: {
         publishableKey: creds!.publishableKey,
         mode: normalizeStripeMode(
@@ -355,11 +390,17 @@ export async function getPublicRestaurantPaymentConfigBySlug(
           creds!.publishableKey,
           undefined
         ),
+        currency: restaurantCurrency,
       },
     };
   }
 
-  return { provider: CustomerPaymentProvider.NONE, ready: false };
+  return {
+    provider: CustomerPaymentProvider.NONE,
+    ready: false,
+    currencyCode: restaurantCurrency,
+    countryCode: restaurantCountry,
+  };
 }
 
 export async function upsertRestaurantPayPalCredentials(params: {

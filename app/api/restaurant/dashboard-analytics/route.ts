@@ -10,7 +10,7 @@ import {
 import { countDiningTables } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
-import { analyticsActiveOrderStatusWhere } from '@/lib/sales-order-status';
+import { analyticsActiveOrderStatusWhere, orderCountsTowardRevenue } from '@/lib/sales-order-status';
 import {
   enforceAnalyticsDays,
   getTodayCreatedAtBounds,
@@ -171,7 +171,17 @@ export async function GET(_req: NextRequest) {
           ...orderScope,
           ...(todayBounds ? {} : { createdAt: { gte: from } }),
         },
-        select: { createdAt: true, total: true, sourceType: true },
+        select: {
+          createdAt: true,
+          total: true,
+          sourceType: true,
+          status: true,
+          payments: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { status: true, amount: true },
+          },
+        },
       }),
     ]);
 
@@ -211,25 +221,40 @@ export async function GET(_req: NextRequest) {
           : utcDayKey(new Date(row.createdAt));
       const bucket = byDay.get(k);
       if (!bucket) continue;
-      const total = Number(row.total) || 0;
+      const latestPayment = row.payments[0];
+      const revenueEligible = orderCountsTowardRevenue({
+        orderStatus: row.status,
+        paymentStatus: latestPayment?.status ?? null,
+      });
+      const total = revenueEligible
+        ? Number(latestPayment?.amount ?? row.total) || 0
+        : 0;
       bucket.orders += 1;
-      bucket.revenue += total;
+      if (revenueEligible) {
+        bucket.revenue += total;
+      }
       if (row.sourceType === 'ONLINE') {
         bucket.onlineOrders += 1;
-        bucket.onlineRevenue += total;
+        if (revenueEligible) {
+          bucket.onlineRevenue += total;
+          channelTotals.revenue.online += total;
+        }
         channelTotals.orders.online += 1;
-        channelTotals.revenue.online += total;
       } else if (row.sourceType === 'KIOSK') {
         bucket.kioskOrders += 1;
-        bucket.kioskRevenue += total;
+        if (revenueEligible) {
+          bucket.kioskRevenue += total;
+          channelTotals.revenue.kiosk += total;
+        }
         channelTotals.orders.kiosk += 1;
-        channelTotals.revenue.kiosk += total;
       } else {
         // Treat POS and other in-store sources as POS channel for analytics.
         bucket.posOrders += 1;
-        bucket.posRevenue += total;
+        if (revenueEligible) {
+          bucket.posRevenue += total;
+          channelTotals.revenue.pos += total;
+        }
         channelTotals.orders.pos += 1;
-        channelTotals.revenue.pos += total;
       }
     }
 

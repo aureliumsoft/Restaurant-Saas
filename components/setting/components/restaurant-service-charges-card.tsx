@@ -21,6 +21,8 @@ import type {
   RestaurantServiceCharges,
   ServiceChargeChannelConfig,
 } from '@/lib/restaurant-service-charge';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
 
 type ChannelKey = keyof RestaurantServiceCharges;
 
@@ -59,11 +61,13 @@ function ChannelToggle({
   description,
   value,
   onChange,
+  chargeAmountLabel,
 }: {
   label: string;
   description: string;
   value: ServiceChargeChannelConfig;
   onChange: (next: ServiceChargeChannelConfig) => void;
+  chargeAmountLabel: string;
 }) {
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-4">
@@ -92,7 +96,7 @@ function ChannelToggle({
         </button>
       </div>
       <div className="mt-4 space-y-2">
-        <Label htmlFor={`${label}-charge-amount`}>Charge amount (€)</Label>
+        <Label htmlFor={`${label}-charge-amount`}>{chargeAmountLabel}</Label>
         <Input
           id={`${label}-charge-amount`}
           type="number"
@@ -117,6 +121,8 @@ function ChannelToggle({
 }
 
 export function RestaurantServiceChargesCard() {
+  const { regional } = useOwnerRestaurantRegional();
+  const chargeAmountLabel = `Charge amount (${getRestaurantCurrencySymbol(regional.currencyCode)})`;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [charges, setCharges] = useState<RestaurantServiceCharges>(emptyCharges);
@@ -189,6 +195,7 @@ export function RestaurantServiceChargesCard() {
             label={channel.label}
             description={channel.description}
             value={charges[channel.key]}
+            chargeAmountLabel={chargeAmountLabel}
             onChange={(next) =>
               setCharges((prev) => ({ ...prev, [channel.key]: next }))
             }

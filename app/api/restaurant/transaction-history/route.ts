@@ -6,6 +6,7 @@ import {
   userIsOwnerOrAdmin,
 } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
+import { isCanceledOrderStatus } from '@/lib/order-payment';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import {
   getTodayCreatedAtBounds,
@@ -80,6 +81,12 @@ export async function GET(req: NextRequest) {
     const page = toPositiveInt(req.nextUrl.searchParams.get('page'), 1);
     const take = Math.min(toPositiveInt(req.nextUrl.searchParams.get('take'), 20), 100);
 
+    const restaurant = await db.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: { currencyCode: true },
+    });
+    const orderCurrency = restaurant?.currencyCode ?? 'EUR';
+
     const [orders, subscriptions, registerTxns] = await Promise.all([
       db.order.findMany({
         where: { restaurantId, ...orderBranchFilter, ...todayCreatedAt },
@@ -128,6 +135,7 @@ export async function GET(req: NextRequest) {
     const rows: HistoryRow[] = [
       ...orders.map((o) => {
         const payment = o.payments[0];
+        const orderCanceled = isCanceledOrderStatus(o.status);
         return {
           key: `ORDER:${o.id}`,
           kind: 'ORDER' as const,
@@ -136,8 +144,10 @@ export async function GET(req: NextRequest) {
           shortOrderId: o.shortOrderId,
           ticketNumber: o.ticketNumber,
           amount: payment?.amount ?? o.total ?? null,
-          currency: 'EUR',
-          status: payment?.status ?? o.status,
+          currency: orderCurrency,
+          status: orderCanceled
+            ? 'cancelled'
+            : (payment?.status ?? o.status),
           method: payment?.method ?? null,
           source: o.sourceType,
           note: o.address ?? null,
@@ -169,7 +179,7 @@ export async function GET(req: NextRequest) {
         shortOrderId: null,
         ticketNumber: null,
         amount: t.totalAmount != null ? Number(t.totalAmount) : null,
-        currency: 'EUR',
+        currency: orderCurrency,
         status: t.isComplete ? 'completed' : 'open',
         method: 'register',
         source: t.sourceType,

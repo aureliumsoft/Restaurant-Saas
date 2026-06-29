@@ -29,6 +29,40 @@ export function isPendingPaymentStatus(status: string | null | undefined): boole
   return s === 'pending' || s === 'pedding';
 }
 
+export function isCompletedPaymentStatus(
+  status: string | null | undefined
+): boolean {
+  const s = String(status ?? '').trim().toLowerCase();
+  return s === 'completed' || s === 'complete' || s === 'paid' || s === 'success';
+}
+
+export function isCanceledPaymentStatus(
+  status: string | null | undefined
+): boolean {
+  const s = String(status ?? '').trim().toLowerCase();
+  return (
+    s === 'canceled' ||
+    s === 'cancelled' ||
+    s === 'failed' ||
+    s === 'cancel'
+  );
+}
+
+/** Revenue counts only when payment is completed (not pending/cancelled). */
+export function orderCountsTowardRevenue(opts: {
+  orderStatus: string;
+  paymentStatus: string | null | undefined;
+}): boolean {
+  const payment = String(opts.paymentStatus ?? '').trim();
+  if (payment) {
+    if (isCanceledPaymentStatus(payment) || isPendingPaymentStatus(payment)) {
+      return false;
+    }
+    return isCompletedPaymentStatus(payment);
+  }
+  return isCompletedSalesStatus(opts.orderStatus);
+}
+
 /** Prisma filter: active orders for dashboard charts (excludes canceled/failed). */
 export function analyticsActiveOrderStatusWhere() {
   return {

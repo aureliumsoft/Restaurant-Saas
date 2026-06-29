@@ -23,6 +23,7 @@ import {
 } from '@/components/kds/kds-order-action-dialog';
 import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
 import { kdsFetchErrorMessage } from '@/lib/kds-api-errors';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 
 type PendingOrder = {
@@ -83,19 +84,13 @@ function normalizeLineName(rawName: string, rawQty: number) {
   };
 }
 
-function fmt(v: number) {
-  return v.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 const MIN_CUSTOM_MINUTES = 1;
 const MAX_CUSTOM_MINUTES = 240;
 /** Matches KDS kitchen screen polling interval. */
 const REFRESH_INTERVAL_MS = 5000;
 
 export function KdsManagerBoard() {
+  const { formatMoney } = useOwnerRestaurantRegional();
   const [orders, setOrders] = useState<PendingOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -389,7 +384,7 @@ export function KdsManagerBoard() {
                         );
                       })}
                     </div>
-                    <p className="text-xs font-semibold">€{fmt(o.total)}</p>
+                    <p className="text-xs font-semibold">{formatMoney(o.total)}</p>
                   </div>
 
                   <div className="flex w-full justify-between flex-col gap-3 rounded-lg border bg-muted/20 p-3">

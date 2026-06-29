@@ -90,6 +90,8 @@ export function fakeRestaurantComplete() {
     kioskServiceChargeAmount: 0,
     onlineServiceChargeEnabled: false,
     onlineServiceChargeAmount: 0,
+    currencyCode: 'EUR',
+    countryCode: 'ES',
     ownerId: faker.string.uuid(),
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),

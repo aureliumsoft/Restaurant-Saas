@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { OrderSourceType } from '@prisma/client';
 
 import { db } from '@/lib/db';
+import { cancelOrderPayments } from '@/lib/order-payment';
 import { getOrOpenPosShift } from '@/lib/pos-shift';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
@@ -59,13 +60,7 @@ export async function PATCH(
         },
         data: { status: 'canceled' },
       });
-      await tx.payment.updateMany({
-        where: {
-          orderId: order.id,
-          status: 'pending',
-        },
-        data: { status: 'cancelled' },
-      });
+      await cancelOrderPayments(tx, order.id);
     });
 
     return NextResponse.json({ ok: true });

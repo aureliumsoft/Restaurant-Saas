@@ -38,6 +38,8 @@ import {
   useBranchContext,
   withBranchQuery,
 } from '@/hooks/use-branch-context';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
 import { kioskBasePath } from '@/lib/kiosk-path';
 import { canAccessDashboardModule } from '@/lib/restaurant-roles';
 import { cn } from '@/lib/utils';
@@ -137,7 +139,7 @@ function formatDayLabel(isoDay: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function formatMoney(n: number): string {
+function formatCompactAxis(n: number): string {
   if (!Number.isFinite(n) || n === 0) return '0';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 10_000) return `${(n / 1_000).toFixed(1)}k`;
@@ -245,6 +247,8 @@ function moduleMetric(
 }
 
 export default function DashboardAnalytics() {
+  const { formatMoney, regional } = useOwnerRestaurantRegional();
+  const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
   const { activeBranchId, loading: branchLoading, isOwnerOrAdmin } =
     useBranchContext();
   const [permissions, setPermissions] = useState<string[] | null>(null);
@@ -372,8 +376,8 @@ export default function DashboardAnalytics() {
             {todayOnly
               ? 'Showing today’s orders and revenue only.'
               : analytics?.branchScoped && analytics.activeBranchName
-                ? `Showing data for ${analytics.activeBranchName} — active orders and revenue (online, POS, kiosk).`
-                : 'Active orders and revenue — online, POS, and kiosk with selectable day ranges.'}
+                ? `Showing data for ${analytics.activeBranchName} — orders and completed-payment revenue (online, POS, kiosk).`
+                : 'Orders and completed-payment revenue — online, POS, and kiosk with selectable day ranges.'}
           </p>
         </div>
         {slug ? (
@@ -496,7 +500,7 @@ export default function DashboardAnalytics() {
                     Completed revenue ({chartDaysLabel})
                   </CardTitle>
                   <CardDescription>
-                    Revenue from active orders (Starter plan).
+                    Revenue from orders with completed payment (Starter plan).
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
@@ -515,7 +519,7 @@ export default function DashboardAnalytics() {
                         <YAxis />
                         <Tooltip
                           formatter={(value: number) =>
-                            `€${formatMoney(Number(value))}`
+                            `${currencySymbol}${formatCompactAxis(Number(value))}`
                           }
                           labelFormatter={(label) =>
                             formatDayLabel(String(label))
@@ -523,7 +527,7 @@ export default function DashboardAnalytics() {
                         />
                         <Bar
                           dataKey="revenue"
-                          name="Revenue (€)"
+                          name={`Revenue (${regional.currencyCode})`}
                           fill={CHANNEL_COLORS.pos}
                         />
                       </BarChart>
@@ -688,7 +692,7 @@ export default function DashboardAnalytics() {
                       Revenue by channel ({chartDaysLabel})
                     </CardTitle>
                     <CardDescription>
-                      Multiple bar chart for Online, POS, and Kiosk totals per
+                      Completed-payment revenue for Online, POS, and Kiosk per
                       day.
                     </CardDescription>
                   </CardHeader>
@@ -701,19 +705,19 @@ export default function DashboardAnalytics() {
                       <div className="border-r px-3 py-2">
                         <p className="text-muted-foreground">Online</p>
                         <p className="text-sm font-semibold">
-                          €{formatMoney(revenuePieData[0]?.value ?? 0)}
+                          {formatMoney(revenuePieData[0]?.value ?? 0)}
                         </p>
                       </div>
                       <div className="border-r px-3 py-2">
                         <p className="text-muted-foreground">POS</p>
                         <p className="text-sm font-semibold">
-                          €{formatMoney(revenuePieData[1]?.value ?? 0)}
+                          {formatMoney(revenuePieData[1]?.value ?? 0)}
                         </p>
                       </div>
                       <div className="px-3 py-2">
                         <p className="text-muted-foreground">Kiosk</p>
                         <p className="text-sm font-semibold">
-                          €{formatMoney(revenuePieData[2]?.value ?? 0)}
+                          {formatMoney(revenuePieData[2]?.value ?? 0)}
                         </p>
                       </div>
                     </div>
@@ -736,7 +740,7 @@ export default function DashboardAnalytics() {
                               fontWeight: 'bold',
                             }}
                             formatter={(value: number) =>
-                              formatMoney(Number(value))
+                              formatCompactAxis(Number(value))
                             }
                             labelFormatter={(label) =>
                               formatDayLabel(String(label))
@@ -772,7 +776,7 @@ export default function DashboardAnalytics() {
                       Channel mix
                     </CardTitle>
                     <CardDescription>
-                      Share of active orders and revenue by channel.
+                      Share of orders and completed-payment revenue by channel.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0">
@@ -851,13 +855,13 @@ export default function DashboardAnalytics() {
                       </div>
                       <div className="h-[280px] w-full">
                         <p className="mb-2 text-sm font-medium">
-                          Revenue(€) split
+                          Revenue ({regional.currencyCode}) split
                         </p>
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Tooltip
                               formatter={(value: number) =>
-                                formatMoney(Number(value))
+                                formatCompactAxis(Number(value))
                               }
                             />
                             <Legend />
@@ -893,7 +897,7 @@ export default function DashboardAnalytics() {
                                         y={cy - 2}
                                         className="fill-foreground text-lg font-semibold"
                                       >
-                                        €{formatMoney(totalRevenueAll)}
+                                        {formatMoney(totalRevenueAll)}
                                       </tspan>
                                       <tspan
                                         x={cx}

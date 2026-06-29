@@ -14,6 +14,8 @@ import {
 } from '@/lib/menu/category-visibility';
 import { menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
 import { Badge } from '@/components/ui/badge';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
 
 import {
   DEFAULT_CATEGORY_MIN_MAX,
@@ -106,6 +108,8 @@ export function RecommendationRuleForm({
   resetKey = 0,
   draftByVariant = {},
 }: Props) {
+  const { formatMoney, regional } = useOwnerRestaurantRegional();
+  const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
   const locked = variantDefaults(variant);
   const [sourceType] = useState<'CATEGORY' | 'PRODUCT'>(locked.sourceType);
   const [selectionType] = useState<'SINGLE' | 'MULTIPLE'>(locked.selectionType);
@@ -540,7 +544,7 @@ export function RecommendationRuleForm({
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
               For each category, optionally choose a default item. When set,
-              guests only see an extra charge (+€) for options priced above
+              guests only see an extra charge (+{currencySymbol}) for options priced above
               that default. Leave as none to show full prices.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -631,13 +635,13 @@ export function RecommendationRuleForm({
                               {it.name}
                             </span>
                             <span className="shrink-0 tabular-nums text-muted-foreground">
-                              €
-                              {(it.salePrice != null &&
-                              it.salePrice > 0 &&
-                              it.salePrice < it.price
-                                ? it.salePrice
-                                : it.price
-                              ).toFixed(2)}
+                              {formatMoney(
+                                it.salePrice != null &&
+                                it.salePrice > 0 &&
+                                it.salePrice < it.price
+                                  ? it.salePrice
+                                  : it.price
+                              )}
                             </span>
                           </label>
                         ))}

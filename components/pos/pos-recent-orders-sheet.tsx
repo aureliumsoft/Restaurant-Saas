@@ -15,17 +15,11 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import eventBus from '@/lib/even';
 import { isCanceledOrderStatus } from '@/lib/sales-order-status';
 import { cn } from '@/lib/utils';
-
-function formatMoney(n: number) {
-  return n.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 export type PosRecentOrderRow = {
   id: string;
@@ -90,6 +84,7 @@ export function PosRecentOrdersSheet({
   logoUrl,
   onEditOrder,
 }: Props) {
+  const { formatMoney, regional } = useOwnerRestaurantRegional();
   const [orders, setOrders] = useState<PosRecentOrderRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [printBusyId, setPrintBusyId] = useState<string | null>(null);
@@ -183,6 +178,8 @@ export function PosRecentOrdersSheet({
         grandTotal: detail.total,
         paidAmount: detail.paymentAmount,
         paymentMode: detail.paymentMode,
+        currencyCode: regional.currencyCode,
+        countryCode: regional.countryCode,
       });
       if (!ok) toast.error('Could not open print preview.');
     } catch (error) {
@@ -288,7 +285,7 @@ export function PosRecentOrdersSheet({
                           canceled && 'text-muted-foreground line-through'
                         )}
                       >
-                        €{formatMoney(order.total)}
+                        {formatMoney(order.total)}
                       </p>
                       <div className="flex items-center gap-1">
                         {!canceled ? (

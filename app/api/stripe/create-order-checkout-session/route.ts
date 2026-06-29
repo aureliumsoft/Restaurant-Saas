@@ -3,8 +3,15 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
+import { toStripeCurrencyCode } from '@/lib/format-money';
 import { getRequestOrigin } from '@/lib/request-origin';
-import { getRestaurantStripeRuntimeConfigBySlug } from '@/lib/restaurant-payment-credentials';
+import {
+  getRestaurantStripeRuntimeConfigBySlug,
+} from '@/lib/restaurant-payment-credentials';
+import {
+  parseRestaurantRegionalSettings,
+  RESTAURANT_REGIONAL_DB_SELECT,
+} from '@/lib/restaurant-regional';
 import { createRestaurantStripeCheckoutSession } from '@/lib/restaurant-stripe-client';
 
 export const runtime = 'nodejs';
@@ -36,10 +43,6 @@ export async function POST(req: NextRequest) {
   }
 
   const origin = await getRequestOrigin();
-  const currency = (parsed.data.currency ?? 'EUR').toUpperCase();
-  if (parsed.data.amount <= 0) {
-    return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-  }
 
   const restaurantSlug = parsed.data.metadata?.restaurantSlug?.trim();
   if (!restaurantSlug) {
@@ -47,6 +50,19 @@ export async function POST(req: NextRequest) {
       { error: 'restaurantSlug is required for customer order payments.' },
       { status: 400 }
     );
+  }
+
+  const restaurantRegional = await db.restaurant.findUnique({
+    where: { slug: restaurantSlug },
+    select: RESTAURANT_REGIONAL_DB_SELECT,
+  });
+  const regional = parseRestaurantRegionalSettings(restaurantRegional);
+  const currency = toStripeCurrencyCode(
+    parsed.data.currency ?? regional.currencyCode
+  );
+
+  if (parsed.data.amount <= 0) {
+    return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
   }
 
   const row = await getRestaurantStripeRuntimeConfigBySlug(restaurantSlug);

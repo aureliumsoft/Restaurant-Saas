@@ -15,6 +15,8 @@ type OrdersKpiCardProps = {
   tabName?: string;
   label: string;
   value: ReactNode;
+  /** Smaller line under the main value (e.g. order count). */
+  subtitle?: ReactNode;
   sparklineData: number[];
   accentColor: string;
   icon: ComponentType<{ className?: string }>;
@@ -25,6 +27,7 @@ export function OrdersKpiCard({
   tabName,
   label,
   value,
+  subtitle,
   sparklineData,
   accentColor,
   icon: Icon,
@@ -46,6 +49,11 @@ export function OrdersKpiCard({
           <p className="mt-2 text-3xl font-bold tabular-nums text-foreground">
             {loading ? '…' : value}
           </p>
+          {subtitle != null && !loading ? (
+            <p className="mt-1 text-sm font-medium tabular-nums text-muted-foreground">
+              {subtitle}
+            </p>
+          ) : null}
         </div>
         <div
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl dark:shadow-[0_0_20px_-4px]"

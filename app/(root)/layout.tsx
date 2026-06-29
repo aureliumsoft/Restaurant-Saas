@@ -20,6 +20,7 @@ import { BranchSwitcher } from '@/components/dashboard/branch-switcher';
 import { useRestaurantBranding } from '@/components/layout/restaurant-branding-provider';
 import { BranchProvider } from '@/hooks/use-branch-context';
 import { DashboardAppShell } from '@/components/layout/dashboard-app-shell';
+import { RestaurantRegionalProvider } from '@/components/layout/restaurant-regional-provider';
 
 const SIDEBAR_STORAGE_KEY = 'dashboard-sidebar-open';
 
@@ -209,6 +210,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
 
   return (
     <BranchProvider>
+      <RestaurantRegionalProvider>
       <DashboardAppShell
         sidebarOpen={sidebarOpen}
         sidebarHeader={
@@ -305,6 +307,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
         )}
         {children}
       </DashboardAppShell>
+      </RestaurantRegionalProvider>
     </BranchProvider>
   );
 };

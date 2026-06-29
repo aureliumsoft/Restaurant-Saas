@@ -19,6 +19,7 @@ import {
   resolveServiceChargeAmount,
 } from '@/lib/restaurant-service-charge';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { resolvePosPaymentLedgerAmount } from '@/lib/order-payment';
 import { getOrOpenPosShift } from '@/lib/pos-shift';
 
 import {
@@ -112,6 +113,15 @@ export async function POST(req: NextRequest) {
         ? paymentStatusRaw
         : 'completed';
     const methodLabel = paymentModeToMethodLabel(paymentMode);
+    const { ledgerAmount, validationError } = resolvePosPaymentLedgerAmount({
+      grandTotal,
+      tenderedAmount: paymentAmount,
+      paymentMode,
+      paymentStatus: initialPaymentStatus,
+    });
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
+    }
 
     const addressRaw = body.address;
     const address =
@@ -278,7 +288,7 @@ export async function POST(req: NextRequest) {
         await tx.payment.create({
           data: {
             orderId: order.id,
-            amount: paymentAmount,
+            amount: ledgerAmount,
             status: initialPaymentStatus,
             method: methodLabel,
             restaurantId,

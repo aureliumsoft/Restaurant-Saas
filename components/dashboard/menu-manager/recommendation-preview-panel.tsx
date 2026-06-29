@@ -23,6 +23,8 @@ import {
 } from '@/lib/menu/recommendation-preview-groups';
 
 import { PersonalizeOptionsSection } from '@/components/order/personalize-options-section';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
 
 import type { MenuCategoryRow, MenuItemRow } from './types';
 
@@ -125,6 +127,8 @@ export function RecommendationPreviewPanel({
   previewPersonalizeByGroup = {},
   onPersonalizePreviewChange,
 }: Props) {
+  const { formatMoney, regional } = useOwnerRestaurantRegional();
+  const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
   const [previewVariationId, setPreviewVariationId] = useState('');
 
   useEffect(() => {
@@ -222,8 +226,9 @@ export function RecommendationPreviewPanel({
           </div>
           <div className="rounded-lg border border-border bg-muted/30 p-3">
             <p className="text-lg font-bold tabular-nums text-primary">
-              €
-              {effectiveUnitPrice(selected.price, selected.salePrice).toFixed(2)}
+              {formatMoney(
+                effectiveUnitPrice(selected.price, selected.salePrice)
+              )}
             </p>
             {selected.description?.trim() ? (
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -529,6 +534,7 @@ function PreviewGroupCard({
                   multipleMode: group.multipleMode,
                   groupSelectedIds: previewIds,
                   optionId: it.id,
+                  currencySymbol,
                 }
               );
               return (
@@ -578,6 +584,7 @@ function PreviewGroupCard({
                   multipleMode: group.multipleMode,
                   groupSelectedIds: previewIds,
                   optionId: it.id,
+                  currencySymbol,
                 }
               );
               const atMax =

@@ -1,7 +1,12 @@
+import { formatCurrency } from '@/lib/format-money';
 import {
   parseCustomerFromAddressSnapshot,
   parseTableFromAddressSnapshot,
 } from '@/lib/order-fulfillment';
+import {
+  parseRestaurantRegionalSettings,
+  type RestaurantRegionalSettings,
+} from '@/lib/restaurant-regional';
 import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
 import {
   buildThermalReceiptHeaderHtml,
@@ -61,7 +66,11 @@ export async function printKioskReceipt({
       };
     };
     const restaurantBody = (await restaurantRes.json().catch(() => ({}))) as {
-      data?: { name?: string | null; logoUrl?: string | null } | null;
+      data?: {
+        name?: string | null;
+        logoUrl?: string | null;
+        regional?: Partial<RestaurantRegionalSettings>;
+      } | null;
     };
     const branchesBody = (await branchesRes.json().catch(() => ({}))) as {
       data?: Array<{ id?: string; name?: string | null }>;
@@ -75,6 +84,8 @@ export async function printKioskReceipt({
     const details = orderBody.data;
     const restaurantName = restaurantBody.data?.name?.trim() || 'Restaurant';
     const logoUrl = restaurantBody.data?.logoUrl ?? null;
+    const regional = parseRestaurantRegionalSettings(restaurantBody.data?.regional);
+    const money = (n: number) => formatCurrency(n, regional);
     const ticketNo = details?.ticketNumber ?? null;
     const displayTrackingId =
       details?.shortOrderId ?? details?.id ?? orderId;
@@ -121,14 +132,14 @@ export async function printKioskReceipt({
             (m) => `<tr>
 <td style="padding-left:10px;color:#555;">${escapeHtml(m.name)}</td>
 <td class="qty">${m.quantity}</td>
-<td class="amt">€${(m.unitPrice * m.quantity).toFixed(2)}</td>
+<td class="amt">${escapeHtml(money(m.unitPrice * m.quantity))}</td>
 </tr>`
           )
           .join('');
         return `<tr>
 <td>${escapeHtml(it.name)}</td>
 <td class="qty">${it.quantity}</td>
-<td class="amt">€${(it.price * it.quantity).toFixed(2)}</td>
+<td class="amt">${escapeHtml(money(it.price * it.quantity))}</td>
 </tr>${modifierRows}`;
       })
       .join('');
@@ -166,10 +177,10 @@ export async function printKioskReceipt({
     </table>
     <div class="sep"></div>
     <div class="totals">
-      <div><span>Subtotal</span><span>€${subtotal.toFixed(2)}</span></div>
-      <div><span>Tax</span><span>€${tax.toFixed(2)}</span></div>
-      <div><span>Paid</span><span>€${paidAmount.toFixed(2)}</span></div>
-      <div class="grand"><span>Total</span><span>€${total.toFixed(2)}</span></div>
+      <div><span>Subtotal</span><span>${escapeHtml(money(subtotal))}</span></div>
+      <div><span>Tax</span><span>${escapeHtml(money(tax))}</span></div>
+      <div><span>Paid</span><span>${escapeHtml(money(paidAmount))}</span></div>
+      <div class="grand"><span>Total</span><span>${escapeHtml(money(total))}</span></div>
     </div>
     <div class="sep"></div>
     <div class="center muted">Thank you!</div>

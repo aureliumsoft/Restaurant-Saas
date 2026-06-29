@@ -23,17 +23,11 @@ import {
 } from '@/components/ui/sheet';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import eventBus from '@/lib/even';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
 import type { PosOrderDetail } from '@/components/pos/pos-recent-orders-sheet';
 
-const KIOSK_ORDERS_POLL_MS = 5000;
-
-function formatMoney(n: number) {
-  return n.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
+const KIOSK_ORDERS_POLL_MS = 10_000;
 
 export type KioskPendingOrderRow = {
   id: string;
@@ -59,6 +53,7 @@ type Props = {
   logoUrl?: string | null;
   onEditOrder: (order: PosOrderDetail) => void;
   onOrdersChanged?: () => void;
+  onPendingCountChange?: (count: number) => void;
 };
 
 export function PosKioskOrdersSheet({
@@ -70,7 +65,9 @@ export function PosKioskOrdersSheet({
   logoUrl,
   onEditOrder,
   onOrdersChanged,
+  onPendingCountChange,
 }: Props) {
+  const { formatMoney, regional } = useOwnerRestaurantRegional();
   const [orders, setOrders] = useState<KioskPendingOrderRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [printBusyId, setPrintBusyId] = useState<string | null>(null);
@@ -80,8 +77,11 @@ export function PosKioskOrdersSheet({
   const [paidInput, setPaidInput] = useState('');
   const [paying, setPaying] = useState(false);
   const loadRequestRef = useRef(0);
+  const loadInFlightRef = useRef(false);
 
   const loadOrders = useCallback(async (opts?: { silent?: boolean }) => {
+    if (loadInFlightRef.current) return;
+    loadInFlightRef.current = true;
     const requestId = ++loadRequestRef.current;
     if (!opts?.silent) setLoading(true);
     try {
@@ -90,7 +90,9 @@ export function PosKioskOrdersSheet({
         { params: branchId ? { branchId } : undefined }
       );
       if (requestId !== loadRequestRef.current) return;
-      setOrders(res.data.data ?? []);
+      const list = res.data.data ?? [];
+      setOrders(list);
+      onPendingCountChange?.(list.length);
     } catch (error) {
       if (requestId !== loadRequestRef.current) return;
       if (!opts?.silent) {
@@ -98,28 +100,33 @@ export function PosKioskOrdersSheet({
         toast.error(apiErrorMessage(error, 'Could not load kiosk orders.'));
       }
     } finally {
+      loadInFlightRef.current = false;
       if (!opts?.silent && requestId === loadRequestRef.current) {
         setLoading(false);
       }
     }
-  }, [branchId]);
+  }, [branchId, onPendingCountChange]);
 
   useEffect(() => {
     if (!open) return;
     void loadOrders();
-    const intervalId = window.setInterval(() => {
+    const refresh = () => {
+      if (document.hidden) return;
       void loadOrders({ silent: true });
-    }, KIOSK_ORDERS_POLL_MS);
-    const onRefresh = () => void loadOrders({ silent: true });
+    };
+    const intervalId = window.setInterval(refresh, KIOSK_ORDERS_POLL_MS);
+    const onRefresh = () => refresh();
     eventBus.on('refreshKioskOrders', onRefresh);
+    document.addEventListener('visibilitychange', refresh);
     return () => {
       window.clearInterval(intervalId);
       eventBus.removeListener('refreshKioskOrders', onRefresh);
+      document.removeEventListener('visibilitychange', refresh);
     };
   }, [open, branchId, loadOrders]);
 
   const notifyChanged = () => {
-    eventBus.emit('refreshKioskOrders');
+    void loadOrders({ silent: true });
     eventBus.emit('refreshRecentOrders');
     onOrdersChanged?.();
   };
@@ -163,6 +170,8 @@ export function PosKioskOrdersSheet({
         grandTotal: detail.total,
         paidAmount: detail.paymentAmount,
         paymentMode: detail.paymentMode,
+        currencyCode: regional.currencyCode,
+        countryCode: regional.countryCode,
       });
       if (!ok) toast.error('Could not open print preview.');
     } catch (error) {
@@ -241,7 +250,7 @@ export function PosKioskOrdersSheet({
       );
       const change = res.data.data?.change ?? payChange;
       toast.success(
-        `Payment completed — change €${formatMoney(change)}`
+        `Payment completed — change ${formatMoney(change)}`
       );
       setPayOrder(null);
       setPaidInput('');
@@ -313,7 +322,7 @@ export function PosKioskOrdersSheet({
                           </p>
                         </div>
                         <p className="shrink-0 font-semibold tabular-nums">
-                          €{formatMoney(order.total)}
+                          {formatMoney(order.total)}
                         </p>
                       </div>
 
@@ -410,7 +419,7 @@ export function PosKioskOrdersSheet({
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Order total</span>
                 <span className="font-semibold tabular-nums">
-                  €{formatMoney(payOrder.total)}
+                  {formatMoney(payOrder.total)}
                 </span>
               </div>
               <div className="space-y-1">
@@ -427,7 +436,7 @@ export function PosKioskOrdersSheet({
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Change</span>
                 <span className="font-semibold tabular-nums">
-                  €{formatMoney(payChange)}
+                  {formatMoney(payChange)}
                 </span>
               </div>
             </div>

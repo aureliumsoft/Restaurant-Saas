@@ -1,15 +1,15 @@
+import { formatCurrency } from '@/lib/format-money';
+import {
+  DEFAULT_RESTAURANT_REGIONAL,
+  RestaurantCountryCode,
+  RestaurantCurrencyCode,
+  parseRestaurantRegionalSettings,
+} from '@/lib/restaurant-regional';
 import {
   buildThermalReceiptHeaderHtml,
   escapeHtml,
   getThermalReceiptDocumentCss,
 } from '@/lib/thermal-receipt-html';
-
-function formatMoney(n: number) {
-  return n.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 export type PosOrderReceiptLine = {
   name: string;
@@ -38,6 +38,8 @@ export type PrintPosOrderReceiptOptions = {
   grandTotal: number;
   paidAmount: number;
   paymentMode?: string;
+  currencyCode?: string;
+  countryCode?: string;
 };
 
 export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
@@ -64,7 +66,15 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
     grandTotal,
     paidAmount,
     paymentMode = 'cash',
+    currencyCode = DEFAULT_RESTAURANT_REGIONAL.currencyCode,
+    countryCode = DEFAULT_RESTAURANT_REGIONAL.countryCode,
   } = options;
+
+  const regional = parseRestaurantRegionalSettings({
+    currencyCode: currencyCode as RestaurantCurrencyCode,
+    countryCode: countryCode as RestaurantCountryCode,
+  });
+  const money = (n: number) => formatCurrency(n, regional);
 
   const changeAmount =
     paymentMode === 'cash' ? Math.max(0, paidAmount - grandTotal) : 0;
@@ -74,7 +84,7 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
       (line) => `<tr>
           <td>${escapeHtml(line.name)}</td>
           <td class="qty">${line.qty}</td>
-          <td class="amt">€${formatMoney(line.lineTotal)}</td>
+          <td class="amt">${escapeHtml(money(line.lineTotal))}</td>
         </tr>`
     )
     .join('');
@@ -115,13 +125,13 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
       </table>
       <div class="sep"></div>
       <div class="totals">
-        <div><span>Subtotal</span><span>€${formatMoney(subtotal)}</span></div>
-        ${serviceChargeAmount > 0 ? `<div><span>Service charge</span><span>€${formatMoney(serviceChargeAmount)}</span></div>` : ''}
-        <div><span>Tax</span><span>€${formatMoney(taxAmount)}</span></div>
-        <div><span>Discount</span><span>€${formatMoney(discountAmount)}</span></div>
-        <div><span>Paid</span><span>€${formatMoney(paidAmount)}</span></div>
-        <div><span>Change</span><span>€${formatMoney(changeAmount)}</span></div>
-        <div class="grand"><span>Total</span><span>€${formatMoney(grandTotal)}</span></div>
+        <div><span>Subtotal</span><span>${escapeHtml(money(subtotal))}</span></div>
+        ${serviceChargeAmount > 0 ? `<div><span>Service charge</span><span>${escapeHtml(money(serviceChargeAmount))}</span></div>` : ''}
+        <div><span>Tax</span><span>${escapeHtml(money(taxAmount))}</span></div>
+        <div><span>Discount</span><span>${escapeHtml(money(discountAmount))}</span></div>
+        <div><span>Paid</span><span>${escapeHtml(money(paidAmount))}</span></div>
+        <div><span>Change</span><span>${escapeHtml(money(changeAmount))}</span></div>
+        <div class="grand"><span>Total</span><span>${escapeHtml(money(grandTotal))}</span></div>
       </div>
       <div class="sep"></div>
       <div class="center">Thank you!</div>

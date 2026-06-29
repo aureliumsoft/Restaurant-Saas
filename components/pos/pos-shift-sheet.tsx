@@ -20,22 +20,11 @@ import {
 } from '@/components/ui/sheet';
 import type { PosShiftPayload, PosShiftSummary } from '@/lib/pos-shift';
 import { printPosShiftRecord } from '@/lib/pos-shift-print';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { isCanceledOrderStatus } from '@/lib/sales-order-status';
 import { cn } from '@/lib/utils';
 import { LogoutConfirmation } from '@/components/ui/confirmation-dialogs';
-
-function formatMoney(n: number) {
-  return n.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function formatSignedMoney(n: number) {
-  const sign = n > 0 ? '+' : n < 0 ? '−' : '';
-  return `${sign}€${formatMoney(Math.abs(n))}`;
-}
 
 type Props = {
   open: boolean;
@@ -64,6 +53,11 @@ export function PosShiftSheet({
   onShiftClosed,
 }: Props) {
   const router = useRouter();
+  const { formatMoney, regional } = useOwnerRestaurantRegional();
+  const formatSignedMoney = (n: number) => {
+    const sign = n > 0 ? '+' : n < 0 ? '−' : '';
+    return `${sign}${formatMoney(Math.abs(n))}`;
+  };
   const [shift, setShift] = useState<PosShiftPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [ending, setEnding] = useState(false);
@@ -152,6 +146,8 @@ export function PosShiftSheet({
       brandName,
       branchName,
       logoUrl,
+      currencyCode: regional.currencyCode,
+      countryCode: regional.countryCode,
     });
     if (!ok) {
       toast.error('Could not open print preview.');
@@ -238,7 +234,7 @@ export function PosShiftSheet({
                 <div>
                   <p className="text-xs text-muted-foreground">Total sales</p>
                   <p className="font-semibold tabular-nums">
-                    €{formatMoney(shift.totalSales)}
+                    {formatMoney(shift.totalSales)}
                   </p>
                 </div>
               </div>
@@ -302,7 +298,7 @@ export function PosShiftSheet({
                               canceled && 'text-muted-foreground line-through'
                             )}
                           >
-                            €{formatMoney(order.total)}
+                            {formatMoney(order.total)}
                           </p>
                         </li>
                         );
@@ -319,7 +315,7 @@ export function PosShiftSheet({
                     <span className="text-muted-foreground">Previous cash left</span>
                     <span className="font-medium tabular-nums">
                       {shift.previousClosingCashInLocker != null
-                        ? `€${formatMoney(shift.previousClosingCashInLocker)}`
+                        ? formatMoney(shift.previousClosingCashInLocker)
                         : '—'}
                     </span>
                   </div>
@@ -332,19 +328,19 @@ export function PosShiftSheet({
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground">Cash sales (shift)</span>
                     <span className="font-medium tabular-nums">
-                      €{formatMoney(shift.cashSalesTotal)}
+                      {formatMoney(shift.cashSalesTotal)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground">Card / other sales</span>
                     <span className="font-medium tabular-nums">
-                      €{formatMoney(shift.nonCashSalesTotal)}
+                      {formatMoney(shift.nonCashSalesTotal)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 border-t pt-2 font-semibold">
                     <span>Expected in locker</span>
                     <span className="tabular-nums">
-                      €{formatMoney(shift.expectedCashInLocker)}
+                      {formatMoney(shift.expectedCashInLocker)}
                     </span>
                   </div>
                 </div>

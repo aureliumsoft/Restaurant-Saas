@@ -9,6 +9,10 @@ import {
   withDefaultServiceChargesPayload,
   withServiceChargesPayload,
 } from "@/lib/restaurant-service-charge";
+import {
+  parseRestaurantRegionalSettings,
+  RESTAURANT_REGIONAL_DB_SELECT,
+} from "@/lib/restaurant-regional";
 
 function getSubdomainFromHost(hostname: string) {
   if (hostname.endsWith(".localhost")) {
@@ -30,6 +34,7 @@ async function findCustomerRestaurant(
   const selectWithCharges = {
     ...RESTAURANT_BRANDING_DB_SELECT,
     ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+    ...RESTAURANT_REGIONAL_DB_SELECT,
   } as const;
 
   try {
@@ -38,7 +43,10 @@ async function findCustomerRestaurant(
       select: selectWithCharges,
     });
     if (!restaurant) return null;
-    return withServiceChargesPayload(restaurant);
+    return {
+      ...withServiceChargesPayload(restaurant),
+      regional: parseRestaurantRegionalSettings(restaurant),
+    };
   } catch (error) {
     if (!isPrismaUnknownFieldError(error)) throw error;
     const restaurant = await db.restaurant.findUnique({
@@ -46,7 +54,10 @@ async function findCustomerRestaurant(
       select: RESTAURANT_BRANDING_DB_SELECT,
     });
     if (!restaurant) return null;
-    return withDefaultServiceChargesPayload(restaurant);
+    return {
+      ...withDefaultServiceChargesPayload(restaurant),
+      regional: parseRestaurantRegionalSettings(null),
+    };
   }
 }
 

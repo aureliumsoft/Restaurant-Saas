@@ -1,17 +1,19 @@
+import { formatCurrency } from '@/lib/format-money';
+import {
+  DEFAULT_RESTAURANT_REGIONAL,
+  parseRestaurantRegionalSettings,
+  type RestaurantRegionalSettings,
+} from '@/lib/restaurant-regional';
 import type { PosShiftPayload } from '@/lib/pos-shift';
 import { isCanceledOrderStatus } from '@/lib/sales-order-status';
 import { escapeHtml } from '@/lib/thermal-receipt-html';
 
-function formatMoney(n: number) {
-  return n.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function formatSignedMoney(n: number) {
+function formatSignedMoney(
+  n: number,
+  regional: RestaurantRegionalSettings
+) {
   const sign = n > 0 ? '+' : n < 0 ? '−' : '';
-  return `${sign}€${formatMoney(Math.abs(n))}`;
+  return `${sign}${formatCurrency(Math.abs(n), regional)}`;
 }
 
 function getA4ShiftPrintCss(): string {
@@ -111,12 +113,27 @@ export type PrintPosShiftRecordOptions = {
   brandName: string;
   branchName?: string | null;
   logoUrl?: string | null;
+  currencyCode?: string;
+  countryCode?: string;
 };
 
 export function printPosShiftRecord(options: PrintPosShiftRecordOptions) {
   if (typeof window === 'undefined') return false;
 
-  const { shift, cashLeftInLocker, brandName, branchName, logoUrl } = options;
+  const {
+    shift,
+    cashLeftInLocker,
+    brandName,
+    branchName,
+    logoUrl,
+    currencyCode,
+    countryCode,
+  } = options;
+  const regional = parseRestaurantRegionalSettings({
+    currencyCode: currencyCode ?? DEFAULT_RESTAURANT_REGIONAL.currencyCode,
+    countryCode: countryCode ?? DEFAULT_RESTAURANT_REGIONAL.countryCode,
+  });
+  const money = (n: number) => formatCurrency(n, regional);
   const expected = shift.expectedCashInLocker;
   const leftInLocker = cashLeftInLocker;
   const difference =
@@ -136,7 +153,7 @@ export function printPosShiftRecord(options: PrintPosShiftRecordOptions) {
         <td>${escapeHtml(new Date(order.createdAt).toLocaleString())}</td>
         <td>${escapeHtml(order.paymentMethod ?? '—')}</td>
         <td>${escapeHtml(order.customerName ?? '—')}</td>
-        <td class="amt${canceled ? ' canceled' : ''}">€${formatMoney(order.total)}</td>
+        <td class="amt${canceled ? ' canceled' : ''}">${escapeHtml(money(order.total))}</td>
       </tr>`;
     })
     .join('');
@@ -186,25 +203,25 @@ export function printPosShiftRecord(options: PrintPosShiftRecordOptions) {
         </table>
         <div class="row total">
           <span>Total shift sales</span>
-          <span>€${formatMoney(shift.totalSales)}</span>
+          <span>${escapeHtml(money(shift.totalSales))}</span>
         </div>
       </section>
 
       <section class="section">
         <h3 class="section-title">Cash reconciliation</h3>
-        <div class="row"><span>Previous cash left</span><strong>${shift.previousClosingCashInLocker != null ? `€${formatMoney(shift.previousClosingCashInLocker)}` : '—'}</strong></div>
+        <div class="row"><span>Previous cash left</span><strong>${shift.previousClosingCashInLocker != null ? escapeHtml(money(shift.previousClosingCashInLocker)) : '—'}</strong></div>
         ${
           shift.previousShiftEndedAt
             ? `<div class="row muted"><span>Last shift ended</span><span>${escapeHtml(new Date(shift.previousShiftEndedAt).toLocaleString())}</span></div>`
             : ''
         }
-        <div class="row"><span>Cash sales (shift)</span><strong>€${formatMoney(shift.cashSalesTotal)}</strong></div>
-        <div class="row"><span>Card / other sales</span><strong>€${formatMoney(shift.nonCashSalesTotal)}</strong></div>
-        <div class="row"><span>Expected in locker</span><strong>€${formatMoney(expected)}</strong></div>
-        <div class="row"><span>Cash left in locker</span><strong>${leftInLocker != null ? `€${formatMoney(leftInLocker)}` : '—'}</strong></div>
+        <div class="row"><span>Cash sales (shift)</span><strong>${escapeHtml(money(shift.cashSalesTotal))}</strong></div>
+        <div class="row"><span>Card / other sales</span><strong>${escapeHtml(money(shift.nonCashSalesTotal))}</strong></div>
+        <div class="row"><span>Expected in locker</span><strong>${escapeHtml(money(expected))}</strong></div>
+        <div class="row"><span>Cash left in locker</span><strong>${leftInLocker != null ? escapeHtml(money(leftInLocker)) : '—'}</strong></div>
         <div class="row total">
           <span>Difference</span>
-          <span>${difference != null ? formatSignedMoney(difference) : '—'}</span>
+          <span>${difference != null ? escapeHtml(formatSignedMoney(difference, regional)) : '—'}</span>
         </div>
         <p class="muted">Cash left is what you leave in the locker when ending this shift. Difference = cash left − expected.</p>
       </section>

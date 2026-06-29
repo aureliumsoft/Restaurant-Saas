@@ -50,6 +50,7 @@ import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import { menuItemBelongsToCategory, menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
 import { cn } from '@/lib/utils';
 import { useDashboardPermissions } from '@/hooks/use-dashboard-permissions';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 
 import { InventoryQuickActions } from './inventory-quick-actions';
 import type { MenuCategoryRow, MenuItemRow } from './types';
@@ -153,6 +154,7 @@ export function ProductsTab({
   onRefresh,
   loading,
 }: Props) {
+  const { formatMoney } = useOwnerRestaurantRegional();
   const { canEdit, canDelete } = useDashboardPermissions();
   const canEditProducts = canEdit('product');
   const canDeleteProducts = canDelete('product');
@@ -406,16 +408,16 @@ export function ProductsTab({
                                         From{' '}
                                       </span>
                                       <span className="font-medium">
-                                        €{display.amount.toFixed(2)}
+                                        {formatMoney(display.amount)}
                                       </span>
                                     </>
                                   ) : display.compareAt != null ? (
                                     <span className="text-muted-foreground line-through">
-                                      €{display.compareAt.toFixed(2)}
+                                      {formatMoney(display.compareAt!)}
                                     </span>
                                   ) : (
                                     <span className="font-medium">
-                                      €{display.amount.toFixed(2)}
+                                      {formatMoney(display.amount)}
                                     </span>
                                   )}
                                 </DashboardTableCell>
@@ -426,7 +428,8 @@ export function ProductsTab({
                                     </span>
                                   ) : display.compareAt != null ? (
                                     <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                                      €{display.amount.toFixed(2)}
+                                      {formatMoney(display.amount)}
+                                    </span>
                                     </span>
                                   ) : (
                                     '—'

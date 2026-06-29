@@ -8,6 +8,7 @@ import {
 } from '@/lib/branch/branch-scope';
 import { findDiningTableForBranch } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
+import { resolvePosPaymentLedgerAmount } from '@/lib/order-payment';
 import {
   normalizePosOrderLines,
   paymentMethodToMode,
@@ -274,6 +275,15 @@ export async function PATCH(
         ? paymentStatusRaw
         : 'completed';
     const methodLabel = paymentModeToMethodLabel(paymentMode);
+    const { ledgerAmount, validationError } = resolvePosPaymentLedgerAmount({
+      grandTotal,
+      tenderedAmount: paymentAmount,
+      paymentMode,
+      paymentStatus,
+    });
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
+    }
 
     const addressRaw = body.address;
     const address =
@@ -391,7 +401,7 @@ export async function PATCH(
         await tx.payment.update({
           where: { id: paymentId },
           data: {
-            amount: paymentAmount,
+            amount: ledgerAmount,
             status: paymentStatus,
             method: methodLabel,
           },
@@ -400,7 +410,7 @@ export async function PATCH(
         await tx.payment.create({
           data: {
             orderId: existing.id,
-            amount: paymentAmount,
+            amount: ledgerAmount,
             status: paymentStatus,
             method: methodLabel,
             restaurantId: auth.restaurantId,

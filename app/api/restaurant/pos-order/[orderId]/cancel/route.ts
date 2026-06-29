@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { OrderSourceType } from '@prisma/client';
 
 import { db } from '@/lib/db';
+import { cancelOrderPayments } from '@/lib/order-payment';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
 export async function PATCH(
@@ -64,6 +65,7 @@ export async function PATCH(
         where: { id: order.id },
         data: { status: 'canceled' },
       });
+      await cancelOrderPayments(tx, order.id);
       await tx.kitchenTicket.updateMany({
         where: {
           orderId: order.id,

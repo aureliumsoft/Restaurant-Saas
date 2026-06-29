@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
+import { cancelOrderPayments } from '@/lib/order-payment';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
 export async function PATCH(
@@ -38,9 +39,12 @@ export async function PATCH(
       );
     }
 
-    await db.order.update({
-      where: { id: order.id },
-      data: { status: 'canceled' },
+    await db.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: 'canceled' },
+      });
+      await cancelOrderPayments(tx, order.id);
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });

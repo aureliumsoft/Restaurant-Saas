@@ -30,6 +30,8 @@ import {
   DashboardTableWrapper as TableWrapper,
 } from '@/components/dashboard/dashboard-table';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { formatCurrency } from '@/lib/format-money';
 import {
   Sheet,
   SheetContent,
@@ -45,14 +47,6 @@ import type {
 import { Eye, Loader2, RefreshCcw } from 'lucide-react';
 
 const PAGE_SIZE = 20;
-
-function money(value: number | null, currency = 'EUR') {
-  if (value == null || Number.isNaN(value)) return '—';
-  return `${currency.toUpperCase()} ${value.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 function kindBadge(kind: TransactionHistoryKind) {
   if (kind === 'ORDER') return 'Order';
@@ -70,7 +64,20 @@ function trackingNumberLabel(row: TransactionHistoryRow): string {
   return token.length <= 8 ? token.toUpperCase() : token.slice(0, 6).toUpperCase();
 }
 
+function formatPaymentMethod(method: string | null | undefined) {
+  if (!method) return '—';
+  return method;
+}
+
 export function Records() {
+  const { formatMoney, regional } = useOwnerRestaurantRegional();
+  const formatRowMoney = (value: number | null, currency?: string | null) => {
+    if (value == null || Number.isNaN(value)) return '—';
+    return formatCurrency(value, {
+      currencyCode: currency ?? regional.currencyCode,
+      countryCode: regional.countryCode,
+    });
+  };
   const { activeBranchId, loading: branchLoading, isOwnerOrAdmin } =
     useBranchContext();
   const [rows, setRows] = useState<TransactionHistoryRow[]>([]);
@@ -233,6 +240,7 @@ export function Records() {
                         Source
                       </TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="hidden md:table-cell">Payment</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead className="hidden lg:table-cell">
                         When
@@ -244,7 +252,7 @@ export function Records() {
                     {loading ? (
                       <TableRow>
                         <TableCell
-                          colSpan={9}
+                          colSpan={10}
                           className="text-center text-muted-foreground"
                         >
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -253,7 +261,7 @@ export function Records() {
                     ) : error ? (
                       <TableRow>
                         <TableCell
-                          colSpan={9}
+                          colSpan={10}
                           className="text-center text-destructive"
                         >
                           {error}
@@ -262,7 +270,7 @@ export function Records() {
                     ) : rows.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={9}
+                          colSpan={10}
                           className="text-center text-muted-foreground"
                         >
                           No records found.
@@ -289,8 +297,11 @@ export function Records() {
                             {row.source}
                           </TableCell>
                           <TableCell>{row.status}</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {formatPaymentMethod(row.method)}
+                          </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {money(row.amount, row.currency)}
+                            {formatRowMoney(row.amount, row.currency)}
                           </TableCell>
                           <TableCell className="hidden lg:table-cell text-muted-foreground">
                             {new Date(row.createdAt).toLocaleString()}
@@ -370,7 +381,7 @@ export function Records() {
                 <div>
                   <p className="text-xs text-muted-foreground">Amount</p>
                   <p className="tabular-nums">
-                    {money(active.amount, active.currency)}
+                    {formatRowMoney(active.amount, active.currency)}
                   </p>
                 </div>
                 <div>

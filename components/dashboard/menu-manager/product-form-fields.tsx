@@ -21,6 +21,11 @@ import {
   filterDecimalInput,
   filterNameTextInput,
 } from '@/lib/validation/fields';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import {
+  priceFieldLabel,
+  salePriceFieldLabel,
+} from '@/lib/restaurant-regional';
 
 import { CategoryPickerStrip } from './category-picker-strip';
 import { InventoryQuickActions } from './inventory-quick-actions';
@@ -148,6 +153,7 @@ export function ProductFormFields({
   variationTemplates: variationTemplatesProp,
   onVariationTemplatesReload,
 }: Props) {
+  const { formatMoney, regional } = useOwnerRestaurantRegional();
   const internalTemplates = useRestaurantVariationTemplates();
   const variationTemplates =
     variationTemplatesProp ?? internalTemplates.variationTemplates;
@@ -266,7 +272,9 @@ export function ProductFormFields({
       {!hasVariations ? (
         <div className="grid  grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="grid gap-2">
-            <FieldLabel required={showRequired}>Price (€)</FieldLabel>
+            <FieldLabel required={showRequired}>
+              {priceFieldLabel(regional.currencyCode)}
+            </FieldLabel>
             <Input
               type="number"
               step="0.01"
@@ -300,7 +308,7 @@ export function ProductFormFields({
             Base price and sale price are hidden while variations exist. The menu
             shows{' '}
             <span className="font-medium text-foreground">
-              From €{minVariation != null ? minVariation.toFixed(2) : '—'}
+              From {minVariation != null ? formatMoney(minVariation) : '—'}
             </span>{' '}
             (lowest variation price).
           </p>
@@ -377,7 +385,9 @@ export function ProductFormFields({
                     </Select>
                   </div>
                   <div className="grid gap-1">
-                    <FieldLabel required={showRequired}>Price (€)</FieldLabel>
+                    <FieldLabel required={showRequired}>
+              {priceFieldLabel(regional.currencyCode)}
+            </FieldLabel>
                     <Input
                       type="number"
                       step="0.01"

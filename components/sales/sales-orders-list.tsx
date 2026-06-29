@@ -16,17 +16,10 @@ import {
   DashboardTableWrapper as TableWrapper,
 } from '@/components/dashboard/dashboard-table';
 import { orderSourceLabel } from '@/lib/order-source-label';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import eventBus from '@/lib/even';
 import type { SalesOrderRow, SalesOrdersApiResponse } from '@/types/sales-order';
 import { cn } from '@/lib/utils';
-
-function formatMoney(n: number | null) {
-  if (n == null || Number.isNaN(n)) return '—';
-  return n.toLocaleString('en-IE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 type SalesOrdersListProps = {
   onSelectSaleTransaction?: (id: string) => void;
@@ -37,6 +30,9 @@ export function SalesOrdersList({
   onSelectSaleTransaction,
   selectedTransactionId,
 }: SalesOrdersListProps) {
+  const { formatMoney: formatCurrencyAmount } = useOwnerRestaurantRegional();
+  const formatMoney = (n: number | null) =>
+    n == null || Number.isNaN(n) ? '—' : formatCurrencyAmount(n);
   const [rows, setRows] = useState<SalesOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

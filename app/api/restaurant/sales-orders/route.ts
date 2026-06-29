@@ -236,16 +236,61 @@ export async function GET(req: NextRequest) {
         if (!target) continue;
         target.totalOrders += count;
         target.totalAmount += amount;
-        if (bucket === 'completed') {
-          target.revenueOrders += count;
-          target.revenueAmount += amount;
-        } else if (bucket === 'pending') {
+        if (bucket === 'pending') {
           target.pending.count += count;
           target.pending.amount += amount;
-        } else {
+        } else if (bucket === 'canceled') {
           target.canceled.count += count;
           target.canceled.amount += amount;
         }
+      }
+
+      const revenueStatRows = await db.$queryRaw<
+        Array<{
+          sourceType: string;
+          cnt: bigint | number;
+          amt: number;
+        }>
+      >(Prisma.sql`
+        SELECT o."sourceType"::text AS "sourceType",
+               COUNT(*)::int AS cnt,
+               COALESCE(SUM(COALESCE(lp.amount, o.total)), 0)::float AS amt
+        FROM "Order" o
+        LEFT JOIN LATERAL (
+          SELECT p.amount, p.status
+          FROM "Payment" p
+          WHERE p."orderId" = o.id::text
+          ORDER BY p."createdAt" DESC
+          LIMIT 1
+        ) lp ON true
+        WHERE o."restaurantId" = ${rid}
+          ${branchSql}
+          ${menuPeriodSql}
+          AND (
+            lower(COALESCE(lp.status, '')) IN (
+              'completed', 'complete', 'paid', 'success'
+            )
+            OR (
+              lp.status IS NULL
+              AND lower(o.status) IN ('completed', 'complete')
+            )
+          )
+        GROUP BY o."sourceType"
+      `);
+      for (const row of revenueStatRows) {
+        const amount = Number(row.amt) || 0;
+        const count = Number(row.cnt) || 0;
+        const target =
+          row.sourceType === 'ONLINE'
+            ? stats.online
+            : row.sourceType === 'KIOSK'
+              ? stats.kiosk
+              : row.sourceType === 'POS' || row.sourceType === 'OTHER'
+                ? stats.pos
+                : null;
+        if (!target) continue;
+        target.revenueOrders += count;
+        target.revenueAmount += amount;
       }
     } catch {
       // prisma fallback omitted for stats — keep zeros

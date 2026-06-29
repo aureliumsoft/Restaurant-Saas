@@ -302,17 +302,18 @@ export function chargeableConfigurationItemUnitPrice(
   );
 }
 
-/** Guest-facing (+€delta) for configuration items. */
+/** Guest-facing addon delta/full label for configuration pickers. */
 export function formatConfigurationAddonDisplay(
   resolvedListUnit: number,
-  defaultUnitPrice: number | null | undefined
+  defaultUnitPrice: number | null | undefined,
+  currencySymbol = '€'
 ): string | null {
   if (defaultUnitPrice != null) {
     const delta = Math.round((resolvedListUnit - defaultUnitPrice) * 100) / 100;
     if (delta <= 0) return null;
-    return `(+€${delta.toFixed(2)})`;
+    return `(+${currencySymbol}${delta.toFixed(2)})`;
   }
-  return `(+€${resolvedListUnit.toFixed(2)})`;
+  return `(+${currencySymbol}${resolvedListUnit.toFixed(2)})`;
 }
 
 /** Guest-facing addon label for configuration pickers (quantity + free tier). */
@@ -326,6 +327,7 @@ export function configurationAddonPriceLabel(
     groupSelectedIds?: string[];
     /** When set, free tier is allocated across the whole group in selection order. */
     optionId?: string;
+    currencySymbol?: string;
   }
 ): string | null {
   if (options?.multipleMode === 'QUANTITY') {
@@ -343,5 +345,9 @@ export function configurationAddonPriceLabel(
           );
     if (!show) return null;
   }
-  return formatConfigurationAddonDisplay(resolvedListUnit, defaultUnitPrice);
+  return formatConfigurationAddonDisplay(
+    resolvedListUnit,
+    defaultUnitPrice,
+    options?.currencySymbol
+  );
 }

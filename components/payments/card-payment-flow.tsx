@@ -33,6 +33,7 @@ type UseCardPaymentFlowOptions = {
   amount: number;
   orderIdPrefix?: string;
   formatMoney?: (n: number) => string;
+  currency?: string;
 };
 
 function defaultFormatMoney(n: number) {
@@ -46,6 +47,7 @@ export function useCardPaymentFlow({
   amount,
   orderIdPrefix = 'PRE',
   formatMoney = defaultFormatMoney,
+  currency = 'EUR',
 }: UseCardPaymentFlowOptions) {
   const [cardPaymentStatus, setCardPaymentStatus] =
     useState<CardPaymentStatus>('idle');
@@ -107,7 +109,7 @@ export function useCardPaymentFlow({
         {
           orderId: `${orderIdPrefix}-${Date.now()}`,
           amount,
-          currency: 'EUR',
+          currency,
         },
         { timeout: 120000 }
       );
@@ -249,7 +251,7 @@ export function CardPaymentDialogs({
               Insert or tap card on the terminal…
             </p>
             <p className="text-lg font-semibold tabular-nums">
-              €{formatMoney(amount)}
+              {formatMoney(amount)}
             </p>
           </div>
           <DialogFooter className="flex-col gap-2 sm:flex-col">
@@ -286,7 +288,7 @@ export function CardPaymentDialogs({
               Payment successful
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Card payment of €{formatMoney(amount)} was approved
+              Card payment of {formatMoney(amount)} was approved
               {cardTransactionId ? ` (${cardTransactionId})` : ''}. You can now
               confirm your order.
             </AlertDialogDescription>

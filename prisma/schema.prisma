@@ -154,6 +154,10 @@ model Restaurant {
   /// Flat system service charge for online checkout (when enabled).
   onlineServiceChargeEnabled Boolean @default(false)
   onlineServiceChargeAmount  Float   @default(0)
+  /// ISO 4217 currency for POS, kiosk, storefront, and customer payments.
+  currencyCode   String @default("EUR")
+  /// ISO 3166-1 alpha-2 country (e.g. ES, PK).
+  countryCode    String @default("ES")
   ownerId        String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
