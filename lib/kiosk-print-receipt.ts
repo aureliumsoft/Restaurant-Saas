@@ -102,13 +102,13 @@ export async function printKioskReceipt({
       !!customerName && customerName.toLowerCase().endsWith(' customer');
     const metaLines = [
       tableName && !isDineInDisplayName
-        ? `<div><strong>Table:</strong> ${escapeHtml(tableName)}</div>`
+        ? `<div class="receipt-line"><strong>Table:</strong> ${escapeHtml(tableName)}</div>`
         : '',
       customerName
-        ? `<div><strong>Customer:</strong> ${escapeHtml(customerName)}</div>`
+        ? `<div class="receipt-line"><strong>Customer:</strong> ${escapeHtml(customerName)}</div>`
         : '',
       customerPhone
-        ? `<div><strong>Phone:</strong> ${escapeHtml(customerPhone)}</div>`
+        ? `<div class="receipt-line"><strong>Phone:</strong> ${escapeHtml(customerPhone)}</div>`
         : '',
     ]
       .filter(Boolean)
@@ -152,10 +152,10 @@ export async function printKioskReceipt({
   <div class="r">
     ${receiptHeader}
     <div class="sep"></div>
-    ${ticketNo != null ? `<div><strong>Ticket:</strong> #${ticketNo}</div>` : ''}
-    <div><strong>Tracking:</strong> ${escapeHtml(displayTrackingId)}</div>
-    <div><strong>Payment:</strong> ${escapeHtml(paymentMethod)}</div>
-    <div><strong>Status:</strong> ${escapeHtml(paymentState)}</div>
+    ${ticketNo != null ? `<div class="receipt-line"><strong>Ticket:</strong> #${ticketNo}</div>` : ''}
+    <div class="receipt-line"><strong>Tracking:</strong> ${escapeHtml(displayTrackingId)}</div>
+    <div class="receipt-line"><strong>Payment:</strong> ${escapeHtml(paymentMethod)}</div>
+    <div class="receipt-line"><strong>Status:</strong> ${escapeHtml(paymentState)}</div>
     ${metaLines}
     <div class="sep"></div>
     <table>

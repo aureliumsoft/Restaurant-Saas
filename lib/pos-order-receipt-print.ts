@@ -96,16 +96,16 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
     <div class="r">
       ${receiptHeader}
       <div class="sep"></div>
-      ${ticketNumber != null ? `<div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Ticket:</strong> #${ticketNumber}</div>` : ''}
-      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Tracking ID:</strong> ${escapeHtml(orderRef)}</div>
-      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Mode:</strong> ${escapeHtml(orderMode)}</div>
-      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Payment:</strong> ${escapeHtml(paymentMethodLabel)}</div>
-      <div style="font-size: 9px; color: #555; margin-top: 1px;"><strong>Status:</strong> paid</div>
-      ${tableLabel ? `<div><strong>Table:</strong> ${escapeHtml(tableLabel)}</div>` : ''}
-      ${customerName ? `<div><strong>Customer:</strong> ${escapeHtml(customerName)}</div>` : ''}
-      ${customerPhone ? `<div><strong>Phone:</strong> ${escapeHtml(customerPhone)}</div>` : ''}
-      ${address ? `<div><strong>Address:</strong> ${escapeHtml(address)}</div>` : ''}
-      ${note ? `<div><strong>Note:</strong> ${escapeHtml(note)}</div>` : ''}
+      ${ticketNumber != null ? `<div class="receipt-line"><strong>Ticket:</strong> #${ticketNumber}</div>` : ''}
+      <div class="receipt-line"><strong>Tracking ID:</strong> ${escapeHtml(orderRef)}</div>
+      <div class="receipt-line"><strong>Mode:</strong> ${escapeHtml(orderMode)}</div>
+      <div class="receipt-line"><strong>Payment:</strong> ${escapeHtml(paymentMethodLabel)}</div>
+      <div class="receipt-line"><strong>Status:</strong> paid</div>
+      ${tableLabel ? `<div class="receipt-line"><strong>Table:</strong> ${escapeHtml(tableLabel)}</div>` : ''}
+      ${customerName ? `<div class="receipt-line"><strong>Customer:</strong> ${escapeHtml(customerName)}</div>` : ''}
+      ${customerPhone ? `<div class="receipt-line"><strong>Phone:</strong> ${escapeHtml(customerPhone)}</div>` : ''}
+      ${address ? `<div class="receipt-line"><strong>Address:</strong> ${escapeHtml(address)}</div>` : ''}
+      ${note ? `<div class="receipt-line"><strong>Note:</strong> ${escapeHtml(note)}</div>` : ''}
       <div class="sep"></div>
       <table>
         <thead>
@@ -124,7 +124,7 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
         <div class="grand"><span>Total</span><span>€${formatMoney(grandTotal)}</span></div>
       </div>
       <div class="sep"></div>
-      <div class="center muted">Thank you!</div>
+      <div class="center">Thank you!</div>
     </div>
   </body>
 </html>`;
