@@ -32,6 +32,7 @@ import {
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { formatCurrency } from '@/lib/format-money';
+import { normalizeRestaurantCurrencyCode } from '@/lib/restaurant-regional';
 import {
   Sheet,
   SheetContent,
@@ -74,7 +75,9 @@ export function Records() {
   const formatRowMoney = (value: number | null, currency?: string | null) => {
     if (value == null || Number.isNaN(value)) return '—';
     return formatCurrency(value, {
-      currencyCode: currency ?? regional.currencyCode,
+      currencyCode: normalizeRestaurantCurrencyCode(
+        currency ?? regional.currencyCode
+      ),
       countryCode: regional.countryCode,
     });
   };

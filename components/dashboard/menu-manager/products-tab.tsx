@@ -430,7 +430,6 @@ export function ProductsTab({
                                     <span className="font-medium text-emerald-600 dark:text-emerald-400">
                                       {formatMoney(display.amount)}
                                     </span>
-                                    </span>
                                   ) : (
                                     '—'
                                   )}

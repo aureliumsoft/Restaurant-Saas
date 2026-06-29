@@ -307,6 +307,7 @@ export function RecommendationPreviewPanel({
               parentVariation={previewVariationContext.parent}
               variationShortLabel={previewVariationContext.shortLabel}
               previewIds={previewByGroup[g.id] ?? []}
+              currencySymbol={currencySymbol}
               onPreviewChange={(ids) => onPreviewChange(g.id, ids)}
               onDelete={
                 onDeleteGroup
@@ -425,6 +426,7 @@ function PreviewGroupCard({
   parentVariation,
   variationShortLabel,
   previewIds,
+  currencySymbol,
   onPreviewChange,
   onDelete,
   deleting,
@@ -435,6 +437,7 @@ function PreviewGroupCard({
   parentVariation: ParentVariationContext | null;
   variationShortLabel: string | null;
   previewIds: string[];
+  currencySymbol: string;
   onPreviewChange: (ids: string[]) => void;
   onDelete?: () => void;
   deleting?: boolean;

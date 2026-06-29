@@ -99,8 +99,13 @@ export function localeForRegionalSettings(
   }
 }
 
+export type RestaurantRegionalInput = {
+  currencyCode?: string | null;
+  countryCode?: string | null;
+};
+
 export function parseRestaurantRegionalSettings(
-  row: Partial<RestaurantRegionalSettings> | null | undefined
+  row: RestaurantRegionalInput | null | undefined
 ): RestaurantRegionalSettings {
   const currencyCode = normalizeRestaurantCurrencyCode(row?.currencyCode);
   const countryCode = normalizeRestaurantCountryCode(
