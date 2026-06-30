@@ -41,6 +41,7 @@ import {
   type PersonalizeGroup,
 } from '@/components/order/personalize-options-section';
 import { buildCustomerLightSurfaceVars } from '@/lib/restaurant-theme';
+import type { RestaurantRegionalSettings } from '@/lib/restaurant-regional';
 import {
   chargeableUnitsForOptionInGroup,
   getRecommendationLimits,
@@ -66,6 +67,7 @@ import {
   productUnitPriceWithVariation,
   variationPickerBaselineUnitPrice,
 } from '@/lib/menu/recommendation-addon-price';
+import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import {
   clearOptionDataForGroup,
   clearOptionDataForKey,
@@ -165,7 +167,8 @@ function configurationItemPickerPrice(
   group: AttributeGroup,
   parentVariation: ParentVariationContext | null,
   groupSelectedIds: string[],
-  selectedNestedVariationByOption: Record<string, string>
+  selectedNestedVariationByOption: Record<string, string>,
+  regional?: Partial<RestaurantRegionalSettings>
 ) {
   const visible = visibleConfigurationItems(group, parentVariation);
   const optionKey = optionSelectionKey(group.id, item.menuItemId);
@@ -215,6 +218,7 @@ function configurationItemPickerPrice(
       multipleMode: group.multipleMode,
       groupSelectedIds,
       optionId: item.menuItemId,
+      regional,
     }),
   };
 }
@@ -270,6 +274,7 @@ export function ProductCustomizeDialog({
   onOpenChange,
   onConfirm,
 }: Props) {
+  const { formatMoney, regional } = useRestaurantRegional(undefined);
   const variationPickerBaseline = useMemo(
     () => variationPickerBaselineUnitPrice(productBaseUnitPrice, variations),
     [productBaseUnitPrice, variations]
@@ -1134,7 +1139,7 @@ export function ProductCustomizeDialog({
     [themePrimaryColor]
   );
 
-  const basePriceLabel = `€${productBaseUnitPrice.toFixed(2)}`;
+  const basePriceLabel = formatMoney(productBaseUnitPrice);
 
   const productRecPickerContext = () => ({
     nestedConfigs,
@@ -1244,7 +1249,8 @@ export function ProductCustomizeDialog({
         ),
         priceLabel: formatVariationAddonDisplay(
           v.priceDelta,
-          variationPickerBaseline
+          variationPickerBaseline,
+          regional
         ),
         imageUrl: v.imageUrl ?? productImageUrl ?? null,
         selected: selectedVariationId === v.id,
@@ -1306,7 +1312,8 @@ export function ProductCustomizeDialog({
           group,
           baseProductVariationContext.parent,
           groupSelectedIds,
-          selectedNestedVariationByOption
+          selectedNestedVariationByOption,
+          regional
         );
         return {
         id: it.menuItemId,
@@ -1422,7 +1429,8 @@ export function ProductCustomizeDialog({
           group,
           baseProductVariationContext.parent,
           selected,
-          selectedNestedVariationByOption
+          selectedNestedVariationByOption,
+          regional
         );
         return {
         id: it.menuItemId,
@@ -1475,7 +1483,8 @@ export function ProductCustomizeDialog({
       ),
       priceLabel: formatVariationAddonDisplay(
         v.priceDelta,
-        optionVariationBaseline
+        optionVariationBaseline,
+        regional
       ),
       imageUrl: v.imageUrl ?? item.imageUrl ?? null,
       selected: selectedNestedVariationByOption[key] === v.id,
@@ -1512,6 +1521,7 @@ export function ProductCustomizeDialog({
     preselectedRecommendationVariationByGroup,
     productImageUrl,
     productRecommendationGroups,
+    regional,
     selectedByGroup,
     selectedNestedVariationByOption,
     selectedVariationId,
@@ -1642,7 +1652,8 @@ export function ProductCustomizeDialog({
                     g,
                     nestedConfigs[g.id],
                     selectedVariationIdForGroup,
-                    baseProductVariationContext.parent
+                    baseProductVariationContext.parent,
+                    regional
                   );
                   return (
                     <section
@@ -1784,7 +1795,8 @@ export function ProductCustomizeDialog({
                                 selectedNestedVariationByOption,
                                 nestedOptionConfigs,
                                 baseProductVariationContext.parent,
-                                baseProductVariationContext.shortLabel
+                                baseProductVariationContext.shortLabel,
+                                regional
                               );
                                 return (
                                   <button
@@ -1988,7 +2000,7 @@ export function ProductCustomizeDialog({
                   <span className="flex w-full items-center justify-between gap-4">
                     <span>Add</span>
                     <span className="tabular-nums">
-                      €{(selectedUnitTotal * quantity).toFixed(2)}
+                      {formatMoney(selectedUnitTotal * quantity)}
                     </span>
                   </span>
                 </Button>

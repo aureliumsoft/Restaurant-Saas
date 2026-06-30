@@ -435,6 +435,7 @@ export function OrderCartPanel({ isEmpty, children, footer }: OrderCartPanelProp
 type OrderCartCheckoutButtonProps = {
   itemCount: number;
   total: number;
+  formattedTotal?: string;
   label: string;
   onClick: () => void;
 };
@@ -442,9 +443,13 @@ type OrderCartCheckoutButtonProps = {
 export function OrderCartCheckoutButton({
   itemCount,
   total,
+  formattedTotal,
   label,
   onClick,
 }: OrderCartCheckoutButtonProps) {
+  const totalLabel =
+    formattedTotal ??
+    (Number.isFinite(total) ? total.toFixed(2) : '0.00');
   return (
     <button
       type="button"
@@ -459,7 +464,7 @@ export function OrderCartCheckoutButton({
         </span>
       </span>
       <span className="flex-1 text-center text-sm font-bold">{label}</span>
-      <span className="shrink-0 text-sm font-bold">€{total.toFixed(2)}</span>
+      <span className="shrink-0 text-sm font-bold">{totalLabel}</span>
     </button>
   );
 }

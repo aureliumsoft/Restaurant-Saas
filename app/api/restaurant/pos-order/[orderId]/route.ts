@@ -21,6 +21,7 @@ import {
   resolveServiceChargeAmount,
 } from '@/lib/restaurant-service-charge';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 
 const orderSelect = {
   id: true,
@@ -426,6 +427,11 @@ export async function PATCH(
     if (!updated) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
+
+    publishOrderLifecycleUpdate({
+      restaurantId: auth.restaurantId,
+      branchId,
+    });
 
     return NextResponse.json({
       data: mapOrderDetail(updated),

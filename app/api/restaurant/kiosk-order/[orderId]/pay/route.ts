@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { getOrOpenPosShift } from '@/lib/pos-shift';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 
 const paySchema = z.object({
   paid: z.number().min(0),
@@ -108,6 +109,11 @@ export async function POST(
         where: { id: order.id },
         data: { posShiftId: activeShift.id },
       });
+    });
+
+    publishOrderLifecycleUpdate({
+      restaurantId: auth.restaurantId,
+      branchId: order.branchId,
     });
 
     return NextResponse.json({

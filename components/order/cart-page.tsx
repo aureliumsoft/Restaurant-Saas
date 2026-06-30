@@ -560,7 +560,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                           </div>
                         ) : null}
                         <p className="mt-2 text-xs text-muted-foreground">
-                          {t('unitPrice')}: EUR {lineUnitTotal(line).toFixed(2)}
+                          {t('unitPrice')}: {formatMoney(lineUnitTotal(line))}
                         </p>
                       </div>
                     </div>

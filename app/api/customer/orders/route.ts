@@ -20,6 +20,7 @@ import {
   isTicketNumberConflict,
   utcTicketDateFromNow,
 } from '@/lib/order-ticket-number';
+import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 
 import {
   computeCheckoutTotal,
@@ -361,6 +362,11 @@ export async function POST(req: NextRequest) {
       },
       { maxWait: 10_000, timeout: 30_000 }
     );
+
+    publishOrderLifecycleUpdate({
+      restaurantId: restaurant.id,
+      branchId,
+    });
 
     return NextResponse.json(
       {

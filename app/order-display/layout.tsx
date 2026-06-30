@@ -1,5 +1,5 @@
 import { KdsLayoutHeader } from '@/components/kds/kds-layout-header';
-import { BranchProvider } from '@/hooks/use-branch-context';
+import { OperationalRealtimeShell } from '@/components/layout/operational-realtime-shell';
 
 export default function OrderDisplayLayout({
   children,
@@ -7,7 +7,7 @@ export default function OrderDisplayLayout({
   children: React.ReactNode;
 }) {
   return (
-    <BranchProvider>
+    <OperationalRealtimeShell>
       {/* h-screen + overflow-hidden so the customer display never spills past
           the viewport — the screen is meant to be wall-mounted, not scrolled. */}
       <div className="flex h-screen max-h-screen flex-col overflow-hidden bg-muted/30 dark:bg-background">
@@ -16,6 +16,6 @@ export default function OrderDisplayLayout({
           {children}
         </div>
       </div>
-    </BranchProvider>
+    </OperationalRealtimeShell>
   );
 }

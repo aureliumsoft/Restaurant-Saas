@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 
 const FINAL_TO_ORDER: Record<string, string> = {
   completed: 'completed',
@@ -57,6 +58,15 @@ export async function PATCH(
         where: { id: orderId },
         data: { status: FINAL_TO_ORDER[status] },
       });
+    });
+
+    const order = await db.order.findUnique({
+      where: { id: orderId },
+      select: { branchId: true },
+    });
+    publishOrderLifecycleUpdate({
+      restaurantId: auth.restaurantId,
+      branchId: order?.branchId,
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });

@@ -21,6 +21,7 @@ import {
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { resolvePosPaymentLedgerAmount } from '@/lib/order-payment';
 import { getOrOpenPosShift } from '@/lib/pos-shift';
+import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 
 import {
   normalizePosOrderLines,
@@ -299,6 +300,11 @@ export async function POST(req: NextRequest) {
       },
       { maxWait: 10_000, timeout: 30_000 }
     );
+
+    publishOrderLifecycleUpdate({
+      restaurantId,
+      branchId: result.order.branchId,
+    });
 
     return NextResponse.json(
       {

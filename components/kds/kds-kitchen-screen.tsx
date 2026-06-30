@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import {
   RefreshCw,
   CheckCircle2,
@@ -294,26 +295,11 @@ export function KdsKitchenScreen() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    const onBranch = () => void load();
-    window.addEventListener('branch-changed', onBranch);
-    return () => window.removeEventListener('branch-changed', onBranch);
-  }, [load]);
-
-  useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  useEffect(() => {
-    const t = setInterval(() => {
-      void load();
-    }, 8000);
-    return () => clearInterval(t);
-  }, [load]);
+  useRealtimeRefresh('realtime:kds.tickets', () => void load());
 
   const sorted = useMemo(
     () =>

@@ -19,7 +19,8 @@ import type {
 } from '@/app/api/restaurant/order-display/route';
 import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
 
-const REFRESH_INTERVAL_MS = 5000;
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
+
 const VOICE_STORAGE_KEY = 'order-display:voice-enabled';
 const COMPLETED_ANNOUNCEMENT_REPEATS = 3;
 const IN_PROGRESS_DISPLAY_LIMIT = 8;
@@ -289,20 +290,7 @@ export function OrderDisplayScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    const onBranch = () => void load();
-    window.addEventListener('branch-changed', onBranch);
-    return () => window.removeEventListener('branch-changed', onBranch);
-  }, [load]);
-
-  useEffect(() => {
-    const t = window.setInterval(() => void load(), REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(t);
-  }, [load]);
+  useRealtimeRefresh('realtime:order_display', () => void load());
 
   const lastUpdatedText = useMemo(() => {
     if (!lastUpdated) return '—';
@@ -341,7 +329,7 @@ export function OrderDisplayScreen() {
               </>
             ) : null}
             {' · '}
-            Live · refreshes every {REFRESH_INTERVAL_MS / 1000}s · last sync{' '}
+            Live · updates in real time · last sync{' '}
             {lastUpdatedText}
           </p>
         </div>

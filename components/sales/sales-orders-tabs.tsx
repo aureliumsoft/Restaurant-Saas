@@ -509,7 +509,7 @@ export function SalesOrdersTabs() {
           tabName={activeLabel}
           label="Total Revenue"
           value={formatMoney(activeStats.revenueAmount)}
-          subtitle={`${activeStats.revenueOrders.toLocaleString()} Complete Orders`}
+          subtitle={`${activeStats.revenueOrders.toLocaleString()} Complete Payments`}
           sparklineData={kpiSparklineFromValue(activeStats.revenueAmount)}
           accentColor="#22c55e"
           icon={CircleDollarSign}

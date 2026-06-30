@@ -1,40 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
-type RestaurantPayload = {
-  name?: string | null;
-  logoUrl?: string | null;
-};
+import { useStaffRestaurantBranding } from '@/hooks/use-staff-permissions';
 
 export function OperationalHeaderRestaurantBrand() {
-  const [name, setName] = useState<string>('Restaurant');
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const { restaurantName, logoUrl: bootstrapLogo } =
+    useStaffRestaurantBranding();
   const [logoFailed, setLogoFailed] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/restaurant');
-        const json = (await res.json().catch(() => ({}))) as {
-          data?: RestaurantPayload | null;
-        };
-        if (cancelled) return;
-        const d = json?.data;
-        if (d?.name?.trim()) setName(d.name.trim());
-        const logo = d?.logoUrl?.trim();
-        setLogoUrl(logo && logo.length > 0 ? logo : null);
-        setLogoFailed(false);
-      } catch {
-        /* keep defaults */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
+  const name = restaurantName || 'Restaurant';
+  const logoUrl = bootstrapLogo;
   const initial = (name || 'R').charAt(0).toUpperCase();
 
   return (

@@ -38,6 +38,8 @@ import {
   useBranchContext,
   withBranchQuery,
 } from '@/hooks/use-branch-context';
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
+import { useStaffPermissions, useStaffRestaurantBranding } from '@/hooks/use-staff-permissions';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
 import { kioskBasePath } from '@/lib/kiosk-path';
@@ -251,74 +253,56 @@ export default function DashboardAnalytics() {
   const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
   const { activeBranchId, loading: branchLoading, isOwnerOrAdmin } =
     useBranchContext();
-  const [permissions, setPermissions] = useState<string[] | null>(null);
+  const {
+    permissions,
+    loading: permissionsLoading,
+    plan,
+  } = useStaffPermissions();
+  const { restaurantSlug } = useStaffRestaurantBranding();
   const [analytics, setAnalytics] = useState<AnalyticsPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [slug, setSlug] = useState<string | null>(null);
-  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
-  const [planRecommendations, setPlanRecommendations] = useState(true);
+  const planRecommendations = plan?.recommendations !== false;
+  const permissionsLoaded = !permissionsLoading;
   const [selectedDays, setSelectedDays] = useState<7 | 14 | 30>(7);
   const queryDays = isOwnerOrAdmin ? selectedDays : 1;
+  const slug = restaurantSlug;
 
-  const load = useCallback(
-    async (days: number, branchId: string | null) => {
-      setError(null);
-      setAnalyticsLoading(true);
-      try {
-        const [permRes, dashRes] = await Promise.all([
-          axios.get<{
-            permissions: string[];
-            plan?: { recommendations?: boolean };
-          }>('/api/me/dashboard-permissions'),
-          axios.get<AnalyticsPayload>(
-            withBranchQuery(
-              `/api/restaurant/dashboard-analytics?days=${days}`,
-              branchId
-            )
-          ),
-        ]);
-        setPermissions(permRes.data.permissions ?? []);
-        setPlanRecommendations(permRes.data.plan?.recommendations !== false);
-        setAnalytics(dashRes.data);
-      } catch {
-        setError('Could not load dashboard analytics.');
-        setPermissions([]);
-        setPlanRecommendations(true);
-        setAnalytics(null);
-      } finally {
-        setAnalyticsLoading(false);
-        setPermissionsLoaded(true);
-      }
-    },
-    []
-  );
+  const load = useCallback(async (days: number, branchId: string | null) => {
+    setError(null);
+    setAnalyticsLoading(true);
+    try {
+      const dashRes = await axios.get<AnalyticsPayload>(
+        withBranchQuery(
+          `/api/restaurant/dashboard-analytics?days=${days}`,
+          branchId
+        )
+      );
+      setAnalytics(dashRes.data);
+    } catch {
+      setError('Could not load dashboard analytics.');
+      setAnalytics(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (branchLoading) return;
     void load(queryDays, activeBranchId);
   }, [load, queryDays, activeBranchId, branchLoading]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await axios.get<{ data: { slug?: string } | null }>(
-          '/api/restaurant'
-        );
-        const s = res.data?.data?.slug?.trim();
-        if (!cancelled) setSlug(s && s.length > 0 ? s : null);
-      } catch {
-        if (!cancelled) setSlug(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useRealtimeRefresh(
+    'realtime:dashboard.analytics',
+    () => {
+      if (branchLoading) return;
+      void load(queryDays, activeBranchId);
+    },
+    { runOnMount: false }
+  );
 
   const modules = useMemo(() => {
-    if (!permissionsLoaded || !permissions) return [];
+    if (!permissionsLoaded) return [];
     return DASHBOARD_MODULES.filter((m) => {
       if (m.moduleKey === 'dashboard') return false;
       if (m.moduleKey === 'recommendations' && !planRecommendations)

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 
 import { Header } from '@/components/customer-app/header';
 import { Footer } from '@/components/customer-app/footer';
+import { CustomerRegionalProvider } from '@/components/layout/customer-regional-provider';
 import { cn } from '@/lib/utils';
 
 function isStorefrontHome(pathname: string | null) {
@@ -52,7 +53,9 @@ export function WebAppLayoutShell({ children }: { children: ReactNode }) {
             hideLayoutChrome && 'min-h-screen'
           )}
         >
-          {children}
+          <Suspense fallback={children}>
+            <CustomerRegionalProvider>{children}</CustomerRegionalProvider>
+          </Suspense>
         </main>
 
         {!hideLayoutChrome && !hideLayoutFooter ? (

@@ -33,41 +33,29 @@ import {
 } from '@/lib/restaurant-regional';
 import { formatCurrency } from '@/lib/format-money';
 import { useOptionalRestaurantRegionalContext } from '@/components/layout/restaurant-regional-provider';
+import {
+  revalidateStaffBootstrap,
+  selectStaffBootstrap,
+  useStaffBootstrapSWR,
+} from '@/hooks/use-staff-bootstrap-swr';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 
 export function RestaurantRegionalSettingsCard() {
   const regionalContext = useOptionalRestaurantRegionalContext();
-  const [loading, setLoading] = useState(true);
-  const [hasRestaurant, setHasRestaurant] = useState(false);
+  const { data, isLoading: bootstrapLoading } = useStaffBootstrapSWR();
+  const bootstrap = selectStaffBootstrap(data);
+  const { regional, loading: regionalLoading } = useOwnerRestaurantRegional();
+  const loading = bootstrapLoading || regionalLoading;
+  const hasRestaurant = Boolean(bootstrap?.restaurant);
   const [saving, setSaving] = useState(false);
   const [currencyCode, setCurrencyCode] = useState<RestaurantCurrencyCode>('EUR');
   const [countryCode, setCountryCode] = useState<RestaurantCountryCode>('ES');
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await axios.get<{ data: RestaurantRegionalSettings | null }>(
-          '/api/restaurant/regional'
-        );
-        const d = res.data?.data;
-        if (cancelled) return;
-        if (!d) {
-          setHasRestaurant(false);
-          return;
-        }
-        setHasRestaurant(true);
-        setCurrencyCode(d.currencyCode);
-        setCountryCode(d.countryCode);
-      } catch {
-        if (!cancelled) toast.error('Could not load currency and country.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (loading) return;
+    setCurrencyCode(regional.currencyCode);
+    setCountryCode(regional.countryCode);
+  }, [loading, regional.currencyCode, regional.countryCode]);
 
   function handleCurrencyChange(next: RestaurantCurrencyCode) {
     setCurrencyCode(next);
@@ -97,6 +85,7 @@ export function RestaurantRegionalSettingsCard() {
       }
       toast.success('Currency and country saved.');
       regionalContext?.refresh();
+      void revalidateStaffBootstrap();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: unknown } } };
       const flat = err.response?.data?.error;

@@ -6,16 +6,19 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from 'react';
 
 import { formatCurrency } from '@/lib/format-money';
+import eventBus from '@/lib/even';
 import {
-  DEFAULT_RESTAURANT_REGIONAL,
   parseRestaurantRegionalSettings,
   type RestaurantRegionalSettings,
 } from '@/lib/restaurant-regional';
+import {
+  revalidateStaffBootstrap,
+  useStaffBootstrapSWR,
+} from '@/hooks/use-staff-bootstrap-swr';
 
 type RestaurantRegionalContextValue = {
   regional: RestaurantRegionalSettings;
@@ -27,49 +30,31 @@ type RestaurantRegionalContextValue = {
 const RestaurantRegionalContext =
   createContext<RestaurantRegionalContextValue | null>(null);
 
+/** Regional settings from shared staff bootstrap (deduped with branch provider). */
 export function RestaurantRegionalProvider({ children }: { children: ReactNode }) {
-  const [regional, setRegional] = useState<RestaurantRegionalSettings>(
-    DEFAULT_RESTAURANT_REGIONAL
-  );
-  const [loading, setLoading] = useState(true);
-  const [refreshToken, setRefreshToken] = useState(0);
+  const { data, isLoading } = useStaffBootstrapSWR();
+  const regional = parseRestaurantRegionalSettings(data?.data?.regional);
 
   const refresh = useCallback(() => {
-    setRefreshToken((n) => n + 1);
+    void revalidateStaffBootstrap();
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      try {
-        const res = await fetch('/api/restaurant/regional', {
-          cache: 'no-store',
-        });
-        const body = (await res.json().catch(() => ({}))) as {
-          data?: RestaurantRegionalSettings | null;
-        };
-        if (cancelled) return;
-        setRegional(parseRestaurantRegionalSettings(body.data));
-      } catch {
-        if (!cancelled) setRegional(DEFAULT_RESTAURANT_REGIONAL);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+    const onRegional = () => refresh();
+    eventBus.on('realtime:config.regional', onRegional);
     return () => {
-      cancelled = true;
+      eventBus.removeListener('realtime:config.regional', onRegional);
     };
-  }, [refreshToken]);
+  }, [refresh]);
 
   const value = useMemo<RestaurantRegionalContextValue>(
     () => ({
       regional,
-      loading,
+      loading: isLoading && !data,
       formatMoney: (amount: number) => formatCurrency(amount, regional),
       refresh,
     }),
-    [loading, regional, refresh]
+    [data, isLoading, regional, refresh]
   );
 
   return (

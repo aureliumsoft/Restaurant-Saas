@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { dashboardCardClass } from '@/components/dashboard/dashboard-surface';
+import { useBranchContext } from '@/hooks/use-branch-context';
 import {
   DashboardTable as Table,
   DashboardTableBody as TableBody,
@@ -78,12 +79,12 @@ type ConfirmAction =
 export default function RestaurantUsersCard({
   roleBasedSettingsAllowed = true,
 }: RestaurantUsersCardProps) {
+  const { isOwnerOrAdmin } = useBranchContext();
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [branchOptions, setBranchOptions] = useState<BranchOption[]>([]);
   const [inviteBranchId, setInviteBranchId] = useState('');
-  const [isOwnerOrAdmin, setIsOwnerOrAdmin] = useState(false);
   const [branchEditEmployee, setBranchEditEmployee] =
     useState<EmployeeRow | null>(null);
   const [editBranchId, setEditBranchId] = useState('');
@@ -130,21 +131,17 @@ export default function RestaurantUsersCard({
     }
     setLoading(true);
     try {
-      const [empRes, branchRes, branchCtxRes] = await Promise.all([
+      const [empRes, branchRes] = await Promise.all([
         axios.get<{
           employees: EmployeeRow[];
           pendingInvites: PendingInvite[];
         }>('/api/restaurant/employees'),
         axios.get<{ data?: BranchOption[] }>('/api/restaurant/branches'),
-        axios.get<{ data?: { isOwnerOrAdmin?: boolean } }>(
-          '/api/me/branch-context'
-        ),
         loadAssignableRoles(),
       ]);
       setEmployees(empRes.data.employees ?? []);
       setPendingInvites(empRes.data.pendingInvites ?? []);
       setBranchOptions(branchRes.data.data ?? []);
-      setIsOwnerOrAdmin(Boolean(branchCtxRes.data.data?.isOwnerOrAdmin));
     } catch (e: any) {
       toast.error(
         e.response?.data?.error ?? e.message ?? 'Failed to load team members.'

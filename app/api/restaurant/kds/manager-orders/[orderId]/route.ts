@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { cancelOrderPayments } from '@/lib/order-payment';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 
 export async function PATCH(
   _req: NextRequest,
@@ -25,7 +26,7 @@ export async function PATCH(
 
     const order = await db.order.findFirst({
       where: { id: orderId, restaurantId: auth.restaurantId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, branchId: true },
     });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
@@ -45,6 +46,11 @@ export async function PATCH(
         data: { status: 'canceled' },
       });
       await cancelOrderPayments(tx, order.id);
+    });
+
+    publishOrderLifecycleUpdate({
+      restaurantId: auth.restaurantId,
+      branchId: order.branchId,
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });

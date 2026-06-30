@@ -22,6 +22,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { useStaffPermissions } from '@/hooks/use-staff-permissions';
 
 type BranchRow = {
   id: string;
@@ -32,9 +33,8 @@ type BranchRow = {
 };
 
 export function BranchedPage() {
+  const { plan } = useStaffPermissions();
   const [branches, setBranches] = useState<BranchRow[]>([]);
-  /** `null` from API means unlimited (Scale). */
-  const [maxBranches, setMaxBranches] = useState<number | null>(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -50,24 +50,17 @@ export function BranchedPage() {
 
   const load = async () => {
     setLoading(true);
-    (async () => {
-      try {
-        const [res, subRes] = await Promise.all([
-          axios.get<{ data: BranchRow[] }>('/api/restaurant/branches'),
-          axios.get<{
-            data?: { limits?: { maxBranches?: number | null } };
-          }>('/api/me/subscription-access'),
-        ]);
-        setBranches(res.data.data ?? []);
-        const cap = subRes.data?.data?.limits?.maxBranches;
-        setMaxBranches(typeof cap === 'number' ? cap : cap === null ? null : 1);
-      } catch {
-        toast.error('Could not load branches');
-        setBranches([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    try {
+      const res = await axios.get<{ data: BranchRow[] }>(
+        '/api/restaurant/branches'
+      );
+      setBranches(res.data.data ?? []);
+    } catch {
+      toast.error('Could not load branches');
+      setBranches([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -76,6 +69,7 @@ export function BranchedPage() {
 
   const activeBranch = branches.find((b) => b.id === activeId) ?? null;
   const cannotDeleteLastBranch = branches.length <= 1;
+  const maxBranches = plan?.maxBranches ?? 1;
   const branchCap =
     maxBranches === null ? Number.POSITIVE_INFINITY : maxBranches;
   const atBranchLimit = branches.length >= branchCap;

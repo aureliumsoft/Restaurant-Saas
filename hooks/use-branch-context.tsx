@@ -6,12 +6,16 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from 'react';
 import axios from 'axios';
 
+import eventBus from '@/lib/even';
 import type { BranchOption } from '@/lib/branch/branch-scope';
+import {
+  revalidateStaffBootstrap,
+  useStaffBootstrapSWR,
+} from '@/hooks/use-staff-bootstrap-swr';
 
 type BranchContextValue = {
   loading: boolean;
@@ -26,74 +30,73 @@ type BranchContextValue = {
 
 const BranchContext = createContext<BranchContextValue | null>(null);
 
-export function BranchProvider({ children }: { children: ReactNode }) {
-  const [loading, setLoading] = useState(true);
-  const [branches, setBranches] = useState<BranchOption[]>([]);
-  const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
-  const [canSwitchBranch, setCanSwitchBranch] = useState(false);
-  const [isOwnerOrAdmin, setIsOwnerOrAdmin] = useState(false);
+const emptyBranchValue: BranchContextValue = {
+  loading: false,
+  branches: [],
+  activeBranchId: null,
+  canSwitchBranch: false,
+  isOwnerOrAdmin: false,
+  setActiveBranch: async () => {},
+  branchQuery: '',
+  reload: async () => {},
+};
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get<{
-        data?: {
-          branches?: BranchOption[];
-          activeBranchId?: string | null;
-          canSwitchBranch?: boolean;
-          isOwnerOrAdmin?: boolean;
-        };
-      }>('/api/me/branch-context');
-      const d = res.data.data;
-      setBranches(d?.branches ?? []);
-      setActiveBranchId(d?.activeBranchId ?? null);
-      setCanSwitchBranch(Boolean(d?.canSwitchBranch));
-      setIsOwnerOrAdmin(Boolean(d?.isOwnerOrAdmin));
-    } catch {
-      setBranches([]);
-      setActiveBranchId(null);
-      setCanSwitchBranch(false);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+/** Branch scope from shared staff bootstrap cache (no separate API call). */
+export function BranchProvider({ children }: { children: ReactNode }) {
+  const { data, isLoading, mutate } = useStaffBootstrapSWR();
+  const scope = data?.data?.branchScope ?? null;
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const onConfig = () => void mutate();
+    eventBus.on('realtime:config.branding', onConfig);
+    eventBus.on('realtime:config.regional', onConfig);
+    return () => {
+      eventBus.removeListener('realtime:config.branding', onConfig);
+      eventBus.removeListener('realtime:config.regional', onConfig);
+    };
+  }, [mutate]);
 
-  const setActiveBranch = useCallback(async (branchId: string) => {
-    await axios.post('/api/me/active-branch', { branchId });
-    setActiveBranchId(branchId);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('branch-changed', { detail: { branchId } }));
-    }
-  }, []);
+  const reload = useCallback(async () => {
+    await mutate();
+  }, [mutate]);
 
+  const setActiveBranch = useCallback(
+    async (branchId: string) => {
+      await axios.post('/api/me/active-branch', { branchId });
+      await revalidateStaffBootstrap();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('branch-changed', { detail: { branchId } })
+        );
+      }
+    },
+    []
+  );
+
+  const activeBranchId = scope?.activeBranchId ?? null;
   const branchQuery = activeBranchId
     ? `branchId=${encodeURIComponent(activeBranchId)}`
     : '';
 
-  const value = useMemo(
+  const value = useMemo<BranchContextValue>(
     () => ({
-      loading,
-      branches,
+      loading: isLoading && !data,
+      branches: scope?.branches ?? [],
       activeBranchId,
-      canSwitchBranch,
-      isOwnerOrAdmin,
+      canSwitchBranch: Boolean(scope?.canSwitchBranch),
+      isOwnerOrAdmin: Boolean(scope?.isOwnerOrAdmin),
       setActiveBranch,
       branchQuery,
-      reload: load,
+      reload,
     }),
     [
-      loading,
-      branches,
+      isLoading,
+      data,
+      scope,
       activeBranchId,
-      canSwitchBranch,
-      isOwnerOrAdmin,
       setActiveBranch,
       branchQuery,
-      load,
+      reload,
     ]
   );
 
@@ -105,16 +108,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
 export function useBranchContext() {
   const ctx = useContext(BranchContext);
   if (!ctx) {
-    return {
-      loading: false,
-      branches: [],
-      activeBranchId: null,
-      canSwitchBranch: false,
-      isOwnerOrAdmin: false,
-      setActiveBranch: async () => {},
-      branchQuery: '',
-      reload: async () => {},
-    };
+    return emptyBranchValue;
   }
   return ctx;
 }

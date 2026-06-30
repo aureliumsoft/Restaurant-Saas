@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Flame, Loader2, Tag } from 'lucide-react';
 
 import { GlassPanel, SectionHeading } from '@/components/customer-app/storefront/glass-panel';
+import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 
 type MenuItem = {
   id: string;
@@ -31,6 +32,7 @@ function pickFeatured(items: MenuItem[]): MenuItem[] {
 
 export function StorefrontFeatured({ slug }: { slug: string }) {
   const { t } = useTranslation();
+  const { formatMoney } = useRestaurantRegional(slug);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -129,11 +131,11 @@ export function StorefrontFeatured({ slug }: { slug: string }) {
                   <div className="mt-2 flex items-baseline gap-2">
                     {onSale ? (
                       <span className="text-xs text-[#94a3b8] line-through">
-                        €{item.price.toFixed(2)}
+                        {formatMoney(item.price)}
                       </span>
                     ) : null}
                     <span className="font-bold text-primary">
-                      €{displayPrice.toFixed(2)}
+                      {formatMoney(displayPrice)}
                     </span>
                   </div>
                 </div>

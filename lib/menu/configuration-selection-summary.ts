@@ -1,5 +1,7 @@
 import { buildModifierSelectionsForGroups } from '@/lib/menu/build-modifier-selections';
 import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
+import { formatAddonDelta } from '@/lib/format-money';
+import type { RestaurantRegionalSettings } from '@/lib/restaurant-regional';
 import { productRecommendationVariationPriceLabel } from '@/lib/menu/recommendation-addon-price';
 import {
   optionSelectionKey,
@@ -21,21 +23,29 @@ export type ConfigurationSummaryLine = {
   nested: ConfigurationSummaryLine[];
 };
 
-export function formatSelectionPriceLabel(unitPrice: number): string | null {
-  if (unitPrice <= 0) return null;
-  return `(+€${unitPrice.toFixed(2)})`;
+export function formatSelectionPriceLabel(
+  unitPrice: number,
+  regional?: Partial<RestaurantRegionalSettings>
+): string | null {
+  return formatAddonDelta(unitPrice, regional);
 }
 
-function selectionToSummaryLine(sel: MenuOption): ConfigurationSummaryLine {
+function selectionToSummaryLine(
+  sel: MenuOption,
+  regional?: Partial<RestaurantRegionalSettings>
+): ConfigurationSummaryLine {
   return {
     name: sel.name,
-    priceLabel: formatSelectionPriceLabel(sel.unitPrice),
+    priceLabel: formatSelectionPriceLabel(sel.unitPrice, regional),
     personalize: [],
     nested: [],
   };
 }
 
-function splitModsToSummaryLines(mods: { selections: MenuOption[] }[]): {
+function splitModsToSummaryLines(
+  mods: { selections: MenuOption[] }[],
+  regional?: Partial<RestaurantRegionalSettings>
+): {
   personalize: ConfigurationSummaryLine[];
   nested: ConfigurationSummaryLine[];
 } {
@@ -43,7 +53,7 @@ function splitModsToSummaryLines(mods: { selections: MenuOption[] }[]): {
   const nested: ConfigurationSummaryLine[] = [];
   for (const mod of mods) {
     for (const sel of mod.selections) {
-      const line = selectionToSummaryLine(sel);
+      const line = selectionToSummaryLine(sel, regional);
       if (isPersonalizeModifierMenuItemId(sel.menuItemId)) {
         personalize.push(line);
       } else {
@@ -60,7 +70,8 @@ export function buildCategoryGroupSelectionSummary(
   selectedNestedVariationByOption: Record<string, string>,
   nestedOptionConfigs: Record<string, NestedRecommendationResult>,
   parentVariation: ParentVariationContext | null,
-  parentVariationShortLabel: string | null
+  parentVariationShortLabel: string | null,
+  regional?: Partial<RestaurantRegionalSettings>
 ): ConfigurationSummaryLine[] {
   if (selectedIds.length === 0) return [];
 
@@ -77,10 +88,13 @@ export function buildCategoryGroupSelectionSummary(
     for (const sel of mod.selections) {
       const key = optionSelectionKey(group.id, sel.menuItemId);
       const nestedConfigMods = nestedOptionConfigs[key]?.mods ?? [];
-      const { personalize, nested } = splitModsToSummaryLines(nestedConfigMods);
+      const { personalize, nested } = splitModsToSummaryLines(
+        nestedConfigMods,
+        regional
+      );
       lines.push({
         name: sel.name,
-        priceLabel: formatSelectionPriceLabel(sel.unitPrice),
+        priceLabel: formatSelectionPriceLabel(sel.unitPrice, regional),
         personalize,
         nested,
       });
@@ -93,7 +107,8 @@ export function buildProductRecSelectionSummary(
   group: AttributeGroup,
   config: NestedRecommendationResult | undefined,
   preselectedVariationId: string | undefined,
-  parentVariation: ParentVariationContext | null
+  parentVariation: ParentVariationContext | null,
+  regional?: Partial<RestaurantRegionalSettings>
 ): ConfigurationSummaryLine[] {
   const item = group.items[0];
   if (!item) return [];
@@ -111,10 +126,13 @@ export function buildProductRecSelectionSummary(
   const name = pvName ? `${item.name} (${pvName})` : item.name;
   const priceLabel =
     pv != null
-      ? productRecommendationVariationPriceLabel(item, pv.priceDelta)
+      ? productRecommendationVariationPriceLabel(item, pv.priceDelta, regional)
       : null;
 
-  const { personalize, nested } = splitModsToSummaryLines(config?.mods ?? []);
+  const { personalize, nested } = splitModsToSummaryLines(
+    config?.mods ?? [],
+    regional
+  );
 
   return [
     {

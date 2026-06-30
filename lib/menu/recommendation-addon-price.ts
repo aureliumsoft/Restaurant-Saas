@@ -1,4 +1,6 @@
+import { formatAddonDelta } from '@/lib/format-money';
 import { getMinVariationPrice } from '@/lib/menu-item-pricing';
+import type { RestaurantRegionalSettings } from '@/lib/restaurant-regional';
 import {
   shouldShowOptionQuantityPrice,
   shouldShowQuantityGroupPickerPrices,
@@ -43,11 +45,13 @@ export function productRecommendationVariationUnitPrice(
 /** Guest-facing (+€delta) for a recommended product variation picker. */
 export function productRecommendationVariationPriceLabel(
   item: ProductRecommendationItemLike,
-  variationUnitPrice: number
+  variationUnitPrice: number,
+  regional?: Partial<RestaurantRegionalSettings>
 ): string | null {
   return formatVariationAddonDisplay(
     variationUnitPrice,
-    productRecommendationListBaseline(item)
+    productRecommendationListBaseline(item),
+    regional
   );
 }
 
@@ -77,7 +81,8 @@ export function recommendationAddonDelta(
 export function formatRecommendationAddonDisplay(
   itemPrice: number,
   itemSalePrice: number | null | undefined,
-  defaultUnitPrice: number | null | undefined
+  defaultUnitPrice: number | null | undefined,
+  regional?: Partial<RestaurantRegionalSettings>
 ): string | null {
   const delta = recommendationAddonDelta(
     itemPrice,
@@ -86,10 +91,10 @@ export function formatRecommendationAddonDisplay(
   );
   if (defaultUnitPrice != null) {
     if (delta == null) return null;
-    return `(+€${delta.toFixed(2)})`;
+    return formatAddonDelta(delta, regional);
   }
   const unit = effectiveMenuItemUnitPrice(itemPrice, itemSalePrice);
-  return `(+€${unit.toFixed(2)})`;
+  return formatAddonDelta(unit, regional);
 }
 
 /** Guest-facing addon label for recommendation pickers (quantity + free tier). */
@@ -103,6 +108,7 @@ export function recommendationAddonPriceLabel(
     /** All selected option ids in the group (with duplicates for qty). */
     groupSelectedIds?: string[];
     optionId?: string;
+    regional?: Partial<RestaurantRegionalSettings>;
   }
 ): string | null {
   if (options?.multipleMode === 'QUANTITY') {
@@ -123,7 +129,8 @@ export function recommendationAddonPriceLabel(
   return formatRecommendationAddonDisplay(
     itemPrice,
     itemSalePrice,
-    defaultUnitPrice
+    defaultUnitPrice,
+    options?.regional
   );
 }
 
@@ -164,14 +171,15 @@ export function variationAddonDelta(
 /** UI label for a variation option vs parent list price. */
 export function formatVariationAddonDisplay(
   variationUnitPrice: number,
-  parentListUnitPrice: number | null | undefined
+  parentListUnitPrice: number | null | undefined,
+  regional?: Partial<RestaurantRegionalSettings>
 ): string | null {
   const delta = variationAddonDelta(variationUnitPrice, parentListUnitPrice);
   if (parentListUnitPrice != null) {
     if (delta == null) return null;
-    return `(+€${delta.toFixed(2)})`;
+    return formatAddonDelta(delta, regional);
   }
-  return `(+€${variationUnitPrice.toFixed(2)})`;
+  return formatAddonDelta(variationUnitPrice, regional);
 }
 
 /** Extra charge vs parent list price (0 when variation matches included price). */

@@ -13,14 +13,15 @@ import Bread from '@/components/dashboard/breadcrumb';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { toast } from 'react-toastify';
-import axios from 'axios';
 import { cn } from '@/lib/utils';
 import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
 import { BranchSwitcher } from '@/components/dashboard/branch-switcher';
 import { useRestaurantBranding } from '@/components/layout/restaurant-branding-provider';
 import { BranchProvider } from '@/hooks/use-branch-context';
+import { useStaffPermissions, useStaffSubscription } from '@/hooks/use-staff-permissions';
 import { DashboardAppShell } from '@/components/layout/dashboard-app-shell';
 import { RestaurantRegionalProvider } from '@/components/layout/restaurant-regional-provider';
+import { RestaurantRealtimeProvider } from '@/components/providers/restaurant-realtime-provider';
 
 const SIDEBAR_STORAGE_KEY = 'dashboard-sidebar-open';
 
@@ -50,15 +51,12 @@ const RootLayout = ({ children }: RootLayoutProps) => {
   } = useRestaurantBranding();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [subscriptionChecked, setSubscriptionChecked] = useState(false);
-  const [subscriptionAllowed, setSubscriptionAllowed] = useState(true);
-  const [subscriptionWarning, setSubscriptionWarning] = useState<string | null>(
-    null
-  );
-  const [permissionsChecked, setPermissionsChecked] = useState(false);
-  const [allowedModuleKeys, setAllowedModuleKeys] = useState<Set<string>>(
-    () => new Set(DASHBOARD_MODULES.map((m) => m.moduleKey))
-  );
+  const { loading: bootstrapLoading, subscription } = useStaffSubscription();
+  const { loading: permissionsLoading, allowedModuleKeys } = useStaffPermissions();
+  const subscriptionAllowed = subscription.allowed;
+  const subscriptionWarning = subscription.warning;
+  const permissionsChecked = !permissionsLoading;
+  const subscriptionChecked = !bootstrapLoading;
 
   useEffect(() => {
     try {
@@ -87,77 +85,14 @@ const RootLayout = ({ children }: RootLayoutProps) => {
   }, [sessionStatus, pathname, router]);
 
   useEffect(() => {
-    let mounted = true;
-    const check = async () => {
-      try {
-        const res = await axios.get('/api/me/subscription-access');
-        const data = res?.data?.data;
-        if (!mounted) return;
-        const allowed = Boolean(data?.allowed);
-        setSubscriptionAllowed(allowed);
-        setSubscriptionWarning(
-          typeof data?.warning === 'string' && data.warning.trim() !== ''
-            ? data.warning
-            : null
-        );
-        setSubscriptionChecked(true);
-        if (!allowed) {
-          toast.error(
-            'Your trial/plan is expired or not configured. Please choose a pricing plan.'
-          );
-          router.replace('/pricing');
-        }
-      } catch {
-        if (!mounted) return;
-        setSubscriptionAllowed(false);
-        setSubscriptionChecked(true);
-        toast.error('Could not verify subscription access.');
-        router.replace('/pricing');
-      }
-    };
-    void check();
-    return () => {
-      mounted = false;
-    };
-  }, [router]);
-
-  useEffect(() => {
-    let mounted = true;
-    axios
-      .get<{
-        permissions?: string[];
-        plan?: { recommendations?: boolean };
-      }>('/api/me/dashboard-permissions')
-      .then((res) => {
-        if (!mounted) return;
-        const list = res.data.permissions ?? [];
-        const allowed = new Set<string>();
-        for (const token of list) {
-          const [moduleKey, action] = token.split(':');
-          if (action === 'access' && moduleKey) {
-            allowed.add(moduleKey);
-          }
-        }
-        if (res.data.plan?.recommendations === false) {
-          allowed.delete('recommendations');
-        }
-        setAllowedModuleKeys(allowed);
-      })
-      .catch(() => {
-        if (!mounted) return;
-        // Do not lock users out if permission API has transient errors.
-        setAllowedModuleKeys(
-          new Set(DASHBOARD_MODULES.map((m) => m.moduleKey))
-        );
-      })
-      .finally(() => {
-        if (!mounted) return;
-        setPermissionsChecked(true);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    if (!subscriptionChecked) return;
+    if (!subscriptionAllowed) {
+      toast.error(
+        'Your trial/plan is expired or not configured. Please choose a pricing plan.'
+      );
+      router.replace('/pricing');
+    }
+  }, [subscriptionChecked, subscriptionAllowed, router]);
 
   useEffect(() => {
     if (!permissionsChecked) return;
@@ -210,6 +145,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
 
   return (
     <BranchProvider>
+      <RestaurantRealtimeProvider>
       <RestaurantRegionalProvider>
       <DashboardAppShell
         sidebarOpen={sidebarOpen}
@@ -308,6 +244,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
         {children}
       </DashboardAppShell>
       </RestaurantRegionalProvider>
+      </RestaurantRealtimeProvider>
     </BranchProvider>
   );
 };

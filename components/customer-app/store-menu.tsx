@@ -2,6 +2,7 @@
 
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 type MenuItemLite = {
   id: string;
   name: string;
@@ -38,6 +39,7 @@ type CategoryLite = {
 };
 
 export function StoreMenu({ slug }: { slug: string }) {
+  const { formatMoney } = useRestaurantRegional(slug);
   const [categories, setCategories] = useState<CategoryLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,14 +133,16 @@ export function StoreMenu({ slug }: { slug: string }) {
                     {item.salePrice != null && item.salePrice < item.price ? (
                       <>
                         <span className="text-sm text-[#94a3b8] line-through">
-                          €{item.price.toFixed(2)}
+                          {formatMoney(item.price)}
                         </span>
                         <p className="font-semibold text-primary">
-                          €{item.salePrice.toFixed(2)}
+                          {formatMoney(item.salePrice)}
                         </p>
                       </>
                     ) : (
-                      <p className="font-semibold text-[#0f172a]">€{item.price.toFixed(2)}</p>
+                      <p className="font-semibold text-[#0f172a]">
+                        {formatMoney(item.price)}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -168,7 +172,10 @@ export function StoreMenu({ slug }: { slug: string }) {
                         <p className="text-xs text-[#64748b]">
                           Options from “{g.linkedCategory.name}”:{' '}
                           {g.linkedCategory.items
-                            .map((o) => `${o.name} (€${o.price.toFixed(2)})`)
+                            .map(
+                              (o) =>
+                                `${o.name} (${formatMoney(o.price)})`
+                            )
                             .join(' · ')}
                         </p>
                       </div>
@@ -184,8 +191,9 @@ export function StoreMenu({ slug }: { slug: string }) {
                         <li key={o.sortOrder}>
                           {o.offeredItem.name}{' '}
                           <span className="text-[#64748b]">
-                            €
-                            {(o.offeredItem.salePrice ?? o.offeredItem.price).toFixed(2)}
+                            {formatMoney(
+                              o.offeredItem.salePrice ?? o.offeredItem.price
+                            )}
                           </span>
                         </li>
                       ))}

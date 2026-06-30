@@ -12,6 +12,7 @@ import {
   RESTAURANT_REGIONAL_DB_SELECT,
 } from '@/lib/restaurant-regional';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
+import { publishConfigUpdate } from '@/lib/realtime/publish';
 
 const regionalPatchSchema = z
   .object({
@@ -121,6 +122,8 @@ export async function PATCH(req: NextRequest) {
       currencyCode,
       countryCode
     );
+
+    publishConfigUpdate('config.regional', auth.restaurant.id);
 
     return NextResponse.json(
       { data: parseRestaurantRegionalSettings(updated) },

@@ -6,6 +6,8 @@ import {
   shouldShowOptionQuantityPrice,
   shouldShowQuantityGroupPickerPrices,
 } from '@/lib/menu/recommendation-limits';
+import { formatAddonDelta } from '@/lib/format-money';
+import type { RestaurantRegionalSettings } from '@/lib/restaurant-regional';
 
 export type VariationLinkRef = {
   id: string;
@@ -306,14 +308,14 @@ export function chargeableConfigurationItemUnitPrice(
 export function formatConfigurationAddonDisplay(
   resolvedListUnit: number,
   defaultUnitPrice: number | null | undefined,
-  currencySymbol = '€'
+  regional?: Partial<RestaurantRegionalSettings>
 ): string | null {
   if (defaultUnitPrice != null) {
     const delta = Math.round((resolvedListUnit - defaultUnitPrice) * 100) / 100;
     if (delta <= 0) return null;
-    return `(+${currencySymbol}${delta.toFixed(2)})`;
+    return formatAddonDelta(delta, regional);
   }
-  return `(+${currencySymbol}${resolvedListUnit.toFixed(2)})`;
+  return formatAddonDelta(resolvedListUnit, regional);
 }
 
 /** Guest-facing addon label for configuration pickers (quantity + free tier). */
@@ -327,6 +329,8 @@ export function configurationAddonPriceLabel(
     groupSelectedIds?: string[];
     /** When set, free tier is allocated across the whole group in selection order. */
     optionId?: string;
+    regional?: Partial<RestaurantRegionalSettings>;
+    /** @deprecated use regional */
     currencySymbol?: string;
   }
 ): string | null {
@@ -348,6 +352,9 @@ export function configurationAddonPriceLabel(
   return formatConfigurationAddonDisplay(
     resolvedListUnit,
     defaultUnitPrice,
-    options?.currencySymbol
+    options?.regional ??
+      (options?.currencySymbol
+        ? { currencyCode: options.currencySymbol as 'EUR' }
+        : undefined)
   );
 }

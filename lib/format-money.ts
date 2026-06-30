@@ -61,6 +61,16 @@ export function formatCurrency(
   }).format(safe);
 }
 
+/** Parenthesized addon label e.g. (+€1.50) or (+Rs100.00). */
+export function formatAddonDelta(
+  amount: number,
+  opts?: FormatMoneyOptions
+): string | null {
+  const safe = Number.isFinite(amount) ? amount : 0;
+  if (safe <= 0) return null;
+  return `(+${formatCurrency(safe, opts)})`;
+}
+
 /** Compact currency for KPI cards (e.g. €12.5k, Rs1.2M). */
 export function formatCompactCurrency(
   amount: number,

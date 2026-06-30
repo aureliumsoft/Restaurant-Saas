@@ -1,42 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
+import { useCallback } from 'react';
 
-import type { DashboardModuleKey, PermissionAction } from '@/constant/dashboardModules';
+import type {
+  DashboardModuleKey,
+  PermissionAction,
+} from '@/constant/dashboardModules';
 import { hasDashboardPermission } from '@/lib/dashboard-permissions';
-
-type PlanFeatures = {
-  recommendations?: boolean;
-};
+import { useStaffPermissions } from '@/hooks/use-staff-permissions';
 
 export function useDashboardPermissions() {
-  const [permissions, setPermissions] = useState<string[]>([]);
-  const [plan, setPlan] = useState<PlanFeatures | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-    axios
-      .get<{ permissions?: string[]; plan?: PlanFeatures }>(
-        '/api/me/dashboard-permissions'
-      )
-      .then((res) => {
-        if (!mounted) return;
-        setPermissions(res.data.permissions ?? []);
-        setPlan(res.data.plan ?? null);
-      })
-      .catch(() => {
-        if (!mounted) return;
-        setPermissions([]);
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const { loading, permissions, plan } = useStaffPermissions();
 
   const can = useCallback(
     (moduleKey: DashboardModuleKey, action: PermissionAction) =>

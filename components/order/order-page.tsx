@@ -57,6 +57,7 @@ import {
   OrderMenuHeader,
 } from '@/components/order/order-menu-header';
 import { cn } from '@/lib/utils';
+import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { ArrowUp, Minus, Pencil, Plus, Search, X } from 'lucide-react';
 
 export type OrderPageProps = {
@@ -407,9 +408,11 @@ type OfferItem = {
 function ProductCard({
   product,
   onAdd,
+  formatMoney,
 }: {
   product: CustomerMenuProduct;
   onAdd: () => void;
+  formatMoney: (amount: number) => string;
   showCustomizeIndicator?: boolean;
 }) {
   const priceDisplay = getMenuItemDisplayPrice(product);
@@ -460,10 +463,10 @@ function ProductCard({
           ) : null}
           {hasSale ? (
             <span className="mr-2 text-sm font-normal text-[#8e8e9a] line-through">
-              €{priceDisplay.compareAt!.toFixed(2)}
+              {formatMoney(priceDisplay.compareAt!)}
             </span>
           ) : null}
-          €{priceDisplay.amount.toFixed(2)}
+          {formatMoney(priceDisplay.amount)}
         </div>
       </div>
     </button>
@@ -477,6 +480,9 @@ export default function OrderPageClient({
 }: OrderPageProps) {
   const restaurantSlug =
     orderInfo?.restaurantSlug?.trim() || orderInfo?.storeId?.trim() || '';
+  const { formatMoney } = useRestaurantRegional(
+    restaurantSlug || undefined
+  );
   const storefrontPath = restaurantSlug
     ? `/web-app/${encodeURIComponent(restaurantSlug)}`
     : '/web-app';
@@ -945,6 +951,7 @@ export default function OrderPageClient({
     <OrderCartCheckoutButton
       itemCount={cartItemCount}
       total={total}
+      formattedTotal={formatMoney(total)}
       label={t('orderSeeMyOrder')}
       onClick={() =>
         router.push(
@@ -982,7 +989,7 @@ export default function OrderPageClient({
                     {cartLineTitle(line.productName, line.variationName)}
                   </p>
                   <span className="shrink-0 text-sm font-bold text-primary">
-                    €{lineTotal(line).toFixed(2)}
+                    {formatMoney(lineTotal(line))}
                   </span>
                 </div>
 
@@ -999,7 +1006,7 @@ export default function OrderPageClient({
                         {modLine.prefix === 'branch' ? '↳ ' : '- '}
                         {modLine.name}
                         {modLine.unitPrice > 0
-                          ? ` (+€${modLine.unitPrice.toFixed(2)})`
+                          ? ` (+${formatMoney(modLine.unitPrice)})`
                           : ''}
                       </p>
                     ))}
@@ -1303,6 +1310,7 @@ export default function OrderPageClient({
                         <ProductCard
                           key={product.id}
                           product={product}
+                          formatMoney={formatMoney}
                           onAdd={() => handleProductSelect(product)}
                         />
                       ))}

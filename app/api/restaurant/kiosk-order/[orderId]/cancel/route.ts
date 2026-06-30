@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { cancelOrderPayments } from '@/lib/order-payment';
 import { getOrOpenPosShift } from '@/lib/pos-shift';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 
 export async function PATCH(
   _req: NextRequest,
@@ -61,6 +62,11 @@ export async function PATCH(
         data: { status: 'canceled' },
       });
       await cancelOrderPayments(tx, order.id);
+    });
+
+    publishOrderLifecycleUpdate({
+      restaurantId: auth.restaurantId,
+      branchId: order.branchId,
     });
 
     return NextResponse.json({ ok: true });

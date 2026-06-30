@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { getBranchScopeFromRequest, orderBranchSql } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 
 const MIN_PREP_MINUTES = 1;
@@ -186,6 +187,7 @@ export async function POST(req: NextRequest) {
       where: { id: orderId, restaurantId },
       select: {
         id: true,
+        branchId: true,
         payments: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -260,6 +262,11 @@ export async function POST(req: NextRequest) {
         });
       }, KDS_TX_OPTIONS);
 
+      publishOrderLifecycleUpdate({
+        restaurantId,
+        branchId: order.branchId,
+      });
+
       return NextResponse.json({ data: { id: activeTicket.id } }, { status: 200 });
     }
 
@@ -291,6 +298,11 @@ export async function POST(req: NextRequest) {
 
       return created;
     }, KDS_TX_OPTIONS);
+
+    publishOrderLifecycleUpdate({
+      restaurantId,
+      branchId: order.branchId,
+    });
 
     return NextResponse.json({ data: { id: ticket.id } }, { status: 201 });
   } catch (error) {

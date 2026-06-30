@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { SessionProvider } from "next-auth/react";
+import type { Session } from "next-auth";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@/components/theme-provider";
 import NextTopLoader from "nextjs-toploader";
@@ -18,6 +18,8 @@ import {
 import type { UiLanguage } from "@/lib/i18n/resources";
 import { DEFAULT_UI_LANGUAGE } from "@/lib/i18n/resources";
 import { OfflineBootstrap } from "@/components/offline/offline-bootstrap";
+import { AppSWRProvider } from "@/components/providers/app-swr-provider";
+import { AuthSessionProvider } from "@/components/providers/auth-session-provider";
 import { RestaurantBrandingProvider } from "@/components/layout/restaurant-branding-provider";
 
 /**
@@ -49,9 +51,11 @@ function UiLanguageHydrator() {
 
 export default function Providers({
   initialLanguage = DEFAULT_UI_LANGUAGE,
+  session = null,
   children,
 }: {
   initialLanguage?: UiLanguage;
+  session?: Session | null;
   children: React.ReactNode;
 }) {
   ensureI18nInitialized(initialLanguage);
@@ -65,8 +69,9 @@ export default function Providers({
         enableSystem
         disableTransitionOnChange
       >
-        <SessionProvider>
-          <RestaurantBrandingProvider>
+        <AuthSessionProvider session={session}>
+          <AppSWRProvider>
+            <RestaurantBrandingProvider>
             <NextTopLoader showSpinner={false} />
             <OfflineBootstrap />
             <UiLanguageHydrator />
@@ -82,7 +87,8 @@ export default function Providers({
             />
             <DeferredVercelMetrics />
           </RestaurantBrandingProvider>
-        </SessionProvider>
+          </AppSWRProvider>
+        </AuthSessionProvider>
       </ThemeProvider>
       </UiLanguageProvider>
     </I18nextProvider>

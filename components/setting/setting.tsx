@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import axios from 'axios';
 
 import RolesCard from './components/roles';
 import RestaurantUsersCard from './components/restaurant-users';
@@ -18,13 +17,14 @@ import {
   SETTINGS_SECTIONS,
   type SettingsSectionId,
 } from '@/constant/settingsNav';
+import { useStaffPermissions } from '@/hooks/use-staff-permissions';
 
 export function Setting() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [brandingAllowed, setBrandingAllowed] = useState(true);
-  const [roleBasedSettingsAllowed, setRoleBasedSettingsAllowed] =
-    useState(true);
+  const { plan } = useStaffPermissions();
+  const brandingAllowed = plan?.branding !== false;
+  const roleBasedSettingsAllowed = plan?.roleBasedSettings !== false;
 
   const section = useMemo(
     () => parseSettingsSection(searchParams.get('section')),
@@ -37,31 +37,6 @@ export function Setting() {
   }, [roleBasedSettingsAllowed, section]);
 
   const activeMeta = SETTINGS_SECTIONS.find((item) => item.id === activeSection);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await axios.get<{
-          data?: {
-            limits?: { branding?: boolean; roleBasedSettings?: boolean };
-          };
-        }>('/api/me/subscription-access');
-        const lim = res.data?.data?.limits;
-        if (cancelled || !lim) return;
-        setBrandingAllowed(lim.branding !== false);
-        setRoleBasedSettingsAllowed(lim.roleBasedSettings !== false);
-      } catch {
-        if (!cancelled) {
-          setBrandingAllowed(true);
-          setRoleBasedSettingsAllowed(true);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (section === 'access' && !roleBasedSettingsAllowed) {

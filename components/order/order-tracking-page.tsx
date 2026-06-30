@@ -8,6 +8,7 @@ import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaur
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 
 type TrackingResult = {
   id: string;
@@ -30,6 +31,9 @@ export function OrderTrackingPage({
   restaurantSlug?: string;
 }) {
   const router = useRouter();
+  const { formatMoney } = useRestaurantRegional(
+    restaurantSlug.trim() || undefined
+  );
   const [orderId, setOrderId] = useState(initialOrderId);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,7 +117,7 @@ export function OrderTrackingPage({
                 <strong>Payment method:</strong> {result.payment?.method ?? 'N/A'}
               </p>
               <p>
-                <strong>Total:</strong> €{result.total.toFixed(2)}
+                <strong>Total:</strong> {formatMoney(result.total)}
               </p>
               {result.customer ? (
                 <div className="rounded border p-3">

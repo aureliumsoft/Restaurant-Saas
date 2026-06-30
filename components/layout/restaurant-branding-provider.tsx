@@ -13,6 +13,10 @@ import { useSession } from 'next-auth/react';
 
 import eventBus from '@/lib/even';
 import {
+  selectStaffBootstrap,
+  useStaffBootstrapSWR,
+} from '@/hooks/use-staff-bootstrap-swr';
+import {
   applyRestaurantDocumentBranding,
   customerBrandingRouteFromLocation,
   inferCustomerSubdomainFromHost,
@@ -96,11 +100,26 @@ export function RestaurantBrandingProvider({ children }: { children: ReactNode }
     return () => window.removeEventListener('popstate', syncSearch);
   }, [pathname]);
 
+  const staffBootstrap = useStaffBootstrapSWR();
+  const staffRestaurant = selectStaffBootstrap(staffBootstrap.data)?.restaurant;
+
+  useEffect(() => {
+    const isStaff = staffRoute && sessionStatus === 'authenticated';
+    if (!isStaff || !staffRestaurant) return;
+    setRestaurantName(staffRestaurant.name?.trim() || 'Restaurant');
+    const slug = staffRestaurant.slug?.trim();
+    setRestaurantSlug(slug && slug.length > 0 ? slug : null);
+    const logo = staffRestaurant.logoUrl?.trim();
+    setLogoUrl(logo && logo.length > 0 ? logo : null);
+    setLogoFailed(false);
+  }, [staffRoute, sessionStatus, staffRestaurant]);
+
   useEffect(() => {
     const isStaff = staffRoute && sessionStatus === 'authenticated';
     const isCustomer = Boolean(customerRoute);
 
     if (!isStaff && !isCustomer) return;
+    if (isStaff && staffRestaurant) return;
 
     let cancelled = false;
 
@@ -149,12 +168,14 @@ export function RestaurantBrandingProvider({ children }: { children: ReactNode }
     void load();
     const onRefresh = () => void load();
     eventBus.on('fetchStoreData', onRefresh);
+    eventBus.on('realtime:config.branding', onRefresh);
 
     return () => {
       cancelled = true;
       eventBus.removeListener('fetchStoreData', onRefresh);
+      eventBus.removeListener('realtime:config.branding', onRefresh);
     };
-  }, [staffRoute, sessionStatus, customerRoute]);
+  }, [staffRoute, sessionStatus, customerRoute, staffRestaurant]);
 
   useEffect(() => {
     const isStaff = staffRoute && sessionStatus === 'authenticated';

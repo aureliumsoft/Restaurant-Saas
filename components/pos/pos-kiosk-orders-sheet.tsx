@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
 import { Loader2, Monitor, Pencil, Printer } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -23,26 +23,15 @@ import {
 } from '@/components/ui/sheet';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import eventBus from '@/lib/even';
+import {
+  useKioskPendingCash,
+  type KioskPendingOrderRow,
+} from '@/hooks/use-kiosk-pending-cash';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
 import type { PosOrderDetail } from '@/components/pos/pos-recent-orders-sheet';
 
-const KIOSK_ORDERS_POLL_MS = 10_000;
-
-export type KioskPendingOrderRow = {
-  id: string;
-  shortOrderId: string;
-  ticketNumber: number | null;
-  total: number;
-  status: string;
-  tableLabel: string | null;
-  createdAt: string;
-  customerName: string | null;
-  paymentMethod: string;
-  paymentAmount: number;
-  paymentStatus: string;
-  itemCount: number;
-};
+export type { KioskPendingOrderRow };
 
 type Props = {
   open: boolean;
@@ -53,7 +42,6 @@ type Props = {
   logoUrl?: string | null;
   onEditOrder: (order: PosOrderDetail) => void;
   onOrdersChanged?: () => void;
-  onPendingCountChange?: (count: number) => void;
 };
 
 export function PosKioskOrdersSheet({
@@ -65,70 +53,24 @@ export function PosKioskOrdersSheet({
   logoUrl,
   onEditOrder,
   onOrdersChanged,
-  onPendingCountChange,
 }: Props) {
   const { formatMoney, regional } = useOwnerRestaurantRegional();
-  const [orders, setOrders] = useState<KioskPendingOrderRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { orders, loading, removeOrder, confirmInBackground, refresh } =
+    useKioskPendingCash(branchId);
   const [printBusyId, setPrintBusyId] = useState<string | null>(null);
   const [editBusyId, setEditBusyId] = useState<string | null>(null);
   const [cancelBusyId, setCancelBusyId] = useState<string | null>(null);
   const [payOrder, setPayOrder] = useState<KioskPendingOrderRow | null>(null);
   const [paidInput, setPaidInput] = useState('');
   const [paying, setPaying] = useState(false);
-  const loadRequestRef = useRef(0);
-  const loadInFlightRef = useRef(false);
 
-  const loadOrders = useCallback(async (opts?: { silent?: boolean }) => {
-    if (loadInFlightRef.current) return;
-    loadInFlightRef.current = true;
-    const requestId = ++loadRequestRef.current;
-    if (!opts?.silent) setLoading(true);
-    try {
-      const res = await axios.get<{ data: KioskPendingOrderRow[] }>(
-        '/api/restaurant/kiosk-order/pending-cash',
-        { params: branchId ? { branchId } : undefined }
-      );
-      if (requestId !== loadRequestRef.current) return;
-      const list = res.data.data ?? [];
-      setOrders(list);
-      onPendingCountChange?.(list.length);
-    } catch (error) {
-      if (requestId !== loadRequestRef.current) return;
-      if (!opts?.silent) {
-        setOrders([]);
-        toast.error(apiErrorMessage(error, 'Could not load kiosk orders.'));
-      }
-    } finally {
-      loadInFlightRef.current = false;
-      if (!opts?.silent && requestId === loadRequestRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [branchId, onPendingCountChange]);
-
-  useEffect(() => {
-    if (!open) return;
-    void loadOrders();
-    const refresh = () => {
-      if (document.hidden) return;
-      void loadOrders({ silent: true });
-    };
-    const intervalId = window.setInterval(refresh, KIOSK_ORDERS_POLL_MS);
-    const onRefresh = () => refresh();
-    eventBus.on('refreshKioskOrders', onRefresh);
-    document.addEventListener('visibilitychange', refresh);
-    return () => {
-      window.clearInterval(intervalId);
-      eventBus.removeListener('refreshKioskOrders', onRefresh);
-      document.removeEventListener('visibilitychange', refresh);
-    };
-  }, [open, branchId, loadOrders]);
-
-  const notifyChanged = () => {
-    void loadOrders({ silent: true });
-    eventBus.emit('refreshRecentOrders');
-    onOrdersChanged?.();
+  const notifyChanged = (removedOrderId: string) => {
+    removeOrder(removedOrderId);
+    confirmInBackground();
+    window.setTimeout(() => {
+      eventBus.emit('refreshRecentOrders');
+      onOrdersChanged?.();
+    }, 0);
   };
 
   const fetchOrderDetail = async (orderId: string) => {
@@ -208,10 +150,10 @@ export function PosKioskOrdersSheet({
         `/api/restaurant/kiosk-order/${encodeURIComponent(orderId)}/cancel`
       );
       toast.success('Kiosk order canceled.');
-      await loadOrders();
-      notifyChanged();
+      notifyChanged(orderId);
     } catch (error) {
       toast.error(apiErrorMessage(error, 'Could not cancel order.'));
+      confirmInBackground();
     } finally {
       setCancelBusyId(null);
     }
@@ -241,23 +183,29 @@ export function PosKioskOrdersSheet({
       return;
     }
     setPaying(true);
+    const paidOrderId = payOrder.id;
     try {
       const res = await axios.post<{
         data: { paid: number; change: number; paymentStatus: string };
       }>(
-        `/api/restaurant/kiosk-order/${encodeURIComponent(payOrder.id)}/pay`,
+        `/api/restaurant/kiosk-order/${encodeURIComponent(paidOrderId)}/pay`,
         { paid }
       );
       const change = res.data.data?.change ?? payChange;
+      removeOrder(paidOrderId);
+      setPayOrder(null);
+      setPaidInput('');
       toast.success(
         `Payment completed — change ${formatMoney(change)}`
       );
-      setPayOrder(null);
-      setPaidInput('');
-      await loadOrders();
-      notifyChanged();
+      confirmInBackground();
+      window.setTimeout(() => {
+        eventBus.emit('refreshRecentOrders');
+        onOrdersChanged?.();
+      }, 0);
     } catch (error) {
       toast.error(apiErrorMessage(error, 'Could not record payment.'));
+      confirmInBackground();
     } finally {
       setPaying(false);
     }
@@ -271,6 +219,11 @@ export function PosKioskOrdersSheet({
             <SheetTitle className="flex items-center gap-2">
               <Monitor className="h-5 w-5" />
               Kiosk orders
+              {orders.length > 0 ? (
+                <span className="ml-1 rounded-full bg-fire-500 px-2 py-0.5 text-xs font-bold text-white">
+                  {orders.length}
+                </span>
+              ) : null}
             </SheetTitle>
             <SheetDescription>
               Cash kiosk orders awaiting payment. Collect cash, print, edit, or
@@ -396,7 +349,7 @@ export function PosKioskOrdersSheet({
               variant="outline"
               className="w-full"
               disabled={loading}
-              onClick={() => void loadOrders()}
+              onClick={() => void refresh()}
             >
               Refresh
             </Button>

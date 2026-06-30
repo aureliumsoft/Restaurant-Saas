@@ -24,6 +24,7 @@ import {
 import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
 import { kdsFetchErrorMessage } from '@/lib/kds-api-errors';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 
 type PendingOrder = {
@@ -86,8 +87,6 @@ function normalizeLineName(rawName: string, rawQty: number) {
 
 const MIN_CUSTOM_MINUTES = 1;
 const MAX_CUSTOM_MINUTES = 240;
-/** Matches KDS kitchen screen polling interval. */
-const REFRESH_INTERVAL_MS = 5000;
 
 export function KdsManagerBoard() {
   const { formatMoney } = useOwnerRestaurantRegional();
@@ -140,20 +139,7 @@ export function KdsManagerBoard() {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    const onBranch = () => void load();
-    window.addEventListener('branch-changed', onBranch);
-    return () => window.removeEventListener('branch-changed', onBranch);
-  }, [load]);
-
-  useEffect(() => {
-    const t = window.setInterval(() => void load(), REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(t);
-  }, [load]);
+  useRealtimeRefresh('realtime:kds.manager', () => void load());
 
   const lastUpdatedText = useMemo(() => {
     if (!lastUpdated) return '—';
@@ -269,8 +255,7 @@ export function KdsManagerBoard() {
           <h1 className="text-2xl font-semibold">KDS Manager</h1>
           <p className="text-sm text-muted-foreground">
             Choose a preset or enter custom minutes, then proceed the order to
-            making. Live · refreshes every {REFRESH_INTERVAL_MS / 1000}s · last
-            sync {lastUpdatedText}
+            making. Live · updates in real time · last sync {lastUpdatedText}
           </p>
         </div>
         <div className="flex items-center gap-2">

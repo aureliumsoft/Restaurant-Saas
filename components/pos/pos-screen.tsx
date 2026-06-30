@@ -102,6 +102,9 @@ import { cn } from '@/lib/utils';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import eventBus from '@/lib/even';
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
+import { useKioskPendingCash, revalidateKioskPendingCash } from '@/hooks/use-kiosk-pending-cash';
+import { useStaffRestaurantBranding } from '@/hooks/use-staff-permissions';
 import { MenuOfferChoiceDialog } from '@/components/order/menu-offer-choice-dialog';
 import {
   ProductCustomizeDialog,
@@ -443,8 +446,7 @@ function PosCartLineSummary({
 }
 
 const POS_ARCHIVED_ORDERS_KEY = 'pos_archived_orders_v1';
-/** Poll pending kiosk cash badge when the kiosk sheet is closed. */
-const KIOSK_PENDING_POLL_MS = 15_000;
+/** Badge count for pending kiosk cash — refreshed via SSE, not polling. */
 
 export function PosScreen() {
   const router = useRouter();
@@ -456,6 +458,18 @@ export function PosScreen() {
     isOwnerOrAdmin,
     setActiveBranch,
   } = useBranchContext();
+  const {
+    restaurantName,
+    logoUrl: staffLogoUrl,
+    themePrimaryColor: staffThemeColor,
+  } = useStaffRestaurantBranding();
+  const branding = useMemo(
+    () => ({
+      name: restaurantName || 'Restaurant',
+      logoUrl: staffLogoUrl,
+    }),
+    [restaurantName, staffLogoUrl]
+  );
   const [orderMode, setOrderMode] = useState<OrderMode>('tables');
   const [categoryId, setCategoryId] = useState<string>('all');
   const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
@@ -471,10 +485,6 @@ export function PosScreen() {
   const [orderAddress, setOrderAddress] = useState('');
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState('');
-  const [branding, setBranding] = useState<RestaurantBranding>({
-    name: 'Restaurant',
-    logoUrl: null,
-  });
   const [serviceCharges, setServiceCharges] =
     useState<RestaurantServiceCharges>(() =>
       parseRestaurantServiceCharges(undefined)
@@ -518,7 +528,8 @@ export function PosScreen() {
   const [shiftSheetOpen, setShiftSheetOpen] = useState(false);
   const [recentOrdersOpen, setRecentOrdersOpen] = useState(false);
   const [kioskOrdersOpen, setKioskOrdersOpen] = useState(false);
-  const [kioskPendingCount, setKioskPendingCount] = useState(0);
+  const posBranchId = selectedBranchId || activeBranchId || null;
+  const { count: kioskPendingCount } = useKioskPendingCash(posBranchId);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [editingOrderLabel, setEditingOrderLabel] = useState<string | null>(
     null
@@ -532,7 +543,6 @@ export function PosScreen() {
   >(null);
   const [lastShiftEndedAt, setLastShiftEndedAt] = useState<string | null>(null);
   const shiftSummaryBranchRef = useRef('');
-  const kioskPendingInFlightRef = useRef(false);
   const categoryScrollRef = useRef<HTMLDivElement>(null);
   const [clockLabel, setClockLabel] = useState('');
 
@@ -668,9 +678,12 @@ export function PosScreen() {
     }
   }, [menuLoadError]);
 
-  useEffect(() => {
-    void loadPendingKitchenOrders();
-  }, [loadPendingKitchenOrders]);
+  useRealtimeRefresh(
+    ['refreshRecentOrders', 'realtime:kds.tickets'],
+    () => {
+      void loadPendingKitchenOrders();
+    }
+  );
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
@@ -716,64 +729,16 @@ export function PosScreen() {
   }, [archivedOrders]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/restaurant', {
-          method: 'GET',
-          cache: 'no-store',
-        });
-        if (!res.ok) return;
-        const json = (await res.json()) as {
-          data?: {
-            name?: string | null;
-            logoUrl?: string | null;
-            themePrimaryColor?: string | null;
-          } | null;
-        };
-        const data = json?.data;
-        if (cancelled || !data) return;
-        setBranding({
-          name: (data.name?.trim() || 'Restaurant') as string,
-          logoUrl: data.logoUrl ?? null,
-        });
-        if (data.themePrimaryColor?.trim()) {
-          setThemePrimaryColor(data.themePrimaryColor.trim());
-        }
-      } catch {
-        // ignore branding fetch errors for printing fallback
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (staffThemeColor?.trim()) {
+      setThemePrimaryColor(staffThemeColor.trim());
+    }
+  }, [staffThemeColor]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/restaurant/branches', {
-          method: 'GET',
-          cache: 'no-store',
-        });
-        if (!res.ok) throw new Error('branches');
-        const json = (await res.json()) as { data?: BranchOption[] };
-        const list = Array.isArray(json?.data) ? json.data : [];
-        if (cancelled) return;
-        setBranches(list);
-        setSelectedBranchId((prev) => prev || list[0]?.id || '');
-      } catch {
-        if (!cancelled) {
-          setBranches([]);
-          setSelectedBranchId('');
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    const list = scopedBranches.map((b) => ({ id: b.id, name: b.name }));
+    setBranches(list);
+    setSelectedBranchId((prev) => prev || list[0]?.id || activeBranchId || '');
+  }, [scopedBranches, activeBranchId]);
 
   useEffect(() => {
     if (activeBranchId) {
@@ -987,23 +952,6 @@ export function PosScreen() {
     [applyShiftSummary]
   );
 
-  const refreshKioskPendingCount = useCallback(async (branchId: string) => {
-    if (kioskPendingInFlightRef.current) return;
-    kioskPendingInFlightRef.current = true;
-    try {
-      const res = await axios.get<{ count?: number }>(
-        '/api/restaurant/kiosk-order/pending-cash',
-        { params: { branchId, count: '1' } }
-      );
-      const count = res.data.count ?? 0;
-      setKioskPendingCount((prev) => (prev === count ? prev : count));
-    } catch {
-      setKioskPendingCount((prev) => (prev === 0 ? prev : 0));
-    } finally {
-      kioskPendingInFlightRef.current = false;
-    }
-  }, []);
-
   const handleShiftUpdated = useCallback(
     (shift: { orderCount: number } | null) => {
       setShiftOrderCount((prev) => {
@@ -1033,7 +981,6 @@ export function PosScreen() {
       setShiftOrderCount(0);
       setLastClosingCashInLocker(null);
       setLastShiftEndedAt(null);
-      setKioskPendingCount(0);
       shiftSummaryBranchRef.current = '';
       return;
     }
@@ -1042,42 +989,15 @@ export function PosScreen() {
     void refreshShiftSummary(branchId);
   }, [selectedBranchId, activeBranchId, refreshShiftSummary]);
 
-  useEffect(() => {
+  const refreshShiftOnRealtime = useCallback(() => {
     const branchId = selectedBranchId || activeBranchId || '';
-    if (!branchId) {
-      setKioskPendingCount(0);
-      return;
-    }
-    // Kiosk sheet polls the full list while open; avoid duplicate API calls.
-    if (kioskOrdersOpen) return;
+    if (!branchId) return;
+    void refreshShiftSummary(branchId);
+  }, [selectedBranchId, activeBranchId, refreshShiftSummary]);
 
-    const refresh = () => {
-      if (document.hidden) return;
-      void refreshKioskPendingCount(branchId);
-    };
-    refresh();
-
-    const intervalId = window.setInterval(refresh, KIOSK_PENDING_POLL_MS);
-
-    const onBranchChanged = () => refresh();
-    const onKioskOrdersChanged = () => refresh();
-
-    window.addEventListener('branch-changed', onBranchChanged);
-    eventBus.on('refreshKioskOrders', onKioskOrdersChanged);
-    document.addEventListener('visibilitychange', refresh);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener('branch-changed', onBranchChanged);
-      eventBus.removeListener('refreshKioskOrders', onKioskOrdersChanged);
-      document.removeEventListener('visibilitychange', refresh);
-    };
-  }, [
-    selectedBranchId,
-    activeBranchId,
-    refreshKioskPendingCount,
-    kioskOrdersOpen,
-  ]);
+  useRealtimeRefresh('refreshRecentOrders', refreshShiftOnRealtime, {
+    runOnMount: false,
+  });
 
   function printOrderReceipt(
     orderRef: string,
@@ -1682,7 +1602,7 @@ export function PosScreen() {
         setAmountPaid('');
         setCheckoutOpen(false);
         const branchId = selectedBranchId || activeBranchId || '';
-        if (branchId) void refreshKioskPendingCount(branchId);
+        if (branchId) revalidateKioskPendingCash(branchId);
         eventBus.emit('refreshKioskOrders');
         return;
       }
@@ -1953,7 +1873,7 @@ export function PosScreen() {
             type="button"
             variant="ghost"
             size="icon"
-            className={cn('h-9 w-9 rounded-xl', POS_GHOST_ICON_BTN)}
+            className={cn('relative h-9 w-9 rounded-xl', POS_GHOST_ICON_BTN)}
             title="Recent orders"
             onClick={() => setRecentOrdersOpen(true)}
           >
@@ -3399,7 +3319,6 @@ export function PosScreen() {
         branchName={selectedBranchName}
         logoUrl={branding.logoUrl}
         onEditOrder={(order) => loadOrderForEdit(order, 'kiosk')}
-        onPendingCountChange={setKioskPendingCount}
         onOrdersChanged={() => {
           eventBus.emit('refreshRecentOrders');
           const branchId = selectedBranchId || activeBranchId || '';
