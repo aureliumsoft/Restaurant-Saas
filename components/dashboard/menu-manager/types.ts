@@ -99,6 +99,7 @@ export type MenuCategoryRow = {
   name: string;
   imageUrl?: string | null;
   showInFront: boolean;
+  sortOrder: number;
   items: MenuItemRow[];
 };
 

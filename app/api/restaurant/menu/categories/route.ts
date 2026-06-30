@@ -11,6 +11,7 @@ const createCategorySchema = z
   .object({
     name: z.string().min(1, 'Name is required').max(200),
     showInFront: z.boolean().optional(),
+    sortOrder: z.number().int().min(0).optional(),
     imageUrl: z.string().max(2_800_000).optional().nullable().or(z.literal('')),
   })
   .superRefine((val, ctx) => {
@@ -87,10 +88,17 @@ export async function POST(req: NextRequest) {
       : null;
 
   try {
+    const lastCategory = await db.menuCategory.findFirst({
+      where: { restaurantId: auth.restaurant.id },
+      orderBy: { sortOrder: 'desc' },
+      select: { sortOrder: true },
+    });
+
     const created = await db.menuCategory.create({
       data: {
         name: parsed.data.name.trim(),
         showInFront: parsed.data.showInFront ?? true,
+        sortOrder: parsed.data.sortOrder ?? (lastCategory?.sortOrder ?? -1) + 1,
         imageUrl,
         restaurantId: auth.restaurant.id,
       },
@@ -99,6 +107,7 @@ export async function POST(req: NextRequest) {
         name: true,
         imageUrl: true,
         showInFront: true,
+        sortOrder: true,
       },
     });
 

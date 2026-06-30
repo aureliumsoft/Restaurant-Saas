@@ -12,6 +12,7 @@ export const runtime = 'nodejs';
 
 const bodySchema = z.object({
   provider: z.nativeEnum(CustomerPaymentProvider),
+  paymentTerminalIp: z.string().max(45).optional().nullable(),
 });
 
 export async function GET() {
@@ -49,7 +50,8 @@ export async function PUT(req: Request) {
   try {
     await setRestaurantPaymentProvider(
       session.ctx.restaurant.id,
-      parsed.data.provider
+      parsed.data.provider,
+      parsed.data.paymentTerminalIp
     );
     const data = await getRestaurantPaymentProviderDto(session.ctx.restaurant.id);
     return NextResponse.json({ data });

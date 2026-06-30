@@ -158,6 +158,8 @@ model Restaurant {
   currencyCode   String @default("EUR")
   /// ISO 3166-1 alpha-2 country (e.g. ES, PK).
   countryCode    String @default("ES")
+  /// Optional payment terminal IP address used by card-terminal integrations.
+  paymentTerminalIp String?
   ownerId        String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -448,6 +450,7 @@ model MenuCategory {
   name         String
   imageUrl     String?
   restaurantId String
+  sortOrder    Int     @default(0)
   /// When true, category and its products appear on web, kiosk, and POS browse menus.
   /// When false, products are only available via recommendation / add-on rules.
   showInFront  Boolean @default(true)
@@ -459,6 +462,8 @@ model MenuCategory {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([restaurantId, sortOrder])
 }
 
 /// Many-to-many: a product can appear in multiple menu categories.

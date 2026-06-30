@@ -13,6 +13,7 @@ const patchCategorySchema = z
   .object({
     name: z.string().min(1).max(200).optional(),
     showInFront: z.boolean().optional(),
+    sortOrder: z.number().int().min(0).optional(),
     imageUrl: z.string().max(2_800_000).optional().nullable().or(z.literal('')),
   })
   .superRefine((val, ctx) => {
@@ -115,6 +116,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const data: {
     name?: string;
     showInFront?: boolean;
+    sortOrder?: number;
     imageUrl?: string | null;
   } = {};
 
@@ -123,6 +125,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
   if (parsed.data.showInFront !== undefined) {
     data.showInFront = parsed.data.showInFront;
+  }
+  if (parsed.data.sortOrder !== undefined) {
+    data.sortOrder = parsed.data.sortOrder;
   }
   if (parsed.data.imageUrl !== undefined) {
     data.imageUrl =
@@ -144,6 +149,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         name: true,
         imageUrl: true,
         showInFront: true,
+        sortOrder: true,
       },
     });
 

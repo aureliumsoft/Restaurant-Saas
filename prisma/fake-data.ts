@@ -70,6 +70,7 @@ export function fakeRestaurant() {
     logoKey: undefined,
     mainBannerUrl: undefined,
     themePrimaryColor: undefined,
+    paymentTerminalIp: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -92,6 +93,7 @@ export function fakeRestaurantComplete() {
     onlineServiceChargeAmount: 0,
     currencyCode: 'EUR',
     countryCode: 'ES',
+    paymentTerminalIp: undefined,
     ownerId: faker.string.uuid(),
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
@@ -408,6 +410,7 @@ export function fakeMenuCategoryComplete() {
     name: faker.person.fullName(),
     imageUrl: undefined,
     restaurantId: faker.string.uuid(),
+    sortOrder: 0,
     showInFront: true,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),

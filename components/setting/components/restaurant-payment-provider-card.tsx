@@ -21,10 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 
 type PaymentProviderState = {
   restaurantId?: string;
   provider: 'NONE' | 'PAYPAL' | 'STRIPE';
+  paymentTerminalIp: string | null;
   paypal: { configured: boolean; verified: boolean };
   stripe: { configured: boolean; verified: boolean };
 };
@@ -34,12 +36,15 @@ export function RestaurantPaymentProviderCard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [state, setState] = useState<PaymentProviderState | null>(null);
+  const [terminalIp, setTerminalIp] = useState('');
 
   const load = useCallback(async () => {
     const res = await axios.get<{ data?: PaymentProviderState }>(
       '/api/restaurant/payment-provider'
     );
-    setState(res.data?.data ?? null);
+    const nextState = res.data?.data ?? null;
+    setState(nextState);
+    setTerminalIp(nextState?.paymentTerminalIp ?? '');
   }, []);
 
   useEffect(() => {
@@ -64,15 +69,43 @@ export function RestaurantPaymentProviderCard() {
     try {
       const res = await axios.put<{ data?: PaymentProviderState }>(
         '/api/restaurant/payment-provider',
-        { provider: next }
+        { provider: next, paymentTerminalIp: terminalIp.trim() || null }
       );
-      setState(res.data?.data ?? null);
+      const nextState = res.data?.data ?? null;
+      setState(nextState);
+      setTerminalIp(nextState?.paymentTerminalIp ?? '');
       toast.success('Payment method updated.');
     } catch (e: unknown) {
       const msg =
         axios.isAxiosError(e) && typeof e.response?.data?.error === 'string'
           ? e.response.data.error
           : 'Could not update payment method.';
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveTerminalIp() {
+    if (!state) return;
+    setSaving(true);
+    try {
+      const res = await axios.put<{ data?: PaymentProviderState }>(
+        '/api/restaurant/payment-provider',
+        {
+          provider: state.provider,
+          paymentTerminalIp: terminalIp.trim() || null,
+        }
+      );
+      const nextState = res.data?.data ?? null;
+      setState(nextState);
+      setTerminalIp(nextState?.paymentTerminalIp ?? '');
+      toast.success('Payment terminal IP saved.');
+    } catch (e: unknown) {
+      const msg =
+        axios.isAxiosError(e) && typeof e.response?.data?.error === 'string'
+          ? e.response.data.error
+          : 'Could not save payment terminal IP.';
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -136,6 +169,28 @@ export function RestaurantPaymentProviderCard() {
               </SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium" htmlFor="payment-terminal-ip">
+            Payment terminal IP
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              id="payment-terminal-ip"
+              value={terminalIp}
+              onChange={(e) => setTerminalIp(e.target.value)}
+              placeholder="192.168.1.50"
+              disabled={saving}
+              className="max-w-sm"
+            />
+            <Button type="button" onClick={() => void handleSaveTerminalIp()} disabled={saving}>
+              Save terminal IP
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Used for card-terminal integrations and terminal-based payments.
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">

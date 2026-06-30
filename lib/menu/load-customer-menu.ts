@@ -93,7 +93,7 @@ async function enrichRestaurantMenuForCustomer<
 >(restaurant: T, mode: CustomerMenuSelectMode) {
   const allCategories = await loadRestaurantMenuCategories({
     restaurantId: restaurant.id,
-    categorySelect: { id: true, name: true },
+    categorySelect: { id: true, name: true, sortOrder: true },
     itemSelect: buildRecommendationPoolItemSelect(mode),
     categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
   });
@@ -117,7 +117,7 @@ async function loadBySlugWithMode(slug: string, mode: CustomerMenuSelectMode) {
 
   const menus = await loadRestaurantMenuCategories({
     restaurantId: restaurant.id,
-    categorySelect: { id: true, name: true, imageUrl: true },
+    categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
     itemSelect: buildCustomerMenuItemSelect(mode),
     categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
   });
@@ -137,7 +137,7 @@ async function loadBySubdomainWithMode(
 
   const menus = await loadRestaurantMenuCategories({
     restaurantId: restaurant.id,
-    categorySelect: { id: true, name: true, imageUrl: true },
+    categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
     itemSelect: buildCustomerMenuItemSelect(mode),
     categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
   });

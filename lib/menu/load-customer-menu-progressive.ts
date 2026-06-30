@@ -133,7 +133,7 @@ async function loadRecommendationPool(
 ) {
   return loadRestaurantMenuCategories({
     restaurantId,
-    categorySelect: { id: true, name: true },
+    categorySelect: { id: true, name: true, sortOrder: true },
     itemSelect: buildRecommendationPoolItemSelect(mode),
     categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
   });
@@ -159,7 +159,7 @@ export async function loadCustomerMenuCategoriesMeta(options: {
 
     const categories = await loadRestaurantMenuCategories({
       restaurantId: restaurant.id,
-      categorySelect: { id: true, name: true, imageUrl: true },
+      categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
       itemSelect: { id: true },
       categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
     });
@@ -193,7 +193,7 @@ export async function loadCustomerMenuCategoryItems(options: {
     const category = await loadSingleCategoryWithLinkedItems({
       restaurantId: restaurant.id,
       categoryId: options.categoryId,
-      categorySelect: { id: true, name: true, imageUrl: true },
+      categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
       itemSelect: buildCustomerMenuItemSelect(mode),
       categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
     });

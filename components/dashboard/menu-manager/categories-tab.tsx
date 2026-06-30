@@ -3,7 +3,16 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { Eye, EyeOff, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import {
+  GripVertical,
+  Eye,
+  EyeOff,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +36,8 @@ import {
 } from '@/lib/menu/category-visibility';
 
 import type { MenuCategoryRow } from './types';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 
 type Props = {
   categories: MenuCategoryRow[];
@@ -44,8 +55,18 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmAddOpen, setConfirmAddOpen] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [orderedCategories, setOrderedCategories] = useState<MenuCategoryRow[]>([]);
 
   const canAdd = Boolean(name.trim()) && !adding;
+
+  useEffect(() => {
+    setOrderedCategories(
+      [...categories].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    );
+  }, [categories]);
 
   const add = async () => {
     if (!name.trim() || adding) return;
@@ -127,6 +148,37 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
     }
   };
 
+  const moveCategory = async (fromId: string, toId: string) => {
+    if (!fromId || !toId || fromId === toId) return;
+
+    const fromIndex = orderedCategories.findIndex((c) => c.id === fromId);
+    const toIndex = orderedCategories.findIndex((c) => c.id === toId);
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    const reordered = [...orderedCategories];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+
+    setOrderedCategories(reordered);
+    setDraggingId(null);
+    setReorderingId(fromId);
+    try {
+      await Promise.all(
+        reordered.map((category, position) =>
+          axios.patch(`/api/restaurant/menu/categories/${category.id}`, {
+            sortOrder: position,
+          })
+        )
+      );
+      toast.success('Category order updated');
+      await onRefresh();
+    } catch {
+      toast.error('Could not update category order');
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
   return (
     <>
       <Card>
@@ -180,18 +232,30 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
               <Loader2 className="mx-auto animate-spin text-primary" />
             </p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {categories.map((c) => (
+            <div className="space-y-3">
+              {orderedCategories.map((c) => (
                 <CategoryCard
                   key={c.id}
                   category={c}
                   toggling={togglingId === c.id}
+                  dragging={draggingId === c.id}
+                  reordering={reorderingId === c.id}
                   onRename={rename}
                   onImageChange={updateImage}
                   onToggleShowInFront={setCategoryShowInFront}
                   onDelete={(id) => {
                     setDeletingId(id);
                     setConfirmDeleteOpen(true);
+                  }}
+                  onReorder={moveCategory}
+                  activeDragId={activeDragId}
+                  onDragStart={(id) => {
+                    setDraggingId(id);
+                    setActiveDragId(id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggingId(null);
+                    setActiveDragId(null);
                   }}
                 />
               ))}
@@ -227,6 +291,8 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
         }}
         onCancel={() => setConfirmDeleteOpen(false)}
       />
+
+      
     </>
   );
 }
@@ -234,17 +300,29 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
 function CategoryCard({
   category,
   toggling,
+  dragging,
+  reordering,
   onRename,
   onImageChange,
   onToggleShowInFront,
   onDelete,
+  onReorder,
+  activeDragId,
+  onDragStart,
+  onDragEnd,
 }: {
   category: MenuCategoryRow;
   toggling: boolean;
+  dragging: boolean;
+  reordering: boolean;
   onRename: (id: string, name: string) => void;
   onImageChange: (id: string, imageUrl: string) => void;
   onToggleShowInFront: (id: string, showInFront: boolean) => void;
   onDelete: (id: string) => void;
+  onReorder: (fromId: string, toId: string) => void;
+  activeDragId: string | null;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(category.name);
@@ -293,131 +371,174 @@ function CategoryCard({
     }
   };
 
-  return (
-    <Card className="dashboard-grid-card flex flex-col overflow-hidden transition-shadow">
+ return (
+
+  <>
+  <div
+    className={`flex items-center gap-4 rounded-lg border bg-card p-4 transition-colors ${dragging ? 'border-primary bg-muted/50' : 'hover:bg-muted/30'}`}
+    draggable={!editing && !reordering}
+    onDragStart={() => onDragStart(category.id)}
+    onDragEnd={onDragEnd}
+    onDragOver={(event) => event.preventDefault()}
+    onDrop={(event) => {
+      event.preventDefault();
+      if (!activeDragId || activeDragId === category.id) {
+        onDragEnd();
+        return;
+      }
+      onReorder(activeDragId, category.id);
+    }}
+  >
+    {/* Sort */}
+    <div className="flex w-14 items-center gap-2">
+      <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab active:cursor-grabbing" />
+      <span className="text-sm font-medium">
+        {category.sortOrder + 1}
+      </span>
+    </div>
+
+    {/* Image */}
+    <div className="h-16 w-24 overflow-hidden rounded-md border bg-muted shrink-0">
       {category.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={category.imageUrl}
           alt=""
-          className="aspect-[16/7] w-full object-cover"
+          className="h-full w-full object-cover"
         />
       ) : (
-        <div className="flex aspect-[16/7] w-full items-center justify-center bg-muted text-xs text-muted-foreground">
-          No category image
+        <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+          No Image
         </div>
       )}
-      <CardHeader className="space-y-3 pb-3">
-        <div className="flex items-start justify-between gap-2">
-          {!hasProducts ? (
-            <Badge variant="outline" className="shrink-0">
-              Empty — hidden
-            </Badge>
-          ) : (
-            <Badge variant={visible ? 'default' : 'secondary'} className="shrink-0">
-              {visible ? 'Storefront' : 'Recommendations only'}
-            </Badge>
-          )}
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
-            onClick={() => onDelete(category.id)}
-            aria-label="Delete category"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-        {editing ? (
-          <div className="space-y-3">
-            <Input
-              value={val}
-              onChange={(e) => setVal(e.target.value)}
-              disabled={saving}
-              autoFocus
-              aria-label="Category name"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void saveEdits();
-                if (e.key === 'Escape') cancelEdit();
-              }}
-            />
-            <Base64ImageUploadField
-              label="Category image"
-              value={imageVal}
-              onChange={setImageVal}
-              helperText="Shown on website, kiosk, and POS."
-            />
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                className="flex-1"
-                disabled={saving || savingImage || !val.trim()}
-                onClick={() => void saveEdits()}
-              >
-                {saving || savingImage ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                ) : (
-                  'Save'
-                )}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={saving || savingImage}
-                onClick={cancelEdit}
-                aria-label="Cancel edit"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-start justify-between gap-2">
-            <CardTitle className="text-base leading-snug">{category.name}</CardTitle>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 shrink-0"
-              onClick={() => setEditing(true)}
-              aria-label="Edit category"
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-      </CardHeader>
-      <CardContent className="mt-auto flex flex-col gap-3 pt-0">
-        <p className="text-xs text-muted-foreground">
-          {category.items.length}{' '}
-          {category.items.length === 1 ? 'product' : 'products'}
-          {!hasProducts ? ' — add products to show on menu or recommendations' : ''}
-        </p>
+    </div>
+
+    {/* Name */}
+    <div className="flex-1">
+      {editing ? (
+        <Input
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+        />
+      ) : (
+        <>
+          <h3 className="font-semibold">{category.name}</h3>
+
+          <p className="text-sm text-muted-foreground">
+            {category.items.length}{" "}
+            {category.items.length === 1 ? "product" : "products"}
+          </p>
+        </>
+      )}
+    </div>
+
+    {/* Visibility */}
+    <div className="w-40">
+      {!hasProducts ? (
+        <Badge variant="outline">
+          Empty
+        </Badge>
+      ) : (
+        <Badge variant={visible ? "default" : "secondary"}>
+          {visible ? "Storefront" : "Recommendations"}
+        </Badge>
+      )}
+    </div>
+
+    {/* Actions */}
+    <div className="flex items-center gap-2">
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={() => setEditing(true)}
+      >
+        <Pencil className="h-4 w-4" />
+      </Button>
+
+      <Button
+        size="icon"
+        variant="ghost"
+        className="text-destructive"
+        onClick={() => onDelete(category.id)}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+
+    <p className="text-xs text-muted-foreground">Drag to reorder</p>
+
+    {/* Show / Hide */}
+    <Button
+      variant="outline"
+      disabled={toggling || !hasProducts}
+      onClick={() => onToggleShowInFront(category.id, !visible)}
+    >
+      {visible ? (
+        <>
+          <EyeOff className="mr-2 h-4 w-4" />
+          Hide
+        </>
+      ) : (
+        <>
+          <Eye className="mr-2 h-4 w-4" />
+          Show
+        </>
+      )}
+    </Button>
+  </div>
+
+<Dialog open={editing} onOpenChange={setEditing}>
+  <DialogContent className="sm:max-w-lg">
+    <DialogHeader>
+      <DialogTitle>Edit Category</DialogTitle>
+      <DialogDescription>
+        Update the category information.
+      </DialogDescription>
+    </DialogHeader>
+
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <Label>Name</Label>
+
+        <Input
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          disabled={saving}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void saveEdits();
+          }}
+        />
+      </div>
+
+      <Base64ImageUploadField
+        label="Category image"
+        value={imageVal}
+        onChange={setImageVal}
+        helperText="Shown on website, kiosk and POS."
+      />
+
+      <div className="flex justify-end gap-2">
         <Button
-          type="button"
           variant="outline"
-          className="w-full"
-          disabled={toggling || !hasProducts}
-          onClick={() => onToggleShowInFront(category.id, !visible)}
+          onClick={cancelEdit}
+          disabled={saving || savingImage}
         >
-          {toggling ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          ) : visible ? (
-            <>
-              <EyeOff className="mr-2 h-4 w-4" />
-              Hide from front
-            </>
-          ) : (
-            <>
-              <Eye className="mr-2 h-4 w-4" />
-              Show in front
-            </>
-          )}
+          Cancel
         </Button>
-      </CardContent>
-    </Card>
-  );
+
+        <Button
+          disabled={saving || savingImage || !val.trim()}
+          onClick={() => void saveEdits()}
+        >
+          {(saving || savingImage) && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          )}
+
+          Save Changes
+        </Button>
+      </div>
+    </div>
+  </DialogContent>
+</Dialog>
+</>
+);
 }

@@ -88,6 +88,7 @@ export async function loadRestaurantMenuCategoriesMeta(restaurantId: string) {
       id: true,
       name: true,
       showInFront: true,
+      sortOrder: true,
       imageUrl: true,
     },
     itemSelect: { id: true },
@@ -126,6 +127,7 @@ export async function loadRestaurantMenuCategoryItems(
       id: true,
       name: true,
       showInFront: true,
+      sortOrder: true,
       imageUrl: true,
     },
     itemSelect: menuItemSelect,
@@ -134,7 +136,7 @@ export async function loadRestaurantMenuCategoryItems(
 
   const allCategories = await loadRestaurantMenuCategories({
     restaurantId,
-    categorySelect: { id: true, name: true, imageUrl: true },
+    categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
     itemSelect: recommendationPoolItemSelect,
     categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
   });

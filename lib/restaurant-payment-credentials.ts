@@ -29,6 +29,7 @@ import {
 export type RestaurantPaymentProviderDto = {
   restaurantId: string;
   provider: CustomerPaymentProvider;
+  paymentTerminalIp: string | null;
   paypal: {
     configured: boolean;
     verified: boolean;
@@ -156,6 +157,7 @@ export async function getRestaurantPaymentProviderDto(
     where: { id: restaurantId },
     select: {
       customerPaymentProvider: true,
+      paymentTerminalIp: true,
       paypalCredentials: true,
       stripeCredentials: true,
     },
@@ -166,6 +168,7 @@ export async function getRestaurantPaymentProviderDto(
   return {
     restaurantId,
     provider: restaurant.customerPaymentProvider,
+    paymentTerminalIp: restaurant.paymentTerminalIp ?? null,
     paypal: paypalDto(restaurant.paypalCredentials),
     stripe: stripeDto(restaurant.stripeCredentials),
   };
@@ -173,7 +176,8 @@ export async function getRestaurantPaymentProviderDto(
 
 export async function setRestaurantPaymentProvider(
   restaurantId: string,
-  provider: CustomerPaymentProvider
+  provider: CustomerPaymentProvider,
+  paymentTerminalIp?: string | null
 ) {
   if (provider === CustomerPaymentProvider.PAYPAL) {
     const creds = await db.restaurantPayPalCredentials.findUnique({
@@ -198,7 +202,12 @@ export async function setRestaurantPaymentProvider(
 
   await db.restaurant.update({
     where: { id: restaurantId },
-    data: { customerPaymentProvider: provider },
+    data: {
+      customerPaymentProvider: provider,
+      ...(paymentTerminalIp !== undefined
+        ? { paymentTerminalIp: paymentTerminalIp?.trim() || null }
+        : {}),
+    },
   });
 }
 

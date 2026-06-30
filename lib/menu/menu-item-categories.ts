@@ -80,7 +80,10 @@ export async function loadCategoriesWithLinkedItems<
       restaurantId: options.restaurantId,
       ...options.categoryWhere,
     },
-    orderBy: { name: 'asc' },
+    orderBy: [
+      { sortOrder: 'asc' as const },
+      { name: 'asc' as const },
+    ] as Prisma.Enumerable<Prisma.MenuCategoryOrderByWithRelationInput>,
     select: options.categorySelect,
   });
 

@@ -105,6 +105,7 @@ export async function GET(req: NextRequest) {
         id: true,
         name: true,
         showInFront: true,
+        sortOrder: true,
         imageUrl: true,
       },
       itemSelect: menuItemSelect,
@@ -119,7 +120,7 @@ export async function GET(req: NextRequest) {
 
     const allCategories = await loadRestaurantMenuCategories({
       restaurantId: auth.restaurant.id,
-      categorySelect: { id: true, name: true, imageUrl: true },
+      categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
       itemSelect: recommendationPoolItemSelect,
       categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
     });
