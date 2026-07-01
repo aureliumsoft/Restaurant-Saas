@@ -668,7 +668,7 @@ export function PosScreen() {
     setThemePrimaryColor(menuMeta.themePrimaryColor?.trim() || null);
     setServiceCharges(
       (menuMeta.serviceCharges as RestaurantServiceCharges | undefined) ??
-        parseRestaurantServiceCharges(undefined)
+      parseRestaurantServiceCharges(undefined)
     );
   }, [menuMeta]);
 
@@ -1692,7 +1692,7 @@ export function PosScreen() {
         if (finalStatus !== 'completed') {
           toast.error(
             terminalMessage ||
-              'Card terminal payment was not approved. Order remains pending.'
+            'Card terminal payment was not approved. Order remains pending.'
           );
           return;
         }
@@ -1743,10 +1743,10 @@ export function PosScreen() {
     label: string;
     icon: ComponentType<{ className?: string }>;
   }[] = [
-    { id: 'tables', label: 'Table', icon: TableIcon },
-    { id: 'delivery', label: 'Delivery', icon: Truck },
-    { id: 'takeaway', label: 'Take-away', icon: ShoppingBag },
-  ];
+      { id: 'tables', label: 'Table', icon: TableIcon },
+      { id: 'delivery', label: 'Delivery', icon: Truck },
+      { id: 'takeaway', label: 'Take-away', icon: ShoppingBag },
+    ];
 
   const renderPosProductButton = (p: PosMenuProduct) => (
     <button
@@ -2058,9 +2058,9 @@ export function PosScreen() {
                 </>
               )}
               {!showCategorySections &&
-              !showProductSkeletons &&
-              !loadingMenu &&
-              filteredProducts.length === 0 ? (
+                !showProductSkeletons &&
+                !loadingMenu &&
+                filteredProducts.length === 0 ? (
                 <div className="col-span-full py-16 text-center text-sm text-muted-foreground">
                   <p>No products match this category or search.</p>
                   <Button
@@ -2604,13 +2604,13 @@ export function PosScreen() {
                                 {line.qty}x{' '}
                                 {'productName' in line
                                   ? cartLineTitle(
-                                      (line as CartLine).productName,
-                                      (line as CartLine).variationName
-                                    )
+                                    (line as CartLine).productName,
+                                    (line as CartLine).variationName
+                                  )
                                   : (line as { name?: string }).name}
                               </span>
                               {'modifiers' in line &&
-                              Array.isArray((line as CartLine).modifiers) ? (
+                                Array.isArray((line as CartLine).modifiers) ? (
                                 <span className="mt-0.5 block space-y-0.5">
                                   {cartModifierSelectionNames(
                                     (line as CartLine).modifiers
@@ -2713,72 +2713,82 @@ export function PosScreen() {
               </div>
 
               <div className="space-y-3">
-                <div className="rounded-lg border p-3">
+                <div className="rounded-lg p-3 space-y-2">
                   <div className="text-sm font-medium">Order details</div>
-                  <div className="mt-2 grid gap-2">
+                  {isTableMode ? (
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">
-                        Branch
+                        Select table
                       </label>
-                      <Input
-                        readOnly
-                        className="h-9 bg-muted/40 text-sm font-medium"
-                        value={selectedBranchName}
-                      />
-                    </div>
-                    {isTableMode ? (
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground">
-                          Select table
-                        </label>
-                        <Select value={tableId} onValueChange={setTableId}>
-                          <SelectTrigger className="h-9 bg-background">
-                            <SelectValue
-                              placeholder={
-                                tablesLoading
-                                  ? 'Loading tables…'
-                                  : diningTables.length === 0
-                                    ? 'No tables available'
-                                    : 'Select table'
-                              }
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {diningTables.map((t) => (
-                              <SelectItem key={t.id} value={t.id}>
-                                {t.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span className="tabular-nums">
-                      {formatMoney(subtotal)}
-                    </span>
-                  </div>
-                  {activeServiceChargeAmount > 0 ? (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        Service charge
-                      </span>
-                      <span className="tabular-nums">
-                        {formatMoney(activeServiceChargeAmount)}
-                      </span>
+                      <Select value={tableId} onValueChange={setTableId}>
+                        <SelectTrigger className="h-9 bg-background">
+                          <SelectValue
+                            placeholder={
+                              tablesLoading
+                                ? 'Loading tables…'
+                                : diningTables.length === 0
+                                  ? 'No tables available'
+                                  : 'Select table'
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {diningTables.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   ) : null}
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Total</span>
-                    <span className="font-semibold tabular-nums">
-                      {formatMoney(grandTotal)}
-                    </span>
-                  </div>
+
+                  {orderMode !== 'tables' ? (
+                    <div className="rounded-lg">
+                      <div className="mt-2 grid gap-2">
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">
+                            Name
+                          </label>
+                          <Input
+                            className="h-9 bg-background"
+                            value={customerName}
+                            onChange={(e) => setCustomerName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">
+                            Phone
+                          </label>
+                          <Input
+                            className="h-9 bg-background"
+                            inputMode="tel"
+                            value={customerPhone}
+                            onChange={(event) => {
+                              const value = event.target.value.replace(/\D/g, '');
+                              setCustomerPhone(value);
+                            }}
+                          />
+                        </div>
+                        {isDeliveryMode ? (
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground">
+                              Delivery address
+                            </label>
+                            <textarea
+                              className="flex min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              placeholder="Enter delivery address"
+                              value={orderAddress}
+                              onChange={(e) => setOrderAddress(e.target.value)}
+                              rows={3}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+
                   <div className="mt-2 grid gap-2">
                     {isEditingKioskOrder ? (
                       <div className="rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
@@ -2821,10 +2831,10 @@ export function PosScreen() {
                               className={cn(
                                 'w-full gap-2',
                                 cardPaymentStatus === 'success' &&
-                                  'bg-emerald-600 hover:bg-emerald-600/90',
+                                'bg-emerald-600 hover:bg-emerald-600/90',
                                 (cardPaymentStatus === 'error' ||
                                   cardPaymentStatus === 'cancelled') &&
-                                  'bg-destructive hover:bg-destructive/90'
+                                'bg-destructive hover:bg-destructive/90'
                               )}
                               disabled={
                                 cardPaymentStatus === 'processing' ||
@@ -2856,6 +2866,29 @@ export function PosScreen() {
                               )}
                             </Button>
                           ) : null}
+                        </div>
+
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Subtotal</span>
+                          <span className="tabular-nums">
+                            {formatMoney(subtotal)}
+                          </span>
+                        </div>
+                        {activeServiceChargeAmount > 0 ? (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Service charge
+                            </span>
+                            <span className="tabular-nums">
+                              {formatMoney(activeServiceChargeAmount)}
+                            </span>
+                          </div>
+                        ) : null}
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Total</span>
+                          <span className="font-semibold tabular-nums">
+                            {formatMoney(grandTotal)}
+                          </span>
                         </div>
 
                         {isCardMode ? (
@@ -2901,51 +2934,7 @@ export function PosScreen() {
                   </div>
                 </div>
 
-                {orderMode !== 'tables' ? (
-                  <div className="rounded-lg border p-3">
-                    <div className="text-sm font-medium">Customer</div>
-                    <div className="mt-2 grid gap-2">
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground">
-                          Name
-                        </label>
-                        <Input
-                          className="h-9 bg-background"
-                          value={customerName}
-                          onChange={(e) => setCustomerName(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground">
-                          Phone
-                        </label>
-                        <Input
-                          className="h-9 bg-background"
-                          inputMode="tel"
-                          value={customerPhone}
-                          onChange={(event) => {
-                            const value = event.target.value.replace(/\D/g, '');
-                            setCustomerPhone(value);
-                          }}
-                        />
-                      </div>
-                      {isDeliveryMode ? (
-                        <div className="space-y-1">
-                          <label className="text-xs text-muted-foreground">
-                            Delivery address
-                          </label>
-                          <textarea
-                            className="flex min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                            placeholder="Enter delivery address"
-                            value={orderAddress}
-                            onChange={(e) => setOrderAddress(e.target.value)}
-                            rows={3}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
+
               </div>
             </div>
           </div>
@@ -3165,7 +3154,7 @@ export function PosScreen() {
                       type="button"
                       variant={
                         kitchenPrepMinutes[kitchenSendOrder.id] === m &&
-                        !kitchenCustomMinutes.trim()
+                          !kitchenCustomMinutes.trim()
                           ? 'default'
                           : 'outline'
                       }
@@ -3260,9 +3249,9 @@ export function PosScreen() {
         productBaseUnitPrice={
           customizeProduct
             ? effectiveUnitPrice(
-                customizeProduct.price,
-                customizeProduct.salePrice
-              )
+              customizeProduct.price,
+              customizeProduct.salePrice
+            )
             : 0
         }
         attributeGroups={attributeGroupsForDialog}
