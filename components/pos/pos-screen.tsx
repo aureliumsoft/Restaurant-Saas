@@ -528,6 +528,10 @@ export function PosScreen() {
   const [shiftSheetOpen, setShiftSheetOpen] = useState(false);
   const [recentOrdersOpen, setRecentOrdersOpen] = useState(false);
   const [kioskOrdersOpen, setKioskOrdersOpen] = useState(false);
+  const [activeProductId, setActiveProductId] = useState<string | null>(null);
+  const productButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const proceedOrderButtonRef = useRef<HTMLButtonElement | null>(null);
+  const placeOrderButtonRef = useRef<HTMLButtonElement | null>(null);
   const posBranchId = selectedBranchId || activeBranchId || null;
   const { count: kioskPendingCount } = useKioskPendingCash(posBranchId);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -832,6 +836,121 @@ export function PosScreen() {
     });
   }, [categoryId, products, search]);
 
+  const showCategorySections =
+    categoryId === 'all' && !search.trim() && !categoriesLoading;
+
+  const visibleProducts = useMemo(() => {
+    return showCategorySections ? products : filteredProducts;
+  }, [products, filteredProducts, showCategorySections]);
+
+  useEffect(() => {
+    if (visibleProducts.length === 0) {
+      setActiveProductId(null);
+      return;
+    }
+    if (activeProductId == null || !visibleProducts.some((p) => p.id === activeProductId)) {
+      setActiveProductId(visibleProducts[0].id);
+    }
+  }, [visibleProducts, activeProductId]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isSearchInput = target?.matches('input[placeholder*="Search"]');
+      const focusField =
+        (target?.matches('input, textarea, select') || target?.isContentEditable) &&
+        !isSearchInput;
+
+      if (event.key === 'F9') {
+        if (checkoutOpen) {
+          if (placeOrderButtonRef.current && !placeOrderButtonRef.current.disabled) {
+            event.preventDefault();
+            placeOrderButtonRef.current.click();
+          }
+        } else if (proceedOrderButtonRef.current && !proceedOrderButtonRef.current.disabled) {
+          event.preventDefault();
+          proceedOrderButtonRef.current.click();
+        }
+        return;
+      }
+
+      // Allow arrow key navigation in search mode
+      const isArrowKey = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key);
+      if (isArrowKey && search.trim() && isSearchInput) {
+        if (visibleProducts.length === 0) return;
+
+        event.preventDefault();
+        const currentIndex = visibleProducts.findIndex((p) => p.id === activeProductId);
+        const isNext = event.key === 'ArrowRight' || event.key === 'ArrowDown';
+        const nextIndex =
+          currentIndex < 0
+            ? 0
+            : isNext
+            ? currentIndex >= visibleProducts.length - 1
+              ? 0
+              : currentIndex + 1
+            : currentIndex <= 0
+            ? visibleProducts.length - 1
+            : currentIndex - 1;
+
+        if (nextIndex !== currentIndex) {
+          const nextProduct = visibleProducts[nextIndex];
+          setActiveProductId(nextProduct.id);
+          const nextButton = productButtonRefs.current[nextProduct.id];
+          if (nextButton) {
+            nextButton.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+          }
+        }
+        return;
+      }
+
+      // Add Enter key support for search mode to select product
+      if (event.key === 'Enter' && search.trim() && isSearchInput) {
+        event.preventDefault();
+        if (activeProductId) {
+          const product = visibleProducts.find((p) => p.id === activeProductId);
+          if (product) {
+            handleProductSelect(product);
+          }
+        }
+        return;
+      }
+
+      if (focusField) return;
+      if (!isArrowKey) {
+        return;
+      }
+      if (visibleProducts.length === 0) return;
+
+      event.preventDefault();
+      const currentIndex = visibleProducts.findIndex((p) => p.id === activeProductId);
+      const isNext = event.key === 'ArrowRight' || event.key === 'ArrowDown';
+      const nextIndex =
+        currentIndex < 0
+          ? 0
+          : isNext
+          ? currentIndex >= visibleProducts.length - 1
+            ? 0
+            : currentIndex + 1
+          : currentIndex <= 0
+          ? visibleProducts.length - 1
+          : currentIndex - 1;
+
+      if (nextIndex !== currentIndex) {
+        const nextProduct = visibleProducts[nextIndex];
+        setActiveProductId(nextProduct.id);
+        const nextButton = productButtonRefs.current[nextProduct.id];
+        if (nextButton) {
+          nextButton.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+          nextButton.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [checkoutOpen, visibleProducts, activeProductId, search]);
+
   const showProductSkeletons = useMemo(() => {
     if (search.trim()) {
       return anyCategoryLoading && filteredProducts.length === 0;
@@ -855,9 +974,6 @@ export function PosScreen() {
     search,
     anyCategoryLoading,
   ]);
-
-  const showCategorySections =
-    categoryId === 'all' && !search.trim() && !categoriesLoading;
 
   const itemsCount = useMemo(() => cart.reduce((s, l) => s + l.qty, 0), [cart]);
 
@@ -1752,8 +1868,20 @@ export function PosScreen() {
     <button
       key={p.id}
       type="button"
-      onClick={() => handleProductSelect(p)}
-      className={POS_PRODUCT_CARD}
+      ref={(el) => {
+        productButtonRefs.current[p.id] = el;
+      }}
+      onClick={() => {
+        setActiveProductId(p.id);
+        handleProductSelect(p);
+      }}
+      onFocus={() => setActiveProductId(p.id)}
+      className={cn(
+        POS_PRODUCT_CARD,
+        activeProductId === p.id &&
+          'border-fire-500/70 ring-2 ring-fire-500/20 shadow-lg shadow-fire-500/10'
+      )}
+      tabIndex={0}
     >
       <div className="aspect-square w-full overflow-hidden rounded-xl bg-muted">
         {p.imageUrl ? (
@@ -1858,13 +1986,20 @@ export function PosScreen() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder={
-              categoryId === 'all'
-                ? 'Search all products...'
-                : 'Search in this category...'
+              search.trim()
+                ? 'Press ↑↓ to navigate • Enter to select'
+                : categoryId === 'all'
+                  ? 'Search all products...'
+                  : 'Search in this category...'
             }
-            className={cn('h-10 rounded-xl pl-9', POS_INPUT_CLASS)}
+            className={cn(
+              'h-10 rounded-xl pl-9 pr-3',
+              search.trim() && 'ring-1 ring-fire-500/30',
+              POS_INPUT_CLASS
+            )}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            title={search.trim() ? 'Use arrow keys to navigate search results and press Enter to add to cart' : ''}
           />
         </div>
 
@@ -2388,6 +2523,7 @@ export function PosScreen() {
                 POS_ACCENT_BTN
               )}
               disabled={cart.length === 0 || savingOrder || terminalProcessing}
+              ref={proceedOrderButtonRef}
               onClick={() => {
                 resetCardPayment();
                 setPaymentMode('cash');
@@ -2395,7 +2531,7 @@ export function PosScreen() {
                 setCheckoutOpen(true);
               }}
             >
-              {editingOrderId ? 'Update order' : 'Proceed Order'}
+              {editingOrderId ? 'Update order (f9)' : 'Proceed Order (f9)'}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
@@ -2952,6 +3088,7 @@ export function PosScreen() {
             </Button>
 
             <Button
+              ref={placeOrderButtonRef}
               type="button"
               className="w-full"
               disabled={
@@ -2992,7 +3129,7 @@ export function PosScreen() {
                   <>
                     <Check className="h-4 w-4 mr-2" />{' '}
                     <span>
-                      {editingOrderId ? 'Update order' : 'Place Order'}
+                      {editingOrderId ? 'Update order (f9)' : 'Place Order (f9)'}
                     </span>
                   </>
                 )}

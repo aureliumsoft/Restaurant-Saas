@@ -186,9 +186,9 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
-          <label htmlFor="new-category-name" className="text-sm font-medium">
-            Category Name
-          </label>
+            <label htmlFor="new-category-name" className="text-sm font-medium">
+              Category Name
+            </label>
             <Input
               placeholder="New category name"
               value={name}
@@ -205,6 +205,17 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
               onChange={setImageUrl}
               helperText="Optional — shown on website, kiosk, and POS."
             />
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border accent-primary"
+                checked={showInFront}
+                onChange={(e) => setShowInFront(e.target.checked)}
+              />
+              <span>Show in front on (website, kiosk, POS)</span>
+            </label>
+
             <Button
               type="button"
               disabled={!canAdd}
@@ -217,15 +228,6 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
               )}
               {adding ? 'Adding…' : 'Add category'}
             </Button>
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-border accent-primary"
-                checked={showInFront}
-                onChange={(e) => setShowInFront(e.target.checked)}
-              />
-              <span>Show in front (website, kiosk, POS)</span>
-            </label>
           </div>
           {loading ? (
             <p className="text-sm text-muted-foreground">
@@ -292,7 +294,7 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
         onCancel={() => setConfirmDeleteOpen(false)}
       />
 
-      
+
     </>
   );
 }
@@ -371,174 +373,174 @@ function CategoryCard({
     }
   };
 
- return (
+  return (
 
-  <>
-  <div
-    className={`flex items-center gap-4 rounded-lg border bg-card p-4 transition-colors ${dragging ? 'border-primary bg-muted/50' : 'hover:bg-muted/30'}`}
-    draggable={!editing && !reordering}
-    onDragStart={() => onDragStart(category.id)}
-    onDragEnd={onDragEnd}
-    onDragOver={(event) => event.preventDefault()}
-    onDrop={(event) => {
-      event.preventDefault();
-      if (!activeDragId || activeDragId === category.id) {
-        onDragEnd();
-        return;
-      }
-      onReorder(activeDragId, category.id);
-    }}
-  >
-    {/* Sort */}
-    <div className="flex w-14 items-center gap-2">
-      <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab active:cursor-grabbing" />
-      <span className="text-sm font-medium">
-        {category.sortOrder + 1}
-      </span>
-    </div>
-
-    {/* Image */}
-    <div className="h-16 w-24 overflow-hidden rounded-md border bg-muted shrink-0">
-      {category.imageUrl ? (
-        <img
-          src={category.imageUrl}
-          alt=""
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-          No Image
+    <>
+      <div
+        className={`flex items-center gap-4 rounded-lg border bg-card p-4 transition-colors ${dragging ? 'border-primary bg-muted/50' : 'hover:bg-muted/30'}`}
+        draggable={!editing && !reordering}
+        onDragStart={() => onDragStart(category.id)}
+        onDragEnd={onDragEnd}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          if (!activeDragId || activeDragId === category.id) {
+            onDragEnd();
+            return;
+          }
+          onReorder(activeDragId, category.id);
+        }}
+      >
+        {/* Sort */}
+        <div className="flex w-14 items-center gap-2">
+          <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab active:cursor-grabbing" />
+          <span className="text-sm font-medium">
+            {category.sortOrder + 1}
+          </span>
         </div>
-      )}
-    </div>
 
-    {/* Name */}
-    <div className="flex-1">
-      {editing ? (
-        <Input
-          value={val}
-          onChange={(e) => setVal(e.target.value)}
-        />
-      ) : (
-        <>
-          <h3 className="font-semibold">{category.name}</h3>
+        {/* Image */}
+        <div className="h-16 w-24 overflow-hidden rounded-md border bg-muted shrink-0">
+          {category.imageUrl ? (
+            <img
+              src={category.imageUrl}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+              No Image
+            </div>
+          )}
+        </div>
 
-          <p className="text-sm text-muted-foreground">
-            {category.items.length}{" "}
-            {category.items.length === 1 ? "product" : "products"}
-          </p>
-        </>
-      )}
-    </div>
+        {/* Name */}
+        <div className="flex-1">
+          {editing ? (
+            <Input
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+            />
+          ) : (
+            <>
+              <h3 className="font-semibold">{category.name}</h3>
 
-    {/* Visibility */}
-    <div className="w-40">
-      {!hasProducts ? (
-        <Badge variant="outline">
-          Empty
-        </Badge>
-      ) : (
-        <Badge variant={visible ? "default" : "secondary"}>
-          {visible ? "Storefront" : "Recommendations"}
-        </Badge>
-      )}
-    </div>
+              <p className="text-sm text-muted-foreground">
+                {category.items.length}{" "}
+                {category.items.length === 1 ? "product" : "products"}
+              </p>
+            </>
+          )}
+        </div>
 
-    {/* Actions */}
-    <div className="flex items-center gap-2">
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={() => setEditing(true)}
-      >
-        <Pencil className="h-4 w-4" />
-      </Button>
+        {/* Visibility */}
+        <div className="w-40">
+          {!hasProducts ? (
+            <Badge variant="outline">
+              Empty
+            </Badge>
+          ) : (
+            <Badge variant={visible ? "default" : "secondary"}>
+              {visible ? "Storefront" : "Recommendations"}
+            </Badge>
+          )}
+        </div>
 
-      <Button
-        size="icon"
-        variant="ghost"
-        className="text-destructive"
-        onClick={() => onDelete(category.id)}
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </div>
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setEditing(true)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
 
-    <p className="text-xs text-muted-foreground">Drag to reorder</p>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="text-destructive"
+            onClick={() => onDelete(category.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
 
-    {/* Show / Hide */}
-    <Button
-      variant="outline"
-      disabled={toggling || !hasProducts}
-      onClick={() => onToggleShowInFront(category.id, !visible)}
-    >
-      {visible ? (
-        <>
-          <EyeOff className="mr-2 h-4 w-4" />
-          Hide
-        </>
-      ) : (
-        <>
-          <Eye className="mr-2 h-4 w-4" />
-          Show
-        </>
-      )}
-    </Button>
-  </div>
+        <p className="text-xs text-muted-foreground">Drag to reorder</p>
 
-<Dialog open={editing} onOpenChange={setEditing}>
-  <DialogContent className="sm:max-w-lg">
-    <DialogHeader>
-      <DialogTitle>Edit Category</DialogTitle>
-      <DialogDescription>
-        Update the category information.
-      </DialogDescription>
-    </DialogHeader>
-
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <Label>Name</Label>
-
-        <Input
-          value={val}
-          onChange={(e) => setVal(e.target.value)}
-          disabled={saving}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void saveEdits();
-          }}
-        />
-      </div>
-
-      <Base64ImageUploadField
-        label="Category image"
-        value={imageVal}
-        onChange={setImageVal}
-        helperText="Shown on website, kiosk and POS."
-      />
-
-      <div className="flex justify-end gap-2">
+        {/* Show / Hide */}
         <Button
           variant="outline"
-          onClick={cancelEdit}
-          disabled={saving || savingImage}
+          disabled={toggling || !hasProducts}
+          onClick={() => onToggleShowInFront(category.id, !visible)}
         >
-          Cancel
-        </Button>
-
-        <Button
-          disabled={saving || savingImage || !val.trim()}
-          onClick={() => void saveEdits()}
-        >
-          {(saving || savingImage) && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          {visible ? (
+            <>
+              <EyeOff className="mr-2 h-4 w-4" />
+              Hide
+            </>
+          ) : (
+            <>
+              <Eye className="mr-2 h-4 w-4" />
+              Show
+            </>
           )}
-
-          Save Changes
         </Button>
       </div>
-    </div>
-  </DialogContent>
-</Dialog>
-</>
-);
+
+      <Dialog open={editing} onOpenChange={setEditing}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Category</DialogTitle>
+            <DialogDescription>
+              Update the category information.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <Label>Name</Label>
+
+              <Input
+                value={val}
+                onChange={(e) => setVal(e.target.value)}
+                disabled={saving}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveEdits();
+                }}
+              />
+            </div>
+
+            <Base64ImageUploadField
+              label="Category image"
+              value={imageVal}
+              onChange={setImageVal}
+              helperText="Shown on website, kiosk and POS."
+            />
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={cancelEdit}
+                disabled={saving || savingImage}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                disabled={saving || savingImage || !val.trim()}
+                onClick={() => void saveEdits()}
+              >
+                {(saving || savingImage) && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }

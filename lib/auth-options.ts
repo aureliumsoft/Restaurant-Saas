@@ -206,6 +206,12 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+  pages: {
+    signIn: '/login',
+    signOut: '/login',
+    error: '/login',
+    newUser: '/dashboard',
+  },
   secret:
     process.env.NEXTAUTH_SECRET ??
     (process.env.NODE_ENV === "production" ? undefined : "dev-nextauth-secret"),

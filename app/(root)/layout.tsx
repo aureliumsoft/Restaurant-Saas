@@ -96,7 +96,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
 
   useEffect(() => {
     if (!permissionsChecked) return;
-    if (pathname === '/no-access') return;
+    if (pathname === '/no-access' || pathname === '/dashboard') return;
     const moduleKey = moduleKeyForPath(pathname ?? '/');
     if (!moduleKey) return;
     if (!allowedModuleKeys.has(moduleKey)) {

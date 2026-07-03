@@ -38,8 +38,8 @@ function roleDefaultPath(
 
 /**
  * Where to send the user after sign-in.
- * Platform admins (`ADMIN_EMAIL` / etc., or JWT `role === ADMIN`) go to SaaS admin even
- * with no `roleId` yet (Google/new users allowed).
+ * Platform admins (`ADMIN_EMAIL` / etc., or JWT `role === ADMIN`) go to SaaS admin.
+ * All other users go directly to dashboard where role is checked for content display.
  */
 function postLoginPath(
   user:
@@ -56,13 +56,11 @@ function postLoginPath(
 ): string {
   if (hasExplicitCallback) return callbackUrl;
 
+  // Platform admins go to admin dashboard
   if (isPlatformAdminSession(user)) return '/admin/dashboard';
 
-  const legacyRole = user?.role ?? undefined;
-  const roleId = user?.roleId;
-  if (roleId == null || roleId === '') return '/';
-
-  return roleDefaultPath(user, user?.roleName, legacyRole);
+  // All other users go to dashboard - role-based content is shown there
+  return '/dashboard';
 }
 
 function LoginForm() {
@@ -93,7 +91,7 @@ function LoginForm() {
     setLoading(true);
     try {
       await signIn('google', {
-        callbackUrl: hasExplicitCallback ? callbackUrl : '/login',
+        callbackUrl: '/dashboard',
       });
     } catch (e: any) {
       toast.error(e?.message ?? 'Failed to sign in with Google.');
