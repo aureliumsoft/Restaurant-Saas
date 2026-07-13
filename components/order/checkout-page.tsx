@@ -29,6 +29,7 @@ import {
   writeCutleryPreference,
   writeOrderCommentPreference,
 } from '@/lib/online-order-preferences';
+import { readOrderSchedule } from '@/lib/order-time-slots';
 
 function formatOrderApiError(body: unknown): string {
   if (!body || typeof body !== 'object') {
@@ -258,6 +259,8 @@ export default function CheckoutPageClient({
       return;
     }
 
+    const schedule = readOrderSchedule(orderId);
+
     setSubmitting(true);
     try {
       const result = await submitCustomerOrder({
@@ -287,6 +290,13 @@ export default function CheckoutPageClient({
         total: grandTotal,
         cutlery,
         comment: comment.trim() || undefined,
+        schedule: schedule
+          ? {
+              mode: schedule.mode,
+              slot: schedule.slot || undefined,
+              slotDateTime: schedule.slotDateTime || undefined,
+            }
+          : undefined,
       });
 
       if (result.status === 'queued') {
@@ -352,6 +362,13 @@ export default function CheckoutPageClient({
       total: grandTotal,
       cutlery,
       comment: comment.trim() || undefined,
+      schedule: readOrderSchedule(orderId)
+        ? {
+            mode: readOrderSchedule(orderId)?.mode ?? 'asap',
+            slot: readOrderSchedule(orderId)?.slot || undefined,
+            slotDateTime: readOrderSchedule(orderId)?.slotDateTime || undefined,
+          }
+        : undefined,
       paymentStatus: 'completed' as const,
       paymentMethod,
     };

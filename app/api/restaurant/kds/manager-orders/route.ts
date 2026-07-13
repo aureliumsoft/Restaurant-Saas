@@ -46,6 +46,9 @@ export async function GET(_req: NextRequest) {
         tableLabel: true,
         cutleryRequested: true,
         customerComment: true,
+        orderScheduleMode: true,
+        orderScheduleSlot: true,
+        orderScheduleAt: true,
         createdAt: true,
         customer: { select: { name: true, phone: true } },
         items: {

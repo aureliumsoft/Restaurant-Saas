@@ -67,6 +67,12 @@ const orderInfoSchema = z.object({
   restaurantSlug: z.string().optional(),
 });
 
+const orderScheduleSchema = z.object({
+  mode: z.enum(['asap', 'later']).optional().default('asap'),
+  slot: z.string().max(60).optional(),
+  slotDateTime: z.string().datetime().optional(),
+});
+
 const postSchema = z.object({
   restaurantSlug: z.string().min(1).max(200),
   orderType: z.enum(['delivery', 'pickUp']),
@@ -76,6 +82,7 @@ const postSchema = z.object({
   total: z.number().finite().nonnegative(),
   cutlery: z.boolean(),
   comment: z.string().max(2000).optional(),
+  schedule: orderScheduleSchema.optional(),
   paymentStatus: z.enum(['pending', 'completed']).optional(),
   paymentMethod: z.string().min(1).max(100).optional(),
 }).superRefine((data, ctx) => {
@@ -184,6 +191,7 @@ export async function POST(req: NextRequest) {
     total,
     cutlery,
     comment,
+    schedule,
     paymentStatus,
     paymentMethod,
   } =
@@ -290,6 +298,9 @@ export async function POST(req: NextRequest) {
               address: addressSnapshot || null,
               cutleryRequested: cutlery,
               customerComment: comment?.trim() || null,
+              orderScheduleMode: schedule?.mode ?? 'asap',
+              orderScheduleSlot: schedule?.slot?.trim() || null,
+              orderScheduleAt: schedule?.slotDateTime ? new Date(schedule.slotDateTime) : null,
               taxAmount: 0,
               discountAmount: 0,
               serviceChargeAmount,

@@ -48,6 +48,8 @@ export async function GET(req: NextRequest) {
             name: true,
             address: true,
             phone: true,
+            openingHours: true,
+            slotDurationMinutes: true,
           },
         },
       },

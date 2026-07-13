@@ -12,6 +12,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { buildCustomerLightSurfaceVars } from '@/lib/restaurant-theme';
+import type { BranchOpeningHours } from '@/lib/order-time-slots';
 
 const ORDER_ACCENT_GOLD = '#f5d76e';
 
@@ -20,6 +21,7 @@ type OrderStoreInfoSheetProps = {
   onOpenChange: (open: boolean) => void;
   locationTitle: string;
   address: string;
+  branchHours?: BranchOpeningHours | null;
 };
 
 type MapCoords = {
@@ -27,7 +29,17 @@ type MapCoords = {
   lon: number;
 };
 
-const DEFAULT_OPENING_HOURS = '11:00 - 23:59';
+function normalizeDayTime(value: string | undefined | null): string {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  const trimmed = value.trim();
+  if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
+    const [hours, minutes] = trimmed.split(':').map(Number);
+    if (Number.isFinite(hours) && Number.isFinite(minutes)) {
+      return `${String(Math.min(23, Math.max(0, hours))).padStart(2, '0')}:${String(Math.min(59, Math.max(0, minutes))).padStart(2, '0')}`;
+    }
+  }
+  return '';
+}
 
 function buildOsmEmbedUrl(coords: MapCoords) {
   const { lat, lon } = coords;
@@ -43,6 +55,7 @@ export function OrderStoreInfoSheet({
   onOpenChange,
   locationTitle,
   address,
+  branchHours,
 }: OrderStoreInfoSheetProps) {
   const { i18n, t } = useTranslation();
   const [coords, setCoords] = useState<MapCoords | null>(null);
@@ -95,12 +108,38 @@ export function OrderStoreInfoSheet({
   }, [open, trimmedAddress]);
 
   const openingHoursRows = useMemo(() => {
-    return Array.from({ length: 7 }, (_, index) => {
-      const date = new Date(2024, 0, 1 + index);
+    const byDay = new Map<
+      number,
+      { isOpen: boolean; openTime: string; closeTime: string }
+    >();
+    if (Array.isArray(branchHours)) {
+      for (const entry of branchHours) {
+        if (typeof entry?.dayOfWeek !== 'number') continue;
+        byDay.set(entry.dayOfWeek, {
+          isOpen: entry.isOpen === true,
+          openTime: normalizeDayTime(entry.openTime),
+          closeTime: normalizeDayTime(entry.closeTime),
+        });
+      }
+    }
+
+    return Array.from({ length: 7 }, (_, dayOfWeek) => {
+      // Sunday-first labels matching Branch.dayOfWeek (0 = Sunday).
+      const date = new Date(2024, 0, 7 + dayOfWeek);
       const day = date.toLocaleDateString(i18n.language, { weekday: 'long' });
-      return { day, hours: DEFAULT_OPENING_HOURS };
+      const hours = byDay.get(dayOfWeek);
+      if (!hours?.isOpen) {
+        return { day, hours: t('branchClosed'), closed: true };
+      }
+      const openTime = hours.openTime || '—';
+      const closeTime = hours.closeTime || '—';
+      return {
+        day,
+        hours: `${openTime} - ${closeTime}`,
+        closed: false,
+      };
     });
-  }, [i18n.language]);
+  }, [branchHours, i18n.language, t]);
 
   const directionsUrl = trimmedAddress
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
@@ -204,7 +243,13 @@ export function OrderStoreInfoSheet({
                     style={{ color: ORDER_ACCENT_GOLD }}
                     strokeWidth={2}
                   />
-                  <span className="shrink-0 font-medium">{row.hours}</span>
+                  <span
+                    className={`shrink-0 font-medium ${
+                      row.closed ? 'text-[#8e8e9a]' : ''
+                    }`}
+                  >
+                    {row.hours}
+                  </span>
                 </div>
               ))}
             </div>

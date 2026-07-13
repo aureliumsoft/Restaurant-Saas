@@ -39,6 +39,7 @@ import { cn } from '@/lib/utils';
 import { buildCustomerLightSurfaceVars } from '@/lib/restaurant-theme';
 import {
   generateOrderTimeSlots,
+  isBranchClosedToday,
   readOrderSchedule,
   writeOrderSchedule,
   type OrderSchedule,
@@ -69,6 +70,13 @@ type OrderMenuHeaderProps = {
   deliveryAddress?: string | null;
   backHref: string;
   className?: string;
+  branchHours?: Array<{
+    dayOfWeek: number;
+    isOpen: boolean;
+    openTime: string;
+    closeTime: string;
+  }> | null;
+  slotDurationMinutes?: number;
 };
 
 export function OrderMenuHeader({
@@ -82,6 +90,8 @@ export function OrderMenuHeader({
   deliveryAddress,
   backHref,
   className,
+  branchHours,
+  slotDurationMinutes = 30,
 }: OrderMenuHeaderProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
@@ -90,35 +100,65 @@ export function OrderMenuHeader({
   const [methodChangeOpen, setMethodChangeOpen] = useState(false);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
   const [storeInfoOpen, setStoreInfoOpen] = useState(false);
-  const timeSlots = useMemo(() => generateOrderTimeSlots(), []);
+  const timeSlots = useMemo(
+    () =>
+      generateOrderTimeSlots(branchHours, {
+        intervalMinutes: slotDurationMinutes,
+      }),
+    [branchHours, slotDurationMinutes]
+  );
+  const branchClosed =
+    isBranchClosedToday(branchHours) || timeSlots.length === 0;
   const [schedule, setSchedule] = useState<OrderSchedule>({
     mode: 'asap',
     slot: '',
   });
 
   useEffect(() => {
+    if (branchClosed) {
+      setSchedule({ mode: 'asap', slot: '' });
+      return;
+    }
     const saved = readOrderSchedule(orderId);
     if (saved) {
+      const stillValid =
+        !saved.slotDateTime ||
+        timeSlots.some((slot) => slot.startAt === saved.slotDateTime);
+      if (saved.mode === 'later' && !stillValid) {
+        const next = {
+          mode: 'later' as const,
+          slot: timeSlots[0]?.label ?? '',
+          slotDateTime: timeSlots[0]?.startAt,
+        };
+        setSchedule(next);
+        writeOrderSchedule(orderId, next);
+        return;
+      }
       setSchedule(saved);
       return;
     }
     setSchedule({
       mode: 'asap',
-      slot: timeSlots[0] ?? '',
+      slot: timeSlots[0]?.label ?? '',
+      slotDateTime: timeSlots[0]?.startAt,
     });
-  }, [orderId, timeSlots]);
+  }, [orderId, timeSlots, branchClosed]);
 
   const handleSaveSchedule = (next: OrderSchedule) => {
     setSchedule(next);
     writeOrderSchedule(orderId, next);
   };
 
-  const schedulePrimaryLabel =
-    schedule.mode === 'asap' ? t('orderAsap') : t('orderForLater');
-  const scheduleSecondaryLabel =
-    schedule.mode === 'asap'
-      ? timeSlots[0] || t('orderTimeRangePlaceholder')
-      : schedule.slot || timeSlots[0] || t('orderTimeRangePlaceholder');
+  const schedulePrimaryLabel = branchClosed
+    ? t('branchClosed')
+    : schedule.mode === 'asap'
+      ? t('orderAsap')
+      : t('orderForLater');
+  const scheduleSecondaryLabel = branchClosed
+    ? t('branchClosedHint')
+    : schedule.mode === 'asap'
+      ? timeSlots[0]?.label || t('orderTimeRangePlaceholder')
+      : schedule.slot || timeSlots[0]?.label || t('orderTimeRangePlaceholder');
 
   const handleConfirmOrderMethodChange = () => {
     if (typeof window !== 'undefined') {
@@ -312,20 +352,36 @@ export function OrderMenuHeader({
 
           <div className="flex min-w-0 flex-1 items-center px-3 py-3 sm:px-4">
             <div className="min-w-0">
-              <button
-                type="button"
-                className="inline-flex max-w-full items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white sm:text-xs"
-                onClick={() => setTimePickerOpen(true)}
-              >
-                <span className="truncate">{schedulePrimaryLabel}</span>
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white" />
-              </button>
-              <p
-                className="mt-1 truncate text-[10px] font-medium sm:text-xs"
-                style={{ color: ORDER_ACCENT_GOLD }}
-              >
-                {scheduleSecondaryLabel}
-              </p>
+              {branchClosed ? (
+                <>
+                  <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-white sm:text-xs">
+                    {schedulePrimaryLabel}
+                  </p>
+                  <p
+                    className="mt-1 truncate text-[10px] font-medium sm:text-xs"
+                    style={{ color: ORDER_ACCENT_GOLD }}
+                  >
+                    {scheduleSecondaryLabel}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="inline-flex max-w-full items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white sm:text-xs"
+                    onClick={() => setTimePickerOpen(true)}
+                  >
+                    <span className="truncate">{schedulePrimaryLabel}</span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white" />
+                  </button>
+                  <p
+                    className="mt-1 truncate text-[10px] font-medium sm:text-xs"
+                    style={{ color: ORDER_ACCENT_GOLD }}
+                  >
+                    {scheduleSecondaryLabel}
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -377,10 +433,12 @@ export function OrderMenuHeader({
       </AlertDialog>
 
       <OrderTimePickerDialog
-        open={timePickerOpen}
+        open={timePickerOpen && !branchClosed}
         onOpenChange={setTimePickerOpen}
         schedule={schedule}
         onSave={handleSaveSchedule}
+        branchHours={branchHours}
+        slotDurationMinutes={slotDurationMinutes}
       />
 
       <OrderStoreInfoSheet
@@ -388,6 +446,7 @@ export function OrderMenuHeader({
         onOpenChange={setStoreInfoOpen}
         locationTitle={branchLabel}
         address={storeAddress?.trim() || ''}
+        branchHours={branchHours}
       />
     </header>
   );

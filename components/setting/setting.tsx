@@ -86,7 +86,6 @@ export function Setting() {
               {activeSection === 'basic' ? (
                 <>
                   <CustomerEntryLinks />
-                  <RestaurantRegionalSettingsCard />
                   <RestaurantBrandingCard brandingAllowed={brandingAllowed} />
                 </>
               ) : null}
@@ -105,6 +104,7 @@ export function Setting() {
               {activeSection === 'payments' ? (
                 <>
                   <RestaurantServiceChargesCard />
+                  <RestaurantRegionalSettingsCard />
                   <RestaurantPaymentProviderCard />
                 </>
               ) : null}

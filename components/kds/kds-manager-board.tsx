@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
+  ArrowUpRight,
   Check,
   CheckCircle2,
   Loader2,
@@ -38,6 +39,9 @@ type PendingOrder = {
   sourceType: string;
   cutleryRequested: boolean;
   customerComment: string | null;
+  orderScheduleMode: string | null;
+  orderScheduleSlot: string | null;
+  orderScheduleAt: string | null;
   createdAt: string;
   paymentStatus: string | null;
   paymentMethod: string | null;
@@ -262,6 +266,7 @@ export function KdsManagerBoard() {
           <Button asChild variant="default">
             <Link href="/kds-screen" target="_blank">
               Open KDS Screen
+              <ArrowUpRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
           <Button
@@ -332,6 +337,15 @@ export function KdsManagerBoard() {
                     <p className="text-xs text-muted-foreground">
                       {new Date(o.createdAt).toLocaleString()}
                     </p>
+                    {o.orderScheduleMode === 'later' && o.orderScheduleAt ? (
+                      <p className="text-xs font-medium text-primary">
+                        Scheduled for {new Date(o.orderScheduleAt).toLocaleString()}
+                      </p>
+                    ) : (
+                      <p className="text-xs font-medium text-primary">
+                        As soon as possible
+                      </p>
+                    )}
                     <OrderCustomerExtras
                       cutleryRequested={o.cutleryRequested}
                       customerComment={o.customerComment}
@@ -445,6 +459,13 @@ export function KdsManagerBoard() {
                       <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
                         Collect payment at POS before sending this order to the
                         kitchen.
+                      </p>
+                    ) : null}
+
+                    {o.orderScheduleMode === 'later' && o.orderScheduleAt ? (
+                      <p className="text-xs text-muted-foreground">
+                        This order will only be sent to the kitchen after{' '}
+                        {new Date(o.orderScheduleAt).toLocaleString()}.
                       </p>
                     ) : null}
 

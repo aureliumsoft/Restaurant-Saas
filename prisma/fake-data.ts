@@ -211,6 +211,8 @@ export function fakeBranchComplete() {
     name: faker.person.fullName(),
     address: undefined,
     phone: undefined,
+    openingHours: [],
+    slotDurationMinutes: 30,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -623,6 +625,8 @@ export function fakeOrder() {
     address: undefined,
     customerComment: undefined,
     tableLabel: undefined,
+    orderScheduleSlot: undefined,
+    orderScheduleAt: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -648,6 +652,9 @@ export function fakeOrderComplete() {
     diningTableId: undefined,
     tableLabel: undefined,
     posShiftId: undefined,
+    orderScheduleMode: 'asap',
+    orderScheduleSlot: undefined,
+    orderScheduleAt: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };

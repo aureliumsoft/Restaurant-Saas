@@ -59,6 +59,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { ArrowUp, Minus, Pencil, Plus, Search, X } from 'lucide-react';
+import type { BranchOpeningHours } from '@/lib/order-time-slots';
 
 export type OrderPageProps = {
   orderType: 'delivery' | 'pickUp';
@@ -501,6 +502,8 @@ export default function OrderPageClient({
     null
   );
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [branchHours, setBranchHours] = useState<BranchOpeningHours | null>(null);
+  const [slotDurationMinutes, setSlotDurationMinutes] = useState(30);
   const { t, i18n } = useTranslation();
   const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
 
@@ -719,6 +722,52 @@ export default function OrderPageClient({
     if (bannerOffers.length === 0) return;
     setCurrentOffer((prev) => prev % bannerOffers.length);
   }, [bannerOffers]);
+
+  useEffect(() => {
+    const branchId = orderInfo?.storeId?.trim();
+    if (!branchId) {
+      setBranchHours(null);
+      setSlotDurationMinutes(30);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/customer/branches?slug=' + encodeURIComponent(restaurantSlug || ''), {
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const json = (await res.json().catch(() => ({}))) as {
+          data?: Array<{
+            id?: string;
+            openingHours?: BranchOpeningHours | null;
+            slotDurationMinutes?: number | null;
+          }>;
+        };
+        const branch = (json.data ?? []).find((item) => item.id === branchId);
+        if (!cancelled) {
+          setBranchHours(branch?.openingHours ?? null);
+          setSlotDurationMinutes(
+            branch?.slotDurationMinutes === 15 ||
+              branch?.slotDurationMinutes === 30 ||
+              branch?.slotDurationMinutes === 60
+              ? branch.slotDurationMinutes
+              : 30
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setBranchHours(null);
+          setSlotDurationMinutes(30);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orderInfo?.storeId, restaurantSlug]);
 
   const addToCart = (
     product: CustomerMenuProduct,
@@ -1173,6 +1222,8 @@ export default function OrderPageClient({
         storeAddress={orderInfo?.storeAddress}
         deliveryAddress={orderInfo?.address}
         backHref={storefrontPath}
+        branchHours={branchHours}
+        slotDurationMinutes={slotDurationMinutes}
       />
 
       <div

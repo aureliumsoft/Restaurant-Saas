@@ -23,14 +23,82 @@ import {
   X,
 } from 'lucide-react';
 import { useStaffPermissions } from '@/hooks/use-staff-permissions';
+import {
+  DEFAULT_SLOT_DURATION_MINUTES,
+  SLOT_DURATION_OPTIONS,
+  normalizeSlotDurationMinutes,
+  type BranchOpeningHours,
+  type SlotDurationMinutes,
+} from '@/lib/order-time-slots';
 
 type BranchRow = {
   id: string;
   name: string;
   address: string | null;
   phone: string | null;
+  openingHours: BranchOpeningHours | null;
+  slotDurationMinutes?: number | null;
   createdAt: string;
 };
+
+const weekdayLabels = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+
+function createDefaultOpeningHours(): BranchOpeningHours {
+  return Array.from({ length: 7 }, (_, dayOfWeek) => ({
+    dayOfWeek,
+    isOpen: false,
+    openTime: '',
+    closeTime: '',
+  }));
+}
+
+function normalizeOpeningHours(
+  openingHours: BranchOpeningHours | null | undefined
+): BranchOpeningHours {
+  const defaults = createDefaultOpeningHours();
+  if (!Array.isArray(openingHours) || openingHours.length === 0) {
+    return defaults;
+  }
+
+  const merged = new Map<number, BranchOpeningHours[number]>();
+  openingHours.forEach((entry) => {
+    if (typeof entry?.dayOfWeek === 'number') {
+      const isOpen = entry.isOpen === true;
+      merged.set(entry.dayOfWeek, {
+        dayOfWeek: entry.dayOfWeek,
+        isOpen,
+        openTime: isOpen && typeof entry.openTime === 'string' ? entry.openTime : '',
+        closeTime:
+          isOpen && typeof entry.closeTime === 'string' ? entry.closeTime : '',
+      });
+    }
+  });
+
+  return defaults.map((entry) => merged.get(entry.dayOfWeek) ?? entry);
+}
+
+function formatOpeningHoursSummary(openingHours: BranchOpeningHours | null | undefined) {
+  const normalized = normalizeOpeningHours(openingHours);
+  const enabledDays = normalized.filter((entry) => entry.isOpen);
+  if (enabledDays.length === 0) {
+    return 'Closed all week';
+  }
+
+  const first = enabledDays[0];
+  const label = `${weekdayLabels[first.dayOfWeek]} ${first.openTime}–${first.closeTime}`;
+  if (enabledDays.length === 1) {
+    return label;
+  }
+  return `${label} + ${enabledDays.length - 1} more`;
+}
 
 export function BranchedPage() {
   const { plan } = useStaffPermissions();
@@ -43,6 +111,11 @@ export function BranchedPage() {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [openingHours, setOpeningHours] = useState<BranchOpeningHours>(
+    createDefaultOpeningHours()
+  );
+  const [slotDurationMinutes, setSlotDurationMinutes] =
+    useState<SlotDurationMinutes>(DEFAULT_SLOT_DURATION_MINUTES);
 
   const [confirmAddOpen, setConfirmAddOpen] = useState(false);
   const [confirmEditOpen, setConfirmEditOpen] = useState(false);
@@ -79,6 +152,16 @@ export function BranchedPage() {
     setName('');
     setAddress('');
     setPhone('');
+    setOpeningHours(createDefaultOpeningHours());
+    setSlotDurationMinutes(DEFAULT_SLOT_DURATION_MINUTES);
+  }
+
+  function updateOpeningHour(dayOfWeek: number, patch: Partial<BranchOpeningHours[number]>) {
+    setOpeningHours((current) =>
+      current.map((entry) =>
+        entry.dayOfWeek === dayOfWeek ? { ...entry, ...patch } : entry
+      )
+    );
   }
 
   function startEdit(branch: BranchRow) {
@@ -86,6 +169,10 @@ export function BranchedPage() {
     setName(branch.name);
     setAddress(branch.address ?? '');
     setPhone(branch.phone ?? '');
+    setOpeningHours(normalizeOpeningHours(branch.openingHours));
+    setSlotDurationMinutes(
+      normalizeSlotDurationMinutes(branch.slotDurationMinutes)
+    );
   }
 
   async function createBranch() {
@@ -107,6 +194,8 @@ export function BranchedPage() {
         name: trimmed,
         address: address.trim(),
         phone: phone.trim(),
+        openingHours,
+        slotDurationMinutes,
       });
       toast.success('Branch created');
       resetForm();
@@ -137,6 +226,8 @@ export function BranchedPage() {
         name: trimmed,
         address: address.trim(),
         phone: phone.trim(),
+        openingHours,
+        slotDurationMinutes,
       });
       toast.success('Branch updated');
       resetForm();
@@ -221,6 +312,93 @@ export function BranchedPage() {
               onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
             />
           </div>
+          <div className="rounded-lg border p-3 space-y-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-medium">Weekly opening hours</p>
+                <p className="text-xs text-muted-foreground">
+                  Set the hours that customers can choose for later orders.
+                </p>
+              </div>
+              <label className="flex flex-col gap-1 text-sm sm:min-w-[180px]">
+                <span className="font-medium">Slot duration</span>
+                <select
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  value={slotDurationMinutes}
+                  onChange={(event) =>
+                    setSlotDurationMinutes(
+                      normalizeSlotDurationMinutes(Number(event.target.value))
+                    )
+                  }
+                >
+                  {SLOT_DURATION_OPTIONS.map((minutes) => (
+                    <option key={minutes} value={minutes}>
+                      {minutes} minutes
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-muted-foreground">
+                  Order page time slots use this length.
+                </span>
+              </label>
+            </div>
+            <div className="space-y-2">
+              {openingHours.map((entry) => {
+                const isClosed = !entry.isOpen;
+                return (
+                  <div
+                    key={entry.dayOfWeek}
+                    className="grid gap-2 sm:grid-cols-[140px_90px_120px_120px] items-center"
+                  >
+                    <span className="text-sm">{weekdayLabels[entry.dayOfWeek]}</span>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={isClosed}
+                        onChange={(event) => {
+                          const closed = event.target.checked;
+                          updateOpeningHour(entry.dayOfWeek, {
+                            isOpen: !closed,
+                            openTime: closed ? '' : entry.openTime || '09:00',
+                            closeTime: closed ? '' : entry.closeTime || '17:00',
+                          });
+                        }}
+                      />
+                      Close
+                    </label>
+                    {isClosed ? (
+                      <>
+                        <Input type="time" value="" disabled placeholder="—" />
+                        <Input type="time" value="" disabled placeholder="—" />
+                      </>
+                    ) : (
+                      <>
+                        <Input
+                          type="time"
+                          value={entry.openTime}
+                          onChange={(event) =>
+                            updateOpeningHour(entry.dayOfWeek, {
+                              openTime: event.target.value,
+                            })
+                          }
+                        />
+                        <Input
+                          type="time"
+                          value={entry.closeTime}
+                          onChange={(event) =>
+                            updateOpeningHour(entry.dayOfWeek, {
+                              closeTime: event.target.value,
+                            })
+                          }
+                        />
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-2">
             {activeId ? (
               <>
@@ -325,6 +503,11 @@ export function BranchedPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {b.phone || 'No phone'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatOpeningHoursSummary(b.openingHours)}
+                      {' · '}
+                      {normalizeSlotDurationMinutes(b.slotDurationMinutes)} min slots
                     </p>
                     <div className="mt-2">
                       <Button

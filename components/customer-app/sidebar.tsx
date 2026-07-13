@@ -22,6 +22,11 @@ import {
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WEB_CUSTOMER_TAKEAWAY_NAME } from '@/lib/web-customer';
+import {
+  getBranchCloseTimeToday,
+  isBranchOpenNow,
+  type BranchOpeningHours,
+} from '@/lib/order-time-slots';
 
 function splitAddressLines(address: string): [string, string] {
   const parts = address
@@ -38,6 +43,7 @@ type Store = {
   address: string;
   phone?: string;
   collectionFrom?: string;
+  openingHours?: BranchOpeningHours | null;
 };
 
 type SidebarProps = {
@@ -90,6 +96,8 @@ export function Sidebar({
 
   const selectDeliveryBranch = (storeId: string) => {
     setSelectedStoreId(storeId);
+    const store = activeStores?.find((s) => s.id === storeId);
+    if (!isBranchOpenNow(store?.openingHours)) return;
     setDeliveryInfoOpen(true);
   };
 
@@ -116,12 +124,21 @@ export function Sidebar({
           return;
         }
         setActiveStores(
-          rows.map((b: { id: unknown; name?: unknown; address?: unknown; phone?: unknown }) => ({
-            id: String(b.id),
-            name: String(b.name || 'Branch'),
-            address: String(b.address || 'No address'),
-            phone: b.phone ? String(b.phone) : undefined,
-          }))
+          rows.map(
+            (b: {
+              id: unknown;
+              name?: unknown;
+              address?: unknown;
+              phone?: unknown;
+              openingHours?: BranchOpeningHours | null;
+            }) => ({
+              id: String(b.id),
+              name: String(b.name || 'Branch'),
+              address: String(b.address || 'No address'),
+              phone: b.phone ? String(b.phone) : undefined,
+              openingHours: Array.isArray(b.openingHours) ? b.openingHours : null,
+            })
+          )
         );
       } catch {
         if (!cancelled) setActiveStores([]);
@@ -337,6 +354,12 @@ export function Sidebar({
       <p className="text-xs font-semibold uppercase tracking-wide text-[#64748b]">
         {t('selectBranch')}
       </p>
+      {!selectedStoreId ? (
+        <div className="flex items-center gap-2 rounded-xl border border-[#ececf0] bg-[#f8fafc] px-3 py-2 text-sm text-[#8e8e9a]">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />
+          <span>{t('branchClosed')} · {t('selectBranchToContinue')}</span>
+        </div>
+      ) : null}
       <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
         {branchesLoading && (
           <Loader2 className="mx-auto h-4 w-4 animate-spin text-primary" />
@@ -344,7 +367,18 @@ export function Sidebar({
         {!branchesLoading && activeStores?.length === 0 && (
           <p className="text-xs text-[#64748b]">{t('noBranchesTakeaway')}</p>
         )}
-        {activeStores?.map((store) => (
+        {activeStores?.map((store) => {
+          const openNow = isBranchOpenNow(store.openingHours);
+          const closeTime = getBranchCloseTimeToday(store.openingHours);
+          const methodLabel =
+            mode === 'delivery' ? t('delivery') : t('takeAwayLabel');
+          const statusLabel = openNow
+            ? t('orderMethodAvailableTill', {
+                method: methodLabel,
+                time: closeTime ?? '',
+              })
+            : t('branchClosed');
+          return (
           <button
             key={store.id}
             type="button"
@@ -362,10 +396,19 @@ export function Sidebar({
             <div className="min-w-0 flex-1 pr-2">
               <p className="text-sm font-semibold text-[#0f172a]">{store.name}</p>
               <p className="mt-0.5 text-xs text-[#64748b]">{store.address}</p>
+              <div className="mt-2 flex items-center gap-2 text-xs text-[#64748b]">
+                <span
+                  className={`h-2 w-2 shrink-0 rounded-full ${
+                    openNow ? 'bg-emerald-500' : 'bg-rose-500'
+                  }`}
+                />
+                <span>{statusLabel}</span>
+              </div>
             </div>
             <IconChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[#94a3b8]" />
           </button>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -562,9 +605,27 @@ export function Sidebar({
               {t('noBranchesTakeaway')}
             </p>
           ) : null}
+          {!branchesLoading && !selectedStoreId && (activeStores?.length ?? 0) > 0 ? (
+            <div className="flex items-center gap-2 rounded-2xl border border-[#ececf0] bg-[#f8fafc] px-4 py-3 text-sm text-[#8e8e9a]">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />
+              <span>
+                {t('branchClosed')} · {t('selectBranchToContinue')}
+              </span>
+            </div>
+          ) : null}
           {activeStores?.map((store) => {
             const [line1, line2] = splitAddressLines(store.address);
             const selected = selectedStoreId === store.id;
+            const openNow = isBranchOpenNow(store.openingHours);
+            const closeTime = getBranchCloseTimeToday(store.openingHours);
+            const methodLabel =
+              mode === 'delivery' ? t('delivery') : t('takeAwayLabel');
+            const statusLabel = openNow
+              ? t('orderMethodAvailableTill', {
+                  method: methodLabel,
+                  time: closeTime ?? '',
+                })
+              : t('branchClosed');
 
             return (
               <button
@@ -590,15 +651,24 @@ export function Sidebar({
                   <p className="text-sm leading-relaxed text-[#8e8e9a]">{line2}</p>
                 ) : null}
                 <div className="mt-3 flex items-center gap-2 text-sm text-[#8e8e9a]">
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                  <span>{t('takeawayCollectionAvailable')}</span>
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${
+                      openNow ? 'bg-emerald-500' : 'bg-rose-500'
+                    }`}
+                  />
+                  <span>{statusLabel}</span>
                 </div>
               </button>
             );
           })}
         </div>
 
-        {mode === 'delivery' && selectedStoreId && deliveryAddress.trim() ? (
+        {mode === 'delivery' &&
+        selectedStoreId &&
+        deliveryAddress.trim() &&
+        isBranchOpenNow(
+          activeStores?.find((s) => s.id === selectedStoreId)?.openingHours
+        ) ? (
           <Button
             className="h-12 w-full rounded-2xl text-sm font-semibold"
             onClick={() => setDeliveryInfoOpen(true)}
@@ -607,7 +677,11 @@ export function Sidebar({
           </Button>
         ) : null}
 
-        {mode === 'takeaway' && selectedStoreId ? (
+        {mode === 'takeaway' &&
+        selectedStoreId &&
+        isBranchOpenNow(
+          activeStores?.find((s) => s.id === selectedStoreId)?.openingHours
+        ) ? (
           <Button
             className="h-12 w-full rounded-2xl text-sm font-semibold"
             onClick={handleTakeawayProceed}

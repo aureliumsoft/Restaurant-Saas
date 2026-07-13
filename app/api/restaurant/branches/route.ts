@@ -7,10 +7,19 @@ import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { branchCapacityAllows } from '@/lib/subscription-plan-features';
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from '@/lib/subscription-plan-enforcement';
 
+const openingHourSchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
+  isOpen: z.boolean(),
+  openTime: z.string().trim().max(5).optional().default(''),
+  closeTime: z.string().trim().max(5).optional().default(''),
+});
+
 const createBranchSchema = z.object({
   name: z.string().trim().min(1).max(120),
   address: z.string().trim().max(500).optional().or(z.literal('')),
   phone: z.string().trim().max(60).optional().or(z.literal('')),
+  openingHours: z.array(openingHourSchema).optional().default([]),
+  slotDurationMinutes: z.union([z.literal(15), z.literal(30), z.literal(60)]).optional().default(30),
 });
 
 export async function GET(_req: NextRequest) {
@@ -31,6 +40,8 @@ export async function GET(_req: NextRequest) {
         name: true,
         address: true,
         phone: true,
+        openingHours: true,
+        slotDurationMinutes: true,
         createdAt: true,
       },
     });
@@ -77,12 +88,16 @@ export async function POST(req: NextRequest) {
         name: parsed.data.name.trim(),
         address: parsed.data.address?.trim() || null,
         phone: parsed.data.phone?.trim() || null,
+        openingHours: parsed.data.openingHours,
+        slotDurationMinutes: parsed.data.slotDurationMinutes,
       },
       select: {
         id: true,
         name: true,
         address: true,
         phone: true,
+        openingHours: true,
+        slotDurationMinutes: true,
         createdAt: true,
       },
     });

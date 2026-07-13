@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Branch" ADD COLUMN IF NOT EXISTS "slotDurationMinutes" INTEGER NOT NULL DEFAULT 30;
