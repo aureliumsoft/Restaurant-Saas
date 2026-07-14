@@ -49,7 +49,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
 
       try {
         const metaRes = await fetch('/api/restaurant/menu/categories', {
-          cache: 'no-store',
+          cache: 'default',
         });
         const metaBody = (await metaRes.json().catch(() => ({}))) as {
           data?: {
@@ -91,6 +91,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
         setCategories(initial);
         setCategoriesLoading(false);
 
+        // One category at a time — progressive paint, faster per-request work on server.
         for (const category of initial) {
           if (isStale()) return;
 
@@ -103,7 +104,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
           try {
             const itemsRes = await fetch(
               `/api/restaurant/menu/categories/${encodeURIComponent(category.id)}`,
-              { cache: 'no-store' }
+              { cache: 'default' }
             );
             const itemsBody = (await itemsRes.json().catch(() => ({}))) as {
               data?: { items?: TItem[] };

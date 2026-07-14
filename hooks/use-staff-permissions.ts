@@ -13,7 +13,8 @@ export function useStaffAccessGate() {
   const { data, error, isLoading, isValidating } = useStaffBootstrapSWR();
   const bootstrap = selectStaffBootstrap(data);
 
-  const ready = Boolean(bootstrap) && !isLoading;
+  // Cached/fallback payload counts as ready; background revalidate can continue.
+  const ready = Boolean(bootstrap);
   const failed = Boolean(error) && !bootstrap && !isLoading;
 
   return {

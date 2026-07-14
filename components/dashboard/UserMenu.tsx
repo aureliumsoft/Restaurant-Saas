@@ -12,6 +12,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { clearStaffBootstrapSessionCache } from '@/lib/query/bootstrap-fetcher';
 
 export default function UserMenu({
   className,
@@ -56,6 +57,7 @@ export default function UserMenu({
 
   const handleLogout = async () => {
     setLoggingOut(true);
+    clearStaffBootstrapSessionCache();
     await signOut({ callbackUrl: '/' });
   };
 

@@ -17,6 +17,7 @@ import {
 } from '@/lib/menu/load-customer-menu';
 import { loadSingleCategoryWithLinkedItems } from '@/lib/menu/menu-item-categories';
 import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
+import { withRecommendationPoolCache } from '@/lib/menu/recommendation-pool-cache';
 import {
   parseRestaurantServiceCharges,
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
@@ -131,12 +132,16 @@ async function loadRecommendationPool(
   restaurantId: string,
   mode: CustomerMenuSelectMode
 ) {
-  return loadRestaurantMenuCategories({
-    restaurantId,
-    categorySelect: { id: true, name: true, sortOrder: true },
-    itemSelect: buildRecommendationPoolItemSelect(mode),
-    categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
-  });
+  return withRecommendationPoolCache(
+    `customer:${restaurantId}:${mode}`,
+    () =>
+      loadRestaurantMenuCategories({
+        restaurantId,
+        categorySelect: { id: true, name: true, sortOrder: true },
+        itemSelect: buildRecommendationPoolItemSelect(mode),
+        categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
+      })
+  );
 }
 
 function restaurantMetaPayload<
@@ -157,21 +162,22 @@ export async function loadCustomerMenuCategoriesMeta(options: {
     const restaurant = await resolveRestaurant(options.slug, options.subdomain);
     if (!restaurant) return null;
 
-    const categories = await loadRestaurantMenuCategories({
-      restaurantId: restaurant.id,
-      categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
-      itemSelect: { id: true },
-      categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
+    // Category WHERE already requires products — skip joining every item id.
+    const categories = await db.menuCategory.findMany({
+      where: {
+        restaurantId: restaurant.id,
+        ...CUSTOMER_MENU_CATEGORY_WHERE,
+      },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, name: true, sortOrder: true, imageUrl: true },
     });
 
-    const menus = categories
-      .filter((c) => (c.items?.length ?? 0) > 0)
-      .map((c) => ({
-        id: c.id,
-        name: c.name,
-        imageUrl: c.imageUrl,
-        items: [],
-      }));
+    const menus = categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      imageUrl: c.imageUrl,
+      items: [],
+    }));
 
     return {
       ...restaurantMetaPayload(restaurant),
@@ -190,16 +196,23 @@ export async function loadCustomerMenuCategoryItems(options: {
     const restaurant = await resolveRestaurant(options.slug, options.subdomain);
     if (!restaurant) return null;
 
-    const category = await loadSingleCategoryWithLinkedItems({
-      restaurantId: restaurant.id,
-      categoryId: options.categoryId,
-      categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
-      itemSelect: buildCustomerMenuItemSelect(mode),
-      categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
-    });
+    const [category, pool] = await Promise.all([
+      loadSingleCategoryWithLinkedItems({
+        restaurantId: restaurant.id,
+        categoryId: options.categoryId,
+        categorySelect: {
+          id: true,
+          name: true,
+          sortOrder: true,
+          imageUrl: true,
+        },
+        itemSelect: buildCustomerMenuItemSelect(mode),
+        categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
+      }),
+      loadRecommendationPool(restaurant.id, mode),
+    ]);
     if (!category) return null;
 
-    const pool = await loadRecommendationPool(restaurant.id, mode);
     const enriched = applyProductRecommendationPools(
       { menus: [category] },
       pool

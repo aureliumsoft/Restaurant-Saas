@@ -7,6 +7,7 @@ import {
 import { RECOMMENDATION_SOURCE_CATEGORY_WHERE } from '@/lib/menu/category-visibility';
 import { loadSingleCategoryWithLinkedItems } from '@/lib/menu/menu-item-categories';
 import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
+import { withRecommendationPoolCache } from '@/lib/menu/recommendation-pool-cache';
 import {
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
   parseRestaurantServiceCharges,
@@ -82,29 +83,29 @@ export async function loadRestaurantMenuCategoriesMeta(restaurantId: string) {
   });
   if (!restaurantMeta) return null;
 
-  const categories = await loadRestaurantMenuCategories({
-    restaurantId,
-    categorySelect: {
+  const categories = await db.menuCategory.findMany({
+    where: {
+      restaurantId,
+      showInFront: true,
+      OR: [{ itemLinks: { some: {} } }, { items: { some: {} } }],
+    },
+    orderBy: { sortOrder: 'asc' },
+    select: {
       id: true,
       name: true,
       showInFront: true,
       sortOrder: true,
       imageUrl: true,
     },
-    itemSelect: { id: true },
   });
 
-  const menus = categories
-    .filter(
-      (c) => c.showInFront !== false && (c.items?.length ?? 0) > 0
-    )
-    .map((c) => ({
-      id: c.id,
-      name: c.name,
-      showInFront: c.showInFront,
-      imageUrl: c.imageUrl,
-      items: [],
-    }));
+  const menus = categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    showInFront: c.showInFront,
+    imageUrl: c.imageUrl,
+    items: [],
+  }));
 
   return withServiceChargesPayload({
     ...restaurantMeta,
@@ -118,28 +119,35 @@ export async function loadRestaurantMenuCategoryItems(
   restaurantId: string,
   categoryId: string
 ) {
-  const categoryIdsByItem = await loadCategoryIdsByItem(restaurantId);
-
-  const category = await loadSingleCategoryWithLinkedItems({
-    restaurantId,
-    categoryId,
-    categorySelect: {
-      id: true,
-      name: true,
-      showInFront: true,
-      sortOrder: true,
-      imageUrl: true,
-    },
-    itemSelect: menuItemSelect,
-  });
+  const [categoryIdsByItem, category, allCategories] = await Promise.all([
+    loadCategoryIdsByItem(restaurantId),
+    loadSingleCategoryWithLinkedItems({
+      restaurantId,
+      categoryId,
+      categorySelect: {
+        id: true,
+        name: true,
+        showInFront: true,
+        sortOrder: true,
+        imageUrl: true,
+      },
+      itemSelect: menuItemSelect,
+    }),
+    withRecommendationPoolCache(`pos:${restaurantId}`, () =>
+      loadRestaurantMenuCategories({
+        restaurantId,
+        categorySelect: {
+          id: true,
+          name: true,
+          sortOrder: true,
+          imageUrl: true,
+        },
+        itemSelect: recommendationPoolItemSelect,
+        categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
+      })
+    ),
+  ]);
   if (!category || category.showInFront === false) return null;
-
-  const allCategories = await loadRestaurantMenuCategories({
-    restaurantId,
-    categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
-    itemSelect: recommendationPoolItemSelect,
-    categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
-  });
 
   const itemsWithCategoryIds = category.items.map((item) =>
     mapMenuItemWithCategoryIds(item, categoryIdsByItem)

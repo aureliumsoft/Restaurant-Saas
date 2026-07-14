@@ -6,6 +6,10 @@ import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query
 
 type RouteContext = { params: Promise<{ categoryId: string }> };
 
+const MENU_CACHE_HEADERS = {
+  'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+};
+
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
     const { categoryId } = await context.params;
@@ -28,7 +32,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Category not found.' }, { status: 404 });
     }
 
-    return NextResponse.json({ data }, { status: 200 });
+    return NextResponse.json(
+      { data },
+      { status: 200, headers: MENU_CACHE_HEADERS }
+    );
   } catch (error) {
     console.error('customer menu category items', error);
     return NextResponse.json(

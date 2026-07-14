@@ -119,7 +119,12 @@ export function RestaurantBrandingProvider({ children }: { children: ReactNode }
     const isCustomer = Boolean(customerRoute);
 
     if (!isStaff && !isCustomer) return;
-    if (isStaff && staffRestaurant) return;
+    // Staff branding comes from bootstrap — don't race a second /api/restaurant
+    // while bootstrap is still in flight.
+    if (isStaff) {
+      if (staffBootstrap.isLoading && !staffRestaurant) return;
+      if (staffRestaurant) return;
+    }
 
     let cancelled = false;
 
@@ -128,6 +133,7 @@ export function RestaurantBrandingProvider({ children }: { children: ReactNode }
         let url: string | null = null;
 
         if (isStaff) {
+          // Only after bootstrap settled without a restaurant (edge / failure).
           url = '/api/restaurant';
         } else if (customerRoute?.slug) {
           url = `/api/customer/restaurant?slug=${encodeURIComponent(customerRoute.slug)}`;
@@ -175,7 +181,13 @@ export function RestaurantBrandingProvider({ children }: { children: ReactNode }
       eventBus.removeListener('fetchStoreData', onRefresh);
       eventBus.removeListener('realtime:config.branding', onRefresh);
     };
-  }, [staffRoute, sessionStatus, customerRoute, staffRestaurant]);
+  }, [
+    staffRoute,
+    sessionStatus,
+    customerRoute,
+    staffRestaurant,
+    staffBootstrap.isLoading,
+  ]);
 
   useEffect(() => {
     const isStaff = staffRoute && sessionStatus === 'authenticated';

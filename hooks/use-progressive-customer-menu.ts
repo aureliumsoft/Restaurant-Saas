@@ -59,7 +59,7 @@ export function useProgressiveCustomerMenu<TItem>({
       setError(null);
 
       try {
-        const metaRes = await fetch(categoriesUrl, { cache: 'no-store' });
+        const metaRes = await fetch(categoriesUrl, { cache: 'default' });
         const metaBody = (await metaRes.json().catch(() => ({}))) as {
           data?: Record<string, unknown> | null;
           error?: string;
@@ -97,11 +97,21 @@ export function useProgressiveCustomerMenu<TItem>({
         setCategories(initial);
         setCategoriesLoading(false);
 
+        // One category at a time — first categories paint ASAP; later ones follow.
         for (const category of initial) {
           if (isStale()) return;
 
           const itemsUrl = categoryItemsUrl(category.id);
-          if (!itemsUrl) continue;
+          if (!itemsUrl) {
+            setCategories((prev) =>
+              prev.map((c) =>
+                c.id === category.id
+                  ? { ...c, loaded: true, loading: false }
+                  : c
+              )
+            );
+            continue;
+          }
 
           setCategories((prev) =>
             prev.map((c) =>
@@ -110,7 +120,7 @@ export function useProgressiveCustomerMenu<TItem>({
           );
 
           try {
-            const itemsRes = await fetch(itemsUrl, { cache: 'no-store' });
+            const itemsRes = await fetch(itemsUrl, { cache: 'default' });
             const itemsBody = (await itemsRes.json().catch(() => ({}))) as {
               data?: { items?: TItem[] };
               error?: string;
