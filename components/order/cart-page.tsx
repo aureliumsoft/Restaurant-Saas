@@ -29,6 +29,10 @@ import {
   cartModifierDisplayLines,
 } from '@/lib/cart-line-display';
 import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
+import {
+  onlineCartStorageKey,
+  writeCartToLocalStorage,
+} from '@/lib/cart-storage';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
 import { CutleryOption } from '@/components/order/cutlery-option';
@@ -258,7 +262,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
 
   const updateCart = (next: CartLine[]) => {
     setCart(next);
-    localStorage.setItem(`cart-${orderId}`, JSON.stringify(next));
+    writeCartToLocalStorage(onlineCartStorageKey(orderId), next);
   };
 
   const adjustQuantity = (lineId: string, delta: number) => {

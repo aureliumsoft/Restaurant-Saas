@@ -43,6 +43,11 @@ import {
   cartModifierDisplayLines,
 } from '@/lib/cart-line-display';
 import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
+import {
+  compactCartImageUrl,
+  onlineCartStorageKey,
+  writeCartToLocalStorage,
+} from '@/lib/cart-storage';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { setUiLanguage } from '@/lib/i18n/client';
 import type { UiLanguage } from '@/lib/i18n/resources';
@@ -651,7 +656,7 @@ export default function OrderPageClient({
 
   useEffect(() => {
     if (!mounted) return;
-    localStorage.setItem(`cart-${orderId}`, JSON.stringify(cart));
+    writeCartToLocalStorage(onlineCartStorageKey(orderId), cart);
   }, [cart, mounted, orderId]);
 
   useEffect(() => {
@@ -793,7 +798,7 @@ export default function OrderPageClient({
         menuItemId: product.id,
         productName: product.name,
         description: product.description ?? null,
-        imageUrl: product.imageUrl ?? null,
+        imageUrl: compactCartImageUrl(product.imageUrl),
         baseUnitPrice,
         quantity: 1,
         variationId,

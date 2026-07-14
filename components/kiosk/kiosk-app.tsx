@@ -63,6 +63,7 @@ import {
   cartPersonalizeSelectionNames,
 } from '@/lib/cart-line-display';
 import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
+import { compactCartImageUrl, writeCartToLocalStorage } from '@/lib/cart-storage';
 import { cn } from '@/lib/utils';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import { setUiLanguage } from '@/lib/i18n/client';
@@ -287,10 +288,7 @@ function loadCart(slug: string, branchId: string): CartLine[] {
 }
 
 function saveCart(slug: string, branchId: string, lines: CartLine[]) {
-  localStorage.setItem(
-    kioskCartStorageKey(slug, branchId),
-    JSON.stringify(lines)
-  );
+  writeCartToLocalStorage(kioskCartStorageKey(slug, branchId), lines);
 }
 
 /** Single-line label for cart / kitchen (matches server `ticketProductName` shape). */
@@ -629,7 +627,7 @@ export function KioskApp({
           menuItemId: product.id,
           productName: product.name,
           description: product.description ?? null,
-          imageUrl: product.imageUrl ?? null,
+          imageUrl: compactCartImageUrl(product.imageUrl),
           baseUnitPrice,
           quantity: 1,
           variationId,
