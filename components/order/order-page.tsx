@@ -42,6 +42,7 @@ import {
   cartLineTitle,
   cartModifierDisplayLines,
 } from '@/lib/cart-line-display';
+import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { setUiLanguage } from '@/lib/i18n/client';
 import type { UiLanguage } from '@/lib/i18n/resources';
@@ -216,19 +217,11 @@ function getSignature(
 }
 
 function lineUnitTotal(line: CartLine) {
-  const base =
-    line.variationId && line.variationPriceOverride != null
-      ? line.variationPriceOverride
-      : line.baseUnitPrice;
-  const modTotal = line.modifiers.reduce(
-    (sum, m) => sum + m.selections.reduce((s2, sel) => s2 + sel.unitPrice, 0),
-    0
-  );
-  return base + modTotal;
+  return cartLineUnitTotal(line);
 }
 
 function lineTotal(line: CartLine) {
-  return lineUnitTotal(line) * line.quantity;
+  return cartLineTotal(line);
 }
 
 function parseCartFromStorage(raw: string | null): CartLine[] {
@@ -258,9 +251,10 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
           imageUrl: (maybeLine as any).imageUrl ?? null,
           baseUnitPrice: maybeLine.baseUnitPrice,
           quantity: Number(maybeLine.quantity ?? 1),
-          modifiers: Array.isArray((maybeLine as any).modifiers)
-            ? (maybeLine as any).modifiers
-            : [],
+          variationId: (maybeLine as CartLine).variationId ?? null,
+          variationName: (maybeLine as CartLine).variationName ?? null,
+          variationPriceOverride: (maybeLine as CartLine).variationPriceOverride,
+          modifiers: normalizeCartModifiers((maybeLine as any).modifiers),
           modifiersSignature: String(maybeLine.modifiersSignature ?? ''),
           offeredProductName: (maybeLine as any).offeredProductName ?? null,
         });
@@ -1440,8 +1434,10 @@ export default function OrderPageClient({
             groupName: m.groupName,
             selections: m.selections.map((s: MenuOption) => ({
               menuItemId: s.menuItemId,
-              name: s.name,
-              unitPrice: s.unitPrice,
+              name: String(s.name ?? 'Option'),
+              unitPrice: Number.isFinite(Number(s.unitPrice))
+                ? Number(s.unitPrice)
+                : 0,
             })),
           }));
 

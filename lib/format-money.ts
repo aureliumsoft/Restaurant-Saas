@@ -53,12 +53,20 @@ export function formatCurrency(
     return formatMoneyAmount(safe, { locale, countryCode: regional.countryCode });
   }
 
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: regional.currencyCode,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(safe);
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: regional.currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(safe);
+  } catch {
+    const symbol = getRestaurantCurrencySymbol(regional.currencyCode);
+    return `${symbol}${formatMoneyAmount(safe, {
+      locale,
+      countryCode: regional.countryCode,
+    })}`;
+  }
 }
 
 /** Parenthesized addon label e.g. (+€1.50) or (+Rs100.00). */

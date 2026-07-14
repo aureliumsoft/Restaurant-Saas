@@ -13,6 +13,7 @@ import {
   cartLineTitle,
   cartModifierDisplayLines,
 } from '@/lib/cart-line-display';
+import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { submitCustomerOrder } from '@/lib/offline/submit-order';
 import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
@@ -80,19 +81,11 @@ type CartLine = {
 };
 
 function lineUnitTotal(line: CartLine) {
-  const base =
-    line.variationId && line.variationPriceOverride != null
-      ? line.variationPriceOverride
-      : line.baseUnitPrice;
-  const modTotal = line.modifiers.reduce(
-    (sum, m) => sum + m.selections.reduce((s2, sel) => s2 + sel.unitPrice, 0),
-    0
-  );
-  return base + modTotal;
+  return cartLineUnitTotal(line);
 }
 
 function lineTotal(line: CartLine) {
-  return lineUnitTotal(line) * line.quantity;
+  return cartLineTotal(line);
 }
 
 function parseCartFromStorage(raw: string | null): CartLine[] {
@@ -124,9 +117,7 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
           variationId: (maybeLine as CartLine).variationId ?? null,
           variationName: (maybeLine as CartLine).variationName ?? null,
           variationPriceOverride: (maybeLine as CartLine).variationPriceOverride,
-          modifiers: Array.isArray((maybeLine as any).modifiers)
-            ? (maybeLine as any).modifiers
-            : [],
+          modifiers: normalizeCartModifiers((maybeLine as any).modifiers),
           modifiersSignature: String(maybeLine.modifiersSignature ?? ''),
         });
         continue;

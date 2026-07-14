@@ -1,7 +1,8 @@
 import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
+import { normalizeCartModifiers } from '@/lib/cart-normalize';
 
 export type CartModifierSelectionLike = {
-  selections: { name: string; menuItemId?: string }[];
+  selections: { name?: string | null; menuItemId?: string }[];
 };
 
 function selectionNames(
@@ -10,12 +11,13 @@ function selectionNames(
 ): string[] {
   const names: string[] = [];
   for (const mod of modifiers) {
-    for (const sel of mod.selections) {
+    const selections = Array.isArray(mod.selections) ? mod.selections : [];
+    for (const sel of selections) {
       const isPersonalize = sel.menuItemId
         ? isPersonalizeModifierMenuItemId(sel.menuItemId)
         : false;
       if (isPersonalize !== personalize) continue;
-      const n = sel.name.trim();
+      const n = String(sel.name ?? '').trim();
       if (n.length > 0) names.push(n);
     }
   }
@@ -31,21 +33,24 @@ export type CartModifierDisplayLine = {
 /** Cart sidebar lines with ↳ personalize vs - addon prefixes. */
 export function cartModifierDisplayLines(
   modifiers: Array<{
-    selections: { name: string; menuItemId?: string; unitPrice?: number }[];
-  }>
+    selections?: {
+      name?: string | null;
+      menuItemId?: string;
+      unitPrice?: number;
+    }[];
+  }> | unknown
 ): CartModifierDisplayLine[] {
   const lines: CartModifierDisplayLine[] = [];
-  for (const mod of modifiers) {
+  for (const mod of normalizeCartModifiers(modifiers)) {
     for (const sel of mod.selections) {
-      const name = sel.name.trim();
-      if (!name) continue;
-      const isPersonalize = sel.menuItemId
-        ? isPersonalizeModifierMenuItemId(sel.menuItemId)
-        : false;
       lines.push({
-        prefix: isPersonalize ? 'branch' : 'dash',
-        name,
-        unitPrice: sel.unitPrice ?? 0,
+        prefix: sel.menuItemId
+          ? isPersonalizeModifierMenuItemId(sel.menuItemId)
+            ? 'branch'
+            : 'dash'
+          : 'dash',
+        name: sel.name,
+        unitPrice: sel.unitPrice,
       });
     }
   }
@@ -54,23 +59,29 @@ export function cartModifierDisplayLines(
 
 /** Personalize selections — shown below the product name. */
 export function cartPersonalizeSelectionNames(
-  modifiers: CartModifierSelectionLike[]
+  modifiers: CartModifierSelectionLike[] | unknown
 ): string[] {
-  return selectionNames(modifiers, true);
+  return selectionNames(
+    Array.isArray(modifiers) ? modifiers : normalizeCartModifiers(modifiers),
+    true
+  );
 }
 
 /** Addon / recommendation names only — no personalize, no category group labels. */
 export function cartModifierSelectionNames(
-  modifiers: CartModifierSelectionLike[]
+  modifiers: CartModifierSelectionLike[] | unknown
 ): string[] {
-  return selectionNames(modifiers, false);
+  return selectionNames(
+    Array.isArray(modifiers) ? modifiers : normalizeCartModifiers(modifiers),
+    false
+  );
 }
 
 export function cartLineTitle(
-  productName: string,
+  productName: string | null | undefined,
   variationName?: string | null
 ): string {
-  const base = productName.trim();
+  const base = String(productName ?? '').trim() || 'Item';
   const variation = variationName?.trim();
   return variation ? `${base} (${variation})` : base;
 }

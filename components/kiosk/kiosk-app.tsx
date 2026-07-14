@@ -62,6 +62,7 @@ import {
   cartModifierSelectionNames,
   cartPersonalizeSelectionNames,
 } from '@/lib/cart-line-display';
+import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
 import { cn } from '@/lib/utils';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import { setUiLanguage } from '@/lib/i18n/client';
@@ -243,16 +244,11 @@ function getSignature(
 }
 
 function lineUnitTotal(line: CartLine) {
-  const base = line.variationId ? line.variationPriceDelta : line.baseUnitPrice;
-  const modTotal = line.modifiers.reduce(
-    (sum, m) => sum + m.selections.reduce((s2, sel) => s2 + sel.unitPrice, 0),
-    0
-  );
-  return base + modTotal;
+  return cartLineUnitTotal(line);
 }
 
 function lineTotal(line: CartLine) {
-  return lineUnitTotal(line) * line.quantity;
+  return cartLineTotal(line);
 }
 
 function loadCart(slug: string, branchId: string): CartLine[] {
@@ -262,13 +258,29 @@ function loadCart(slug: string, branchId: string): CartLine[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (row): row is CartLine =>
-        !!row &&
-        typeof row === 'object' &&
-        typeof (row as CartLine).lineId === 'string' &&
-        typeof (row as CartLine).menuItemId === 'string'
-    );
+    return parsed
+      .filter(
+        (row): row is CartLine =>
+          !!row &&
+          typeof row === 'object' &&
+          typeof (row as CartLine).lineId === 'string' &&
+          typeof (row as CartLine).menuItemId === 'string'
+      )
+      .map((row) => ({
+        ...row,
+        productName: String(row.productName ?? 'Item'),
+        baseUnitPrice: Number.isFinite(Number(row.baseUnitPrice))
+          ? Number(row.baseUnitPrice)
+          : 0,
+        quantity:
+          Number.isFinite(Number(row.quantity)) && Number(row.quantity) > 0
+            ? Number(row.quantity)
+            : 1,
+        variationPriceDelta: Number.isFinite(Number(row.variationPriceDelta))
+          ? Number(row.variationPriceDelta)
+          : 0,
+        modifiers: normalizeCartModifiers(row.modifiers),
+      }));
   } catch {
     return [];
   }
@@ -283,15 +295,13 @@ function saveCart(slug: string, branchId: string, lines: CartLine[]) {
 
 /** Single-line label for cart / kitchen (matches server `ticketProductName` shape). */
 function cartLineDisplayName(line: CartLine): string {
-  const base = line.variationName
-    ? `${line.productName} (${line.variationName})`
-    : line.productName;
+  const base = cartLineTitle(line.productName, line.variationName);
   if (!line.modifiers.length) return base;
-  const bits = line.modifiers.map((g) => {
+  const bits = normalizeCartModifiers(line.modifiers).map((g) => {
     const names = g.selections.map((s) => s.name).join(', ');
-    return `${names}, `;
+    return names ? `${names}, ` : '';
   });
-  return `${base} (${bits.join(', ')})`;
+  return bits.some(Boolean) ? `${base} (${bits.join(', ')})` : base;
 }
 
 function cartSummaryLines(cart: CartLine[], maxLines: number): string[] {
@@ -1956,8 +1966,10 @@ export function KioskApp({
               groupName: m.groupName,
               selections: m.selections.map((s) => ({
                 menuItemId: s.menuItemId,
-                name: s.name,
-                unitPrice: s.unitPrice,
+                name: String(s.name ?? 'Option'),
+                unitPrice: Number.isFinite(Number(s.unitPrice))
+                  ? Number(s.unitPrice)
+                  : 0,
               })),
             }));
             const times = Math.max(1, Math.floor(quantity));
