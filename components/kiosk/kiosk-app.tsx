@@ -58,9 +58,11 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
 import {
+  buildProductImageByIdMap,
   cartLineTitle,
   cartModifierSelectionNames,
   cartPersonalizeSelectionNames,
+  resolveCartLineImageUrl,
 } from '@/lib/cart-line-display';
 import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
 import { compactCartImageUrl, writeCartToLocalStorage } from '@/lib/cart-storage';
@@ -528,6 +530,11 @@ export function KioskApp({
       c.items.map((p) => ({ ...p, categoryName: c.name }))
     );
   }, [menu]);
+
+  const productImageById = useMemo(
+    () => buildProductImageByIdMap(allProducts),
+    [allProducts]
+  );
 
   const displayedProducts = useMemo(() => {
     if (!menu) return [];
@@ -1001,7 +1008,7 @@ export function KioskApp({
           !hasBanner && 'bg-[#f8fafc]'
         )}
       >
-        <header className="sticky top-0 z-2000 border-b border-[#e2e8f0] bg-white/95 px-4 py-3 text-[#0f172a] backdrop-blur">
+        <header className="sticky top-0 z-50 border-b border-[#e2e8f0] bg-white/95 px-4 py-3 text-[#0f172a] backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               {displayMenu.logoUrl ? (
@@ -1226,7 +1233,6 @@ export function KioskApp({
                         key={c.id}
                         type="button"
                         variant={categoryId === c.id ? 'default' : 'outline'}
-                        className="h-auto shrink-0 gap-1.5 px-2.5 py-1.5"
                         onClick={() => setCategoryId(c.id)}
                       >
                         {thumb ? (
@@ -1265,7 +1271,7 @@ export function KioskApp({
                 {categoryId === 'all' ? (
                   progressiveCategories.map((category) => (
                     <section key={category.id} className="mb-6">
-                      <h2 className="mb-3 text-lg font-bold">{category.name}</h2>
+                      <h2 className=" mb-3 text-lg font-bold">{category.name}</h2>
                       {category.loading ||
                       (!category.loaded && category.items.length === 0) ? (
                         <ProductCardSkeletonGrid
@@ -1400,16 +1406,20 @@ export function KioskApp({
                     const addonNames = cartModifierSelectionNames(
                       line.modifiers
                     );
+                    const displayImageUrl = resolveCartLineImageUrl(
+                      line,
+                      productImageById
+                    );
                     return (
                       <li
                         key={line.lineId}
                         className="flex gap-3 rounded-xl border border-[#e2e8f0] bg-white p-3 shadow-sm"
                       >
                         <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-[#f1f5f9]">
-                          {line.imageUrl ? (
+                          {displayImageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={line.imageUrl}
+                              src={displayImageUrl}
                               alt=""
                               className="h-full w-full object-cover"
                             />

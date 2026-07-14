@@ -85,3 +85,41 @@ export function cartLineTitle(
   const variation = variationName?.trim();
   return variation ? `${base} (${variation})` : base;
 }
+
+export type ProductImageSource = {
+  id: string;
+  imageUrl?: string | null;
+};
+
+/** Map menu item id → image URL for cart display hydration. */
+export function buildProductImageByIdMap(
+  products: Iterable<ProductImageSource>
+): Map<string, string | null> {
+  const map = new Map<string, string | null>();
+  for (const product of products) {
+    const id = String(product.id ?? '').trim();
+    if (!id) continue;
+    const url =
+      typeof product.imageUrl === 'string' && product.imageUrl.trim()
+        ? product.imageUrl.trim()
+        : null;
+    map.set(id, url);
+  }
+  return map;
+}
+
+/** Prefer stored URL; fall back to live menu catalog (storage may omit images). */
+export function resolveCartLineImageUrl(
+  line: { menuItemId?: string | null; imageUrl?: string | null },
+  productImageById?: Map<string, string | null> | null
+): string | null {
+  const stored =
+    typeof line.imageUrl === 'string' && line.imageUrl.trim()
+      ? line.imageUrl.trim()
+      : null;
+  if (stored) return stored;
+
+  const menuItemId = String(line.menuItemId ?? '').trim();
+  if (!menuItemId || !productImageById) return null;
+  return productImageById.get(menuItemId) ?? null;
+}

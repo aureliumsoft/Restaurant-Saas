@@ -25,8 +25,10 @@ import {
 } from '@/lib/customer-menu-client';
 import { resolveWebCustomerName } from '@/lib/web-customer';
 import {
+  buildProductImageByIdMap,
   cartLineTitle,
   cartModifierDisplayLines,
+  resolveCartLineImageUrl,
 } from '@/lib/cart-line-display';
 import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
 import {
@@ -284,6 +286,13 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
   const { formatMoney } = useRestaurantRegional(orderInfo?.restaurantSlug);
   const grandTotal = total + serviceChargeAmount;
 
+  const productImageById = useMemo(() => {
+    if (!menuRestaurant) return new Map<string, string | null>();
+    return buildProductImageByIdMap(
+      menuRestaurant.menus.flatMap((category) => category.items)
+    );
+  }, [menuRestaurant]);
+
   const offeredProducts: OfferedProduct[] = useMemo(() => {
     if (!menuRestaurant || cart.length === 0) return [];
 
@@ -523,12 +532,16 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
             <div className="mb-6 space-y-4">
               {cart.map((line) => {
                 const modifierLines = cartModifierDisplayLines(line.modifiers);
+                const displayImageUrl = resolveCartLineImageUrl(
+                  line,
+                  productImageById
+                );
                 return (
                 <Card key={line.lineId}>
                   <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-4 min-w-0">
-                      {line.imageUrl ? (
-                        <img src={line.imageUrl} alt={line.productName} className="h-16 w-16 rounded object-cover" />
+                      {displayImageUrl ? (
+                        <img src={displayImageUrl} alt={line.productName} className="h-16 w-16 rounded object-cover" />
                       ) : (
                         <div className="flex h-16 w-16 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
                           —
