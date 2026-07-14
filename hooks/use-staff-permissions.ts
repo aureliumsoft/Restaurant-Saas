@@ -8,8 +8,26 @@ import {
   useStaffBootstrapSWR,
 } from '@/hooks/use-staff-bootstrap-swr';
 
+/** Shared staff access gate: session bootstrap must succeed before dashboard UI. */
+export function useStaffAccessGate() {
+  const { data, error, isLoading, isValidating } = useStaffBootstrapSWR();
+  const bootstrap = selectStaffBootstrap(data);
+
+  const ready = Boolean(bootstrap) && !isLoading;
+  const failed = Boolean(error) && !bootstrap && !isLoading;
+
+  return {
+    ready,
+    failed,
+    loading: !ready && !failed,
+    isValidating,
+    error,
+    bootstrap,
+  };
+}
+
 export function useStaffPermissions() {
-  const { data, isLoading } = useStaffBootstrapSWR();
+  const { data, error, isLoading } = useStaffBootstrapSWR();
   const bootstrap = selectStaffBootstrap(data);
 
   const allowedModuleKeys = useMemo(() => {
@@ -28,25 +46,32 @@ export function useStaffPermissions() {
   }, [bootstrap?.permissions, bootstrap?.plan?.recommendations]);
 
   return {
-    loading: isLoading && !data,
+    /** True until a successful bootstrap payload is available. */
+    loading: (isLoading && !data) || Boolean(error && !bootstrap),
     permissions: bootstrap?.permissions ?? [],
     plan: bootstrap?.plan ?? null,
     allowedModuleKeys,
     allModuleKeys: new Set(DASHBOARD_MODULES.map((m) => m.moduleKey)),
+    ready: Boolean(bootstrap),
+    failed: Boolean(error) && !bootstrap,
   };
 }
 
 export function useStaffSubscription() {
-  const { data, isLoading } = useStaffBootstrapSWR();
+  const { data, error, isLoading } = useStaffBootstrapSWR();
   const bootstrap = selectStaffBootstrap(data);
+
   return {
-    loading: isLoading && !data,
+    loading: (isLoading && !data) || Boolean(error && !bootstrap),
     subscription: bootstrap?.subscription ?? {
-      allowed: true,
+      // Deny by default until bootstrap proves access — never open the shell early.
+      allowed: false,
       warning: null,
       plan: null,
       status: null,
     },
+    ready: Boolean(bootstrap),
+    failed: Boolean(error) && !bootstrap,
   };
 }
 
