@@ -934,11 +934,7 @@ export function KioskApp({
   if (branchValid === null) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f8fafc] p-6">
-        <ProductCardSkeletonGrid
-          count={6}
-          variant="kiosk"
-          gridClassName="grid w-full max-w-5xl grid-cols-2 gap-3 sm:grid-cols-3"
-        />
+        <Loader2 className="animate-spin text-primary h-10 w-10" />
       </div>
     );
   }

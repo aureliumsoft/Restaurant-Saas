@@ -36,18 +36,20 @@ export function ProductCardSkeleton({
   }
 
   if (variant === 'kiosk') {
+    // Match live kiosk cards; use opaque slate bones (theme muted blends on light bg).
+    const bone = 'bg-[#e2e8f0]';
     return (
       <div
         className={cn(
-          'overflow-hidden rounded-lg  p-3 shadow-sm',
+          'overflow-hidden rounded-lg border border-[#e2e8f0] bg-white p-3 shadow-sm',
           className
         )}
         aria-hidden
       >
-        <Skeleton className="aspect-square w-full rounded-lg" />
-        <Skeleton className="mt-2 h-4 w-3/4" />
-        <Skeleton className="mt-2 h-4 w-1/3" />
-        <Skeleton className="mt-3 h-9 w-full rounded-md" />
+        <Skeleton className={cn('aspect-square w-full rounded-lg', bone)} />
+        <Skeleton className={cn('mt-2 h-4 w-3/4', bone)} />
+        <Skeleton className={cn('mt-2 h-4 w-1/3', bone)} />
+        <Skeleton className={cn('mt-3 h-9 w-full rounded-md', bone)} />
       </div>
     );
   }
@@ -98,7 +100,10 @@ export function ProductCardSkeletonGrid({
 export function CategoryPillSkeleton({ className }: { className?: string }) {
   return (
     <Skeleton
-      className={cn('h-10 w-28 shrink-0 rounded-full', className)}
+      className={cn(
+        'h-10 w-28 shrink-0 rounded-full bg-[#e2e8f0]',
+        className
+      )}
       aria-hidden
     />
   );
