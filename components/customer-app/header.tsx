@@ -6,10 +6,11 @@ import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { Globe, Menu, User } from 'lucide-react';
+import { CalendarDays, Globe, Menu, User } from 'lucide-react';
 
 import { useUiLanguageSnapshot } from '@/components/i18n/ui-language-context';
 import { LanguageSwitcher } from '@/components/main/language-switcher';
+import { useCustomerAccount } from '@/components/customer-app/customer-account-context';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -37,6 +38,11 @@ type RestaurantBrand = {
 export function Header() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const {
+    openAccountSheet,
+    account,
+    setRestaurantContext,
+  } = useCustomerAccount();
   const queryRestaurantSlug =
     searchParams.get('restaurantSlug')?.trim() ||
     searchParams.get('slug')?.trim() ||
@@ -111,6 +117,10 @@ export function Header() {
               : null,
           themePrimaryColor: r?.themePrimaryColor ?? null,
         });
+        setRestaurantContext({
+          restaurantSlug: slugForApi ?? undefined,
+          themePrimaryColor: r?.themePrimaryColor ?? null,
+        });
         setLogoLoadFailed(false);
       } catch {
         // Keep current default values if the request fails.
@@ -118,7 +128,7 @@ export function Header() {
     };
 
     void run();
-  }, [inferredSubdomain, slugForApi]);
+  }, [inferredSubdomain, setRestaurantContext, slugForApi]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -133,13 +143,16 @@ export function Header() {
       ? brand.logoUrl.trim()
       : null;
 
-  const loginHref = useMemo(() => {
-    const callback =
-      typeof window !== 'undefined'
-        ? `${window.location.pathname}${window.location.search}`
-        : pathname || '/';
-    return `/login?callbackUrl=${encodeURIComponent(callback)}`;
-  }, [pathname]);
+  const openLogin = () => {
+    openAccountSheet({ restaurantSlug: slugForApi ?? pathSlug ?? null });
+  };
+
+  const openMyOrders = () => {
+    openAccountSheet({
+      restaurantSlug: slugForApi ?? pathSlug ?? null,
+      view: 'orders',
+    });
+  };
 
   const menuSheetStyle = useMemo(
     () => buildCustomerLightSurfaceVars(brand.themePrimaryColor) as CSSProperties,
@@ -186,13 +199,14 @@ export function Header() {
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-2 lg:gap-3">
-            <Link
-              href={loginHref}
+            <button
+              type="button"
+              onClick={openLogin}
               className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#f5d76e] transition hover:text-white lg:hidden"
-              aria-label={t('storefrontLogin')}
+              aria-label={account ? t('customerAuthAccountTitle') : t('storefrontLogin')}
             >
               <User className="h-6 w-6" strokeWidth={1.5} />
-            </Link>
+            </button>
 
             <Sheet>
               <SheetTrigger asChild>
@@ -226,13 +240,26 @@ export function Header() {
                   aria-label={t('storefrontLogin')}
                 >
                   <SheetClose asChild>
-                    <Link
-                      href={loginHref}
-                      className="flex items-center gap-2 rounded-lg px-2 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
+                    <button
+                      type="button"
+                      onClick={openLogin}
+                      className="flex items-center gap-2 rounded-lg px-2 py-3 text-left text-sm font-medium text-foreground transition hover:bg-muted"
                     >
                       <User className="h-4 w-4" />
-                      {t('storefrontLogin')}
-                    </Link>
+                      {account
+                        ? account.name || t('customerAuthAccountTitle')
+                        : t('storefrontLogin')}
+                    </button>
+                  </SheetClose>
+                  <SheetClose asChild>
+                    <button
+                      type="button"
+                      onClick={openMyOrders}
+                      className="flex items-center gap-2 rounded-lg px-2 py-3 text-left text-sm font-medium text-foreground transition hover:bg-muted"
+                    >
+                      <CalendarDays className="h-4 w-4" />
+                      {t('customerAuthMyOrders')}
+                    </button>
                   </SheetClose>
                 </nav>
                 <div className="mt-6 border-t border-border pt-5">
@@ -245,13 +272,16 @@ export function Header() {
               </SheetContent>
             </Sheet>
 
-            <Link
-              href={loginHref}
+            <button
+              type="button"
+              onClick={openLogin}
               className="hidden items-center gap-1.5 text-sm font-medium text-primary-foreground/90 transition hover:text-white lg:inline-flex"
             >
               <User className="h-4 w-4" />
-              {t('storefrontLogin')}
-            </Link>
+              {account
+                ? account.name || t('customerAuthAccountTitle')
+                : t('storefrontLogin')}
+            </button>
           </div>
         </div>
       </header>

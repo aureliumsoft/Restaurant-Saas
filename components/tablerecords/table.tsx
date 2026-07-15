@@ -145,7 +145,7 @@ export function Records() {
       <div className="flex items-center justify-between">
         {' '}
         <div className="flex flex-col justify-center items-start gap-2">
-          <h1 className="text-2xl font-bold">Records</h1>{' '}
+          <h1 className="text-2xl font-bold">Transaction Records</h1>{' '}
           <p className="text-sm text-muted-foreground">
             {dataScope === 'today' || !isOwnerOrAdmin
               ? 'Transaction records for today only.'

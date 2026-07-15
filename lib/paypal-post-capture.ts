@@ -1,4 +1,8 @@
 import { db } from '@/lib/db';
+import {
+  createCustomerOrder,
+  parseCustomerOrderPayload,
+} from '@/lib/orders/create-customer-order';
 import { parsePayPalCustomId, type PayPalOrderMetadata } from '@/lib/paypal-server';
 import {
   captureRestaurantPayPalOrder,
@@ -80,6 +84,7 @@ export async function applyPayPalPostCapture(opts: {
     payload?: unknown;
     metadata?: Record<string, string>;
     restaurantId?: string | null;
+    customerAccountId?: string | null;
     status?: string;
   } | null = null;
   let intentKey: string | null = null;
@@ -179,42 +184,32 @@ export async function applyPayPalPostCapture(opts: {
     } else if (intent?.endpoint && intent.payload && intentKey) {
       if (intent.status !== 'completed') {
         try {
-          const res = await fetch(`${baseUrl}${intent.endpoint}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+          if (intent.endpoint === '/api/customer/orders') {
+            const orderData = parseCustomerOrderPayload({
               ...(typeof intent.payload === 'object' && intent.payload !== null
                 ? intent.payload
                 : {}),
               paymentStatus: 'completed',
               paymentMethod: 'PayPal',
-            }),
-          });
-          if (res.ok) {
-            const body = (await res.json().catch(() => ({}))) as {
-              data?: {
-                orderId?: string;
-                shortOrderId?: string;
-                restaurantId?: string;
-                ticketNumber?: number | null;
-              };
-            };
-            orderId =
-              typeof body?.data?.orderId === 'string'
-                ? body.data.orderId
-                : undefined;
-            shortOrderId =
-              typeof body?.data?.shortOrderId === 'string'
-                ? body.data.shortOrderId
-                : undefined;
-            restaurantIdResult =
-              typeof body?.data?.restaurantId === 'string'
-                ? body.data.restaurantId
-                : undefined;
-            ticketNumber =
-              typeof body?.data?.ticketNumber === 'number'
-                ? body.data.ticketNumber
-                : null;
+            });
+            if (!orderData) {
+              throw new Error('Invalid PayPal order intent payload');
+            }
+            const created = await createCustomerOrder({
+              data: orderData,
+              customerAccountId: intent.customerAccountId ?? null,
+            });
+            if (!created.ok) {
+              throw new Error(
+                typeof created.error === 'string'
+                  ? created.error
+                  : 'Order creation failed'
+              );
+            }
+            orderId = created.orderId;
+            shortOrderId = created.shortOrderId;
+            restaurantIdResult = created.restaurantId;
+            ticketNumber = created.ticketNumber;
             await db.platformSetting.update({
               where: { key: intentKey },
               data: {
@@ -230,6 +225,59 @@ export async function applyPayPalPostCapture(opts: {
               },
             });
             orderSync = 'completed';
+          } else {
+            const res = await fetch(`${baseUrl}${intent.endpoint}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...(typeof intent.payload === 'object' && intent.payload !== null
+                  ? intent.payload
+                  : {}),
+                paymentStatus: 'completed',
+                paymentMethod: 'PayPal',
+              }),
+            });
+            if (res.ok) {
+              const body = (await res.json().catch(() => ({}))) as {
+                data?: {
+                  orderId?: string;
+                  shortOrderId?: string;
+                  restaurantId?: string;
+                  ticketNumber?: number | null;
+                };
+              };
+              orderId =
+                typeof body?.data?.orderId === 'string'
+                  ? body.data.orderId
+                  : undefined;
+              shortOrderId =
+                typeof body?.data?.shortOrderId === 'string'
+                  ? body.data.shortOrderId
+                  : undefined;
+              restaurantIdResult =
+                typeof body?.data?.restaurantId === 'string'
+                  ? body.data.restaurantId
+                  : undefined;
+              ticketNumber =
+                typeof body?.data?.ticketNumber === 'number'
+                  ? body.data.ticketNumber
+                  : null;
+              await db.platformSetting.update({
+                where: { key: intentKey },
+                data: {
+                  value: JSON.stringify({
+                    ...intent,
+                    status: 'completed',
+                    paypalOrderId: orderToken,
+                    orderId,
+                    shortOrderId,
+                    ticketNumber,
+                    completedAt: new Date().toISOString(),
+                  }),
+                },
+              });
+              orderSync = 'completed';
+            }
           }
         } catch (e) {
           console.error('PayPal order intent sync failed:', e);

@@ -596,6 +596,54 @@ export function fakeMenuItemAttributeGroupVariationLimitComplete() {
     updatedAt: faker.date.anytime(),
   };
 }
+export function fakeCustomerAccount() {
+  return {
+    email: faker.internet.email(),
+    emailNormalized: faker.lorem.words(5),
+    passwordHash: faker.lorem.words(5),
+    name: faker.person.fullName(),
+    phone: undefined,
+    emailVerifiedAt: undefined,
+    disabledAt: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeCustomerAccountComplete() {
+  return {
+    id: faker.string.uuid(),
+    restaurantId: faker.string.uuid(),
+    email: faker.internet.email(),
+    emailNormalized: faker.lorem.words(5),
+    passwordHash: faker.lorem.words(5),
+    name: faker.person.fullName(),
+    phone: undefined,
+    emailVerifiedAt: undefined,
+    disabledAt: undefined,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeCustomerSession() {
+  return {
+    tokenHash: faker.lorem.words(5),
+    expiresAt: faker.date.anytime(),
+    userAgent: undefined,
+    ipAddress: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeCustomerSessionComplete() {
+  return {
+    id: faker.string.uuid(),
+    accountId: faker.string.uuid(),
+    tokenHash: faker.lorem.words(5),
+    expiresAt: faker.date.anytime(),
+    userAgent: undefined,
+    ipAddress: undefined,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
 export function fakeCustomer() {
   return {
     name: faker.person.fullName(),
@@ -611,6 +659,7 @@ export function fakeCustomerComplete() {
     email: undefined,
     phone: faker.lorem.words(5),
     restaurantId: faker.string.uuid(),
+    accountId: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -638,6 +687,7 @@ export function fakeOrderComplete() {
     restaurantId: faker.string.uuid(),
     branchId: undefined,
     customerId: undefined,
+    customerAccountId: undefined,
     ticketNumber: undefined,
     ticketDate: undefined,
     status: faker.lorem.words(5),

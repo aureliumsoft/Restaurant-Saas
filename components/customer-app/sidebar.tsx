@@ -20,6 +20,7 @@ import {
   IconTruck,
 } from '@tabler/icons-react';
 import { Loader2 } from 'lucide-react';
+import { useCustomerAccountOptional } from '@/components/customer-app/customer-account-context';
 import { cn } from '@/lib/utils';
 import { WEB_CUSTOMER_TAKEAWAY_NAME } from '@/lib/web-customer';
 import {
@@ -86,6 +87,8 @@ export function Sidebar({
   variant = 'default',
 }: SidebarProps) {
   const { t } = useTranslation();
+  const customerAccount = useCustomerAccountOptional();
+  const customerName = customerAccount?.account?.name?.trim() ?? '';
   const [activeStores, setActiveStores] = useState<Store[]>();
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [restaurantName, setRestaurantName] = useState('');
@@ -475,7 +478,9 @@ export function Sidebar({
         )}
       >
         <p className="text-[1.65rem] font-bold leading-tight text-primary">
-          {t('storefrontHi')}
+          {customerName
+            ? `${t('storefrontHi')} ${customerName}`
+            : t('storefrontHi')}
         </p>
 
         {menuBanners.length > 0 ? (

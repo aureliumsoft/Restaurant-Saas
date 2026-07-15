@@ -1,6 +1,10 @@
 import Stripe from 'stripe';
 
 import { db } from '@/lib/db';
+import {
+  createCustomerOrder,
+  parseCustomerOrderPayload,
+} from '@/lib/orders/create-customer-order';
 import { fromStripeUnitAmount } from '@/lib/stripe-server';
 
 export function resolveBaseUrlFromHeaders(headers: Headers): string {
@@ -26,6 +30,7 @@ export function resolveBaseUrlFromHeaders(headers: Headers): string {
 type OrderIntentPayload = {
   endpoint?: '/api/customer/orders' | '/api/kiosk/orders';
   payload?: unknown;
+  customerAccountId?: string | null;
   status?: string;
 };
 
@@ -78,6 +83,66 @@ export async function processOrderIntentFromSession(
         typeof parsedCompleted.ticketNumber === 'number'
           ? parsedCompleted.ticketNumber
           : null,
+    };
+  }
+
+  if (parsed.endpoint === '/api/customer/orders') {
+    const orderData = parseCustomerOrderPayload({
+      ...(typeof parsed.payload === 'object' && parsed.payload !== null
+        ? parsed.payload
+        : {}),
+      paymentStatus: 'completed',
+      paymentMethod: 'Stripe',
+    });
+    if (!orderData) {
+      throw new Error(`Invalid order payload for ${key}`);
+    }
+    const created = await createCustomerOrder({
+      data: orderData,
+      customerAccountId: parsed.customerAccountId ?? null,
+    });
+    if (!created.ok) {
+      await db.platformSetting.update({
+        where: { key },
+        data: {
+          value: JSON.stringify({
+            ...parsed,
+            status: 'failed',
+            stripeSessionId: session.id,
+            lastError:
+              typeof created.error === 'string'
+                ? created.error.slice(0, 500)
+                : 'Order creation failed',
+            lastStatusCode: created.status,
+            lastAttemptedAt: new Date().toISOString(),
+          }),
+        },
+      });
+      throw new Error(
+        `Order creation failed for ${parsed.endpoint} (${created.status})`
+      );
+    }
+
+    await db.platformSetting.update({
+      where: { key },
+      data: {
+        value: JSON.stringify({
+          ...parsed,
+          status: 'completed',
+          stripeSessionId: session.id,
+          orderId: created.orderId,
+          shortOrderId: created.shortOrderId,
+          ticketNumber: created.ticketNumber,
+          completedAt: new Date().toISOString(),
+        }),
+      },
+    });
+
+    return {
+      status: 'completed',
+      orderId: created.orderId,
+      shortOrderId: created.shortOrderId,
+      ticketNumber: created.ticketNumber,
     };
   }
 

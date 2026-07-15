@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
+import {
+  getCustomerAccountSession,
+  resolveRestaurantIdBySlug,
+} from '@/lib/customer-auth/session';
 import { toStripeCurrencyCode } from '@/lib/format-money';
 import { getRequestOrigin } from '@/lib/request-origin';
 import {
@@ -87,29 +91,35 @@ export async function POST(req: NextRequest) {
         : `intent-${Date.now()}`;
 
     if (shouldStoreIntent) {
+      let customerAccountId: string | null = null;
+      if (parsed.data.source === 'online') {
+        const restaurant = await resolveRestaurantIdBySlug(restaurantSlug);
+        if (restaurant) {
+          const session = await getCustomerAccountSession(req, {
+            restaurantId: restaurant.id,
+          });
+          customerAccountId = session?.accountId ?? null;
+        }
+      }
+
       const intentKey = `stripe_order_intent:${intentId}`;
+      const intentValue = JSON.stringify({
+        source: parsed.data.source,
+        endpoint: parsed.data.endpoint,
+        payload: parsed.data.payload,
+        metadata: parsed.data.metadata ?? {},
+        customerAccountId,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      });
       await db.platformSetting.upsert({
         where: { key: intentKey },
         create: {
           key: intentKey,
-          value: JSON.stringify({
-            source: parsed.data.source,
-            endpoint: parsed.data.endpoint,
-            payload: parsed.data.payload,
-            metadata: parsed.data.metadata ?? {},
-            status: 'pending',
-            createdAt: new Date().toISOString(),
-          }),
+          value: intentValue,
         },
         update: {
-          value: JSON.stringify({
-            source: parsed.data.source,
-            endpoint: parsed.data.endpoint,
-            payload: parsed.data.payload,
-            metadata: parsed.data.metadata ?? {},
-            status: 'pending',
-            createdAt: new Date().toISOString(),
-          }),
+          value: intentValue,
         },
       });
     }

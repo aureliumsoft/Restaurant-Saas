@@ -1214,6 +1214,7 @@ export default function OrderPageClient({
       <OrderMenuHeader
         orderId={orderId}
         restaurantName={orderInfo?.restaurantName}
+        restaurantSlug={orderInfo?.restaurantSlug}
         logoUrl={logoUrl}
         themePrimaryColor={themePrimaryColor}
         orderType={orderType}

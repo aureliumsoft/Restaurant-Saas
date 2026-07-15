@@ -173,6 +173,7 @@ model Restaurant {
   employees            Employee[]
   employeeInvites      EmployeeInvite[]
   customers            Customer[]
+  customerAccounts     CustomerAccount[]
   branches             Branch[]
   subscription         RestaurantSubscription?
   subscriptionPayments SubscriptionPayment[]
@@ -664,18 +665,70 @@ model MenuItemAttributeGroupVariationLimit {
   @@index([variationId])
 }
 
+/// Restaurant-scoped authenticated customer identity (separate from staff User).
+model CustomerAccount {
+  id              String    @id @default(uuid())
+  restaurantId    String
+  /// Display email (as entered, trimmed).
+  email           String
+  /// Lowercased email for unique lookup within a restaurant.
+  emailNormalized String
+  passwordHash    String
+  name            String
+  phone           String?
+  emailVerifiedAt DateTime?
+  disabledAt      DateTime?
+
+  restaurant Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  sessions   CustomerSession[]
+  profiles   Customer[]
+  orders     Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([restaurantId, emailNormalized])
+  @@index([restaurantId])
+}
+
+/// Opaque cookie session for a CustomerAccount.
+model CustomerSession {
+  id        String   @id @default(uuid())
+  accountId String
+  /// SHA-256 of the cookie token (never store the raw token).
+  tokenHash String   @unique
+  expiresAt DateTime
+  userAgent String?
+  ipAddress String?
+
+  account CustomerAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([expiresAt])
+}
+
 model Customer {
   id           String  @id @default(uuid())
   name         String
   email        String?
   phone        String
   restaurantId String
+  /// Linked authenticated account for this restaurant (optional; guests stay null).
+  accountId    String?
 
   orders     Order[]
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurant Restaurant       @relation(fields: [restaurantId], references: [id])
+  account    CustomerAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([restaurantId, accountId])
+  @@index([restaurantId])
+  @@index([accountId])
 }
 
 model Order {
@@ -687,6 +740,8 @@ model Order {
   restaurantId   String
   branchId       String?
   customerId     String?
+  /// Immutable authenticated owner for customer order history (null for guests).
+  customerAccountId String?
   /// Daily ticket number (resets from 1 each day per branch).
   ticketNumber   Int?
   /// Date bucket for daily ticket sequence.
@@ -721,17 +776,20 @@ model Order {
   items          OrderItem[]
   payments       Payment[]
   kitchenTickets KitchenTicket[]
-  restaurant     Restaurant      @relation(fields: [restaurantId], references: [id])
-  branch         Branch?         @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  customer       Customer?       @relation(fields: [customerId], references: [id])
-  diningTable    DiningTable?    @relation(fields: [diningTableId], references: [id], onDelete: SetNull)
-  posShift       PosShift?       @relation(fields: [posShiftId], references: [id], onDelete: SetNull)
+  restaurant     Restaurant       @relation(fields: [restaurantId], references: [id])
+  branch         Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  customer       Customer?        @relation(fields: [customerId], references: [id])
+  customerAccount CustomerAccount? @relation(fields: [customerAccountId], references: [id], onDelete: SetNull)
+  diningTable    DiningTable?     @relation(fields: [diningTableId], references: [id], onDelete: SetNull)
+  posShift       PosShift?        @relation(fields: [posShiftId], references: [id], onDelete: SetNull)
 
   @@index([restaurantId])
   @@index([branchId])
   @@index([sourceType])
   @@index([diningTableId])
   @@index([posShiftId])
+  @@index([customerAccountId, createdAt])
+  @@index([customerAccountId, restaurantId, createdAt])
   @@index([restaurantId, ticketDate])
   @@index([restaurantId, branchId, ticketDate])
   @@unique([restaurantId, branchId, ticketDate, ticketNumber])

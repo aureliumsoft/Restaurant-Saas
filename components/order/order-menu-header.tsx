@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   Info,
@@ -33,6 +34,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { LanguageSwitcher } from '@/components/main/language-switcher';
+import { useCustomerAccountOptional } from '@/components/customer-app/customer-account-context';
 import { OrderTimePickerDialog } from '@/components/order/order-time-picker-dialog';
 import { OrderStoreInfoSheet } from '@/components/order/order-store-info-sheet';
 import { cn } from '@/lib/utils';
@@ -62,6 +64,7 @@ export { ORDER_ACCENT_GOLD };
 type OrderMenuHeaderProps = {
   orderId: string;
   restaurantName?: string | null;
+  restaurantSlug?: string | null;
   logoUrl?: string | null;
   themePrimaryColor?: string | null;
   orderType: 'delivery' | 'pickUp';
@@ -82,6 +85,7 @@ type OrderMenuHeaderProps = {
 export function OrderMenuHeader({
   orderId,
   restaurantName,
+  restaurantSlug,
   logoUrl,
   themePrimaryColor,
   orderType,
@@ -94,8 +98,11 @@ export function OrderMenuHeader({
   slotDurationMinutes = 30,
 }: OrderMenuHeaderProps) {
   const { t } = useTranslation();
-  const pathname = usePathname();
   const router = useRouter();
+  const customerAccount = useCustomerAccountOptional();
+  const openAccountSheet = customerAccount?.openAccountSheet;
+  const setRestaurantContext = customerAccount?.setRestaurantContext;
+  const accountName = customerAccount?.account?.name?.trim();
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
   const [methodChangeOpen, setMethodChangeOpen] = useState(false);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
@@ -160,6 +167,14 @@ export function OrderMenuHeader({
       ? timeSlots[0]?.label || t('orderTimeRangePlaceholder')
       : schedule.slot || timeSlots[0]?.label || t('orderTimeRangePlaceholder');
 
+  useEffect(() => {
+    if (!setRestaurantContext) return;
+    setRestaurantContext({
+      restaurantSlug: restaurantSlug ?? null,
+      themePrimaryColor: themePrimaryColor ?? null,
+    });
+  }, [setRestaurantContext, restaurantSlug, themePrimaryColor]);
+
   const handleConfirmOrderMethodChange = () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(`cart-${orderId}`);
@@ -168,15 +183,21 @@ export function OrderMenuHeader({
     router.push(backHref);
   };
 
-  const loginHref = useMemo(() => {
-    const callback =
-      typeof window !== 'undefined'
-        ? `${window.location.pathname}${window.location.search}`
-        : pathname || '/';
-    return `/login?callbackUrl=${encodeURIComponent(callback)}`;
-  }, [pathname]);
+  const openLogin = () => {
+    openAccountSheet?.({
+      restaurantSlug: restaurantSlug ?? null,
+    });
+  };
+
+  const openMyOrders = () => {
+    openAccountSheet?.({
+      restaurantSlug: restaurantSlug ?? null,
+      view: 'orders',
+    });
+  };
 
   const brandLabel = restaurantName?.trim() || 'Restaurant';
+  const loginLabel = accountName || t('storefrontLogin');
   const locationLine =
     orderType === 'delivery'
       ? deliveryAddress?.trim() || storeAddress?.trim() || ''
@@ -233,14 +254,27 @@ export function OrderMenuHeader({
             </Link>
           </SheetClose>
           <SheetClose asChild>
-            <Link
-              href={loginHref}
-              className="flex items-center gap-2 rounded-lg px-2 py-3 text-sm font-medium text-foreground transition hover:bg-muted lg:hidden"
+            <button
+              type="button"
+              onClick={openLogin}
+              className="flex items-center gap-2 rounded-lg px-2 py-3 text-left text-sm font-medium text-foreground transition hover:bg-muted lg:hidden"
             >
               <User className="h-4 w-4" />
-              {t('storefrontLogin')}
-            </Link>
+              {loginLabel}
+            </button>
           </SheetClose>
+          {customerAccount ? (
+            <SheetClose asChild>
+              <button
+                type="button"
+                onClick={openMyOrders}
+                className="flex items-center gap-2 rounded-lg px-2 py-3 text-left text-sm font-medium text-foreground transition hover:bg-muted"
+              >
+                <CalendarDays className="h-4 w-4" />
+                {t('customerAuthMyOrders')}
+              </button>
+            </SheetClose>
+          ) : null}
         </nav>
         <div className="mt-6 border-t border-border pt-5">
           <p className="mb-3 text-sm font-medium text-foreground">
@@ -293,23 +327,25 @@ export function OrderMenuHeader({
           </div>
 
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:gap-3">
-            <Link
-              href={loginHref}
+            <button
+              type="button"
+              onClick={openLogin}
               className="inline-flex h-10 w-10 items-center justify-center sm:hidden"
               style={{ color: ORDER_ACCENT_GOLD }}
-              aria-label={t('storefrontLogin')}
+              aria-label={loginLabel}
             >
               <User className="h-5 w-5" strokeWidth={1.75} />
-            </Link>
+            </button>
 
-            <Link
-              href={loginHref}
+            <button
+              type="button"
+              onClick={openLogin}
               className="hidden items-center gap-1.5 text-sm font-medium transition hover:opacity-90 sm:inline-flex"
               style={{ color: ORDER_ACCENT_GOLD }}
             >
               <User className="h-4 w-4" strokeWidth={1.75} />
-              {t('storefrontLogin')}
-            </Link>
+              {loginLabel}
+            </button>
 
             {menuSheet}
           </div>

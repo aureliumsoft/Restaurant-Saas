@@ -4,6 +4,10 @@ import { z } from 'zod';
 
 import { db } from '@/lib/db';
 import {
+  getCustomerAccountSession,
+  resolveRestaurantIdBySlug,
+} from '@/lib/customer-auth/session';
+import {
   createPayPalOrder,
   getPayPalConfigError,
   isPayPalConfigured,
@@ -89,11 +93,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let customerAccountId: string | null = null;
+  if (source === 'online' && restaurantSlug) {
+    const restaurant = await resolveRestaurantIdBySlug(restaurantSlug);
+    if (restaurant) {
+      const session = await getCustomerAccountSession(req, {
+        restaurantId: restaurant.id,
+      });
+      customerAccountId = session?.accountId ?? null;
+    }
+  }
+
   const intentValue = JSON.stringify({
     source: parsed.data.source ?? null,
     metadata: parsed.data.metadata ?? {},
     endpoint: parsed.data.endpoint ?? null,
     payload: parsed.data.payload ?? null,
+    customerAccountId,
     restaurantId: restaurantPayPal?.restaurantId ?? null,
     status: 'pending',
     createdAt: new Date().toISOString(),
