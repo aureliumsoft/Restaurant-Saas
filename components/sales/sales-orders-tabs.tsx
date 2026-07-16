@@ -28,14 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from '@/components/ui/pagination';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { salesOrderMethodLabel } from '@/lib/order-fulfillment';
@@ -164,93 +157,6 @@ function trackingNumberLabel(row: SalesOrderRow): string {
   const token = (row.trackingToken ?? row.id).replace(/[^a-zA-Z0-9]/g, '');
   if (!token) return '—';
   return token.length <= 8 ? token.toUpperCase() : token.slice(0, 6).toUpperCase();
-}
-
-function SalesOrdersPaginationBar({
-  pagination,
-  page,
-  onPageChange,
-  loading,
-}: {
-  pagination: SalesOrdersPagination;
-  page: number;
-  onPageChange: (p: number) => void;
-  loading: boolean;
-}) {
-  const { totalPages, total, pageSize } = pagination;
-  if (totalPages <= 1 && total <= pageSize) return null;
-
-  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const to = Math.min(page * pageSize, total);
-
-  return (
-    <div className="flex flex-col items-center justify-between gap-3 sm:flex-row w-full">
-      <Pagination>
-        <PaginationContent className="w-full flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
-            Showing {from}–{to} of {total}
-          </p>
-          <div className="flex items-center justify-end">
-            <PaginationItem>
-              <PaginationPrevious
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (page > 1 && !loading) onPageChange(page - 1);
-                }}
-                className={page <= 1 ? 'pointer-events-none opacity-50' : ''}
-              />
-            </PaginationItem>
-
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(
-                (p) =>
-                  p === 1 ||
-                  p === totalPages ||
-                  (p >= page - 1 && p <= page + 1)
-              )
-              .map((p, idx, arr) => {
-                const prev = arr[idx - 1];
-                const showEllipsis = prev != null && p - prev > 1;
-                return (
-                  <span key={p} className="flex items-center">
-                    {showEllipsis ? (
-                      <PaginationItem>
-                        <span className="px-2 text-muted-foreground">…</span>
-                      </PaginationItem>
-                    ) : null}
-                    <PaginationItem>
-                      <PaginationLink
-                        href="#"
-                        isActive={p === page}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          if (!loading) onPageChange(p);
-                        }}
-                      >
-                        {p}
-                      </PaginationLink>
-                    </PaginationItem>
-                  </span>
-                );
-              })}
-            <PaginationItem>
-              <PaginationNext
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (page < totalPages && !loading) onPageChange(page + 1);
-                }}
-                className={
-                  page >= totalPages ? 'pointer-events-none opacity-50' : ''
-                }
-              />
-            </PaginationItem>
-          </div>
-        </PaginationContent>
-      </Pagination>
-    </div>
-  );
 }
 
 function OrdersTable({
@@ -667,7 +573,7 @@ export function SalesOrdersTabs() {
         ) : (
           <>
             <OrdersTable rows={orders} onView={openDetail} formatMoney={formatMoney} />
-            <SalesOrdersPaginationBar
+            <TablePagination
               pagination={pagination}
               page={page}
               onPageChange={setPage}

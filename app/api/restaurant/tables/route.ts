@@ -8,9 +8,14 @@ import {
 } from '@/lib/branch/branch-scope';
 import {
   createDiningTableRow,
+  countDiningTables,
   listDiningTables,
 } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
+import {
+  buildPaginationMeta,
+  parsePaginationParams,
+} from '@/lib/pagination';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 
 const postSchema = z.object({
@@ -33,15 +38,34 @@ export async function GET(req: NextRequest) {
     auth.user.id,
     auth.restaurant.id
   );
-  const rows = await listDiningTables(
-    auth.restaurant.id,
-    branchScope?.activeBranchId ?? null
+  const activeBranchId = branchScope?.activeBranchId ?? null;
+  const wantsPagination = req.nextUrl.searchParams.get('page') != null;
+
+  if (!wantsPagination) {
+    const rows = await listDiningTables(auth.restaurant.id, activeBranchId);
+    return NextResponse.json(
+      {
+        data: rows,
+        activeBranchId,
+      },
+      { status: 200 }
+    );
+  }
+
+  const { page, pageSize, skip, take } = parsePaginationParams(
+    req.nextUrl.searchParams,
+    { defaultPageSize: 20 }
   );
+  const [total, rows] = await Promise.all([
+    countDiningTables(auth.restaurant.id, activeBranchId),
+    listDiningTables(auth.restaurant.id, activeBranchId, { skip, take }),
+  ]);
 
   return NextResponse.json(
     {
       data: rows,
-      activeBranchId: branchScope?.activeBranchId ?? null,
+      activeBranchId,
+      pagination: buildPaginationMeta(page, pageSize, total),
     },
     { status: 200 }
   );

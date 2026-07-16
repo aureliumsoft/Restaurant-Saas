@@ -29,6 +29,7 @@ import {
   DashboardTableRow as TableRow,
   DashboardTableWrapper as TableWrapper,
 } from '@/components/dashboard/dashboard-table';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { formatCurrency } from '@/lib/format-money';
@@ -48,6 +49,15 @@ import type {
 import { Eye, Loader2, RefreshCcw } from 'lucide-react';
 
 const PAGE_SIZE = 20;
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(id);
+  }, [value, delayMs]);
+  return debounced;
+}
 
 function kindBadge(kind: TransactionHistoryKind) {
   if (kind === 'ORDER') return 'Order';
@@ -87,6 +97,7 @@ export function Records() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
+  const debouncedQ = useDebouncedValue(q, 300);
   const [kind, setKind] = useState<'ALL' | TransactionHistoryKind>('ALL');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -104,7 +115,7 @@ export function Records() {
         '/api/restaurant/transaction-history',
         {
           params: {
-            q: q || undefined,
+            q: debouncedQ || undefined,
             kind: kind === 'ALL' ? undefined : kind,
             page,
             take: PAGE_SIZE,
@@ -122,7 +133,7 @@ export function Records() {
     } finally {
       setLoading(false);
     }
-  }, [q, kind, page, activeBranchId]);
+  }, [debouncedQ, kind, page, activeBranchId]);
 
   useEffect(() => {
     if (branchLoading) return;
@@ -131,7 +142,7 @@ export function Records() {
 
   useEffect(() => {
     setPage(1);
-  }, [q, kind]);
+  }, [debouncedQ, kind]);
 
   const stats = useMemo(() => {
     const orderCount = rows.filter((r) => r.kind === 'ORDER').length;
@@ -328,29 +339,17 @@ export function Records() {
                 </Table>
               </TableWrapper>
 
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Page {page} of {totalPages}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={page <= 1 || loading}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={page >= totalPages || loading}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
+              <TablePagination
+                pagination={{
+                  page,
+                  pageSize: PAGE_SIZE,
+                  total,
+                  totalPages,
+                }}
+                page={page}
+                onPageChange={setPage}
+                loading={loading}
+              />
             </>
           )}
         </DashboardCardContent>

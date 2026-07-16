@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { dashboardCardClass } from '@/components/dashboard/dashboard-surface';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import {
   DashboardTable as Table,
@@ -84,6 +85,13 @@ export default function RestaurantUsersCard({
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [branchOptions, setBranchOptions] = useState<BranchOption[]>([]);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 1,
+  });
   const [inviteBranchId, setInviteBranchId] = useState('');
   const [branchEditEmployee, setBranchEditEmployee] =
     useState<EmployeeRow | null>(null);
@@ -135,12 +143,21 @@ export default function RestaurantUsersCard({
         axios.get<{
           employees: EmployeeRow[];
           pendingInvites: PendingInvite[];
-        }>('/api/restaurant/employees'),
+          pagination?: {
+            page: number;
+            pageSize: number;
+            total: number;
+            totalPages: number;
+          };
+        }>('/api/restaurant/employees', {
+          params: { page, limit: 20 },
+        }),
         axios.get<{ data?: BranchOption[] }>('/api/restaurant/branches'),
         loadAssignableRoles(),
       ]);
       setEmployees(empRes.data.employees ?? []);
       setPendingInvites(empRes.data.pendingInvites ?? []);
+      if (empRes.data.pagination) setPagination(empRes.data.pagination);
       setBranchOptions(branchRes.data.data ?? []);
     } catch (e: any) {
       toast.error(
@@ -151,7 +168,7 @@ export default function RestaurantUsersCard({
     } finally {
       setLoading(false);
     }
-  }, [loadAssignableRoles]);
+  }, [loadAssignableRoles, page]);
 
   useEffect(() => {
     void fetchAll();
@@ -602,6 +619,7 @@ export default function RestaurantUsersCard({
                   No employees loaded.
                 </p>
               ) : (
+                <div className="space-y-4">
                 <TableWrapper>
                   <Table minWidth={720}>
                     <TableHeader>
@@ -726,6 +744,13 @@ export default function RestaurantUsersCard({
                     </TableBody>
                   </Table>
                 </TableWrapper>
+                <TablePagination
+                  pagination={pagination}
+                  page={page}
+                  onPageChange={setPage}
+                  loading={loading}
+                />
+                </div>
               )}
             </div>
           </>

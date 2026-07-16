@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { loadCustomerMenuCategoryItems } from '@/lib/menu/load-customer-menu-progressive';
 import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query';
+import { parsePaginationParams } from '@/lib/pagination';
 
 type RouteContext = { params: Promise<{ categoryId: string }> };
 
@@ -23,9 +24,16 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: resolved.error }, { status: 400 });
     }
 
+    const { page, pageSize } = parsePaginationParams(req.nextUrl.searchParams, {
+      defaultPageSize: 24,
+      maxPageSize: 48,
+    });
+
     const data = await loadCustomerMenuCategoryItems({
       ...resolved,
       categoryId: trimmed,
+      page,
+      limit: pageSize,
     });
 
     if (!data) {

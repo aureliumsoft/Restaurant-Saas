@@ -123,6 +123,7 @@ export const resources = {
       customerOrdersEmpty: 'No orders yet.',
       customerOrdersEmptyHint:
         'Orders placed while signed in will appear here.',
+      customerOrdersLoadMore: 'Load more',
       customerOrderDetailTitle: 'Order details',
       customerOrderItems: 'Items',
       customerOrderPayment: 'Payment',
@@ -570,6 +571,7 @@ export const resources = {
       customerOrdersEmpty: 'Todavia no hay pedidos.',
       customerOrdersEmptyHint:
         'Los pedidos realizados con sesion iniciada apareceran aqui.',
+      customerOrdersLoadMore: 'Cargar mas',
       customerOrderDetailTitle: 'Detalles del pedido',
       customerOrderItems: 'Articulos',
       customerOrderPayment: 'Pago',

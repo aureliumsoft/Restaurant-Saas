@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
+import {
+  buildPaginationMeta,
+  parsePaginationParams,
+} from '@/lib/pagination';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { branchCapacityAllows } from '@/lib/subscription-plan-features';
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from '@/lib/subscription-plan-enforcement';
@@ -32,21 +36,49 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const branches = await db.branch.findMany({
-      where: { restaurantId: auth.restaurantId },
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        phone: true,
-        openingHours: true,
-        slotDurationMinutes: true,
-        createdAt: true,
-      },
-    });
+    const wantsPagination = _req.nextUrl.searchParams.get('page') != null;
+    const branchSelect = {
+      id: true,
+      name: true,
+      address: true,
+      phone: true,
+      openingHours: true,
+      slotDurationMinutes: true,
+      createdAt: true,
+    } as const;
 
-    return NextResponse.json({ data: branches }, { status: 200 });
+    if (!wantsPagination) {
+      const branches = await db.branch.findMany({
+        where: { restaurantId: auth.restaurantId },
+        orderBy: { createdAt: 'asc' },
+        select: branchSelect,
+      });
+      return NextResponse.json({ data: branches }, { status: 200 });
+    }
+
+    const { page, pageSize, skip, take } = parsePaginationParams(
+      _req.nextUrl.searchParams,
+      { defaultPageSize: 12 }
+    );
+    const where = { restaurantId: auth.restaurantId };
+    const [total, branches] = await Promise.all([
+      db.branch.count({ where }),
+      db.branch.findMany({
+        where,
+        orderBy: { createdAt: 'asc' },
+        skip,
+        take,
+        select: branchSelect,
+      }),
+    ]);
+
+    return NextResponse.json(
+      {
+        data: branches,
+        pagination: buildPaginationMeta(page, pageSize, total),
+      },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('restaurant branches', error);
     return NextResponse.json(

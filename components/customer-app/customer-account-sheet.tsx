@@ -103,7 +103,9 @@ export function CustomerAccountSheet({
   const [error, setError] = useState<string | null>(null);
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersLoadingMore, setOrdersLoadingMore] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [ordersNextCursor, setOrdersNextCursor] = useState<string | null>(null);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -131,22 +133,23 @@ export function CustomerAccountSheet({
     }
   }, [open, account, view]);
 
-  // Load orders whenever the orders step becomes active.
+  // Load first page of orders whenever the orders step becomes active.
   useEffect(() => {
     if (!open || step !== 'orders' || !account || !restaurantSlug) return;
 
     let cancelled = false;
     setOrdersLoading(true);
     setOrdersError(null);
+    setOrdersNextCursor(null);
 
     void (async () => {
       try {
         const res = await fetch(
-          `/api/customer/me/orders?restaurantSlug=${encodeURIComponent(restaurantSlug)}`,
+          `/api/customer/me/orders?restaurantSlug=${encodeURIComponent(restaurantSlug)}&limit=20`,
           { cache: 'no-store' }
         );
         const json = (await res.json().catch(() => ({}))) as {
-          data?: { orders?: OrderListItem[] };
+          data?: { orders?: OrderListItem[]; nextCursor?: string | null };
           error?: string;
         };
         if (cancelled) return;
@@ -156,6 +159,7 @@ export function CustomerAccountSheet({
           return;
         }
         setOrders(json.data?.orders ?? []);
+        setOrdersNextCursor(json.data?.nextCursor ?? null);
       } catch {
         if (!cancelled) setOrdersError(t('customerAuthGenericError'));
       } finally {
@@ -167,6 +171,25 @@ export function CustomerAccountSheet({
       cancelled = true;
     };
   }, [open, step, account, restaurantSlug, t]);
+
+  const loadMoreOrders = async () => {
+    if (!restaurantSlug || !ordersNextCursor || ordersLoadingMore) return;
+    setOrdersLoadingMore(true);
+    try {
+      const res = await fetch(
+        `/api/customer/me/orders?restaurantSlug=${encodeURIComponent(restaurantSlug)}&limit=20&cursor=${encodeURIComponent(ordersNextCursor)}`,
+        { cache: 'no-store' }
+      );
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: { orders?: OrderListItem[]; nextCursor?: string | null };
+      };
+      if (!res.ok) return;
+      setOrders((prev) => [...prev, ...(json.data?.orders ?? [])]);
+      setOrdersNextCursor(json.data?.nextCursor ?? null);
+    } finally {
+      setOrdersLoadingMore(false);
+    }
+  };
 
   const openOrderDetail = async (orderId: string) => {
     if (!restaurantSlug) return;
@@ -641,7 +664,8 @@ export function CustomerAccountSheet({
                   </p>
                 </div>
               ) : (
-                orders.map((order) => (
+                <>
+                  {orders.map((order) => (
                   <button
                     key={order.id}
                     type="button"
@@ -675,7 +699,23 @@ export function CustomerAccountSheet({
                     </div>
                     <ChevronRight className="h-4 w-4 shrink-0 text-[#8a86a0]" />
                   </button>
-                ))
+                  ))}
+                  {ordersNextCursor ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 w-full rounded-xl border-[#d9d9e2]"
+                      disabled={ordersLoadingMore}
+                      onClick={() => void loadMoreOrders()}
+                    >
+                      {ordersLoadingMore ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        t('customerOrdersLoadMore')
+                      )}
+                    </Button>
+                  ) : null}
+                </>
               )}
             </div>
           ) : null}

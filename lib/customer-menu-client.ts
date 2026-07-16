@@ -61,16 +61,19 @@ export function buildCustomerMenuCategoriesUrl(
   return `/api/customer/menu/categories?${query}`;
 }
 
-/** Progressive menu: products for one category. */
+/** Progressive menu: products for one category (optional page/limit batching). */
 export function buildCustomerMenuCategoryItemsUrl(
   categoryId: string,
   restaurantSlug: string | null | undefined,
   storeId: string | null | undefined,
-  hostSubdomain: string | null
+  hostSubdomain: string | null,
+  opts?: { page?: number; limit?: number }
 ): string | null {
   const query = customerMenuQueryString(restaurantSlug, storeId, hostSubdomain);
   if (!query) return null;
-  return `/api/customer/menu/categories/${encodeURIComponent(categoryId)}?${query}`;
+  const page = opts?.page ?? 1;
+  const limit = opts?.limit ?? 24;
+  return `/api/customer/menu/categories/${encodeURIComponent(categoryId)}?${query}&page=${page}&limit=${limit}`;
 }
 
 /** Kiosk progressive menu helpers (slug-only). */
@@ -80,7 +83,10 @@ export function buildKioskMenuCategoriesUrl(slug: string): string {
 
 export function buildKioskMenuCategoryItemsUrl(
   slug: string,
-  categoryId: string
+  categoryId: string,
+  opts?: { page?: number; limit?: number }
 ): string {
-  return `/api/customer/menu/categories/${encodeURIComponent(categoryId)}?slug=${encodeURIComponent(slug)}`;
+  const page = opts?.page ?? 1;
+  const limit = opts?.limit ?? 24;
+  return `/api/customer/menu/categories/${encodeURIComponent(categoryId)}?slug=${encodeURIComponent(slug)}&page=${page}&limit=${limit}`;
 }

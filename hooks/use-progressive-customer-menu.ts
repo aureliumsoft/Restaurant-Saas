@@ -13,14 +13,24 @@ export type ProgressiveMenuCategory<TItem> = {
 
 type UseProgressiveCustomerMenuOptions = {
   categoriesUrl: string | null;
-  categoryItemsUrl: (categoryId: string) => string | null;
+  /** Build URL for a category page. page is 1-based. */
+  categoryItemsUrl: (
+    categoryId: string,
+    page: number,
+    limit: number
+  ) => string | null;
   enabled?: boolean;
+  /** Products per request batch (default 24). */
+  batchSize?: number;
 };
+
+const DEFAULT_BATCH = 24;
 
 export function useProgressiveCustomerMenu<TItem>({
   categoriesUrl,
   categoryItemsUrl,
   enabled = true,
+  batchSize = DEFAULT_BATCH,
 }: UseProgressiveCustomerMenuOptions) {
   const [restaurantMeta, setRestaurantMeta] = useState<Record<
     string,
@@ -97,21 +107,9 @@ export function useProgressiveCustomerMenu<TItem>({
         setCategories(initial);
         setCategoriesLoading(false);
 
-        // One category at a time — first categories paint ASAP; later ones follow.
+        // Categories sequentially; within each category, batches of products.
         for (const category of initial) {
           if (isStale()) return;
-
-          const itemsUrl = categoryItemsUrl(category.id);
-          if (!itemsUrl) {
-            setCategories((prev) =>
-              prev.map((c) =>
-                c.id === category.id
-                  ? { ...c, loaded: true, loading: false }
-                  : c
-              )
-            );
-            continue;
-          }
 
           setCategories((prev) =>
             prev.map((c) =>
@@ -119,35 +117,67 @@ export function useProgressiveCustomerMenu<TItem>({
             )
           );
 
-          try {
-            const itemsRes = await fetch(itemsUrl, { cache: 'default' });
-            const itemsBody = (await itemsRes.json().catch(() => ({}))) as {
-              data?: { items?: TItem[] };
-              error?: string;
-            };
+          let page = 1;
+          let hasMore = true;
+          let accumulated: TItem[] = [];
+
+          while (hasMore) {
             if (isStale()) return;
 
-            const items = Array.isArray(itemsBody.data?.items)
-              ? itemsBody.data!.items!
-              : [];
+            const itemsUrl = categoryItemsUrl(category.id, page, batchSize);
+            if (!itemsUrl) {
+              hasMore = false;
+              break;
+            }
 
-            setCategories((prev) =>
-              prev.map((c) =>
-                c.id === category.id
-                  ? { ...c, items, loaded: true, loading: false }
-                  : c
-              )
-            );
-          } catch {
-            if (isStale()) return;
-            setCategories((prev) =>
-              prev.map((c) =>
-                c.id === category.id
-                  ? { ...c, loaded: true, loading: false }
-                  : c
-              )
-            );
+            try {
+              const itemsRes = await fetch(itemsUrl, { cache: 'default' });
+              const itemsBody = (await itemsRes.json().catch(() => ({}))) as {
+                data?: {
+                  items?: TItem[];
+                  hasMore?: boolean;
+                  total?: number;
+                };
+                error?: string;
+              };
+              if (isStale()) return;
+
+              const batch = Array.isArray(itemsBody.data?.items)
+                ? itemsBody.data!.items!
+                : [];
+              accumulated = [...accumulated, ...batch];
+              hasMore = Boolean(itemsBody.data?.hasMore) && batch.length > 0;
+
+              // Paint after each batch so the UI populates progressively.
+              setCategories((prev) =>
+                prev.map((c) =>
+                  c.id === category.id
+                    ? {
+                        ...c,
+                        items: accumulated,
+                        loaded: !hasMore,
+                        loading: hasMore,
+                      }
+                    : c
+                )
+              );
+
+              page += 1;
+              if (batch.length === 0) hasMore = false;
+            } catch {
+              if (isStale()) return;
+              hasMore = false;
+            }
           }
+
+          if (isStale()) return;
+          setCategories((prev) =>
+            prev.map((c) =>
+              c.id === category.id
+                ? { ...c, items: accumulated, loaded: true, loading: false }
+                : c
+            )
+          );
         }
 
         if (!isStale()) setMenuComplete(true);
@@ -162,7 +192,7 @@ export function useProgressiveCustomerMenu<TItem>({
     return () => {
       cancelled = true;
     };
-  }, [categoriesUrl, categoryItemsUrl, enabled, reset]);
+  }, [categoriesUrl, categoryItemsUrl, enabled, reset, batchSize]);
 
   return {
     restaurantMeta,

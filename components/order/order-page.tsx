@@ -430,6 +430,8 @@ function ProductCard({
           <img
             src={product.imageUrl}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="h-44 w-full object-cover"
           />
         ) : (
@@ -513,12 +515,13 @@ export default function OrderPageClient({
     hostSubdomain
   );
   const categoryItemsUrl = useCallback(
-    (categoryId: string) =>
+    (categoryId: string, page: number, limit: number) =>
       buildCustomerMenuCategoryItemsUrl(
         categoryId,
         orderInfo?.restaurantSlug,
         orderInfo?.storeId,
-        hostSubdomain
+        hostSubdomain,
+        { page, limit }
       ),
     [orderInfo?.restaurantSlug, orderInfo?.storeId, hostSubdomain]
   );

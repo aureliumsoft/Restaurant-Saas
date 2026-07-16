@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
+import {
+  buildPaginationMeta,
+  parsePaginationParams,
+} from '@/lib/pagination';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 
 const bodySchema = z.object({
@@ -20,12 +24,34 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const rows = await db.restaurantVariation.findMany({
-    where: { restaurantId: auth.restaurant.id },
-    orderBy: { sortOrder: 'asc' },
-  });
+  const wantsPagination = req.nextUrl.searchParams.get('page') != null;
+  if (!wantsPagination) {
+    const rows = await db.restaurantVariation.findMany({
+      where: { restaurantId: auth.restaurant.id },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return NextResponse.json({ data: rows });
+  }
 
-  return NextResponse.json({ data: rows });
+  const { page, pageSize, skip, take } = parsePaginationParams(
+    req.nextUrl.searchParams,
+    { defaultPageSize: 12 }
+  );
+  const where = { restaurantId: auth.restaurant.id };
+  const [total, rows] = await Promise.all([
+    db.restaurantVariation.count({ where }),
+    db.restaurantVariation.findMany({
+      where,
+      orderBy: { sortOrder: 'asc' },
+      skip,
+      take,
+    }),
+  ]);
+
+  return NextResponse.json({
+    data: rows,
+    pagination: buildPaginationMeta(page, pageSize, total),
+  });
 }
 
 export async function POST(req: NextRequest) {

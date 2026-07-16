@@ -45,6 +45,7 @@ import {
   useBranchContext,
   withBranchQuery,
 } from '@/hooks/use-branch-context';
+import { TablePagination } from '@/components/ui/table-pagination';
 
 export type DiningTableRow = {
   id: string;
@@ -54,6 +55,8 @@ export type DiningTableRow = {
   updatedAt: string;
 };
 
+const PAGE_SIZE = 20;
+
 export function TablesModule() {
   const { activeBranchId, loading: branchLoading, branches } =
     useBranchContext();
@@ -61,6 +64,13 @@ export function TablesModule() {
     branches.find((b) => b.id === activeBranchId)?.name ?? null;
   const [rows, setRows] = useState<DiningTableRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<DiningTableRow | null>(null);
   const [name, setName] = useState('');
@@ -72,16 +82,32 @@ export function TablesModule() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get<{ data: DiningTableRow[] }>(
-        withBranchQuery('/api/restaurant/tables', activeBranchId)
+      const res = await axios.get<{
+        data: DiningTableRow[];
+        pagination?: {
+          page: number;
+          pageSize: number;
+          total: number;
+          totalPages: number;
+        };
+      }>(
+        withBranchQuery(
+          `/api/restaurant/tables?page=${page}&limit=${PAGE_SIZE}`,
+          activeBranchId
+        )
       );
       setRows(Array.isArray(res.data?.data) ? res.data.data : []);
+      if (res.data.pagination) setPagination(res.data.pagination);
     } catch {
       toast.error('Could not load tables');
       setRows([]);
     } finally {
       setLoading(false);
     }
+  }, [activeBranchId, page]);
+
+  useEffect(() => {
+    setPage(1);
   }, [activeBranchId]);
 
   useEffect(() => {
@@ -92,7 +118,7 @@ export function TablesModule() {
   function openCreate() {
     setEditing(null);
     setName('');
-    setSortOrder(String(rows.length));
+    setSortOrder(String(pagination.total));
     setDialogOpen(true);
   }
 
@@ -189,6 +215,7 @@ export function TablesModule() {
             No tables yet. Add one so staff can select it on the POS screen.
           </p>
         ) : (
+          <>
           <DashboardTableWrapper>
             <DashboardTable>
               <DashboardTableHeader>
@@ -232,6 +259,13 @@ export function TablesModule() {
               </DashboardTableBody>
             </DashboardTable>
           </DashboardTableWrapper>
+          <TablePagination
+            pagination={pagination}
+            page={page}
+            onPageChange={setPage}
+            loading={loading}
+          />
+          </>
         )}
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

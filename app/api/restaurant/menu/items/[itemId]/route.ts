@@ -10,6 +10,73 @@ import {
   validateMenuItemCategoryIds,
 } from "@/lib/menu/menu-item-categories";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
+import {
+  buildCustomerMenuAttributeGroupsSelect,
+  customerMenuItemCoreSelect,
+} from "@/lib/menu/customer-menu-attribute-groups-select";
+import { personalizeGroupsSelect } from "@/lib/menu/personalize-groups-select";
+
+const detailSelect = {
+  ...customerMenuItemCoreSelect,
+  categoryId: true,
+  createdAt: true,
+  updatedAt: true,
+  attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
+  personalizeGroups: personalizeGroupsSelect,
+  offersFromThis: {
+    orderBy: { sortOrder: "asc" as const },
+    select: {
+      id: true,
+      sortOrder: true,
+      offeredItem: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          imageUrl: true,
+          price: true,
+          salePrice: true,
+        },
+      },
+    },
+  },
+} as const;
+
+export async function GET(
+  req: NextRequest,
+  ctx: { params: Promise<{ itemId: string }> }
+) {
+  const auth = await getRestaurantForOwnerRequest(req, {
+    moduleKeys: ["product", "pos", "recommendations"],
+    action: "access",
+  });
+  if ("error" in auth) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  const { itemId } = await ctx.params;
+  const item = await db.menuItem.findFirst({
+    where: { id: itemId, restaurantId: auth.restaurant.id },
+    select: detailSelect,
+  });
+  if (!item) {
+    return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  }
+
+  const categoryIds = await getMenuItemCategoryIds(itemId);
+  return NextResponse.json(
+    {
+      data: {
+        ...item,
+        categoryIds:
+          categoryIds.length > 0 ? categoryIds : [item.categoryId],
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      },
+    },
+    { status: 200 }
+  );
+}
 
 const patchSchema = z
   .object({

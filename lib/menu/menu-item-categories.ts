@@ -158,9 +158,13 @@ export async function loadSingleCategoryWithLinkedItems<
   itemSelect: TItemSelect;
   categoryWhere?: Prisma.MenuCategoryWhereInput;
   itemOrderBy?: Prisma.MenuItemOrderByWithRelationInput;
+  /** When set, only this page of items is loaded (full id list is still resolved). */
+  pagination?: { skip: number; take: number };
 }): Promise<
   | (Prisma.MenuCategoryGetPayload<{ select: TCategorySelect }> & {
       items: Prisma.MenuItemGetPayload<{ select: TItemSelect }>[];
+      itemTotal: number;
+      hasMore: boolean;
     })
   | null
 > {
@@ -176,24 +180,22 @@ export async function loadSingleCategoryWithLinkedItems<
   });
   if (!category) return null;
 
+  // Resolve ordered item IDs first (cheap), then load full rows for the page.
   const links = await db.menuItemCategory.findMany({
     where: {
       categoryId: options.categoryId,
       category: { restaurantId: options.restaurantId },
     },
     orderBy: [{ sortOrder: 'asc' }, { menuItem: { name: 'asc' } }],
-    select: {
-      menuItemId: true,
-      menuItem: { select: options.itemSelect },
-    },
+    select: { menuItemId: true },
   });
 
-  const items: MenuItem[] = [];
+  const orderedIds: string[] = [];
   const seen = new Set<string>();
   for (const link of links) {
     if (seen.has(link.menuItemId)) continue;
     seen.add(link.menuItemId);
-    items.push(link.menuItem);
+    orderedIds.push(link.menuItemId);
   }
 
   const legacyItems = await db.menuItem.findMany({
@@ -202,20 +204,59 @@ export async function loadSingleCategoryWithLinkedItems<
       categoryId: options.categoryId,
     },
     orderBy: options.itemOrderBy ?? { name: 'asc' },
-    select: options.itemSelect,
+    select: { id: true },
   });
   for (const row of legacyItems) {
-    const item = row as MenuItem & { id: string };
-    if (seen.has(item.id)) continue;
-    seen.add(item.id);
-    items.push(item);
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    orderedIds.push(row.id);
+  }
+
+  const itemTotal = orderedIds.length;
+  const skip = options.pagination?.skip ?? 0;
+  const take = options.pagination?.take ?? orderedIds.length;
+  const pageIds =
+    options.pagination != null
+      ? orderedIds.slice(skip, skip + take)
+      : orderedIds;
+  const hasMore =
+    options.pagination != null ? skip + pageIds.length < itemTotal : false;
+
+  if (pageIds.length === 0) {
+    return {
+      ...category,
+      items: [],
+      itemTotal,
+      hasMore,
+    } as Prisma.MenuCategoryGetPayload<{ select: TCategorySelect }> & {
+      items: MenuItem[];
+      itemTotal: number;
+      hasMore: boolean;
+    };
+  }
+
+  const loaded = await db.menuItem.findMany({
+    where: { id: { in: pageIds } },
+    select: options.itemSelect,
+  });
+  const byId = new Map(
+    loaded.map((row) => [(row as MenuItem & { id: string }).id, row as MenuItem])
+  );
+  const items: MenuItem[] = [];
+  for (const id of pageIds) {
+    const item = byId.get(id);
+    if (item) items.push(item);
   }
 
   return {
     ...category,
     items,
+    itemTotal,
+    hasMore,
   } as Prisma.MenuCategoryGetPayload<{ select: TCategorySelect }> & {
     items: MenuItem[];
+    itemTotal: number;
+    hasMore: boolean;
   };
 }
 

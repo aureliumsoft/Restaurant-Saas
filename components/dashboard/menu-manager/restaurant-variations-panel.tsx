@@ -21,14 +21,24 @@ import {
 } from '@/components/ui/confirmation-dialogs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { filterNameTextInput } from '@/lib/validation/fields';
 
 import type { RestaurantVariationRow } from './types';
 
+const PAGE_SIZE = 12;
+
 export function RestaurantVariationsPanel() {
   const [rows, setRows] = useState<RestaurantVariationRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
 
   const [name, setName] = useState('');
   const [shortLabel, setShortLabel] = useState('');
@@ -50,16 +60,25 @@ export function RestaurantVariationsPanel() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get<{ data: RestaurantVariationRow[] }>(
-        '/api/restaurant/variations'
-      );
+      const res = await axios.get<{
+        data: RestaurantVariationRow[];
+        pagination?: {
+          page: number;
+          pageSize: number;
+          total: number;
+          totalPages: number;
+        };
+      }>('/api/restaurant/variations', {
+        params: { page, limit: PAGE_SIZE },
+      });
       setRows(res.data.data ?? []);
+      if (res.data.pagination) setPagination(res.data.pagination);
     } catch {
       toast.error('Could not load variations.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     void load();
@@ -181,21 +200,29 @@ export function RestaurantVariationsPanel() {
               <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
             </p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {rows.map((row) => (
-                <VariationCard
-                  key={row.id}
-                  variation={row}
-                  onRequestSave={(draft) => {
-                    setPendingSave(draft);
-                    setConfirmSaveOpen(true);
-                  }}
-                  onDelete={(id) => {
-                    setDeletingId(id);
-                    setConfirmDeleteOpen(true);
-                  }}
-                />
-              ))}
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {rows.map((row) => (
+                  <VariationCard
+                    key={row.id}
+                    variation={row}
+                    onRequestSave={(draft) => {
+                      setPendingSave(draft);
+                      setConfirmSaveOpen(true);
+                    }}
+                    onDelete={(id) => {
+                      setDeletingId(id);
+                      setConfirmDeleteOpen(true);
+                    }}
+                  />
+                ))}
+              </div>
+              <TablePagination
+                pagination={pagination}
+                page={page}
+                onPageChange={setPage}
+                loading={loading}
+              />
             </div>
           )}
 

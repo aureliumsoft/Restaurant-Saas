@@ -49,13 +49,19 @@ export async function countDiningTables(
 
 export async function listDiningTables(
   restaurantId: string,
-  branchId: string | null
+  branchId: string | null,
+  pagination?: { skip: number; take: number }
 ): Promise<DiningTableListRow[]> {
   const hasBranchCol = await hasDiningTableBranchColumn();
+  const skip = pagination?.skip;
+  const take = pagination?.take;
   if (!hasBranchCol || !branchId) {
     const rows = await db.diningTable.findMany({
       where: { restaurantId },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      ...(pagination
+        ? { skip: pagination.skip, take: pagination.take }
+        : {}),
       select: {
         id: true,
         name: true,
@@ -65,6 +71,16 @@ export async function listDiningTables(
       },
     });
     return rows.map((r) => ({ ...r, branchId: null }));
+  }
+  if (pagination) {
+    return db.$queryRaw<DiningTableListRow[]>`
+      SELECT id, name, "sortOrder", "branchId", "createdAt", "updatedAt"
+      FROM "DiningTable"
+      WHERE "restaurantId" = ${restaurantId}
+        AND "branchId" = ${branchId}
+      ORDER BY "sortOrder" ASC, name ASC
+      LIMIT ${take!} OFFSET ${skip!}
+    `;
   }
   return db.$queryRaw<DiningTableListRow[]>`
     SELECT id, name, "sortOrder", "branchId", "createdAt", "updatedAt"

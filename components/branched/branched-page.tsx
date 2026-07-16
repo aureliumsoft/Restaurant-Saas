@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { toast } from 'react-toastify';
 import {
   Cross,
@@ -104,6 +105,13 @@ export function BranchedPage() {
   const { plan } = useStaffPermissions();
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 12,
+    total: 0,
+    totalPages: 1,
+  });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -124,10 +132,19 @@ export function BranchedPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await axios.get<{ data: BranchRow[] }>(
-        '/api/restaurant/branches'
-      );
+      const res = await axios.get<{
+        data: BranchRow[];
+        pagination?: {
+          page: number;
+          pageSize: number;
+          total: number;
+          totalPages: number;
+        };
+      }>('/api/restaurant/branches', {
+        params: { page, limit: 12 },
+      });
       setBranches(res.data.data ?? []);
+      if (res.data.pagination) setPagination(res.data.pagination);
     } catch {
       toast.error('Could not load branches');
       setBranches([]);
@@ -138,14 +155,15 @@ export function BranchedPage() {
 
   useEffect(() => {
     void load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const activeBranch = branches.find((b) => b.id === activeId) ?? null;
-  const cannotDeleteLastBranch = branches.length <= 1;
+  const cannotDeleteLastBranch = pagination.total <= 1;
   const maxBranches = plan?.maxBranches ?? 1;
   const branchCap =
     maxBranches === null ? Number.POSITIVE_INFINITY : maxBranches;
-  const atBranchLimit = branches.length >= branchCap;
+  const atBranchLimit = pagination.total >= branchCap;
 
   function resetForm() {
     setActiveId(null);
@@ -483,20 +501,22 @@ export function BranchedPage() {
             </p>
           ) : (
             <div className="space-y-2">
-              {branches.length <= 1 ? (
+              {pagination.total <= 1 ? (
                 <p className="text-xs text-amber-600">
                   You must keep at least one branch.
                 </p>
               ) : null}
               {branches.map((b, index) => {
                 const editing = b.id === activeId;
+                const displayIndex =
+                  (pagination.page - 1) * pagination.pageSize + index + 1;
                 return (
                   <div
                     key={b.id}
                     className={`rounded-lg border p-3 ${editing ? 'border-primary' : ''}`}
                   >
                     <p className="text-sm font-semibold">
-                      {index + 1}. {b.name}
+                      {displayIndex}. {b.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {b.address || 'No address'}
@@ -524,6 +544,12 @@ export function BranchedPage() {
                   </div>
                 );
               })}
+              <TablePagination
+                pagination={pagination}
+                page={page}
+                onPageChange={setPage}
+                loading={loading}
+              />
             </div>
           )}
         </CardContent>

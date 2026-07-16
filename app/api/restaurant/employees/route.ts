@@ -13,6 +13,10 @@ import { db } from '@/lib/db';
 import { GLOBAL_ROLE_SLUG, getGlobalRoleIdBySlug } from '@/lib/global-roles';
 import { syncEmployeeBranches } from '@/lib/branch/branch-scope';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import {
+  buildPaginationMeta,
+  parsePaginationParams,
+} from '@/lib/pagination';
 import { RESTAURANT_ROLE_SLUG } from '@/lib/restaurant-roles';
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from '@/lib/subscription-plan-enforcement';
 
@@ -71,25 +75,68 @@ export async function GET(req: NextRequest) {
   }
 
   const now = new Date();
+  const wantsPagination = req.nextUrl.searchParams.get('page') != null;
+  const employeeInclude = {
+    user: { select: { id: true, name: true, email: true } },
+    role: { select: { id: true, name: true, slug: true } },
+    branches: { select: { branchId: true } },
+  } as const;
 
-  const [employees, pendingInvites] = await Promise.all([
-    db.employee.findMany({
+  const pendingInvites = await db.employeeInvite.findMany({
+    where: {
+      restaurantId: auth.restaurantId,
+      status: 'PENDING',
+      expiresAt: { gt: now },
+    },
+    include: { role: { select: { id: true, name: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (!wantsPagination) {
+    const employees = await db.employee.findMany({
       where: { restaurantId: auth.restaurantId },
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-        role: { select: { id: true, name: true, slug: true } },
-        branches: { select: { branchId: true } },
-      },
+      include: employeeInclude,
       orderBy: { createdAt: 'asc' },
-    }),
-    db.employeeInvite.findMany({
-      where: {
-        restaurantId: auth.restaurantId,
-        status: 'PENDING',
-        expiresAt: { gt: now },
-      },
-      include: { role: { select: { id: true, name: true } } },
-      orderBy: { createdAt: 'desc' },
+    });
+
+    return NextResponse.json({
+      restaurantName: restaurant.name,
+      employees: employees.map((e) => ({
+        id: e.id,
+        userId: e.user.id,
+        name: e.user.name,
+        email: e.user.email,
+        role: {
+          id: e.role.id,
+          name: e.role.name,
+          slug: e.role.slug,
+        },
+        isOwner: e.userId === restaurant.ownerId,
+        branchIds: e.branches.map((b) => b.branchId),
+      })),
+      pendingInvites: pendingInvites.map((inv) => ({
+        id: inv.id,
+        email: inv.email,
+        role: { id: inv.role.id, name: inv.role.name },
+        branchIds: inv.branchIds ?? [],
+        expiresAt: inv.expiresAt.toISOString(),
+      })),
+    });
+  }
+
+  const { page, pageSize, skip, take } = parsePaginationParams(
+    req.nextUrl.searchParams,
+    { defaultPageSize: 20 }
+  );
+  const where = { restaurantId: auth.restaurantId };
+  const [total, employees] = await Promise.all([
+    db.employee.count({ where }),
+    db.employee.findMany({
+      where,
+      include: employeeInclude,
+      orderBy: { createdAt: 'asc' },
+      skip,
+      take,
     }),
   ]);
 
@@ -115,6 +162,7 @@ export async function GET(req: NextRequest) {
       branchIds: inv.branchIds ?? [],
       expiresAt: inv.expiresAt.toISOString(),
     })),
+    pagination: buildPaginationMeta(page, pageSize, total),
   });
 }
 

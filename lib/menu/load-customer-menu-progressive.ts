@@ -191,10 +191,16 @@ export async function loadCustomerMenuCategoryItems(options: {
   slug?: string | null;
   subdomain?: string | null;
   categoryId: string;
+  page?: number;
+  limit?: number;
 }) {
   return withMenuSelectMode(async (mode) => {
     const restaurant = await resolveRestaurant(options.slug, options.subdomain);
     if (!restaurant) return null;
+
+    const page = Math.max(1, options.page ?? 1);
+    const limit = Math.min(48, Math.max(1, options.limit ?? 24));
+    const skip = (page - 1) * limit;
 
     const [category, pool] = await Promise.all([
       loadSingleCategoryWithLinkedItems({
@@ -208,6 +214,7 @@ export async function loadCustomerMenuCategoryItems(options: {
         },
         itemSelect: buildCustomerMenuItemSelect(mode),
         categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
+        pagination: { skip, take: limit },
       }),
       loadRecommendationPool(restaurant.id, mode),
     ]);
@@ -225,6 +232,10 @@ export async function loadCustomerMenuCategoryItems(options: {
     return {
       categoryId: category.id,
       items: sanitized?.menus?.[0]?.items ?? [],
+      page,
+      limit,
+      total: category.itemTotal,
+      hasMore: category.hasMore,
     };
   });
 }

@@ -356,7 +356,8 @@ export function KioskApp({
   const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
 
   const categoryItemsUrl = useCallback(
-    (id: string) => buildKioskMenuCategoryItemsUrl(slug, id),
+    (id: string, page: number, limit: number) =>
+      buildKioskMenuCategoryItemsUrl(slug, id, { page, limit }),
     [slug]
   );
 
@@ -834,6 +835,8 @@ export function KioskApp({
         <img
           src={src}
           alt={alt}
+          loading="lazy"
+          decoding="async"
           className="aspect-square w-full rounded-lg bg-[#f1f5f9] object-cover"
         />
       );

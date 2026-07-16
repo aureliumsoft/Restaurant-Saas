@@ -20,12 +20,10 @@ import {
 
 import type { OrderInfo } from '@/components/order/order-types';
 import {
-  buildCustomerMenuRequestUrl,
   inferHostSubdomainForMenu,
 } from '@/lib/customer-menu-client';
 import { resolveWebCustomerName } from '@/lib/web-customer';
 import {
-  buildProductImageByIdMap,
   cartLineTitle,
   cartModifierDisplayLines,
   resolveCartLineImageUrl,
@@ -76,51 +74,21 @@ type CartPageProps = {
   orderInfo?: OrderInfo;
 };
 
-type CustomerMenuProduct = {
-  id: string;
-  name: string;
-  description: string | null;
-  imageUrl: string | null;
-  price: number;
-  salePrice: number | null;
-  categoryId: string;
-  offersFromThis?: {
-    id: string;
-    sortOrder: number;
-    offeredItem: {
-      id: string;
-      name: string;
-      description: string | null;
-      imageUrl: string | null;
-      price: number;
-      salePrice: number | null;
-    };
-  }[];
-};
-
-type CustomerMenuCategory = {
-  id: string;
-  name: string;
-  items: CustomerMenuProduct[];
-};
-
-type CustomerMenuRestaurant = {
-  id: string;
-  menus: CustomerMenuCategory[];
-};
-
-type CustomerMenuResponse =
-  | {
-      data: CustomerMenuRestaurant | null;
-    }
-  | CustomerMenuRestaurant;
-
 type OfferedProduct = {
   id: string;
   name: string;
   description: string | null;
   imageUrl: string | null;
   unitPrice: number;
+};
+
+type CartOfferItem = {
+  id: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  price: number;
+  salePrice: number | null;
 };
 
 function lineUnitTotal(line: CartLine) {
@@ -187,7 +155,10 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
 export default function CartPageClient({ orderType, orderId, orderInfo }: CartPageProps) {
   const { t } = useTranslation();
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [menuRestaurant, setMenuRestaurant] = useState<CustomerMenuRestaurant | null>(null);
+  const [productImages, setProductImages] = useState<
+    Record<string, string | null>
+  >({});
+  const [cartOffers, setCartOffers] = useState<CartOfferItem[]>([]);
   const [offersOpen, setOffersOpen] = useState(false);
   const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
@@ -287,49 +258,31 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
   const grandTotal = total + serviceChargeAmount;
 
   const productImageById = useMemo(() => {
-    if (!menuRestaurant) return new Map<string, string | null>();
-    return buildProductImageByIdMap(
-      menuRestaurant.menus.flatMap((category) => category.items)
-    );
-  }, [menuRestaurant]);
+    return new Map<string, string | null>(Object.entries(productImages));
+  }, [productImages]);
 
   const offeredProducts: OfferedProduct[] = useMemo(() => {
-    if (!menuRestaurant || cart.length === 0) return [];
-
-    const byId = new Map<string, OfferedProduct>();
-
-    for (const line of cart) {
-      const product = menuRestaurant.menus
-        .flatMap((c) => c.items)
-        .find((p) => p.id === line.menuItemId);
-      if (!product) continue;
-
-      const offers = product.offersFromThis ?? [];
-      for (const offer of offers) {
-        const item = offer.offeredItem;
-        // Skip products already in cart
-        if (cart.some((l) => l.menuItemId === item.id)) continue;
-
-        if (!byId.has(item.id)) {
-          const base =
-            item.salePrice != null &&
-            item.salePrice > 0 &&
-            item.salePrice < item.price
-              ? item.salePrice
-              : item.price;
-          byId.set(item.id, {
-            id: item.id,
-            name: item.name,
-            description: item.description,
-            imageUrl: item.imageUrl,
-            unitPrice: base,
-          });
-        }
-      }
+    if (cartOffers.length === 0 || cart.length === 0) return [];
+    const inCart = new Set(cart.map((l) => l.menuItemId));
+    const out: OfferedProduct[] = [];
+    for (const item of cartOffers) {
+      if (inCart.has(item.id)) continue;
+      const unitPrice =
+        item.salePrice != null &&
+        item.salePrice > 0 &&
+        item.salePrice < item.price
+          ? item.salePrice
+          : item.price;
+      out.push({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        imageUrl: item.imageUrl,
+        unitPrice,
+      });
     }
-
-    return Array.from(byId.values());
-  }, [cart, menuRestaurant]);
+    return out;
+  }, [cart, cartOffers]);
 
   useEffect(() => {
     if (offeredProducts.length > 0) {
@@ -387,43 +340,54 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
   }, [themePrimaryColor]);
 
   useEffect(() => {
-    const loadMenu = async () => {
+    const loadOffers = async () => {
       try {
         const hostSubdomain = inferHostSubdomainForMenu();
+        const slug = orderInfo?.restaurantSlug?.trim() || null;
         const queryStoreId =
           orderInfo?.storeId && orderInfo.storeId.trim().length > 0
             ? orderInfo.storeId.trim()
             : null;
-        const menuUrl = buildCustomerMenuRequestUrl(
-          orderInfo?.restaurantSlug,
-          queryStoreId,
-          hostSubdomain
+        const query = slug
+          ? `slug=${encodeURIComponent(slug)}`
+          : queryStoreId || hostSubdomain
+            ? `subdomain=${encodeURIComponent(queryStoreId || hostSubdomain || '')}`
+            : null;
+
+        const itemIds = [
+          ...new Set(cart.map((l) => l.menuItemId).filter(Boolean)),
+        ];
+        if (!query || itemIds.length === 0) {
+          setProductImages({});
+          setCartOffers([]);
+          return;
+        }
+
+        const res = await fetch(
+          `/api/customer/menu/cart-offers?${query}&itemIds=${encodeURIComponent(itemIds.join(','))}`
         );
-
-        if (!menuUrl) {
-          setMenuRestaurant(null);
-          return;
-        }
-
-        const res = await fetch(menuUrl);
         if (!res.ok) {
-          setMenuRestaurant(null);
+          setProductImages({});
+          setCartOffers([]);
           return;
         }
 
-        const payload = (await res.json()) as CustomerMenuResponse;
-        const restaurant =
-          'data' in payload
-            ? (payload.data ?? null)
-            : (payload as CustomerMenuRestaurant);
-        setMenuRestaurant(restaurant);
+        const payload = (await res.json()) as {
+          data?: {
+            images?: Record<string, string | null>;
+            offers?: CartOfferItem[];
+          };
+        };
+        setProductImages(payload.data?.images ?? {});
+        setCartOffers(payload.data?.offers ?? []);
       } catch {
-        setMenuRestaurant(null);
+        setProductImages({});
+        setCartOffers([]);
       }
     };
 
-    void loadMenu();
-  }, [orderInfo?.storeId, orderInfo?.restaurantSlug]);
+    void loadOffers();
+  }, [cart, orderInfo?.storeId, orderInfo?.restaurantSlug]);
 
   const handleAddOffered = (p: OfferedProduct) => {
     const line: CartLine = {

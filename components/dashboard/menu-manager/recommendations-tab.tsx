@@ -56,6 +56,24 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
+import type { PaginationMeta } from '@/lib/pagination';
+
+function StripProductSkeleton() {
+  const bone =
+    'bg-[#e2e8f0] dark:bg-[#4d4d4f] animate-pulse';
+  return (
+    <div
+      className="w-[9.5rem] shrink-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm sm:w-[10.5rem]"
+      aria-hidden
+    >
+      <div className={cn('aspect-[4/3] w-full', bone)} />
+      <div className="space-y-2 p-2.5">
+        <div className={cn('h-4 w-[80%] rounded-md', bone)} />
+        <div className={cn('h-3 w-1/2 rounded-md', bone)} />
+      </div>
+    </div>
+  );
+}
 
 import {
   categoryUsesVariationLimits,
@@ -364,7 +382,33 @@ export function RecommendationsTab({
     categories.map((c) => c.id)
   );
   const [productSearch, setProductSearch] = useState('');
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
   const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
+
+  /** Facebook-style infinite strip: load only visible chunks, then next page. */
+  type StripProduct = MenuItemRow & {
+    categoryName: string;
+    categoryNames?: string[];
+  };
+  const STRIP_PAGE_SIZE = 4;
+  const [stripProducts, setStripProducts] = useState<StripProduct[]>([]);
+  const [stripPage, setStripPage] = useState(1);
+  const [stripHasMore, setStripHasMore] = useState(false);
+  const [stripTotal, setStripTotal] = useState(0);
+  const [stripLoading, setStripLoading] = useState(false);
+  const [stripLoadingMore, setStripLoadingMore] = useState(false);
+  const stripRequestIdRef = useRef(0);
+  const stripPageRef = useRef(1);
+  const stripHasMoreRef = useRef(false);
+  const stripPrefetchingRef = useRef(false);
+
+  useEffect(() => {
+    const id = window.setTimeout(
+      () => setDebouncedProductSearch(productSearch.trim()),
+      300
+    );
+    return () => window.clearTimeout(id);
+  }, [productSearch]);
 
   const categoryIdsSignature = useMemo(
     () =>
@@ -401,26 +445,130 @@ export function RecommendationsTab({
     [selected]
   );
 
-  const filteredProducts = useMemo(() => {
-    const q = productSearch.trim().toLowerCase();
-    if (filterCategoryIds.length === 0) return [];
-    const allow = new Set(filterCategoryIds);
-    let list = allProducts.filter((p) => {
-      const ids =
-        p.categoryIds && p.categoryIds.length > 0
-          ? p.categoryIds
-          : [p.categoryId];
-      return ids.some((id) => allow.has(id));
-    });
-    if (q) {
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.categoryName.toLowerCase().includes(q)
-      );
-    }
-    return list;
-  }, [allProducts, filterCategoryIds, productSearch]);
+  const loadStripPage = useCallback(
+    async (
+      page: number,
+      append: boolean,
+      requestId: number
+    ): Promise<boolean> => {
+      if (filterCategoryIds.length === 0) {
+        setStripProducts([]);
+        setStripPage(1);
+        setStripHasMore(false);
+        setStripTotal(0);
+        stripPageRef.current = 1;
+        stripHasMoreRef.current = false;
+        return false;
+      }
+
+      try {
+        const params: Record<string, string | number> = {
+          page,
+          limit: STRIP_PAGE_SIZE,
+          categoryIds: filterCategoryIds.join(','),
+        };
+        if (debouncedProductSearch) {
+          params.search = debouncedProductSearch;
+        }
+
+        const res = await axios.get<{
+          data: {
+            products: StripProduct[];
+            pagination: PaginationMeta;
+          };
+        }>('/api/restaurant/menu/products', { params });
+
+        if (requestId !== stripRequestIdRef.current) return false;
+
+        const next = (res.data.data.products ?? []).map((p) => ({
+          ...p,
+          attributeGroups: p.attributeGroups ?? [],
+        }));
+        const pagination = res.data.data.pagination;
+
+        setStripProducts((prev) => {
+          if (!append) return next;
+          const seen = new Set(prev.map((p) => p.id));
+          return [...prev, ...next.filter((p) => !seen.has(p.id))];
+        });
+        setStripPage(pagination.page);
+        setStripHasMore(pagination.hasNextPage);
+        setStripTotal(pagination.total);
+        stripPageRef.current = pagination.page;
+        stripHasMoreRef.current = pagination.hasNextPage;
+        return pagination.hasNextPage;
+      } catch {
+        if (requestId !== stripRequestIdRef.current) return false;
+        if (!append) {
+          setStripProducts([]);
+          setStripHasMore(false);
+          setStripTotal(0);
+          stripHasMoreRef.current = false;
+        }
+        toast.error('Could not load products.');
+        return false;
+      }
+    },
+    [filterCategoryIds, debouncedProductSearch]
+  );
+
+  const prefetchStripChain = useCallback(
+    async (requestId: number) => {
+      if (stripPrefetchingRef.current) return;
+      if (!stripHasMoreRef.current) return;
+
+      stripPrefetchingRef.current = true;
+      setStripLoadingMore(true);
+
+      try {
+        while (
+          stripHasMoreRef.current &&
+          requestId === stripRequestIdRef.current
+        ) {
+          const nextPage = stripPageRef.current + 1;
+          const hasMore = await loadStripPage(nextPage, true, requestId);
+          if (!hasMore || requestId !== stripRequestIdRef.current) break;
+        }
+      } finally {
+        if (requestId === stripRequestIdRef.current) {
+          stripPrefetchingRef.current = false;
+          setStripLoadingMore(false);
+        }
+      }
+    },
+    [loadStripPage]
+  );
+
+  useEffect(() => {
+    const requestId = ++stripRequestIdRef.current;
+    stripPrefetchingRef.current = false;
+
+    void (async () => {
+      if (filterCategoryIds.length === 0) {
+        setStripProducts([]);
+        setStripPage(1);
+        setStripHasMore(false);
+        setStripTotal(0);
+        stripPageRef.current = 1;
+        stripHasMoreRef.current = false;
+        setStripLoading(false);
+        return;
+      }
+
+      setStripLoading(true);
+      setStripLoadingMore(false);
+      try {
+        const hasMore = await loadStripPage(1, false, requestId);
+        if (hasMore && requestId === stripRequestIdRef.current) {
+          void prefetchStripChain(requestId);
+        }
+      } finally {
+        if (requestId === stripRequestIdRef.current) {
+          setStripLoading(false);
+        }
+      }
+    })();
+  }, [filterCategoryIds, debouncedProductSearch, loadStripPage, prefetchStripChain]);
 
   const activeCategoryFilterLabel = useMemo(() => {
     const allIds = localCategories.map((c) => c.id);
@@ -439,9 +587,9 @@ export function RecommendationsTab({
     return `${filterCategoryIds.length} categories`;
   }, [filterCategoryIds, localCategories]);
 
-  const filteredProductIdsKey = useMemo(
-    () => filteredProducts.map((p) => p.id).join(','),
-    [filteredProducts]
+  const stripProductIdsKey = useMemo(
+    () => stripProducts.map((p) => p.id).join(','),
+    [stripProducts]
   );
 
   const productStripRef = useRef<HTMLDivElement>(null);
@@ -466,7 +614,7 @@ export function RecommendationsTab({
 
   useLayoutEffect(() => {
     syncProductStripScroll();
-  }, [filteredProductIdsKey, syncProductStripScroll]);
+  }, [stripProductIdsKey, stripLoadingMore, syncProductStripScroll]);
 
   useEffect(() => {
     const el = productStripRef.current;
@@ -474,6 +622,10 @@ export function RecommendationsTab({
     const ro = new ResizeObserver(() => syncProductStripScroll());
     ro.observe(el);
     return () => ro.disconnect();
+  }, [syncProductStripScroll]);
+
+  const onProductStripScroll = useCallback(() => {
+    syncProductStripScroll();
   }, [syncProductStripScroll]);
 
   const scrollProductStrip = useCallback((direction: 'back' | 'forward') => {
@@ -1286,7 +1438,7 @@ export function RecommendationsTab({
         </CardTitle>
       </CardHeader>
       <CardContent className="min-w-0 max-w-full space-y-6 px-4 pb-6 sm:px-6">
-        {loading ? (
+        {categories.length === 0 && loading ? (
           <div
             className="flex min-h-[min(420px,70vh)] w-full flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border bg-muted/30 py-16"
             role="status"
@@ -1297,7 +1449,7 @@ export function RecommendationsTab({
               className=" animate-spin text-primary text-center mx-auto"
             />
           </div>
-        ) : allProducts?.length === 0 ? (
+        ) : stripTotal === 0 && !stripLoading && !loading && allProducts.length === 0 ? (
     <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
       <p className="text-sm text-muted-foreground">
         Add products first — configuration rules are attached to a product.
@@ -1425,7 +1577,18 @@ export function RecommendationsTab({
               Turn on at least one category in the filter, or tap{' '}
               <span className="font-medium text-foreground">All</span>.
             </p>
-          ) : filteredProducts.length === 0 ? (
+          ) : stripLoading && stripProducts.length === 0 ? (
+            <div className="overflow-hidden rounded-lg border border-border/60 bg-background/50 px-1 py-1.5 sm:px-1.5">
+              <div className="flex w-max items-stretch gap-3 py-1 pe-1 ps-1">
+                {Array.from({ length: STRIP_PAGE_SIZE }).map((_, i) => (
+                  <>
+                  <StripProductSkeleton key={`strip-skel-${i}`} />
+                  <StripProductSkeleton key={`strip-skel-${i + 4}`} />
+                  </>
+                ))}
+              </div>
+            </div>
+          ) : stripProducts.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border bg-background/80 px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
               No products match the checked categories and search. Adjust
               the filter or clear the search.
@@ -1446,11 +1609,11 @@ export function RecommendationsTab({
                 </Button>
                 <div
                   ref={productStripRef}
-                  onScroll={syncProductStripScroll}
+                  onScroll={onProductStripScroll}
                   className="min-h-0 min-w-0 max-w-full touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 >
                   <div className="flex w-max items-stretch gap-3 py-1 pe-1 ps-1">
-                    {filteredProducts.map((p) => {
+                    {stripProducts.map((p) => {
                       const isActive = p.id === selectedId;
 
                       return (
@@ -1473,6 +1636,8 @@ export function RecommendationsTab({
                               <img
                                 src={p.imageUrl}
                                 alt=""
+                                loading="lazy"
+                                decoding="async"
                                 className="h-full w-full object-cover"
                               />
                             ) : (
@@ -1503,6 +1668,11 @@ export function RecommendationsTab({
                         </button>
                       );
                     })}
+                    {stripLoadingMore && stripHasMore
+                      ? Array.from({ length: STRIP_PAGE_SIZE }).map((_, i) => (
+                          <StripProductSkeleton key={`strip-more-${i}`} />
+                        ))
+                      : null}
                   </div>
                 </div>
                 <Button
@@ -1517,6 +1687,14 @@ export function RecommendationsTab({
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
+              {stripTotal > 0 ? (
+                <p className="px-3 pb-2 text-[11px] text-muted-foreground">
+                  Showing {stripProducts.length} of {stripTotal}
+                  {stripLoadingMore && stripHasMore
+                    ? ' · loading more in background…'
+                    : ''}
+                </p>
+              ) : null}
             </div>
           )}
         </div>
