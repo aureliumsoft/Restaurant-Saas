@@ -263,7 +263,10 @@ export function CategoriesTab({
           {loading ? (
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, i) => (
+                <>
                 <CategoryCardSkeleton key={`category-skeleton-${i}`} />
+                <CategoryCardSkeleton key={`category-skeleton-${i + 4}`} />
+                </>
               ))}
             </div>
           ) : (
