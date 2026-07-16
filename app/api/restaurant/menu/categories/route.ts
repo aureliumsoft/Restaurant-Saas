@@ -5,6 +5,11 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { estimateDataUrlBytes, isAcceptedImageValue } from '@/lib/image-data-url';
 import { loadRestaurantMenuCategoriesMeta } from '@/lib/menu/load-restaurant-menu-progressive';
+import {
+  buildPaginationMeta,
+  clampPage,
+  parsePaginationParams,
+} from '@/lib/pagination';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 
 const createCategorySchema = z
@@ -47,6 +52,64 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const mode = req.nextUrl.searchParams.get('mode');
+    if (mode === 'management') {
+      const { page, pageSize } = parsePaginationParams(req.nextUrl.searchParams, {
+        defaultPageSize: 4,
+        maxPageSize: 25,
+      });
+      const search = req.nextUrl.searchParams.get('search')?.trim() ?? '';
+      const where = {
+        restaurantId: auth.restaurant.id,
+        ...(search
+          ? { name: { contains: search, mode: 'insensitive' as const } }
+          : {}),
+      };
+
+      const total = await db.menuCategory.count({ where });
+      const safePage = clampPage(page, total, pageSize);
+      const skip = (safePage - 1) * pageSize;
+
+      const categories = await db.menuCategory.findMany({
+        where,
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        skip,
+        take: pageSize,
+        select: {
+          id: true,
+          name: true,
+          imageUrl: true,
+          showInFront: true,
+          sortOrder: true,
+          _count: {
+            select: {
+              itemLinks: true,
+              items: true,
+            },
+          },
+        },
+      });
+
+      const pagination = buildPaginationMeta(safePage, pageSize, total);
+      return NextResponse.json(
+        {
+          data: {
+            categories: categories.map((c) => ({
+              id: c.id,
+              name: c.name,
+              imageUrl: c.imageUrl,
+              showInFront: c.showInFront,
+              sortOrder: c.sortOrder,
+              itemCount: Math.max(c._count.itemLinks, c._count.items),
+              items: [],
+            })),
+            pagination,
+          },
+        },
+        { status: 200 }
+      );
+    }
+
     const data = await loadRestaurantMenuCategoriesMeta(auth.restaurant.id);
     if (!data) {
       return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });

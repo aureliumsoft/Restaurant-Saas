@@ -34,6 +34,7 @@ import {
   categoryHasProducts,
   isMenuCategoryShownInFront,
 } from '@/lib/menu/category-visibility';
+import { cn } from '@/lib/utils';
 
 import type { MenuCategoryRow } from './types';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -43,9 +44,39 @@ type Props = {
   categories: MenuCategoryRow[];
   onRefresh: () => Promise<void>;
   loading: boolean;
+  loadingMore?: boolean;
 };
 
-export function CategoriesTab({ categories, onRefresh, loading }: Props) {
+function CategoryCardSkeleton() {
+  const bone = 'bg-[#e2e8f0] dark:bg-[#3f3f46] animate-pulse';
+  return (
+    <div className="flex items-center gap-4 rounded-lg border bg-card p-4">
+      <div className="flex w-14 items-center gap-2">
+        <div className={cn('h-4 w-4 rounded', bone)} />
+        <div className={cn('h-4 w-6 rounded', bone)} />
+      </div>
+      <div className={cn('h-16 w-24 shrink-0 rounded-md border', bone)} />
+      <div className="flex-1 space-y-2">
+        <div className={cn('h-5 w-40 rounded', bone)} />
+        <div className={cn('h-4 w-24 rounded', bone)} />
+      </div>
+      <div className={cn('h-6 w-24 rounded-full', bone)} />
+      <div className="flex items-center gap-2">
+        <div className={cn('h-9 w-9 rounded-md', bone)} />
+        <div className={cn('h-9 w-9 rounded-md', bone)} />
+      </div>
+      <div className={cn('h-4 w-24 rounded', bone)} />
+      <div className={cn('h-9 w-20 rounded-md', bone)} />
+    </div>
+  );
+}
+
+export function CategoriesTab({
+  categories,
+  onRefresh,
+  loading,
+  loadingMore = false,
+}: Props) {
   const [name, setName] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [showInFront, setShowInFront] = useState(true);
@@ -230,9 +261,11 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
             </Button>
           </div>
           {loading ? (
-            <p className="text-sm text-muted-foreground">
-              <Loader2 className="mx-auto animate-spin text-primary" />
-            </p>
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <CategoryCardSkeleton key={`category-skeleton-${i}`} />
+              ))}
+            </div>
           ) : (
             <div className="space-y-3">
               {orderedCategories.map((c) => (
@@ -261,6 +294,11 @@ export function CategoriesTab({ categories, onRefresh, loading }: Props) {
                   }}
                 />
               ))}
+              {loadingMore
+                ? Array.from({ length: 4 }).map((_, i) => (
+                    <CategoryCardSkeleton key={`category-loading-more-${i}`} />
+                  ))
+                : null}
             </div>
           )}
 
@@ -339,6 +377,10 @@ function CategoryCard({
   }, [category.name, category.imageUrl]);
 
   const hasProducts = categoryHasProducts(category);
+  const productCount =
+    typeof category.itemCount === 'number'
+      ? category.itemCount
+      : category.items.length;
   const visible = isMenuCategoryShownInFront(category);
 
   const cancelEdit = () => {
@@ -426,8 +468,8 @@ function CategoryCard({
               <h3 className="font-semibold">{category.name}</h3>
 
               <p className="text-sm text-muted-foreground">
-                {category.items.length}{" "}
-                {category.items.length === 1 ? "product" : "products"}
+                {productCount}{' '}
+                {productCount === 1 ? 'product' : 'products'}
               </p>
             </>
           )}

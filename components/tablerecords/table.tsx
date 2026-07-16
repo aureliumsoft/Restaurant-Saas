@@ -10,8 +10,8 @@ import {
   DashboardCardContent,
   DashboardCardHeader,
   DashboardCardTitle,
-  DashboardStatCard,
 } from '@/components/dashboard/dashboard-card';
+import { OrdersKpiCard, kpiSparklineFromValue } from '@/components/sales/orders-kpi-card';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -46,7 +46,14 @@ import type {
   TransactionHistoryResponse,
   TransactionHistoryRow,
 } from '@/types/transaction-history';
-import { Eye, Loader2, RefreshCcw } from 'lucide-react';
+import {
+  CircleDollarSign,
+  Clock3,
+  Eye,
+  Loader2,
+  RefreshCcw,
+  ShoppingBag,
+} from 'lucide-react';
 
 const PAGE_SIZE = 20;
 
@@ -214,30 +221,30 @@ export function Records() {
           ) : (
             <>
               <div className="grid gap-3 md:grid-cols-3">
-                <DashboardStatCard>
-                  <DashboardCardContent className="p-4">
-                    <p className="text-xs text-muted-foreground">
-                      Orders in current page
-                    </p>
-                    <p className="text-2xl font-semibold">{stats.orderCount}</p>
-                  </DashboardCardContent>
-                </DashboardStatCard>
-                <DashboardStatCard>
-                  <DashboardCardContent className="p-4">
-                    <p className="text-xs text-muted-foreground">
-                      Subscriptions in current page
-                    </p>
-                    <p className="text-2xl font-semibold">{stats.subCount}</p>
-                  </DashboardCardContent>
-                </DashboardStatCard>
-                <DashboardStatCard>
-                  <DashboardCardContent className="p-4">
-                    <p className="text-xs text-muted-foreground">
-                      Register in current page
-                    </p>
-                    <p className="text-2xl font-semibold">{stats.regCount}</p>
-                  </DashboardCardContent>
-                </DashboardStatCard>
+                <OrdersKpiCard
+                  label="Orders"
+                  subtitle="in current page"
+                  value={stats.orderCount.toLocaleString()}
+                  sparklineData={kpiSparklineFromValue(stats.orderCount)}
+                  accentColor="#ed6e40"
+                  icon={ShoppingBag}
+                />
+                <OrdersKpiCard
+                  label="Subscriptions"
+                  subtitle="in current page"
+                  value={stats.subCount.toLocaleString()}
+                  sparklineData={kpiSparklineFromValue(stats.subCount)}
+                  accentColor="#7c3aed"
+                  icon={CircleDollarSign}
+                />
+                <OrdersKpiCard
+                  label="Register"
+                  subtitle="in current page"
+                  value={stats.regCount.toLocaleString()}
+                  sparklineData={kpiSparklineFromValue(stats.regCount)}
+                  accentColor="#14b8a6"
+                  icon={Clock3}
+                />
               </div>
 
               <TableWrapper>

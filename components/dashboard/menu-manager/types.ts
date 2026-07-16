@@ -100,6 +100,7 @@ export type MenuCategoryRow = {
   imageUrl?: string | null;
   showInFront: boolean;
   sortOrder: number;
+  itemCount?: number;
   items: MenuItemRow[];
 };
 

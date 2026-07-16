@@ -18,8 +18,12 @@ export const RECOMMENDATION_SOURCE_CATEGORY_WHERE: Prisma.MenuCategoryWhereInput
   };
 
 export function categoryHasProducts(
-  category: { items?: unknown[] | null } | null | undefined
+  category:
+    | { items?: unknown[] | null; itemCount?: number | null }
+    | null
+    | undefined
 ): boolean {
+  if (typeof category?.itemCount === 'number') return category.itemCount > 0;
   return Array.isArray(category?.items) && category.items.length > 0;
 }
 
