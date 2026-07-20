@@ -98,6 +98,47 @@ function cacheKey(page: number, search: string, categoryId: string) {
   return `${page}|${search}|${categoryId}`;
 }
 
+function ProductThumb({
+  src,
+  hasImage,
+}: {
+  src: string | null | undefined;
+  hasImage?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const showImage = Boolean(src) && !failed;
+
+  if (!showImage) {
+    return (
+      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md border border-border bg-muted text-[10px] text-muted-foreground">
+        {hasImage ? '…' : '—'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-12 w-12 overflow-hidden rounded-md border border-border bg-muted">
+      {!loaded ? (
+        <div className={cn('absolute inset-0', SKELETON_BONE)} aria-hidden />
+      ) : null}
+      {/* eslint-disable-next-line @next/next/no-img-element -- lazy product thumbs (http or /image proxy) */}
+      <img
+        src={src!}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className={cn(
+          'h-full w-full object-cover transition-opacity',
+          loaded ? 'opacity-100' : 'opacity-0'
+        )}
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+      />
+    </div>
+  );
+}
+
 function ProductRowSkeleton() {
   return (
     <DashboardTableRow>
@@ -480,32 +521,13 @@ export function ProductsTab({
                             const categoryNames = item.categoryNames ?? [
                               item.categoryName,
                             ];
-                            const showImage = Boolean(item.imageUrl);
                             return (
                               <DashboardTableRow key={item.id}>
                                 <DashboardTableCell>
-                                  <div
-                                    className={cn(
-                                      'relative h-12 w-12 overflow-hidden rounded-md border border-border bg-muted',
-                                      !showImage &&
-                                        'flex items-center justify-center text-[10px] text-muted-foreground'
-                                    )}
-                                  >
-                                    {showImage ? (
-                                      // eslint-disable-next-line @next/next/no-img-element -- dashboard menu URLs
-                                      <img
-                                        src={item.imageUrl!}
-                                        alt=""
-                                        loading="lazy"
-                                        decoding="async"
-                                        className="h-full w-full object-cover"
-                                      />
-                                    ) : item.hasImage ? (
-                                      'Img'
-                                    ) : (
-                                      '—'
-                                    )}
-                                  </div>
+                                  <ProductThumb
+                                    src={item.imageUrl}
+                                    hasImage={item.hasImage}
+                                  />
                                 </DashboardTableCell>
                                 <DashboardTableCell>
                                   <div className="font-medium">{item.name}</div>

@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { db } from '@/lib/db';
 import {
@@ -10,20 +10,16 @@ import {
 } from '@/lib/pagination';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 
-/** List payloads must stay small — never return multi-MB base64 data URLs. */
-function toListImageUrl(imageUrl: string | null | undefined): string | null {
-  if (!imageUrl) return null;
-  const trimmed = imageUrl.trim();
-  if (!trimmed) return null;
-  if (trimmed.startsWith('data:')) return null;
-  return trimmed;
+/** Lazy image URL — browser loads photo after list JSON (does not bloat list payload). */
+function lazyProductImageUrl(itemId: string): string {
+  return `/api/restaurant/menu/items/${encodeURIComponent(itemId)}/image`;
 }
 
 const listItemSelect = {
   id: true,
   name: true,
   description: true,
-  imageUrl: true,
+  // Do NOT select imageUrl here — base64 blobs would slow DB→API→client for every page.
   price: true,
   salePrice: true,
   categoryId: true,
@@ -164,14 +160,30 @@ export async function GET(req: NextRequest) {
     ]);
 
     const itemIds = items.map((item) => item.id);
-    const categoryLinks =
+
+    const [categoryLinks, imageFlags] = await Promise.all([
       itemIds.length === 0
-        ? []
-        : await db.menuItemCategory.findMany({
+        ? Promise.resolve(
+            [] as Array<{ menuItemId: string; categoryId: string }>
+          )
+        : db.menuItemCategory.findMany({
             where: { menuItemId: { in: itemIds } },
             orderBy: { sortOrder: 'asc' },
             select: { menuItemId: true, categoryId: true },
-          });
+          }),
+      // Presence only — avoids transferring base64 blobs into the list response.
+      itemIds.length === 0
+        ? Promise.resolve([] as Array<{ id: string; hasImage: boolean }>)
+        : db.$queryRaw<Array<{ id: string; hasImage: boolean }>>`
+            SELECT id, ("imageUrl" IS NOT NULL) AS "hasImage"
+            FROM "MenuItem"
+            WHERE id IN (${Prisma.join(itemIds)})
+          `,
+    ]);
+
+    const hasImageById = new Map(
+      imageFlags.map((row) => [row.id, Boolean(row.hasImage)])
+    );
 
     const categoryIdsByItem = new Map<string, string[]>();
     for (const link of categoryLinks) {
@@ -205,13 +217,14 @@ export async function GET(req: NextRequest) {
       const categoryNames = ids
         .map((id) => categoryNameById.get(id))
         .filter((name): name is string => Boolean(name));
-      const listImage = toListImageUrl(item.imageUrl);
+      const hasImage = hasImageById.get(item.id) === true;
       return {
         id: item.id,
         name: item.name,
         description: truncateDescription(item.description),
-        imageUrl: listImage,
-        hasImage: Boolean(item.imageUrl?.trim()),
+        // Browser lazy-loads each photo via this endpoint after list JSON arrives.
+        imageUrl: hasImage ? lazyProductImageUrl(item.id) : null,
+        hasImage,
         price: item.price,
         salePrice: item.salePrice,
         categoryId: item.categoryId,
