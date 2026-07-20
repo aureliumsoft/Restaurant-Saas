@@ -1051,7 +1051,7 @@ export function RecommendationsTab(_props?: Props) {
       cancelled = true;
       setLoadingPersonalize(false);
     };
-  }, [selectedId, selectedDetail, productCache]);
+  }, [selectedId]);
 
   const saveRecommendationDraft = async (
     draft: RecommendationRuleDraft,

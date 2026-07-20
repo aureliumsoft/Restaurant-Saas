@@ -126,6 +126,10 @@ import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
+import {
+  fetchRestaurantMenuProductDetail,
+  productNeedsDetailFetch,
+} from '@/lib/menu/fetch-menu-product-detail';
 
 const POS_PANEL_CLASS =
   'rounded-2xl border border-border bg-card text-card-foreground shadow-md dark:shadow-[0_8px_30px_rgba(0,0,0,0.25)]';
@@ -910,7 +914,7 @@ export function PosScreen() {
         if (activeProductId) {
           const product = visibleProducts.find((p) => p.id === activeProductId);
           if (product) {
-            handleProductSelect(product);
+            void handleProductSelect(product);
           }
         }
         return;
@@ -1233,9 +1237,38 @@ export function PosScreen() {
   const resolveCatalogProduct = (ref: { id: string }) =>
     products.find((p) => p.id === ref.id) ?? null;
 
-  const proceedWithProduct = (p: PosMenuProduct) => {
-    if (productNeedsCustomizeDialog(p)) openCustomize(p);
-    else addToCart(p, []);
+  const proceedWithProduct = async (p: PosMenuProduct) => {
+    if (productNeedsCustomizeDialog(p)) {
+      let product = p;
+      if (productNeedsDetailFetch(p)) {
+        const full = await fetchRestaurantMenuProductDetail<
+          PosMenuProduct & { categoryIds?: string[] }
+        >(p.id);
+        if (!full) {
+          toast.error('Could not load product configuration.');
+          return;
+        }
+        product = {
+          ...full,
+          categoryId: p.categoryId,
+          description: full.description ?? null,
+          imageUrl: full.imageUrl ?? null,
+          price: Number(full.price),
+          salePrice:
+            full.salePrice != null && Number.isFinite(Number(full.salePrice))
+              ? Number(full.salePrice)
+              : null,
+          attributeGroups: full.attributeGroups ?? [],
+          variations: (full.variations ?? []).map((v) => ({
+            ...v,
+            priceDelta: Number(v.priceDelta ?? 0),
+          })),
+        };
+      }
+      openCustomize(product);
+      return;
+    }
+    addToCart(p, []);
   };
 
   const handleProductSelect = (p: PosMenuProduct) => {
@@ -1873,7 +1906,7 @@ export function PosScreen() {
       }}
       onClick={() => {
         setActiveProductId(p.id);
-        handleProductSelect(p);
+        void handleProductSelect(p);
       }}
       onFocus={() => setActiveProductId(p.id)}
       className={cn(

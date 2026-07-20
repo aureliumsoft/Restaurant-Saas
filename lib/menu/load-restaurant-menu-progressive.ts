@@ -1,48 +1,16 @@
 import { db } from '@/lib/db';
-import { applyProductRecommendationPools } from '@/lib/menu/apply-product-recommendation-pools';
-import {
-  buildCustomerMenuAttributeGroupsSelect,
-  customerMenuItemCoreSelect,
-} from '@/lib/menu/customer-menu-attribute-groups-select';
-import { RECOMMENDATION_SOURCE_CATEGORY_WHERE } from '@/lib/menu/category-visibility';
 import { loadSingleCategoryWithLinkedItems } from '@/lib/menu/menu-item-categories';
-import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
-import { withRecommendationPoolCache } from '@/lib/menu/recommendation-pool-cache';
+import { menuItemBrowseListSelect } from '@/lib/menu/menu-item-list-select';
+import {
+  hasImageByMenuItemIds,
+  mapBrowseListItem,
+  restaurantMenuItemImageUrl,
+} from '@/lib/menu/menu-item-image-utils';
 import {
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
   parseRestaurantServiceCharges,
   withServiceChargesPayload,
 } from '@/lib/restaurant-service-charge';
-import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
-
-const menuItemSelect = {
-  ...customerMenuItemCoreSelect,
-  categoryId: true,
-  attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
-  personalizeGroups: personalizeGroupsSelect,
-  offersFromThis: {
-    orderBy: { sortOrder: 'asc' as const },
-    select: {
-      id: true,
-      sortOrder: true,
-      offeredItem: {
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          imageUrl: true,
-          price: true,
-          salePrice: true,
-        },
-      },
-    },
-  },
-} as const;
-
-const recommendationPoolItemSelect = {
-  ...customerMenuItemCoreSelect,
-  attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
-} as const;
 
 async function loadCategoryIdsByItem(restaurantId: string) {
   const links = await db.menuItemCategory.findMany({
@@ -114,12 +82,12 @@ export async function loadRestaurantMenuCategoriesMeta(restaurantId: string) {
   });
 }
 
-/** POS menu: items for one category. */
+/** POS menu: items for one category (fast browse list). */
 export async function loadRestaurantMenuCategoryItems(
   restaurantId: string,
   categoryId: string
 ) {
-  const [categoryIdsByItem, category, allCategories] = await Promise.all([
+  const [categoryIdsByItem, category] = await Promise.all([
     loadCategoryIdsByItem(restaurantId),
     loadSingleCategoryWithLinkedItems({
       restaurantId,
@@ -131,37 +99,25 @@ export async function loadRestaurantMenuCategoryItems(
         sortOrder: true,
         imageUrl: true,
       },
-      itemSelect: menuItemSelect,
+      itemSelect: menuItemBrowseListSelect,
     }),
-    withRecommendationPoolCache(`pos:${restaurantId}`, () =>
-      loadRestaurantMenuCategories({
-        restaurantId,
-        categorySelect: {
-          id: true,
-          name: true,
-          sortOrder: true,
-          imageUrl: true,
-        },
-        itemSelect: recommendationPoolItemSelect,
-        categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
-      })
-    ),
   ]);
   if (!category || category.showInFront === false) return null;
 
-  const itemsWithCategoryIds = category.items.map((item) =>
-    mapMenuItemWithCategoryIds(item, categoryIdsByItem)
-  );
+  const itemIds = category.items.map((item) => item.id);
+  const imageFlags = await hasImageByMenuItemIds(itemIds);
 
-  const enriched = applyProductRecommendationPools(
-    {
-      menus: [{ ...category, items: itemsWithCategoryIds }],
-    },
-    allCategories
-  );
+  const itemsWithCategoryIds = category.items.map((item) => {
+    const mapped = mapBrowseListItem(
+      item,
+      imageFlags.get(item.id) ?? false,
+      imageFlags.get(item.id) ? restaurantMenuItemImageUrl(item.id) : null
+    );
+    return mapMenuItemWithCategoryIds(mapped, categoryIdsByItem);
+  });
 
   return {
     categoryId: category.id,
-    items: enriched.menus?.[0]?.items ?? [],
+    items: itemsWithCategoryIds,
   };
 }

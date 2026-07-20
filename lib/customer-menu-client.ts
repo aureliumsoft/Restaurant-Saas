@@ -90,3 +90,7 @@ export function buildKioskMenuCategoryItemsUrl(
   const limit = opts?.limit ?? 24;
   return `/api/customer/menu/categories/${encodeURIComponent(categoryId)}?slug=${encodeURIComponent(slug)}&page=${page}&limit=${limit}`;
 }
+
+export function buildKioskMenuItemDetailUrl(slug: string, itemId: string): string {
+  return `/api/customer/menu/items/${encodeURIComponent(itemId)}?slug=${encodeURIComponent(slug)}`;
+}

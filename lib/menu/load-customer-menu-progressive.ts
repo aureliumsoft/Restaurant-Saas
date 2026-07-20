@@ -15,8 +15,14 @@ import {
 import {
   isPrismaSchemaDriftError,
 } from '@/lib/menu/load-customer-menu';
-import { loadSingleCategoryWithLinkedItems } from '@/lib/menu/menu-item-categories';
+import { loadSingleCategoryWithLinkedItems, getMenuItemCategoryIds } from '@/lib/menu/menu-item-categories';
 import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
+import { menuItemBrowseListSelect } from '@/lib/menu/menu-item-list-select';
+import {
+  customerMenuItemImageUrl,
+  hasImageByMenuItemIds,
+  mapBrowseListItem,
+} from '@/lib/menu/menu-item-image-utils';
 import { withRecommendationPoolCache } from '@/lib/menu/recommendation-pool-cache';
 import {
   parseRestaurantServiceCharges,
@@ -186,7 +192,7 @@ export async function loadCustomerMenuCategoriesMeta(options: {
   });
 }
 
-/** Items for a single storefront category, with recommendation pools applied. */
+/** Items for a single storefront category (fast browse list — no recommendation pool). */
 export async function loadCustomerMenuCategoryItems(options: {
   slug?: string | null;
   subdomain?: string | null;
@@ -194,7 +200,7 @@ export async function loadCustomerMenuCategoryItems(options: {
   page?: number;
   limit?: number;
 }) {
-  return withMenuSelectMode(async (mode) => {
+  return withMenuSelectMode(async () => {
     const restaurant = await resolveRestaurant(options.slug, options.subdomain);
     if (!restaurant) return null;
 
@@ -202,36 +208,41 @@ export async function loadCustomerMenuCategoryItems(options: {
     const limit = Math.min(48, Math.max(1, options.limit ?? 24));
     const skip = (page - 1) * limit;
 
-    const [category, pool] = await Promise.all([
-      loadSingleCategoryWithLinkedItems({
-        restaurantId: restaurant.id,
-        categoryId: options.categoryId,
-        categorySelect: {
-          id: true,
-          name: true,
-          sortOrder: true,
-          imageUrl: true,
-        },
-        itemSelect: buildCustomerMenuItemSelect(mode),
-        categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
-        pagination: { skip, take: limit },
-      }),
-      loadRecommendationPool(restaurant.id, mode),
-    ]);
+    const category = await loadSingleCategoryWithLinkedItems({
+      restaurantId: restaurant.id,
+      categoryId: options.categoryId,
+      categorySelect: {
+        id: true,
+        name: true,
+        sortOrder: true,
+        imageUrl: true,
+      },
+      itemSelect: menuItemBrowseListSelect,
+      categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
+      pagination: { skip, take: limit },
+    });
     if (!category) return null;
 
-    const enriched = applyProductRecommendationPools(
-      { menus: [category] },
-      pool
+    const itemIds = category.items.map((item) => item.id);
+    const imageFlags = await hasImageByMenuItemIds(itemIds);
+    const imageQuery = {
+      slug: options.slug,
+      subdomain: options.subdomain,
+    };
+
+    const items = category.items.map((item) =>
+      mapBrowseListItem(
+        item,
+        imageFlags.get(item.id) ?? false,
+        imageFlags.get(item.id)
+          ? customerMenuItemImageUrl(item.id, imageQuery)
+          : null
+      )
     );
-    const sanitized = sanitizeCustomerMenuPayload({
-      ...restaurantMetaPayload(restaurant),
-      menus: enriched.menus ?? [],
-    });
 
     return {
       categoryId: category.id,
-      items: sanitized?.menus?.[0]?.items ?? [],
+      items,
       page,
       limit,
       total: category.itemTotal,
@@ -239,3 +250,52 @@ export async function loadCustomerMenuCategoryItems(options: {
     };
   });
 }
+
+/** Full product detail for customize dialog (fetched by id). */
+export async function loadCustomerMenuProductDetail(options: {
+  slug?: string | null;
+  subdomain?: string | null;
+  itemId: string;
+}) {
+  return withMenuSelectMode(async (mode) => {
+    const restaurant = await resolveRestaurant(options.slug, options.subdomain);
+    if (!restaurant) return null;
+
+    const item = await db.menuItem.findFirst({
+      where: {
+        id: options.itemId,
+        restaurantId: restaurant.id,
+      },
+      select: buildCustomerMenuItemSelect(mode),
+    });
+    if (!item) return null;
+
+    const categoryIds = await getMenuItemCategoryIds(options.itemId);
+    const pool = await loadRecommendationPool(restaurant.id, mode);
+    const enriched = applyProductRecommendationPools(
+      {
+        menus: [
+          {
+            id: 'detail',
+            name: '',
+            items: [{ ...item, categoryIds }],
+          },
+        ],
+      },
+      pool
+    );
+    const sanitized = sanitizeCustomerMenuPayload({
+      ...restaurantMetaPayload(restaurant),
+      menus: enriched.menus ?? [],
+    });
+    const detail = sanitized?.menus?.[0]?.items?.[0] ?? null;
+    if (!detail) return null;
+
+    return {
+      ...detail,
+      categoryIds:
+        categoryIds.length > 0 ? categoryIds : [detail.categoryId],
+    };
+  });
+}
+

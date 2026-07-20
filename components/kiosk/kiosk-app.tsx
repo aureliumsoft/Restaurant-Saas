@@ -38,6 +38,11 @@ import {
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
+import {
+  fetchCustomerMenuProductDetail,
+  productNeedsDetailFetch,
+} from '@/lib/menu/fetch-menu-product-detail';
+import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -126,6 +131,7 @@ type CustomerMenuProduct = {
   name: string;
   description: string | null;
   imageUrl: string | null;
+  hasImage?: boolean;
   price: number;
   salePrice: number | null;
   categoryId: string;
@@ -395,7 +401,7 @@ export function KioskApp({
     };
   }, [restaurantMeta, progressiveCategories, slug]);
 
-  const menuLoading = categoriesLoading;
+  const menuLoading = categoriesLoading && progressiveCategories.length === 0;
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id')?.trim();
@@ -659,9 +665,24 @@ export function KioskApp({
   const resolveCatalogProduct = (ref: { id: string }) =>
     allProducts.find((p) => p.id === ref.id) ?? null;
 
-  const proceedWithProduct = (p: CustomerMenuProduct) => {
-    if (productNeedsCustomizeDialog(p)) openCustomize(p);
-    else addToCart(p, []);
+  const proceedWithProduct = async (p: CustomerMenuProduct) => {
+    if (productNeedsCustomizeDialog(p)) {
+      let product = p;
+      if (productNeedsDetailFetch(p)) {
+        const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
+          p.id,
+          { slug }
+        );
+        if (!full) {
+          toast.error(t('productNotFoundToModify'));
+          return;
+        }
+        product = { ...full, categoryId: p.categoryId };
+      }
+      openCustomize(product);
+      return;
+    }
+    addToCart(p, []);
   };
 
   const handleProductSelect = (p: CustomerMenuProduct) => {
@@ -676,7 +697,7 @@ export function KioskApp({
   };
 
   const onProductTap = (p: CustomerMenuProduct) => {
-    handleProductSelect(p);
+    void handleProductSelect(p);
   };
 
   const qtyOnMenu = useCallback(
@@ -828,26 +849,6 @@ export function KioskApp({
     setStep('mode');
   };
 
-  const ProductThumb = ({ src, alt }: { src: string | null; alt: string }) => {
-    if (src) {
-      return (
-        // eslint-disable-next-line @next/next/no-img-element -- kiosk menus use arbitrary CDN URLs
-        <img
-          src={src}
-          alt={alt}
-          loading="lazy"
-          decoding="async"
-          className="aspect-square w-full rounded-lg bg-[#f1f5f9] object-cover"
-        />
-      );
-    }
-    return (
-      <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-[#f1f5f9] text-xs text-[#64748b]">
-        No photo
-      </div>
-    );
-  };
-
   const ProductCard = ({ p }: { p: CustomerMenuProduct }) => {
     const unit = effectiveUnitPrice(p.price, p.salePrice);
     const showStrike =
@@ -858,7 +859,12 @@ export function KioskApp({
     return (
       <Card className="overflow-hidden border border-[#e2e8f0] bg-white shadow-sm">
         <CardContent className="p-3">
-          <ProductThumb src={p.imageUrl} alt={p.name} />
+          <LazyMenuProductImage
+            src={p.imageUrl}
+            hasImage={p.hasImage ?? Boolean(p.imageUrl)}
+            alt={p.name}
+            className="aspect-square w-full rounded-lg"
+          />
           <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-tight">
             {p.name}
           </h3>

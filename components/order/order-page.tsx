@@ -36,6 +36,11 @@ import {
 } from '@/components/menu/product-card-skeleton';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
+import {
+  fetchCustomerMenuProductDetail,
+  productNeedsDetailFetch,
+} from '@/lib/menu/fetch-menu-product-detail';
+import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import {
@@ -78,6 +83,7 @@ type CustomerMenuProduct = {
   name: string;
   description: string | null;
   imageUrl: string | null;
+  hasImage?: boolean;
   price: number;
   salePrice: number | null;
   categoryId: string;
@@ -426,13 +432,12 @@ function ProductCard({
       className="flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
     >
       <div className="relative">
-        {product.imageUrl ? (
-          <img
+        {product.hasImage ?? Boolean(product.imageUrl) ? (
+          <LazyMenuProductImage
             src={product.imageUrl}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="h-44 w-full object-cover"
+            hasImage
+            alt={product.name}
+            className="h-44 w-full"
           />
         ) : (
           <div className="flex h-44 w-full items-center justify-center bg-[#f4f4f6] text-muted-foreground">
@@ -822,12 +827,27 @@ export default function OrderPageClient({
   const resolveCatalogProduct = (ref: { id: string }) =>
     products.find((p) => p.id === ref.id) ?? null;
 
-  const proceedWithProduct = (p: CustomerMenuProduct) => {
+  const proceedWithProduct = async (p: CustomerMenuProduct) => {
     if (productNeedsCustomizeDialog(p)) {
-      openCustomizeForProduct(p);
-    } else {
-      addToCart(p, []);
+      let product = p;
+      if (productNeedsDetailFetch(p)) {
+        const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
+          p.id,
+          {
+            slug: orderInfo?.restaurantSlug,
+            subdomain: hostSubdomain || orderInfo?.storeId,
+          }
+        );
+        if (!full) {
+          toast.error(t('productNotFoundToModify'));
+          return;
+        }
+        product = { ...full, categoryId: p.categoryId };
+      }
+      openCustomizeForProduct(product);
+      return;
     }
+    addToCart(p, []);
   };
 
   const handleProductSelect = (product: CustomerMenuProduct) => {
@@ -1365,7 +1385,7 @@ export default function OrderPageClient({
                           key={product.id}
                           product={product}
                           formatMoney={formatMoney}
-                          onAdd={() => handleProductSelect(product)}
+                          onAdd={() => void handleProductSelect(product)}
                         />
                       ))}
                     </div>
