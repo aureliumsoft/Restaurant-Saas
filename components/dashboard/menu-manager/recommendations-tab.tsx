@@ -57,6 +57,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import type { PaginationMeta } from '@/lib/pagination';
+import { LazyProductImage } from './lazy-product-image';
 
 function StripProductSkeleton() {
   const bone =
@@ -389,6 +390,7 @@ export function RecommendationsTab({
   type StripProduct = MenuItemRow & {
     categoryName: string;
     categoryNames?: string[];
+    hasImage?: boolean;
   };
   const STRIP_PAGE_SIZE = 4;
   const [stripProducts, setStripProducts] = useState<StripProduct[]>([]);
@@ -1631,20 +1633,12 @@ export function RecommendationsTab({
                           )}
                         >
                           <div className="relative aspect-[4/3] w-full bg-muted">
-                            {p.imageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element -- dashboard menu URLs
-                              <img
-                                src={p.imageUrl}
-                                alt=""
-                                loading="lazy"
-                                decoding="async"
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                                No photo
-                              </div>
-                            )}
+                            <LazyProductImage
+                              src={p.imageUrl}
+                              hasImage={p.hasImage ?? Boolean(p.imageUrl)}
+                              className="absolute inset-0 h-full w-full"
+                              emptyLabel="No photo"
+                            />
                             <span
                               className={cn(
                                 'absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border-2 bg-background/90 text-xs font-bold shadow-sm backdrop-blur-sm transition',

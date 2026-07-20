@@ -45,6 +45,7 @@ import { useDashboardPermissions } from '@/hooks/use-dashboard-permissions';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 
 import { InventoryQuickActions } from './inventory-quick-actions';
+import { LazyProductImage } from './lazy-product-image';
 import type { MenuItemRow } from './types';
 
 const PRODUCTS_PAGE_SIZE = 12;
@@ -96,47 +97,6 @@ function formatMenuItemDate(iso: string | undefined) {
 
 function cacheKey(page: number, search: string, categoryId: string) {
   return `${page}|${search}|${categoryId}`;
-}
-
-function ProductThumb({
-  src,
-  hasImage,
-}: {
-  src: string | null | undefined;
-  hasImage?: boolean;
-}) {
-  const [failed, setFailed] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const showImage = Boolean(src) && !failed;
-
-  if (!showImage) {
-    return (
-      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md border border-border bg-muted text-[10px] text-muted-foreground">
-        {hasImage ? '…' : '—'}
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative h-12 w-12 overflow-hidden rounded-md border border-border bg-muted">
-      {!loaded ? (
-        <div className={cn('absolute inset-0', SKELETON_BONE)} aria-hidden />
-      ) : null}
-      {/* eslint-disable-next-line @next/next/no-img-element -- lazy product thumbs (http or /image proxy) */}
-      <img
-        src={src!}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        className={cn(
-          'h-full w-full object-cover transition-opacity',
-          loaded ? 'opacity-100' : 'opacity-0'
-        )}
-        onLoad={() => setLoaded(true)}
-        onError={() => setFailed(true)}
-      />
-    </div>
-  );
 }
 
 function ProductRowSkeleton() {
@@ -524,9 +484,11 @@ export function ProductsTab({
                             return (
                               <DashboardTableRow key={item.id}>
                                 <DashboardTableCell>
-                                  <ProductThumb
+                                  <LazyProductImage
                                     src={item.imageUrl}
                                     hasImage={item.hasImage}
+                                    className="h-12 w-12 rounded-md border border-border"
+                                    emptyLabel="—"
                                   />
                                 </DashboardTableCell>
                                 <DashboardTableCell>

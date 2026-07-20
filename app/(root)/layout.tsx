@@ -43,9 +43,22 @@ function moduleKeyForPath(pathname: string): string | null {
   return nested?.moduleKey ?? null;
 }
 
-function AccessLoadingScreen({ message }: { message: string }) {
+function AccessLoadingScreen({
+  message,
+  fading = false,
+}: {
+  message: string;
+  fading?: boolean;
+}) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#f4f4f5] text-sm text-muted-foreground dark:bg-zinc-950">
+    <div
+      className={cn(
+        'fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 bg-[#f4f4f5] text-sm text-muted-foreground transition-opacity duration-300 ease-out dark:bg-zinc-950',
+        fading ? 'pointer-events-none opacity-0' : 'opacity-100'
+      )}
+      aria-busy={!fading}
+      aria-live="polite"
+    >
       <Loader2 className="h-10 w-10 animate-spin text-primary" />
       <p>{message}</p>
     </div>
@@ -67,6 +80,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
   const [sidebarHydrated, setSidebarHydrated] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const openedForSessionRef = useRef(false);
+  const [accessGateVisible, setAccessGateVisible] = useState(true);
 
   const { loading: accessLoading, failed: accessFailed, ready: accessReady } =
     useStaffAccessGate();
@@ -77,17 +91,40 @@ const RootLayout = ({ children }: RootLayoutProps) => {
   const subscriptionAllowed = subscription.allowed;
   const subscriptionWarning = subscription.warning;
 
-  // Security + access must clear before any dashboard chrome (sidebar/nav) renders.
-  const securityReady =
+  const bootstrapReady =
     sessionStatus === 'authenticated' &&
     accessReady &&
     permissionsReady &&
     subscriptionAllowed;
 
+  const securityReady = bootstrapReady && permissions.length > 0;
+
+  const blockingMessage =
+    sessionStatus === 'loading'
+      ? 'Checking session…'
+      : accessLoading || !accessReady
+        ? 'Checking access & security…'
+        : !subscriptionAllowed
+          ? 'Redirecting to pricing…'
+          : !permissionsReady
+            ? 'Loading permissions…'
+            : null;
+
+  // Fade out the access gate once the dashboard is ready to show.
+  useEffect(() => {
+    if (!securityReady) {
+      setAccessGateVisible(true);
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setAccessGateVisible(false);
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [securityReady]);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
-      // Default open. Only collapse when the user previously closed it.
       setSidebarOpen(stored !== 'false');
     } catch {
       setSidebarOpen(true);
@@ -105,7 +142,6 @@ const RootLayout = ({ children }: RootLayoutProps) => {
     }
   }, [sidebarOpen, sidebarHydrated]);
 
-  // After login / access clears, always present the sidebar (nav) by default.
   useEffect(() => {
     if (!securityReady || openedForSessionRef.current) return;
     openedForSessionRef.current = true;
@@ -150,12 +186,8 @@ const RootLayout = ({ children }: RootLayoutProps) => {
     }
   };
 
-  if (sessionStatus === 'loading' || sessionStatus === 'unauthenticated') {
+  if (sessionStatus === 'unauthenticated') {
     return <AccessLoadingScreen message="Checking session…" />;
-  }
-
-  if (accessLoading || !accessReady) {
-    return <AccessLoadingScreen message="Checking access & security…" />;
   }
 
   if (accessFailed) {
@@ -176,128 +208,138 @@ const RootLayout = ({ children }: RootLayoutProps) => {
     );
   }
 
-  if (!subscriptionAllowed) {
-    return <AccessLoadingScreen message="Redirecting to pricing…" />;
-  }
-
-  if (!permissionsReady) {
-    return <AccessLoadingScreen message="Loading permissions…" />;
-  }
-
-  // Sidebar chrome only after security clears; nav needs permissions.
-  if (permissions.length === 0) {
+  if (bootstrapReady && permissions.length === 0) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#f4f4f5] px-4 text-center dark:bg-zinc-950">
         <p className="text-sm text-muted-foreground">
           No dashboard permissions were returned for this account.
         </p>
-        <Button type="button" variant="outline" onClick={() => router.replace('/pricing')}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.replace('/pricing')}
+        >
           Go to pricing
         </Button>
       </div>
     );
   }
 
+  const accessGateFading = securityReady && accessGateVisible;
+  const showAccessOverlay =
+    accessGateVisible && (Boolean(blockingMessage) || securityReady);
+
   return (
     <BranchProvider>
       <RestaurantRealtimeProvider>
         <RestaurantRegionalProvider>
-          <DashboardAppShell
-            sidebarOpen={sidebarOpen}
-            sidebarHeader={
-              <Link
-                href={restaurantSlug ? `/web-app/${restaurantSlug}` : '/'}
-                target={restaurantSlug ? '_blank' : undefined}
-                className="flex items-center gap-2 font-semibold transition-opacity hover:opacity-90"
+          {showAccessOverlay ? (
+            <AccessLoadingScreen
+              message={blockingMessage ?? 'Checking access & security…'}
+              fading={accessGateFading}
+            />
+          ) : null}
+
+          {securityReady ? (
+            <div className="min-h-screen animate-in fade-in duration-300">
+              <DashboardAppShell
+                sidebarOpen={sidebarOpen}
+                sidebarHeader={
+                  <Link
+                    href={restaurantSlug ? `/web-app/${restaurantSlug}` : '/'}
+                    target={restaurantSlug ? '_blank' : undefined}
+                    className="flex items-center gap-2 font-semibold transition-opacity hover:opacity-90"
+                  >
+                    <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/10 text-xs font-semibold uppercase ring-1 ring-primary/15">
+                      {restaurantLogoUrl && !logoFailed ? (
+                        <img
+                          src={restaurantLogoUrl}
+                          alt={restaurantName}
+                          className="h-full w-full object-cover"
+                          onError={() => setLogoFailed(true)}
+                        />
+                      ) : (
+                        <span>{restaurantName.charAt(0)}</span>
+                      )}
+                    </div>
+                    <span className="truncate">{restaurantName}</span>
+                  </Link>
+                }
+                sidebarNav={<Navbar />}
+                sidebarFooter={<UserMenu className="w-full justify-start" />}
+                header={
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 rounded-xl text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                      aria-label="Toggle navigation"
+                      title="Show or hide the sidebar with navigation links"
+                      onClick={toggleNav}
+                    >
+                      <span className="hidden md:inline-flex" aria-hidden>
+                        {sidebarOpen ? (
+                          <PanelLeftClose className="h-5 w-5" />
+                        ) : (
+                          <PanelLeft className="h-5 w-5" />
+                        )}
+                      </span>
+                      <span className="inline-flex md:hidden" aria-hidden>
+                        <Menu className="h-5 w-5" />
+                      </span>
+                    </Button>
+
+                    <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+                      <NavbarSheet onNavigate={() => setMobileNavOpen(false)} />
+                    </Sheet>
+
+                    <div
+                      className={cn(
+                        'flex min-w-0 shrink items-center gap-2',
+                        sidebarOpen && 'md:hidden'
+                      )}
+                    >
+                      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-sm font-semibold uppercase ring-1 ring-border">
+                        {restaurantLogoUrl && !logoFailed ? (
+                          <img
+                            src={restaurantLogoUrl}
+                            alt={restaurantName}
+                            className="h-full w-full object-cover"
+                            onError={() => setLogoFailed(true)}
+                          />
+                        ) : (
+                          <span>{restaurantName.charAt(0)}</span>
+                        )}
+                      </div>
+                      <span className="truncate text-sm font-semibold">
+                        {restaurantName}
+                      </span>
+                    </div>
+
+                    <Bread />
+                    <BranchSwitcher />
+                    <ModeToggle />
+                    <div
+                      className={cn(
+                        'ml-auto flex items-center gap-2',
+                        sidebarOpen && 'md:hidden'
+                      )}
+                    >
+                      <UserMenu />
+                    </div>
+                  </>
+                }
               >
-                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/10 text-xs font-semibold uppercase ring-1 ring-primary/15">
-                  {restaurantLogoUrl && !logoFailed ? (
-                    <img
-                      src={restaurantLogoUrl}
-                      alt={restaurantName}
-                      className="h-full w-full object-cover"
-                      onError={() => setLogoFailed(true)}
-                    />
-                  ) : (
-                    <span>{restaurantName.charAt(0)}</span>
-                  )}
-                </div>
-                <span className="truncate">{restaurantName}</span>
-              </Link>
-            }
-            sidebarNav={<Navbar />}
-            sidebarFooter={<UserMenu className="w-full justify-start" />}
-            header={
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 rounded-xl text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-                  aria-label="Toggle navigation"
-                  title="Show or hide the sidebar with navigation links"
-                  onClick={toggleNav}
-                >
-                  <span className="hidden md:inline-flex" aria-hidden>
-                    {sidebarOpen ? (
-                      <PanelLeftClose className="h-5 w-5" />
-                    ) : (
-                      <PanelLeft className="h-5 w-5" />
-                    )}
-                  </span>
-                  <span className="inline-flex md:hidden" aria-hidden>
-                    <Menu className="h-5 w-5" />
-                  </span>
-                </Button>
-
-                <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-                  <NavbarSheet onNavigate={() => setMobileNavOpen(false)} />
-                </Sheet>
-
-                <div
-                  className={cn(
-                    'flex min-w-0 shrink items-center gap-2',
-                    sidebarOpen && 'md:hidden'
-                  )}
-                >
-                  <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-sm font-semibold uppercase ring-1 ring-border">
-                    {restaurantLogoUrl && !logoFailed ? (
-                      <img
-                        src={restaurantLogoUrl}
-                        alt={restaurantName}
-                        className="h-full w-full object-cover"
-                        onError={() => setLogoFailed(true)}
-                      />
-                    ) : (
-                      <span>{restaurantName.charAt(0)}</span>
-                    )}
+                {subscriptionWarning && (
+                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+                    {subscriptionWarning}
                   </div>
-                  <span className="truncate text-sm font-semibold">
-                    {restaurantName}
-                  </span>
-                </div>
-
-                <Bread />
-                <BranchSwitcher />
-                <ModeToggle />
-                <div
-                  className={cn(
-                    'ml-auto flex items-center gap-2',
-                    sidebarOpen && 'md:hidden'
-                  )}
-                >
-                  <UserMenu />
-                </div>
-              </>
-            }
-          >
-            {subscriptionWarning && (
-              <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
-                {subscriptionWarning}
-              </div>
-            )}
-            {children}
-          </DashboardAppShell>
+                )}
+                {children}
+              </DashboardAppShell>
+            </div>
+          ) : null}
         </RestaurantRegionalProvider>
       </RestaurantRealtimeProvider>
     </BranchProvider>
