@@ -9,7 +9,6 @@ import { ArrowLeft, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { MenuPageShell } from '@/components/dashboard/menu-manager/menu-page-shell';
 import {
   ProductFormFields,
-  ProductFormSkeleton,
   buildProductPayload,
   isProductCreateFormDirty,
   isProductFormValid,
@@ -177,16 +176,14 @@ export default function ProductCreatePage() {
             <CardHeader className="flex flex-col gap-4 space-y-0">
               <div className="flex flex-row flex-wrap items-center justify-between gap-2">
                 <CardTitle>Create product</CardTitle>
-                {!showEmptyCategories ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={goToProducts}
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back to products
-                  </Button>
-                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={goToProducts}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back to products
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -209,12 +206,11 @@ export default function ProductCreatePage() {
                     }
                   />
                 </div>
-              ) : categoriesLoading && categories.length === 0 ? (
-                <ProductFormSkeleton />
               ) : (
                 <>
                   <ProductFormFields
                     categories={categories}
+                    categoriesLoading={categoriesLoading}
                     form={form}
                     onFormChange={(patch) =>
                       setForm((f) => ({ ...f, ...patch }))

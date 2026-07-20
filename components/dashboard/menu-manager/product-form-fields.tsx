@@ -81,6 +81,8 @@ export function useRestaurantVariationTemplates() {
 
 type Props = {
   categories: MenuCategoryRow[];
+  /** First page of categories still loading — show strip skeleton. */
+  categoriesLoading?: boolean;
   form: ProductFormState;
   onFormChange: (patch: Partial<ProductFormState>) => void;
   variationRows: VariationFormRow[];
@@ -144,6 +146,7 @@ function isVariationRowValid(
 
 export function ProductFormFields({
   categories,
+  categoriesLoading = false,
   form,
   onFormChange,
   variationRows,
@@ -227,11 +230,15 @@ export function ProductFormFields({
         <p className="text-xs text-muted-foreground">
           Select one or more categories where this product should appear.
         </p>
-        <CategoryPickerStrip
-          categories={categories}
-          selectedIds={form.categoryIds}
-          onChange={(categoryIds) => onFormChange({ categoryIds })}
-        />
+        {categoriesLoading && categories.length === 0 ? (
+          <CategoryPickerSkeleton />
+        ) : (
+          <CategoryPickerStrip
+            categories={categories}
+            selectedIds={form.categoryIds}
+            onChange={(categoryIds) => onFormChange({ categoryIds })}
+          />
+        )}
       </div>
 
       <div className="grid gap-2 ">
@@ -650,26 +657,39 @@ function formSkeletonBone(className?: string) {
   return `rounded-md bg-[#e2e8f0] animate-pulse dark:bg-[#4d4d4f] ${className ?? ''}`;
 }
 
-/** Placeholder while categories or product detail load. */
+/** Category strip placeholder while paginated catalog loads. */
+export function CategoryPickerSkeleton() {
+  const bone = formSkeletonBone;
+  return (
+    <div
+      className="overflow-hidden rounded-lg border border-border/60 bg-background/50 px-1 py-1.5 sm:px-1.5"
+      aria-hidden
+    >
+      <div className="flex w-max items-stretch gap-3 py-1 pe-1 ps-1">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="w-[9.5rem] shrink-0 overflow-hidden rounded-xl border border-border sm:w-[10.5rem]"
+          >
+            <div className={bone('aspect-[4/3] w-full rounded-none')} />
+            <div className="space-y-2 p-2.5">
+              <div className={bone('h-4 w-[80%]')} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Placeholder while product detail loads (edit flow). */
 export function ProductFormSkeleton() {
   const bone = formSkeletonBone;
   return (
     <div className="space-y-6" aria-hidden>
       <div className="space-y-2">
         <div className={bone('h-4 w-24')} />
-        <div className="flex gap-3 overflow-hidden py-1">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="w-[9.5rem] shrink-0 overflow-hidden rounded-xl border border-border sm:w-[10.5rem]"
-            >
-              <div className={bone('aspect-[4/3] w-full rounded-none')} />
-              <div className="space-y-2 p-2.5">
-                <div className={bone('h-4 w-[80%]')} />
-              </div>
-            </div>
-          ))}
-        </div>
+        <CategoryPickerSkeleton />
       </div>
       <div className="space-y-2">
         <div className={bone('h-4 w-16')} />
