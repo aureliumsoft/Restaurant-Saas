@@ -645,3 +645,77 @@ export function buildProductPayload(
     },
   };
 }
+
+function formSkeletonBone(className?: string) {
+  return `rounded-md bg-[#e2e8f0] animate-pulse dark:bg-[#4d4d4f] ${className ?? ''}`;
+}
+
+/** Placeholder while categories or product detail load. */
+export function ProductFormSkeleton() {
+  const bone = formSkeletonBone;
+  return (
+    <div className="space-y-6" aria-hidden>
+      <div className="space-y-2">
+        <div className={bone('h-4 w-24')} />
+        <div className="flex gap-3 overflow-hidden py-1">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="w-[9.5rem] shrink-0 overflow-hidden rounded-xl border border-border sm:w-[10.5rem]"
+            >
+              <div className={bone('aspect-[4/3] w-full rounded-none')} />
+              <div className="space-y-2 p-2.5">
+                <div className={bone('h-4 w-[80%]')} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <div className={bone('h-4 w-16')} />
+        <div className={bone('h-10 w-full')} />
+      </div>
+      <div className="space-y-2">
+        <div className={bone('h-4 w-24')} />
+        <div className={bone('h-24 w-full')} />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <div className={bone('h-4 w-12')} />
+          <div className={bone('h-10 w-full')} />
+        </div>
+        <div className="space-y-2">
+          <div className={bone('h-4 w-20')} />
+          <div className={bone('h-10 w-full')} />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <div className={bone('h-4 w-14')} />
+        <div className={bone('aspect-video max-w-xs w-full')} />
+      </div>
+    </div>
+  );
+}
+
+/** Keep selected category ids visible while paginated catalog still loads. */
+export function categoriesWithSelectedIds(
+  categories: MenuCategoryRow[],
+  selectedIds: string[]
+): MenuCategoryRow[] {
+  if (selectedIds.length === 0) return categories;
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const merged = [...categories];
+  for (const id of selectedIds) {
+    if (!byId.has(id)) {
+      merged.push({
+        id,
+        name: 'Category',
+        imageUrl: null,
+        showInFront: true,
+        sortOrder: 0,
+        items: [],
+      });
+    }
+  }
+  return merged;
+}

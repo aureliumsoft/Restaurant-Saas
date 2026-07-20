@@ -7,7 +7,6 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import {
   ArrowLeft,
-  Cross,
   Loader2,
   Save,
   Trash2,
@@ -17,7 +16,9 @@ import {
 import { MenuPageShell } from '@/components/dashboard/menu-manager/menu-page-shell';
 import {
   ProductFormFields,
+  ProductFormSkeleton,
   buildProductPayload,
+  categoriesWithSelectedIds,
   isProductEditFormDirty,
   productFormStateFromItem,
   useRestaurantVariationTemplates,
@@ -26,8 +27,8 @@ import {
   type VariationFormRow,
 } from '@/components/dashboard/menu-manager/product-form-fields';
 import { InventoryQuickActions } from '@/components/dashboard/menu-manager/inventory-quick-actions';
-import { useRestaurantMenu } from '@/components/dashboard/menu-manager/use-restaurant-menu';
 import type { MenuItemRow } from '@/components/dashboard/menu-manager/types';
+import { useMenuCategoriesCatalog } from '@/hooks/use-menu-categories-catalog';
 import ErrorBoundary from '@/components/toaster/toaster';
 import {
   AlertDialog,
@@ -44,24 +45,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 
-function findMenuItem(
-  categories: { items: MenuItemRow[] }[],
-  id: string
-): MenuItemRow | null {
-  for (const category of categories) {
-    const found = category.items.find((item) => item.id === id);
-    if (found) return found;
-  }
-  return null;
-}
-
 export default function ProductEditPage() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useParams();
   const productId = typeof params.id === 'string' ? params.id : '';
 
-  const { loading, categories, load } = useRestaurantMenu();
+  const {
+    categories,
+    loading: categoriesLoading,
+    refresh: refreshCategories,
+  } = useMenuCategoriesCatalog();
+  const [productLoading, setProductLoading] = useState(true);
+  const [productNotFound, setProductNotFound] = useState(false);
+  const [item, setItem] = useState<MenuItemRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const [form, setForm] = useState<ProductFormState>({
@@ -81,10 +78,46 @@ export default function ProductEditPage() {
   } | null>(null);
   const hydratedIdRef = useRef<string | null>(null);
 
-  const item = useMemo(
-    () => (productId ? findMenuItem(categories, productId) : null),
-    [categories, productId]
-  );
+  useEffect(() => {
+    if (!productId) {
+      setProductLoading(false);
+      setProductNotFound(true);
+      setItem(null);
+      return;
+    }
+
+    let cancelled = false;
+    hydratedIdRef.current = null;
+    initialRef.current = null;
+    setProductLoading(true);
+    setProductNotFound(false);
+    setItem(null);
+
+    void axios
+      .get<{ data: MenuItemRow }>(`/api/restaurant/menu/items/${productId}`)
+      .then((res) => {
+        if (cancelled) return;
+        setItem(res.data.data);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        const err = e as { response?: { status?: number } };
+        if (err.response?.status === 404) {
+          setProductNotFound(true);
+        } else {
+          toast.error('Could not load product.');
+          setProductNotFound(true);
+        }
+        setItem(null);
+      })
+      .finally(() => {
+        if (!cancelled) setProductLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [productId]);
 
   useEffect(() => {
     if (!item || hydratedIdRef.current === item.id) return;
@@ -98,6 +131,11 @@ export default function ProductEditPage() {
     };
     hydratedIdRef.current = item.id;
   }, [item]);
+
+  const categoriesForForm = useMemo(
+    () => categoriesWithSelectedIds(categories, form.categoryIds),
+    [categories, form.categoryIds]
+  );
 
   const isDirty = useMemo(() => {
     if (!initialRef.current) return false;
@@ -175,7 +213,6 @@ export default function ProductEditPage() {
       );
       toast.success('Product updated');
       allowNextNavigation();
-      await load();
       router.push('/product');
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: unknown } } };
@@ -190,7 +227,11 @@ export default function ProductEditPage() {
     }
   };
 
-  const showNotFound = !loading && productId && !item;
+  const showEmptyCategories =
+    !categoriesLoading && categories.length === 0 && !productLoading;
+  const showForm = Boolean(item) && !productNotFound;
+  const showFormSkeleton =
+    productLoading || (showForm && categoriesLoading && categories.length === 0);
 
   return (
     <div className="w-full">
@@ -200,81 +241,81 @@ export default function ProductEditPage() {
           description="Update menu item details, pricing, and variations."
           loading={false}
         >
-          {loading ? (
-            <p className="text-sm text-muted-foreground">
-              <Loader2 className="animate-spin text-primary text-center mx-auto" />
-            </p>
+          {productNotFound ? (
+            <Card>
+              <CardContent className="flex flex-col gap-3 p-6">
+                <p className="text-sm text-muted-foreground">
+                  Product not found. It may have been deleted.
+                </p>
+                <Button type="button" asChild className="w-fit">
+                  <Link href="/product">Back to products</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : showEmptyCategories ? (
+            <Card>
+              <CardContent className="flex flex-col gap-3 p-6">
+                <p className="text-sm text-muted-foreground">
+                  Create at least one category before editing products.
+                </p>
+                <InventoryQuickActions
+                  variant="toolbar"
+                  showVariation={false}
+                  onMenuRefresh={refreshCategories}
+                  onCategoryCreated={(categoryId) =>
+                    setForm((f) => ({
+                      ...f,
+                      categoryIds: f.categoryIds.includes(categoryId)
+                        ? f.categoryIds
+                        : [...f.categoryIds, categoryId],
+                    }))
+                  }
+                />
+              </CardContent>
+            </Card>
           ) : (
-            <>
-              {showNotFound ? (
-                <Card>
-                  <CardContent className="flex flex-col gap-3 p-6">
-                    <p className="text-sm text-muted-foreground">
-                      Product not found. It may have been deleted.
-                    </p>
-                    <Button type="button" asChild className="w-fit">
-                      <Link href="/product">Back to products</Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : categories?.length === 0 && !loading ? (
-                <Card>
-                  <CardContent className="flex flex-col gap-3 p-6">
-                    <p className="text-sm text-muted-foreground">
-                      Create at least one category before editing products.
-                    </p>
-                    <InventoryQuickActions
-                      variant="toolbar"
-                      showVariation={false}
-                      onMenuRefresh={load}
-                      onCategoryCreated={(categoryId) =>
-                        setForm((f) => ({
-                          ...f,
-                          categoryIds: f.categoryIds.includes(categoryId)
-                            ? f.categoryIds
-                            : [...f.categoryIds, categoryId],
-                        }))
-                      }
-                    />
-                  </CardContent>
-                </Card>
-              ) : item ? (
-                <Card>
-                  <CardHeader className="flex flex-col gap-4 space-y-0">
-                    <div className="flex flex-row flex-wrap items-center justify-between gap-2">
-                      <CardTitle className="text-lg">{item.name}</CardTitle>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={goToProducts}
-                      >
-                        <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to products
-                      </Button>
-                    </div>
-                    <InventoryQuickActions
-                      onMenuRefresh={load}
-                      onVariationTemplatesReload={reloadVariationTemplates}
-                      onCategoryCreated={(categoryId) =>
-                        setForm((f) => ({
-                          ...f,
-                          categoryIds: f.categoryIds.includes(categoryId)
-                            ? f.categoryIds
-                            : [...f.categoryIds, categoryId],
-                        }))
-                      }
-                    />
-                  </CardHeader>
-                  <CardContent className="space-y-6">
+            <Card>
+              <CardHeader className="flex flex-col gap-4 space-y-0">
+                <div className="flex flex-row flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-lg">
+                    {item?.name ?? 'Edit product'}
+                  </CardTitle>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={goToProducts}
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back to products
+                  </Button>
+                </div>
+                <InventoryQuickActions
+                  onMenuRefresh={refreshCategories}
+                  onVariationTemplatesReload={reloadVariationTemplates}
+                  onCategoryCreated={(categoryId) =>
+                    setForm((f) => ({
+                      ...f,
+                      categoryIds: f.categoryIds.includes(categoryId)
+                        ? f.categoryIds
+                        : [...f.categoryIds, categoryId],
+                    }))
+                  }
+                />
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {showFormSkeleton ? (
+                  <ProductFormSkeleton />
+                ) : showForm ? (
+                  <>
                     <ProductFormFields
-                      categories={categories}
+                      categories={categoriesForForm}
                       form={form}
                       onFormChange={(patch) =>
                         setForm((f) => ({ ...f, ...patch }))
                       }
                       variationRows={variationRows}
                       onVariationRowsChange={setVariationRows}
-                      onMenuRefresh={load}
+                      onMenuRefresh={refreshCategories}
                       variationTemplates={variationTemplates}
                       onVariationTemplatesReload={reloadVariationTemplates}
                     />
@@ -308,10 +349,10 @@ export default function ProductEditPage() {
                         </>
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              ) : null}
-            </>
+                  </>
+                ) : null}
+              </CardContent>
+            </Card>
           )}
         </MenuPageShell>
 
@@ -329,7 +370,6 @@ export default function ProductEditPage() {
             <AlertDialogFooter>
               <AlertDialogCancel
                 type="button"
-
                 className="bg-gray-100 text-gray-900 hover:bg-gray-200 hover:text-gray-900"
               >
                 <>

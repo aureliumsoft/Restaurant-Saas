@@ -9,6 +9,7 @@ import { ArrowLeft, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { MenuPageShell } from '@/components/dashboard/menu-manager/menu-page-shell';
 import {
   ProductFormFields,
+  ProductFormSkeleton,
   buildProductPayload,
   isProductCreateFormDirty,
   isProductFormValid,
@@ -17,7 +18,7 @@ import {
   type VariationFormRow,
 } from '@/components/dashboard/menu-manager/product-form-fields';
 import { InventoryQuickActions } from '@/components/dashboard/menu-manager/inventory-quick-actions';
-import { useRestaurantMenu } from '@/components/dashboard/menu-manager/use-restaurant-menu';
+import { useMenuCategoriesCatalog } from '@/hooks/use-menu-categories-catalog';
 import ErrorBoundary from '@/components/toaster/toaster';
 import {
   AlertDialog,
@@ -33,7 +34,6 @@ import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -52,13 +52,20 @@ const EMPTY_PRODUCT_FORM: ProductFormState = {
 export default function ProductCreatePage() {
   const router = useRouter();
   const pathname = usePathname();
-  const { loading, categories, load } = useRestaurantMenu();
+  const {
+    categories,
+    loading: categoriesLoading,
+    refresh: refreshCategories,
+  } = useMenuCategoriesCatalog();
   const [saving, setSaving] = useState(false);
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const [form, setForm] = useState<ProductFormState>(EMPTY_PRODUCT_FORM);
   const [variationRows, setVariationRows] = useState<VariationFormRow[]>([]);
   const { variationTemplates, reloadVariationTemplates } =
     useRestaurantVariationTemplates();
+
+  const showEmptyCategories =
+    !categoriesLoading && categories.length === 0;
 
   const isDirty = useMemo(
     () => isProductCreateFormDirty(form, variationRows),
@@ -170,7 +177,7 @@ export default function ProductCreatePage() {
             <CardHeader className="flex flex-col gap-4 space-y-0">
               <div className="flex flex-row flex-wrap items-center justify-between gap-2">
                 <CardTitle>Create product</CardTitle>
-                {categories.length > 0 || loading ? (
+                {!showEmptyCategories ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -181,77 +188,70 @@ export default function ProductCreatePage() {
                   </Button>
                 ) : null}
               </div>
-             
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <p className="text-sm text-muted-foreground">
-                  <Loader2 className="animate-spin text-primary text-center mx-auto" />
-                </p>
+              {showEmptyCategories ? (
+                <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
+                  <p className="text-sm text-muted-foreground">
+                    Create at least one category before adding products.
+                  </p>
+                  <InventoryQuickActions
+                    variant="toolbar"
+                    showVariation={false}
+                    onMenuRefresh={refreshCategories}
+                    onCategoryCreated={(categoryId) =>
+                      setForm((f) => ({
+                        ...f,
+                        categoryIds: f.categoryIds.includes(categoryId)
+                          ? f.categoryIds
+                          : [...f.categoryIds, categoryId],
+                      }))
+                    }
+                  />
+                </div>
+              ) : categoriesLoading && categories.length === 0 ? (
+                <ProductFormSkeleton />
               ) : (
                 <>
-                  {categories?.length === 0 && !loading ? (
-                    <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
-                      <p className="text-sm text-muted-foreground">
-                        Create at least one category before adding products.
-                      </p>
-                      <InventoryQuickActions
-                        variant="toolbar"
-                        showVariation={false}
-                        onMenuRefresh={load}
-                        onCategoryCreated={(categoryId) =>
-                          setForm((f) => ({
-                            ...f,
-                            categoryIds: f.categoryIds.includes(categoryId)
-                              ? f.categoryIds
-                              : [...f.categoryIds, categoryId],
-                          }))
-                        }
-                      />
-                    </div>
-                  ) : (
-                    <>
-                      <ProductFormFields
-                        categories={categories}
-                        form={form}
-                        onFormChange={(patch) =>
-                          setForm((f) => ({ ...f, ...patch }))
-                        }
-                        variationRows={variationRows}
-                        onVariationRowsChange={setVariationRows}
-                        showRequired
-                        onMenuRefresh={load}
-                        variationTemplates={variationTemplates}
-                        onVariationTemplatesReload={reloadVariationTemplates}
-                      />
-                      <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-                        <Button
-                          type="button"
-                          disabled={saving || !canCreate}
-                          onClick={() => setSaveConfirmOpen(true)}
-                        >
-                          {saving ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              <span>Creating...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="h-4 w-4 mr-2" />
-                              <span>Create product</span>
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={goToProducts}
-                        >
-                          <span>Cancel</span>
-                        </Button>
-                      </div>
-                    </>
-                  )}
+                  <ProductFormFields
+                    categories={categories}
+                    form={form}
+                    onFormChange={(patch) =>
+                      setForm((f) => ({ ...f, ...patch }))
+                    }
+                    variationRows={variationRows}
+                    onVariationRowsChange={setVariationRows}
+                    showRequired
+                    onMenuRefresh={refreshCategories}
+                    variationTemplates={variationTemplates}
+                    onVariationTemplatesReload={reloadVariationTemplates}
+                  />
+                  <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+                    <Button
+                      type="button"
+                      disabled={saving || !canCreate}
+                      onClick={() => setSaveConfirmOpen(true)}
+                    >
+                      {saving ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          <span>Creating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4 mr-2" />
+                          <span>Create product</span>
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={goToProducts}
+                    >
+                      <span>Cancel</span>
+                    </Button>
+                  </div>
                 </>
               )}
             </CardContent>
