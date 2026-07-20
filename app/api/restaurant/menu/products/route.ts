@@ -10,6 +10,15 @@ import {
 } from '@/lib/pagination';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 
+/** List payloads must stay small — never return multi-MB base64 data URLs. */
+function toListImageUrl(imageUrl: string | null | undefined): string | null {
+  if (!imageUrl) return null;
+  const trimmed = imageUrl.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('data:')) return null;
+  return trimmed;
+}
+
 const listItemSelect = {
   id: true,
   name: true,
@@ -20,17 +29,12 @@ const listItemSelect = {
   categoryId: true,
   createdAt: true,
   updatedAt: true,
+  // Only fields needed for list pricing + variation count (no variation images).
   variations: {
     orderBy: { sortOrder: 'asc' as const },
     select: {
       id: true,
-      name: true,
-      title: true,
-      imageUrl: true,
-      swatchHex: true,
       priceDelta: true,
-      sortOrder: true,
-      restaurantVariationId: true,
     },
   },
 } as const;
@@ -93,6 +97,14 @@ function categoryFilterWhere(
   };
 }
 
+function truncateDescription(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length <= 160) return trimmed;
+  return `${trimmed.slice(0, 157)}…`;
+}
+
 export async function GET(req: NextRequest) {
   const auth = await getRestaurantForOwnerRequest(req, {
     moduleKeys: ['product', 'pos', 'recommendations'],
@@ -106,9 +118,11 @@ export async function GET(req: NextRequest) {
     const restaurantId = auth.restaurant.id;
     const search = req.nextUrl.searchParams.get('search')?.trim() ?? '';
     const categoryIds = parseCategoryIds(req.nextUrl.searchParams);
+    const includeCategories =
+      req.nextUrl.searchParams.get('includeCategories') !== '0';
 
     const { page, pageSize } = parsePaginationParams(req.nextUrl.searchParams, {
-      defaultPageSize: 8,
+      defaultPageSize: 12,
       maxPageSize: 24,
     });
 
@@ -123,25 +137,31 @@ export async function GET(req: NextRequest) {
       ...(andFilters.length > 0 ? { AND: andFilters } : {}),
     };
 
-    const [total, categories] = await Promise.all([
-      db.menuItem.count({ where: combinedWhere }),
-      db.menuCategory.findMany({
-        where: { restaurantId },
-        orderBy: { sortOrder: 'asc' },
-        select: { id: true, name: true },
-      }),
-    ]);
-
+    // Count first so we can clamp page, then fetch page rows + categories in parallel.
+    const total = await db.menuItem.count({ where: combinedWhere });
     const safePage = clampPage(page, total, pageSize);
     const skip = (safePage - 1) * pageSize;
 
-    const items = await db.menuItem.findMany({
-      where: combinedWhere,
-      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-      skip,
-      take: pageSize,
-      select: listItemSelect,
-    });
+    const [categories, items] = await Promise.all([
+      includeCategories
+        ? db.menuCategory.findMany({
+            where: { restaurantId },
+            orderBy: { sortOrder: 'asc' },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve(
+            [] as Array<{ id: string; name: string }>
+          ),
+      total === 0
+        ? Promise.resolve([])
+        : db.menuItem.findMany({
+            where: combinedWhere,
+            orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+            skip,
+            take: pageSize,
+            select: listItemSelect,
+          }),
+    ]);
 
     const itemIds = items.map((item) => item.id);
     const categoryLinks =
@@ -159,15 +179,42 @@ export async function GET(req: NextRequest) {
       list.push(link.categoryId);
       categoryIdsByItem.set(link.menuItemId, list);
     }
-    const categoryNameById = new Map(categories.map((c) => [c.id, c.name]));
+
+    // Prefer names from this response; fall back to primary category relation via map.
+    let categoryNameById = new Map(categories.map((c) => [c.id, c.name]));
+    if (!includeCategories || categories.length === 0) {
+      const neededIds = [
+        ...new Set(
+          items.flatMap((item) => {
+            const linked = categoryIdsByItem.get(item.id) ?? [];
+            return linked.length > 0 ? linked : [item.categoryId];
+          })
+        ),
+      ];
+      if (neededIds.length > 0) {
+        const named = await db.menuCategory.findMany({
+          where: { restaurantId, id: { in: neededIds } },
+          select: { id: true, name: true },
+        });
+        categoryNameById = new Map(named.map((c) => [c.id, c.name]));
+      }
+    }
 
     const products = items.map((item) => {
       const ids = categoryIdsByItem.get(item.id) ?? [item.categoryId];
       const categoryNames = ids
         .map((id) => categoryNameById.get(id))
         .filter((name): name is string => Boolean(name));
+      const listImage = toListImageUrl(item.imageUrl);
       return {
-        ...item,
+        id: item.id,
+        name: item.name,
+        description: truncateDescription(item.description),
+        imageUrl: listImage,
+        hasImage: Boolean(item.imageUrl?.trim()),
+        price: item.price,
+        salePrice: item.salePrice,
+        categoryId: item.categoryId,
         categoryIds: ids,
         categoryNames:
           categoryNames.length > 0
@@ -179,6 +226,7 @@ export async function GET(req: NextRequest) {
           '—',
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
+        variations: item.variations,
         attributeGroups: [] as unknown[],
       };
     });
@@ -188,7 +236,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       data: {
         products,
-        categories,
+        categories: includeCategories ? categories : undefined,
         pagination: meta,
       },
     });

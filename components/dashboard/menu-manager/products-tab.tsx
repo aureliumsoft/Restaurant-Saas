@@ -1,13 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import {
   ListFilter,
-  Loader2,
   Pencil,
   Plus,
   Search,
@@ -50,16 +49,18 @@ import type { MenuItemRow } from './types';
 
 const PRODUCTS_PAGE_SIZE = 12;
 const ALL_CATEGORIES = 'all';
+const SKELETON_BONE = 'bg-[#e2e8f0] dark:bg-[#3f3f46] animate-pulse';
 
 type ProductListItem = MenuItemRow & {
   categoryName: string;
   categoryNames: string[];
+  hasImage?: boolean;
 };
 
 type ProductsApiResponse = {
   data: {
     products: ProductListItem[];
-    categories: Array<{ id: string; name: string }>;
+    categories?: Array<{ id: string; name: string }>;
     pagination: {
       page: number;
       pageSize: number;
@@ -67,6 +68,12 @@ type ProductsApiResponse = {
       totalPages: number;
     };
   };
+};
+
+type CachedPage = {
+  products: ProductListItem[];
+  pagination: ProductsApiResponse['data']['pagination'];
+  categories?: Array<{ id: string; name: string }>;
 };
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -85,6 +92,47 @@ function formatMenuItemDate(iso: string | undefined) {
   } catch {
     return '—';
   }
+}
+
+function cacheKey(page: number, search: string, categoryId: string) {
+  return `${page}|${search}|${categoryId}`;
+}
+
+function ProductRowSkeleton() {
+  return (
+    <DashboardTableRow>
+      <DashboardTableCell>
+        <div className={cn('h-12 w-12 rounded-md border', SKELETON_BONE)} />
+      </DashboardTableCell>
+      <DashboardTableCell>
+        <div className="space-y-2">
+          <div className={cn('h-4 w-40 rounded', SKELETON_BONE)} />
+          <div className={cn('h-3 w-56 rounded', SKELETON_BONE)} />
+        </div>
+      </DashboardTableCell>
+      <DashboardTableCell>
+        <div className={cn('h-4 w-24 rounded', SKELETON_BONE)} />
+      </DashboardTableCell>
+      <DashboardTableCell>
+        <div className={cn('h-4 w-16 rounded', SKELETON_BONE)} />
+      </DashboardTableCell>
+      <DashboardTableCell>
+        <div className={cn('h-4 w-14 rounded', SKELETON_BONE)} />
+      </DashboardTableCell>
+      <DashboardTableCell className="hidden lg:table-cell">
+        <div className={cn('h-3 w-28 rounded', SKELETON_BONE)} />
+      </DashboardTableCell>
+      <DashboardTableCell className="hidden md:table-cell">
+        <div className={cn('h-3 w-28 rounded', SKELETON_BONE)} />
+      </DashboardTableCell>
+      <DashboardTableCell>
+        <div className="flex gap-1">
+          <div className={cn('h-9 w-9 rounded-md', SKELETON_BONE)} />
+          <div className={cn('h-9 w-9 rounded-md', SKELETON_BONE)} />
+        </div>
+      </DashboardTableCell>
+    </DashboardTableRow>
+  );
 }
 
 type Props = {
@@ -127,40 +175,124 @@ export function ProductsTab({
   );
   const [deleting, setDeleting] = useState(false);
 
-  const loadProducts = useCallback(async () => {
-    setLoading(true);
-    try {
+  const requestIdRef = useRef(0);
+  const cacheRef = useRef<Map<string, CachedPage>>(new Map());
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
+
+  const applyPayload = useCallback(
+    (payload: CachedPage, mergeCategories: boolean) => {
+      setProducts(payload.products);
+      setPagination(payload.pagination);
+      if (payload.categories && payload.categories.length > 0) {
+        setCategories(payload.categories);
+      } else if (!mergeCategories && categoriesRef.current.length === 0) {
+        setCategories([]);
+      }
+    },
+    []
+  );
+
+  const fetchPage = useCallback(
+    async (
+      targetPage: number,
+      searchValue: string,
+      categoryValue: string,
+      opts?: { includeCategories?: boolean }
+    ): Promise<CachedPage | null> => {
+      const includeCategories =
+        opts?.includeCategories ?? categoriesRef.current.length === 0;
       const res = await axios.get<ProductsApiResponse>(
         '/api/restaurant/menu/products',
         {
           params: {
-            page,
+            page: targetPage,
             limit: PRODUCTS_PAGE_SIZE,
-            search: debouncedSearch || undefined,
+            search: searchValue || undefined,
             categoryId:
-              categoryFilter === ALL_CATEGORIES ? undefined : categoryFilter,
+              categoryValue === ALL_CATEGORIES ? undefined : categoryValue,
+            includeCategories: includeCategories ? '1' : '0',
           },
         }
       );
       const payload = res.data.data;
-      setProducts(payload.products ?? []);
-      setCategories(payload.categories ?? []);
-      setPagination(
-        payload.pagination ?? {
-          page: 1,
-          pageSize: PRODUCTS_PAGE_SIZE,
-          total: 0,
-          totalPages: 1,
-        }
+      const cached: CachedPage = {
+        products: payload.products ?? [],
+        pagination:
+          payload.pagination ?? {
+            page: targetPage,
+            pageSize: PRODUCTS_PAGE_SIZE,
+            total: 0,
+            totalPages: 1,
+          },
+        categories: payload.categories,
+      };
+      cacheRef.current.set(
+        cacheKey(targetPage, searchValue, categoryValue),
+        cached
       );
+      return cached;
+    },
+    []
+  );
+
+  const prefetchNextPage = useCallback(
+    (current: CachedPage, searchValue: string, categoryValue: string) => {
+      const nextPage = current.pagination.page + 1;
+      if (nextPage > current.pagination.totalPages) return;
+      const key = cacheKey(nextPage, searchValue, categoryValue);
+      if (cacheRef.current.has(key)) return;
+      void fetchPage(nextPage, searchValue, categoryValue, {
+        includeCategories: false,
+      }).catch(() => {
+        /* silent prefetch */
+      });
+    },
+    [fetchPage]
+  );
+
+  const loadProducts = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    const key = cacheKey(page, debouncedSearch, categoryFilter);
+    const cached = cacheRef.current.get(key);
+
+    // Always show loading for the requested page until data is ready.
+    setLoading(true);
+    setProducts([]);
+
+    if (cached) {
+      if (requestId !== requestIdRef.current) return;
+      applyPayload(cached, true);
+      setLoading(false);
+      prefetchNextPage(cached, debouncedSearch, categoryFilter);
+      return;
+    }
+
+    try {
+      const payload = await fetchPage(page, debouncedSearch, categoryFilter, {
+        includeCategories: categoriesRef.current.length === 0,
+      });
+      if (requestId !== requestIdRef.current || !payload) return;
+      applyPayload(payload, true);
+      prefetchNextPage(payload, debouncedSearch, categoryFilter);
     } catch (e: unknown) {
+      if (requestId !== requestIdRef.current) return;
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || 'Failed to load products');
       setProducts([]);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [page, debouncedSearch, categoryFilter]);
+  }, [
+    page,
+    debouncedSearch,
+    categoryFilter,
+    applyPayload,
+    fetchPage,
+    prefetchNextPage,
+  ]);
 
   useEffect(() => {
     void loadProducts();
@@ -168,9 +300,12 @@ export function ProductsTab({
 
   useEffect(() => {
     setPage(1);
+    // Filter/search change invalidates cached pages for previous filters.
+    cacheRef.current.clear();
   }, [debouncedSearch, categoryFilter]);
 
   const refreshAll = async () => {
+    cacheRef.current.clear();
     await onRefresh?.();
     await loadProducts();
   };
@@ -194,8 +329,24 @@ export function ProductsTab({
 
   const noCategories =
     !categoriesLoading &&
+    !loading &&
     categories.length === 0 &&
     (hasCategoriesHint === false || hasCategoriesHint === undefined);
+
+  const showEmptyInventory =
+    !loading &&
+    pagination.total === 0 &&
+    !debouncedSearch &&
+    categoryFilter === ALL_CATEGORIES &&
+    categories.length > 0;
+
+  const showToolbarAndTable =
+    !noCategories &&
+    (loading ||
+      pagination.total > 0 ||
+      debouncedSearch.length > 0 ||
+      categoryFilter !== ALL_CATEGORIES ||
+      categories.length > 0);
 
   return (
     <DashboardCard>
@@ -207,11 +358,7 @@ export function ProductsTab({
         />
       </DashboardCardHeader>
       <DashboardCardContent className="space-y-4 pt-4">
-        {loading && products.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            <Loader2 className="mx-auto animate-spin text-center text-primary" />
-          </p>
-        ) : noCategories ? (
+        {noCategories ? (
           <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
             <p className="text-sm text-muted-foreground">
               Create at least one category before you can add products.
@@ -222,7 +369,7 @@ export function ProductsTab({
               onMenuRefresh={refreshAll}
             />
           </div>
-        ) : pagination.total === 0 && !debouncedSearch && categoryFilter === ALL_CATEGORIES ? (
+        ) : showEmptyInventory ? (
           <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
             {canEditProducts ? (
               <Button type="button" asChild>
@@ -234,7 +381,7 @@ export function ProductsTab({
             ) : null}
             <p className="text-sm text-muted-foreground">No products yet.</p>
           </div>
-        ) : (
+        ) : showToolbarAndTable ? (
           <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               {canEditProducts ? (
@@ -291,13 +438,14 @@ export function ProductsTab({
             </div>
 
             <p className="text-xs text-muted-foreground">
-              {pagination.total === 0
-                ? 'No products match your search or filter.'
-                : `Showing ${products.length} of ${pagination.total} product${pagination.total === 1 ? '' : 's'} · sorted by newest or recently updated`}
-              {loading ? ' · Loading…' : ''}
+              {loading
+                ? `Loading page ${page}…`
+                : pagination.total === 0
+                  ? 'No products match your search or filter.'
+                  : `Showing ${products.length} of ${pagination.total} product${pagination.total === 1 ? '' : 's'} · page ${pagination.page} of ${pagination.totalPages} · sorted by newest or recently updated.`}
             </p>
 
-            {pagination.total === 0 ? null : (
+            {loading || pagination.total > 0 ? (
               <>
                 <DashboardTableWrapper>
                   <DashboardTable minWidth={1040}>
@@ -320,130 +468,139 @@ export function ProductsTab({
                       </DashboardTableRow>
                     </DashboardTableHeader>
                     <DashboardTableBody>
-                      {products.map((item) => {
-                        const display = getMenuItemDisplayPrice(item);
-                        const variationCount = item.variations?.length ?? 0;
-                        const categoryNames = item.categoryNames ?? [
-                          item.categoryName,
-                        ];
-                        return (
-                          <DashboardTableRow key={item.id}>
-                            <DashboardTableCell>
-                              <div
-                                className={cn(
-                                  'relative h-12 w-12 overflow-hidden rounded-md border border-border bg-muted',
-                                  !item.imageUrl &&
-                                    'flex items-center justify-center text-[10px] text-muted-foreground'
-                                )}
-                              >
-                                {item.imageUrl ? (
-                                  // eslint-disable-next-line @next/next/no-img-element -- dashboard menu URLs
-                                  <img
-                                    src={item.imageUrl}
-                                    alt=""
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  '—'
-                                )}
-                              </div>
-                            </DashboardTableCell>
-                            <DashboardTableCell>
-                              <div className="font-medium">{item.name}</div>
-                              {item.description ? (
-                                <div className="line-clamp-2 text-wrap text-xs font-light text-muted-foreground">
-                                  {item.description}
-                                </div>
-                              ) : null}
-                              {variationCount > 0 ? (
-                                <div className="mt-0.5 text-[11px] text-muted-foreground">
-                                  {variationCount} variation
-                                  {variationCount === 1 ? '' : 's'}
-                                </div>
-                              ) : null}
-                            </DashboardTableCell>
-                            <DashboardTableCell className="text-muted-foreground">
-                              {categoryNames.length > 1
-                                ? categoryNames.join(', ')
-                                : item.categoryName}
-                            </DashboardTableCell>
-                            <DashboardTableCell className="tabular-nums">
-                              {display.hasVariations ? (
-                                <>
-                                  <span className="text-xs text-muted-foreground">
-                                    From{' '}
-                                  </span>
-                                  <span className="font-medium">
-                                    {formatMoney(display.amount)}
-                                  </span>
-                                </>
-                              ) : display.compareAt != null ? (
-                                <span className="text-muted-foreground line-through">
-                                  {formatMoney(display.compareAt!)}
-                                </span>
-                              ) : (
-                                <span className="font-medium">
-                                  {formatMoney(display.amount)}
-                                </span>
-                              )}
-                            </DashboardTableCell>
-                            <DashboardTableCell className="tabular-nums">
-                              {display.hasVariations ? (
-                                <span className="text-xs text-muted-foreground">
-                                  via variations
-                                </span>
-                              ) : display.compareAt != null ? (
-                                <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                                  {formatMoney(display.amount)}
-                                </span>
-                              ) : (
-                                '—'
-                              )}
-                            </DashboardTableCell>
-                            <DashboardTableCell className="hidden text-xs text-muted-foreground lg:table-cell">
-                              {formatMenuItemDate(item.createdAt)}
-                            </DashboardTableCell>
-                            <DashboardTableCell className="hidden text-xs text-muted-foreground md:table-cell">
-                              {formatMenuItemDate(item.updatedAt)}
-                            </DashboardTableCell>
-                            <DashboardTableCell>
-                              <div className="flex gap-1">
-                                {canEditProducts ? (
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="outline"
-                                    asChild
+                      {loading
+                        ? Array.from({ length: PRODUCTS_PAGE_SIZE }).map(
+                            (_, i) => (
+                              <ProductRowSkeleton key={`product-skel-${i}`} />
+                            )
+                          )
+                        : products.map((item) => {
+                            const display = getMenuItemDisplayPrice(item);
+                            const variationCount = item.variations?.length ?? 0;
+                            const categoryNames = item.categoryNames ?? [
+                              item.categoryName,
+                            ];
+                            const showImage = Boolean(item.imageUrl);
+                            return (
+                              <DashboardTableRow key={item.id}>
+                                <DashboardTableCell>
+                                  <div
+                                    className={cn(
+                                      'relative h-12 w-12 overflow-hidden rounded-md border border-border bg-muted',
+                                      !showImage &&
+                                        'flex items-center justify-center text-[10px] text-muted-foreground'
+                                    )}
                                   >
-                                    <Link
-                                      href={`/product/edit/${item.id}`}
-                                      aria-label={`Edit ${item.name}`}
-                                    >
-                                      <Pencil className="h-4 w-4" />
-                                    </Link>
-                                  </Button>
-                                ) : null}
-                                {canDeleteProducts ? (
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="outline"
-                                    className="text-destructive"
-                                    onClick={() => {
-                                      setDeletingProduct(item);
-                                      setDeleteConfirmOpen(true);
-                                    }}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                ) : null}
-                              </div>
-                            </DashboardTableCell>
-                          </DashboardTableRow>
-                        );
-                      })}
+                                    {showImage ? (
+                                      // eslint-disable-next-line @next/next/no-img-element -- dashboard menu URLs
+                                      <img
+                                        src={item.imageUrl!}
+                                        alt=""
+                                        loading="lazy"
+                                        decoding="async"
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : item.hasImage ? (
+                                      'Img'
+                                    ) : (
+                                      '—'
+                                    )}
+                                  </div>
+                                </DashboardTableCell>
+                                <DashboardTableCell>
+                                  <div className="font-medium">{item.name}</div>
+                                  {item.description ? (
+                                    <div className="line-clamp-2 text-wrap text-xs font-light text-muted-foreground">
+                                      {item.description}
+                                    </div>
+                                  ) : null}
+                                  {variationCount > 0 ? (
+                                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                      {variationCount} variation
+                                      {variationCount === 1 ? '' : 's'}
+                                    </div>
+                                  ) : null}
+                                </DashboardTableCell>
+                                <DashboardTableCell className="text-muted-foreground">
+                                  {categoryNames.length > 1
+                                    ? categoryNames.join(', ')
+                                    : item.categoryName}
+                                </DashboardTableCell>
+                                <DashboardTableCell className="tabular-nums">
+                                  {display.hasVariations ? (
+                                    <>
+                                      <span className="text-xs text-muted-foreground">
+                                        From{' '}
+                                      </span>
+                                      <span className="font-medium">
+                                        {formatMoney(display.amount)}
+                                      </span>
+                                    </>
+                                  ) : display.compareAt != null ? (
+                                    <span className="text-muted-foreground line-through">
+                                      {formatMoney(display.compareAt!)}
+                                    </span>
+                                  ) : (
+                                    <span className="font-medium">
+                                      {formatMoney(display.amount)}
+                                    </span>
+                                  )}
+                                </DashboardTableCell>
+                                <DashboardTableCell className="tabular-nums">
+                                  {display.hasVariations ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      via variations
+                                    </span>
+                                  ) : display.compareAt != null ? (
+                                    <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                                      {formatMoney(display.amount)}
+                                    </span>
+                                  ) : (
+                                    '—'
+                                  )}
+                                </DashboardTableCell>
+                                <DashboardTableCell className="hidden text-xs text-muted-foreground lg:table-cell">
+                                  {formatMenuItemDate(item.createdAt)}
+                                </DashboardTableCell>
+                                <DashboardTableCell className="hidden text-xs text-muted-foreground md:table-cell">
+                                  {formatMenuItemDate(item.updatedAt)}
+                                </DashboardTableCell>
+                                <DashboardTableCell>
+                                  <div className="flex gap-1">
+                                    {canEditProducts ? (
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="outline"
+                                        asChild
+                                      >
+                                        <Link
+                                          href={`/product/edit/${item.id}`}
+                                          aria-label={`Edit ${item.name}`}
+                                        >
+                                          <Pencil className="h-4 w-4" />
+                                        </Link>
+                                      </Button>
+                                    ) : null}
+                                    {canDeleteProducts ? (
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="outline"
+                                        className="text-destructive"
+                                        onClick={() => {
+                                          setDeletingProduct(item);
+                                          setDeleteConfirmOpen(true);
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                </DashboardTableCell>
+                              </DashboardTableRow>
+                            );
+                          })}
                     </DashboardTableBody>
                   </DashboardTable>
                 </DashboardTableWrapper>
@@ -455,7 +612,16 @@ export function ProductsTab({
                   loading={loading}
                 />
               </>
-            )}
+            ) : null}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={`boot-skel-${i}`}
+                className={cn('h-14 w-full rounded-lg border', SKELETON_BONE)}
+              />
+            ))}
           </div>
         )}
       </DashboardCardContent>
