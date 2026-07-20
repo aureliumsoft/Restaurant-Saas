@@ -44,6 +44,7 @@ export type AttrGroupRow = {
     name: string;
     shortLabel: string | null;
   } | null;
+  includeDefaultLinkedVariationPrice?: boolean;
   linkedProduct?: {
     id: string;
     name: string;

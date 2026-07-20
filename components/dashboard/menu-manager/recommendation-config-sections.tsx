@@ -95,6 +95,10 @@ function SavedGroupList({
               {g.defaultLinkedRestaurantVariation?.name
                 ? ` · Default variation: ${g.defaultLinkedRestaurantVariation.name}`
                 : ''}
+              {g.defaultLinkedRestaurantVariationId &&
+              g.includeDefaultLinkedVariationPrice === false
+                ? ' · Variation price hidden'
+                : ''}
               {g.defaultLinkedMenuItem?.name
                 ? ` · Default item: ${g.defaultLinkedMenuItem.name}`
                 : ''}

@@ -92,6 +92,7 @@ function buildAttributeGroupsSelect(
     productCategoryIds: true,
     defaultLinkedMenuItemId: true,
     defaultLinkedRestaurantVariationId: true,
+    includeDefaultLinkedVariationPrice: true,
     defaultLinkedRestaurantVariation: {
       select: { id: true, name: true, shortLabel: true },
     },
@@ -132,6 +133,7 @@ function buildAttributeGroupsSelect(
 
   if (mode === 'full') {
     groupSelect.useVariationPricing = true;
+    groupSelect.includeDefaultLinkedVariationPrice = true;
   }
 
   return {

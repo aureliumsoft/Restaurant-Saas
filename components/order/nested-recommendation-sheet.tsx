@@ -737,6 +737,8 @@ function InlineRecommendationGroups({
                       ? configurationItemListUnitPriceForGroup(it, {
                           defaultLinkedRestaurantVariationId:
                             g.defaultLinkedRestaurantVariationId,
+                          includeDefaultLinkedVariationPrice:
+                            g.includeDefaultLinkedVariationPrice,
                         })
                       : configurationItemResolvedListUnit(
                           it,
@@ -885,6 +887,7 @@ type Props = {
   parentConfigurationGroup?: {
     useVariationPricing?: boolean;
     defaultLinkedRestaurantVariationId?: string | null;
+    includeDefaultLinkedVariationPrice?: boolean;
   };
   /** Base product variation (e.g. taco size) for configuration item rates. */
   baseProductVariation?: ParentVariationContext | null;

@@ -629,6 +629,8 @@ model MenuItemAttributeGroup {
   defaultLinkedMenuItemId String?
   /// Fixed restaurant variation tier for linked category items (e.g. Medium pizzas only).
   defaultLinkedRestaurantVariationId String?
+  /// When false with a default variation, guests see base item price only (variation tier is free).
+  includeDefaultLinkedVariationPrice Boolean @default(true)
   /// For PRODUCT source: category ids whose products guests can pick (same + other categories).
   productCategoryIds String[] @default([])
   /// When true, configuration item prices follow the guest's selected base-product variation.

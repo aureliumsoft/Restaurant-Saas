@@ -97,6 +97,8 @@ export function buildModifierSelectionsForGroups(
             ? configurationItemListUnitPriceForGroup(it, {
                 defaultLinkedRestaurantVariationId:
                   g.defaultLinkedRestaurantVariationId,
+                includeDefaultLinkedVariationPrice:
+                  g.includeDefaultLinkedVariationPrice,
               })
             : configurationItemResolvedListUnit(
                 it,

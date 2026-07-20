@@ -16,6 +16,7 @@ export const recommendationGroupBodySchema = z
     linkedCategoryId: z.string().uuid().optional(),
     defaultLinkedMenuItemId: z.string().uuid().nullable().optional(),
     defaultLinkedRestaurantVariationId: z.string().uuid().nullable().optional(),
+    includeDefaultLinkedVariationPrice: z.boolean().optional(),
     linkedProductId: z.string().uuid().optional(),
     productCategoryIds: z.array(z.string().uuid()).optional(),
     sortOrder: z.number().int().min(0).optional(),

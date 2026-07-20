@@ -208,6 +208,10 @@ export async function POST(
             defaultLinkedMenuItemId: data.defaultLinkedMenuItemId ?? null,
             defaultLinkedRestaurantVariationId:
               data.defaultLinkedRestaurantVariationId ?? null,
+            includeDefaultLinkedVariationPrice:
+              data.defaultLinkedRestaurantVariationId != null
+                ? (data.includeDefaultLinkedVariationPrice ?? true)
+                : true,
             productCategoryIds: [],
             linkedProductId: null,
           }
@@ -217,6 +221,7 @@ export async function POST(
             linkedCategoryId: null,
             defaultLinkedMenuItemId: null,
             defaultLinkedRestaurantVariationId: null,
+            includeDefaultLinkedVariationPrice: true,
           }),
       ...(isMultiple
         ? {

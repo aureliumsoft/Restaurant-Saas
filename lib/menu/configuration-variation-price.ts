@@ -162,10 +162,12 @@ export function isConfigurationGroupVisibleForFilters(
 /** List unit price when a fixed default variation tier is configured. */
 export function configurationItemListUnitPriceForDefaultLinked(
   item: ConfigurationItemLike,
-  defaultRestaurantVariationId: string | null | undefined
+  defaultRestaurantVariationId: string | null | undefined,
+  includeVariationPrice = true
 ): number {
   const original = effectiveMenuItemUnitPrice(item.price, item.salePrice);
   if (!defaultRestaurantVariationId) return original;
+  if (!includeVariationPrice) return original;
   const matched = matchItemVariationForDefaultLinked(
     { restaurantVariationId: defaultRestaurantVariationId },
     item.variations ?? []
@@ -181,6 +183,7 @@ export function configurationItemListUnitPriceForGroup(
     parentVariation?: ParentVariationContext | null;
     useVariationPricing?: boolean;
     defaultLinkedRestaurantVariationId?: string | null;
+    includeDefaultLinkedVariationPrice?: boolean;
   }
 ): number {
   if (options.useVariationPricing) {
@@ -193,7 +196,8 @@ export function configurationItemListUnitPriceForGroup(
   if (options.defaultLinkedRestaurantVariationId) {
     return configurationItemListUnitPriceForDefaultLinked(
       item,
-      options.defaultLinkedRestaurantVariationId
+      options.defaultLinkedRestaurantVariationId,
+      options.includeDefaultLinkedVariationPrice ?? true
     );
   }
   return configurationItemListUnitPrice(item, options.parentVariation, false);
@@ -340,6 +344,8 @@ type ConfigurationDefaultListUnitInput = {
   defaultMenuItemId?: string | null;
   defaultUnitPrice?: number | null;
   useVariationPricing?: boolean;
+  defaultLinkedRestaurantVariationId?: string | null;
+  includeDefaultLinkedVariationPrice?: boolean;
   items: Array<ConfigurationItemLike & { menuItemId?: string }>;
 };
 
@@ -432,6 +438,18 @@ export function configurationDefaultListUnitPriceForSelection(
     (i) => i.menuItemId === group.defaultMenuItemId
   );
   if (!defaultItem) return group.defaultUnitPrice ?? null;
+
+  if (
+    group.defaultLinkedRestaurantVariationId &&
+    !(group.useVariationPricing ?? false)
+  ) {
+    return configurationItemListUnitPriceForGroup(defaultItem, {
+      defaultLinkedRestaurantVariationId:
+        group.defaultLinkedRestaurantVariationId,
+      includeDefaultLinkedVariationPrice:
+        group.includeDefaultLinkedVariationPrice,
+    });
+  }
 
   let defaultNestedVariationId: string | null = null;
   if (selectedNestedVariation && !(group.useVariationPricing ?? false)) {

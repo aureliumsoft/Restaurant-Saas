@@ -58,6 +58,8 @@ export type RecommendationRuleDraft = {
   categoryDefaults: Record<string, string>;
   /** categoryId → restaurant variation template id (e.g. Medium) */
   categoryDefaultVariations: Record<string, string>;
+  /** categoryId → show recommended variation price on customer side (default true) */
+  categoryIncludeDefaultVariationPrice: Record<string, boolean>;
   productCategoryIds: string[];
   linkedProductId: string;
   linkedProductIds: string[];
@@ -134,6 +136,10 @@ export function RecommendationRuleForm({
   const [categoryDefaultVariations, setCategoryDefaultVariations] = useState<
     Record<string, string>
   >({});
+  const [
+    categoryIncludeDefaultVariationPrice,
+    setCategoryIncludeDefaultVariationPrice,
+  ] = useState<Record<string, boolean>>({});
   const [productCategoryIds, setProductCategoryIds] = useState<string[]>([]);
   const [linkedProductId, setLinkedProductId] = useState('');
   const [linkedProductIds, setLinkedProductIds] = useState<string[]>([]);
@@ -329,6 +335,11 @@ export function RecommendationRuleForm({
           delete next[id];
           return next;
         });
+        setCategoryIncludeDefaultVariationPrice((prevPricing) => {
+          const next = { ...prevPricing };
+          delete next[id];
+          return next;
+        });
         setCategoryVariationPricing((prevPricing) => {
           const next = { ...prevPricing };
           delete next[id];
@@ -362,6 +373,10 @@ export function RecommendationRuleForm({
       ...prev,
       [categoryId]: restaurantVariationId,
     }));
+    setCategoryIncludeDefaultVariationPrice((prev) => ({
+      ...prev,
+      [categoryId]: prev[categoryId] ?? true,
+    }));
     setCategoryVariationPricing((prev) => ({
       ...prev,
       [categoryId]: false,
@@ -374,6 +389,21 @@ export function RecommendationRuleForm({
       delete next[categoryId];
       return next;
     });
+    setCategoryIncludeDefaultVariationPrice((prev) => {
+      const next = { ...prev };
+      delete next[categoryId];
+      return next;
+    });
+  };
+
+  const setCategoryIncludeDefaultVariationPriceEnabled = (
+    categoryId: string,
+    enabled: boolean
+  ) => {
+    setCategoryIncludeDefaultVariationPrice((prev) => ({
+      ...prev,
+      [categoryId]: enabled,
+    }));
   };
 
   const setCategoryVariationPricingEnabled = (
@@ -418,6 +448,7 @@ export function RecommendationRuleForm({
       ruleCategoryIds,
       categoryDefaults,
       categoryDefaultVariations,
+      categoryIncludeDefaultVariationPrice,
       productCategoryIds,
       linkedProductId,
       linkedProductIds,
@@ -436,6 +467,7 @@ export function RecommendationRuleForm({
       ruleCategoryIds,
       categoryDefaults,
       categoryDefaultVariations,
+      categoryIncludeDefaultVariationPrice,
       productCategoryIds,
       linkedProductId,
       linkedProductIds,
@@ -458,6 +490,7 @@ export function RecommendationRuleForm({
     setRuleCategoryIds([]);
     setCategoryDefaults({});
     setCategoryDefaultVariations({});
+    setCategoryIncludeDefaultVariationPrice({});
     setProductCategoryIds([]);
     setLinkedProductId('');
     setLinkedProductIds([]);
@@ -687,6 +720,8 @@ export function RecommendationRuleForm({
                 const variationPricingEnabled =
                   categoryVariationPricing[cat.id] ?? false;
                 const defaultVariationId = categoryDefaultVariations[cat.id];
+                const includeDefaultVariationPrice =
+                  categoryIncludeDefaultVariationPrice[cat.id] ?? true;
                 return (
                   <div
                     key={cat.id}
@@ -766,6 +801,28 @@ export function RecommendationRuleForm({
                             ))}
                           </SelectContent>
                         </Select>
+                        <label className="mt-2 flex cursor-pointer items-start gap-2">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                            checked={includeDefaultVariationPrice}
+                            onChange={(e) =>
+                              setCategoryIncludeDefaultVariationPriceEnabled(
+                                cat.id,
+                                e.target.checked
+                              )
+                            }
+                          />
+                          <span className="text-xs">
+                            <span className="font-medium text-foreground">
+                              Show recommended variation price
+                            </span>
+                            <span className="mt-0.5 block text-muted-foreground">
+                              When unchecked, guests see base product prices
+                              only (the recommended size is free).
+                            </span>
+                          </span>
+                        </label>
                       </div>
                     ) : checked ? (
                       <p className="mt-3 border-t border-border pt-3 text-[11px] text-muted-foreground">

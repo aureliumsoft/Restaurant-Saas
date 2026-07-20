@@ -573,6 +573,7 @@ export function fakeMenuItemAttributeGroupComplete() {
     linkedProductId: undefined,
     defaultLinkedMenuItemId: undefined,
     defaultLinkedRestaurantVariationId: undefined,
+    includeDefaultLinkedVariationPrice: true,
     productCategoryIds: [],
     useVariationPricing: false,
     createdAt: new Date(),

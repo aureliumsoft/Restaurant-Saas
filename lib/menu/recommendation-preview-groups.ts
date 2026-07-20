@@ -193,6 +193,10 @@ export function buildDraftPreviewGroups(
         defaultLinkedMenuItemId: draft.categoryDefaults[catId] ?? null,
         defaultLinkedRestaurantVariationId:
           draft.categoryDefaultVariations[catId] ?? null,
+        includeDefaultLinkedVariationPrice:
+          draft.categoryDefaultVariations[catId] != null
+            ? (draft.categoryIncludeDefaultVariationPrice[catId] ?? true)
+            : true,
         defaultLinkedMenuItem: defaultItem
           ? {
               id: defaultItem.id,

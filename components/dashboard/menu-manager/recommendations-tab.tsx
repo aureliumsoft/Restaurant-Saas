@@ -237,6 +237,10 @@ function buildRecommendationPayloads(
         defaultLinkedMenuItemId: draft.categoryDefaults[cat.id] ?? null,
         defaultLinkedRestaurantVariationId:
           draft.categoryDefaultVariations[cat.id] ?? null,
+        includeDefaultLinkedVariationPrice:
+          draft.categoryDefaultVariations[cat.id] != null
+            ? (draft.categoryIncludeDefaultVariationPrice[cat.id] ?? true)
+            : true,
         useVariationPricing: draft.categoryVariationPricing[cat.id] ?? false,
         sortOrder:
           sortOrderByKey.get(recommendationDraftKey(variant, cat.id)) ?? index,

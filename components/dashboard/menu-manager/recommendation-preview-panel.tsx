@@ -25,7 +25,7 @@ import {
 
 import { PersonalizeOptionsSection } from '@/components/order/personalize-options-section';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
-import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
+import type { RestaurantRegionalSettings } from '@/lib/restaurant-regional';
 
 import type { MenuCategoryRow, MenuItemRow } from './types';
 
@@ -40,6 +40,8 @@ function previewDefaultListUnit(
 ): number | null {
   const defaultLinkedRestaurantVariationId =
     group.defaultLinkedRestaurantVariationId ?? null;
+  const includeDefaultLinkedVariationPrice =
+    group.includeDefaultLinkedVariationPrice ?? true;
   return configurationDefaultListUnitPrice(
     {
       defaultMenuItemId:
@@ -52,7 +54,10 @@ function previewDefaultListUnit(
                   price: group.defaultLinkedMenuItem.price,
                   salePrice: group.defaultLinkedMenuItem.salePrice,
                 },
-                { defaultLinkedRestaurantVariationId }
+                {
+                  defaultLinkedRestaurantVariationId,
+                  includeDefaultLinkedVariationPrice,
+                }
               )
             : effectiveMenuItemUnitPrice(
                 group.defaultLinkedMenuItem.price,
@@ -60,6 +65,8 @@ function previewDefaultListUnit(
               )
           : null,
       useVariationPricing: group.useVariationPricing,
+      defaultLinkedRestaurantVariationId,
+      includeDefaultLinkedVariationPrice,
       items: visibleItems.map((item) => ({
         menuItemId: item.id,
         price: item.price,
@@ -143,7 +150,6 @@ export function RecommendationPreviewPanel({
   onPersonalizePreviewChange,
 }: Props) {
   const { formatMoney, regional } = useOwnerRestaurantRegional();
-  const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
   const [previewVariationId, setPreviewVariationId] = useState('');
 
   useEffect(() => {
@@ -338,7 +344,7 @@ export function RecommendationPreviewPanel({
               parentVariation={previewVariationContext.parent}
               variationShortLabel={previewVariationContext.shortLabel}
               previewIds={previewByGroup[g.id] ?? []}
-              currencySymbol={currencySymbol}
+              regional={regional}
               onPreviewChange={(ids) => onPreviewChange(g.id, ids)}
               onDelete={
                 onDeleteGroup
@@ -458,7 +464,7 @@ function PreviewGroupCard({
   parentVariation,
   variationShortLabel,
   previewIds,
-  currencySymbol,
+  regional,
   onPreviewChange,
   onDelete,
   deleting,
@@ -470,7 +476,7 @@ function PreviewGroupCard({
   parentVariation: ParentVariationContext | null;
   variationShortLabel: string | null;
   previewIds: string[];
-  currencySymbol: string;
+  regional: RestaurantRegionalSettings;
   onPreviewChange: (ids: string[]) => void;
   onDelete?: () => void;
   deleting?: boolean;
@@ -489,6 +495,8 @@ function PreviewGroupCard({
   const useVariationPricing = group.useVariationPricing ?? false;
   const defaultLinkedRestaurantVariationId =
     group.defaultLinkedRestaurantVariationId ?? null;
+  const includeDefaultLinkedVariationPrice =
+    group.includeDefaultLinkedVariationPrice ?? true;
   const defaultUnit = previewDefaultListUnit(group, items, parentVariation);
   const defaultVariationLabel =
     defaultLinkedRestaurantVariationId && !useVariationPricing
@@ -577,6 +585,7 @@ function PreviewGroupCard({
                 parentVariation,
                 useVariationPricing,
                 defaultLinkedRestaurantVariationId,
+                includeDefaultLinkedVariationPrice,
               });
               const priceLabel = configurationAddonPriceLabel(
                 listUnit,
@@ -586,7 +595,7 @@ function PreviewGroupCard({
                   multipleMode: group.multipleMode,
                   groupSelectedIds: previewIds,
                   optionId: it.id,
-                  currencySymbol,
+                  regional,
                 }
               );
               return (
@@ -627,6 +636,7 @@ function PreviewGroupCard({
                 parentVariation,
                 useVariationPricing,
                 defaultLinkedRestaurantVariationId,
+                includeDefaultLinkedVariationPrice,
               });
               const priceLabel = configurationAddonPriceLabel(
                 listUnit,
@@ -636,7 +646,7 @@ function PreviewGroupCard({
                   multipleMode: group.multipleMode,
                   groupSelectedIds: previewIds,
                   optionId: it.id,
-                  currencySymbol,
+                  regional,
                 }
               );
               const atMax =

@@ -116,6 +116,8 @@ export type AttributeGroup = {
   useVariationPricing?: boolean;
   /** Fixed restaurant variation tier for linked category items (e.g. Medium only). */
   defaultLinkedRestaurantVariationId?: string | null;
+  /** When false with a default variation, guests see base item price only. */
+  includeDefaultLinkedVariationPrice?: boolean;
   items: (Omit<MenuOption, 'unitPrice'> & {
     price: number;
     salePrice: number | null;
@@ -193,6 +195,8 @@ function configurationItemPickerPrice(
       ? configurationItemListUnitPriceForGroup(item, {
           defaultLinkedRestaurantVariationId:
             group.defaultLinkedRestaurantVariationId,
+          includeDefaultLinkedVariationPrice:
+            group.includeDefaultLinkedVariationPrice,
         })
       : configurationItemResolvedListUnit(
           item,

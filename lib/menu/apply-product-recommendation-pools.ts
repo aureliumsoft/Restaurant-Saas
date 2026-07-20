@@ -1,5 +1,5 @@
 import {
-  enrichAttributeGroupSource,
+  enrichAttributeGroupFromPool,
   type AttributeGroupLike,
   type CategoryLike,
 } from '@/lib/menu/product-recommendation-pool';
@@ -17,7 +17,7 @@ type RestaurantWithMenus = {
   menus?: MenuCategoryWithItems[] | null;
 };
 
-/** Enrich PRODUCT groups with nested recommendation data for the anchor product. */
+/** Enrich recommendation groups with full category product pools (incl. sub-category links). */
 export function applyProductRecommendationPools<T extends RestaurantWithMenus>(
   restaurant: T,
   allCategories: CategoryLike[]
@@ -28,15 +28,9 @@ export function applyProductRecommendationPools<T extends RestaurantWithMenus>(
     ...cat,
     items: (cat.items ?? []).map((item) => ({
       ...item,
-      attributeGroups: (item.attributeGroups ?? []).map((group) => {
-        if (
-          group.sourceType !== 'PRODUCT' ||
-          !(group.productCategoryIds?.length ?? 0)
-        ) {
-          return group;
-        }
-        return enrichAttributeGroupSource(group, allCategories, item.id);
-      }),
+      attributeGroups: (item.attributeGroups ?? []).map((group) =>
+        enrichAttributeGroupFromPool(group, allCategories, item.id)
+      ),
     })),
   }));
 

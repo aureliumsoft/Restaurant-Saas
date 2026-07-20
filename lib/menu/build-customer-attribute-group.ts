@@ -29,6 +29,7 @@ export function buildCustomerAttributeGroup(
       name: string;
       shortLabel?: string | null;
     } | null;
+    includeDefaultLinkedVariationPrice?: boolean;
     variationLimits?: {
       variationId: string;
       minItems: number;
@@ -47,6 +48,8 @@ export function buildCustomerAttributeGroup(
     group.defaultLinkedRestaurantVariationId ??
     group.defaultLinkedRestaurantVariation?.id ??
     null;
+  const includeDefaultLinkedVariationPrice =
+    group.includeDefaultLinkedVariationPrice ?? true;
 
   const defaultItem =
     group.sourceType === 'CATEGORY' && group.defaultLinkedMenuItem
@@ -59,7 +62,8 @@ export function buildCustomerAttributeGroup(
       ? defaultRestaurantVariationId
         ? configurationItemListUnitPriceForDefaultLinked(
             defaultItem,
-            defaultRestaurantVariationId
+            defaultRestaurantVariationId,
+            includeDefaultLinkedVariationPrice
           )
         : effectiveMenuItemUnitPrice(defaultItem.price, defaultItem.salePrice)
       : null;
@@ -88,6 +92,7 @@ export function buildCustomerAttributeGroup(
     defaultUnitPrice,
     useVariationPricing: group.useVariationPricing ?? false,
     defaultLinkedRestaurantVariationId: defaultRestaurantVariationId,
+    includeDefaultLinkedVariationPrice,
     items: items.map((it) => {
       const raw = rawItems.find((r) => r.id === it.id);
       const nestedGroups = raw?.attributeGroups ?? [];
