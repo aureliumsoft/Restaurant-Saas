@@ -56,6 +56,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
+import { useRecommendationsCatalog } from '@/hooks/use-recommendations-catalog';
 import type { PaginationMeta } from '@/lib/pagination';
 import { LazyProductImage } from './lazy-product-image';
 
@@ -82,7 +83,7 @@ import {
   resolveCategoryFreeQuantity,
   resolveProductFreeQuantity,
 } from '@/lib/menu/recommendation-category-limits';
-import { filterCategoriesWithProducts } from '@/lib/menu/category-visibility';
+import { filterCategoriesWithProducts, categoryHasProducts } from '@/lib/menu/category-visibility';
 import { menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
 import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
 
@@ -120,8 +121,9 @@ function effectiveUnitPrice(price: number, salePrice: number | null) {
 
 function validateRecommendationDraft(
   draft: RecommendationRuleDraft,
-  localCategories: MenuCategoryRow[], 
-  selected: MenuItemRow
+  localCategories: MenuCategoryRow[],
+  selected: MenuItemRow,
+  productLookup?: (id: string) => MenuItemRow | undefined
 ): string | null {
   if (draft.sourceType === 'CATEGORY' && draft.ruleCategoryIds.length === 0) {
     return 'Choose at least one recommendation category.';
@@ -177,9 +179,7 @@ function validateRecommendationDraft(
           : [];
     for (const productId of linkedProductIds) {
       const productName =
-        localCategories
-          .flatMap((c) => c.items)
-          .find((i) => i.id === productId)?.name ?? 'Product';
+        productLookup?.(productId)?.name ?? 'Product';
       const limits =
         draft.productMinMax[productId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
       if (limits.maxItems < limits.minItems) {
@@ -325,63 +325,126 @@ async function persistRecommendationDraft(
 }
 
 type Props = {
-  categories: MenuCategoryRow[];
-  onRefresh: () => Promise<void>;
-  loading: boolean;
+  /** @deprecated Configurations loads catalog internally; prop ignored. */
+  categories?: MenuCategoryRow[];
+  onRefresh?: () => Promise<void>;
+  loading?: boolean;
 };
 
-export function RecommendationsTab({
-  categories,
-  onRefresh: _onRefresh,
-  loading,
-}: Props) {
+type ProductWithCategory = MenuItemRow & {
+  categoryName: string;
+  categoryNames?: string[];
+};
+
+export function RecommendationsTab(_props?: Props) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [localCategories, setLocalCategories] =
-    useState<MenuCategoryRow[]>(categories);
+  const {
+    categories: catalogCategories,
+    loading: categoriesLoading,
+    refresh: refreshCatalog,
+  } = useRecommendationsCatalog();
+
+  const [localCategories, setLocalCategories] = useState<MenuCategoryRow[]>([]);
+  const [productCache, setProductCache] = useState<
+    Map<string, ProductWithCategory>
+  >(new Map());
+  const [pickerProductsLoading, setPickerProductsLoading] = useState(false);
+  const [selectedDetail, setSelectedDetail] =
+    useState<ProductWithCategory | null>(null);
+  const [selectedDetailLoading, setSelectedDetailLoading] = useState(false);
 
   useEffect(() => {
-    setLocalCategories(filterCategoriesWithProducts(categories));
-  }, [categories]);
+    setLocalCategories(
+      filterCategoriesWithProducts(catalogCategories).map((c) => ({
+        ...c,
+        items: c.items ?? [],
+      }))
+    );
+  }, [catalogCategories]);
 
-  const allProducts = useMemo(() => {
-    const byId = new Map<
-      string,
-      MenuItemRow & { categoryName: string; categoryNames: string[] }
-    >();
-    for (const category of localCategories) {
-      for (const item of category.items) {
-        const categoryIds =
-          item.categoryIds && item.categoryIds.length > 0
-            ? item.categoryIds
-            : [item.categoryId];
-        const existing = byId.get(item.id);
-        if (existing) {
-          if (!existing.categoryNames.includes(category.name)) {
-            existing.categoryNames.push(category.name);
-          }
-          existing.categoryIds = [
-            ...new Set([...(existing.categoryIds ?? []), ...categoryIds]),
-          ];
-          continue;
-        }
-        byId.set(item.id, {
-          ...item,
-          categoryIds,
-          categoryName: category.name,
-          categoryNames: [category.name],
-        });
-      }
-    }
-    return Array.from(byId.values());
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of localCategories) map.set(c.id, c.name);
+    return map;
   }, [localCategories]);
+
+  const mergeProductsIntoCache = useCallback(
+    (products: Array<MenuItemRow & { categoryName?: string; categoryNames?: string[] }>) => {
+      if (products.length === 0) return;
+      setProductCache((prev) => {
+        const next = new Map(prev);
+        for (const p of products) {
+          const categoryName =
+            p.categoryName ?? categoryNameById.get(p.categoryId) ?? '—';
+          next.set(p.id, {
+            ...p,
+            attributeGroups: p.attributeGroups ?? [],
+            categoryName,
+            categoryNames:
+              p.categoryNames ??
+              (p.categoryIds && p.categoryIds.length > 0
+                ? p.categoryIds
+                    .map((id) => categoryNameById.get(id))
+                    .filter((n): n is string => Boolean(n))
+                : [categoryName]),
+          });
+        }
+        return next;
+      });
+    },
+    [categoryNameById]
+  );
+
+  const allProducts = useMemo(
+    () => Array.from(productCache.values()),
+    [productCache]
+  );
+
+  const productLookup = useCallback(
+    (id: string) => productCache.get(id),
+    [productCache]
+  );
+
+  const loadProductsForCategories = useCallback(
+    async (categoryIds: string[]) => {
+      if (categoryIds.length === 0) return;
+      setPickerProductsLoading(true);
+      try {
+        let page = 1;
+        let hasMore = true;
+        while (hasMore) {
+          const res = await axios.get<{
+            data: {
+              products: ProductWithCategory[];
+              pagination: PaginationMeta;
+            };
+          }>('/api/restaurant/menu/products', {
+            params: {
+              page,
+              limit: 24,
+              categoryIds: categoryIds.join(','),
+              includeCategories: '0',
+            },
+          });
+          mergeProductsIntoCache(res.data.data.products ?? []);
+          hasMore = res.data.data.pagination.hasNextPage;
+          page += 1;
+          if (page > 20) break;
+        }
+      } catch {
+        toast.error('Could not load products for picker.');
+      } finally {
+        setPickerProductsLoading(false);
+      }
+    },
+    [mergeProductsIntoCache]
+  );
 
   const [selectedId, setSelectedId] = useState<string>('');
   /** Checked category ids for the product strip + search. Empty = none. */
-  const [filterCategoryIds, setFilterCategoryIds] = useState<string[]>(() =>
-    categories.map((c) => c.id)
-  );
+  const [filterCategoryIds, setFilterCategoryIds] = useState<string[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
   const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
@@ -437,10 +500,62 @@ export function RecommendationsTab({
     });
   }, [categoryIdsSignature, localCategories]);
 
-  const selected = useMemo(
-    () => allProducts.find((p) => p.id === selectedId) ?? null,
-    [allProducts, selectedId]
-  );
+  const selected = selectedDetail;
+
+  useEffect(() => {
+    mergeProductsIntoCache(stripProducts);
+  }, [stripProducts, mergeProductsIntoCache]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setSelectedDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedDetailLoading(true);
+
+    void axios
+      .get<{ data: MenuItemRow & { categoryIds?: string[] } }>(
+        `/api/restaurant/menu/items/${selectedId}`
+      )
+      .then((res) => {
+        if (cancelled) return;
+        const data = res.data.data;
+        const categoryIds =
+          data.categoryIds && data.categoryIds.length > 0
+            ? data.categoryIds
+            : [data.categoryId];
+        const categoryNames = categoryIds
+          .map((id) => categoryNameById.get(id))
+          .filter((n): n is string => Boolean(n));
+        const detail: ProductWithCategory = {
+          ...data,
+          categoryIds,
+          categoryName:
+            categoryNameById.get(data.categoryId) ??
+            categoryNames[0] ??
+            '—',
+          categoryNames:
+            categoryNames.length > 0 ? categoryNames : ['—'],
+          attributeGroups: data.attributeGroups ?? [],
+        };
+        setSelectedDetail(detail);
+        mergeProductsIntoCache([detail]);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        toast.error('Could not load product configuration.');
+        setSelectedDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSelectedDetailLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, categoryNameById, mergeProductsIntoCache]);
 
   const selectedCategoryIds = useMemo(
     () => (selected ? menuItemCategoryIds(selected) : []),
@@ -674,6 +789,21 @@ export function RecommendationsTab({
   >({});
   const [formResetKeys, setFormResetKeys] = useState(INITIAL_FORM_RESET_KEYS);
 
+  const pickerCategoryIds = useMemo(() => {
+    const ids = new Set<string>(offerCategoryIds);
+    for (const draft of Object.values(draftByVariant)) {
+      if (draft?.sourceType === 'PRODUCT') {
+        for (const id of draft.productCategoryIds) ids.add(id);
+      }
+    }
+    return [...ids];
+  }, [offerCategoryIds, draftByVariant]);
+
+  useEffect(() => {
+    if (pickerCategoryIds.length === 0) return;
+    void loadProductsForCategories(pickerCategoryIds);
+  }, [pickerCategoryIds, loadProductsForCategories]);
+
   const bumpFormReset = useCallback((variant: RecommendationFormVariant) => {
     setFormResetKeys((prev) => ({
       ...prev,
@@ -794,9 +924,9 @@ export function RecommendationsTab({
     () =>
       localCategories.filter(
         (c) =>
-          c.items.length > 0 &&
+          categoryHasProducts(c) &&
           !selectedCategoryIds.includes(c.id)
-    ),
+      ),
     [localCategories, selectedCategoryIds]
   );
 
@@ -836,8 +966,8 @@ export function RecommendationsTab({
     const stillVisible =
       filterCategoryIds.length > 0 &&
       (() => {
-        const p = allProducts.find((x) => x.id === selectedId);
-        if (p == null) return false;
+        const p = productCache.get(selectedId) ?? selectedDetail;
+        if (p == null) return stripProducts.some((x) => x.id === selectedId);
         const ids =
           p.categoryIds && p.categoryIds.length > 0
             ? p.categoryIds
@@ -860,7 +990,9 @@ export function RecommendationsTab({
   }, [
     filterCategoryIds,
     selectedId,
-    allProducts,
+    productCache,
+    selectedDetail,
+    stripProducts,
     isDirty,
     requestLeave,
     resetDraftState,
@@ -868,14 +1000,16 @@ export function RecommendationsTab({
 
   const updateSelectedItem = (updater: (item: MenuItemRow) => MenuItemRow) => {
     if (!selectedId) return;
-    setLocalCategories((prev) =>
-      prev.map((cat) => ({
-        ...cat,
-        items: cat.items.map((item) =>
-          item.id === selectedId ? updater(item) : item
-        ),
-      }))
-    );
+    setSelectedDetail((prev) => {
+      if (!prev || prev.id !== selectedId) return prev;
+      const next = updater(prev) as ProductWithCategory;
+      setProductCache((cache) => {
+        const updated = new Map(cache);
+        updated.set(selectedId, next);
+        return updated;
+      });
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -885,7 +1019,7 @@ export function RecommendationsTab({
       return;
     }
 
-    const menuItem = allProducts.find((item) => item.id === selectedId);
+    const menuItem = selectedDetail ?? productCache.get(selectedId);
     setPersonalizeDraft(personalizeGroupsToDraft(menuItem?.personalizeGroups));
     setPersonalizeDirty(false);
 
@@ -917,7 +1051,7 @@ export function RecommendationsTab({
       cancelled = true;
       setLoadingPersonalize(false);
     };
-  }, [selectedId]);
+  }, [selectedId, selectedDetail, productCache]);
 
   const saveRecommendationDraft = async (
     draft: RecommendationRuleDraft,
@@ -931,7 +1065,8 @@ export function RecommendationsTab({
     const validationError = validateRecommendationDraft(
       draft,
       localCategories,
-      selected
+      selected,
+      productLookup
     );
     if (validationError) {
       toast.error(validationError);
@@ -1164,7 +1299,8 @@ export function RecommendationsTab({
       const validationError = validateRecommendationDraft(
         draft,
         localCategories,
-        selected
+        selected,
+        productLookup
       );
       if (validationError) {
         toast.error(`${RECOMMENDATION_SECTION_LABELS[variant]}: ${validationError}`);
@@ -1440,18 +1576,7 @@ export function RecommendationsTab({
         </CardTitle>
       </CardHeader>
       <CardContent className="min-w-0 max-w-full space-y-6 px-4 pb-6 sm:px-6">
-        {categories.length === 0 && loading ? (
-          <div
-            className="flex min-h-[min(420px,70vh)] w-full flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border bg-muted/30 py-16"
-            role="status"
-            aria-live="polite"
-            aria-busy="true"
-          >
-            <Loader2
-              className=" animate-spin text-primary text-center mx-auto"
-            />
-          </div>
-        ) : stripTotal === 0 && !stripLoading && !loading && allProducts.length === 0 ? (
+        {localCategories.length === 0 && !categoriesLoading ? (
     <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
       <p className="text-sm text-muted-foreground">
         Add products first — configuration rules are attached to a product.
@@ -1559,7 +1684,7 @@ export function RecommendationsTab({
                           {cat.name}
                         </span>
                         <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
-                          {cat.items.length}
+                          {cat.itemCount ?? cat.items.length}
                         </span>
                       </label>
                     );
@@ -1575,10 +1700,20 @@ export function RecommendationsTab({
 
         <div className="min-w-0 w-full max-w-full min-h-0 overflow-x-clip">
           {filterCategoryIds.length === 0 ? (
+            categoriesLoading ? (
+              <div className="overflow-hidden rounded-lg border border-border/60 bg-background/50 px-1 py-1.5 sm:px-1.5">
+                <div className="flex w-max items-stretch gap-3 py-1 pe-1 ps-1">
+                  {Array.from({ length: STRIP_PAGE_SIZE }).map((_, i) => (
+                    <StripProductSkeleton key={`strip-init-${i}`} />
+                  ))}
+                </div>
+              </div>
+            ) : (
             <p className="rounded-lg border border-dashed border-border bg-background/80 px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
               Turn on at least one category in the filter, or tap{' '}
               <span className="font-medium text-foreground">All</span>.
             </p>
+            )
           ) : stripLoading && stripProducts.length === 0 ? (
             <div className="overflow-hidden rounded-lg border border-border/60 bg-background/50 px-1 py-1.5 sm:px-1.5">
               <div className="flex w-max items-stretch gap-3 py-1 pe-1 ps-1">
@@ -1696,7 +1831,19 @@ export function RecommendationsTab({
 
       <div className="grid min-w-0 max-w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(260px,1fr)] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] xl:gap-10 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,440px)]">
         <div className="min-w-0 w-full max-w-full space-y-6 lg:mx-auto">
-          {selected ? (
+          {selectedDetailLoading && selectedId ? (
+            <div
+              className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-muted/15 px-4 py-10"
+              role="status"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">
+                Loading product configuration…
+              </p>
+            </div>
+          ) : selected ? (
             <RecommendationConfigSections
               selected={selected}
               localCategories={localCategories}
