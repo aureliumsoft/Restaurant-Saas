@@ -91,6 +91,10 @@ function buildAttributeGroupsSelect(
     sortOrder: true,
     productCategoryIds: true,
     defaultLinkedMenuItemId: true,
+    defaultLinkedRestaurantVariationId: true,
+    defaultLinkedRestaurantVariation: {
+      select: { id: true, name: true, shortLabel: true },
+    },
     defaultLinkedMenuItem: {
       select: {
         id: true,

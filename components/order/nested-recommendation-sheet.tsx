@@ -42,9 +42,10 @@ import {
   configurationAddonPriceLabel,
   configurationDefaultListUnitPriceForSelection,
   configurationGroupDisplayTitle,
+  configurationItemListUnitPriceForGroup,
   configurationItemResolvedListUnit,
-  filterConfigurationItemsForParentVariation,
-  isConfigurationGroupVisibleForParentVariation,
+  filterConfigurationItemsForGroup,
+  isConfigurationGroupVisibleForFilters,
   isConfigurationItemAvailableForParentVariation,
   parentVariationFromItemVariation,
   type ParentVariationContext,
@@ -178,7 +179,7 @@ function collectVisibleCategoryGroupIds(
     }
     if (g.sourceType === 'PRODUCT') continue;
     if (
-      !isConfigurationGroupVisibleForParentVariation(g, parentVariation)
+      !isConfigurationGroupVisibleForFilters(g, parentVariation)
     ) {
       continue;
     }
@@ -298,7 +299,7 @@ function OptionNestedPanel({
     baseProductVariation;
 
   const nestedGroups = (item.nestedAttributeGroups ?? []).filter((g) =>
-    isConfigurationGroupVisibleForParentVariation(
+    isConfigurationGroupVisibleForFilters(
       g,
       configurationParentVariation
     )
@@ -586,7 +587,7 @@ function InlineRecommendationGroups({
     <div className="space-y-5">
       {groups.map((g) => {
         if (
-          !isConfigurationGroupVisibleForParentVariation(
+          !isConfigurationGroupVisibleForFilters(
             g,
             baseProductVariation
           )
@@ -699,11 +700,12 @@ function InlineRecommendationGroups({
 
             <div className="divide-y divide-border">
               {(() => {
-                const visibleItems = filterConfigurationItemsForParentVariation(
-                  g.items,
-                  baseProductVariation,
-                  g.useVariationPricing ?? false
-                );
+                const visibleItems = filterConfigurationItemsForGroup(g.items, {
+                  parentVariation: baseProductVariation,
+                  useVariationPricing: g.useVariationPricing ?? false,
+                  defaultLinkedRestaurantVariationId:
+                    g.defaultLinkedRestaurantVariationId,
+                });
                 if (visibleItems.length === 0) {
                   return (
                     <p className="px-4 py-3 text-sm text-muted-foreground">
@@ -711,7 +713,9 @@ function InlineRecommendationGroups({
                         ? 'Select the main product variation first.'
                         : g.useVariationPricing
                           ? 'No add-ons for this variation.'
-                          : 'No options available.'}
+                          : g.defaultLinkedRestaurantVariationId
+                            ? 'No add-ons for this size.'
+                            : 'No options available.'}
                     </p>
                   );
                 }
@@ -727,12 +731,19 @@ function InlineRecommendationGroups({
                   const nestedVariation = nestedVariationId
                     ? (it.variations ?? []).find((v) => v.id === nestedVariationId)
                     : undefined;
-                  const listUnit = configurationItemResolvedListUnit(
-                    it,
-                    baseProductVariation,
-                    g.useVariationPricing ?? false,
-                    nestedVariationId
-                  );
+                  const listUnit =
+                    g.defaultLinkedRestaurantVariationId &&
+                    !(g.useVariationPricing ?? false)
+                      ? configurationItemListUnitPriceForGroup(it, {
+                          defaultLinkedRestaurantVariationId:
+                            g.defaultLinkedRestaurantVariationId,
+                        })
+                      : configurationItemResolvedListUnit(
+                          it,
+                          baseProductVariation,
+                          g.useVariationPricing ?? false,
+                          nestedVariationId
+                        );
                   const defaultListUnit =
                     configurationDefaultListUnitPriceForSelection(
                       g,
@@ -871,7 +882,10 @@ type Props = {
   attributeGroups: AttributeGroup[];
   initialProductVariationId?: string;
   /** Group context for the product being configured (category option or product rec). */
-  parentConfigurationGroup?: { useVariationPricing?: boolean };
+  parentConfigurationGroup?: {
+    useVariationPricing?: boolean;
+    defaultLinkedRestaurantVariationId?: string | null;
+  };
   /** Base product variation (e.g. taco size) for configuration item rates. */
   baseProductVariation?: ParentVariationContext | null;
   baseProductVariationShortLabel?: string | null;
@@ -1037,7 +1051,7 @@ export function NestedRecommendationSheet({
   const visibleCategoryGroups = useMemo(
     () =>
       categoryGroups.filter((g) =>
-        isConfigurationGroupVisibleForParentVariation(
+        isConfigurationGroupVisibleForFilters(
           g,
           configurationParentVariation
         )
@@ -1070,7 +1084,10 @@ export function NestedRecommendationSheet({
 
   useEffect(() => {
     if (!open) return;
-    if (parentConfigurationGroup?.useVariationPricing) {
+    if (
+      parentConfigurationGroup?.useVariationPricing ||
+      parentConfigurationGroup?.defaultLinkedRestaurantVariationId
+    ) {
       const resolved = resolveCategoryItemVariationId(
         product,
         baseProductVariation,
@@ -1415,7 +1432,7 @@ export function NestedRecommendationSheet({
     const missingOptionConfig = allGroupsFlat.some((g) => {
       if (g.sourceType === 'PRODUCT') return false;
       if (
-        !isConfigurationGroupVisibleForParentVariation(
+        !isConfigurationGroupVisibleForFilters(
           g,
           configurationParentVariation
         )
@@ -1444,7 +1461,7 @@ export function NestedRecommendationSheet({
     return allGroupsFlat.some((g) => {
       if (g.sourceType === 'PRODUCT') return false;
       if (
-        !isConfigurationGroupVisibleForParentVariation(
+        !isConfigurationGroupVisibleForFilters(
           g,
           configurationParentVariation
         )

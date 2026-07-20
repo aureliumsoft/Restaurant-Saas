@@ -560,6 +560,7 @@ model RestaurantVariation {
 
   restaurant Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   menuRates  MenuItemVariation[]
+  defaultLinkedAttributeGroups MenuItemAttributeGroup[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -626,6 +627,8 @@ model MenuItemAttributeGroup {
   linkedProductId  String?
   /// Included baseline item when sourceType is CATEGORY (delta pricing for other items).
   defaultLinkedMenuItemId String?
+  /// Fixed restaurant variation tier for linked category items (e.g. Medium pizzas only).
+  defaultLinkedRestaurantVariationId String?
   /// For PRODUCT source: category ids whose products guests can pick (same + other categories).
   productCategoryIds String[] @default([])
   /// When true, configuration item prices follow the guest's selected base-product variation.
@@ -635,6 +638,7 @@ model MenuItemAttributeGroup {
   linkedCategory   MenuCategory? @relation("AttributeLinkedCategory", fields: [linkedCategoryId], references: [id], onDelete: Cascade)
   linkedProduct    MenuItem?    @relation("RecommendationLinkedProduct", fields: [linkedProductId], references: [id], onDelete: Cascade)
   defaultLinkedMenuItem MenuItem? @relation("RecommendationCategoryDefault", fields: [defaultLinkedMenuItemId], references: [id], onDelete: SetNull)
+  defaultLinkedRestaurantVariation RestaurantVariation? @relation(fields: [defaultLinkedRestaurantVariationId], references: [id], onDelete: SetNull)
   variationLimits  MenuItemAttributeGroupVariationLimit[]
 
   createdAt DateTime @default(now())
@@ -644,6 +648,7 @@ model MenuItemAttributeGroup {
   @@index([linkedCategoryId])
   @@index([linkedProductId])
   @@index([defaultLinkedMenuItemId])
+  @@index([defaultLinkedRestaurantVariationId])
 }
 
 /// Min/max picks per base-product variation (e.g. Small → 2 meats, Large → 4).

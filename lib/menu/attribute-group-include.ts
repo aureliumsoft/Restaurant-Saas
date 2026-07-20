@@ -9,6 +9,9 @@ const defaultLinkedMenuItemSelect = {
 export const attributeGroupInclude = {
   linkedCategory: { select: { id: true, name: true } },
   defaultLinkedMenuItem: { select: defaultLinkedMenuItemSelect },
+  defaultLinkedRestaurantVariation: {
+    select: { id: true, name: true, shortLabel: true },
+  },
   linkedProduct: {
     select: {
       id: true,
@@ -53,5 +56,6 @@ export const attributeGroupSelectFields = {
   maxItems: true,
   sortOrder: true,
   defaultLinkedMenuItemId: true,
+  defaultLinkedRestaurantVariationId: true,
   useVariationPricing: true,
 } as const;

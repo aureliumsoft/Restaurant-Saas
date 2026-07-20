@@ -2,11 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import axios from 'axios';
 import { Loader2, Save } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import {
   isCategoryEligibleForRecommendations,
@@ -25,10 +33,12 @@ import {
   variationLabel,
 } from '@/lib/menu/recommendation-category-limits';
 import type { RecommendationFormVariant } from '@/lib/menu/recommendation-preview-groups';
+import { buildRestaurantDefaultVariationOptions } from '@/lib/menu/recommendation-default-variation-options';
 import {
   reservedRecommendationCategoryIds,
   reservedRecommendationProductIds,
 } from '@/lib/menu/recommendation-reserved-ids';
+import { useRestaurantVariationTemplates } from '@/components/dashboard/menu-manager/product-form-fields';
 
 import type { MenuCategoryRow, MenuItemRow } from './types';
 
@@ -46,6 +56,8 @@ export type RecommendationRuleDraft = {
   ruleCategoryIds: string[];
   /** categoryId → default menu item id */
   categoryDefaults: Record<string, string>;
+  /** categoryId → restaurant variation template id (e.g. Medium) */
+  categoryDefaultVariations: Record<string, string>;
   productCategoryIds: string[];
   linkedProductId: string;
   linkedProductIds: string[];
@@ -119,6 +131,9 @@ export function RecommendationRuleForm({
   const [categoryDefaults, setCategoryDefaults] = useState<
     Record<string, string>
   >({});
+  const [categoryDefaultVariations, setCategoryDefaultVariations] = useState<
+    Record<string, string>
+  >({});
   const [productCategoryIds, setProductCategoryIds] = useState<string[]>([]);
   const [linkedProductId, setLinkedProductId] = useState('');
   const [linkedProductIds, setLinkedProductIds] = useState<string[]>([]);
@@ -140,7 +155,19 @@ export function RecommendationRuleForm({
   const [categoryVariationPricing, setCategoryVariationPricing] = useState<
     Record<string, boolean>
   >({});
+  const [categoryProductsById, setCategoryProductsById] = useState<
+    Record<string, MenuItemRow[]>
+  >({});
+  const [categoryProductsLoadingById, setCategoryProductsLoadingById] = useState<
+    Record<string, boolean>
+  >({});
 
+  const { variationTemplates, loading: variationTemplatesLoading } =
+    useRestaurantVariationTemplates();
+  const defaultVariationOptions = useMemo(
+    () => buildRestaurantDefaultVariationOptions(variationTemplates),
+    [variationTemplates]
+  );
   const baseVariations = selected.variations ?? [];
 
   const selectedCategoryIds = useMemo(
@@ -226,7 +253,7 @@ export function RecommendationRuleForm({
   const useVariationLimits =
     selectionType === 'MULTIPLE' &&
     sourceType === 'CATEGORY' &&
-    baseVariations.length > 0;
+    (selected.variations?.length ?? 0) > 0;
 
   const initCategoryLimitDefaults = (categoryId: string) => {
     setCategoryFreeQuantity((prev) => ({
@@ -297,6 +324,11 @@ export function RecommendationRuleForm({
           delete next[id];
           return next;
         });
+        setCategoryDefaultVariations((prevVariations) => {
+          const next = { ...prevVariations };
+          delete next[id];
+          return next;
+        });
         setCategoryVariationPricing((prevPricing) => {
           const next = { ...prevPricing };
           delete next[id];
@@ -322,6 +354,28 @@ export function RecommendationRuleForm({
     });
   };
 
+  const setCategoryDefaultVariation = (
+    categoryId: string,
+    restaurantVariationId: string
+  ) => {
+    setCategoryDefaultVariations((prev) => ({
+      ...prev,
+      [categoryId]: restaurantVariationId,
+    }));
+    setCategoryVariationPricing((prev) => ({
+      ...prev,
+      [categoryId]: false,
+    }));
+  };
+
+  const clearCategoryDefaultVariation = (categoryId: string) => {
+    setCategoryDefaultVariations((prev) => {
+      const next = { ...prev };
+      delete next[categoryId];
+      return next;
+    });
+  };
+
   const setCategoryVariationPricingEnabled = (
     categoryId: string,
     enabled: boolean
@@ -330,14 +384,29 @@ export function RecommendationRuleForm({
       ...prev,
       [categoryId]: enabled,
     }));
+    if (enabled) {
+      setCategoryDefaultVariations((prev) => {
+        const next = { ...prev };
+        delete next[categoryId];
+        return next;
+      });
+    }
   };
 
   const selectedCategories = useMemo(
     () =>
       ruleCategoryIds
-        .map((id) => localCategories.find((c) => c.id === id))
+        .map((id) => {
+          const category = localCategories.find((c) => c.id === id);
+          if (!category) return null;
+          const loadedItems = categoryProductsById[id];
+          return {
+            ...category,
+            items: loadedItems ?? category.items,
+          };
+        })
         .filter((c): c is MenuCategoryRow => c != null),
-    [localCategories, ruleCategoryIds]
+    [localCategories, ruleCategoryIds, categoryProductsById]
   );
 
   const currentDraft = useMemo(
@@ -348,6 +417,7 @@ export function RecommendationRuleForm({
       required,
       ruleCategoryIds,
       categoryDefaults,
+      categoryDefaultVariations,
       productCategoryIds,
       linkedProductId,
       linkedProductIds,
@@ -365,6 +435,7 @@ export function RecommendationRuleForm({
       required,
       ruleCategoryIds,
       categoryDefaults,
+      categoryDefaultVariations,
       productCategoryIds,
       linkedProductId,
       linkedProductIds,
@@ -386,6 +457,7 @@ export function RecommendationRuleForm({
     setRequired(false);
     setRuleCategoryIds([]);
     setCategoryDefaults({});
+    setCategoryDefaultVariations({});
     setProductCategoryIds([]);
     setLinkedProductId('');
     setLinkedProductIds([]);
@@ -395,8 +467,62 @@ export function RecommendationRuleForm({
     setProductFreeQuantity({});
     setProductMinMax({});
     setCategoryVariationPricing({});
+    setCategoryProductsById({});
+    setCategoryProductsLoadingById({});
     lastDraftKeyRef.current = '';
   }, [resetKey]);
+
+  useEffect(() => {
+    if (sourceType !== 'CATEGORY') return;
+    for (const categoryId of ruleCategoryIds) {
+      if (categoryProductsById[categoryId]?.length) continue;
+      if (categoryProductsLoadingById[categoryId]) continue;
+
+      setCategoryProductsLoadingById((prev) => ({
+        ...prev,
+        [categoryId]: true,
+      }));
+
+      void (async () => {
+        try {
+          let page = 1;
+          let hasMore = true;
+          const collected: MenuItemRow[] = [];
+          while (hasMore) {
+            const res = await axios.get<{
+              data: {
+                products: MenuItemRow[];
+                pagination: { hasNextPage: boolean };
+              };
+            }>('/api/restaurant/menu/products', {
+              params: {
+                page,
+                limit: 24,
+                categoryIds: categoryId,
+                includeCategories: '0',
+              },
+            });
+
+            const batch = res.data.data.products ?? [];
+            collected.push(...batch);
+            hasMore = Boolean(res.data.data.pagination?.hasNextPage);
+            page += 1;
+            if (page > 20 || batch.length === 0) break;
+          }
+
+          setCategoryProductsById((prev) => ({
+            ...prev,
+            [categoryId]: collected,
+          }));
+        } finally {
+          setCategoryProductsLoadingById((prev) => ({
+            ...prev,
+            [categoryId]: false,
+          }));
+        }
+      })();
+    }
+  }, [sourceType, ruleCategoryIds, categoryProductsById, categoryProductsLoadingById]);
 
   useEffect(() => {
     const draftKey = JSON.stringify(currentDraft);
@@ -543,9 +669,11 @@ export function RecommendationRuleForm({
         ) : (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              For each category, optionally choose a default item. When set,
-              guests only see an extra charge (+{currencySymbol}) for options priced above
-              that default. Leave as none to show full prices.
+              For each category, optionally choose a recommended variation
+              (e.g. Medium) and/or a default item. A recommended variation
+              filters add-ons to that size and applies it automatically at
+              checkout. When a default item is set, guests only see an extra
+              charge (+{currencySymbol}) for options priced above that default.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               {assignableCategories.map((cat) => {
@@ -553,8 +681,12 @@ export function RecommendationRuleForm({
                 const selectionOrder = ruleCategoryIds.indexOf(cat.id);
                 const onMenu = isMenuCategoryShownInFront(cat);
                 const defaultId = categoryDefaults[cat.id];
+                const categoryItems = categoryProductsById[cat.id] ?? cat.items;
+                const categoryItemsLoading =
+                  categoryProductsLoadingById[cat.id] ?? false;
                 const variationPricingEnabled =
                   categoryVariationPricing[cat.id] ?? false;
+                const defaultVariationId = categoryDefaultVariations[cat.id];
                 return (
                   <div
                     key={cat.id}
@@ -588,7 +720,69 @@ export function RecommendationRuleForm({
                         {onMenu ? 'On menu' : 'Add-on only'}
                       </Badge>
                     </label>
-                    {checked && cat.items.length > 0 ? (
+                    {checked && variationTemplatesLoading ? (
+                      <div className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Loading variation options...
+                      </div>
+                    ) : checked && defaultVariationOptions.length > 0 ? (
+                      <div className="mt-3 space-y-2 border-t border-border pt-3">
+                        <Label
+                          htmlFor={`recommended-variation-${cat.id}`}
+                          className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                        >
+                          Recommended variation (optional)
+                        </Label>
+                        <p className="text-[11px] text-muted-foreground">
+                          Pick a size for this category (e.g. Medium). Only
+                          add-ons with that variation are shown, and it is
+                          applied automatically when the guest selects one.
+                        </p>
+                        <Select
+                          value={defaultVariationId || '__none__'}
+                          onValueChange={(value) => {
+                            if (value === '__none__') {
+                              clearCategoryDefaultVariation(cat.id);
+                            } else {
+                              setCategoryDefaultVariation(cat.id, value);
+                            }
+                          }}
+                        >
+                          <SelectTrigger
+                            id={`recommended-variation-${cat.id}`}
+                            className="h-10 bg-background text-sm"
+                          >
+                            <SelectValue placeholder="Select variation" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">None</SelectItem>
+                            {defaultVariationOptions.map((option) => (
+                              <SelectItem
+                                key={`${cat.id}-${option.restaurantVariationId}`}
+                                value={option.restaurantVariationId}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : checked ? (
+                      <p className="mt-3 border-t border-border pt-3 text-[11px] text-muted-foreground">
+                        No variation templates yet. Add sizes on the{' '}
+                        <Link href="/variations" className="underline">
+                          Variations
+                        </Link>{' '}
+                        page, then pick a recommended variation for this
+                        category.
+                      </p>
+                    ) : null}
+                    {checked && categoryItemsLoading ? (
+                      <div className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Loading category products...
+                      </div>
+                    ) : checked && categoryItems.length > 0 ? (
                       <div className="mt-3 max-h-40 space-y-1 overflow-y-auto border-t border-border pt-3">
                         <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           Default item (optional)
@@ -612,7 +806,7 @@ export function RecommendationRuleForm({
                             None
                           </span>
                         </label>
-                        {cat.items.map((it) => (
+                        {categoryItems.map((it) => (
                           <label
                             key={it.id}
                             className={cn(
@@ -653,12 +847,13 @@ export function RecommendationRuleForm({
                     ) : null}
                     {checked &&
                     baseVariations.length > 0 &&
-                    cat.items.length > 0 ? (
+                    categoryItems.length > 0 ? (
                       <label className="mt-3 flex cursor-pointer items-start gap-2 border-t border-border pt-3">
                         <input
                           type="checkbox"
                           className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
                           checked={variationPricingEnabled}
+                          disabled={Boolean(defaultVariationId)}
                           onChange={(e) =>
                             setCategoryVariationPricingEnabled(
                               cat.id,

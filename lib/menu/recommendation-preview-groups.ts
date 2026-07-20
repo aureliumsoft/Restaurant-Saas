@@ -7,6 +7,7 @@ import {
 } from '@/lib/menu/recommendation-category-limits';
 import {
   configurationGroupHasItemsForParentVariation,
+  filterConfigurationItemsForDefaultLinkedVariation,
   filterConfigurationItemsForParentVariation,
   isConfigurationItemAvailableForParentVariation,
   type ParentVariationContext,
@@ -161,7 +162,8 @@ export function buildDraftPreviewGroups(
       const cat = localCategories.find((c) => c.id === catId);
       if (!cat) continue;
       const defaultItem = draft.categoryDefaults[catId]
-        ? cat.items.find((i) => i.id === draft.categoryDefaults[catId])
+        ? allProducts.find((i) => i.id === draft.categoryDefaults[catId]) ??
+          cat.items.find((i) => i.id === draft.categoryDefaults[catId])
         : null;
       const catMinMax =
         draft.categoryMinMax[catId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
@@ -189,6 +191,8 @@ export function buildDraftPreviewGroups(
         sortOrder: sortPlan.get(recommendationDraftKey(variant, catId)) ?? 0,
         linkedCategory: { id: cat.id, name: cat.name },
         defaultLinkedMenuItemId: draft.categoryDefaults[catId] ?? null,
+        defaultLinkedRestaurantVariationId:
+          draft.categoryDefaultVariations[catId] ?? null,
         defaultLinkedMenuItem: defaultItem
           ? {
               id: defaultItem.id,
@@ -265,11 +269,50 @@ export function buildDraftPreviewGroups(
   return out;
 }
 
+/** Merge loaded products into category rows for configuration preview. */
+export function buildPreviewCategoriesWithProducts(
+  categories: MenuCategoryRow[],
+  allProducts: Array<
+    MenuItemRow & { categoryIds?: string[]; categoryName?: string }
+  >
+): MenuCategoryRow[] {
+  const productsByCategory = new Map<string, MenuItemRow[]>();
+
+  for (const product of allProducts) {
+    const categoryIds =
+      product.categoryIds && product.categoryIds.length > 0
+        ? product.categoryIds
+        : [product.categoryId];
+    for (const categoryId of categoryIds) {
+      const list = productsByCategory.get(categoryId) ?? [];
+      if (!list.some((item) => item.id === product.id)) {
+        list.push(product);
+      }
+      productsByCategory.set(categoryId, list);
+    }
+  }
+
+  return categories.map((category) => {
+    const loaded = productsByCategory.get(category.id);
+    return loaded && loaded.length > 0
+      ? { ...category, items: loaded }
+      : category;
+  });
+}
+
 export function linkedItemsForPreviewGroup(
   group: PreviewAttrGroup,
   baseProduct: MenuItemRow,
-  categories: MenuCategoryRow[]
+  categories: MenuCategoryRow[],
+  allProducts: Array<
+    MenuItemRow & { categoryIds?: string[]; categoryName?: string }
+  > = []
 ): MenuItemRow[] {
+  const categoriesWithProducts = buildPreviewCategoriesWithProducts(
+    categories,
+    allProducts
+  );
+
   const enriched = enrichAttributeGroupSource(
     {
       sourceType: group.sourceType ?? 'CATEGORY',
@@ -278,14 +321,16 @@ export function linkedItemsForPreviewGroup(
         ? {
             ...group.linkedCategory,
             items:
-              categories.find((c) => c.id === group.linkedCategory?.id)?.items ??
-              [],
+              categoriesWithProducts.find(
+                (c) => c.id === group.linkedCategory?.id
+              )?.items ?? [],
           }
         : null,
       linkedProduct: group.linkedProduct
-        ? categories
+        ? categoriesWithProducts
             .flatMap((c) => c.items)
-            .find((i) => i.id === group.linkedProduct?.id) ?? {
+            .find((i) => i.id === group.linkedProduct?.id) ??
+          allProducts.find((p) => p.id === group.linkedProduct?.id) ?? {
             id: group.linkedProduct.id,
             name: group.linkedProduct.name,
             description: null,
@@ -297,7 +342,7 @@ export function linkedItemsForPreviewGroup(
           }
         : null,
     },
-    categories.map((c) => ({
+    categoriesWithProducts.map((c) => ({
       id: c.id,
       name: c.name,
       items: c.items,
@@ -322,6 +367,9 @@ export function isPreviewGroupVisibleForParentVariation(
   parentVariation: ParentVariationContext | null | undefined
 ): boolean {
   const useVariationPricing = group.useVariationPricing ?? false;
+  const defaultLinkedRestaurantVariationId =
+    group.defaultLinkedRestaurantVariationId ?? null;
+
   if (group.sourceType === 'PRODUCT') {
     const item = items[0];
     if (!item) return false;
@@ -331,6 +379,16 @@ export function isPreviewGroupVisibleForParentVariation(
       useVariationPricing
     );
   }
+
+  if (defaultLinkedRestaurantVariationId && !useVariationPricing) {
+    return (
+      filterConfigurationItemsForDefaultLinkedVariation(
+        items.map(previewItemConfigLike),
+        defaultLinkedRestaurantVariationId
+      ).length > 0
+    );
+  }
+
   return configurationGroupHasItemsForParentVariation(
     {
       items: items.map(previewItemConfigLike),
@@ -346,6 +404,9 @@ export function visibleItemsForPreviewGroup(
   parentVariation: ParentVariationContext | null | undefined
 ): MenuItemRow[] {
   const useVariationPricing = group.useVariationPricing ?? false;
+  const defaultLinkedRestaurantVariationId =
+    group.defaultLinkedRestaurantVariationId ?? null;
+
   if (group.sourceType === 'PRODUCT') {
     const item = items[0];
     if (!item) return [];
@@ -357,6 +418,14 @@ export function visibleItemsForPreviewGroup(
       ? items
       : [];
   }
+
+  if (defaultLinkedRestaurantVariationId && !useVariationPricing) {
+    return filterConfigurationItemsForDefaultLinkedVariation(
+      items,
+      defaultLinkedRestaurantVariationId
+    ) as MenuItemRow[];
+  }
+
   return filterConfigurationItemsForParentVariation(
     items,
     parentVariation,

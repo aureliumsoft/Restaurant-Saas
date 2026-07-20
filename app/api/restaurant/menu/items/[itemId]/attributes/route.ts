@@ -119,6 +119,22 @@ export async function POST(
         );
       }
     }
+
+    if (data.defaultLinkedRestaurantVariationId) {
+      const variation = await db.restaurantVariation.findFirst({
+        where: {
+          id: data.defaultLinkedRestaurantVariationId,
+          restaurantId: auth.restaurant.id,
+        },
+        select: { id: true },
+      });
+      if (!variation) {
+        return NextResponse.json(
+          { error: "Default variation must belong to your restaurant." },
+          { status: 400 }
+        );
+      }
+    }
   } else {
     const linkedProduct = await db.menuItem.findFirst({
       where: {
@@ -190,6 +206,8 @@ export async function POST(
         ? {
             linkedCategoryId: data.linkedCategoryId!,
             defaultLinkedMenuItemId: data.defaultLinkedMenuItemId ?? null,
+            defaultLinkedRestaurantVariationId:
+              data.defaultLinkedRestaurantVariationId ?? null,
             productCategoryIds: [],
             linkedProductId: null,
           }
@@ -198,6 +216,7 @@ export async function POST(
             productCategoryIds: data.productCategoryIds ?? [],
             linkedCategoryId: null,
             defaultLinkedMenuItemId: null,
+            defaultLinkedRestaurantVariationId: null,
           }),
       ...(isMultiple
         ? {

@@ -44,6 +44,161 @@ export function parentVariationFromItemVariation(
   };
 }
 
+export type DefaultLinkedVariationRef = {
+  restaurantVariationId?: string | null;
+  name?: string | null;
+  title?: string | null;
+};
+
+/** Match an item variation to a fixed default restaurant variation tier. */
+export function matchItemVariationForDefaultLinked(
+  defaultRef: DefaultLinkedVariationRef | null | undefined,
+  itemVariations: VariationLinkRef[]
+): VariationLinkRef | null {
+  if (!defaultRef) return null;
+
+  if (defaultRef.restaurantVariationId) {
+    const byTemplate = itemVariations.find(
+      (v) => v.restaurantVariationId === defaultRef.restaurantVariationId
+    );
+    if (byTemplate) return byTemplate;
+  }
+
+  const defaultKeys = new Set(
+    [defaultRef.name, defaultRef.title]
+      .map(normalizeVariationKey)
+      .filter((k) => k.length > 0)
+  );
+  if (defaultKeys.size === 0) return null;
+
+  return (
+    itemVariations.find((v) => {
+      const keys = [v.name, v.title]
+        .map(normalizeVariationKey)
+        .filter((k) => k.length > 0);
+      return keys.some((k) => defaultKeys.has(k));
+    }) ?? null
+  );
+}
+
+/** Whether this add-on is offered for the group's fixed default variation tier. */
+export function isConfigurationItemAvailableForDefaultLinkedVariation(
+  item: ConfigurationItemLike,
+  defaultRestaurantVariationId: string | null | undefined
+): boolean {
+  if (!defaultRestaurantVariationId) return true;
+  return (
+    matchItemVariationForDefaultLinked(
+      { restaurantVariationId: defaultRestaurantVariationId },
+      item.variations ?? []
+    ) != null
+  );
+}
+
+/** Hide add-ons with no rate for the group's fixed default variation tier. */
+export function filterConfigurationItemsForDefaultLinkedVariation<
+  T extends ConfigurationItemLike,
+>(items: T[], defaultRestaurantVariationId: string | null | undefined): T[] {
+  if (!defaultRestaurantVariationId) return items;
+  return items.filter((item) =>
+    isConfigurationItemAvailableForDefaultLinkedVariation(
+      item,
+      defaultRestaurantVariationId
+    )
+  );
+}
+
+/** Visible configuration items after parent-variation and fixed-default filters. */
+export function filterConfigurationItemsForGroup<
+  T extends ConfigurationItemLike,
+>(
+  items: T[],
+  options: {
+    parentVariation?: ParentVariationContext | null;
+    useVariationPricing?: boolean;
+    defaultLinkedRestaurantVariationId?: string | null;
+  }
+): T[] {
+  const useVariationPricing = options.useVariationPricing ?? false;
+  const defaultLinkedRestaurantVariationId =
+    options.defaultLinkedRestaurantVariationId ?? null;
+
+  let filtered = items;
+  if (defaultLinkedRestaurantVariationId && !useVariationPricing) {
+    filtered = filterConfigurationItemsForDefaultLinkedVariation(
+      filtered,
+      defaultLinkedRestaurantVariationId
+    );
+  }
+  if (useVariationPricing) {
+    filtered = filterConfigurationItemsForParentVariation(
+      filtered,
+      options.parentVariation,
+      true
+    );
+  }
+  return filtered;
+}
+
+/** Whether a configuration section should render for the current filters. */
+export function isConfigurationGroupVisibleForFilters(
+  group: {
+    items: ConfigurationItemLike[];
+    useVariationPricing?: boolean;
+    defaultLinkedRestaurantVariationId?: string | null;
+  },
+  parentVariation: ParentVariationContext | null | undefined
+): boolean {
+  return (
+    filterConfigurationItemsForGroup(group.items, {
+      parentVariation,
+      useVariationPricing: group.useVariationPricing,
+      defaultLinkedRestaurantVariationId:
+        group.defaultLinkedRestaurantVariationId,
+    }).length > 0
+  );
+}
+
+/** List unit price when a fixed default variation tier is configured. */
+export function configurationItemListUnitPriceForDefaultLinked(
+  item: ConfigurationItemLike,
+  defaultRestaurantVariationId: string | null | undefined
+): number {
+  const original = effectiveMenuItemUnitPrice(item.price, item.salePrice);
+  if (!defaultRestaurantVariationId) return original;
+  const matched = matchItemVariationForDefaultLinked(
+    { restaurantVariationId: defaultRestaurantVariationId },
+    item.variations ?? []
+  );
+  if (matched) return matched.priceDelta;
+  return original;
+}
+
+/** Resolved list unit for configuration items (parent, fixed default, or base). */
+export function configurationItemListUnitPriceForGroup(
+  item: ConfigurationItemLike,
+  options: {
+    parentVariation?: ParentVariationContext | null;
+    useVariationPricing?: boolean;
+    defaultLinkedRestaurantVariationId?: string | null;
+  }
+): number {
+  if (options.useVariationPricing) {
+    return configurationItemListUnitPrice(
+      item,
+      options.parentVariation,
+      true
+    );
+  }
+  if (options.defaultLinkedRestaurantVariationId) {
+    return configurationItemListUnitPriceForDefaultLinked(
+      item,
+      options.defaultLinkedRestaurantVariationId
+    );
+  }
+  return configurationItemListUnitPrice(item, options.parentVariation, false);
+}
+
 /** Match an item variation to the guest's selected base-product variation. */
 export function matchItemVariationForParent(
   parent: ParentVariationContext | null | undefined,

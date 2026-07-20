@@ -52,11 +52,13 @@ import {
   chargeableConfigurationItemUnitPrice,
   configurationDefaultListUnitPriceForSelection,
   configurationGroupDisplayTitle,
+  configurationItemListUnitPriceForGroup,
   configurationItemResolvedListUnit,
-  filterConfigurationItemsForParentVariation,
+  filterConfigurationItemsForGroup,
   configurationAddonPriceLabel,
-  isConfigurationGroupVisibleForParentVariation,
+  isConfigurationGroupVisibleForFilters,
   isConfigurationItemAvailableForParentVariation,
+  isConfigurationItemAvailableForDefaultLinkedVariation,
   type ParentVariationContext,
 } from '@/lib/menu/configuration-variation-price';
 import {
@@ -112,6 +114,8 @@ export type AttributeGroup = {
   defaultUnitPrice?: number | null;
   /** When true, item prices follow the guest's selected base-product variation. */
   useVariationPricing?: boolean;
+  /** Fixed restaurant variation tier for linked category items (e.g. Medium only). */
+  defaultLinkedRestaurantVariationId?: string | null;
   items: (Omit<MenuOption, 'unitPrice'> & {
     price: number;
     salePrice: number | null;
@@ -155,11 +159,12 @@ function visibleConfigurationItems(
   group: AttributeGroup,
   parentVariation: ParentVariationContext | null
 ) {
-  return filterConfigurationItemsForParentVariation(
-    group.items,
+  return filterConfigurationItemsForGroup(group.items, {
     parentVariation,
-    group.useVariationPricing ?? false
-  );
+    useVariationPricing: group.useVariationPricing ?? false,
+    defaultLinkedRestaurantVariationId:
+      group.defaultLinkedRestaurantVariationId,
+  });
 }
 
 function configurationItemPickerPrice(
@@ -182,12 +187,19 @@ function configurationItemPickerPrice(
   const nestedVariation = nestedVariationId
     ? (item.variations ?? []).find((v) => v.id === nestedVariationId)
     : undefined;
-  const listUnit = configurationItemResolvedListUnit(
-    item,
-    parentVariation,
-    group.useVariationPricing ?? false,
-    nestedVariationId
-  );
+  const listUnit =
+    group.defaultLinkedRestaurantVariationId &&
+    !(group.useVariationPricing ?? false)
+      ? configurationItemListUnitPriceForGroup(item, {
+          defaultLinkedRestaurantVariationId:
+            group.defaultLinkedRestaurantVariationId,
+        })
+      : configurationItemResolvedListUnit(
+          item,
+          parentVariation,
+          group.useVariationPricing ?? false,
+          nestedVariationId
+        );
   const defaultListUnit = configurationDefaultListUnitPriceForSelection(
     group,
     parentVariation,
@@ -348,7 +360,7 @@ export function ProductCustomizeDialog({
   const visibleCategoryGroups = useMemo(
     () =>
       categoryGroups.filter((g) =>
-        isConfigurationGroupVisibleForParentVariation(
+        isConfigurationGroupVisibleForFilters(
           g,
           baseProductVariationContext.parent
         )
@@ -376,13 +388,16 @@ export function ProductCustomizeDialog({
       let changed = false;
       const next: Record<string, string[]> = { ...prev };
       for (const g of categoryGroups) {
-        if (!g.useVariationPricing) continue;
+        const usesParent = g.useVariationPricing ?? false;
+        const usesDefaultLinked = Boolean(g.defaultLinkedRestaurantVariationId);
+        if (!usesParent && !usesDefaultLinked) continue;
         const allowed = new Set(
-          filterConfigurationItemsForParentVariation(
-            g.items,
-            parent,
-            true
-          ).map((it) => it.menuItemId)
+          filterConfigurationItemsForGroup(g.items, {
+            parentVariation: parent,
+            useVariationPricing: usesParent,
+            defaultLinkedRestaurantVariationId:
+              g.defaultLinkedRestaurantVariationId,
+          }).map((it) => it.menuItemId)
         );
         const cur = prev[g.id] ?? [];
         const filtered = cur.filter((id) => allowed.has(id));

@@ -2,8 +2,9 @@ import {
   chargeableConfigurationItemUnitPrice,
   configurationDefaultListUnitPriceForSelection,
   configurationGroupDisplayTitle,
+  configurationItemListUnitPriceForGroup,
   configurationItemResolvedListUnit,
-  filterConfigurationItemsForParentVariation,
+  filterConfigurationItemsForGroup,
   type ParentVariationContext,
 } from '@/lib/menu/configuration-variation-price';
 import { chargeableUnitsByOptionInGroup } from '@/lib/menu/recommendation-limits';
@@ -54,11 +55,11 @@ export function buildModifierSelectionsForGroups(
     const ids = selectedByGroup[g.id] ?? [];
     if (ids.length === 0) continue;
 
-    const visibleItems = filterConfigurationItemsForParentVariation(
-      g.items,
+    const visibleItems = filterConfigurationItemsForGroup(g.items, {
       parentVariation,
-      g.useVariationPricing ?? false
-    );
+      useVariationPricing: g.useVariationPricing ?? false,
+      defaultLinkedRestaurantVariationId: g.defaultLinkedRestaurantVariationId,
+    });
     const itemById = new Map(
       visibleItems.map((it) => [it.menuItemId, it] as const)
     );
@@ -90,12 +91,19 @@ export function buildModifierSelectionsForGroups(
         const finalName = nestedVariationName
           ? `${it.name} (${nestedVariationName})`
           : it.name;
-        const listUnit = configurationItemResolvedListUnit(
-          it,
-          parentVariation,
-          g.useVariationPricing ?? false,
-          nestedVariationId
-        );
+        const listUnit =
+          g.defaultLinkedRestaurantVariationId &&
+          !(g.useVariationPricing ?? false)
+            ? configurationItemListUnitPriceForGroup(it, {
+                defaultLinkedRestaurantVariationId:
+                  g.defaultLinkedRestaurantVariationId,
+              })
+            : configurationItemResolvedListUnit(
+                it,
+                parentVariation,
+                g.useVariationPricing ?? false,
+                nestedVariationId
+              );
         const defaultListUnit = configurationDefaultListUnitPriceForSelection(
           g,
           parentVariation,

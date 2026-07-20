@@ -15,6 +15,7 @@ export const recommendationGroupBodySchema = z
     required: z.boolean().optional(),
     linkedCategoryId: z.string().uuid().optional(),
     defaultLinkedMenuItemId: z.string().uuid().nullable().optional(),
+    defaultLinkedRestaurantVariationId: z.string().uuid().nullable().optional(),
     linkedProductId: z.string().uuid().optional(),
     productCategoryIds: z.array(z.string().uuid()).optional(),
     sortOrder: z.number().int().min(0).optional(),
@@ -38,6 +39,25 @@ export const recommendationGroupBodySchema = z
         message:
           'defaultLinkedMenuItemId must not be set for product recommendations',
         path: ['defaultLinkedMenuItemId'],
+      });
+    }
+    if (data.sourceType === 'PRODUCT' && data.defaultLinkedRestaurantVariationId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'defaultLinkedRestaurantVariationId must not be set for product recommendations',
+        path: ['defaultLinkedRestaurantVariationId'],
+      });
+    }
+    if (
+      data.useVariationPricing &&
+      data.defaultLinkedRestaurantVariationId
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Choose either variation pricing or a fixed default variation, not both',
+        path: ['defaultLinkedRestaurantVariationId'],
       });
     }
     if (data.sourceType === 'PRODUCT' && !data.linkedProductId) {

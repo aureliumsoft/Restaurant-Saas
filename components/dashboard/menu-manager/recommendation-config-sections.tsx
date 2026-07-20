@@ -92,6 +92,12 @@ function SavedGroupList({
               {g.sourceType === 'PRODUCT'
                 ? `Product · ${g.linkedProduct?.name ?? '—'}`
                 : `Category · ${g.linkedCategory?.name ?? '—'}`}
+              {g.defaultLinkedRestaurantVariation?.name
+                ? ` · Default variation: ${g.defaultLinkedRestaurantVariation.name}`
+                : ''}
+              {g.defaultLinkedMenuItem?.name
+                ? ` · Default item: ${g.defaultLinkedMenuItem.name}`
+                : ''}
               {g.required ? ' · Required' : ' · Optional'}
             </p>
           </div>
@@ -158,7 +164,7 @@ export function RecommendationConfigSections({
       <RecommendationConfigSectionShell
         step={1}
         title="Category · single selection"
-        description="Guests pick one item from each linked category. Optionally set a default item for delta pricing."
+        description="Guests pick one item from each linked category. Optionally set a default item or fixed variation tier (e.g. Medium only)."
       >
         <SavedGroupList
           groups={savedGroupsByType.categorySingle}

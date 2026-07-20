@@ -30,7 +30,10 @@ const listItemSelect = {
     orderBy: { sortOrder: 'asc' as const },
     select: {
       id: true,
+      name: true,
+      title: true,
       priceDelta: true,
+      restaurantVariationId: true,
     },
   },
 } as const;

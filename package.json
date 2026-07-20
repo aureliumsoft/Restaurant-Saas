@@ -8,11 +8,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "prisma migrate deploy && next build",
+    "vercel-build": "node scripts/prisma-migrate-deploy.mjs && next build",
     "start": "next start",
-    "db:migrate": "prisma migrate deploy",
+    "db:migrate": "node scripts/prisma-migrate-deploy.mjs",
     "db:seed": "prisma db seed",
-    "db:setup": "prisma migrate deploy && prisma db seed",
+    "db:setup": "node scripts/prisma-migrate-deploy.mjs && prisma db seed",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "seed:admin": "ts-node -O \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/seed-admin-user.ts"

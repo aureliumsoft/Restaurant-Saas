@@ -1,10 +1,14 @@
 import {
   matchItemVariationForParent,
+  matchItemVariationForDefaultLinked,
   type ParentVariationContext,
 } from '@/lib/menu/configuration-variation-price';
 import { hasPersonalizeOptions } from '@/lib/menu/personalize-options';
 
-export type OptionConfigGroup = { useVariationPricing?: boolean };
+export type OptionConfigGroup = {
+  useVariationPricing?: boolean;
+  defaultLinkedRestaurantVariationId?: string | null;
+};
 
 export type OptionConfigContext = {
   group?: OptionConfigGroup;
@@ -30,13 +34,31 @@ export function categoryItemUsesParentVariation(
   return group?.useVariationPricing ?? false;
 }
 
+/** Matched add-on variation id when group uses a fixed default variation tier. */
+export function resolveDefaultLinkedCategoryItemVariationId(
+  item: OptionItemLike,
+  group: OptionConfigGroup | undefined
+): string | null {
+  const restaurantVariationId = group?.defaultLinkedRestaurantVariationId;
+  if (!restaurantVariationId || categoryItemUsesParentVariation(group)) {
+    return null;
+  }
+  const matched = matchItemVariationForDefaultLinked(
+    { restaurantVariationId },
+    item.variations ?? []
+  );
+  return matched?.id ?? null;
+}
+
 /** Matched add-on variation id when group prices by parent variation. */
 export function resolveCategoryItemVariationId(
   item: OptionItemLike,
   parentVariation: ParentVariationContext | null | undefined,
   group: OptionConfigGroup | undefined
 ): string | null {
-  if (!categoryItemUsesParentVariation(group)) return null;
+  if (!categoryItemUsesParentVariation(group)) {
+    return resolveDefaultLinkedCategoryItemVariationId(item, group);
+  }
   const matched = matchItemVariationForParent(
     parentVariation,
     item.variations ?? []
@@ -48,10 +70,10 @@ export function optionNeedsManualVariationPicker(
   item: { variations?: unknown[] | null },
   group: OptionConfigGroup | undefined
 ): boolean {
-  return (
-    (item.variations?.length ?? 0) > 0 &&
-    !categoryItemUsesParentVariation(group)
-  );
+  if ((item.variations?.length ?? 0) === 0) return false;
+  if (categoryItemUsesParentVariation(group)) return false;
+  if (group?.defaultLinkedRestaurantVariationId) return false;
+  return true;
 }
 
 /** Resolved variation id for a linked product recommendation selection. */
@@ -129,6 +151,11 @@ export function effectiveOptionVariationId(
     context?.group
   );
   if (fromParent) return fromParent;
+  const fromDefaultLinked = resolveDefaultLinkedCategoryItemVariationId(
+    item,
+    context?.group
+  );
+  if (fromDefaultLinked) return fromDefaultLinked;
   return (
     selectedNestedVariationByOption[key] ??
     (
@@ -197,6 +224,9 @@ export function isOptionConfigComplete(
 ): boolean {
   const hasNested = (item.nestedAttributeGroups?.length ?? 0) > 0;
   const usesParentVar = categoryItemUsesParentVariation(context?.group);
+  const hasDefaultLinkedVar = Boolean(
+    context?.group?.defaultLinkedRestaurantVariationId
+  );
   const hasManualVar = optionNeedsManualVariationPicker(item, context?.group);
   if (!hasManualVar && !hasNested) return true;
 
@@ -211,6 +241,10 @@ export function isOptionConfigComplete(
   if (usesParentVar && (item.variations?.length ?? 0) > 0) {
     if (!context?.parentVariation) return false;
     if (!resolveCategoryItemVariationId(item, context.parentVariation, context.group)) {
+      return false;
+    }
+  } else if (hasDefaultLinkedVar && (item.variations?.length ?? 0) > 0) {
+    if (!resolveDefaultLinkedCategoryItemVariationId(item, context?.group)) {
       return false;
     }
   } else if (hasManualVar) {
@@ -252,11 +286,12 @@ export function shouldAutoOpenOptionFlow(
   );
 }
 
-/** Apply parent-matched variation ids for selected options in variation-priced groups. */
-export function syncParentVariationOptionSelections(
+/** Apply auto-resolved variation ids for selected options (parent or fixed default). */
+export function syncAutoResolvedOptionSelections(
   groups: Array<{
     id: string;
     useVariationPricing?: boolean;
+    defaultLinkedRestaurantVariationId?: string | null;
     items: OptionItemLike[];
   }>,
   selectedByGroup: Record<string, string[]>,
@@ -270,11 +305,14 @@ export function syncParentVariationOptionSelections(
     list: Array<{
       id: string;
       useVariationPricing?: boolean;
+      defaultLinkedRestaurantVariationId?: string | null;
       items: OptionItemLike[];
     }>
   ) => {
     for (const g of list) {
-      if (!categoryItemUsesParentVariation(g)) continue;
+      const usesParent = categoryItemUsesParentVariation(g);
+      const usesDefaultLinked = Boolean(g.defaultLinkedRestaurantVariationId);
+      if (!usesParent && !usesDefaultLinked) continue;
       const ids = selectedByGroup[g.id] ?? [];
       for (const optionId of new Set(ids)) {
         const item = g.items.find((it) => it.menuItemId === optionId);
@@ -300,6 +338,7 @@ export function syncParentVariationOptionSelections(
           | Array<{
               id: string;
               useVariationPricing?: boolean;
+              defaultLinkedRestaurantVariationId?: string | null;
               items: OptionItemLike[];
             }>
           | undefined;
@@ -310,6 +349,26 @@ export function syncParentVariationOptionSelections(
 
   walk(groups);
   return changed ? next : null;
+}
+
+/** @deprecated use syncAutoResolvedOptionSelections */
+export function syncParentVariationOptionSelections(
+  groups: Array<{
+    id: string;
+    useVariationPricing?: boolean;
+    defaultLinkedRestaurantVariationId?: string | null;
+    items: OptionItemLike[];
+  }>,
+  selectedByGroup: Record<string, string[]>,
+  parentVariation: ParentVariationContext | null | undefined,
+  prev: Record<string, string>
+): Record<string, string> | null {
+  return syncAutoResolvedOptionSelections(
+    groups,
+    selectedByGroup,
+    parentVariation,
+    prev
+  );
 }
 
 export function emptyOptionNestedConfig(): {

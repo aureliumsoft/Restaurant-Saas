@@ -38,6 +38,12 @@ export type AttrGroupRow = {
     price: number;
     salePrice: number | null;
   } | null;
+  defaultLinkedRestaurantVariationId?: string | null;
+  defaultLinkedRestaurantVariation?: {
+    id: string;
+    name: string;
+    shortLabel: string | null;
+  } | null;
   linkedProduct?: {
     id: string;
     name: string;

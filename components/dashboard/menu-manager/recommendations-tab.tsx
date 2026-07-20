@@ -89,6 +89,7 @@ import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-pric
 
 import {
   buildDraftPreviewGroups,
+  buildPreviewCategoriesWithProducts,
   buildRecommendationSortPlan,
   draftHasContent,
   recommendationDraftKey,
@@ -234,6 +235,8 @@ function buildRecommendationPayloads(
         required: draft.required,
         linkedCategoryId: cat.id,
         defaultLinkedMenuItemId: draft.categoryDefaults[cat.id] ?? null,
+        defaultLinkedRestaurantVariationId:
+          draft.categoryDefaultVariations[cat.id] ?? null,
         useVariationPricing: draft.categoryVariationPricing[cat.id] ?? false,
         sortOrder:
           sortOrderByKey.get(recommendationDraftKey(variant, cat.id)) ?? index,
@@ -792,12 +795,20 @@ export function RecommendationsTab(_props?: Props) {
   const pickerCategoryIds = useMemo(() => {
     const ids = new Set<string>(offerCategoryIds);
     for (const draft of Object.values(draftByVariant)) {
-      if (draft?.sourceType === 'PRODUCT') {
+      if (!draft) continue;
+      if (draft.sourceType === 'PRODUCT') {
         for (const id of draft.productCategoryIds) ids.add(id);
       }
+      if (draft.sourceType === 'CATEGORY') {
+        for (const id of draft.ruleCategoryIds) ids.add(id);
+      }
+    }
+    for (const group of selected?.attributeGroups ?? []) {
+      if (group.linkedCategory?.id) ids.add(group.linkedCategory.id);
+      for (const id of group.productCategoryIds ?? []) ids.add(id);
     }
     return [...ids];
-  }, [offerCategoryIds, draftByVariant]);
+  }, [offerCategoryIds, draftByVariant, selected?.attributeGroups]);
 
   useEffect(() => {
     if (pickerCategoryIds.length === 0) return;
@@ -1506,6 +1517,11 @@ export function RecommendationsTab(_props?: Props) {
     );
   }, [selected, draftByVariant, localCategories, allProducts]);
 
+  const previewCategories = useMemo(
+    () => buildPreviewCategoriesWithProducts(localCategories, allProducts),
+    [localCategories, allProducts]
+  );
+
   const offeredPreviewItems = useMemo(() => {
     const saved = currentOffers.map((o) => ({
       id: o.offeredItem.id,
@@ -1902,7 +1918,8 @@ export function RecommendationsTab(_props?: Props) {
         <aside className="min-w-0 rounded-2xl border border-border bg-muted/25 p-1 lg:sticky lg:top-4 lg:flex lg:max-h-[min(100dvh-8rem,calc(100dvh-10rem))] lg:flex-col lg:overflow-hidden">
           <RecommendationPreviewPanel
             selected={selected}
-            localCategories={localCategories}
+            localCategories={previewCategories}
+            allProducts={allProducts}
             previewGroups={previewGroups}
             previewByGroup={previewByGroup}
             onPreviewChange={(groupId, ids) =>
@@ -1918,6 +1935,7 @@ export function RecommendationsTab(_props?: Props) {
             deletingRule={deletingRule}
             savingAll={savingAll}
             loadingPersonalize={loadingPersonalize}
+            loadingPreviewProducts={pickerProductsLoading}
             personalizePreviewGroups={personalizePreviewGroups}
             previewPersonalizeByGroup={previewPersonalizeByGroup}
             onPersonalizePreviewChange={(groupId, ids) =>

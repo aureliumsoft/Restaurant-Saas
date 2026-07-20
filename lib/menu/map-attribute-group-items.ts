@@ -31,6 +31,7 @@ type LinkedItem = {
 export type AttributeGroupSource = {
   sourceType?: 'CATEGORY' | 'PRODUCT' | null;
   defaultLinkedMenuItemId?: string | null;
+  defaultLinkedRestaurantVariationId?: string | null;
   defaultLinkedMenuItem?: {
     id: string;
     name: string;

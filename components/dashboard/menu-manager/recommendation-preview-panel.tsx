@@ -12,6 +12,7 @@ import {
   configurationDefaultListUnitPrice,
   configurationGroupDisplayTitle,
   configurationItemListUnitPrice,
+  configurationItemListUnitPriceForGroup,
   type ParentVariationContext,
 } from '@/lib/menu/configuration-variation-price';
 import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
@@ -37,16 +38,26 @@ function previewDefaultListUnit(
   visibleItems: MenuItemRow[],
   parentVariation: ParentVariationContext | null
 ): number | null {
+  const defaultLinkedRestaurantVariationId =
+    group.defaultLinkedRestaurantVariationId ?? null;
   return configurationDefaultListUnitPrice(
     {
       defaultMenuItemId:
         group.defaultLinkedMenuItemId ?? group.defaultLinkedMenuItem?.id,
       defaultUnitPrice:
         group.defaultLinkedMenuItem && !(group.useVariationPricing ?? false)
-          ? effectiveMenuItemUnitPrice(
-              group.defaultLinkedMenuItem.price,
-              group.defaultLinkedMenuItem.salePrice
-            )
+          ? defaultLinkedRestaurantVariationId
+            ? configurationItemListUnitPriceForGroup(
+                {
+                  price: group.defaultLinkedMenuItem.price,
+                  salePrice: group.defaultLinkedMenuItem.salePrice,
+                },
+                { defaultLinkedRestaurantVariationId }
+              )
+            : effectiveMenuItemUnitPrice(
+                group.defaultLinkedMenuItem.price,
+                group.defaultLinkedMenuItem.salePrice
+              )
           : null,
       useVariationPricing: group.useVariationPricing,
       items: visibleItems.map((item) => ({
@@ -88,6 +99,7 @@ type OfferPreviewItem = {
 type Props = {
   selected: (MenuItemRow & { categoryName: string }) | null;
   localCategories: MenuCategoryRow[];
+  allProducts?: Array<MenuItemRow & { categoryIds?: string[]; categoryName?: string }>;
   previewGroups: PreviewAttrGroup[];
   previewByGroup: Record<string, string[]>;
   onPreviewChange: (groupId: string, ids: string[]) => void;
@@ -99,6 +111,7 @@ type Props = {
   loadingPersonalize?: boolean;
   saveAllDisabled?: boolean;
   onSaveAll?: () => void;
+  loadingPreviewProducts?: boolean;
   personalizePreviewGroups?: Array<{
     id: string;
     parentName: string;
@@ -112,6 +125,7 @@ type Props = {
 export function RecommendationPreviewPanel({
   selected,
   localCategories,
+  allProducts = [],
   previewGroups,
   previewByGroup,
   onPreviewChange,
@@ -123,6 +137,7 @@ export function RecommendationPreviewPanel({
   loadingPersonalize = false,
   saveAllDisabled,
   onSaveAll,
+  loadingPreviewProducts = false,
   personalizePreviewGroups = [],
   previewPersonalizeByGroup = {},
   onPersonalizePreviewChange,
@@ -163,7 +178,8 @@ export function RecommendationPreviewPanel({
       const items = linkedItemsForPreviewGroup(
         group,
         selected,
-        localCategories
+        localCategories,
+        allProducts
       );
       return isPreviewGroupVisibleForParentVariation(
         group,
@@ -171,10 +187,20 @@ export function RecommendationPreviewPanel({
         previewVariationContext.parent
       );
     });
-  }, [previewGroups, selected, localCategories, previewVariationContext.parent]);
+  }, [previewGroups, selected, localCategories, allProducts, previewVariationContext.parent]);
 
   const hasVariationPricingGroups = useMemo(
     () => previewGroups.some((g) => g.useVariationPricing),
+    [previewGroups]
+  );
+
+  const hasDefaultVariationGroups = useMemo(
+    () =>
+      previewGroups.some(
+        (g) =>
+          Boolean(g.defaultLinkedRestaurantVariationId) &&
+          !(g.useVariationPricing ?? false)
+      ),
     [previewGroups]
   );
 
@@ -294,7 +320,11 @@ export function RecommendationPreviewPanel({
         <p className="text-sm text-muted-foreground">
           {hasVariationPricingGroups
             ? 'No add-on categories are available for this product variation.'
-            : 'No configuration groups are available to preview yet.'}
+            : hasDefaultVariationGroups
+              ? 'No add-ons match the configured default variation yet. Load products in those categories or check variation rates.'
+              : loadingPreviewProducts
+                ? 'Loading add-on products for preview…'
+                : 'No configuration groups are available to preview yet.'}
         </p>
       ) : (
         <div className="space-y-4">
@@ -304,6 +334,7 @@ export function RecommendationPreviewPanel({
               group={g}
               baseProduct={selected}
               categories={localCategories}
+              allProducts={allProducts}
               parentVariation={previewVariationContext.parent}
               variationShortLabel={previewVariationContext.shortLabel}
               previewIds={previewByGroup[g.id] ?? []}
@@ -423,6 +454,7 @@ function PreviewGroupCard({
   group,
   baseProduct,
   categories,
+  allProducts,
   parentVariation,
   variationShortLabel,
   previewIds,
@@ -434,6 +466,7 @@ function PreviewGroupCard({
   group: PreviewAttrGroup;
   baseProduct: MenuItemRow;
   categories: MenuCategoryRow[];
+  allProducts: Array<MenuItemRow & { categoryIds?: string[]; categoryName?: string }>;
   parentVariation: ParentVariationContext | null;
   variationShortLabel: string | null;
   previewIds: string[];
@@ -442,20 +475,36 @@ function PreviewGroupCard({
   onDelete?: () => void;
   deleting?: boolean;
 }) {
-  const allItems = linkedItemsForPreviewGroup(group, baseProduct, categories);
+  const allItems = linkedItemsForPreviewGroup(
+    group,
+    baseProduct,
+    categories,
+    allProducts
+  );
   const items = visibleItemsForPreviewGroup(
     group,
     allItems,
     parentVariation
   );
   const useVariationPricing = group.useVariationPricing ?? false;
+  const defaultLinkedRestaurantVariationId =
+    group.defaultLinkedRestaurantVariationId ?? null;
   const defaultUnit = previewDefaultListUnit(group, items, parentVariation);
-  const groupTitle = configurationGroupDisplayTitle(
-    group.name,
-    parentVariation,
-    useVariationPricing,
-    variationShortLabel
-  );
+  const defaultVariationLabel =
+    defaultLinkedRestaurantVariationId && !useVariationPricing
+      ? group.defaultLinkedRestaurantVariation?.shortLabel?.trim() ||
+        group.defaultLinkedRestaurantVariation?.name ||
+        null
+      : null;
+  const groupTitle =
+    defaultVariationLabel && !useVariationPricing
+      ? `${group.name} ${defaultVariationLabel}`
+      : configurationGroupDisplayTitle(
+          group.name,
+          parentVariation,
+          useVariationPricing,
+          variationShortLabel
+        );
 
   return (
     <section
@@ -524,11 +573,11 @@ function PreviewGroupCard({
           <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
             {items.map((it) => {
               const checked = previewIds[0] === it.id;
-              const listUnit = configurationItemListUnitPrice(
-                it,
+              const listUnit = configurationItemListUnitPriceForGroup(it, {
                 parentVariation,
-                useVariationPricing
-              );
+                useVariationPricing,
+                defaultLinkedRestaurantVariationId,
+              });
               const priceLabel = configurationAddonPriceLabel(
                 listUnit,
                 defaultUnit,
@@ -574,11 +623,11 @@ function PreviewGroupCard({
           <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
             {items.map((it) => {
               const checked = previewIds.includes(it.id);
-              const listUnit = configurationItemListUnitPrice(
-                it,
+              const listUnit = configurationItemListUnitPriceForGroup(it, {
                 parentVariation,
-                useVariationPricing
-              );
+                useVariationPricing,
+                defaultLinkedRestaurantVariationId,
+              });
               const priceLabel = configurationAddonPriceLabel(
                 listUnit,
                 defaultUnit,

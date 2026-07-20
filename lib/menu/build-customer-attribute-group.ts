@@ -3,6 +3,10 @@ import {
   mapAttributeGroupItems,
   type AttributeGroupSource,
 } from '@/lib/menu/map-attribute-group-items';
+import {
+  configurationItemListUnitPriceForDefaultLinked,
+  filterConfigurationItemsForDefaultLinkedVariation,
+} from '@/lib/menu/configuration-variation-price';
 import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
 
 import type { AttributeGroup } from '@/components/order/product-customize-dialog';
@@ -19,6 +23,12 @@ export function buildCustomerAttributeGroup(
     minItems: number | null;
     maxItems: number | null;
     defaultLinkedMenuItemId?: string | null;
+    defaultLinkedRestaurantVariationId?: string | null;
+    defaultLinkedRestaurantVariation?: {
+      id: string;
+      name: string;
+      shortLabel?: string | null;
+    } | null;
     variationLimits?: {
       variationId: string;
       minItems: number;
@@ -33,6 +43,11 @@ export function buildCustomerAttributeGroup(
       ? [group.linkedProduct]
       : (group.linkedCategory?.items ?? []);
 
+  const defaultRestaurantVariationId =
+    group.defaultLinkedRestaurantVariationId ??
+    group.defaultLinkedRestaurantVariation?.id ??
+    null;
+
   const defaultItem =
     group.sourceType === 'CATEGORY' && group.defaultLinkedMenuItem
       ? group.defaultLinkedMenuItem
@@ -41,10 +56,22 @@ export function buildCustomerAttributeGroup(
         : null;
   const defaultUnitPrice =
     defaultItem && !(group.useVariationPricing ?? false)
-      ? effectiveMenuItemUnitPrice(defaultItem.price, defaultItem.salePrice)
+      ? defaultRestaurantVariationId
+        ? configurationItemListUnitPriceForDefaultLinked(
+            defaultItem,
+            defaultRestaurantVariationId
+          )
+        : effectiveMenuItemUnitPrice(defaultItem.price, defaultItem.salePrice)
       : null;
 
-  const items = mapAttributeGroupItems(group, baseProductId);
+  const mappedItems = mapAttributeGroupItems(group, baseProductId);
+  const items =
+    defaultRestaurantVariationId && !(group.useVariationPricing ?? false)
+      ? filterConfigurationItemsForDefaultLinkedVariation(
+          mappedItems,
+          defaultRestaurantVariationId
+        )
+      : mappedItems;
   return {
     id: group.id,
     name: group.name,
@@ -60,6 +87,7 @@ export function buildCustomerAttributeGroup(
     defaultMenuItemId: defaultItem?.id ?? group.defaultLinkedMenuItemId ?? null,
     defaultUnitPrice,
     useVariationPricing: group.useVariationPricing ?? false,
+    defaultLinkedRestaurantVariationId: defaultRestaurantVariationId,
     items: items.map((it) => {
       const raw = rawItems.find((r) => r.id === it.id);
       const nestedGroups = raw?.attributeGroups ?? [];
