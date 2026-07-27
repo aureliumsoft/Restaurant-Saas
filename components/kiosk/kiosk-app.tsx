@@ -21,6 +21,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ChangeEvent,
@@ -338,6 +339,8 @@ export function KioskApp({
   const [customizeProduct, setCustomizeProduct] =
     useState<CustomerMenuProduct | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [customizeLoading, setCustomizeLoading] = useState(false);
+  const customizeLoadTokenRef = useRef(0);
   const [menuOfferOpen, setMenuOfferOpen] = useState(false);
   const [menuOfferProduct, setMenuOfferProduct] =
     useState<CustomerMenuProduct | null>(null);
@@ -657,8 +660,12 @@ export function KioskApp({
     });
   };
 
-  const openCustomize = (p: CustomerMenuProduct) => {
+  const openCustomize = (
+    p: CustomerMenuProduct,
+    options?: { loading?: boolean }
+  ) => {
     setCustomizeProduct(p);
+    setCustomizeLoading(options?.loading ?? false);
     setDialogOpen(true);
   };
 
@@ -667,19 +674,27 @@ export function KioskApp({
 
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     if (productNeedsCustomizeDialog(p)) {
-      let product = p;
       if (productNeedsDetailFetch(p)) {
+        const token = ++customizeLoadTokenRef.current;
+        openCustomize(p, { loading: true });
         const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
           p.id,
           { slug }
         );
+        if (token !== customizeLoadTokenRef.current) return;
         if (!full) {
+          setDialogOpen(false);
+          setCustomizeProduct(null);
+          setCustomizeLoading(false);
           toast.error(t('productNotFoundToModify'));
           return;
         }
-        product = { ...full, categoryId: p.categoryId };
+        setCustomizeProduct({ ...full, categoryId: p.categoryId });
+        setCustomizeLoading(false);
+        return;
       }
-      openCustomize(product);
+      customizeLoadTokenRef.current += 1;
+      openCustomize(p);
       return;
     }
     addToCart(p, []);
@@ -1968,9 +1983,14 @@ export function KioskApp({
             priceDelta: v.priceDelta,
           }))}
           open={dialogOpen}
+          isLoading={customizeLoading}
           onOpenChange={(open) => {
             setDialogOpen(open);
-            if (!open) setCustomizeProduct(null);
+            if (!open) {
+              customizeLoadTokenRef.current += 1;
+              setCustomizeProduct(null);
+              setCustomizeLoading(false);
+            }
           }}
           onConfirm={(mods, variation, quantity = 1) => {
             if (!customizeProduct) return;
@@ -1991,6 +2011,7 @@ export function KioskApp({
             }
             setDialogOpen(false);
             setCustomizeProduct(null);
+            setCustomizeLoading(false);
           }}
         />
       </div>

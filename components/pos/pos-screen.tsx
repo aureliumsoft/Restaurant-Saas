@@ -506,6 +506,8 @@ export function PosScreen() {
   const [customizeProduct, setCustomizeProduct] =
     useState<PosMenuProduct | null>(null);
   const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [customizeLoading, setCustomizeLoading] = useState(false);
+  const customizeLoadTokenRef = useRef(0);
   const [menuOfferOpen, setMenuOfferOpen] = useState(false);
   const [menuOfferProduct, setMenuOfferProduct] =
     useState<PosMenuProduct | null>(null);
@@ -1229,8 +1231,12 @@ export function PosScreen() {
     });
   };
 
-  const openCustomize = (p: PosMenuProduct) => {
+  const openCustomize = (
+    p: PosMenuProduct,
+    options?: { loading?: boolean }
+  ) => {
     setCustomizeProduct(p);
+    setCustomizeLoading(options?.loading ?? false);
     setCustomizeOpen(true);
   };
 
@@ -1239,16 +1245,21 @@ export function PosScreen() {
 
   const proceedWithProduct = async (p: PosMenuProduct) => {
     if (productNeedsCustomizeDialog(p)) {
-      let product = p;
       if (productNeedsDetailFetch(p)) {
+        const token = ++customizeLoadTokenRef.current;
+        openCustomize(p, { loading: true });
         const full = await fetchRestaurantMenuProductDetail<
           PosMenuProduct & { categoryIds?: string[] }
         >(p.id);
+        if (token !== customizeLoadTokenRef.current) return;
         if (!full) {
+          setCustomizeOpen(false);
+          setCustomizeProduct(null);
+          setCustomizeLoading(false);
           toast.error('Could not load product configuration.');
           return;
         }
-        product = {
+        setCustomizeProduct({
           ...full,
           categoryId: p.categoryId,
           description: full.description ?? null,
@@ -1263,9 +1274,12 @@ export function PosScreen() {
             ...v,
             priceDelta: Number(v.priceDelta ?? 0),
           })),
-        };
+        });
+        setCustomizeLoading(false);
+        return;
       }
-      openCustomize(product);
+      customizeLoadTokenRef.current += 1;
+      openCustomize(p);
       return;
     }
     addToCart(p, []);
@@ -3436,9 +3450,14 @@ export function PosScreen() {
           variationShortLabel: v.restaurantVariation?.shortLabel ?? null,
         }))}
         open={customizeOpen}
+        isLoading={customizeLoading}
         onOpenChange={(open) => {
           setCustomizeOpen(open);
-          if (!open) setCustomizeProduct(null);
+          if (!open) {
+            customizeLoadTokenRef.current += 1;
+            setCustomizeProduct(null);
+            setCustomizeLoading(false);
+          }
         }}
         onConfirm={(mods, variation, quantity = 1) => {
           if (!customizeProduct) return;
@@ -3457,6 +3476,7 @@ export function PosScreen() {
           }
           setCustomizeOpen(false);
           setCustomizeProduct(null);
+          setCustomizeLoading(false);
         }}
       />
 

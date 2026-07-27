@@ -1,5 +1,12 @@
 import type { ReactNode } from 'react';
-import { Building2, CreditCard, LayoutDashboard, Settings, Inbox } from 'lucide-react';
+import {
+  Building2,
+  CreditCard,
+  LayoutDashboard,
+  Mail,
+  Settings,
+  Inbox,
+} from 'lucide-react';
 
 export type AdminNavItem = {
   title: string;
@@ -45,6 +52,12 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         path: '/admin/requests',
         icon: <Inbox className="h-4 w-4" />,
         description: 'Demo leads',
+      },
+      {
+        title: 'Newsletter',
+        path: '/admin/newsletter',
+        icon: <Mail className="h-4 w-4" />,
+        description: 'Subscribers & broadcasts',
       },
     ],
   },

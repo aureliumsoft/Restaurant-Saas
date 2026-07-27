@@ -317,6 +317,51 @@ export const resources = {
           messagePlaceholder: 'Tell us about your project',
           submit: 'Get My Free Demo',
         },
+        faq: {
+          eyebrow: 'FAQ',
+          title: 'Questions restaurants ask us.',
+          subtitle:
+            'Straight answers on setup, pricing, hardware, and how Foodluk fits your kitchen.',
+          items: {
+            q1: {
+              question: 'How long does it take to go live?',
+              answer:
+                'Most restaurants launch in under 15 minutes: create your account, import or build your menu, connect a payment method, and share your ordering link or QR codes. Multi-branch setups usually take a bit longer for branch mapping and staff roles.',
+            },
+            q2: {
+              question: 'Do I need special hardware?',
+              answer:
+                'No. Foodluk runs in the browser on tablets, phones, and desktops. Use the devices you already have for POS, kiosk, and kitchen display — optional printers and payment terminals connect when you are ready.',
+            },
+            q3: {
+              question: 'Can I run dine-in, delivery, and pickup together?',
+              answer:
+                'Yes. One menu powers table orders, click & collect, curbside, delivery, kiosk, and POS. Orders land in the same kitchen flow so staff are not juggling separate tablets for each channel.',
+            },
+            q4: {
+              question: 'Is there a free trial?',
+              answer:
+                'Yes — start with a free trial, explore the full product, and cancel anytime before you commit. Book a demo if you want a walkthrough mapped to your menu and branches first.',
+            },
+            q5: {
+              question: 'How do payments and subscriptions work?',
+              answer:
+                'Guest payments go through the providers you enable (such as Stripe, PayPal, or local wallets). Your Foodluk subscription is billed separately based on your plan — transparent pricing with no hidden aggregator commissions on your own channels.',
+            },
+          },
+        },
+        newsletter: {
+          eyebrow: 'Stay in the loop',
+          title: 'Get Foodluk updates in your inbox.',
+          subtitle:
+            'Product news, restaurant tips, and launch offers — short emails, no spam.',
+          placeholder: 'Enter your email',
+          submit: 'Subscribe',
+          submitting: 'Subscribing…',
+          success: 'Thanks — you are on the list.',
+          already: 'You are already subscribed.',
+          error: 'Could not subscribe. Please try again.',
+        },
         recommendations: {
           titleA: 'Loved by the brands',
           titleHighlight: 'redefining',
@@ -768,6 +813,51 @@ export const resources = {
           messageLabel: 'Mensaje',
           messagePlaceholder: 'Cuéntanos sobre tu proyecto',
           submit: 'Quiero mi demo gratis',
+        },
+        faq: {
+          eyebrow: 'Preguntas frecuentes',
+          title: 'Lo que más nos preguntan los restaurantes.',
+          subtitle:
+            'Respuestas claras sobre puesta en marcha, precios, hardware y cómo encaja Foodluk en tu cocina.',
+          items: {
+            q1: {
+              question: '¿Cuánto tarda ponerse en marcha?',
+              answer:
+                'La mayoría de restaurantes arrancan en menos de 15 minutos: crea la cuenta, importa o monta el menú, conecta un método de pago y comparte el enlace o los códigos QR. Las redes con varias sucursales suelen necesitar un poco más para mapear locales y roles.',
+            },
+            q2: {
+              question: '¿Necesito hardware especial?',
+              answer:
+                'No. Foodluk funciona en el navegador en tablets, móviles y ordenadores. Usa los dispositivos que ya tienes para TPV, kiosco y pantalla de cocina — impresoras y datáfonos se conectan cuando quieras.',
+            },
+            q3: {
+              question: '¿Puedo unir sala, delivery y recogida?',
+              answer:
+                'Sí. Un mismo menú alimenta pedidos en mesa, click & collect, recogida en coche, delivery, kiosco y TPV. Los pedidos llegan al mismo flujo de cocina para que el equipo no juggle varias tablets.',
+            },
+            q4: {
+              question: '¿Hay periodo de prueba?',
+              answer:
+                'Sí — empieza con una prueba gratuita, explora el producto completo y cancela cuando quieras antes de comprometerte. Reserva una demo si prefieres un recorrido adaptado a tu menú y sucursales.',
+            },
+            q5: {
+              question: '¿Cómo funcionan pagos y suscripción?',
+              answer:
+                'Los pagos de clientes pasan por los proveedores que actives (como Stripe, PayPal o monederos locales). Tu suscripción a Foodluk se factura aparte según el plan — precios transparentes, sin comisiones ocultas de agregadores en tus propios canales.',
+            },
+          },
+        },
+        newsletter: {
+          eyebrow: 'Mantente al día',
+          title: 'Recibe novedades de Foodluk en tu correo.',
+          subtitle:
+            'Noticias del producto, consejos para restaurantes y ofertas — correos cortos, sin spam.',
+          placeholder: 'Introduce tu correo',
+          submit: 'Suscribirme',
+          submitting: 'Suscribiendo…',
+          success: 'Gracias — ya estás en la lista.',
+          already: 'Ya estás suscrito.',
+          error: 'No se pudo suscribir. Inténtalo de nuevo.',
         },
         recommendations: {
           titleA: 'Las marcas que están',

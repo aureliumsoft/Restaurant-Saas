@@ -563,6 +563,7 @@ export default function OrderPageClient({
   const menuLoading = categoriesLoading && categories.length === 0;
 
   const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [customizeLoading, setCustomizeLoading] = useState(false);
   const [customizeProduct, setCustomizeProduct] =
     useState<CustomerMenuProduct | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
@@ -579,8 +580,14 @@ export default function OrderPageClient({
   const orderInfoRef = useRef(orderInfo);
   orderInfoRef.current = orderInfo;
 
-  const openCustomizeForProduct = (p: CustomerMenuProduct) => {
+  const customizeLoadTokenRef = useRef(0);
+
+  const openCustomizeForProduct = (
+    p: CustomerMenuProduct,
+    options?: { loading?: boolean }
+  ) => {
     setCustomizeProduct(p);
+    setCustomizeLoading(options?.loading ?? false);
     setCustomizeOpen(true);
   };
 
@@ -591,8 +598,7 @@ export default function OrderPageClient({
       return;
     }
     setEditingLineId(line.lineId);
-    setCustomizeProduct(product);
-    setCustomizeOpen(true);
+    void proceedWithProduct(product);
   };
 
   useEffect(() => {
@@ -829,8 +835,9 @@ export default function OrderPageClient({
 
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     if (productNeedsCustomizeDialog(p)) {
-      let product = p;
       if (productNeedsDetailFetch(p)) {
+        const token = ++customizeLoadTokenRef.current;
+        openCustomizeForProduct(p, { loading: true });
         const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
           p.id,
           {
@@ -838,13 +845,20 @@ export default function OrderPageClient({
             subdomain: hostSubdomain || orderInfo?.storeId,
           }
         );
+        if (token !== customizeLoadTokenRef.current) return;
         if (!full) {
+          setCustomizeOpen(false);
+          setCustomizeProduct(null);
+          setCustomizeLoading(false);
           toast.error(t('productNotFoundToModify'));
           return;
         }
-        product = { ...full, categoryId: p.categoryId };
+        setCustomizeProduct({ ...full, categoryId: p.categoryId });
+        setCustomizeLoading(false);
+        return;
       }
-      openCustomizeForProduct(product);
+      customizeLoadTokenRef.current += 1;
+      openCustomizeForProduct(p);
       return;
     }
     addToCart(p, []);
@@ -1418,10 +1432,13 @@ export default function OrderPageClient({
 
         <ProductCustomizeDialog
         open={customizeOpen}
+        isLoading={customizeLoading}
         onOpenChange={(open) => {
           setCustomizeOpen(open);
           if (!open) {
+            customizeLoadTokenRef.current += 1;
             setCustomizeProduct(null);
+            setCustomizeLoading(false);
             setEditingLineId(null);
           }
         }}

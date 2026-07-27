@@ -3,6 +3,36 @@ export type CustomerMenuQuery = {
   subdomain?: string | null;
 };
 
+type DetailCacheEntry = {
+  data: unknown;
+  expiresAt: number;
+};
+
+const DETAIL_CACHE_TTL_MS = 60_000;
+const customerDetailCache = new Map<string, DetailCacheEntry>();
+const restaurantDetailCache = new Map<string, DetailCacheEntry>();
+
+function cacheGet<T>(
+  map: Map<string, DetailCacheEntry>,
+  key: string
+): T | null {
+  const hit = map.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    map.delete(key);
+    return null;
+  }
+  return hit.data as T;
+}
+
+function cacheSet(
+  map: Map<string, DetailCacheEntry>,
+  key: string,
+  data: unknown
+) {
+  map.set(key, { data, expiresAt: Date.now() + DETAIL_CACHE_TTL_MS });
+}
+
 export function buildCustomerMenuItemDetailUrl(
   itemId: string,
   query: CustomerMenuQuery
@@ -22,22 +52,31 @@ export async function fetchCustomerMenuProductDetail<T>(
 ): Promise<T | null> {
   const url = buildCustomerMenuItemDetailUrl(itemId, query);
   if (!url) return null;
+  const cached = cacheGet<T>(customerDetailCache, url);
+  if (cached) return cached;
   const res = await fetch(url, { cache: 'default' });
   if (!res.ok) return null;
   const body = (await res.json().catch(() => ({}))) as { data?: T };
-  return body.data ?? null;
+  const data = body.data ?? null;
+  if (data) cacheSet(customerDetailCache, url, data);
+  return data;
 }
 
 export async function fetchRestaurantMenuProductDetail<T>(
   itemId: string
 ): Promise<T | null> {
+  const key = itemId;
+  const cached = cacheGet<T>(restaurantDetailCache, key);
+  if (cached) return cached;
   const res = await fetch(
     `/api/restaurant/menu/items/${encodeURIComponent(itemId)}`,
     { cache: 'default' }
   );
   if (!res.ok) return null;
   const body = (await res.json().catch(() => ({}))) as { data?: T };
-  return body.data ?? null;
+  const data = body.data ?? null;
+  if (data) cacheSet(restaurantDetailCache, key, data);
+  return data;
 }
 
 export function productNeedsDetailFetch(product: {

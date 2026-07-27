@@ -8,7 +8,7 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
-import { Check, ChevronDown, X } from 'lucide-react';
+import { Check, ChevronDown, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -265,6 +265,8 @@ type Props = {
   personalizeGroups?: PersonalizeGroup[];
   variations?: ProductVariationOption[];
   open: boolean;
+  /** When true, sheet is open but recommendation data is still loading. */
+  isLoading?: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (
     mods: {
@@ -287,6 +289,7 @@ export function ProductCustomizeDialog({
   personalizeGroups = [],
   variations = [],
   open,
+  isLoading = false,
   onOpenChange,
   onConfirm,
 }: Props) {
@@ -721,6 +724,12 @@ export function ProductCustomizeDialog({
 
   useEffect(() => {
     if (!open) return;
+    if (isLoading) {
+      setPicker(null);
+      setActiveProductGroupId(null);
+      setActiveCategoryOption(null);
+      return;
+    }
     const init: Record<string, string[]> = {};
     for (const g of categoryGroups) init[g.id] = [];
     setSelectedByGroup(init);
@@ -758,9 +767,10 @@ export function ProductCustomizeDialog({
         optionNestedConfigs: {},
       }
     );
-  }, [open, categoryGroups, productRecommendationGroups, personalizeGroups]);
+  }, [open, isLoading, categoryGroups, productRecommendationGroups, personalizeGroups]);
 
   const requiredMissing = useMemo(() => {
+    if (isLoading) return true;
     const missingProductRecs = visibleProductRecommendationGroups.some((g) => {
       if (!g.required) return false;
       if (!recommendedProductNeedsSheet(g)) return false;
@@ -804,6 +814,7 @@ export function ProductCustomizeDialog({
       missingCategoryOptionConfig
     );
   }, [
+    isLoading,
     visibleCategoryGroups,
     visibleProductRecommendationGroups,
     nestedConfigs,
@@ -1623,6 +1634,16 @@ export function ProductCustomizeDialog({
 
             <div className="relative flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-4">
+              {isLoading ? (
+                <div
+                  className="flex min-h-[16rem] flex-col items-center justify-center gap-3 py-12 text-muted-foreground"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-sm font-medium">Loading options…</p>
+                </div>
+              ) : (
               <div className="space-y-5">
                 {variations.length > 0 ? (
                   <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -1845,9 +1866,10 @@ export function ProductCustomizeDialog({
                   />
                 ) : null}
         </div>
+              )}
             </div>
 
-            {picker ? (
+            {picker && !isLoading ? (
               <aside
                 className="absolute inset-0 flex min-h-0 flex-col justify-end bg-black/40 animate-in fade-in-0 duration-200"
                 aria-modal="true"
@@ -2012,12 +2034,12 @@ export function ProductCustomizeDialog({
                 </div>
                 <Button
                   type="button"
-                  disabled={requiredMissing}
+                  disabled={requiredMissing || isLoading}
                   onClick={handleConfirm}
                   className="h-12 min-h-[3rem] flex-1 rounded-xl border-0 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 px-5 text-base font-bold text-white shadow-md transition-opacity hover:opacity-95 disabled:opacity-50 sm:min-w-[12rem]"
                 >
                   <span className="flex w-full items-center justify-between gap-4">
-                    <span>Add</span>
+                    <span>{isLoading ? 'Loading…' : 'Add'}</span>
                     <span className="tabular-nums">
                       {formatMoney(selectedUnitTotal * quantity)}
                     </span>

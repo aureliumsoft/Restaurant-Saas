@@ -437,6 +437,39 @@ model DemoRequest {
   @@index([createdAt])
 }
 
+/// Marketing-site newsletter opt-in (platform-wide, not per restaurant).
+model NewsletterSubscriber {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  /// Optional display name from the subscribe form.
+  name           String?
+  source         String?   @default("footer")
+  unsubscribedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([createdAt])
+  @@index([unsubscribedAt])
+}
+
+/// Platform newsletter broadcasts sent to active subscribers.
+model NewsletterCampaign {
+  id             String   @id @default(cuid())
+  subject        String
+  htmlBody       String
+  textBody       String?
+  status         String   @default("SENT")
+  recipientCount Int      @default(0)
+  successCount   Int      @default(0)
+  failureCount   Int      @default(0)
+  sentByEmail    String?
+  sentAt         DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([sentAt])
+}
+
 model Employee {
   id           String @id @default(uuid())
   restaurantId String

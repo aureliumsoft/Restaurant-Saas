@@ -403,6 +403,50 @@ export function fakeDemoRequestComplete() {
     updatedAt: faker.date.anytime(),
   };
 }
+export function fakeNewsletterSubscriber() {
+  return {
+    email: faker.internet.email(),
+    name: undefined,
+    unsubscribedAt: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeNewsletterSubscriberComplete() {
+  return {
+    id: faker.string.uuid(),
+    email: faker.internet.email(),
+    name: undefined,
+    source: 'footer',
+    unsubscribedAt: undefined,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeNewsletterCampaign() {
+  return {
+    subject: faker.lorem.words(5),
+    htmlBody: faker.lorem.words(5),
+    textBody: undefined,
+    sentByEmail: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeNewsletterCampaignComplete() {
+  return {
+    id: faker.string.uuid(),
+    subject: faker.lorem.words(5),
+    htmlBody: faker.lorem.words(5),
+    textBody: undefined,
+    status: 'SENT',
+    recipientCount: 0,
+    successCount: 0,
+    failureCount: 0,
+    sentByEmail: undefined,
+    sentAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
 export function fakeEmployee() {
   return {
     updatedAt: faker.date.anytime(),
