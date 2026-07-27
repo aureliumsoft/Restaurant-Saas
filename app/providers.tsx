@@ -20,6 +20,7 @@ import { DEFAULT_UI_LANGUAGE } from "@/lib/i18n/resources";
 import { OfflineBootstrap } from "@/components/offline/offline-bootstrap";
 import { AppSWRProvider } from "@/components/providers/app-swr-provider";
 import { AuthSessionProvider } from "@/components/providers/auth-session-provider";
+
 import { RestaurantBrandingProvider } from "@/components/layout/restaurant-branding-provider";
 
 /**
