@@ -23,13 +23,29 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 
+type Provider = 'NONE' | 'PAYPAL' | 'STRIPE' | 'WALLETS';
+
 type PaymentProviderState = {
   restaurantId?: string;
-  provider: 'NONE' | 'PAYPAL' | 'STRIPE';
+  provider: Provider;
   paymentTerminalIp: string | null;
   paypal: { configured: boolean; verified: boolean };
   stripe: { configured: boolean; verified: boolean };
+  jazzcash: { configured: boolean; verified: boolean };
+  easypaisa: { configured: boolean; verified: boolean };
 };
+
+function walletLabel(state: PaymentProviderState | null): string {
+  if (!state) return ' (not configured)';
+  const parts: string[] = [];
+  if (state.jazzcash.verified) parts.push('JazzCash');
+  else if (state.jazzcash.configured) parts.push('JazzCash needs verification');
+  if (state.easypaisa.verified) parts.push('Easypaisa');
+  else if (state.easypaisa.configured)
+    parts.push('Easypaisa needs verification');
+  if (parts.length === 0) return ' (not configured)';
+  return ` (${parts.join(' + ')})`;
+}
 
 export function RestaurantPaymentProviderCard() {
   const router = useRouter();
@@ -63,7 +79,7 @@ export function RestaurantPaymentProviderCard() {
     };
   }, [load]);
 
-  async function handleProviderChange(next: 'NONE' | 'PAYPAL' | 'STRIPE') {
+  async function handleProviderChange(next: Provider) {
     if (!state || next === state.provider) return;
     setSaving(true);
     try {
@@ -132,8 +148,8 @@ export function RestaurantPaymentProviderCard() {
           Customer payment method
         </CardTitle>
         <CardDescription>
-          Choose one gateway for online customer payments. Configure credentials
-          on the PayPal or Stripe setup page.
+          Choose PayPal or Stripe alone, or Wallets to offer JazzCash and/or
+          Easypaisa together at checkout.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -141,9 +157,7 @@ export function RestaurantPaymentProviderCard() {
           <p className="text-sm font-medium">Active payment gateway</p>
           <Select
             value={provider}
-            onValueChange={(value) =>
-              handleProviderChange(value as 'NONE' | 'PAYPAL' | 'STRIPE')
-            }
+            onValueChange={(value) => handleProviderChange(value as Provider)}
             disabled={saving}
           >
             <SelectTrigger className="max-w-sm">
@@ -167,6 +181,10 @@ export function RestaurantPaymentProviderCard() {
                     ? ' (needs verification)'
                     : ' (not configured)'}
               </SelectItem>
+              <SelectItem value="WALLETS">
+                Wallets — JazzCash / Easypaisa
+                {walletLabel(state)}
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -184,7 +202,11 @@ export function RestaurantPaymentProviderCard() {
               disabled={saving}
               className="max-w-sm"
             />
-            <Button type="button" onClick={() => void handleSaveTerminalIp()} disabled={saving}>
+            <Button
+              type="button"
+              onClick={() => void handleSaveTerminalIp()}
+              disabled={saving}
+            >
               Save terminal IP
             </Button>
           </div>
@@ -207,6 +229,20 @@ export function RestaurantPaymentProviderCard() {
             onClick={() => router.push('/settings/payments/stripe')}
           >
             Configure Stripe
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.push('/settings/payments/jazzcash')}
+          >
+            Configure JazzCash
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.push('/settings/payments/easypaisa')}
+          >
+            Configure Easypaisa
           </Button>
         </div>
       </CardContent>

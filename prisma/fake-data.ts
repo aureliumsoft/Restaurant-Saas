@@ -148,6 +148,54 @@ export function fakeRestaurantStripeCredentialsComplete() {
     updatedAt: faker.date.anytime(),
   };
 }
+export function fakeRestaurantJazzCashCredentials() {
+  return {
+    merchantId: faker.lorem.words(5),
+    passwordEnc: faker.lorem.words(5),
+    integritySaltEnc: faker.lorem.words(5),
+    lastVerifiedAt: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeRestaurantJazzCashCredentialsComplete() {
+  return {
+    id: faker.string.uuid(),
+    restaurantId: faker.string.uuid(),
+    merchantId: faker.lorem.words(5),
+    passwordEnc: faker.lorem.words(5),
+    integritySaltEnc: faker.lorem.words(5),
+    mode: 'sandbox',
+    isVerified: false,
+    lastVerifiedAt: undefined,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeRestaurantEasypaisaCredentials() {
+  return {
+    storeId: faker.lorem.words(5),
+    hashKeyEnc: faker.lorem.words(5),
+    username: undefined,
+    passwordEnc: undefined,
+    lastVerifiedAt: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeRestaurantEasypaisaCredentialsComplete() {
+  return {
+    id: faker.string.uuid(),
+    restaurantId: faker.string.uuid(),
+    storeId: faker.lorem.words(5),
+    hashKeyEnc: faker.lorem.words(5),
+    username: undefined,
+    passwordEnc: undefined,
+    mode: 'sandbox',
+    isVerified: false,
+    lastVerifiedAt: undefined,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
 export function fakeRestaurantPayPalIntegration() {
   return {
     trackingId: faker.lorem.words(5),

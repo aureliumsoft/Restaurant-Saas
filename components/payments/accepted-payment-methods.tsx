@@ -26,6 +26,18 @@ export const PAYPAL_PAYMENT: AcceptedPaymentMethod = {
   imageUrl: '/payments/paypal.png',
 };
 
+export const JAZZCASH_PAYMENT: AcceptedPaymentMethod = {
+  id: 'jazzcash',
+  name: 'JazzCash',
+  imageUrl: '/payments/jazzcash.svg',
+};
+
+export const EASYPAISA_PAYMENT: AcceptedPaymentMethod = {
+  id: 'easypaisa',
+  name: 'Easypaisa',
+  imageUrl: '/payments/easypaisa.svg',
+};
+
 /** @deprecated Use ACCEPTED_CARD_PAYMENTS */
 export const ACCEPTED_CARD_BRANDS = ACCEPTED_CARD_PAYMENTS.map((m) => ({
   id: m.id,
@@ -37,6 +49,8 @@ type Props = {
   size?: 'sm' | 'md';
   variant?: 'default' | 'on-dark';
   showPayPal?: boolean;
+  showJazzCash?: boolean;
+  showEasypaisa?: boolean;
   showLabel?: boolean;
   label?: string;
   /** Override default card list */
@@ -86,14 +100,19 @@ export function AcceptedPaymentMethods({
   size = 'md',
   variant = 'default',
   showPayPal = false,
+  showJazzCash = false,
+  showEasypaisa = false,
   showLabel = true,
   label = 'We accept',
   methods = ACCEPTED_CARD_PAYMENTS,
 }: Props) {
   const onDark = variant === 'on-dark';
-  const displayMethods = showPayPal
-    ? [PAYPAL_PAYMENT, ...methods]
-    : methods;
+  const displayMethods = [
+    ...(showPayPal ? [PAYPAL_PAYMENT] : []),
+    ...(showJazzCash ? [JAZZCASH_PAYMENT] : []),
+    ...(showEasypaisa ? [EASYPAISA_PAYMENT] : []),
+    ...methods,
+  ];
   const ariaNames = displayMethods.map((m) => m.name).join(', ');
 
   return (

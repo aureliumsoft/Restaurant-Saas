@@ -19,6 +19,8 @@ import { submitCustomerOrder } from '@/lib/offline/submit-order';
 import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
 import { PayPalCheckoutButtons } from '@/components/payments/paypal-checkout-buttons';
 import { StripeCheckoutButton } from '@/components/payments/stripe-checkout-button';
+import { JazzCashCheckoutButton } from '@/components/payments/jazzcash-checkout-button';
+import { EasypaisaCheckoutButton } from '@/components/payments/easypaisa-checkout-button';
 import { CutleryOption } from '@/components/order/cutlery-option';
 import { OrderPreferencesSummary } from '@/components/order/order-preferences-summary';
 import { useRestaurantServiceCharges } from '@/hooks/use-restaurant-service-charges';
@@ -164,9 +166,13 @@ export default function CheckoutPageClient({
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [paymentConfig, setPaymentConfig] = useState<{
-    provider: 'NONE' | 'PAYPAL' | 'STRIPE';
+    provider: 'NONE' | 'PAYPAL' | 'STRIPE' | 'WALLETS';
     ready: boolean;
     currencyCode?: string;
+    wallets?: {
+      jazzcash?: { ready: true };
+      easypaisa?: { ready: true };
+    };
   } | null>(null);
   const [paymentConfigLoading, setPaymentConfigLoading] = useState(true);
 
@@ -186,9 +192,13 @@ export default function CheckoutPageClient({
         );
         const body = (await res.json().catch(() => ({}))) as {
           data?: {
-            provider?: 'NONE' | 'PAYPAL' | 'STRIPE';
+            provider?: 'NONE' | 'PAYPAL' | 'STRIPE' | 'WALLETS';
             ready?: boolean;
             currencyCode?: string;
+            wallets?: {
+              jazzcash?: { ready: true };
+              easypaisa?: { ready: true };
+            };
           };
         };
         if (!cancelled) {
@@ -198,6 +208,7 @@ export default function CheckoutPageClient({
                   provider: body.data.provider ?? 'NONE',
                   ready: body.data.ready === true,
                   currencyCode: body.data.currencyCode,
+                  wallets: body.data.wallets,
                 }
               : { provider: 'NONE', ready: false }
           );
@@ -323,7 +334,9 @@ export default function CheckoutPageClient({
     }
   };
 
-  const buildPaidOrderPayload = (paymentMethod: 'PayPal' | 'Stripe') => {
+  const buildPaidOrderPayload = (
+    paymentMethod: 'PayPal' | 'Stripe' | 'JazzCash' | 'Easypaisa'
+  ) => {
     const slug = orderInfo?.restaurantSlug?.trim();
     if (!slug) return null;
     return {
@@ -703,11 +716,83 @@ export default function CheckoutPageClient({
                         onProcessingChange={setSubmitting}
                         onError={(msg) => toast.error(msg)}
                       />
+                    ) : paymentConfig?.ready &&
+                      paymentConfig.provider === 'WALLETS' ? (
+                      <div className="space-y-2">
+                        {paymentConfig.wallets?.jazzcash?.ready ? (
+                          <JazzCashCheckoutButton
+                            amount={grandTotal}
+                            currency={
+                              paymentConfig.currencyCode ??
+                              regional.currencyCode
+                            }
+                            restaurantSlug={orderInfo.restaurantSlug}
+                            title={`Online order (${
+                              orderType === 'delivery' ? 'Delivery' : 'Pick-up'
+                            })`}
+                            source="online"
+                            endpoint="/api/customer/orders"
+                            payload={buildPaidOrderPayload('JazzCash')}
+                            metadata={{
+                              source: 'online',
+                              restaurantSlug: orderInfo.restaurantSlug,
+                              orderType,
+                            }}
+                            successPath={`/order/${orderType}/${encodeURIComponent(
+                              orderId
+                            )}/success?orderId={orderId}&restaurantSlug=${encodeURIComponent(
+                              orderInfo.restaurantSlug
+                            )}`}
+                            cancelPath={orderPathWithQuery(
+                              `/order/${orderType}/${encodeURIComponent(
+                                orderId
+                              )}/checkout`,
+                              orderInfo
+                            )}
+                            disabled={submitting}
+                            onProcessingChange={setSubmitting}
+                            onError={(msg) => toast.error(msg)}
+                          />
+                        ) : null}
+                        {paymentConfig.wallets?.easypaisa?.ready ? (
+                          <EasypaisaCheckoutButton
+                            amount={grandTotal}
+                            currency={
+                              paymentConfig.currencyCode ??
+                              regional.currencyCode
+                            }
+                            restaurantSlug={orderInfo.restaurantSlug}
+                            title={`Online order (${
+                              orderType === 'delivery' ? 'Delivery' : 'Pick-up'
+                            })`}
+                            source="online"
+                            endpoint="/api/customer/orders"
+                            payload={buildPaidOrderPayload('Easypaisa')}
+                            metadata={{
+                              source: 'online',
+                              restaurantSlug: orderInfo.restaurantSlug,
+                              orderType,
+                            }}
+                            successPath={`/order/${orderType}/${encodeURIComponent(
+                              orderId
+                            )}/success?orderId={orderId}&restaurantSlug=${encodeURIComponent(
+                              orderInfo.restaurantSlug
+                            )}`}
+                            cancelPath={orderPathWithQuery(
+                              `/order/${orderType}/${encodeURIComponent(orderId)}`,
+                              orderInfo
+                            )}
+                            disabled={submitting}
+                            onProcessingChange={setSubmitting}
+                            onError={(msg) => toast.error(msg)}
+                          />
+                        ) : null}
+                      </div>
                     ) : (
                       <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                        Online card payments are not available for this
-                        restaurant yet. The owner must configure PayPal or
-                        Stripe in settings.
+                        Online payments are not available for this restaurant
+                        yet. The owner must configure PayPal, Stripe, or
+                        JazzCash / Easypaisa wallets in settings.
                       </p>
                     )
                   ) : (

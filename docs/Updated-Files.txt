@@ -1,0 +1,42 @@
+Updated Files (23-7-26)
+
+# Schema / migrations
+prisma/schema.prisma
+prisma/migrations/20260723100000_jazzcash_easypaisa_wallets/migration.sql
+prisma/fake-data.ts
+
+# Libs
+lib/restaurant-payment-credentials.ts
+lib/restaurant-jazzcash-client.ts
+lib/restaurant-easypaisa-client.ts
+lib/wallet-order-intent-sync.ts
+
+# Restaurant payment APIs
+app/api/restaurant/payments/jazzcash/route.ts
+app/api/restaurant/payments/jazzcash/test/route.ts
+app/api/restaurant/payments/easypaisa/route.ts
+app/api/restaurant/payments/easypaisa/test/route.ts
+
+# Customer wallet checkout APIs
+app/api/jazzcash/create-order-checkout/route.ts
+app/api/jazzcash/return/route.ts
+app/api/easypaisa/create-order-checkout/route.ts
+app/api/easypaisa/return/route.ts
+
+# Settings UI
+app/(root)/settings/payments/jazzcash/page.tsx
+app/(root)/settings/payments/easypaisa/page.tsx
+components/setting/components/restaurant-payment-provider-card.tsx
+
+# Checkout UI
+components/order/checkout-page.tsx
+components/payments/jazzcash-checkout-button.tsx
+components/payments/easypaisa-checkout-button.tsx
+components/payments/accepted-payment-methods.tsx
+
+# Assets
+public/payments/jazzcash.svg
+public/payments/easypaisa.svg
+
+
+Next Updated Files (Date)

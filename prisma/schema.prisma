@@ -185,6 +185,8 @@ model Restaurant {
   customerPaymentProvider CustomerPaymentProvider @default(NONE)
   paypalCredentials      RestaurantPayPalCredentials?
   stripeCredentials      RestaurantStripeCredentials?
+  jazzCashCredentials    RestaurantJazzCashCredentials?
+  easypaisaCredentials   RestaurantEasypaisaCredentials?
   posShifts              PosShift[]
 }
 
@@ -192,6 +194,8 @@ enum CustomerPaymentProvider {
   NONE
   PAYPAL
   STRIPE
+  /// JazzCash and/or Easypaisa (customer picks wallet at checkout).
+  WALLETS
 }
 
 /// Restaurant-owned PayPal REST API credentials for customer order payments.
@@ -224,6 +228,41 @@ model RestaurantStripeCredentials {
   mode             String   @default("test")
   isVerified       Boolean  @default(false)
   lastVerifiedAt   DateTime?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Restaurant-owned JazzCash merchant credentials for customer order payments.
+model RestaurantJazzCashCredentials {
+  id               String   @id @default(uuid())
+  restaurantId     String   @unique
+  merchantId       String
+  passwordEnc      String
+  integritySaltEnc String
+  mode             String   @default("sandbox")
+  isVerified       Boolean  @default(false)
+  lastVerifiedAt   DateTime?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Restaurant-owned Easypaisa merchant credentials for customer order payments.
+model RestaurantEasypaisaCredentials {
+  id             String   @id @default(uuid())
+  restaurantId   String   @unique
+  storeId        String
+  hashKeyEnc     String
+  username       String?
+  passwordEnc    String?
+  mode           String   @default("sandbox")
+  isVerified     Boolean  @default(false)
+  lastVerifiedAt DateTime?
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 

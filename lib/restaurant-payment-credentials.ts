@@ -16,6 +16,16 @@ import {
 } from '@/lib/restaurant-regional';
 import { toPayPalCurrencyCode } from '@/lib/format-money';
 import {
+  normalizeEasypaisaMode,
+  toRestaurantEasypaisaRuntimeConfig,
+  type RestaurantEasypaisaRuntimeConfig,
+} from '@/lib/restaurant-easypaisa-client';
+import {
+  normalizeJazzCashMode,
+  toRestaurantJazzCashRuntimeConfig,
+  type RestaurantJazzCashRuntimeConfig,
+} from '@/lib/restaurant-jazzcash-client';
+import {
   normalizePayPalMode,
   toRestaurantPayPalRuntimeConfig,
   type RestaurantPayPalRuntimeConfig,
@@ -52,6 +62,27 @@ export type RestaurantPaymentProviderDto = {
     mode: string | null;
     lastVerifiedAt: string | null;
   };
+  jazzcash: {
+    configured: boolean;
+    verified: boolean;
+    merchantId: string | null;
+    merchantIdMasked: string | null;
+    hasPassword: boolean;
+    hasIntegritySalt: boolean;
+    mode: string | null;
+    lastVerifiedAt: string | null;
+  };
+  easypaisa: {
+    configured: boolean;
+    verified: boolean;
+    storeId: string | null;
+    storeIdMasked: string | null;
+    hasHashKey: boolean;
+    username: string | null;
+    hasPassword: boolean;
+    mode: string | null;
+    lastVerifiedAt: string | null;
+  };
 };
 
 export type PublicRestaurantPaymentConfig = {
@@ -69,6 +100,10 @@ export type PublicRestaurantPaymentConfig = {
     publishableKey: string;
     mode: 'test' | 'live';
     currency: string;
+  };
+  wallets?: {
+    jazzcash?: { ready: true };
+    easypaisa?: { ready: true };
   };
 };
 
@@ -134,6 +169,66 @@ function stripeDto(
   };
 }
 
+function jazzCashDto(
+  row: Awaited<
+    ReturnType<typeof db.restaurantJazzCashCredentials.findUnique>
+  > | null
+) {
+  if (!row) {
+    return {
+      configured: false,
+      verified: false,
+      merchantId: null,
+      merchantIdMasked: null,
+      hasPassword: false,
+      hasIntegritySalt: false,
+      mode: null,
+      lastVerifiedAt: null,
+    };
+  }
+  return {
+    configured: true,
+    verified: row.isVerified,
+    merchantId: row.merchantId,
+    merchantIdMasked: maskSecret(row.merchantId),
+    hasPassword: Boolean(row.passwordEnc),
+    hasIntegritySalt: Boolean(row.integritySaltEnc),
+    mode: row.mode,
+    lastVerifiedAt: row.lastVerifiedAt?.toISOString() ?? null,
+  };
+}
+
+function easypaisaDto(
+  row: Awaited<
+    ReturnType<typeof db.restaurantEasypaisaCredentials.findUnique>
+  > | null
+) {
+  if (!row) {
+    return {
+      configured: false,
+      verified: false,
+      storeId: null,
+      storeIdMasked: null,
+      hasHashKey: false,
+      username: null,
+      hasPassword: false,
+      mode: null,
+      lastVerifiedAt: null,
+    };
+  }
+  return {
+    configured: true,
+    verified: row.isVerified,
+    storeId: row.storeId,
+    storeIdMasked: maskSecret(row.storeId),
+    hasHashKey: Boolean(row.hashKeyEnc),
+    username: row.username,
+    hasPassword: Boolean(row.passwordEnc),
+    mode: row.mode,
+    lastVerifiedAt: row.lastVerifiedAt?.toISOString() ?? null,
+  };
+}
+
 export function isRestaurantPayPalCredentialsReady(
   row: { clientId: string; clientSecretEnc: string; isVerified: boolean } | null
 ): boolean {
@@ -150,6 +245,32 @@ export function isRestaurantStripeCredentialsReady(
   return Boolean(row?.publishableKey && row.secretKeyEnc && row.isVerified);
 }
 
+export function isRestaurantJazzCashCredentialsReady(
+  row: {
+    merchantId: string;
+    passwordEnc: string;
+    integritySaltEnc: string;
+    isVerified: boolean;
+  } | null
+): boolean {
+  return Boolean(
+    row?.merchantId &&
+      row.passwordEnc &&
+      row.integritySaltEnc &&
+      row.isVerified
+  );
+}
+
+export function isRestaurantEasypaisaCredentialsReady(
+  row: {
+    storeId: string;
+    hashKeyEnc: string;
+    isVerified: boolean;
+  } | null
+): boolean {
+  return Boolean(row?.storeId && row.hashKeyEnc && row.isVerified);
+}
+
 export async function getRestaurantPaymentProviderDto(
   restaurantId: string
 ): Promise<RestaurantPaymentProviderDto> {
@@ -160,6 +281,8 @@ export async function getRestaurantPaymentProviderDto(
       paymentTerminalIp: true,
       paypalCredentials: true,
       stripeCredentials: true,
+      jazzCashCredentials: true,
+      easypaisaCredentials: true,
     },
   });
   if (!restaurant) {
@@ -171,6 +294,8 @@ export async function getRestaurantPaymentProviderDto(
     paymentTerminalIp: restaurant.paymentTerminalIp ?? null,
     paypal: paypalDto(restaurant.paypalCredentials),
     stripe: stripeDto(restaurant.stripeCredentials),
+    jazzcash: jazzCashDto(restaurant.jazzCashCredentials),
+    easypaisa: easypaisaDto(restaurant.easypaisaCredentials),
   };
 }
 
@@ -196,6 +321,20 @@ export async function setRestaurantPaymentProvider(
     if (!isRestaurantStripeCredentialsReady(creds)) {
       throw new Error(
         'Save and verify Stripe credentials before activating Stripe.'
+      );
+    }
+  }
+  if (provider === CustomerPaymentProvider.WALLETS) {
+    const [jazz, easy] = await Promise.all([
+      db.restaurantJazzCashCredentials.findUnique({ where: { restaurantId } }),
+      db.restaurantEasypaisaCredentials.findUnique({ where: { restaurantId } }),
+    ]);
+    if (
+      !isRestaurantJazzCashCredentialsReady(jazz) &&
+      !isRestaurantEasypaisaCredentialsReady(easy)
+    ) {
+      throw new Error(
+        'Save and verify JazzCash and/or Easypaisa credentials before activating wallets.'
       );
     }
   }
@@ -325,6 +464,136 @@ export async function getRestaurantStripeRuntimeConfigByRestaurantId(
   });
 }
 
+export async function getRestaurantJazzCashRuntimeConfigBySlug(
+  slug: string
+): Promise<{
+  restaurantId: string;
+  slug: string;
+  provider: CustomerPaymentProvider;
+  config: RestaurantJazzCashRuntimeConfig;
+} | null> {
+  const restaurant = await db.restaurant.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      slug: true,
+      customerPaymentProvider: true,
+      jazzCashCredentials: true,
+    },
+  });
+  if (
+    !restaurant ||
+    restaurant.customerPaymentProvider !== CustomerPaymentProvider.WALLETS ||
+    !isRestaurantJazzCashCredentialsReady(restaurant.jazzCashCredentials)
+  ) {
+    return null;
+  }
+  const creds = restaurant.jazzCashCredentials!;
+  return {
+    restaurantId: restaurant.id,
+    slug: restaurant.slug,
+    provider: restaurant.customerPaymentProvider,
+    config: toRestaurantJazzCashRuntimeConfig({
+      merchantId: creds.merchantId,
+      password: decryptSecret(creds.passwordEnc),
+      integritySalt: decryptSecret(creds.integritySaltEnc),
+      mode: creds.mode,
+    }),
+  };
+}
+
+export async function getRestaurantJazzCashRuntimeConfigByRestaurantId(
+  restaurantId: string
+): Promise<RestaurantJazzCashRuntimeConfig | null> {
+  const restaurant = await db.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: {
+      customerPaymentProvider: true,
+      jazzCashCredentials: true,
+    },
+  });
+  if (
+    !restaurant ||
+    restaurant.customerPaymentProvider !== CustomerPaymentProvider.WALLETS ||
+    !isRestaurantJazzCashCredentialsReady(restaurant.jazzCashCredentials)
+  ) {
+    return null;
+  }
+  const creds = restaurant.jazzCashCredentials!;
+  return toRestaurantJazzCashRuntimeConfig({
+    merchantId: creds.merchantId,
+    password: decryptSecret(creds.passwordEnc),
+    integritySalt: decryptSecret(creds.integritySaltEnc),
+    mode: creds.mode,
+  });
+}
+
+export async function getRestaurantEasypaisaRuntimeConfigBySlug(
+  slug: string
+): Promise<{
+  restaurantId: string;
+  slug: string;
+  provider: CustomerPaymentProvider;
+  config: RestaurantEasypaisaRuntimeConfig;
+} | null> {
+  const restaurant = await db.restaurant.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      slug: true,
+      customerPaymentProvider: true,
+      easypaisaCredentials: true,
+    },
+  });
+  if (
+    !restaurant ||
+    restaurant.customerPaymentProvider !== CustomerPaymentProvider.WALLETS ||
+    !isRestaurantEasypaisaCredentialsReady(restaurant.easypaisaCredentials)
+  ) {
+    return null;
+  }
+  const creds = restaurant.easypaisaCredentials!;
+  return {
+    restaurantId: restaurant.id,
+    slug: restaurant.slug,
+    provider: restaurant.customerPaymentProvider,
+    config: toRestaurantEasypaisaRuntimeConfig({
+      storeId: creds.storeId,
+      hashKey: decryptSecret(creds.hashKeyEnc),
+      username: creds.username,
+      password: creds.passwordEnc ? decryptSecret(creds.passwordEnc) : null,
+      mode: creds.mode,
+    }),
+  };
+}
+
+export async function getRestaurantEasypaisaRuntimeConfigByRestaurantId(
+  restaurantId: string
+): Promise<RestaurantEasypaisaRuntimeConfig | null> {
+  const restaurant = await db.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: {
+      customerPaymentProvider: true,
+      easypaisaCredentials: true,
+    },
+  });
+  if (
+    !restaurant ||
+    restaurant.customerPaymentProvider !== CustomerPaymentProvider.WALLETS ||
+    !isRestaurantEasypaisaCredentialsReady(restaurant.easypaisaCredentials)
+  ) {
+    return null;
+  }
+  const creds = restaurant.easypaisaCredentials!;
+  return toRestaurantEasypaisaRuntimeConfig({
+    storeId: creds.storeId,
+    hashKey: decryptSecret(creds.hashKeyEnc),
+    username: creds.username,
+    password: creds.passwordEnc ? decryptSecret(creds.passwordEnc) : null,
+    mode: creds.mode,
+  });
+}
+
 export async function getPublicRestaurantPaymentConfigBySlug(
   slug: string
 ): Promise<PublicRestaurantPaymentConfig | null> {
@@ -334,6 +603,8 @@ export async function getPublicRestaurantPaymentConfigBySlug(
       customerPaymentProvider: true,
       paypalCredentials: true,
       stripeCredentials: true,
+      jazzCashCredentials: true,
+      easypaisaCredentials: true,
       ...RESTAURANT_REGIONAL_DB_SELECT,
     },
   });
@@ -401,6 +672,25 @@ export async function getPublicRestaurantPaymentConfigBySlug(
         ),
         currency: restaurantCurrency,
       },
+    };
+  }
+
+  if (provider === CustomerPaymentProvider.WALLETS) {
+    const jazzReady = isRestaurantJazzCashCredentialsReady(
+      restaurant.jazzCashCredentials
+    );
+    const easyReady = isRestaurantEasypaisaCredentialsReady(
+      restaurant.easypaisaCredentials
+    );
+    const wallets: PublicRestaurantPaymentConfig['wallets'] = {};
+    if (jazzReady) wallets.jazzcash = { ready: true };
+    if (easyReady) wallets.easypaisa = { ready: true };
+    return {
+      provider,
+      ready: jazzReady || easyReady,
+      currencyCode: restaurantCurrency,
+      countryCode: restaurantCountry,
+      wallets: jazzReady || easyReady ? wallets : undefined,
     };
   }
 
@@ -520,6 +810,103 @@ export async function upsertRestaurantStripeCredentials(params: {
   return stripeDto(row);
 }
 
+export async function upsertRestaurantJazzCashCredentials(params: {
+  restaurantId: string;
+  merchantId: string;
+  password?: string;
+  integritySalt?: string;
+  mode: string;
+  isVerified: boolean;
+}) {
+  const existing = await db.restaurantJazzCashCredentials.findUnique({
+    where: { restaurantId: params.restaurantId },
+  });
+  const password =
+    params.password?.trim() ||
+    (existing ? decryptSecret(existing.passwordEnc) : '');
+  const integritySalt =
+    params.integritySalt?.trim() ||
+    (existing ? decryptSecret(existing.integritySaltEnc) : '');
+  if (!password) throw new Error('Password is required.');
+  if (!integritySalt) throw new Error('Integrity salt is required.');
+
+  const row = await db.restaurantJazzCashCredentials.upsert({
+    where: { restaurantId: params.restaurantId },
+    create: {
+      restaurantId: params.restaurantId,
+      merchantId: params.merchantId.trim(),
+      passwordEnc: encryptSecret(password),
+      integritySaltEnc: encryptSecret(integritySalt),
+      mode: normalizeJazzCashMode(params.mode),
+      isVerified: params.isVerified,
+      lastVerifiedAt: params.isVerified ? new Date() : null,
+    },
+    update: {
+      merchantId: params.merchantId.trim(),
+      passwordEnc: encryptSecret(password),
+      integritySaltEnc: encryptSecret(integritySalt),
+      mode: normalizeJazzCashMode(params.mode),
+      isVerified: params.isVerified,
+      lastVerifiedAt: params.isVerified ? new Date() : null,
+    },
+  });
+  return jazzCashDto(row);
+}
+
+export async function upsertRestaurantEasypaisaCredentials(params: {
+  restaurantId: string;
+  storeId: string;
+  hashKey?: string;
+  username?: string | null;
+  password?: string | null;
+  mode: string;
+  isVerified: boolean;
+}) {
+  const existing = await db.restaurantEasypaisaCredentials.findUnique({
+    where: { restaurantId: params.restaurantId },
+  });
+  const hashKey =
+    params.hashKey?.trim() ||
+    (existing ? decryptSecret(existing.hashKeyEnc) : '');
+  if (!hashKey) throw new Error('Hash key is required.');
+
+  const password =
+    params.password === undefined
+      ? existing?.passwordEnc
+        ? decryptSecret(existing.passwordEnc)
+        : null
+      : params.password?.trim() || null;
+
+  const username =
+    params.username === undefined
+      ? existing?.username ?? null
+      : params.username?.trim() || null;
+
+  const row = await db.restaurantEasypaisaCredentials.upsert({
+    where: { restaurantId: params.restaurantId },
+    create: {
+      restaurantId: params.restaurantId,
+      storeId: params.storeId.trim(),
+      hashKeyEnc: encryptSecret(hashKey),
+      username,
+      passwordEnc: password ? encryptSecret(password) : null,
+      mode: normalizeEasypaisaMode(params.mode),
+      isVerified: params.isVerified,
+      lastVerifiedAt: params.isVerified ? new Date() : null,
+    },
+    update: {
+      storeId: params.storeId.trim(),
+      hashKeyEnc: encryptSecret(hashKey),
+      username,
+      passwordEnc: password ? encryptSecret(password) : null,
+      mode: normalizeEasypaisaMode(params.mode),
+      isVerified: params.isVerified,
+      lastVerifiedAt: params.isVerified ? new Date() : null,
+    },
+  });
+  return easypaisaDto(row);
+}
+
 export async function deleteRestaurantPayPalCredentials(restaurantId: string) {
   await db.restaurantPayPalCredentials.deleteMany({ where: { restaurantId } });
   await db.restaurant.updateMany({
@@ -540,4 +927,40 @@ export async function deleteRestaurantStripeCredentials(restaurantId: string) {
     },
     data: { customerPaymentProvider: CustomerPaymentProvider.NONE },
   });
+}
+
+async function maybeDisableWalletsIfNoneReady(restaurantId: string) {
+  const [jazz, easy] = await Promise.all([
+    db.restaurantJazzCashCredentials.findUnique({ where: { restaurantId } }),
+    db.restaurantEasypaisaCredentials.findUnique({ where: { restaurantId } }),
+  ]);
+  if (
+    isRestaurantJazzCashCredentialsReady(jazz) ||
+    isRestaurantEasypaisaCredentialsReady(easy)
+  ) {
+    return;
+  }
+  await db.restaurant.updateMany({
+    where: {
+      id: restaurantId,
+      customerPaymentProvider: CustomerPaymentProvider.WALLETS,
+    },
+    data: { customerPaymentProvider: CustomerPaymentProvider.NONE },
+  });
+}
+
+export async function deleteRestaurantJazzCashCredentials(
+  restaurantId: string
+) {
+  await db.restaurantJazzCashCredentials.deleteMany({ where: { restaurantId } });
+  await maybeDisableWalletsIfNoneReady(restaurantId);
+}
+
+export async function deleteRestaurantEasypaisaCredentials(
+  restaurantId: string
+) {
+  await db.restaurantEasypaisaCredentials.deleteMany({
+    where: { restaurantId },
+  });
+  await maybeDisableWalletsIfNoneReady(restaurantId);
 }
