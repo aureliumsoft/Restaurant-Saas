@@ -15,6 +15,7 @@ const bodySchema = z.object({
   merchantId: z.string().min(2).max(100).optional(),
   password: z.string().min(2).max(200).optional(),
   integritySalt: z.string().min(2).max(200).optional(),
+  returnUrl: z.string().url().max(500).optional(),
   mode: z.enum(['sandbox', 'live']).optional(),
 });
 
@@ -51,6 +52,10 @@ export async function POST(req: Request) {
     parsed.data.integritySalt?.trim() ||
     (existing ? decryptSecret(existing.integritySaltEnc) : '');
   const mode = parsed.data.mode ?? existing?.mode ?? 'sandbox';
+  const returnUrl =
+    parsed.data.returnUrl?.trim() ||
+    existing?.returnUrl ||
+    undefined;
 
   if (!merchantId || !password || !integritySalt) {
     return NextResponse.json(
@@ -68,6 +73,7 @@ export async function POST(req: Request) {
       password,
       integritySalt,
       mode,
+      returnUrl,
     });
     testRestaurantJazzCashCredentials(runtime);
     return NextResponse.json({ ok: true });

@@ -29,11 +29,19 @@ const bodySchema = z.object({
 });
 
 function makeTxnRefNo(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const stamp =
-    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
-    `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Karachi',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '00';
+  const stamp = `${get('year')}${get('month')}${get('day')}${get('hour')}${get('minute')}${get('second')}`;
   const rand = Math.floor(Math.random() * 900 + 100);
   return `T${stamp}${rand}`.slice(0, 20);
 }
@@ -82,7 +90,7 @@ export async function POST(req: NextRequest) {
   const origin = await getRequestOrigin();
   let returnUrl: string;
   try {
-    returnUrl = resolveJazzCashReturnUrl(origin);
+    returnUrl = resolveJazzCashReturnUrl(origin, row.config.returnUrl);
   } catch (e) {
     const msg =
       e instanceof Error ? e.message : 'Invalid JazzCash return URL configuration.';
@@ -133,6 +141,16 @@ export async function POST(req: NextRequest) {
       description: parsed.data.title ?? 'Order payment',
       returnUrl,
       txnRefNo,
+    });
+
+    console.info('[jazzcash] checkout prepared', {
+      mode: row.config.mode,
+      merchantId: row.config.merchantId,
+      returnUrl,
+      txnRefNo,
+      amount: checkout.fields.pp_Amount,
+      gatewayUrl: checkout.gatewayUrl,
+      fieldKeys: Object.keys(checkout.fields).sort(),
     });
 
     return NextResponse.json(

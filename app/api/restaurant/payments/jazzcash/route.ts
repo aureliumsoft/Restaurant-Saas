@@ -9,6 +9,8 @@ import {
   upsertRestaurantJazzCashCredentials,
 } from '@/lib/restaurant-payment-credentials';
 import {
+  getDefaultJazzCashReturnUrl,
+  normalizeJazzCashReturnUrlExact,
   testRestaurantJazzCashCredentials,
   toRestaurantJazzCashRuntimeConfig,
 } from '@/lib/restaurant-jazzcash-client';
@@ -20,6 +22,7 @@ const bodySchema = z.object({
   merchantId: z.string().min(2).max(100),
   password: z.string().min(2).max(200).optional(),
   integritySalt: z.string().min(2).max(200).optional(),
+  returnUrl: z.string().url().max(500).optional(),
   mode: z.enum(['sandbox', 'live']).optional(),
 });
 
@@ -28,7 +31,12 @@ export async function GET() {
   if (!session.ok) return session.response;
 
   const data = await getRestaurantPaymentProviderDto(session.ctx.restaurant.id);
-  return NextResponse.json({ data: data.jazzcash });
+  return NextResponse.json({
+    data: {
+      ...data.jazzcash,
+      defaultReturnUrl: getDefaultJazzCashReturnUrl(),
+    },
+  });
 }
 
 export async function PUT(req: Request) {
@@ -63,11 +71,18 @@ export async function PUT(req: Request) {
       );
     }
 
+    const returnUrl = parsed.data.returnUrl
+      ? normalizeJazzCashReturnUrlExact(parsed.data.returnUrl)
+      : existing?.returnUrl
+        ? normalizeJazzCashReturnUrlExact(existing.returnUrl)
+        : getDefaultJazzCashReturnUrl();
+
     const runtime = toRestaurantJazzCashRuntimeConfig({
       merchantId: parsed.data.merchantId,
       password,
       integritySalt,
       mode: parsed.data.mode,
+      returnUrl,
     });
     testRestaurantJazzCashCredentials(runtime);
 
@@ -76,10 +91,13 @@ export async function PUT(req: Request) {
       merchantId: parsed.data.merchantId,
       password: parsed.data.password,
       integritySalt: parsed.data.integritySalt,
+      returnUrl,
       mode: runtime.mode,
       isVerified: true,
     });
-    return NextResponse.json({ data: jazzcash });
+    return NextResponse.json({
+      data: { ...jazzcash, defaultReturnUrl: getDefaultJazzCashReturnUrl() },
+    });
   } catch (e) {
     const msg =
       e instanceof Error ? e.message : 'Could not save JazzCash credentials.';

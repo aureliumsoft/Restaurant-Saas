@@ -242,6 +242,10 @@ model RestaurantJazzCashCredentials {
   merchantId       String
   passwordEnc      String
   integritySaltEnc String
+  /// Exact Return URL from JazzCash Credential Generator (merchant auth).
+  /// Must match pp_ReturnURL on every checkout or JazzCash rejects with
+  /// "insufficient merchant information".
+  returnUrl        String?
   mode             String   @default("sandbox")
   isVerified       Boolean  @default(false)
   lastVerifiedAt   DateTime?

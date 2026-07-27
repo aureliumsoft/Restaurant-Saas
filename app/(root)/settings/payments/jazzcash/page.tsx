@@ -35,6 +35,8 @@ type JazzCashFormState = {
   merchantId: string;
   password: string;
   integritySalt: string;
+  returnUrl: string;
+  defaultReturnUrl: string;
   mode: 'sandbox' | 'live';
   hasPassword: boolean;
   hasIntegritySalt: boolean;
@@ -50,6 +52,8 @@ export default function JazzCashCredentialsPage() {
     merchantId: '',
     password: '',
     integritySalt: '',
+    returnUrl: '',
+    defaultReturnUrl: 'https://foodluk.com/api/jazzcash/return',
     mode: 'sandbox',
     hasPassword: false,
     hasIntegritySalt: false,
@@ -63,6 +67,8 @@ export default function JazzCashCredentialsPage() {
         const res = await axios.get<{
           data?: {
             merchantId?: string | null;
+            returnUrl?: string | null;
+            defaultReturnUrl?: string | null;
             mode?: string | null;
             hasPassword?: boolean;
             hasIntegritySalt?: boolean;
@@ -71,9 +77,14 @@ export default function JazzCashCredentialsPage() {
         }>('/api/restaurant/payments/jazzcash');
         const data = res.data?.data;
         if (!cancelled && data) {
+          const defaultReturnUrl =
+            data.defaultReturnUrl?.trim() ||
+            'https://foodluk.com/api/jazzcash/return';
           setForm((prev) => ({
             ...prev,
             merchantId: data.merchantId ?? '',
+            returnUrl: data.returnUrl?.trim() || defaultReturnUrl,
+            defaultReturnUrl,
             mode: data.mode === 'live' ? 'live' : 'sandbox',
             hasPassword: data.hasPassword === true,
             hasIntegritySalt: data.hasIntegritySalt === true,
@@ -101,6 +112,7 @@ export default function JazzCashCredentialsPage() {
           merchantId: form.merchantId,
           password: form.password || undefined,
           integritySalt: form.integritySalt || undefined,
+          returnUrl: form.returnUrl || undefined,
           mode: form.mode,
         },
         { validateStatus: (status) => status < 500 }
@@ -134,6 +146,7 @@ export default function JazzCashCredentialsPage() {
         merchantId: form.merchantId,
         password: form.password || undefined,
         integritySalt: form.integritySalt || undefined,
+        returnUrl: form.returnUrl,
         mode: form.mode,
       });
       const data = res.data?.data;
@@ -141,6 +154,7 @@ export default function JazzCashCredentialsPage() {
         ...prev,
         password: '',
         integritySalt: '',
+        returnUrl: data?.returnUrl ?? prev.returnUrl,
         hasPassword: data?.hasPassword === true,
         hasIntegritySalt: data?.hasIntegritySalt === true,
         verified: data?.verified === true,
@@ -164,15 +178,17 @@ export default function JazzCashCredentialsPage() {
     }
     try {
       await axios.delete('/api/restaurant/payments/jazzcash');
-      setForm({
+      setForm((prev) => ({
         merchantId: '',
         password: '',
         integritySalt: '',
+        returnUrl: prev.defaultReturnUrl,
+        defaultReturnUrl: prev.defaultReturnUrl,
         mode: 'sandbox',
         hasPassword: false,
         hasIntegritySalt: false,
         verified: false,
-      });
+      }));
       setTestStatus('idle');
       toast.success('JazzCash credentials removed.');
     } catch {
@@ -224,17 +240,33 @@ export default function JazzCashCredentialsPage() {
           </p>
 
           <p className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-            In the JazzCash Credential Generator, set Return URL to your full
-            public callback URL, for example{' '}
-            <span className="font-mono">
-              https://foodluk.com/api/jazzcash/return
-            </span>
-            . Do not use only{' '}
-            <span className="font-mono">foodluk.com</span>. For local
-            development, also set{' '}
-            <span className="font-mono">JAZZCASH_RETURN_URL</span> in{' '}
-            <span className="font-mono">.env</span> to the same public URL.
+            In JazzCash Merchant Portal → Credential Generator, set Return URL
+            to exactly{' '}
+            <span className="font-mono break-all">{form.defaultReturnUrl}</span>
+            , then generate Merchant ID, Password, and Integrity Salt on that
+            same screen. Paste the same Return URL below. A mismatch causes{' '}
+            <em>&quot;insufficient merchant information&quot;</em>. Use sandbox
+            credentials with Mode = Sandbox (live credentials fail on sandbox).
           </p>
+
+          <div className="space-y-2">
+            <Label htmlFor="jc-return-url">Return URL (from JazzCash portal)</Label>
+            <Input
+              id="jc-return-url"
+              value={form.returnUrl}
+              onChange={(e) => {
+                setTestStatus('idle');
+                setForm((prev) => ({ ...prev, returnUrl: e.target.value }));
+              }}
+              placeholder={form.defaultReturnUrl}
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground">
+              Must be identical to the Return URL used when you generated these
+              credentials. Recommended:{' '}
+              <span className="font-mono break-all">{form.defaultReturnUrl}</span>
+            </p>
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="jc-merchant-id">Merchant ID</Label>

@@ -153,6 +153,7 @@ export function fakeRestaurantJazzCashCredentials() {
     merchantId: faker.lorem.words(5),
     passwordEnc: faker.lorem.words(5),
     integritySaltEnc: faker.lorem.words(5),
+    returnUrl: undefined,
     lastVerifiedAt: undefined,
     updatedAt: faker.date.anytime(),
   };
@@ -164,6 +165,7 @@ export function fakeRestaurantJazzCashCredentialsComplete() {
     merchantId: faker.lorem.words(5),
     passwordEnc: faker.lorem.words(5),
     integritySaltEnc: faker.lorem.words(5),
+    returnUrl: undefined,
     mode: 'sandbox',
     isVerified: false,
     lastVerifiedAt: undefined,

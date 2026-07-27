@@ -69,6 +69,7 @@ export type RestaurantPaymentProviderDto = {
     merchantIdMasked: string | null;
     hasPassword: boolean;
     hasIntegritySalt: boolean;
+    returnUrl: string | null;
     mode: string | null;
     lastVerifiedAt: string | null;
   };
@@ -182,6 +183,7 @@ function jazzCashDto(
       merchantIdMasked: null,
       hasPassword: false,
       hasIntegritySalt: false,
+      returnUrl: null,
       mode: null,
       lastVerifiedAt: null,
     };
@@ -193,6 +195,7 @@ function jazzCashDto(
     merchantIdMasked: maskSecret(row.merchantId),
     hasPassword: Boolean(row.passwordEnc),
     hasIntegritySalt: Boolean(row.integritySaltEnc),
+    returnUrl: row.returnUrl ?? null,
     mode: row.mode,
     lastVerifiedAt: row.lastVerifiedAt?.toISOString() ?? null,
   };
@@ -498,6 +501,7 @@ export async function getRestaurantJazzCashRuntimeConfigBySlug(
       password: decryptSecret(creds.passwordEnc),
       integritySalt: decryptSecret(creds.integritySaltEnc),
       mode: creds.mode,
+      returnUrl: creds.returnUrl,
     }),
   };
 }
@@ -525,6 +529,7 @@ export async function getRestaurantJazzCashRuntimeConfigByRestaurantId(
     password: decryptSecret(creds.passwordEnc),
     integritySalt: decryptSecret(creds.integritySaltEnc),
     mode: creds.mode,
+    returnUrl: creds.returnUrl,
   });
 }
 
@@ -815,6 +820,7 @@ export async function upsertRestaurantJazzCashCredentials(params: {
   merchantId: string;
   password?: string;
   integritySalt?: string;
+  returnUrl?: string | null;
   mode: string;
   isVerified: boolean;
 }) {
@@ -830,6 +836,11 @@ export async function upsertRestaurantJazzCashCredentials(params: {
   if (!password) throw new Error('Password is required.');
   if (!integritySalt) throw new Error('Integrity salt is required.');
 
+  const returnUrl =
+    params.returnUrl === undefined
+      ? existing?.returnUrl ?? null
+      : params.returnUrl?.trim() || null;
+
   const row = await db.restaurantJazzCashCredentials.upsert({
     where: { restaurantId: params.restaurantId },
     create: {
@@ -837,6 +848,7 @@ export async function upsertRestaurantJazzCashCredentials(params: {
       merchantId: params.merchantId.trim(),
       passwordEnc: encryptSecret(password),
       integritySaltEnc: encryptSecret(integritySalt),
+      returnUrl,
       mode: normalizeJazzCashMode(params.mode),
       isVerified: params.isVerified,
       lastVerifiedAt: params.isVerified ? new Date() : null,
@@ -845,6 +857,7 @@ export async function upsertRestaurantJazzCashCredentials(params: {
       merchantId: params.merchantId.trim(),
       passwordEnc: encryptSecret(password),
       integritySaltEnc: encryptSecret(integritySalt),
+      returnUrl,
       mode: normalizeJazzCashMode(params.mode),
       isVerified: params.isVerified,
       lastVerifiedAt: params.isVerified ? new Date() : null,

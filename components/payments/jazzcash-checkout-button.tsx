@@ -12,12 +12,17 @@ function submitHostedForm(
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = gatewayUrl;
+  form.acceptCharset = 'UTF-8';
   form.style.display = 'none';
   for (const [key, value] of Object.entries(fields)) {
+    // Never post empty optional fields — JazzCash can reject merchant lookup.
+    if (value === undefined || value === null || String(value).length === 0) {
+      continue;
+    }
     const input = document.createElement('input');
     input.type = 'hidden';
     input.name = key;
-    input.value = value;
+    input.value = String(value);
     form.appendChild(input);
   }
   document.body.appendChild(form);
