@@ -27,6 +27,7 @@ import { RestaurantBrandingProvider } from "@/components/layout/restaurant-brand
  * React commit as a layout swap (e.g. dashboard → /pos). That combination
  * has triggered DOM/removeChild races with the App Router.
  */
+
 function DeferredVercelMetrics() {
   const [ready, setReady] = useState(false);
   useEffect(() => {

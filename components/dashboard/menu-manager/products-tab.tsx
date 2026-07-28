@@ -6,7 +6,9 @@ import axios from 'axios';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import {
+  Download,
   ListFilter,
+  Loader2,
   Pencil,
   Plus,
   Search,
@@ -170,6 +172,7 @@ export function ProductsTab({
     totalPages: 1,
   });
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingProduct, setDeletingProduct] = useState<MenuItemRow | null>(
     null
@@ -311,6 +314,47 @@ export function ProductsTab({
     await loadProducts();
   };
 
+  const exportProductsExcel = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (categoryFilter !== ALL_CATEGORIES) {
+        params.set('categoryId', categoryFilter);
+      }
+      const qs = params.toString();
+      const res = await fetch(
+        `/api/restaurant/menu/products/export${qs ? `?${qs}` : ''}`
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error || 'Export failed');
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename =
+        match?.[1] || `products-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Products exported to Excel');
+    } catch (e: unknown) {
+      toast.error(
+        e instanceof Error ? e.message : 'Could not export products'
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const remove = async () => {
     if (!deletingProduct) return;
     setDeleting(true);
@@ -353,10 +397,25 @@ export function ProductsTab({
     <DashboardCard>
       <DashboardCardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <DashboardCardTitle>Products</DashboardCardTitle>
-        <InventoryQuickActions
-          onMenuRefresh={refreshAll}
-          className="flex flex-wrap gap-2"
-        />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void exportProductsExcel()}
+            disabled={exporting || noCategories}
+          >
+            {exporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            Export Excel
+          </Button>
+          <InventoryQuickActions
+            onMenuRefresh={refreshAll}
+            className="flex flex-wrap gap-2"
+          />
+        </div>
       </DashboardCardHeader>
       <DashboardCardContent className="space-y-4 pt-4">
         {noCategories ? (
