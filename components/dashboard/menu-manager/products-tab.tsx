@@ -13,6 +13,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Upload,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -173,6 +174,7 @@ export function ProductsTab({
   });
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingProduct, setDeletingProduct] = useState<MenuItemRow | null>(
     null
@@ -181,6 +183,7 @@ export function ProductsTab({
 
   const requestIdRef = useRef(0);
   const cacheRef = useRef<Map<string, CachedPage>>(new Map());
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const categoriesRef = useRef(categories);
   categoriesRef.current = categories;
 
@@ -355,6 +358,49 @@ export function ProductsTab({
     }
   };
 
+  const importProductsExcel = async (file: File) => {
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.set('file', file);
+      const res = await fetch('/api/restaurant/menu/products/import', {
+        method: 'POST',
+        body: formData,
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        details?: string[];
+        data?: {
+          products: number;
+          createdProducts: number;
+          updatedProducts: number;
+          variations: number;
+          recommendations: number;
+          offers: number;
+          personalizeGroups: number;
+          personalizeOptions: number;
+        };
+      };
+      if (!res.ok) {
+        const detail = body.details?.slice(0, 5).join(' | ');
+        throw new Error(
+          detail ? `${body.error ?? 'Import failed'}: ${detail}` : body.error ?? 'Import failed'
+        );
+      }
+      toast.success(
+        `Imported ${body.data?.products ?? 0} products (${body.data?.createdProducts ?? 0} new, ${body.data?.updatedProducts ?? 0} updated)`
+      );
+      await refreshAll();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Could not import products');
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) {
+        importInputRef.current.value = '';
+      }
+    }
+  };
+
   const remove = async () => {
     if (!deletingProduct) return;
     setDeleting(true);
@@ -398,6 +444,30 @@ export function ProductsTab({
       <DashboardCardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <DashboardCardTitle>Products</DashboardCardTitle>
         <div className="flex flex-wrap gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              void importProductsExcel(file);
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing || noCategories}
+          >
+            {importing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="mr-2 h-4 w-4" />
+            )}
+            Import Excel
+          </Button>
           <Button
             type="button"
             variant="outline"
