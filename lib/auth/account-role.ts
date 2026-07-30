@@ -9,7 +9,7 @@ export type AccountRoleForLegacy = {
 /** JWT/session legacy string derived from `User.accountRole` (Role row). */
 export function legacyRoleFromAccountRole(
   role: AccountRoleForLegacy
-): 'ADMIN' | 'OWNER' | 'WORKER' | 'UNKNOW' {
+): 'ADMIN' | 'OWNER' | 'WORKER' | 'USER' | 'UNKNOW' {
   if (!role) return 'UNKNOW';
   const { slug, name, restaurantId } = role;
 
@@ -28,6 +28,13 @@ export function legacyRoleFromAccountRole(
     (name === 'Worker' && restaurantId === null)
   ) {
     return 'WORKER';
+  }
+
+  if (
+    slug === GLOBAL_ROLE_SLUG.CUSTOMER_USER ||
+    (name === 'User' && restaurantId === null)
+  ) {
+    return 'USER';
   }
 
   if (slug === 'admin') return 'WORKER';

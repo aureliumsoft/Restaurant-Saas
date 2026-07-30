@@ -109,8 +109,8 @@ export const authOptions: NextAuthOptions = {
             .slice(2, 6)}`;
 
           await ensureGlobalSignupRolesExist();
-          const pendingOwnerId = await getGlobalRoleIdBySlug(
-            GLOBAL_ROLE_SLUG.PENDING_OWNER
+          const defaultUserRoleId = await getGlobalRoleIdBySlug(
+            GLOBAL_ROLE_SLUG.CUSTOMER_USER
           );
 
           await db.user.create({
@@ -119,7 +119,7 @@ export const authOptions: NextAuthOptions = {
               username,
               email,
               image: picture ?? null,
-              roleId: pendingOwnerId,
+              roleId: defaultUserRoleId,
             },
           });
         }

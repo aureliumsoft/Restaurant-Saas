@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { db } from '@/lib/db';
 import { hashPassword, isStrongPassword } from '@/lib/auth/password';
-import { REGISTER_ROLE_SLUG } from '@/lib/global-roles';
+import { GLOBAL_ROLE_SLUG, REGISTER_ROLE_SLUG, getGlobalRoleIdBySlug } from '@/lib/global-roles';
 
 const signupSchema = z.object({
   name: z
@@ -22,8 +22,9 @@ const signupSchema = z.object({
     .min(8, 'Password must be at least 8 characters.')
     .max(200, 'Password must be at most 200 characters.'),
   roleId: z
-    .string({ required_error: 'Role is required.' })
-    .uuid('Select a valid role.'),
+    .string()
+    .uuid('Select a valid role.')
+    .optional(),
 });
 
 export async function POST(req: Request) {
@@ -48,19 +49,31 @@ export async function POST(req: Request) {
   }
 
   const allowedSlugs = new Set(Object.values(REGISTER_ROLE_SLUG));
-  const accountRole = await db.role.findFirst({
-    where: {
-      id: roleId,
-      restaurantId: null,
-      slug: { in: [...allowedSlugs] },
-    },
-    select: { id: true },
-  });
-  if (!accountRole) {
-    return NextResponse.json(
-      { error: 'Invalid or unavailable role selected.' },
-      { status: 400 }
-    );
+  let resolvedRoleId: string | null = null;
+  if (roleId) {
+    const accountRole = await db.role.findFirst({
+      where: {
+        id: roleId,
+        restaurantId: null,
+        slug: { in: [...allowedSlugs] },
+      },
+      select: { id: true },
+    });
+    if (!accountRole) {
+      return NextResponse.json(
+        { error: 'Invalid or unavailable role selected.' },
+        { status: 400 }
+      );
+    }
+    resolvedRoleId = accountRole.id;
+  } else {
+    resolvedRoleId = await getGlobalRoleIdBySlug(GLOBAL_ROLE_SLUG.CUSTOMER_USER);
+    if (!resolvedRoleId) {
+      return NextResponse.json(
+        { error: 'Default User role is missing. Run seed.' },
+        { status: 503 }
+      );
+    }
   }
 
   const passwordHash = await hashPassword(password);
@@ -71,7 +84,7 @@ export async function POST(req: Request) {
       username,
       email,
       password: passwordHash,
-      roleId: accountRole.id,
+      roleId: resolvedRoleId,
       image: null,
       emailVerified: new Date(),
     },

@@ -5,6 +5,7 @@ export const GLOBAL_ROLE_SLUG = {
   PLATFORM_ADMIN: 'platform_admin',
   PENDING_OWNER: 'pending_owner',
   PENDING_WORKER: 'pending_worker',
+  CUSTOMER_USER: 'customer_user',
 } as const;
 
 /** Global roles offered on `/register` (pending until onboarding or invite). */
