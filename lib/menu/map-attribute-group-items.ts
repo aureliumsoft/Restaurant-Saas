@@ -2,7 +2,7 @@ type LinkedItem = {
   id: string;
   name: string;
   description?: string | null;
-  imageUrl: string | null;
+  imageUrl?: string | null;
   price: number;
   salePrice: number | null;
   attributeGroups?: AttributeGroupSource[] | null;

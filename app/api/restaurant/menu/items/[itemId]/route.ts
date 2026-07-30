@@ -13,8 +13,13 @@ import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 import {
   buildCustomerMenuAttributeGroupsSelect,
   customerMenuItemCoreSelect,
+  customerMenuLinkedItemCoreSelect,
 } from "@/lib/menu/customer-menu-attribute-groups-select";
 import { personalizeGroupsSelect } from "@/lib/menu/personalize-groups-select";
+import {
+  hasImageByMenuItemIds,
+  restaurantMenuItemImageUrl,
+} from "@/lib/menu/menu-item-image-utils";
 
 const detailSelect = {
   ...customerMenuItemCoreSelect,
@@ -42,6 +47,32 @@ const detailSelect = {
   },
 } as const;
 
+/** POS customize: same shape, no embedded image blobs. */
+const liteDetailSelect = {
+  ...customerMenuLinkedItemCoreSelect,
+  categoryId: true,
+  createdAt: true,
+  updatedAt: true,
+  attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
+  personalizeGroups: personalizeGroupsSelect,
+  offersFromThis: {
+    orderBy: { sortOrder: "asc" as const },
+    select: {
+      id: true,
+      sortOrder: true,
+      offeredItem: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          price: true,
+          salePrice: true,
+        },
+      },
+    },
+  },
+} as const;
+
 export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ itemId: string }> }
@@ -55,15 +86,54 @@ export async function GET(
   }
 
   const { itemId } = await ctx.params;
+  const lite = req.nextUrl.searchParams.get("lite") === "1";
   const item = await db.menuItem.findFirst({
     where: { id: itemId, restaurantId: auth.restaurant.id },
-    select: detailSelect,
+    select: lite ? liteDetailSelect : detailSelect,
   });
   if (!item) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
   const categoryIds = await getMenuItemCategoryIds(itemId);
+
+  if (lite) {
+    const offerIds = (item.offersFromThis ?? [])
+      .map((o) => o.offeredItem?.id)
+      .filter((id): id is string => Boolean(id));
+    const imageFlags = await hasImageByMenuItemIds([itemId, ...offerIds]);
+    const hasImage = imageFlags.get(itemId) ?? false;
+    const lazyImage = hasImage ? restaurantMenuItemImageUrl(itemId) : null;
+
+    return NextResponse.json(
+      {
+        data: {
+          ...item,
+          hasImage,
+          imageUrl: lazyImage,
+          categoryIds:
+            categoryIds.length > 0 ? categoryIds : [item.categoryId],
+          createdAt: item.createdAt.toISOString(),
+          updatedAt: item.updatedAt.toISOString(),
+          offersFromThis: (item.offersFromThis ?? []).map((row) => {
+            const oid = row.offeredItem?.id;
+            if (!oid || !row.offeredItem) return row;
+            const oh = imageFlags.get(oid) ?? false;
+            return {
+              ...row,
+              offeredItem: {
+                ...row.offeredItem,
+                hasImage: oh,
+                imageUrl: oh ? restaurantMenuItemImageUrl(oid) : null,
+              },
+            };
+          }),
+        },
+      },
+      { status: 200 }
+    );
+  }
+
   return NextResponse.json(
     {
       data: {

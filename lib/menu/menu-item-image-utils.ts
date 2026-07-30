@@ -8,13 +8,17 @@ export async function hasImageByMenuItemIds(
 
   for (const id of ids) map.set(id, false);
 
+  // Select only ids — never pull imageUrl blobs just to test presence.
   const rows = await db.menuItem.findMany({
-    where: { id: { in: ids }, NOT: { imageUrl: null } },
-    select: { id: true, imageUrl: true },
+    where: {
+      id: { in: ids },
+      AND: [{ imageUrl: { not: null } }, { NOT: { imageUrl: '' } }],
+    },
+    select: { id: true },
   });
 
   for (const row of rows) {
-    map.set(row.id, Boolean(row.imageUrl?.trim()));
+    map.set(row.id, true);
   }
   return map;
 }

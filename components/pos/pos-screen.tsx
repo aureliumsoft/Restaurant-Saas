@@ -123,6 +123,7 @@ import {
   cartPersonalizeSelectionNames,
 } from '@/lib/cart-line-display';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
+import { restaurantMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
@@ -986,7 +987,11 @@ export function PosScreen() {
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
     return customizeProduct.attributeGroups.map((g) =>
-      buildCustomerAttributeGroup(g, customizeProduct.id)
+      buildCustomerAttributeGroup(
+        g,
+        customizeProduct.id,
+        restaurantMenuItemImageUrl
+      )
     );
   }, [customizeProduct]);
 

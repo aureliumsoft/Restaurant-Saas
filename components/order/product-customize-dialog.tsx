@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { ConfigurationSelectSummary } from '@/components/order/configuration-select-summary';
+import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
 import {
   NestedRecommendationSheet,
   type NestedRecommendationResult,
@@ -1917,16 +1918,12 @@ export function ProductCustomizeDialog({
                         }`}
                         onClick={entry.onChoose}
                       >
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
-                          {entry.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element -- menu images are external/base64
-                            <img
-                              src={entry.imageUrl}
-                              alt={entry.name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                        </div>
+                        <LazyMenuProductImage
+                          src={entry.imageUrl}
+                          alt={entry.name}
+                          emptyLabel=""
+                          className="h-12 w-12 shrink-0 rounded-md"
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-foreground">
                             {entry.name}

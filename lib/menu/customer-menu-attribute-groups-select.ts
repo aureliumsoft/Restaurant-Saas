@@ -4,6 +4,7 @@ import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
 
 export type CustomerMenuSelectMode = 'full' | 'legacy';
 
+/** Base product / variation select — may include imageUrl for the product being customized. */
 const variationSelectFull = {
   orderBy: { sortOrder: 'asc' as const },
   select: {
@@ -34,6 +35,38 @@ const variationSelectLegacy = {
   },
 } as const;
 
+/**
+ * Linked recommendation products — never select imageUrl blobs.
+ * Thumbs use lazy `/image` proxy URLs after the sheet paints.
+ */
+const variationSelectLinkedFull = {
+  orderBy: { sortOrder: 'asc' as const },
+  select: {
+    id: true,
+    name: true,
+    title: true,
+    swatchHex: true,
+    priceDelta: true,
+    sortOrder: true,
+    restaurantVariationId: true,
+    restaurantVariation: {
+      select: { id: true, name: true, shortLabel: true },
+    },
+  },
+} as const;
+
+const variationSelectLinkedLegacy = {
+  orderBy: { sortOrder: 'asc' as const },
+  select: {
+    id: true,
+    name: true,
+    title: true,
+    swatchHex: true,
+    priceDelta: true,
+    sortOrder: true,
+  },
+} as const;
+
 export const customerMenuItemCoreSelect = {
   id: true,
   name: true,
@@ -54,6 +87,31 @@ export const customerMenuItemCoreSelectLegacy = {
   variations: variationSelectLegacy,
 } as const;
 
+/** Linked category/product option cards — lightweight, no image blobs. */
+export const customerMenuLinkedItemCoreSelect = {
+  id: true,
+  name: true,
+  description: true,
+  price: true,
+  salePrice: true,
+  variations: variationSelectLinkedFull,
+} as const;
+
+export const customerMenuLinkedItemCoreSelectLegacy = {
+  id: true,
+  name: true,
+  description: true,
+  price: true,
+  salePrice: true,
+  variations: variationSelectLinkedLegacy,
+} as const;
+
+function linkedItemCore(mode: CustomerMenuSelectMode) {
+  return mode === 'full'
+    ? customerMenuLinkedItemCoreSelect
+    : customerMenuLinkedItemCoreSelectLegacy;
+}
+
 function buildAttributeGroupsSelect(
   depth: number,
   mode: CustomerMenuSelectMode
@@ -63,13 +121,10 @@ function buildAttributeGroupsSelect(
     return undefined;
   }
 
-  const itemCore =
-    mode === 'full'
-      ? customerMenuItemCoreSelect
-      : customerMenuItemCoreSelectLegacy;
+  const linkedCore = linkedItemCore(mode);
 
   const nestedItemSelect: Record<string, unknown> = {
-    ...itemCore,
+    ...linkedCore,
     personalizeGroups: personalizeGroupsSelect,
     ...(depth > 1
       ? {
@@ -116,7 +171,7 @@ function buildAttributeGroupsSelect(
     },
     linkedProduct: {
       select: {
-        ...itemCore,
+        ...linkedCore,
         categoryId: true,
         personalizeGroups: personalizeGroupsSelect,
         attributeGroups: buildAttributeGroupsSelect(depth - 1, mode),

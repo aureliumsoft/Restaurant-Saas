@@ -14,6 +14,7 @@ import { Check, ChevronDown, Minus, Plus, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
 import { modifierSelectionsUnitTotal } from '@/lib/menu/build-modifier-selections';
 import { buildConfirmModifierSelections } from '@/lib/menu/build-confirm-modifier-selections';
 import {
@@ -95,20 +96,12 @@ function OptionThumbnail({
   name: string;
 }) {
   return (
-    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
-      {imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={imageUrl}
-          alt={name}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase text-muted-foreground">
-          {name.slice(0, 2)}
-        </div>
-      )}
-    </div>
+    <LazyMenuProductImage
+      src={imageUrl}
+      alt={name}
+      emptyLabel={name.slice(0, 2).toUpperCase()}
+      className="h-12 w-12 shrink-0 rounded-md"
+    />
   );
 }
 

@@ -65,11 +65,11 @@ export async function fetchCustomerMenuProductDetail<T>(
 export async function fetchRestaurantMenuProductDetail<T>(
   itemId: string
 ): Promise<T | null> {
-  const key = itemId;
+  const key = `lite:${itemId}`;
   const cached = cacheGet<T>(restaurantDetailCache, key);
   if (cached) return cached;
   const res = await fetch(
-    `/api/restaurant/menu/items/${encodeURIComponent(itemId)}`,
+    `/api/restaurant/menu/items/${encodeURIComponent(itemId)}?lite=1`,
     { cache: 'default' }
   );
   if (!res.ok) return null;

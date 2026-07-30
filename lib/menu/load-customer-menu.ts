@@ -10,6 +10,8 @@ import {
   buildCustomerMenuAttributeGroupsSelectLegacy,
   customerMenuItemCoreSelect,
   customerMenuItemCoreSelectLegacy,
+  customerMenuLinkedItemCoreSelect,
+  customerMenuLinkedItemCoreSelectLegacy,
   type CustomerMenuSelectMode,
 } from '@/lib/menu/customer-menu-attribute-groups-select';
 import {
@@ -62,10 +64,11 @@ function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
 }
 
 function buildRecommendationPoolItemSelect(mode: CustomerMenuSelectMode) {
+  // Pool feeds recommendation option lists — never embed image blobs.
   const itemCore =
     mode === 'full'
-      ? customerMenuItemCoreSelect
-      : customerMenuItemCoreSelectLegacy;
+      ? customerMenuLinkedItemCoreSelect
+      : customerMenuLinkedItemCoreSelectLegacy;
   const buildGroups =
     mode === 'full'
       ? buildCustomerMenuAttributeGroupsSelect

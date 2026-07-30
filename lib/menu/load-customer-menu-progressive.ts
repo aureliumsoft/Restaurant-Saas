@@ -3,8 +3,8 @@ import { applyProductRecommendationPools } from '@/lib/menu/apply-product-recomm
 import {
   buildCustomerMenuAttributeGroupsSelect,
   buildCustomerMenuAttributeGroupsSelectLegacy,
-  customerMenuItemCoreSelect,
-  customerMenuItemCoreSelectLegacy,
+  customerMenuLinkedItemCoreSelect,
+  customerMenuLinkedItemCoreSelectLegacy,
   type CustomerMenuSelectMode,
 } from '@/lib/menu/customer-menu-attribute-groups-select';
 import {
@@ -43,10 +43,11 @@ const restaurantPublicSelect = {
 } as const;
 
 function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
+  // Customize detail: no embedded image blobs (hero + options use /image proxies).
   const itemCore =
     mode === 'full'
-      ? customerMenuItemCoreSelect
-      : customerMenuItemCoreSelectLegacy;
+      ? customerMenuLinkedItemCoreSelect
+      : customerMenuLinkedItemCoreSelectLegacy;
   const buildGroups =
     mode === 'full'
       ? buildCustomerMenuAttributeGroupsSelect
@@ -67,7 +68,6 @@ function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
             id: true,
             name: true,
             description: true,
-            imageUrl: true,
             price: true,
             salePrice: true,
           },
@@ -78,10 +78,11 @@ function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
 }
 
 function buildRecommendationPoolItemSelect(mode: CustomerMenuSelectMode) {
+  // Pool feeds recommendation option lists — never embed image blobs.
   const itemCore =
     mode === 'full'
-      ? customerMenuItemCoreSelect
-      : customerMenuItemCoreSelectLegacy;
+      ? customerMenuLinkedItemCoreSelect
+      : customerMenuLinkedItemCoreSelectLegacy;
   const buildGroups =
     mode === 'full'
       ? buildCustomerMenuAttributeGroupsSelect
@@ -271,14 +272,33 @@ export async function loadCustomerMenuProductDetail(options: {
     if (!item) return null;
 
     const categoryIds = await getMenuItemCategoryIds(options.itemId);
-    const pool = await loadRecommendationPool(restaurant.id, mode);
+    const imageQuery = {
+      slug: options.slug,
+      subdomain: options.subdomain,
+    };
+    const [pool, imageFlags] = await Promise.all([
+      loadRecommendationPool(restaurant.id, mode),
+      hasImageByMenuItemIds([options.itemId]),
+    ]);
+    const hasImage = imageFlags.get(options.itemId) ?? false;
+    const lazyImage = hasImage
+      ? customerMenuItemImageUrl(options.itemId, imageQuery)
+      : null;
+
     const enriched = applyProductRecommendationPools(
       {
         menus: [
           {
             id: 'detail',
             name: '',
-            items: [{ ...item, categoryIds }],
+            items: [
+              {
+                ...item,
+                categoryIds,
+                hasImage,
+                imageUrl: lazyImage,
+              },
+            ],
           },
         ],
       },
@@ -291,10 +311,40 @@ export async function loadCustomerMenuProductDetail(options: {
     const detail = sanitized?.menus?.[0]?.items?.[0] ?? null;
     if (!detail) return null;
 
+    const offered = (
+      detail as {
+        offersFromThis?: Array<{
+          offeredItem?: { id: string; imageUrl?: string | null } | null;
+        }>;
+      }
+    ).offersFromThis;
+    const offerIds = (offered ?? [])
+      .map((o) => o.offeredItem?.id)
+      .filter((id): id is string => Boolean(id));
+    const offerImageFlags =
+      offerIds.length > 0 ? await hasImageByMenuItemIds(offerIds) : new Map();
+
     return {
       ...detail,
+      hasImage,
+      imageUrl: lazyImage,
       categoryIds:
         categoryIds.length > 0 ? categoryIds : [detail.categoryId],
+      offersFromThis: (offered ?? []).map((row) => {
+        const oid = row.offeredItem?.id;
+        if (!oid || !row.offeredItem) return row;
+        const oh = offerImageFlags.get(oid) ?? false;
+        return {
+          ...row,
+          offeredItem: {
+            ...row.offeredItem,
+            hasImage: oh,
+            imageUrl: oh
+              ? customerMenuItemImageUrl(oid, imageQuery)
+              : null,
+          },
+        };
+      }),
     };
   });
 }

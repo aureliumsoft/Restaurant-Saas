@@ -18,60 +18,136 @@ import type {
   OrderDisplayTicket,
 } from '@/app/api/restaurant/order-display/route';
 import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
-
+import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 
 const VOICE_STORAGE_KEY = 'order-display:voice-enabled';
 const COMPLETED_ANNOUNCEMENT_REPEATS = 3;
 const IN_PROGRESS_DISPLAY_LIMIT = 8;
 
+type OrderDisplayLang = 'es' | 'en';
+
+const COPY = {
+  es: {
+    title: 'Estado del pedido',
+    subtitlePrefix: 'Pedidos POS y kiosco de hoy',
+    liveSync: 'En vivo · se actualiza en tiempo real · última sync',
+    voiceOn: 'Voz activada',
+    voiceOff: 'Voz desactivada',
+    muteTitle: 'Silenciar anuncios',
+    unmuteTitle: 'Activar anuncios',
+    refresh: 'Actualizar',
+    readyNow: 'Listo ahora',
+    readyNowSubtitle: 'Por favor, acérquese al mostrador',
+    readyBadge: 'Listo ahora',
+    recentlyCompleted: 'Completados recientemente',
+    recentlyCompletedSubtitle: 'Siguiente recogida',
+    inPreparation: 'En preparación',
+    inPreparationSubtitle: 'Preparando su pedido',
+    token: 'Token',
+    tracking: 'Seguimiento',
+    walkIn: 'Cliente sin reserva',
+    noReadyYet: 'Aún no hay pedidos listos',
+    noReadyYetSubtitle: 'Los pedidos completados aparecerán aquí.',
+    noOlderReady: 'No hay pedidos listos anteriores',
+    noOlderReadySubtitle: 'Los pedidos completados más antiguos aparecerán aquí.',
+    upNext: 'A continuación…',
+    noPreparing: 'No hay pedidos en preparación',
+    noPreparingSubtitle: 'Los pedidos en curso aparecerán aquí.',
+    signInError: 'Inicie sesión como personal del restaurante para ver esta pantalla.',
+    loadError: 'No se pudieron cargar los pedidos. Reintentando…',
+    announce: (token: string, name: string) =>
+      `Pedido número ${token} completado. ${name}, por favor, acérquese al mostrador para recoger su pedido.`,
+  },
+  en: {
+    title: 'Order Status',
+    subtitlePrefix: "Today's POS & kiosk orders",
+    liveSync: 'Live · updates in real time · last sync',
+    voiceOn: 'Voice on',
+    voiceOff: 'Voice off',
+    muteTitle: 'Mute order announcements',
+    unmuteTitle: 'Enable order announcements',
+    refresh: 'Refresh',
+    readyNow: 'Ready Now',
+    readyNowSubtitle: 'Please come to the counter',
+    readyBadge: 'Ready now',
+    recentlyCompleted: 'Recently Completed',
+    recentlyCompletedSubtitle: 'Picked up next',
+    inPreparation: 'In Preparation',
+    inPreparationSubtitle: 'Working on your order',
+    token: 'Token',
+    tracking: 'Tracking',
+    walkIn: 'Walk-in customer',
+    noReadyYet: 'No orders ready yet',
+    noReadyYetSubtitle: 'Completed orders will appear here.',
+    noOlderReady: 'No older ready orders',
+    noOlderReadySubtitle: 'Older completed orders will queue here.',
+    upNext: 'Up next…',
+    noPreparing: 'No orders being prepared',
+    noPreparingSubtitle: 'Orders being worked on will appear here.',
+    signInError: 'Please sign in as restaurant staff to view this screen.',
+    loadError: 'Could not load orders. Retrying…',
+    announce: (token: string, name: string) =>
+      `Order number ${token} is ready. ${name}, please come to the counter to collect your order.`,
+  },
+} as const;
+
 const FEMALE_VOICE_HINT =
   /female|mujer|woman|helena|monica|paulina|lucia|laura|sabina|elena|sofia|isabel|maria|español.*femenin/i;
 const MALE_VOICE_HINT =
   /male|hombre|man\b|pablo|jorge|diego|carlos|daniel|enrique|rodrigo|español(?!.*femenin)/i;
 
-let cachedSpanishFemaleVoice: SpeechSynthesisVoice | null | undefined;
+let cachedVoice: SpeechSynthesisVoice | null | undefined;
+let cachedVoiceLang: string | null = null;
 
-function pickSpanishFemaleVoice(
-  synth: SpeechSynthesis
+function pickVoiceForLang(
+  synth: SpeechSynthesis,
+  lang: OrderDisplayLang
 ): SpeechSynthesisVoice | null {
   const voices = synth.getVoices();
-  const spanish = voices.filter(
-    (v) =>
-      v.lang.toLowerCase().startsWith('es') || /spanish|español/i.test(v.name)
-  );
-  if (spanish.length === 0) return null;
-
-  const female = spanish.find((v) => FEMALE_VOICE_HINT.test(v.name));
-  if (female) return female;
-
-  const notMale = spanish.find((v) => !MALE_VOICE_HINT.test(v.name));
-  return notMale ?? null;
-}
-
-function getSpanishFemaleVoice(
-  synth: SpeechSynthesis
-): SpeechSynthesisVoice | null {
-  if (cachedSpanishFemaleVoice !== undefined) {
-    return cachedSpanishFemaleVoice;
+  if (lang === 'es') {
+    const spanish = voices.filter(
+      (v) =>
+        v.lang.toLowerCase().startsWith('es') || /spanish|español/i.test(v.name)
+    );
+    if (spanish.length === 0) return null;
+    const female = spanish.find((v) => FEMALE_VOICE_HINT.test(v.name));
+    if (female) return female;
+    const notMale = spanish.find((v) => !MALE_VOICE_HINT.test(v.name));
+    return notMale ?? null;
   }
-  cachedSpanishFemaleVoice = pickSpanishFemaleVoice(synth);
-  return cachedSpanishFemaleVoice;
+  const english = voices.filter(
+    (v) =>
+      v.lang.toLowerCase().startsWith('en') || /english/i.test(v.name)
+  );
+  if (english.length === 0) return null;
+  const female = english.find((v) => FEMALE_VOICE_HINT.test(v.name));
+  return female ?? english[0] ?? null;
 }
 
-function resetSpanishFemaleVoiceCache() {
-  cachedSpanishFemaleVoice = undefined;
+function getVoiceForLang(
+  synth: SpeechSynthesis,
+  lang: OrderDisplayLang
+): SpeechSynthesisVoice | null {
+  if (cachedVoice !== undefined && cachedVoiceLang === lang) {
+    return cachedVoice;
+  }
+  cachedVoiceLang = lang;
+  cachedVoice = pickVoiceForLang(synth, lang);
+  return cachedVoice;
 }
 
-/**
- * Build the speech string for a newly-ready order.
- *
- * Reads digits when the order has a real daily ticket number (so "07" is
- * spoken as "seven", not "zero-seven"), and falls back to spelling out the
- * 6-char tracking id letter-by-letter when there's no ticket number.
- */
-function buildAnnouncement(ticket: OrderDisplayTicket): string {
-  const name = ticket.customerName?.trim() || 'Walk-in customer';
+function resetVoiceCache() {
+  cachedVoice = undefined;
+  cachedVoiceLang = null;
+}
+
+function buildAnnouncement(
+  ticket: OrderDisplayTicket,
+  copy: (typeof COPY)[OrderDisplayLang]
+): string {
+  const name = ticket.customerName?.trim() || copy.walkIn;
   let tokenSpoken: string;
   if (typeof ticket.ticketNumber === 'number' && ticket.ticketNumber > 0) {
     tokenSpoken = String(ticket.ticketNumber);
@@ -81,19 +157,23 @@ function buildAnnouncement(ticket: OrderDisplayTicket): string {
     ).toUpperCase();
     tokenSpoken = id.split('').join(' ');
   }
-  return `Pedido número ${tokenSpoken} completado. ${name}, por favor, acérquese al mostrador para recoger su pedido.`;
+  return copy.announce(tokenSpoken, name);
 }
 
-function speakUtterance(synth: SpeechSynthesis, text: string): Promise<void> {
+function speakUtterance(
+  synth: SpeechSynthesis,
+  text: string,
+  lang: OrderDisplayLang
+): Promise<void> {
   return new Promise((resolve) => {
     const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'es-ES';
+    utter.lang = lang === 'es' ? 'es-ES' : 'en-US';
     utter.rate = 0.95;
     utter.pitch = 1.05;
     utter.volume = 1;
-    const femaleVoice = getSpanishFemaleVoice(synth);
-    if (femaleVoice) {
-      utter.voice = femaleVoice;
+    const voice = getVoiceForLang(synth, lang);
+    if (voice) {
+      utter.voice = voice;
     } else {
       utter.pitch = 1.15;
     }
@@ -104,10 +184,11 @@ function speakUtterance(synth: SpeechSynthesis, text: string): Promise<void> {
   });
 }
 
-/** Announce each completed order {@link COMPLETED_ANNOUNCEMENT_REPEATS} times in sequence. */
 async function speakCompletedAnnouncements(
   tickets: OrderDisplayTicket[],
-  isEnabled: () => boolean
+  isEnabled: () => boolean,
+  lang: OrderDisplayLang,
+  copy: (typeof COPY)[OrderDisplayLang]
 ): Promise<void> {
   if (typeof window === 'undefined' || tickets.length === 0) return;
   const synth = window.speechSynthesis;
@@ -118,22 +199,17 @@ async function speakCompletedAnnouncements(
       synth.cancel();
       return;
     }
-    const text = buildAnnouncement(ticket);
+    const text = buildAnnouncement(ticket, copy);
     for (let repeat = 0; repeat < COMPLETED_ANNOUNCEMENT_REPEATS; repeat++) {
       if (!isEnabled()) {
         synth.cancel();
         return;
       }
-      await speakUtterance(synth, text);
+      await speakUtterance(synth, text, lang);
     }
   }
 }
 
-/**
- * Mask the middle digits of a phone number so the customer is identifiable
- * to themselves (first 3 + last 2 digits visible) but not to bystanders
- * watching the screen.
- */
 function maskPhone(raw: string | null): string {
   if (!raw || isKioskSyntheticCustomerPhone(raw)) return '—';
   const digits = raw.replace(/[^\d+]/g, '');
@@ -152,19 +228,16 @@ function tokenLabel(t: OrderDisplayTicket): string {
   if (typeof t.ticketNumber === 'number' && t.ticketNumber >= 0) {
     return String(t.ticketNumber).padStart(2, '0');
   }
-  // Fallback when the daily ticket number isn't set yet (legacy orders) —
-  // use the short tracking id so the card still has a prominent identifier.
   return trackingId(t);
 }
 
-/** Format API YYYY-MM-DD using the numeric parts (avoids UTC shift bugs). */
-function formatFilterDateLabel(isoYmd: string): string {
+function formatFilterDateLabel(isoYmd: string, locale: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoYmd.trim());
   if (!m) return isoYmd;
   const y = Number(m[1]);
   const mo = Number(m[2]);
   const d = Number(m[3]);
-  return new Date(y, mo - 1, d).toLocaleDateString(undefined, {
+  return new Date(y, mo - 1, d).toLocaleDateString(locale, {
     weekday: 'short',
     year: 'numeric',
     month: 'short',
@@ -173,6 +246,17 @@ function formatFilterDateLabel(isoYmd: string): string {
 }
 
 export function OrderDisplayScreen() {
+  const { regional } = useOwnerRestaurantRegional();
+  // Spain → Spanish UI + Euro; otherwise English (+ restaurant currency, e.g. PKR).
+  const lang: OrderDisplayLang = regional.countryCode === 'ES' ? 'es' : 'en';
+  const copy = COPY[lang];
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+  const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
+  const langRef = useRef(lang);
+  const copyRef = useRef(copy);
+  langRef.current = lang;
+  copyRef.current = copy;
+
   const [completed, setCompleted] = useState<OrderDisplayTicket[]>([]);
   const [inProgress, setInProgress] = useState<OrderDisplayTicket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,13 +266,9 @@ export function OrderDisplayScreen() {
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterTimezone, setFilterTimezone] = useState<string>('UTC');
 
-  // Track which completed tickets we've already shown so we can briefly
-  // pulse new ones when they first appear.
   const seenCompletedRef = useRef<Set<string>>(new Set());
   const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
 
-  // Voice announcement state. We persist the on/off toggle in localStorage
-  // so the wall display remembers it across reloads.
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const voiceEnabledRef = useRef(true);
   const initializedRef = useRef(false);
@@ -196,11 +276,15 @@ export function OrderDisplayScreen() {
   useEffect(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     const synth = window.speechSynthesis;
-    const onVoicesChanged = () => resetSpanishFemaleVoiceCache();
+    const onVoicesChanged = () => resetVoiceCache();
     synth.addEventListener('voiceschanged', onVoicesChanged);
-    resetSpanishFemaleVoiceCache();
+    resetVoiceCache();
     return () => synth.removeEventListener('voiceschanged', onVoicesChanged);
   }, []);
+
+  useEffect(() => {
+    resetVoiceCache();
+  }, [lang]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -217,18 +301,17 @@ export function OrderDisplayScreen() {
       voiceEnabledRef.current = next;
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(VOICE_STORAGE_KEY, next ? 'on' : 'off');
-        // Cancel any in-flight speech when muting.
         if (!next && window.speechSynthesis) {
           window.speechSynthesis.cancel();
         }
-        // Some browsers won't speak until the synth has been "primed" by a
-        // user gesture. Playing a near-silent utterance on the click warms
-        // it up so the very next real announcement actually fires.
         if (next && window.speechSynthesis) {
           const warm = new SpeechSynthesisUtterance(' ');
           warm.volume = 0;
-          const femaleVoice = getSpanishFemaleVoice(window.speechSynthesis);
-          if (femaleVoice) warm.voice = femaleVoice;
+          const voice = getVoiceForLang(
+            window.speechSynthesis,
+            langRef.current
+          );
+          if (voice) warm.voice = voice;
           window.speechSynthesis.speak(warm);
         }
       }
@@ -262,18 +345,18 @@ export function OrderDisplayScreen() {
         setHighlighted((prev) => new Set([...prev, ...freshIds]));
         window.setTimeout(() => {
           setHighlighted((prev) => {
-            const copy = new Set(prev);
-            for (const id of freshIds) copy.delete(id);
-            return copy;
+            const copySet = new Set(prev);
+            for (const id of freshIds) copySet.delete(id);
+            return copySet;
           });
         }, 4500);
 
-        // Speak only AFTER the first load so we don't read out everything
-        // that was already on screen when the kiosk was opened.
         if (initializedRef.current && voiceEnabledRef.current) {
           void speakCompletedAnnouncements(
             freshTickets,
-            () => voiceEnabledRef.current
+            () => voiceEnabledRef.current,
+            langRef.current,
+            copyRef.current
           );
         }
       }
@@ -281,8 +364,8 @@ export function OrderDisplayScreen() {
     } catch (e) {
       const msg =
         axios.isAxiosError(e) && e.response?.status === 401
-          ? 'Please sign in as restaurant staff to view this screen.'
-          : 'Could not load orders. Retrying…';
+          ? copyRef.current.signInError
+          : copyRef.current.loadError;
       setError(msg);
     } finally {
       setLoading(false);
@@ -294,16 +377,13 @@ export function OrderDisplayScreen() {
 
   const lastUpdatedText = useMemo(() => {
     if (!lastUpdated) return '—';
-    return lastUpdated.toLocaleTimeString([], {
+    return lastUpdated.toLocaleTimeString(locale, {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
     });
-  }, [lastUpdated]);
+  }, [lastUpdated, locale]);
 
-  // API returns up to 3 completed (most-recent first).
-  // featured = most recent (huge card on left half).
-  // others = next 2 (small cards on top-right).
   const featured = completed[0] ?? null;
   const recentOthers = completed.slice(1, 3);
 
@@ -312,14 +392,14 @@ export function OrderDisplayScreen() {
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-            Order Status
+            {copy.title}
           </h1>
           <p className="text-xs text-muted-foreground md:text-sm">
-            Today&apos;s POS &amp; kiosk orders
+            {copy.subtitlePrefix}
             {filterDate ? (
               <>
                 {' '}
-                · {formatFilterDateLabel(filterDate)}
+                · {formatFilterDateLabel(filterDate, locale)}
                 {filterTimezone && filterTimezone !== 'UTC' ? (
                   <span className="text-muted-foreground/80">
                     {' '}
@@ -329,8 +409,9 @@ export function OrderDisplayScreen() {
               </>
             ) : null}
             {' · '}
-            Live · updates in real time · last sync{' '}
-            {lastUpdatedText}
+            {regional.currencyCode} ({currencySymbol})
+            {' · '}
+            {copy.liveSync} {lastUpdatedText}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -338,18 +419,14 @@ export function OrderDisplayScreen() {
             type="button"
             variant={voiceEnabled ? 'default' : 'outline'}
             onClick={toggleVoice}
-            title={
-              voiceEnabled
-                ? 'Mute order announcements'
-                : 'Enable order announcements'
-            }
+            title={voiceEnabled ? copy.muteTitle : copy.unmuteTitle}
           >
             {voiceEnabled ? (
               <Volume2 className="mr-2 h-4 w-4" />
             ) : (
               <VolumeX className="mr-2 h-4 w-4" />
             )}
-            {voiceEnabled ? 'Voice on' : 'Voice off'}
+            {voiceEnabled ? copy.voiceOn : copy.voiceOff}
           </Button>
           <Button
             type="button"
@@ -360,7 +437,7 @@ export function OrderDisplayScreen() {
             <RefreshCw
               className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
             />
-            Refresh
+            {copy.refresh}
           </Button>
         </div>
       </header>
@@ -373,14 +450,11 @@ export function OrderDisplayScreen() {
         </Card>
       ) : null}
 
-      {/* Main split — half/half on lg+, stacked on smaller screens.
-          min-h-0 + overflow-hidden so children can flex correctly. */}
       <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-2">
-        {/* LEFT HALF — featured ready order, fills full column height. */}
         <section className="flex min-h-0 flex-col gap-2 overflow-hidden">
           <SectionTitle
-            title="Ready Now"
-            subtitle="Please come to the counter"
+            title={copy.readyNow}
+            subtitle={copy.readyNowSubtitle}
             accent="emerald"
           />
           <div className="min-h-0 flex-1">
@@ -392,24 +466,24 @@ export function OrderDisplayScreen() {
                 icon={
                   <CheckCircle2 className="h-12 w-12 text-emerald-500/60" />
                 }
-                title="No orders ready yet"
-                subtitle="Completed orders will appear here."
+                title={copy.noReadyYet}
+                subtitle={copy.noReadyYetSubtitle}
               />
             ) : (
               <FeaturedReadyCard
                 ticket={featured}
                 pulsing={highlighted.has(featured.ticketId)}
+                copy={copy}
               />
             )}
           </div>
         </section>
 
-        {/* RIGHT HALF — compact rows: recent ready (2) + in-progress (up to 8). */}
         <section className="flex min-h-0 flex-col gap-3 overflow-y-auto">
           <div className="flex shrink-0 flex-col gap-2">
             <SectionTitle
-              title="Recently Completed"
-              subtitle="Picked up next"
+              title={copy.recentlyCompleted}
+              subtitle={copy.recentlyCompletedSubtitle}
               accent="emerald"
             />
             {loading ? (
@@ -420,8 +494,8 @@ export function OrderDisplayScreen() {
             ) : recentOthers.length === 0 ? (
               <EmptyState
                 icon={<CheckCircle2 className="h-8 w-8 text-emerald-500/50" />}
-                title="No older ready orders"
-                subtitle="Older completed orders will queue here."
+                title={copy.noOlderReady}
+                subtitle={copy.noOlderReadySubtitle}
               />
             ) : (
               <div className="grid grid-cols-2 gap-3">
@@ -430,11 +504,12 @@ export function OrderDisplayScreen() {
                     key={t.ticketId}
                     ticket={t}
                     pulsing={highlighted.has(t.ticketId)}
+                    copy={copy}
                   />
                 ))}
                 {recentOthers.length === 1 ? (
                   <div className="flex items-center justify-center rounded-lg border border-dashed border-emerald-500/20 bg-emerald-500/[0.03] px-4 py-6 text-xs text-muted-foreground">
-                    Up next…
+                    {copy.upNext}
                   </div>
                 ) : null}
               </div>
@@ -443,8 +518,8 @@ export function OrderDisplayScreen() {
 
           <div className="flex shrink-0 flex-col gap-2">
             <SectionTitle
-              title="In Preparation"
-              subtitle="Working on your order"
+              title={copy.inPreparation}
+              subtitle={copy.inPreparationSubtitle}
               accent="amber"
             />
             {loading ? (
@@ -458,13 +533,13 @@ export function OrderDisplayScreen() {
             ) : inProgress.length === 0 ? (
               <EmptyState
                 icon={<Utensils className="h-8 w-8 text-amber-500/50" />}
-                title="No orders being prepared"
-                subtitle="Orders being worked on will appear here."
+                title={copy.noPreparing}
+                subtitle={copy.noPreparingSubtitle}
               />
             ) : (
               <div className="grid grid-cols-2 grid-rows-4 gap-2 sm:gap-3">
                 {inProgress.slice(0, IN_PROGRESS_DISPLAY_LIMIT).map((t) => (
-                  <InProgressCard key={t.ticketId} ticket={t} />
+                  <InProgressCard key={t.ticketId} ticket={t} copy={copy} />
                 ))}
               </div>
             )}
@@ -502,13 +577,16 @@ function SectionTitle({
   );
 }
 
-/** Huge "ready now" card filling the left half of the screen. */
+type ScreenCopy = (typeof COPY)[OrderDisplayLang];
+
 function FeaturedReadyCard({
   ticket,
   pulsing,
+  copy,
 }: {
   ticket: OrderDisplayTicket;
   pulsing: boolean;
+  copy: ScreenCopy;
 }) {
   return (
     <Card
@@ -520,7 +598,7 @@ function FeaturedReadyCard({
         className="absolute right-4 top-3 rounded-full bg-emerald-500 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white shadow-md shadow-emerald-500/40"
         aria-hidden="true"
       >
-        Ready now
+        {copy.readyBadge}
       </span>
       <CardContent className="flex flex-1 flex-col items-center justify-center gap-6 p-6 text-center md:p-10">
         <div className="flex h-32 w-32 flex-none items-center justify-center rounded-full bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 md:h-44 md:w-44">
@@ -531,19 +609,19 @@ function FeaturedReadyCard({
         </div>
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-400">
-            Token
+            {copy.token}
           </p>
           <p className="font-mono text-7xl font-black leading-none tracking-tight text-emerald-700 dark:text-emerald-200 md:text-[9rem]">
             {tokenLabel(ticket)}
           </p>
           <p className="mt-5 text-2xl font-bold md:text-3xl">
-            {ticket.customerName?.trim() || 'Walk-in customer'}
+            {ticket.customerName?.trim() || copy.walkIn}
           </p>
           <p className="text-base text-muted-foreground md:text-lg">
             {maskPhone(ticket.customerPhone)}
           </p>
           <p className="mt-3 font-mono text-sm uppercase tracking-widest text-muted-foreground">
-            Tracking · {trackingId(ticket)}
+            {copy.tracking} · {trackingId(ticket)}
           </p>
         </div>
       </CardContent>
@@ -551,13 +629,14 @@ function FeaturedReadyCard({
   );
 }
 
-/** Small ready card shown in the top half of the right column. */
 function RecentReadyCard({
   ticket,
   pulsing,
+  copy,
 }: {
   ticket: OrderDisplayTicket;
   pulsing: boolean;
+  copy: ScreenCopy;
 }) {
   return (
     <Card
@@ -571,13 +650,13 @@ function RecentReadyCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
-            Token
+            {copy.token}
           </p>
           <p className="font-mono text-3xl font-extrabold leading-none tracking-tight text-emerald-700 dark:text-emerald-300">
             {tokenLabel(ticket)}
           </p>
           <p className="mt-0.5 truncate text-sm font-semibold">
-            {ticket.customerName?.trim() || 'Walk-in customer'}
+            {ticket.customerName?.trim() || copy.walkIn}
           </p>
           <p className="truncate text-xs text-muted-foreground">
             {maskPhone(ticket.customerPhone)} · {trackingId(ticket)}
@@ -588,8 +667,13 @@ function RecentReadyCard({
   );
 }
 
-/** Compact in-progress card — same horizontal layout as recently completed. */
-function InProgressCard({ ticket }: { ticket: OrderDisplayTicket }) {
+function InProgressCard({
+  ticket,
+  copy,
+}: {
+  ticket: OrderDisplayTicket;
+  copy: ScreenCopy;
+}) {
   return (
     <Card className="relative overflow-hidden border-amber-500/30 bg-amber-500/[0.05] shadow-sm">
       <CardContent className="flex items-center gap-3 p-3 md:p-4">
@@ -598,13 +682,13 @@ function InProgressCard({ ticket }: { ticket: OrderDisplayTicket }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400">
-            Token
+            {copy.token}
           </p>
           <p className="font-mono text-3xl font-extrabold leading-none tracking-tight text-amber-700 dark:text-amber-300">
             {tokenLabel(ticket)}
           </p>
           <p className="mt-0.5 truncate text-sm font-semibold">
-            {ticket.customerName?.trim() || 'Walk-in customer'}
+            {ticket.customerName?.trim() || copy.walkIn}
           </p>
           <p className="truncate text-xs text-muted-foreground">
             {maskPhone(ticket.customerPhone)} · {trackingId(ticket)}

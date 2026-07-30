@@ -12,6 +12,8 @@ import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-pric
 import type { AttributeGroup } from '@/components/order/product-customize-dialog';
 import type { PersonalizeGroup } from '@/components/order/personalize-options-section';
 
+export type AttributeGroupImageUrlBuilder = (menuItemId: string) => string;
+
 export function buildCustomerAttributeGroup(
   group: AttributeGroupSource & {
     id: string;
@@ -37,7 +39,9 @@ export function buildCustomerAttributeGroup(
     }[];
     useVariationPricing?: boolean;
   },
-  baseProductId: string
+  baseProductId: string,
+  /** Lazy image proxy for recommendation option thumbs (no embedded base64). */
+  imageUrlForItem?: AttributeGroupImageUrlBuilder
 ): AttributeGroup {
   const rawItems =
     group.sourceType === 'PRODUCT' && group.linkedProduct
@@ -96,18 +100,24 @@ export function buildCustomerAttributeGroup(
     items: items.map((it) => {
       const raw = rawItems.find((r) => r.id === it.id);
       const nestedGroups = raw?.attributeGroups ?? [];
+      const lazyImage =
+        imageUrlForItem?.(it.id) ??
+        (it.imageUrl && !it.imageUrl.startsWith('data:')
+          ? it.imageUrl
+          : null);
       return {
         menuItemId: it.id,
         name: it.name,
         description: it.description ?? null,
-        imageUrl: it.imageUrl ?? null,
+        imageUrl: lazyImage,
         price: it.price,
         salePrice: it.salePrice,
         variations: (it.variations ?? []).map((v) => ({
           id: v.id,
           name: v.name,
           title: v.title,
-          imageUrl: v.imageUrl ?? null,
+          // Variation thumbs reuse the product lazy URL (no per-variation blob).
+          imageUrl: lazyImage,
           swatchHex: v.swatchHex ?? null,
           priceDelta: v.priceDelta,
           restaurantVariationId: v.restaurantVariationId ?? null,
@@ -117,7 +127,8 @@ export function buildCustomerAttributeGroup(
             ? nestedGroups.map((ng) =>
                 buildCustomerAttributeGroup(
                   ng as Parameters<typeof buildCustomerAttributeGroup>[0],
-                  it.id
+                  it.id,
+                  imageUrlForItem
                 )
               )
             : undefined,

@@ -63,6 +63,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
+import { customerMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
 import {
   buildProductImageByIdMap,
   cartLineTitle,
@@ -611,9 +612,11 @@ export function KioskApp({
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
     return customizeProduct.attributeGroups.map((g) =>
-      buildCustomerAttributeGroup(g, customizeProduct.id)
+      buildCustomerAttributeGroup(g, customizeProduct.id, (id) =>
+        customerMenuItemImageUrl(id, { slug })
+      )
     );
-  }, [customizeProduct]);
+  }, [customizeProduct, slug]);
 
   const addToCart = (
     product: CustomerMenuProduct,

@@ -35,6 +35,7 @@ import {
   ProductCardSkeletonGrid,
 } from '@/components/menu/product-card-skeleton';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
+import { customerMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import {
   fetchCustomerMenuProductDetail,
@@ -1023,10 +1024,21 @@ export default function OrderPageClient({
 
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
+    const imageQuery = {
+      slug: orderInfo?.restaurantSlug,
+      subdomain: hostSubdomain || orderInfo?.storeId,
+    };
     return customizeProduct.attributeGroups.map((g) =>
-      buildCustomerAttributeGroup(g, customizeProduct.id)
+      buildCustomerAttributeGroup(g, customizeProduct.id, (id) =>
+        customerMenuItemImageUrl(id, imageQuery)
+      )
     );
-  }, [customizeProduct]);
+  }, [
+    customizeProduct,
+    orderInfo?.restaurantSlug,
+    orderInfo?.storeId,
+    hostSubdomain,
+  ]);
 
   // Avoid server/client markup mismatches by rendering only after first mount.
   // Important: this must be AFTER all hooks to keep React Hook order stable.
