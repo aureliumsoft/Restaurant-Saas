@@ -80,6 +80,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
   const [sidebarHydrated, setSidebarHydrated] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const openedForSessionRef = useRef(false);
+  const redirectedToPricingRef = useRef(false);
   const [accessGateVisible, setAccessGateVisible] = useState(true);
 
   const { loading: accessLoading, failed: accessFailed, ready: accessReady } =
@@ -157,11 +158,22 @@ const RootLayout = ({ children }: RootLayoutProps) => {
 
   useEffect(() => {
     if (!accessReady) return;
-    if (!subscriptionAllowed) {
+    if (subscriptionAllowed) {
+      redirectedToPricingRef.current = false;
+      return;
+    }
+    if (!redirectedToPricingRef.current) {
+      redirectedToPricingRef.current = true;
       toast.error(
         'Your trial/plan is expired or not configured. Please choose a pricing plan.'
       );
-      router.replace('/pricing');
+      // Use a full navigation to avoid App Router transition crashes when
+      // leaving the dashboard shell after bootstrap denies subscription access.
+      if (typeof window !== 'undefined') {
+        window.location.replace('/pricing');
+      } else {
+        router.replace('/pricing');
+      }
     }
   }, [accessReady, subscriptionAllowed, router]);
 
