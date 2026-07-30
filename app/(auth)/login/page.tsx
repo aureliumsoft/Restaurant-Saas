@@ -56,11 +56,7 @@ function postLoginPath(
 ): string {
   if (hasExplicitCallback) return callbackUrl;
 
-  // Platform admins go to admin dashboard
-  if (isPlatformAdminSession(user)) return '/admin/dashboard';
-
-  // All other users go to dashboard - role-based content is shown there
-  return '/dashboard';
+  return roleDefaultPath(user, user?.roleName, user?.role);
 }
 
 function LoginForm() {
@@ -91,7 +87,9 @@ function LoginForm() {
     setLoading(true);
     try {
       await signIn('google', {
-        callbackUrl: '/dashboard',
+        // Return to login so session-aware role routing can run consistently.
+        // Explicit callback URLs are still honored when present.
+        callbackUrl: hasExplicitCallback ? callbackUrl : '/login',
       });
     } catch (e: any) {
       toast.error(e?.message ?? 'Failed to sign in with Google.');
@@ -157,12 +155,12 @@ function LoginForm() {
       subtitle="Use your email + password to SignIn."
     >
       <div className="flex flex-col gap-2">
-        {/* <Button onClick={handleGoogle} disabled={loading} variant="secondary">
+        <Button onClick={handleGoogle} disabled={loading} variant="secondary">
             <IconBrandGoogleFilled className="mr-1 h-4 w-4" /> Continue with Google
-          </Button> */}
+          </Button>
       </div>
 
-      {/* <div className="my-6 border-t" /> */}
+     <div className="my-6 border-t" /> 
 
       <form onSubmit={handleCredentials} className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
