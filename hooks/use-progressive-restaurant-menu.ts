@@ -3,10 +3,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ProgressiveMenuCategory } from '@/hooks/use-progressive-customer-menu';
+import { isBrowserOffline } from '@/lib/offline/db';
+import {
+  getOfflineCache,
+  OFFLINE_CACHE_KEYS,
+  setOfflineCache,
+} from '@/lib/offline/local-cache';
 
 type RestaurantMenuMeta = {
   themePrimaryColor?: string | null;
   serviceCharges?: unknown;
+};
+
+type PosMenuCachePayload<TItem> = {
+  meta: RestaurantMenuMeta;
+  categories: ProgressiveMenuCategory<TItem>[];
 };
 
 type UseProgressiveRestaurantMenuOptions = {
@@ -23,6 +34,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [menuComplete, setMenuComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fromOfflineCache, setFromOfflineCache] = useState(false);
   const runIdRef = useRef(0);
 
   const reset = useCallback(() => {
@@ -31,6 +43,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
     setCategoriesLoading(false);
     setMenuComplete(false);
     setError(null);
+    setFromOfflineCache(false);
   }, []);
 
   useEffect(() => {
@@ -47,7 +60,36 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
       reset();
       setCategoriesLoading(true);
 
+      const applyCache = async () => {
+        const cached = await getOfflineCache<PosMenuCachePayload<TItem>>(
+          OFFLINE_CACHE_KEYS.posMenu
+        );
+        if (!cached || isStale()) return false;
+        setMeta(cached.meta);
+        setCategories(
+          cached.categories.map((c) => ({
+            ...c,
+            loaded: true,
+            loading: false,
+          }))
+        );
+        setCategoriesLoading(false);
+        setMenuComplete(true);
+        setFromOfflineCache(true);
+        setError(null);
+        return true;
+      };
+
       try {
+        if (isBrowserOffline()) {
+          const ok = await applyCache();
+          if (!ok && !isStale()) {
+            setError('You are offline and no cached POS menu is available.');
+            setCategoriesLoading(false);
+          }
+          return;
+        }
+
         const metaRes = await fetch('/api/restaurant/menu/categories', {
           cache: 'default',
         });
@@ -66,19 +108,23 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
         if (isStale()) return;
 
         if (!metaRes.ok || !metaBody.data) {
-          setError(
-            typeof metaBody.error === 'string'
-              ? metaBody.error
-              : 'Failed to load menu categories.'
-          );
+          const ok = await applyCache();
+          if (!ok) {
+            setError(
+              typeof metaBody.error === 'string'
+                ? metaBody.error
+                : 'Failed to load menu categories.'
+            );
+          }
           return;
         }
 
         const menus = metaBody.data.menus ?? [];
-        setMeta({
+        const nextMeta: RestaurantMenuMeta = {
           themePrimaryColor: metaBody.data.themePrimaryColor,
           serviceCharges: metaBody.data.serviceCharges,
-        });
+        };
+        setMeta(nextMeta);
 
         const initial: ProgressiveMenuCategory<TItem>[] = menus.map((c) => ({
           id: c.id,
@@ -91,7 +137,8 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
         setCategories(initial);
         setCategoriesLoading(false);
 
-        // One category at a time — progressive paint, faster per-request work on server.
+        const loadedCategories: ProgressiveMenuCategory<TItem>[] = [];
+
         for (const category of initial) {
           if (isStale()) return;
 
@@ -115,28 +162,43 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
               ? itemsBody.data!.items!
               : [];
 
+            const nextCat: ProgressiveMenuCategory<TItem> = {
+              ...category,
+              items,
+              loaded: true,
+              loading: false,
+            };
+            loadedCategories.push(nextCat);
+
             setCategories((prev) =>
-              prev.map((c) =>
-                c.id === category.id
-                  ? { ...c, items, loaded: true, loading: false }
-                  : c
-              )
+              prev.map((c) => (c.id === category.id ? nextCat : c))
             );
           } catch {
             if (isStale()) return;
+            const nextCat: ProgressiveMenuCategory<TItem> = {
+              ...category,
+              items: [],
+              loaded: true,
+              loading: false,
+            };
+            loadedCategories.push(nextCat);
             setCategories((prev) =>
-              prev.map((c) =>
-                c.id === category.id
-                  ? { ...c, loaded: true, loading: false }
-                  : c
-              )
+              prev.map((c) => (c.id === category.id ? nextCat : c))
             );
           }
         }
 
-        if (!isStale()) setMenuComplete(true);
-      } catch {
         if (!isStale()) {
+          setMenuComplete(true);
+          void setOfflineCache(OFFLINE_CACHE_KEYS.posMenu, {
+            meta: nextMeta,
+            categories: loadedCategories,
+          } satisfies PosMenuCachePayload<TItem>);
+        }
+      } catch {
+        if (isStale()) return;
+        const ok = await applyCache();
+        if (!ok) {
           setError('Failed to load menu products for POS.');
           setCategoriesLoading(false);
         }
@@ -154,6 +216,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
     categoriesLoading,
     menuComplete,
     error,
+    fromOfflineCache,
     anyCategoryLoading: categories.some((c) => c.loading),
   };
 }

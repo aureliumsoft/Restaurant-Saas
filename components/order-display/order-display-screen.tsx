@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
 import {
   CheckCircle2,
   Clock3,
@@ -21,10 +20,83 @@ import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
 import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
+import {
+  getOfflineCache,
+  OFFLINE_CACHE_KEYS,
+  setOfflineCache,
+} from '@/lib/offline/local-cache';
+import {
+  listLocalCompletedTickets,
+  listLocalMakingTickets,
+  listLocalTickets,
+  removeLocalTicket,
+  type LocalOfflineTicket,
+} from '@/lib/offline/local-tickets';
+import { isBrowserOffline } from '@/lib/offline/db';
+import { listOrderOutbox } from '@/lib/offline/outbox';
 
 const VOICE_STORAGE_KEY = 'order-display:voice-enabled';
 const COMPLETED_ANNOUNCEMENT_REPEATS = 3;
 const IN_PROGRESS_DISPLAY_LIMIT = 8;
+
+function localTicketToDisplay(
+  t: LocalOfflineTicket,
+  status: 'making' | 'completed'
+): OrderDisplayTicket {
+  return {
+    ticketId: t.id,
+    orderId: t.orderId,
+    status,
+    startedAt: t.startedAt,
+    updatedAt: t.startedAt,
+    selectedMinutes: t.selectedMinutes,
+    shortOrderId: t.shortOrderId,
+    ticketNumber: t.ticketNumber,
+    customerName: null,
+    customerPhone: null,
+  };
+}
+
+function isPendingOfflineTicket(t: LocalOfflineTicket): boolean {
+  return (
+    t.orderId.startsWith('offline-') || t.id.startsWith('local-ticket-')
+  );
+}
+
+type KdsCachedTicket = {
+  id: string;
+  orderId: string;
+  status: string;
+  selectedMinutes: number;
+  startedAt: string;
+  createdAt?: string;
+  ticketNumber: number | null;
+  shortOrderId: string | null;
+};
+
+/** Drop local tickets that are no longer tied to a pending outbox row. */
+async function pruneOrphanLocalTickets(): Promise<void> {
+  try {
+    const [outbox, locals] = await Promise.all([
+      listOrderOutbox(),
+      listLocalTickets(),
+    ]);
+    const pending = new Set<string>();
+    for (const row of outbox) {
+      if (row.localOrderId) {
+        pending.add(row.localOrderId);
+        pending.add(`local-ticket-${row.localOrderId}`);
+      }
+    }
+    for (const t of locals) {
+      if (pending.has(t.orderId) || pending.has(t.id)) continue;
+      // Already synced (or orphaned) — don't keep polluting online display.
+      await removeLocalTicket(t.id);
+    }
+  } catch {
+    /* ignore prune errors */
+  }
+}
 
 type OrderDisplayLang = 'es' | 'en';
 
@@ -319,59 +391,305 @@ export function OrderDisplayScreen() {
     });
   }, []);
 
+  const loadSeqRef = useRef(0);
+
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    const isStale = () => seq !== loadSeqRef.current;
+
     setRefreshing(true);
     try {
-      const res = await axios.get<OrderDisplayPayload>(
-        '/api/restaurant/order-display'
-      );
-      const next = res.data.data;
-      setCompleted(next.completed);
-      setInProgress(next.inProgress);
-      setFilterDate(next.filterDate ?? '');
-      setFilterTimezone(next.filterTimezone ?? 'UTC');
-      setError(null);
-      setLastUpdated(new Date());
+      const applyPayload = (
+        next: OrderDisplayPayload['data'],
+        opts?: { announce?: boolean; notice?: string | null }
+      ) => {
+        if (isStale()) return;
+        setCompleted(Array.isArray(next.completed) ? next.completed : []);
+        setInProgress(
+          (Array.isArray(next.inProgress) ? next.inProgress : []).slice(
+            0,
+            IN_PROGRESS_DISPLAY_LIMIT
+          )
+        );
+        setFilterDate(next.filterDate ?? '');
+        setFilterTimezone(next.filterTimezone ?? 'UTC');
+        setError(opts?.notice ?? null);
+        setLastUpdated(new Date());
 
-      const freshTickets: OrderDisplayTicket[] = [];
-      for (const t of next.completed) {
-        if (!seenCompletedRef.current.has(t.ticketId)) {
-          freshTickets.push(t);
-          seenCompletedRef.current.add(t.ticketId);
+        if (opts?.announce !== false) {
+          const freshTickets: OrderDisplayTicket[] = [];
+          for (const t of next.completed ?? []) {
+            if (!seenCompletedRef.current.has(t.ticketId)) {
+              freshTickets.push(t);
+              seenCompletedRef.current.add(t.ticketId);
+            }
+          }
+          if (freshTickets.length > 0) {
+            const freshIds = new Set(freshTickets.map((t) => t.ticketId));
+            setHighlighted((prev) => new Set([...prev, ...freshIds]));
+            window.setTimeout(() => {
+              setHighlighted((prev) => {
+                const copySet = new Set(prev);
+                for (const id of freshIds) copySet.delete(id);
+                return copySet;
+              });
+            }, 4500);
+
+            if (initializedRef.current && voiceEnabledRef.current) {
+              void speakCompletedAnnouncements(
+                freshTickets,
+                () => voiceEnabledRef.current,
+                langRef.current,
+                copyRef.current
+              );
+            }
+          }
         }
-      }
-      if (freshTickets.length > 0) {
-        const freshIds = new Set(freshTickets.map((t) => t.ticketId));
-        setHighlighted((prev) => new Set([...prev, ...freshIds]));
-        window.setTimeout(() => {
-          setHighlighted((prev) => {
-            const copySet = new Set(prev);
-            for (const id of freshIds) copySet.delete(id);
-            return copySet;
-          });
-        }, 4500);
+        initializedRef.current = true;
+      };
 
-        if (initializedRef.current && voiceEnabledRef.current) {
-          void speakCompletedAnnouncements(
-            freshTickets,
-            () => voiceEnabledRef.current,
-            langRef.current,
-            copyRef.current
+      const mergePendingLocal = async (
+        remote: OrderDisplayPayload['data']
+      ): Promise<OrderDisplayPayload['data']> => {
+        const [localMaking, localCompleted] = await Promise.all([
+          listLocalMakingTickets().catch(() => []),
+          listLocalCompletedTickets().catch(() => []),
+        ]);
+
+        const pendingMaking = localMaking
+          .filter(isPendingOfflineTicket)
+          .map((t) => localTicketToDisplay(t, 'making'));
+        const pendingCompleted = localCompleted
+          .filter(isPendingOfflineTicket)
+          .map((t) => localTicketToDisplay(t, 'completed'));
+
+        return {
+          completed: [
+            ...pendingCompleted,
+            ...(remote.completed ?? []).filter(
+              (t) =>
+                !pendingCompleted.some(
+                  (l) => l.orderId === t.orderId || l.ticketId === t.ticketId
+                )
+            ),
+          ],
+          inProgress: [
+            ...pendingMaking,
+            ...(remote.inProgress ?? []).filter(
+              (t) =>
+                !pendingMaking.some(
+                  (l) => l.orderId === t.orderId || l.ticketId === t.ticketId
+                )
+            ),
+          ],
+          filterDate: remote.filterDate ?? '',
+          filterTimezone: remote.filterTimezone ?? 'UTC',
+        };
+      };
+
+      const buildOfflinePayload = async (
+        base: OrderDisplayPayload['data'] | null
+      ): Promise<OrderDisplayPayload['data']> => {
+        const [localMaking, localCompleted, kdsCached] = await Promise.all([
+          listLocalMakingTickets().catch(() => []),
+          listLocalCompletedTickets().catch(() => []),
+          getOfflineCache<KdsCachedTicket[]>(
+            OFFLINE_CACHE_KEYS.kdsTicketsMaking
+          ).catch(() => null),
+        ]);
+
+        const localInProgress = localMaking
+          .filter(isPendingOfflineTicket)
+          .map((t) => localTicketToDisplay(t, 'making'));
+        const localReady = localCompleted
+          .filter(isPendingOfflineTicket)
+          .map((t) => localTicketToDisplay(t, 'completed'));
+
+        const kdsAsInProgress: OrderDisplayTicket[] = (kdsCached ?? [])
+          .filter((t) => t.status === 'making')
+          .map((t) => ({
+            ticketId: t.id,
+            orderId: t.orderId,
+            status: 'making' as const,
+            startedAt: t.startedAt,
+            updatedAt: t.startedAt,
+            selectedMinutes: t.selectedMinutes,
+            shortOrderId: t.shortOrderId,
+            ticketNumber: t.ticketNumber,
+            customerName: null,
+            customerPhone: null,
+          }));
+
+        const baseInProgress = base?.inProgress ?? [];
+        const baseCompleted = base?.completed ?? [];
+
+        return {
+          completed: [
+            ...localReady,
+            ...baseCompleted.filter(
+              (t) =>
+                !localReady.some(
+                  (l) => l.orderId === t.orderId || l.ticketId === t.ticketId
+                )
+            ),
+          ],
+          inProgress: [
+            ...localInProgress,
+            ...kdsAsInProgress.filter(
+              (t) =>
+                !localInProgress.some(
+                  (l) => l.orderId === t.orderId || l.ticketId === t.ticketId
+                )
+            ),
+            ...baseInProgress.filter(
+              (t) =>
+                !localInProgress.some((l) => l.orderId === t.orderId) &&
+                !kdsAsInProgress.some((k) => k.ticketId === t.ticketId)
+            ),
+          ],
+          filterDate: base?.filterDate ?? '',
+          filterTimezone: base?.filterTimezone ?? 'UTC',
+        };
+      };
+
+      const showOfflineFallback = async (notice: string) => {
+        const cached = await getOfflineCache<OrderDisplayPayload['data']>(
+          OFFLINE_CACHE_KEYS.orderDisplay
+        ).catch(() => null);
+        const merged = await buildOfflinePayload(cached);
+        applyPayload(merged, { announce: false, notice });
+      };
+
+      // Prefer a real network attempt even if navigator.onLine is wrong.
+      if (isBrowserOffline()) {
+        await showOfflineFallback(
+          lang === 'es'
+            ? 'Modo sin conexión — mostrando pedidos locales / en caché.'
+            : 'Offline mode — showing local / cached orders.'
+        );
+        return;
+      }
+
+      // Never block online rendering on IndexedDB maintenance.
+      void pruneOrphanLocalTickets();
+
+      try {
+        const res = await fetch('/api/restaurant/order-display', {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
+
+        if (isStale()) return;
+
+        if (!res.ok) {
+          // Auth / server errors: show message, try cache only for 5xx.
+          if (res.status === 401 || res.status === 403) {
+            setError(copyRef.current.signInError);
+            return;
+          }
+          if (res.status >= 500) {
+            await showOfflineFallback(
+              lang === 'es'
+                ? 'Error del servidor — mostrando pedidos en caché.'
+                : 'Server error — showing cached orders.'
+            );
+            return;
+          }
+          setError(copyRef.current.loadError);
+          return;
+        }
+
+        const body = (await res.json().catch(() => null)) as
+          | OrderDisplayPayload
+          | { error?: string }
+          | null;
+
+        if (isStale()) return;
+
+        const remote =
+          body &&
+          typeof body === 'object' &&
+          'data' in body &&
+          body.data &&
+          typeof body.data === 'object'
+            ? (body.data as OrderDisplayPayload['data'])
+            : null;
+
+        if (!remote) {
+          setError(copyRef.current.loadError);
+          return;
+        }
+
+        // Normalize arrays so UI never crashes on partial payloads.
+        const normalized: OrderDisplayPayload['data'] = {
+          completed: Array.isArray(remote.completed) ? remote.completed : [],
+          inProgress: Array.isArray(remote.inProgress) ? remote.inProgress : [],
+          filterDate: remote.filterDate ?? '',
+          filterTimezone: remote.filterTimezone ?? 'UTC',
+        };
+
+        // Cache write must not fail the live screen.
+        void setOfflineCache(OFFLINE_CACHE_KEYS.orderDisplay, normalized).catch(
+          () => undefined
+        );
+
+        let merged = normalized;
+        try {
+          merged = await mergePendingLocal(normalized);
+        } catch {
+          merged = normalized;
+        }
+
+        applyPayload(merged, { announce: true, notice: null });
+      } catch {
+        // Genuine network failure (DNS, offline mid-request, etc.).
+        const cached = await getOfflineCache<OrderDisplayPayload['data']>(
+          OFFLINE_CACHE_KEYS.orderDisplay
+        ).catch(() => null);
+        const hasLocal =
+          (await listLocalMakingTickets().catch(() => [])).length > 0 ||
+          (await listLocalCompletedTickets().catch(() => [])).length > 0;
+
+        if (cached || hasLocal) {
+          await showOfflineFallback(
+            lang === 'es'
+              ? 'Sin conexión al servidor — mostrando pedidos locales / en caché.'
+              : 'Server unreachable — showing local / cached orders.'
           );
+          return;
         }
+        if (!isStale()) setError(copyRef.current.loadError);
       }
-      initializedRef.current = true;
-    } catch (e) {
-      const msg =
-        axios.isAxiosError(e) && e.response?.status === 401
-          ? copyRef.current.signInError
-          : copyRef.current.loadError;
-      setError(msg);
+    } catch {
+      if (!isStale()) setError(copyRef.current.loadError);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!isStale()) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, []);
+  }, [lang]);
+
+  useEffect(() => {
+    const onOfflineChange = () => void load();
+    window.addEventListener('offline-outbox-changed', onOfflineChange);
+    window.addEventListener('online', onOfflineChange);
+    window.addEventListener('offline', onOfflineChange);
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('foodluk-offline-sync');
+      bc.onmessage = () => void load();
+    } catch {
+      /* optional */
+    }
+    return () => {
+      window.removeEventListener('offline-outbox-changed', onOfflineChange);
+      window.removeEventListener('online', onOfflineChange);
+      window.removeEventListener('offline', onOfflineChange);
+      bc?.close();
+    };
+  }, [load]);
 
   useRealtimeRefresh('realtime:order_display', () => void load());
 

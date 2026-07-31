@@ -24,6 +24,18 @@ import {
 import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
 import { kdsAxiosErrorMessage } from '@/lib/kds-api-errors';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import {
+  getOfflineCache,
+  OFFLINE_CACHE_KEYS,
+  setOfflineCache,
+} from '@/lib/offline/local-cache';
+import {
+  findLocalTicket,
+  listLocalMakingTickets,
+  updateLocalTicketStatus,
+} from '@/lib/offline/local-tickets';
+import { isBrowserOffline } from '@/lib/offline/db';
+import { enqueueOrderOutbox, isOfflineLocalOrderId } from '@/lib/offline/outbox';
 
 type Ticket = {
   id: string;
@@ -281,18 +293,98 @@ export function KdsKitchenScreen() {
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
+      const local = await listLocalMakingTickets();
+      const localAsTickets: Ticket[] = local.map((t) => ({
+        id: t.id,
+        orderId: t.orderId,
+        status: t.status,
+        selectedMinutes: t.selectedMinutes,
+        startedAt: t.startedAt,
+        createdAt: new Date(t.createdAt).toISOString(),
+        sourceType: 'POS',
+        orderTotal: 0,
+        customerName: null,
+        ticketNumber: t.ticketNumber,
+        shortOrderId: t.shortOrderId,
+        items: t.items,
+      }));
+
+      if (isBrowserOffline()) {
+        const cached = await getOfflineCache<Ticket[]>(
+          OFFLINE_CACHE_KEYS.kdsTicketsMaking
+        );
+        const merged = [...localAsTickets, ...(cached ?? [])];
+        const byId = new Map(merged.map((t) => [t.id, t]));
+        setTickets([...byId.values()]);
+        return;
+      }
+
       const res = await axios.get<{ data: Ticket[] }>(
         '/api/restaurant/kds/tickets?status=making'
       );
-      setTickets(res.data.data ?? []);
+      const remote = res.data.data ?? [];
+      void setOfflineCache(OFFLINE_CACHE_KEYS.kdsTicketsMaking, remote);
+      const merged = [...localAsTickets, ...remote];
+      const byId = new Map(merged.map((t) => [t.id, t]));
+      setTickets([...byId.values()]);
     } catch (err) {
+      try {
+        const local = await listLocalMakingTickets();
+        const cached = await getOfflineCache<Ticket[]>(
+          OFFLINE_CACHE_KEYS.kdsTicketsMaking
+        );
+        const localAsTickets: Ticket[] = local.map((t) => ({
+          id: t.id,
+          orderId: t.orderId,
+          status: t.status,
+          selectedMinutes: t.selectedMinutes,
+          startedAt: t.startedAt,
+          createdAt: new Date(t.createdAt).toISOString(),
+          sourceType: 'POS',
+          orderTotal: 0,
+          customerName: null,
+          ticketNumber: t.ticketNumber,
+          shortOrderId: t.shortOrderId,
+          items: t.items,
+        }));
+        const merged = [...localAsTickets, ...(cached ?? [])];
+        if (merged.length > 0) {
+          setTickets(merged);
+          toast.warn('Showing offline / cached kitchen tickets.');
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
       setTickets([]);
-      toast.error(kdsAxiosErrorMessage(err, 'load', 'Could not load kitchen tickets.'));
+      toast.error(
+        kdsAxiosErrorMessage(err, 'load', 'Could not load kitchen tickets.')
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
+
+  useEffect(() => {
+    const onOfflineChange = () => void load();
+    window.addEventListener('offline-outbox-changed', onOfflineChange);
+    window.addEventListener('online', onOfflineChange);
+    window.addEventListener('offline', onOfflineChange);
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('foodluk-offline-sync');
+      bc.onmessage = () => void load();
+    } catch {
+      /* optional */
+    }
+    return () => {
+      window.removeEventListener('offline-outbox-changed', onOfflineChange);
+      window.removeEventListener('online', onOfflineChange);
+      window.removeEventListener('offline', onOfflineChange);
+      bc?.close();
+    };
+  }, [load]);
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
@@ -322,6 +414,58 @@ export function KdsKitchenScreen() {
       setActiveCancelingTicketId(ticketId);
     }
     try {
+      const localTicket = await findLocalTicket(ticketId);
+      const isLocal =
+        Boolean(localTicket) ||
+        isOfflineLocalOrderId(ticketId) ||
+        ticketId.startsWith('local-ticket-');
+
+      if (isLocal) {
+        const updated = await updateLocalTicketStatus(
+          localTicket?.id ?? ticketId,
+          status === 'completed' ? 'completed' : 'canceled'
+        );
+        if (!updated) {
+          throw new Error('Offline kitchen ticket not found on this device.');
+        }
+        // Drop from in-memory board immediately.
+        setTickets((prev) => prev.filter((t) => t.id !== ticketId && t.id !== localTicket?.id));
+        toast.success(
+          status === 'completed'
+            ? 'Ticket completed offline (will sync when online)'
+            : 'Ticket canceled offline (will sync when online)'
+        );
+        await load();
+        return true;
+      }
+
+      if (isBrowserOffline()) {
+        await enqueueOrderOutbox({
+          idempotencyKey: `kds-status-${ticketId}-${status}`,
+          url: `/api/restaurant/kds/tickets/${encodeURIComponent(ticketId)}`,
+          body: JSON.stringify({ status }),
+          kind: 'kds_status',
+          method: 'PATCH',
+          createdAt: Date.now(),
+        });
+        const cached = await getOfflineCache<Ticket[]>(
+          OFFLINE_CACHE_KEYS.kdsTicketsMaking
+        );
+        if (cached) {
+          await setOfflineCache(
+            OFFLINE_CACHE_KEYS.kdsTicketsMaking,
+            cached.filter((t) => t.id !== ticketId)
+          );
+        }
+        setTickets((prev) => prev.filter((t) => t.id !== ticketId));
+        toast.success(
+          status === 'completed'
+            ? 'Ticket completed offline (will sync when online)'
+            : 'Ticket canceled offline (will sync when online)'
+        );
+        return true;
+      }
+
       await axios.patch(`/api/restaurant/kds/tickets/${ticketId}`, { status });
       toast.success(
         status === 'completed' ? 'Order marked complete' : 'Order canceled'

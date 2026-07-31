@@ -28,8 +28,16 @@ import {
   paymentModeToMethodLabel,
   type PosOrderLineInput,
 } from '@/lib/pos-order-lines';
+import {
+  isPrismaUniqueViolation,
+  parseOrderIdempotencyKey,
+  recoverOrderFromIdempotencyConflict,
+  respondIfIdempotentOrderExists,
+} from '@/lib/order-idempotency-server';
 
 export async function POST(req: NextRequest) {
+  let restaurantId = '';
+  let idempotencyKey: string | null = null;
   try {
     const auth = await getRestaurantIdForRequest(req, {
       moduleKey: 'pos',
@@ -38,7 +46,28 @@ export async function POST(req: NextRequest) {
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const restaurantId = auth.restaurantId;
+    restaurantId = auth.restaurantId;
+    idempotencyKey = parseOrderIdempotencyKey(req);
+    const existing = await respondIfIdempotentOrderExists(
+      idempotencyKey,
+      restaurantId
+    );
+    if (existing) {
+      // Keep flat fields for POS UI + nested data for offline flush parser.
+      const body = await existing.json();
+      const data = (body as { data?: Record<string, unknown> }).data;
+      return NextResponse.json(
+        {
+          id: data?.orderId,
+          shortOrderId: data?.shortOrderId,
+          ticketNumber: data?.ticketNumber ?? null,
+          data,
+          message: 'POS order already saved',
+        },
+        { status: 200 }
+      );
+    }
+
     const branchScope = await getBranchScopeFromRequest(
       req,
       auth.userId,
@@ -261,10 +290,14 @@ export async function POST(req: NextRequest) {
                 diningTableId,
                 tableLabel,
                 posShiftId: activeShift.id,
+                ...(idempotencyKey ? { idempotencyKey } : {}),
               },
             });
             break;
           } catch (e) {
+            if (isPrismaUniqueViolation(e) && idempotencyKey) {
+              throw e;
+            }
             if (!isTicketNumberConflict(e) || attempt >= 7) throw e;
             ticketNumber += 1;
           }
@@ -311,11 +344,37 @@ export async function POST(req: NextRequest) {
         id: result.order.id,
         shortOrderId: result.order.shortOrderId,
         ticketNumber: result.ticketNumber,
+        data: {
+          orderId: result.order.id,
+          shortOrderId: result.order.shortOrderId,
+          restaurantId,
+          ticketNumber: result.ticketNumber,
+        },
         message: 'POS order saved',
       },
       { status: 201 }
     );
   } catch (e) {
+    if (isPrismaUniqueViolation(e)) {
+      const recovered = await recoverOrderFromIdempotencyConflict(
+        idempotencyKey,
+        restaurantId
+      );
+      if (recovered) {
+        const body = await recovered.json();
+        const data = (body as { data?: Record<string, unknown> }).data;
+        return NextResponse.json(
+          {
+            id: data?.orderId,
+            shortOrderId: data?.shortOrderId,
+            ticketNumber: data?.ticketNumber ?? null,
+            data,
+            message: 'POS order already saved',
+          },
+          { status: 200 }
+        );
+      }
+    }
     console.error(e);
     return NextResponse.json(
       { error: 'Failed to save POS order' },

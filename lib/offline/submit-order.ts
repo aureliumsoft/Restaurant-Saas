@@ -1,4 +1,13 @@
-import { enqueueOrderOutbox, type OutboxKind } from '@/lib/offline/outbox';
+import {
+  isBrowserOffline,
+  isLikelyNetworkFailure,
+} from '@/lib/offline/db';
+import {
+  enqueueOrderOutbox,
+  offlineLocalOrderId,
+  type OutboxKind,
+  type OutboxFollowUp,
+} from '@/lib/offline/outbox';
 
 export type PlacedOrderPayload = {
   orderId: string;
@@ -12,22 +21,6 @@ function newIdempotencyKey(): string {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-}
-
-function isOffline(): boolean {
-  return typeof navigator !== 'undefined' && navigator.onLine === false;
-}
-
-function isLikelyNetworkFailure(e: unknown): boolean {
-  if (!e || typeof e !== 'object') return false;
-  const err = e as { name?: string; message?: string; cause?: unknown };
-  if (err.name === 'TypeError') {
-    const msg = String(err.message ?? '');
-    if (msg.includes('fetch') || msg.includes('network') || msg.includes('Failed to fetch')) {
-      return true;
-    }
-  }
-  return false;
 }
 
 async function postOrderJson(
@@ -54,13 +47,22 @@ async function postOrderJson(
 
 function parsePlaced(json: unknown): PlacedOrderPayload | null {
   if (!json || typeof json !== 'object') return null;
-  const data = (json as { data?: unknown }).data;
-  if (!data || typeof data !== 'object') return null;
-  const d = data as Record<string, unknown>;
-  const orderId = typeof d.orderId === 'string' ? d.orderId : null;
+  const root = json as Record<string, unknown>;
+  const nested =
+    root.data && typeof root.data === 'object'
+      ? (root.data as Record<string, unknown>)
+      : null;
+  const d = nested ?? root;
+  const orderId =
+    typeof d.orderId === 'string'
+      ? d.orderId
+      : typeof d.id === 'string'
+        ? d.id
+        : null;
   const shortOrderId =
     typeof d.shortOrderId === 'string' ? d.shortOrderId : orderId;
-  const restaurantId = typeof d.restaurantId === 'string' ? d.restaurantId : '';
+  const restaurantId =
+    typeof d.restaurantId === 'string' ? d.restaurantId : '';
   const tn = d.ticketNumber;
   const ticketNumber = typeof tn === 'number' ? tn : null;
   if (!orderId || !shortOrderId) return null;
@@ -73,15 +75,96 @@ function parsePlaced(json: unknown): PlacedOrderPayload | null {
 }
 
 export type SubmitOrderSent = { status: 'sent'; data: PlacedOrderPayload };
-export type SubmitOrderQueued = { status: 'queued'; idempotencyKey: string };
+export type SubmitOrderQueued = {
+  status: 'queued';
+  idempotencyKey: string;
+  localOrderId: string;
+};
 export type SubmitOrderResult = SubmitOrderSent | SubmitOrderQueued;
 
-export async function submitCustomerOrder(body: unknown): Promise<SubmitOrderResult> {
+export async function submitCustomerOrder(
+  body: unknown
+): Promise<SubmitOrderResult> {
   return submitOrderWithOutbox('/api/customer/orders', body, 'customer_order');
 }
 
-export async function submitKioskOrder(body: unknown): Promise<SubmitOrderResult> {
+export async function submitKioskOrder(
+  body: unknown
+): Promise<SubmitOrderResult> {
   return submitOrderWithOutbox('/api/kiosk/orders', body, 'kiosk_order');
+}
+
+export async function submitPosOrder(
+  body: unknown
+): Promise<SubmitOrderResult> {
+  return submitOrderWithOutbox('/api/restaurant/pos-order', body, 'pos_order');
+}
+
+export async function submitKdsTicket(
+  body: { orderId: string; selectedMinutes: number },
+  opts?: { linkedOutboxKey?: string }
+): Promise<{ status: 'sent' } | { status: 'queued'; idempotencyKey: string }> {
+  const idempotencyKey = newIdempotencyKey();
+  const url = '/api/restaurant/kds/tickets';
+  const serialized = JSON.stringify(body);
+
+  if (isBrowserOffline()) {
+    if (opts?.linkedOutboxKey) {
+      const { updateOrderOutbox } = await import('@/lib/offline/outbox');
+      const followUp: OutboxFollowUp = {
+        kind: 'kds_ticket',
+        url,
+        bodyTemplate: JSON.stringify({
+          orderId: '{{orderId}}',
+          selectedMinutes: body.selectedMinutes,
+        }),
+      };
+      await updateOrderOutbox(opts.linkedOutboxKey, { followUp });
+      return { status: 'queued', idempotencyKey: opts.linkedOutboxKey };
+    }
+    await enqueueOrderOutbox({
+      idempotencyKey,
+      url,
+      body: serialized,
+      kind: 'kds_ticket',
+      createdAt: Date.now(),
+      localOrderId: body.orderId,
+    });
+    return { status: 'queued', idempotencyKey };
+  }
+
+  try {
+    const { ok, status } = await postOrderJson(url, body, idempotencyKey);
+    if (ok || status === 201) return { status: 'sent' };
+    throw new Error(`Kitchen ticket failed: ${status}`);
+  } catch (e) {
+    if (isBrowserOffline() || isLikelyNetworkFailure(e)) {
+      if (opts?.linkedOutboxKey) {
+        const { updateOrderOutbox } = await import('@/lib/offline/outbox');
+        await updateOrderOutbox(opts.linkedOutboxKey, {
+          followUp: {
+            kind: 'kds_ticket',
+            url,
+            bodyTemplate: JSON.stringify({
+              orderId: '{{orderId}}',
+              selectedMinutes: body.selectedMinutes,
+            }),
+          },
+        });
+        return { status: 'queued', idempotencyKey: opts.linkedOutboxKey };
+      }
+      await enqueueOrderOutbox({
+        idempotencyKey,
+        url,
+        body: serialized,
+        kind: 'kds_ticket',
+        createdAt: Date.now(),
+        localOrderId: body.orderId,
+      });
+      return { status: 'queued', idempotencyKey };
+    }
+    throw e;
+  }
 }
 
 async function submitOrderWithOutbox(
@@ -90,17 +173,19 @@ async function submitOrderWithOutbox(
   kind: OutboxKind
 ): Promise<SubmitOrderResult> {
   const idempotencyKey = newIdempotencyKey();
+  const localOrderId = offlineLocalOrderId(idempotencyKey);
   const serialized = JSON.stringify(body);
 
-  if (isOffline()) {
+  if (isBrowserOffline()) {
     await enqueueOrderOutbox({
       idempotencyKey,
       url,
       body: serialized,
       kind,
       createdAt: Date.now(),
+      localOrderId,
     });
-    return { status: 'queued', idempotencyKey };
+    return { status: 'queued', idempotencyKey, localOrderId };
   }
 
   try {
@@ -118,16 +203,19 @@ async function submitOrderWithOutbox(
     err.body = json;
     throw err;
   } catch (e) {
-    if (isOffline() || isLikelyNetworkFailure(e)) {
+    if (isBrowserOffline() || isLikelyNetworkFailure(e)) {
       await enqueueOrderOutbox({
         idempotencyKey,
         url,
         body: serialized,
         kind,
         createdAt: Date.now(),
+        localOrderId,
       });
-      return { status: 'queued', idempotencyKey };
+      return { status: 'queued', idempotencyKey, localOrderId };
     }
     throw e;
   }
 }
+
+export { parsePlaced as parsePlacedOrderPayload };

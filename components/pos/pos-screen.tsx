@@ -131,6 +131,12 @@ import {
   fetchRestaurantMenuProductDetail,
   productNeedsDetailFetch,
 } from '@/lib/menu/fetch-menu-product-detail';
+import {
+  isOfflineLocalOrderId,
+} from '@/lib/offline/outbox';
+import { submitKdsTicket, submitPosOrder } from '@/lib/offline/submit-order';
+import { upsertLocalTicket } from '@/lib/offline/local-tickets';
+import { isBrowserOffline } from '@/lib/offline/db';
 
 const POS_PANEL_CLASS =
   'rounded-2xl border border-border bg-card text-card-foreground shadow-md dark:shadow-[0_8px_30px_rgba(0,0,0,0.25)]';
@@ -588,6 +594,7 @@ export function PosScreen() {
     id: string;
     shortOrderId: string;
     ticketNumber: number | null;
+    items: Array<{ id: string; productName: string; quantity: number }>;
   } | null>(null);
   const [kitchenPrepMinutes, setKitchenPrepMinutes] = useState<
     Record<string, number>
@@ -1479,19 +1486,67 @@ export function PosScreen() {
     }
     setSendingToKitchen(true);
     try {
-      const res = await fetch('/api/restaurant/kds/tickets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const linkedOutboxKey = isOfflineLocalOrderId(kitchenSendOrder.id)
+        ? kitchenSendOrder.id.replace(/^offline-/, '')
+        : undefined;
+
+      // Offline-created orders cannot hit the cloud kitchen API until synced.
+      if (linkedOutboxKey) {
+        const { updateOrderOutbox } = await import('@/lib/offline/outbox');
+        await updateOrderOutbox(linkedOutboxKey, {
+          followUp: {
+            kind: 'kds_ticket',
+            url: '/api/restaurant/kds/tickets',
+            bodyTemplate: JSON.stringify({
+              orderId: '{{orderId}}',
+              selectedMinutes: minutes,
+            }),
+          },
+        });
+        await upsertLocalTicket({
+          id: `local-ticket-${kitchenSendOrder.id}`,
           orderId: kitchenSendOrder.id,
+          shortOrderId: kitchenSendOrder.shortOrderId,
+          ticketNumber: kitchenSendOrder.ticketNumber,
+          status: 'making',
+          startedAt: new Date().toISOString(),
           selectedMinutes: minutes,
-        }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        throw new Error(body.error || 'Could not send order to kitchen.');
+          items: kitchenSendOrder.items,
+          source: 'pos_offline',
+          createdAt: Date.now(),
+        });
+        toast.success(
+          `Kitchen ticket saved offline · ${minutes} min (will sync when online)`
+        );
+        resetKitchenSendDialog();
+        void loadPendingKitchenOrders();
+        return;
       }
-      toast.success(`Order sent to kitchen · ${minutes} min prep`);
+
+      const result = await submitKdsTicket({
+        orderId: kitchenSendOrder.id,
+        selectedMinutes: minutes,
+      });
+
+      if (result.status === 'queued') {
+        await upsertLocalTicket({
+          id: `local-ticket-${kitchenSendOrder.id}`,
+          orderId: kitchenSendOrder.id,
+          shortOrderId: kitchenSendOrder.shortOrderId,
+          ticketNumber: kitchenSendOrder.ticketNumber,
+          status: 'making',
+          startedAt: new Date().toISOString(),
+          selectedMinutes: minutes,
+          items: kitchenSendOrder.items,
+          source: 'pos_offline',
+          createdAt: Date.now(),
+        });
+        toast.success(
+          `Kitchen ticket saved offline · ${minutes} min (will sync when online)`
+        );
+      } else {
+        toast.success(`Order sent to kitchen · ${minutes} min prep`);
+      }
       resetKitchenSendDialog();
       void loadPendingKitchenOrders();
     } catch (e: unknown) {
@@ -1533,8 +1588,14 @@ export function PosScreen() {
     id: string;
     shortOrderId: string;
     ticketNumber: number | null;
+    items?: Array<{ id: string; productName: string; quantity: number }>;
   }) {
-    setKitchenSendOrder(order);
+    setKitchenSendOrder({
+      id: order.id,
+      shortOrderId: order.shortOrderId,
+      ticketNumber: order.ticketNumber,
+      items: order.items ?? [],
+    });
     setKitchenCustomMinutes('');
     setKitchenPrepMinutes((prev) => ({
       ...prev,
@@ -1787,17 +1848,65 @@ export function PosScreen() {
         );
         savedOrder = patchRes.data.data;
       } else {
-        const postRes = await axios.post<{
-          id?: string;
-          shortOrderId?: string;
-          ticketNumber?: number | null;
-        }>('/api/restaurant/pos-order', orderPayload);
-        savedOrder = postRes.data;
+        if (effectivePaymentMode === 'card_terminal' && isBrowserOffline()) {
+          toast.error(
+            'Card terminal payments require an internet connection.'
+          );
+          return;
+        }
+        const kitchenItems = cart.map((l) => ({
+          id: l.menuItemId,
+          productName: posCartLineDisplayName(l),
+          quantity: l.qty,
+        }));
+        const createResult = await submitPosOrder(orderPayload);
+        if (createResult.status === 'queued') {
+          const localId = createResult.localOrderId;
+          toast.success(
+            `Order saved offline — will sync when online · ${itemsCount} items · ${formatMoney(grandTotal)}`
+          );
+          printOrderReceipt(localId.slice(0, 8).toUpperCase(), null, {
+            mode: effectivePaymentMode,
+            paid: Number(paymentAmount) || 0,
+          });
+          clearCart();
+          setPayment('');
+          setAmountPaid('');
+          resetCardPayment();
+          setPaymentMode('cash');
+          setOrderAddress('');
+          setCustomerName('');
+          setCustomerPhone('');
+          setTableId('');
+          setCheckoutOpen(false);
+          openKitchenSendDialog({
+            id: localId,
+            shortOrderId: localId.replace(/^offline-/, '').slice(0, 8).toUpperCase(),
+            ticketNumber: null,
+            items: kitchenItems,
+          });
+          return;
+        }
+        savedOrder = {
+          id: createResult.data.orderId,
+          shortOrderId: createResult.data.shortOrderId,
+          ticketNumber: createResult.data.ticketNumber,
+        };
+        (savedOrder as { _kitchenItems?: typeof kitchenItems })._kitchenItems =
+          kitchenItems;
       }
       const dbOrderId = savedOrder.id || editingOrderId || `POS-${Date.now()}`;
       const trackingId =
         savedOrder.shortOrderId || editingOrderLabel || dbOrderId;
       const ticketNumber = savedOrder.ticketNumber ?? null;
+      const kitchenItemsForDialog =
+        (savedOrder as { _kitchenItems?: Array<{ id: string; productName: string; quantity: number }> })
+          ._kitchenItems ??
+        cart.map((l) => ({
+          id: l.menuItemId,
+          productName: posCartLineDisplayName(l),
+          quantity: l.qty,
+        }));
       if (!isEditing && isTerminal) {
         const terminalBase =
           process.env.NEXT_PUBLIC_POS_TERMINAL_API?.trim().replace(/\/$/, '') ||
@@ -1890,6 +1999,7 @@ export function PosScreen() {
           id: dbOrderId,
           shortOrderId: trackingId,
           ticketNumber,
+          items: kitchenItemsForDialog,
         });
         void loadPendingKitchenOrders();
       }
