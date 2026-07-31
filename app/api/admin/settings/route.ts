@@ -4,12 +4,9 @@ import { z } from "zod";
 
 import { requirePlatformAdmin } from "@/lib/auth/adminRequest";
 import { db } from "@/lib/db";
+import { PLATFORM_SETTING_DEFAULTS } from "@/lib/platform-settings";
 
-const DEFAULTS: Record<string, string> = {
-  default_trial_days: "14",
-  support_email: "",
-  billing_notice: "",
-};
+const DEFAULTS: Record<string, string> = { ...PLATFORM_SETTING_DEFAULTS };
 
 const putSchema = z.object({
   entries: z.array(

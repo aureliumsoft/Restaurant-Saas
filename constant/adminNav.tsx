@@ -4,6 +4,7 @@ import {
   CreditCard,
   LayoutDashboard,
   Mail,
+  Search,
   Settings,
   Inbox,
 } from 'lucide-react';
@@ -64,6 +65,12 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   {
     label: 'System',
     items: [
+      {
+        title: 'SEO & analytics',
+        path: '/admin/seo',
+        icon: <Search className="h-4 w-4" />,
+        description: 'GSC, GA4 & verification',
+      },
       {
         title: 'Platform settings',
         path: '/admin/settings',
