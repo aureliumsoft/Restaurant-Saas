@@ -253,7 +253,7 @@ export async function GET(req: NextRequest) {
       const pageSkip = (safePage - 1) * pageSize;
       const rows = await db.order.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+            orderBy: { createdAt: 'desc' },
         skip: pageSkip,
         take: pageSize,
         select: { id: true },
