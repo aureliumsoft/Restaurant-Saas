@@ -3,47 +3,16 @@
 import Script from 'next/script';
 import { usePathname } from 'next/navigation';
 
-/**
- * Operational / tenant surfaces — exclude so GA4 tracks the SaaS marketing
- * funnel (landing, pricing, auth) rather than POS/KDS/storefront noise.
- */
-const SKIP_PREFIXES = [
-  '/admin',
-  '/pos',
-  '/kds',
-  '/kds-screen',
-  '/order-display',
-  '/web-app',
-  '/kiosk',
-  '/dashboard',
-  '/sales',
-  '/branched',
-  '/tables',
-  '/categories',
-  '/variations',
-  '/product',
-  '/configurations',
-  '/records',
-  '/settings',
-  '/invite',
-  '/employees',
-  '/roles',
-] as const;
+import { shouldLoadMarketingAnalytics } from '@/lib/analytics/marketing-path';
 
-function shouldTrackPath(pathname: string | null): boolean {
-  if (!pathname) return true;
-  return !SKIP_PREFIXES.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`)
-  );
-}
-
+/** Direct GA4 Google tag (gtag.js). Prefer GTM when both are configured. */
 export function PlatformGoogleAnalytics({
   measurementId,
 }: {
   measurementId: string;
 }) {
   const pathname = usePathname();
-  if (!measurementId || !shouldTrackPath(pathname)) return null;
+  if (!measurementId || !shouldLoadMarketingAnalytics(pathname)) return null;
 
   return (
     <>

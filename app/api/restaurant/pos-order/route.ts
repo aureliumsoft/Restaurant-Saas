@@ -309,7 +309,7 @@ export async function POST(req: NextRequest) {
 
         await tx.orderItem.createMany({
           data: normalizedItems.map((line) => ({
-            orderId: order.id,
+            orderId: order?.id ?? '',
             menuItemId: line.menuItemId,
             quantity: line.quantity,
             price: line.price,

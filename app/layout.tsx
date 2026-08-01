@@ -6,12 +6,17 @@ import 'react-toastify/dist/ReactToastify.css';
 const inter = Inter({ subsets: ['latin'] });
 import Providers from './providers';
 import { PlatformGoogleAnalytics } from '@/components/analytics/platform-google-analytics';
+import {
+  PlatformGoogleTagManager,
+  PlatformGoogleTagManagerNoscript,
+} from '@/components/analytics/platform-google-tag-manager';
 import { parseUiLanguage } from '@/lib/i18n/language-cookie';
 import { UI_LANG_STORAGE_KEY } from '@/lib/i18n/resources';
 import { getAppSession } from '@/lib/auth/app-session';
 import {
   getPlatformSetting,
   normalizeGa4MeasurementId,
+  normalizeGtmContainerId,
 } from '@/lib/platform-settings';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -41,16 +46,28 @@ export default async function RootLayout({
     cookieStore.get(UI_LANG_STORAGE_KEY)?.value
   );
   const session = await getAppSession();
+  const gtmId = normalizeGtmContainerId(
+    await getPlatformSetting('seo_gtm_container_id')
+  );
   const gaId = normalizeGa4MeasurementId(
     await getPlatformSetting('seo_ga4_measurement_id')
   );
+  // Prefer GTM when set so GA4 is configured inside the container (no double-count).
+  const useGtm = Boolean(gtmId);
+  const useDirectGa4 = !useGtm && Boolean(gaId);
 
   return (
     <html lang={initialLanguage} className="dark" style={{ colorScheme: 'dark' }}>
       <body className={inter.className}>
+        {useGtm ? (
+          <PlatformGoogleTagManagerNoscript containerId={gtmId} />
+        ) : null}
         <Providers initialLanguage={initialLanguage} session={session}>
           {children}
-          {gaId ? <PlatformGoogleAnalytics measurementId={gaId} /> : null}
+          {useGtm ? <PlatformGoogleTagManager containerId={gtmId} /> : null}
+          {useDirectGa4 ? (
+            <PlatformGoogleAnalytics measurementId={gaId} />
+          ) : null}
         </Providers>
       </body>
     </html>

@@ -6,6 +6,7 @@ export const PLATFORM_SETTING_DEFAULTS = {
   support_email: '',
   billing_notice: '',
   seo_google_site_verification: '',
+  seo_gtm_container_id: '',
   seo_ga4_measurement_id: '',
   seo_gsc_property_url: '',
 } as const;
@@ -14,6 +15,7 @@ export type PlatformSettingKey = keyof typeof PLATFORM_SETTING_DEFAULTS;
 
 export const SEO_SETTING_KEYS = [
   'seo_google_site_verification',
+  'seo_gtm_container_id',
   'seo_ga4_measurement_id',
   'seo_gsc_property_url',
 ] as const satisfies readonly PlatformSettingKey[];
@@ -54,5 +56,12 @@ export async function getPlatformSettingsMap(
 export function normalizeGa4MeasurementId(raw: string): string {
   const id = raw.trim().toUpperCase();
   if (!/^G-[A-Z0-9]+$/.test(id)) return '';
+  return id;
+}
+
+/** Normalize GTM container IDs like `GTM-XXXXXXX`. Empty string if invalid. */
+export function normalizeGtmContainerId(raw: string): string {
+  const id = raw.trim().toUpperCase();
+  if (!/^GTM-[A-Z0-9]+$/.test(id)) return '';
   return id;
 }

@@ -10,6 +10,7 @@ import {
   Search,
   BarChart3,
   ShieldCheck,
+  Tags,
 } from 'lucide-react';
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
@@ -37,10 +38,18 @@ const FIELDS = [
     icon: ShieldCheck,
   },
   {
+    key: 'seo_gtm_container_id' as const,
+    label: 'Google Tag Manager container ID',
+    description:
+      'Web container ID (GTM-XXXXXXX). When set, the official GTM snippet is installed and the direct GA4 gtag below is skipped — add GA4 inside GTM instead.',
+    placeholder: 'GTM-XXXXXXX',
+    icon: Tags,
+  },
+  {
     key: 'seo_ga4_measurement_id' as const,
     label: 'Google Analytics 4 Measurement ID',
     description:
-      'GA4 property ID for the Foodluk marketing site (format G-XXXXXXXX).',
+      'Used only when GTM is empty. Prefer configuring GA4 inside Tag Manager when GTM is set.',
     placeholder: 'G-XXXXXXXX',
     icon: BarChart3,
   },
@@ -81,8 +90,10 @@ export default function AdminSeoPage() {
   }, []);
 
   const verificationReady = Boolean(map.seo_google_site_verification?.trim());
+  const gtmReady = Boolean(map.seo_gtm_container_id?.trim());
   const gaReady = Boolean(map.seo_ga4_measurement_id?.trim());
   const gscReady = Boolean(map.seo_gsc_property_url?.trim());
+  const analyticsViaGtm = gtmReady;
 
   const sitemapUrl = useMemo(() => {
     if (typeof window === 'undefined') return '/sitemap.xml';
@@ -121,6 +132,16 @@ export default function AdminSeoPage() {
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" asChild>
               <a
+                href="https://tagmanager.google.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Tag Manager
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <a
                 href={gscOpenUrl(map.seo_gsc_property_url ?? '')}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -143,7 +164,7 @@ export default function AdminSeoPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatusCard
           label="Site verification"
           ready={verificationReady}
@@ -154,12 +175,23 @@ export default function AdminSeoPage() {
           }
         />
         <StatusCard
-          label="Google Analytics"
-          ready={gaReady}
+          label="Google Tag Manager"
+          ready={gtmReady}
           hint={
-            gaReady
-              ? 'GA4 tag loads on marketing & auth pages'
-              : 'Add a G- Measurement ID'
+            gtmReady
+              ? 'Official GTM snippet on marketing & auth pages'
+              : 'Add a GTM- container ID'
+          }
+        />
+        <StatusCard
+          label="Google Analytics"
+          ready={analyticsViaGtm || gaReady}
+          hint={
+            analyticsViaGtm
+              ? 'Configure GA4 inside GTM (direct G- tag is skipped)'
+              : gaReady
+                ? 'Direct GA4 gtag loads on marketing & auth pages'
+                : 'Add GTM or a G- Measurement ID'
           }
         />
         <StatusCard
@@ -248,9 +280,15 @@ export default function AdminSeoPage() {
               </a>
             </li>
             <li>
-              Create a GA4 property for Foodluk, copy the Measurement ID (
-              <code className="text-foreground">G-…</code>), save it here, then confirm
-              realtime hits on the homepage.
+              Create a GTM Web container, copy <code className="text-foreground">GTM-…</code>,
+              save it here. In GTM add a <strong className="text-foreground">GA4 Configuration</strong>{' '}
+              tag with your Measurement ID, trigger All Pages, then{' '}
+              <strong className="text-foreground">Publish</strong>.
+            </li>
+            <li>
+              Or skip GTM and paste a GA4 Measurement ID (
+              <code className="text-foreground">G-…</code>) here for the direct Google tag.
+              If both are set, only GTM is installed.
             </li>
             <li>
               Optionally link GA4 ↔ Search Console in Google’s product settings for
