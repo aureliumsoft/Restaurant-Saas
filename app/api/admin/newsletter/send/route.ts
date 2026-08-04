@@ -3,8 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requirePlatformAdmin } from "@/lib/auth/adminRequest";
-import { db } from "@/lib/db";
-import { sendNewsletterToSubscriber } from "@/lib/email/newsletter";
+import { saveAndBroadcastNewsletter } from "@/lib/newsletter/broadcast";
 import { getSmtpConfigError } from "@/lib/email/smtp";
 
 const sendSchema = z.object({
@@ -43,68 +42,24 @@ export async function POST(req: NextRequest) {
   const { subject, htmlBody, textBody } = parsed.data;
 
   try {
-    const subscribers = await db.newsletterSubscriber.findMany({
-      where: { unsubscribedAt: null },
-      select: { id: true, email: true },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (subscribers.length === 0) {
-      return NextResponse.json(
-        { error: "There are no active subscribers to email." },
-        { status: 400 }
-      );
-    }
-
-    let successCount = 0;
-    let failureCount = 0;
-    const errors: string[] = [];
-
-    for (const sub of subscribers) {
-      const result = await sendNewsletterToSubscriber({
-        to: sub.email,
-        subject,
-        htmlBody,
-        textBody,
-      });
-      if (result.ok) {
-        successCount += 1;
-      } else {
-        failureCount += 1;
-        if (errors.length < 5) {
-          errors.push(`${sub.email}: ${result.error}`);
-        }
-      }
-    }
-
-    const campaign = await db.newsletterCampaign.create({
-      data: {
-        subject,
-        htmlBody,
-        textBody: textBody ?? null,
-        status: failureCount === subscribers.length ? "FAILED" : "SENT",
-        recipientCount: subscribers.length,
-        successCount,
-        failureCount,
-        sentByEmail: auth.email,
-      },
-      select: {
-        id: true,
-        subject: true,
-        recipientCount: true,
-        successCount: true,
-        failureCount: true,
-        sentAt: true,
-        status: true,
-      },
+    const result = await saveAndBroadcastNewsletter({
+      subject,
+      htmlBody,
+      textBody,
+      sentByEmail: auth.email,
     });
 
     return NextResponse.json(
       {
         data: {
-          ...campaign,
-          sentAt: campaign.sentAt.toISOString(),
-          errors: errors.length > 0 ? errors : undefined,
+          id: result.campaignId,
+          subject: result.subject,
+          recipientCount: result.recipientCount,
+          successCount: result.successCount,
+          failureCount: result.failureCount,
+          sentAt: result.sentAt.toISOString(),
+          status: result.status,
+          errors: result.errors.length > 0 ? result.errors : undefined,
         },
       },
       { status: 201 }
@@ -112,7 +67,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error("[admin/newsletter/send]", e);
     return NextResponse.json(
-      { error: "Failed to send newsletter" },
+      { error: "Failed to save and send newsletter" },
       { status: 500 }
     );
   }

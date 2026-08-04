@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
 import { SEO_SETTING_KEYS } from '@/lib/platform-settings';
+import { AdminTrafficMetrics } from '@/components/admin/admin-traffic-metrics';
 
 const FIELDS = [
   {
@@ -54,10 +55,18 @@ const FIELDS = [
     icon: BarChart3,
   },
   {
+    key: 'seo_ga4_property_id' as const,
+    label: 'GA4 property ID (reporting)',
+    description:
+      'Numeric property ID for admin dashboard metrics (Admin → Property settings). Not the G- measurement ID.',
+    placeholder: '123456789',
+    icon: BarChart3,
+  },
+  {
     key: 'seo_gsc_property_url' as const,
     label: 'Search Console property URL',
     description:
-      'Verified property URL used for quick links (e.g. https://foodluk.com/).',
+      'Verified property URL for search metrics and quick links (e.g. https://foodluk.com/).',
     placeholder: 'https://foodluk.com/',
     icon: Search,
   },
@@ -164,6 +173,8 @@ export default function AdminSeoPage() {
         }
       />
 
+      <AdminTrafficMetrics />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatusCard
           label="Site verification"
@@ -209,30 +220,33 @@ export default function AdminSeoPage() {
         <CardHeader>
           <CardTitle>Connection settings</CardTitle>
           <CardDescription>
-            Values are stored in PlatformSetting and applied on the public site after
-            save. Verify ownership in Search Console once the meta tag is live.
+            Values are stored in PlatformSetting and applied on the public site
+            after save. Verify ownership in Search Console once the meta tag is
+            live.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {FIELDS.map(({ key, label, description, placeholder, icon: Icon }) => (
-            <div key={key} className="grid gap-2">
-              <Label htmlFor={key} className="flex items-center gap-2">
-                <Icon className="h-4 w-4 text-muted-foreground" />
-                {label}
-              </Label>
-              <p className="text-xs text-muted-foreground">{description}</p>
-              <Input
-                id={key}
-                value={map[key] ?? ''}
-                placeholder={placeholder}
-                onChange={(e) =>
-                  setMap((m) => ({ ...m, [key]: e.target.value }))
-                }
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-          ))}
+          {FIELDS.map(
+            ({ key, label, description, placeholder, icon: Icon }) => (
+              <div key={key} className="grid gap-2">
+                <Label htmlFor={key} className="flex items-center gap-2">
+                  <Icon className="h-4 w-4 text-muted-foreground" />
+                  {label}
+                </Label>
+                <p className="text-xs text-muted-foreground">{description}</p>
+                <Input
+                  id={key}
+                  value={map[key] ?? ''}
+                  placeholder={placeholder}
+                  onChange={(e) =>
+                    setMap((m) => ({ ...m, [key]: e.target.value }))
+                  }
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
+            )
+          )}
           <Button
             type="button"
             disabled={saving}
@@ -263,10 +277,12 @@ export default function AdminSeoPage() {
         <CardContent>
           <ol className="list-decimal space-y-3 pl-5 text-sm text-muted-foreground">
             <li>
-              In Search Console, add a URL-prefix property for your production domain
-              and choose <strong className="text-foreground">HTML tag</strong>{' '}
-              verification. Paste only the <code className="text-foreground">content</code>{' '}
-              value above, save, then click Verify.
+              In Search Console, add a URL-prefix property for your production
+              domain and choose{' '}
+              <strong className="text-foreground">HTML tag</strong>{' '}
+              verification. Paste only the{' '}
+              <code className="text-foreground">content</code> value above,
+              save, then click Verify.
             </li>
             <li>
               Submit the sitemap:{' '}
@@ -280,19 +296,21 @@ export default function AdminSeoPage() {
               </a>
             </li>
             <li>
-              Create a GTM Web container, copy <code className="text-foreground">GTM-…</code>,
-              save it here. In GTM add a <strong className="text-foreground">GA4 Configuration</strong>{' '}
-              tag with your Measurement ID, trigger All Pages, then{' '}
+              Create a GTM Web container, copy{' '}
+              <code className="text-foreground">GTM-…</code>, save it here. In
+              GTM add a{' '}
+              <strong className="text-foreground">GA4 Configuration</strong> tag
+              with your Measurement ID, trigger All Pages, then{' '}
               <strong className="text-foreground">Publish</strong>.
             </li>
             <li>
               Or skip GTM and paste a GA4 Measurement ID (
-              <code className="text-foreground">G-…</code>) here for the direct Google tag.
-              If both are set, only GTM is installed.
+              <code className="text-foreground">G-…</code>) here for the direct
+              Google tag. If both are set, only GTM is installed.
             </li>
             <li>
-              Optionally link GA4 ↔ Search Console in Google’s product settings for
-              richer reports.
+              Optionally link GA4 ↔ Search Console in Google’s product settings
+              for richer reports.
             </li>
           </ol>
         </CardContent>
@@ -325,7 +343,9 @@ function StatusCard({
         <CardDescription>{label}</CardDescription>
         <CardTitle className="text-base">
           {ready ? (
-            <span className="text-emerald-600 dark:text-emerald-400">Configured</span>
+            <span className="text-emerald-600 dark:text-emerald-400">
+              Configured
+            </span>
           ) : (
             <span className="text-muted-foreground">Not set</span>
           )}

@@ -32,7 +32,7 @@ import {
   DashboardTableRow,
   DashboardTableWrapper,
 } from '@/components/dashboard/dashboard-table';
-import { DeleteConfirmation } from '@/components/ui/confirmation-dialogs';
+import { DeleteConfirmation, SaveConfirmation } from '@/components/ui/confirmation-dialogs';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -49,6 +49,7 @@ import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 
 import { InventoryQuickActions } from './inventory-quick-actions';
 import { LazyProductImage } from './lazy-product-image';
+import { ProductCsvImportWizard } from './product-csv-import-wizard';
 import type { MenuItemRow } from './types';
 
 const PRODUCTS_PAGE_SIZE = 12;
@@ -174,7 +175,8 @@ export function ProductsTab({
   });
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [showExportConfirmation, setShowExportConfirmation] = useState(false);
+  const [showImportWizard, setShowImportWizard] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingProduct, setDeletingProduct] = useState<MenuItemRow | null>(
     null
@@ -183,7 +185,6 @@ export function ProductsTab({
 
   const requestIdRef = useRef(0);
   const cacheRef = useRef<Map<string, CachedPage>>(new Map());
-  const importInputRef = useRef<HTMLInputElement | null>(null);
   const categoriesRef = useRef(categories);
   categoriesRef.current = categories;
 
@@ -317,7 +318,7 @@ export function ProductsTab({
     await loadProducts();
   };
 
-  const exportProductsExcel = async () => {
+  const exportProductsCsv = async () => {
     setExporting(true);
     try {
       const params = new URLSearchParams();
@@ -336,68 +337,30 @@ export function ProductsTab({
         throw new Error(body.error || 'Export failed');
       }
       const blob = await res.blob();
+      if (blob.size === 0) {
+        throw new Error('Export file was empty');
+      }
       const disposition = res.headers.get('Content-Disposition') || '';
       const match = disposition.match(/filename="([^"]+)"/);
       const filename =
-        match?.[1] || `products-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        match?.[1] ||
+        `products-export-${new Date().toISOString().slice(0, 10)}.csv`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
+      a.download = filename.endsWith('.csv') ? filename : `${filename}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      toast.success('Products exported to Excel');
+      setShowExportConfirmation(false);
+      toast.success('Products exported to CSV');
     } catch (e: unknown) {
       toast.error(
         e instanceof Error ? e.message : 'Could not export products'
       );
     } finally {
       setExporting(false);
-    }
-  };
-
-  const importProductsExcel = async (file: File) => {
-    setImporting(true);
-    try {
-      const formData = new FormData();
-      formData.set('file', file);
-      const res = await fetch('/api/restaurant/menu/products/import', {
-        method: 'POST',
-        body: formData,
-      });
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        details?: string[];
-        data?: {
-          products: number;
-          createdProducts: number;
-          updatedProducts: number;
-          variations: number;
-          recommendations: number;
-          offers: number;
-          personalizeGroups: number;
-          personalizeOptions: number;
-        };
-      };
-      if (!res.ok) {
-        const detail = body.details?.slice(0, 5).join(' | ');
-        throw new Error(
-          detail ? `${body.error ?? 'Import failed'}: ${detail}` : body.error ?? 'Import failed'
-        );
-      }
-      toast.success(
-        `Imported ${body.data?.products ?? 0} products (${body.data?.createdProducts ?? 0} new, ${body.data?.updatedProducts ?? 0} updated)`
-      );
-      await refreshAll();
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Could not import products');
-    } finally {
-      setImporting(false);
-      if (importInputRef.current) {
-        importInputRef.current.value = '';
-      }
     }
   };
 
@@ -444,42 +407,27 @@ export function ProductsTab({
       <DashboardCardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <DashboardCardTitle>Products</DashboardCardTitle>
         <div className="flex flex-wrap gap-2">
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              void importProductsExcel(file);
-            }}
-          />
           <Button
             type="button"
             variant="outline"
-            onClick={() => importInputRef.current?.click()}
-            disabled={importing || noCategories}
+            onClick={() => setShowImportWizard(true)}
+            disabled={noCategories}
           >
-            {importing ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="mr-2 h-4 w-4" />
-            )}
-            Import Excel
+            <Download className="mr-2 h-4 w-4" />
+            Import CSV
           </Button>
           <Button
             type="button"
             variant="outline"
-            onClick={() => void exportProductsExcel()}
+            onClick={() => setShowExportConfirmation(true)}
             disabled={exporting || noCategories}
           >
             {exporting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <Download className="mr-2 h-4 w-4" />
+            <Upload className="mr-2 h-4 w-4" />
             )}
-            Export Excel
+            Export CSV
           </Button>
           <InventoryQuickActions
             onMenuRefresh={refreshAll}
@@ -738,6 +686,28 @@ export function ProductsTab({
           </div>
         )}
       </DashboardCardContent>
+
+      <ProductCsvImportWizard
+        open={showImportWizard}
+        onOpenChange={setShowImportWizard}
+        onImported={() => void refreshAll()}
+      />
+
+      <SaveConfirmation
+        open={showExportConfirmation}
+        title="Export products"
+        description={
+          debouncedSearch || categoryFilter !== ALL_CATEGORIES
+            ? 'Download a CSV of products matching your current search and category filters? Images are not included.'
+            : 'Download a CSV of all products? Images are not included.'
+        }
+        loading={exporting}
+        confirmText="Export CSV"
+        onConfirm={() => void exportProductsCsv()}
+        onCancel={() => {
+          if (!exporting) setShowExportConfirmation(false);
+        }}
+      />
 
       <DeleteConfirmation
         open={deleteConfirmOpen}

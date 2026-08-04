@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { Loader2, Plus, Save, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
@@ -17,7 +18,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { normalizeThemePrimaryColor } from '@/lib/restaurant-theme';
-import { Loader2, Save } from 'lucide-react';
 
 type RestaurantBrandingDto = {
   id: string;
@@ -40,7 +40,7 @@ export function RestaurantBrandingCard({
   const [saving, setSaving] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
   const [mainBannerUrl, setMainBannerUrl] = useState('');
-  const [menuBannerLines, setMenuBannerLines] = useState('');
+  const [menuBanners, setMenuBanners] = useState<string[]>(['']);
   const [themePrimaryColor, setThemePrimaryColor] = useState('#ea580c');
 
   useEffect(() => {
@@ -56,13 +56,14 @@ export function RestaurantBrandingCard({
           setHasRestaurant(false);
           setLogoUrl('');
           setMainBannerUrl('');
-          setMenuBannerLines('');
+          setMenuBanners(['']);
           return;
         }
         setHasRestaurant(true);
         setLogoUrl(d.logoUrl ?? '');
         setMainBannerUrl(d.mainBannerUrl ?? '');
-        setMenuBannerLines((d.menuBannerUrls ?? []).join('\n'));
+        const urls = (d.menuBannerUrls ?? []).filter(Boolean);
+        setMenuBanners(urls.length > 0 ? urls : ['']);
         setThemePrimaryColor(d.themePrimaryColor ?? '#ea580c');
       } catch {
         if (!cancelled) toast.error('Could not load restaurant branding.');
@@ -75,6 +76,25 @@ export function RestaurantBrandingCard({
     };
   }, []);
 
+  function addMenuBannerRow() {
+    setMenuBanners((prev) => [...prev, '']);
+  }
+
+  function setMenuBanner(i: number, v: string) {
+    setMenuBanners((prev) => {
+      const next = [...prev];
+      next[i] = v;
+      return next;
+    });
+  }
+
+  function removeMenuBanner(i: number) {
+    setMenuBanners((prev) => {
+      const next = prev.filter((_, idx) => idx !== i);
+      return next.length > 0 ? next : [''];
+    });
+  }
+
   async function handleSave() {
     if (!brandingAllowed) {
       toast.error('Your plan does not include custom branding.');
@@ -85,10 +105,7 @@ export function RestaurantBrandingCard({
       return;
     }
 
-    const menuBannerUrls = menuBannerLines
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const menuBannerUrls = menuBanners.map((s) => s.trim()).filter(Boolean);
 
     setSaving(true);
     try {
@@ -106,7 +123,8 @@ export function RestaurantBrandingCard({
       if (d) {
         setLogoUrl(d.logoUrl ?? '');
         setMainBannerUrl(d.mainBannerUrl ?? '');
-        setMenuBannerLines((d.menuBannerUrls ?? []).join('\n'));
+        const urls = (d.menuBannerUrls ?? []).filter(Boolean);
+        setMenuBanners(urls.length > 0 ? urls : ['']);
         setThemePrimaryColor(d.themePrimaryColor ?? '#ea580c');
       }
       toast.success('Branding saved.');
@@ -136,7 +154,9 @@ export function RestaurantBrandingCard({
       <Card>
         <CardHeader>
           <CardTitle>Logo & banners</CardTitle>
-            <CardDescription><Loader2 className=" animate-spin text-primary text-center mx-auto" />{' '}</CardDescription>
+          <CardDescription>
+            <Loader2 className="mx-auto animate-spin text-primary" />
+          </CardDescription>
         </CardHeader>
       </Card>
     );
@@ -161,8 +181,8 @@ export function RestaurantBrandingCard({
       <CardHeader>
         <CardTitle>Logo & banners</CardTitle>
         <CardDescription>
-          URLs used on the customer website and kiosk. Leave a field empty to
-          clear it.
+          Used on the customer website and kiosk. Leave a field empty to clear
+          it.
         </CardDescription>
         {!brandingAllowed ? (
           <p className="text-sm text-muted-foreground">
@@ -171,15 +191,19 @@ export function RestaurantBrandingCard({
           </p>
         ) : null}
       </CardHeader>
-      <CardContent className={`space-y-4 ${!brandingAllowed ? 'pointer-events-none opacity-60' : ''}`}>
+      <CardContent
+        className={`space-y-4 ${!brandingAllowed ? 'pointer-events-none opacity-60' : ''}`}
+      >
         <Base64ImageUploadField
           label="Logo"
           value={logoUrl}
           onChange={setLogoUrl}
-          helperText="Upload button stores base64 image directly in database."
+          helperText="Upload an image or paste a URL."
         />
         <div className="space-y-2">
-          <Label htmlFor="restaurant-theme-primary-color">Theme primary color</Label>
+          <Label htmlFor="restaurant-theme-primary-color">
+            Theme primary color
+          </Label>
           <div className="flex flex-wrap items-center gap-3">
             <Input
               id="restaurant-theme-primary-color"
@@ -198,7 +222,7 @@ export function RestaurantBrandingCard({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            This color is used as the primary brand color on website and kiosk.
+            Primary brand color on website and kiosk.
           </p>
         </div>
         <div className="space-y-2">
@@ -206,29 +230,45 @@ export function RestaurantBrandingCard({
             label="Main banner"
             value={mainBannerUrl}
             onChange={setMainBannerUrl}
+            helperText="Large background on the web ordering page."
           />
-          <p className="text-xs text-muted-foreground">
-            Shown as the large background on the web ordering page.
-          </p>
         </div>
-        {/* <div className="space-y-2">
-          <Label htmlFor="restaurant-menu-banners">Menu carousel images</Label>
-          <textarea
-            id="restaurant-menu-banners"
-            className={cn(
-              'flex min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors',
-              'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-              'disabled:cursor-not-allowed disabled:opacity-50'
-            )}
-            placeholder={'https://example.com/banner-1.jpg\nhttps://example.com/banner-2.jpg'}
-            value={menuBannerLines}
-            onChange={(e) => setMenuBannerLines(e.target.value)}
-          />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <Label>Menu banners</Label>
+            <Button type="button" variant="outline" size="sm" onClick={addMenuBannerRow}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add banner
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground">
-            One image URL per line (optional). Used in the customer sidebar
-            carousel.
+            Carousel images on the customer menu (optional). Upload or paste a
+            URL for each.
           </p>
-        </div> */}
+          {menuBanners.map((url, i) => (
+            <div key={i} className="flex items-end gap-2">
+              <div className="min-w-0 flex-1">
+                <Base64ImageUploadField
+                  label={`Menu banner ${i + 1}`}
+                  value={url}
+                  onChange={(v) => setMenuBanner(i, v)}
+                />
+              </div>
+              {menuBanners.length > 1 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-destructive hover:bg-destructive/10"
+                  onClick={() => removeMenuBanner(i)}
+                  aria-label={`Remove menu banner ${i + 1}`}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              ) : null}
+            </div>
+          ))}
+        </div>
       </CardContent>
       <CardFooter className="border-t px-6 py-4">
         <Button
@@ -236,7 +276,17 @@ export function RestaurantBrandingCard({
           disabled={saving || !brandingAllowed}
           onClick={() => void handleSave()}
         >
-          {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> <span>Saving...</span></> : <><Save className="h-4 w-4 mr-2" /> <span>Save branding</span></>}
+          {saving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <span>Saving...</span>
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              <span>Save branding</span>
+            </>
+          )}
         </Button>
       </CardFooter>
     </Card>

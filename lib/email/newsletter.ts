@@ -25,7 +25,7 @@ export function wrapNewsletterHtml(opts: {
         <td align="center">
           <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7">
             <tr>
-              <td style="padding:20px 24px;background:#18181b;color:#ffffff;font-size:18px;font-weight:600">
+            <td style="padding:20px 24px;background:#e05d38;color:#ffffff;font-size:18px;font-weight:600">
                 Foodluk
               </td>
             </tr>

@@ -277,14 +277,12 @@ export function AdminDashboardOverview() {
 
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="rounded-xl"
+                variant="ghost"
+                size="icon"
                 disabled={refreshing}
                 onClick={() => load(true)}
               >
-                <RefreshCw className={cn('mr-2 h-4 w-4', refreshing && 'animate-spin')} />
-                Refresh
+                <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
               </Button>
             </div>
 
@@ -352,6 +350,7 @@ export function AdminDashboardOverview() {
           href="/admin/requests"
         />
       </div>
+
 
       <div className="grid gap-5 lg:grid-cols-5">
         <AdminSection className="lg:col-span-3">

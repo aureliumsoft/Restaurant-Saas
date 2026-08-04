@@ -24,7 +24,11 @@ function safeCallbackUrl(raw: string | null): string {
 
 function roleDefaultPath(
   user:
-    | { role?: string | null; roleName?: string | null; isPlatformAdmin?: boolean }
+    | {
+        role?: string | null;
+        roleName?: string | null;
+        isPlatformAdmin?: boolean;
+      }
     | undefined,
   roleName: string | null | undefined,
   legacyRole: string | null | undefined
@@ -76,6 +80,7 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -84,7 +89,7 @@ function LoginForm() {
   }, [status, router, targetAfterLogin]);
 
   async function handleGoogle() {
-    setLoading(true);
+    setLoadingGoogle(true);
     try {
       await signIn('google', {
         // Return to login so session-aware role routing can run consistently.
@@ -94,7 +99,7 @@ function LoginForm() {
     } catch (e: any) {
       toast.error(e?.message ?? 'Failed to sign in with Google.');
     } finally {
-      setLoading(false);
+      setLoadingGoogle(false);
     }
   }
 
@@ -121,7 +126,7 @@ function LoginForm() {
       if (!result?.ok) {
         const err = (result as any)?.error;
         const statusCode = (result as any)?.status;
-      
+
         toast.error(
           err === 'CredentialsSignin'
             ? 'Invalid email or password.'
@@ -155,13 +160,30 @@ function LoginForm() {
       subtitle="Use your email + password to SignIn."
     >
       <div className="flex flex-col gap-2">
-        <Button onClick={handleGoogle} disabled={loading} variant="secondary">
-            <IconBrandGoogleFilled className="mr-1 h-4 w-4" /> Continue with Google
-          </Button>
+        <Button
+          onClick={handleGoogle}
+          disabled={loadingGoogle || loading}
+          variant="secondary"
+        >
+          {loadingGoogle ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
+              <span>Loading…</span>
+            </>
+          ) : (
+            <>
+              <IconBrandGoogleFilled className="mr-1 h-4 w-4" /> Continue with
+              Google
+            </>
+          )}
+        </Button>
       </div>
 
-     <div className="my-6 border-t" /> 
-
+      <div className="flex flex-row gap-2 items-center">
+        <div className="my-6 border-t flex-1" />
+        <div className="text-center text-sm text-muted-foreground">OR</div>
+        <div className="my-6 border-t flex-1" />
+      </div>
       <form onSubmit={handleCredentials} className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <Label htmlFor="email">Email</Label>
@@ -207,7 +229,7 @@ function LoginForm() {
         </div>
 
         <Button
-          disabled={loading}
+          disabled={loading || loadingGoogle}
           type="submit"
           className="h-11 w-full bg-gradient-to-r from-fire-500 via-fire-600 to-fire-500 text-white shadow-[0_16px_34px_-14px] shadow-fire-500/70 hover:from-fire-400 hover:to-fire-500"
         >
@@ -215,7 +237,7 @@ function LoginForm() {
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-              <span>Signing in…</span>
+              <span>Signing In…</span>
             </>
           ) : (
             <>

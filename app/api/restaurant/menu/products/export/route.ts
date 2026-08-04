@@ -4,9 +4,9 @@ import { Prisma } from '@prisma/client';
 
 import { db } from '@/lib/db';
 import {
-  buildProductsExcelBuffer,
-  type ProductExportItem,
-} from '@/lib/menu/export-products-excel';
+  buildProductsCsv,
+  type ProductCsvExportItem,
+} from '@/lib/menu/export-products-csv';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 
 export const runtime = 'nodejs';
@@ -69,51 +69,87 @@ function categoryFilterWhere(
   };
 }
 
-const exportInclude = {
-  category: { select: { id: true, name: true } },
+/** Product values only — no images, no binary fields. */
+const exportSelect = {
+  name: true,
+  description: true,
+  price: true,
+  salePrice: true,
+  createdAt: true,
+  updatedAt: true,
+  category: { select: { name: true } },
   categoryLinks: {
     orderBy: { sortOrder: 'asc' as const },
-    include: {
-      category: { select: { id: true, name: true } },
+    select: {
+      sortOrder: true,
+      category: { select: { name: true } },
     },
   },
   variations: {
     orderBy: { sortOrder: 'asc' as const },
-    include: {
+    select: {
+      name: true,
+      title: true,
+      priceDelta: true,
+      sortOrder: true,
+      swatchHex: true,
       restaurantVariation: {
-        select: { id: true, name: true, shortLabel: true },
+        select: { name: true, shortLabel: true },
       },
     },
   },
   attributeGroups: {
     orderBy: { sortOrder: 'asc' as const },
-    include: {
-      linkedCategory: { select: { id: true, name: true } },
-      linkedProduct: { select: { id: true, name: true } },
-      defaultLinkedMenuItem: { select: { id: true, name: true } },
+    select: {
+      name: true,
+      sortOrder: true,
+      selectionType: true,
+      required: true,
+      sourceType: true,
+      multipleMode: true,
+      freeQuantity: true,
+      minItems: true,
+      maxItems: true,
+      includeDefaultLinkedVariationPrice: true,
+      useVariationPricing: true,
+      linkedCategory: { select: { name: true } },
+      linkedProduct: { select: { name: true } },
+      defaultLinkedMenuItem: { select: { name: true } },
       defaultLinkedRestaurantVariation: {
-        select: { id: true, name: true, shortLabel: true },
+        select: { name: true, shortLabel: true },
       },
       variationLimits: {
-        include: {
-          variation: { select: { id: true, name: true, title: true } },
+        select: {
+          minItems: true,
+          maxItems: true,
+          variation: { select: { name: true, title: true } },
         },
       },
     },
   },
   offersFromThis: {
     orderBy: { sortOrder: 'asc' as const },
-    include: {
-      offeredItem: { select: { id: true, name: true } },
+    select: {
+      sortOrder: true,
+      offeredItem: { select: { name: true } },
     },
   },
   personalizeGroups: {
     orderBy: { sortOrder: 'asc' as const },
-    include: {
-      options: { orderBy: { sortOrder: 'asc' as const } },
+    select: {
+      parentName: true,
+      maxItems: true,
+      sortOrder: true,
+      options: {
+        orderBy: { sortOrder: 'asc' as const },
+        select: {
+          name: true,
+          sortOrder: true,
+        },
+      },
     },
   },
-} satisfies Prisma.MenuItemInclude;
+} satisfies Prisma.MenuItemSelect;
 
 export async function GET(req: NextRequest) {
   const auth = await getRestaurantForOwnerRequest(req, {
@@ -136,29 +172,28 @@ export async function GET(req: NextRequest) {
   if (categoryPart) andParts.push(categoryPart);
 
   try {
-    const products = (await db.menuItem.findMany({
+    const products = await db.menuItem.findMany({
       where: { AND: andParts },
-      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-      include: exportInclude,
-    })) as unknown as ProductExportItem[];
+      orderBy: [{ name: 'asc' }, { createdAt: 'desc' }],
+      select: exportSelect,
+    });
 
-    const buffer = await buildProductsExcelBuffer(products);
+    const csv = buildProductsCsv(products as unknown as ProductCsvExportItem[]);
     const stamp = new Date().toISOString().slice(0, 10);
-    const filename = `products-export-${stamp}.xlsx`;
+    const filename = `products-export-${stamp}.csv`;
 
-    return new NextResponse(new Uint8Array(buffer), {
+    return new NextResponse(csv, {
       status: 200,
       headers: {
-        'Content-Type':
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Cache-Control': 'no-store',
       },
     });
   } catch (e) {
-    console.error('Products Excel export failed:', e);
+    console.error('Products CSV export failed:', e);
     return NextResponse.json(
-      { error: 'Could not export products to Excel.' },
+      { error: 'Could not export products to CSV.' },
       { status: 500 }
     );
   }

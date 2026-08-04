@@ -8,6 +8,7 @@ export const PLATFORM_SETTING_DEFAULTS = {
   seo_google_site_verification: '',
   seo_gtm_container_id: '',
   seo_ga4_measurement_id: '',
+  seo_ga4_property_id: '',
   seo_gsc_property_url: '',
 } as const;
 
@@ -17,6 +18,7 @@ export const SEO_SETTING_KEYS = [
   'seo_google_site_verification',
   'seo_gtm_container_id',
   'seo_ga4_measurement_id',
+  'seo_ga4_property_id',
   'seo_gsc_property_url',
 ] as const satisfies readonly PlatformSettingKey[];
 
@@ -52,10 +54,17 @@ export async function getPlatformSettingsMap(
   return map;
 }
 
-/** Normalize GA4 IDs like `G-XXXXXXXX`. Empty string if invalid. */
+/** Normalize GA4 Measurement IDs like `G-XXXXXXXX`. Empty string if invalid. */
 export function normalizeGa4MeasurementId(raw: string): string {
   const id = raw.trim().toUpperCase();
   if (!/^G-[A-Z0-9]+$/.test(id)) return '';
+  return id;
+}
+
+/** Normalize GA4 property id (digits only, e.g. `123456789`). */
+export function normalizeGa4PropertyId(raw: string): string {
+  const id = raw.trim().replace(/\D/g, '');
+  if (id.length < 5) return '';
   return id;
 }
 

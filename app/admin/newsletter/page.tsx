@@ -22,6 +22,7 @@ import {
 } from '@/components/admin/admin-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -60,6 +61,7 @@ export default function AdminNewsletterPage() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -85,21 +87,15 @@ export default function AdminNewsletterPage() {
   const inactiveSubscribers =
     data?.subscribers.filter((s) => s.unsubscribedAt) ?? [];
 
-  const onSend = async () => {
+  const requestSave = () => {
     if (!subject.trim() || body.trim().length < 10) {
       toast.error('Enter a subject and a message (at least a short paragraph).');
       return;
     }
-    if ((data?.activeCount ?? 0) === 0) {
-      toast.error('No active subscribers yet.');
-      return;
-    }
+    setShowSaveConfirmation(true);
+  };
 
-    const confirmed = window.confirm(
-      `Send this newsletter to ${data?.activeCount ?? 0} active subscriber(s)?`
-    );
-    if (!confirmed) return;
-
+  const onSend = async () => {
     setSending(true);
     try {
       // Convert plain text / simple line breaks to HTML paragraphs.
@@ -118,20 +114,25 @@ export default function AdminNewsletterPage() {
         textBody: body.trim(),
       });
 
-      toast.success(
-        `Sent to ${r.data.data.successCount} of ${r.data.data.recipientCount} subscribers.`
-      );
+      if (r.data.data.recipientCount === 0) {
+        toast.success('Message saved. New subscribers will receive it by email.');
+      } else {
+        toast.success(
+          `Saved and sent to ${r.data.data.successCount} of ${r.data.data.recipientCount} subscribers.`
+        );
+      }
       if (r.data.data.errors?.length) {
         toast.warn(r.data.data.errors[0]);
       }
       setSubject('');
       setBody('');
+      setShowSaveConfirmation(false);
       await load();
     } catch (e) {
       const msg =
         axios.isAxiosError(e) && typeof e.response?.data?.error === 'string'
           ? e.response.data.error
-          : 'Failed to send newsletter.';
+          : 'Failed to save and send newsletter.';
       toast.error(msg);
     } finally {
       setSending(false);
@@ -158,7 +159,7 @@ export default function AdminNewsletterPage() {
       <AdminPageHeader
         eyebrow="Management"
         title="Newsletter"
-        description="Subscribers from the marketing site footer, and broadcasts to the full list."
+        description="Save a message to the database, email all subscribers, and auto-send the latest message when someone new subscribes."
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -189,7 +190,7 @@ export default function AdminNewsletterPage() {
         <Card className={adminCardClass}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Campaigns sent
+              Messages saved
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -204,7 +205,7 @@ export default function AdminNewsletterPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Send className="h-4 w-4" />
-            Compose &amp; send to all
+            Compose, save &amp; send
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -230,30 +231,55 @@ export default function AdminNewsletterPage() {
               disabled={sending}
             />
             <p className="text-xs text-muted-foreground">
-              Plain text is fine — blank lines become paragraphs. Emails are sent
-              one-by-one to each active subscriber via SMTP.
+              Saving stores this as the latest newsletter, emails every active
+              subscriber, and sends this message automatically to anyone who
+              subscribes later.
             </p>
           </div>
           <Button
             type="button"
-            onClick={() => void onSend()}
-            disabled={sending || loading || (data?.activeCount ?? 0) === 0}
+            onClick={requestSave}
+            disabled={sending || loading}
           >
             {sending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending…
+                Saving &amp; sending…
               </>
             ) : (
               <>
                 <Mail className="mr-2 h-4 w-4" />
-                Send to {data?.activeCount ?? 0} subscribers
+                {(data?.activeCount ?? 0) === 0
+                  ? 'Save message'
+                  : `Save & send to ${data?.activeCount ?? 0} subscribers`}
               </>
             )}
           </Button>
         </CardContent>
       </Card>
 
+      <SaveConfirmation
+        open={showSaveConfirmation}
+        title={
+          (data?.activeCount ?? 0) === 0
+            ? 'Save newsletter message'
+            : 'Save & send newsletter'
+        }
+        description={
+          (data?.activeCount ?? 0) === 0
+            ? 'No active subscribers yet. This message will be stored and emailed automatically when someone new subscribes.'
+            : `This message will be saved and emailed to ${data?.activeCount ?? 0} active subscriber(s). Continue?`
+        }
+        itemName={subject.trim() || undefined}
+        loading={sending}
+        confirmText={
+          (data?.activeCount ?? 0) === 0 ? 'Save message' : 'Save & send'
+        }
+        onConfirm={() => void onSend()}
+        onCancel={() => {
+          if (!sending) setShowSaveConfirmation(false);
+        }}
+      />
       <Card className={cn(adminCardClass, 'min-w-0 max-w-full')}>
         <CardHeader>
           <CardTitle>Subscribers</CardTitle>
@@ -326,14 +352,14 @@ export default function AdminNewsletterPage() {
 
       <Card className={cn(adminCardClass, 'min-w-0 max-w-full')}>
         <CardHeader>
-          <CardTitle>Sent campaigns</CardTitle>
+          <CardTitle>Saved &amp; sent messages</CardTitle>
         </CardHeader>
         <CardContent className="min-w-0 p-0">
           <AdminTableWrapper>
             {loading ? (
               <Loader2 className="mx-auto animate-spin text-center text-primary" />
             ) : !data?.campaigns.length ? (
-              <AdminTableEmpty>No campaigns sent yet.</AdminTableEmpty>
+              <AdminTableEmpty>No messages saved yet.</AdminTableEmpty>
             ) : (
               <AdminTable minWidth={720}>
                 <AdminTableHeader>

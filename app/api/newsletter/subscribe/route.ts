@@ -3,12 +3,23 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { sendLatestNewsletterToEmail } from "@/lib/newsletter/broadcast";
+import { getSmtpConfigError } from "@/lib/email/smtp";
 
 const subscribeSchema = z.object({
   email: z.string().trim().email().max(200),
   name: z.string().trim().max(120).optional().nullable(),
   source: z.string().trim().max(60).optional().nullable(),
 });
+
+async function maybeSendLatestWelcome(email: string) {
+  if (getSmtpConfigError()) return;
+  try {
+    await sendLatestNewsletterToEmail(email);
+  } catch (e) {
+    console.error("[newsletter/subscribe] welcome email", e);
+  }
+}
 
 export async function POST(req: NextRequest) {
   let json: unknown;
@@ -53,6 +64,7 @@ export async function POST(req: NextRequest) {
         },
         select: { id: true },
       });
+      await maybeSendLatestWelcome(email);
       return NextResponse.json({ data: row, reactivated: true }, { status: 200 });
     }
 
@@ -60,6 +72,8 @@ export async function POST(req: NextRequest) {
       data: { email, name, source },
       select: { id: true },
     });
+
+    await maybeSendLatestWelcome(email);
 
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (e) {

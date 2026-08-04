@@ -546,20 +546,16 @@ export function OrderCartCheckoutButton({
     formattedTotal ??
     (Number.isFinite(total) ? total.toFixed(2) : '0.00');
   return (
-    <button
-      type="button"
+    <Button
+      variant="default"
       onClick={onClick}
-      className="flex h-12 w-full items-center gap-2 rounded-xl px-3 text-primary transition hover:brightness-[0.98]"
-      style={{ backgroundColor: ORDER_ACCENT_GOLD }}
+      className="flex h-12 w-full items-center gap-2 rounded-xl px-3 transition"
     >
       <span className="relative flex h-8 w-8 shrink-0 items-center justify-center">
         <ShoppingBag className="h-5 w-5" strokeWidth={2.25} aria-hidden />
-        <span className="absolute left-1/2 top-[58%] -translate-x-1/2 -translate-y-1/2 text-[10px] font-bold leading-none">
-          {itemCount}
-        </span>
       </span>
       <span className="flex-1 text-center text-sm font-bold">{label}</span>
       <span className="shrink-0 text-sm font-bold">{totalLabel}</span>
-    </button>
+    </Button>
   );
 }
