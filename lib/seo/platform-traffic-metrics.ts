@@ -122,7 +122,7 @@ export async function fetchTrafficMetricsReport(options?: {
     await getPlatformSetting('seo_ga4_property_id')
   ).trim().replace(/\D/g, '');
 
-  const authConfigured = isGoogleReportingAuthConfigured();
+  const authConfigured = await isGoogleReportingAuthConfigured();
   const cacheKey = `${days}|${startDate}|${endDate}|${siteUrl}|${propertyId}|${authConfigured}`;
   const cached = memoryCache.get(cacheKey);
   if (!options?.forceRefresh && cached && cached.expiresAt > Date.now()) {
@@ -141,7 +141,7 @@ export async function fetchTrafficMetricsReport(options?: {
       reason: !siteUrl
         ? 'Set Search Console property URL in Admin → SEO.'
         : !authConfigured
-          ? 'Add GOOGLE_REPORTING_SERVICE_ACCOUNT_JSON (or GSC refresh token) to server env.'
+          ? 'Add service account JSON or OAuth credentials under Admin → SEO.'
           : undefined,
     },
     ga4: {
@@ -149,7 +149,7 @@ export async function fetchTrafficMetricsReport(options?: {
       reason: !propertyId
         ? 'Set GA4 Property ID (numeric) in Admin → SEO.'
         : !authConfigured
-          ? 'Add GOOGLE_REPORTING_SERVICE_ACCOUNT_JSON (or reporting refresh token) to server env.'
+          ? 'Add service account JSON or OAuth credentials under Admin → SEO.'
           : undefined,
     },
   };

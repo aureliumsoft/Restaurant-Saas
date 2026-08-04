@@ -132,8 +132,7 @@ export function AdminTrafficMetrics() {
 
         {!loading && report && !report.authConfigured ? (
           <p className="text-sm text-muted-foreground">
-            Connect APIs: set a service account or refresh token in server env,
-            then property URL and GA4 Property ID under{' '}
+            Connect APIs: add service account JSON or OAuth credentials under{' '}
             <Link href="/admin/seo" className="underline underline-offset-2">
               SEO & analytics
             </Link>

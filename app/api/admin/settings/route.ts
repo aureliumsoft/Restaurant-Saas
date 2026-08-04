@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requirePlatformAdmin } from "@/lib/auth/adminRequest";
 import { db } from "@/lib/db";
 import { PLATFORM_SETTING_DEFAULTS } from "@/lib/platform-settings";
+import { clearGoogleReportingTokenCache } from "@/lib/seo/google-auth";
 
 const DEFAULTS: Record<string, string> = { ...PLATFORM_SETTING_DEFAULTS };
 
@@ -12,7 +13,8 @@ const putSchema = z.object({
   entries: z.array(
     z.object({
       key: z.string().min(1).max(120),
-      value: z.string().max(8000),
+      // Service account JSON can exceed a few KB.
+      value: z.string().max(100_000),
     })
   ),
 });
@@ -57,6 +59,13 @@ export async function PUT(req: NextRequest) {
         create: { key, value },
         update: { value },
       });
+    }
+    if (
+      parsed.data.entries.some((e) =>
+        e.key.startsWith("seo_google_") || e.key.startsWith("seo_ga") || e.key.startsWith("seo_gsc")
+      )
+    ) {
+      clearGoogleReportingTokenCache();
     }
     const rows = await db.platformSetting.findMany({ orderBy: { key: "asc" } });
     const map: Record<string, string> = { ...DEFAULTS };

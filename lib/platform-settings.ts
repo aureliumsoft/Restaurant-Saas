@@ -10,16 +10,41 @@ export const PLATFORM_SETTING_DEFAULTS = {
   seo_ga4_measurement_id: '',
   seo_ga4_property_id: '',
   seo_gsc_property_url: '',
+  /** Full service account JSON for GSC + GA4 reporting (preferred). */
+  seo_google_reporting_service_account_json: '',
+  /** OAuth client (reporting) — used with refresh token when SA JSON is empty. */
+  seo_google_client_id: '',
+  seo_google_client_secret: '',
+  seo_google_reporting_refresh_token: '',
 } as const;
 
 export type PlatformSettingKey = keyof typeof PLATFORM_SETTING_DEFAULTS;
 
-export const SEO_SETTING_KEYS = [
+/** Public marketing / tracking tags (safe to show on SEO page with property IDs). */
+export const SEO_TRACKING_SETTING_KEYS = [
   'seo_google_site_verification',
   'seo_gtm_container_id',
   'seo_ga4_measurement_id',
+] as const satisfies readonly PlatformSettingKey[];
+
+/** Dashboard metric property identifiers. */
+export const SEO_PROPERTY_SETTING_KEYS = [
   'seo_ga4_property_id',
   'seo_gsc_property_url',
+] as const satisfies readonly PlatformSettingKey[];
+
+/** Server-only Google reporting credentials (platform admin SEO page). */
+export const SEO_CREDENTIAL_SETTING_KEYS = [
+  'seo_google_reporting_service_account_json',
+  'seo_google_client_id',
+  'seo_google_client_secret',
+  'seo_google_reporting_refresh_token',
+] as const satisfies readonly PlatformSettingKey[];
+
+export const SEO_SETTING_KEYS = [
+  ...SEO_TRACKING_SETTING_KEYS,
+  ...SEO_PROPERTY_SETTING_KEYS,
+  ...SEO_CREDENTIAL_SETTING_KEYS,
 ] as const satisfies readonly PlatformSettingKey[];
 
 export async function getPlatformSetting(

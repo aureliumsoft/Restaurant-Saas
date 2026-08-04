@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import {
@@ -11,9 +11,12 @@ import {
   BarChart3,
   ShieldCheck,
   Tags,
+  KeyRound,
+  FileJson,
 } from 'lucide-react';
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import { AdminTrafficMetrics } from '@/components/admin/admin-traffic-metrics';
 import { adminCardClass } from '@/components/admin/admin-surface';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,52 +28,9 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
 import { SEO_SETTING_KEYS } from '@/lib/platform-settings';
-import { AdminTrafficMetrics } from '@/components/admin/admin-traffic-metrics';
-
-const FIELDS = [
-  {
-    key: 'seo_google_site_verification' as const,
-    label: 'Google site verification',
-    description:
-      'Paste the content value from Search Console HTML-tag verification (not the full meta tag).',
-    placeholder: 'e.g. AbCdEf123…',
-    icon: ShieldCheck,
-  },
-  {
-    key: 'seo_gtm_container_id' as const,
-    label: 'Google Tag Manager container ID',
-    description:
-      'Web container ID (GTM-XXXXXXX). When set, the official GTM snippet is installed and the direct GA4 gtag below is skipped — add GA4 inside GTM instead.',
-    placeholder: 'GTM-XXXXXXX',
-    icon: Tags,
-  },
-  {
-    key: 'seo_ga4_measurement_id' as const,
-    label: 'Google Analytics 4 Measurement ID',
-    description:
-      'Used only when GTM is empty. Prefer configuring GA4 inside Tag Manager when GTM is set.',
-    placeholder: 'G-XXXXXXXX',
-    icon: BarChart3,
-  },
-  {
-    key: 'seo_ga4_property_id' as const,
-    label: 'GA4 property ID (reporting)',
-    description:
-      'Numeric property ID for admin dashboard metrics (Admin → Property settings). Not the G- measurement ID.',
-    placeholder: '123456789',
-    icon: BarChart3,
-  },
-  {
-    key: 'seo_gsc_property_url' as const,
-    label: 'Search Console property URL',
-    description:
-      'Verified property URL for search metrics and quick links (e.g. https://foodluk.com/).',
-    placeholder: 'https://foodluk.com/',
-    icon: Search,
-  },
-] as const;
 
 function gscOpenUrl(propertyUrl: string): string {
   const trimmed = propertyUrl.trim();
@@ -102,12 +62,24 @@ export default function AdminSeoPage() {
   const gtmReady = Boolean(map.seo_gtm_container_id?.trim());
   const gaReady = Boolean(map.seo_ga4_measurement_id?.trim());
   const gscReady = Boolean(map.seo_gsc_property_url?.trim());
+  const reportingSaReady = Boolean(
+    map.seo_google_reporting_service_account_json?.trim()
+  );
+  const reportingOauthReady = Boolean(
+    map.seo_google_client_id?.trim() &&
+      map.seo_google_client_secret?.trim() &&
+      map.seo_google_reporting_refresh_token?.trim()
+  );
   const analyticsViaGtm = gtmReady;
 
   const sitemapUrl = useMemo(() => {
     if (typeof window === 'undefined') return '/sitemap.xml';
     return `${window.location.origin}/sitemap.xml`;
   }, []);
+
+  function setField(key: string, value: string) {
+    setMap((m) => ({ ...m, [key]: value }));
+  }
 
   const save = async () => {
     setSaving(true);
@@ -136,20 +108,11 @@ export default function AdminSeoPage() {
       <AdminPageHeader
         eyebrow="System"
         title="SEO & analytics"
-        description="Connect Google Search Console and Analytics to monitor Foodluk platform search and traffic performance."
+        description="Public tracking tags, dashboard property IDs, and Google API credentials for reporting."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <a
-                href="https://tagmanager.google.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Tag Manager
-              </a>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
+            
+            <Button variant="outline" asChild>
               <a
                 href={gscOpenUrl(map.seo_gsc_property_url ?? '')}
                 target="_blank"
@@ -159,7 +122,7 @@ export default function AdminSeoPage() {
                 Search Console
               </a>
             </Button>
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" asChild>
               <a
                 href={gaOpenUrl(map.seo_ga4_measurement_id ?? '')}
                 target="_blank"
@@ -206,66 +169,195 @@ export default function AdminSeoPage() {
           }
         />
         <StatusCard
-          label="Search Console link"
-          ready={gscReady}
+          label="Reporting API auth"
+          ready={reportingSaReady || reportingOauthReady}
           hint={
-            gscReady
-              ? 'Quick link uses your property URL'
-              : 'Optional — helps open the right property'
+            reportingSaReady
+              ? 'Service account JSON configured'
+              : reportingOauthReady
+                ? 'OAuth client + refresh token configured'
+                : 'Add service account or OAuth credentials below'
           }
         />
       </div>
 
+      {/* 1 — Site tracking */}
       <Card className={adminCardClass}>
         <CardHeader>
-          <CardTitle>Connection settings</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Tags className="h-5 w-5 text-muted-foreground" />
+            Site tracking
+          </CardTitle>
           <CardDescription>
-            Values are stored in PlatformSetting and applied on the public site
-            after save. Verify ownership in Search Console once the meta tag is
-            live.
+            Public tags for Foodluk marketing pages (saved to PlatformSetting).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {FIELDS.map(
-            ({ key, label, description, placeholder, icon: Icon }) => (
-              <div key={key} className="grid gap-2">
-                <Label htmlFor={key} className="flex items-center gap-2">
-                  <Icon className="h-4 w-4 text-muted-foreground" />
-                  {label}
-                </Label>
-                <p className="text-xs text-muted-foreground">{description}</p>
-                <Input
-                  id={key}
-                  value={map[key] ?? ''}
-                  placeholder={placeholder}
-                  onChange={(e) =>
-                    setMap((m) => ({ ...m, [key]: e.target.value }))
-                  }
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-            )
-          )}
-          <Button
-            type="button"
-            disabled={saving}
-            onClick={() => setShowSaveConfirmation(true)}
-          >
-            {saving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                <span>Saving…</span>
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                <span>Save SEO settings</span>
-              </>
-            )}
-          </Button>
+          <Field
+            id="seo_google_site_verification"
+            label="Google site verification"
+            icon={ShieldCheck}
+            description="Paste the content value from Search Console HTML-tag verification (not the full meta tag)."
+            placeholder="e.g. AbCdEf123…"
+            value={map.seo_google_site_verification ?? ''}
+            onChange={(v) => setField('seo_google_site_verification', v)}
+          />
+          <Field
+            id="seo_gtm_container_id"
+            label="Google Tag Manager container ID"
+            icon={Tags}
+            description="Web container (GTM-XXXXXXX). When set, GTM is installed and the direct GA4 gtag below is skipped."
+            placeholder="GTM-XXXXXXX"
+            value={map.seo_gtm_container_id ?? ''}
+            onChange={(v) => setField('seo_gtm_container_id', v)}
+          />
+          <Field
+            id="seo_ga4_measurement_id"
+            label="GA4 Measurement ID"
+            icon={BarChart3}
+            description="Used only when GTM is empty (browser tag: G-…)."
+            placeholder="G-XXXXXXXX"
+            value={map.seo_ga4_measurement_id ?? ''}
+            onChange={(v) => setField('seo_ga4_measurement_id', v)}
+          />
         </CardContent>
       </Card>
+
+      {/* 2 — Dashboard properties */}
+      <Card className={adminCardClass}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5 text-muted-foreground" />
+            Dashboard properties
+          </CardTitle>
+          <CardDescription>
+            Which Search Console / GA4 properties to pull for admin metrics.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <Field
+            id="seo_gsc_property_url"
+            label="Search Console property URL"
+            icon={Search}
+            description="Exact property as in GSC (e.g. https://foodluk.com/ or sc-domain:foodluk.com)."
+            placeholder="https://foodluk.com/"
+            value={map.seo_gsc_property_url ?? ''}
+            onChange={(v) => setField('seo_gsc_property_url', v)}
+          />
+          <Field
+            id="seo_ga4_property_id"
+            label="GA4 property ID (reporting)"
+            icon={BarChart3}
+            description="Numeric ID under Analytics Admin → Property settings. Not the G- Measurement ID."
+            placeholder="123456789"
+            value={map.seo_ga4_property_id ?? ''}
+            onChange={(v) => setField('seo_ga4_property_id', v)}
+          />
+        </CardContent>
+      </Card>
+
+      {/* 3 — Service account */}
+      <Card className={adminCardClass}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileJson className="h-5 w-5 text-muted-foreground" />
+            Google service account
+          </CardTitle>
+          <CardDescription>
+            Preferred for dashboard metrics. Paste the full JSON key. Grant this
+            account access on Search Console and Viewer on GA4. Env{' '}
+            <code className="text-foreground">GOOGLE_REPORTING_SERVICE_ACCOUNT_JSON</code>{' '}
+            is still used if this field is empty.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Label htmlFor="seo_google_reporting_service_account_json">
+            Service account JSON
+          </Label>
+          <Textarea
+            id="seo_google_reporting_service_account_json"
+            value={map.seo_google_reporting_service_account_json ?? ''}
+            onChange={(e) =>
+              setField('seo_google_reporting_service_account_json', e.target.value)
+            }
+            placeholder='{"type":"service_account","project_id":"…","private_key":"…","client_email":"…@….iam.gserviceaccount.com",…}'
+            className="min-h-[160px] font-mono text-xs"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p className="text-xs text-muted-foreground">
+            If set, OAuth credentials below are ignored for API calls.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* 4 — OAuth */}
+      <Card className={adminCardClass}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-muted-foreground" />
+            Google OAuth (reporting)
+          </CardTitle>
+          <CardDescription>
+            Used only when service account JSON is empty. Separate from next-auth
+            Google login env unless you intentionally reuse the same client.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <Field
+            id="seo_google_client_id"
+            label="Client ID"
+            icon={KeyRound}
+            description="OAuth 2.0 Client ID from Google Cloud Console."
+            placeholder="….apps.googleusercontent.com"
+            value={map.seo_google_client_id ?? ''}
+            onChange={(v) => setField('seo_google_client_id', v)}
+          />
+          <Field
+            id="seo_google_client_secret"
+            label="Client secret"
+            icon={KeyRound}
+            description="OAuth client secret. Falls back to GOOGLE_CLIENT_SECRET if empty."
+            placeholder="GOCSPX-…"
+            value={map.seo_google_client_secret ?? ''}
+            onChange={(v) => setField('seo_google_client_secret', v)}
+            inputType="password"
+          />
+          <Field
+            id="seo_google_reporting_refresh_token"
+            label="Refresh token"
+            icon={KeyRound}
+            description="Offline refresh token with webmasters.readonly + analytics.readonly scopes."
+            placeholder="1//0…"
+            value={map.seo_google_reporting_refresh_token ?? ''}
+            onChange={(v) => setField('seo_google_reporting_refresh_token', v)}
+            inputType="password"
+          />
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          disabled={saving}
+          onClick={() => setShowSaveConfirmation(true)}
+        >
+          {saving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <span>Saving…</span>
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              <span>Save SEO settings</span>
+            </>
+          )}
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Credentials are stored server-side and never exposed to the public site.
+        </p>
+      </div>
 
       <Card className={adminCardClass}>
         <CardHeader>
@@ -277,15 +369,9 @@ export default function AdminSeoPage() {
         <CardContent>
           <ol className="list-decimal space-y-3 pl-5 text-sm text-muted-foreground">
             <li>
-              In Search Console, add a URL-prefix property for your production
-              domain and choose{' '}
-              <strong className="text-foreground">HTML tag</strong>{' '}
-              verification. Paste only the{' '}
-              <code className="text-foreground">content</code> value above,
-              save, then click Verify.
-            </li>
-            <li>
-              Submit the sitemap:{' '}
+              In Search Console, verify the site with the HTML tag token from{' '}
+              <strong className="text-foreground">Site tracking</strong>, then
+              submit the sitemap:{' '}
               <a
                 className="font-medium text-foreground underline-offset-4 hover:underline"
                 href={sitemapUrl}
@@ -296,21 +382,17 @@ export default function AdminSeoPage() {
               </a>
             </li>
             <li>
-              Create a GTM Web container, copy{' '}
-              <code className="text-foreground">GTM-…</code>, save it here. In
-              GTM add a{' '}
-              <strong className="text-foreground">GA4 Configuration</strong> tag
-              with your Measurement ID, trigger All Pages, then{' '}
-              <strong className="text-foreground">Publish</strong>.
+              Add GTM or a Measurement ID under Site tracking for browser analytics.
             </li>
             <li>
-              Or skip GTM and paste a GA4 Measurement ID (
-              <code className="text-foreground">G-…</code>) here for the direct
-              Google tag. If both are set, only GTM is installed.
+              Under <strong className="text-foreground">Dashboard properties</strong>
+              , set GSC URL and numeric GA4 property ID.
             </li>
             <li>
-              Optionally link GA4 ↔ Search Console in Google’s product settings
-              for richer reports.
+              Prefer a service account JSON under{' '}
+              <strong className="text-foreground">Google service account</strong>
+              ; invite that email to GSC + GA4, enable Search Console API and
+              Analytics Data API. Or use OAuth client + refresh token instead.
             </li>
           </ol>
         </CardContent>
@@ -319,10 +401,49 @@ export default function AdminSeoPage() {
       <SaveConfirmation
         open={showSaveConfirmation}
         title="Save SEO settings"
-        description="Verification and Analytics tags will update on the public site. Save now?"
+        description="Tracking tags, property IDs, and API credentials will be updated. Save now?"
         loading={saving}
         onConfirm={() => void save()}
         onCancel={() => setShowSaveConfirmation(false)}
+      />
+    </div>
+  );
+}
+
+function Field({
+  id,
+  label,
+  icon: Icon,
+  description,
+  placeholder,
+  value,
+  onChange,
+  inputType = 'text',
+}: {
+  id: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  description: string;
+  placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+  inputType?: 'text' | 'password';
+}) {
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor={id} className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-muted-foreground" />
+        {label}
+      </Label>
+      <p className="text-xs text-muted-foreground">{description}</p>
+      <Input
+        id={id}
+        type={inputType}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete="off"
+        spellCheck={false}
       />
     </div>
   );
