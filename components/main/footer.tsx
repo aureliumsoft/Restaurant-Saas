@@ -21,6 +21,7 @@ export default function Footer() {
     { label: t('marketing.footer.operationsItems.aggregator'), href: '/documentation' },
     { label: t('marketing.footer.operationsItems.reviews'), href: '/documentation' },
     { label: t('marketing.footer.operationsItems.callCenter'), href: '/documentation' },
+    { label: t('marketing.nav.blog'), href: '/blog' },
   ];
 
   const legal = [

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import {
   Building2,
   CreditCard,
+  FileText,
   LayoutDashboard,
   Mail,
   Search,
@@ -59,6 +60,12 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         path: '/admin/newsletter',
         icon: <Mail className="h-4 w-4" />,
         description: 'Subscribers & broadcasts',
+      },
+      {
+        title: 'Blog posts',
+        path: '/admin/blog',
+        icon: <FileText className="h-4 w-4" />,
+        description: 'Marketing blog content',
       },
     ],
   },

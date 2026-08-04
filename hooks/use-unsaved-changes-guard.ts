@@ -1,21 +1,29 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 /**
- * Warns on tab close/reload, browser back, and offers a confirm flow before in-app navigation.
+ * Warns on tab close/reload, browser back, in-app link clicks (e.g. admin sidebar),
+ * and offers a confirm flow before leaving with unsaved data.
  */
 export function useUnsavedChangesGuard(
   isDirty: boolean,
   options?: { message?: string }
 ) {
+  const router = useRouter();
   const [leaveOpen, setLeaveOpen] = useState(false);
   const pendingActionRef = useRef<(() => void) | null>(null);
   const allowLeaveRef = useRef(false);
   const historyTrapPushedRef = useRef(false);
   const backNavigationRef = useRef(false);
+  const isDirtyRef = useRef(isDirty);
 
-  /** Re-arm the guard after the user edits again (confirmLeave sets allowLeaveRef once). */
+  useEffect(() => {
+    isDirtyRef.current = isDirty;
+  }, [isDirty]);
+
+  /** Re-arm the guard after the user edits again. */
   useEffect(() => {
     if (isDirty) {
       allowLeaveRef.current = false;
@@ -63,6 +71,60 @@ export function useUnsavedChangesGuard(
     return () => window.removeEventListener('popstate', onPopState);
   }, [isDirty]);
 
+  /** Intercept internal <a href> clicks (sidebar, header, etc.). */
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const onDocumentClick = (e: MouseEvent) => {
+      if (!isDirtyRef.current || allowLeaveRef.current) return;
+      if (e.defaultPrevented) return;
+      if (e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[data-unsaved-ignore]')) return;
+
+      const anchor = target.closest('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement)) return;
+      if (anchor.hasAttribute('download')) return;
+      if (anchor.target && anchor.target !== '_self') return;
+
+      const rawHref = anchor.getAttribute('href');
+      if (!rawHref || rawHref.startsWith('#') || rawHref.startsWith('javascript:')) {
+        return;
+      }
+
+      let url: URL;
+      try {
+        url = new URL(rawHref, window.location.href);
+      } catch {
+        return;
+      }
+      if (url.origin !== window.location.origin) return;
+
+      const samePath =
+        url.pathname === window.location.pathname &&
+        url.search === window.location.search;
+      if (samePath) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const next = `${url.pathname}${url.search}${url.hash}`;
+      backNavigationRef.current = false;
+      pendingActionRef.current = () => {
+        allowLeaveRef.current = true;
+        historyTrapPushedRef.current = false;
+        router.push(next);
+      };
+      setLeaveOpen(true);
+    };
+
+    document.addEventListener('click', onDocumentClick, true);
+    return () => document.removeEventListener('click', onDocumentClick, true);
+  }, [isDirty, router]);
+
   const requestLeave = useCallback(
     (action: () => void) => {
       if (allowLeaveRef.current || !isDirty) {
@@ -79,15 +141,11 @@ export function useUnsavedChangesGuard(
   const confirmLeave = useCallback(() => {
     setLeaveOpen(false);
     const action = pendingActionRef.current;
-    const isBackNav = backNavigationRef.current;
     pendingActionRef.current = null;
     backNavigationRef.current = false;
+    allowLeaveRef.current = true;
+    historyTrapPushedRef.current = false;
     action?.();
-    // Re-arm after in-app discard (product/tab change). Browser-back actions set allow inside action.
-    if (!isBackNav) {
-      allowLeaveRef.current = false;
-      historyTrapPushedRef.current = false;
-    }
   }, []);
 
   const cancelLeave = useCallback(() => {
@@ -102,6 +160,8 @@ export function useUnsavedChangesGuard(
         window.location.href
       );
       historyTrapPushedRef.current = true;
+    } else {
+      backNavigationRef.current = false;
     }
   }, [isDirty]);
 

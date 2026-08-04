@@ -27,6 +27,7 @@ export default function Header() {
     { href: '/demo-request', label: t('marketing.nav.demoRequest') },
     { href: '/restaurant-signup', label: t('marketing.nav.restaurantSignup') },
     { href: '/pricing', label: t('marketing.nav.pricing') },
+    { href: '/blog', label: t('marketing.nav.blog') },
     { href: '/documentation', label: t('marketing.nav.documentation') },
   ];
 

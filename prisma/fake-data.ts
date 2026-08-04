@@ -449,6 +449,31 @@ export function fakeNewsletterCampaignComplete() {
     updatedAt: faker.date.anytime(),
   };
 }
+export function fakeBlogPost() {
+  return {
+    title: faker.lorem.words(5),
+    slug: faker.lorem.words(5),
+    imageUrl: undefined,
+    shortDescription: faker.lorem.words(5),
+    contentHtml: faker.lorem.words(5),
+    publishedAt: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeBlogPostComplete() {
+  return {
+    id: faker.string.uuid(),
+    title: faker.lorem.words(5),
+    slug: faker.lorem.words(5),
+    imageUrl: undefined,
+    shortDescription: faker.lorem.words(5),
+    contentHtml: faker.lorem.words(5),
+    status: 'DRAFT',
+    publishedAt: undefined,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
 export function fakeEmployee() {
   return {
     updatedAt: faker.date.anytime(),
