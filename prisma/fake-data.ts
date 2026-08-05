@@ -474,6 +474,44 @@ export function fakeBlogPostComplete() {
     updatedAt: faker.date.anytime(),
   };
 }
+export function fakePlatformFaq() {
+  return {
+    question: faker.lorem.words(5),
+    answer: faker.lorem.words(5),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakePlatformFaqComplete() {
+  return {
+    id: faker.string.uuid(),
+    question: faker.lorem.words(5),
+    answer: faker.lorem.words(5),
+    sortOrder: 0,
+    status: 'PUBLISHED',
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeDocumentationModule() {
+  return {
+    name: faker.person.fullName(),
+    shortDescription: faker.lorem.words(5),
+    contentHtml: faker.lorem.words(5),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeDocumentationModuleComplete() {
+  return {
+    id: faker.string.uuid(),
+    name: faker.person.fullName(),
+    shortDescription: faker.lorem.words(5),
+    contentHtml: faker.lorem.words(5),
+    sortOrder: 0,
+    status: 'PUBLISHED',
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
 export function fakeEmployee() {
   return {
     updatedAt: faker.date.anytime(),

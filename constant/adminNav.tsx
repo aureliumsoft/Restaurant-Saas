@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import {
+  BookOpen,
   Building2,
   CreditCard,
   FileText,
+  HelpCircle,
   LayoutDashboard,
   Mail,
   Search,
@@ -66,6 +68,18 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         path: '/admin/blog',
         icon: <FileText className="h-4 w-4" />,
         description: 'Marketing blog content',
+      },
+      {
+        title: 'FAQs',
+        path: '/admin/faqs',
+        icon: <HelpCircle className="h-4 w-4" />,
+        description: 'Landing page questions',
+      },
+      {
+        title: 'Documentation',
+        path: '/admin/documentation',
+        icon: <BookOpen className="h-4 w-4" />,
+        description: 'Public docs modules',
       },
     ],
   },

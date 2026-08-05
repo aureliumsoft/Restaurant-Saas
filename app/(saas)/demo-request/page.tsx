@@ -16,52 +16,6 @@ import { toast } from 'react-toastify';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  DEMO_OWNER_EMAIL,
-  DEMO_OWNER_PASSWORD,
-} from '@/lib/demo-restaurant';
-
-function DemoCredentialsBanner() {
-  return (
-    <div className="mb-6 rounded-2xl border border-fire-200/80 bg-fire-50/80 p-4 dark:border-fire-500/30 dark:bg-fire-500/10">
-      <p className="text-sm font-semibold text-fire-800 dark:text-fire-200">
-        Demo restaurant access
-      </p>
-      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-        Use these credentials to explore the product before or after your demo
-        request.
-      </p>
-      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-        <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Email
-          </dt>
-          <dd className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
-            {DEMO_OWNER_EMAIL}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Password
-          </dt>
-          <dd className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
-            {DEMO_OWNER_PASSWORD}
-          </dd>
-        </div>
-      </dl>
-      <Button
-        asChild
-        size="sm"
-        className="mt-4 bg-gradient-to-r from-fire-500 to-fire-600 text-white hover:from-fire-400 hover:to-fire-500"
-      >
-        <Link href="/login">
-          <LogIn className="mr-2 h-4 w-4" />
-          Sign in to demo
-        </Link>
-      </Button>
-    </div>
-  );
-}
 
 export default function DemoRequestPage() {
   const [name, setName] = useState('');

@@ -492,6 +492,39 @@ model BlogPost {
   @@index([createdAt])
 }
 
+/// Platform marketing FAQs (admin-managed; landing page accordion).
+model PlatformFaq {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  /// Lower numbers appear first.
+  sortOrder Int      @default(0)
+  /// DRAFT | PUBLISHED
+  status    String   @default("PUBLISHED")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, sortOrder])
+  @@index([createdAt])
+}
+
+/// Platform documentation modules (admin-managed; /documentation Modules section).
+model DocumentationModule {
+  id               String   @id @default(cuid())
+  name             String
+  shortDescription String
+  contentHtml      String
+  /// Lower numbers appear first.
+  sortOrder        Int      @default(0)
+  /// DRAFT | PUBLISHED
+  status           String   @default("PUBLISHED")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([status, sortOrder])
+  @@index([createdAt])
+}
+
 model Employee {
   id           String @id @default(uuid())
   restaurantId String

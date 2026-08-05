@@ -22,7 +22,6 @@ import {
   Send,
   Loader2,
   SendHorizonal,
-  ChevronDown,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
@@ -31,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Footer from '@/components/main/footer';
 import Header from '@/components/main/header';
+import { LandingFaqSection } from '@/components/marketing/landing-faq-section';
 
 export default function Home() {
   return (
@@ -42,11 +42,8 @@ export default function Home() {
       <FeaturesSection />
       <StatsSection />
       <ContactSection />
-      <FaqSection />
+      <LandingFaqSection />
       <NewsletterSection />
-
-      {/* <RecommendationsSection /> */}
-
       <Footer />
       </main>
     </div>
@@ -585,75 +582,6 @@ function ContactSection() {
               </form>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const FAQ_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5'] as const;
-
-function FaqSection() {
-  const { t } = useTranslation();
-  const [openKey, setOpenKey] = useState<string | null>('q1');
-
-  return (
-    <section className="relative bg-white py-20 dark:bg-black md:py-24">
-      <div className="mx-auto max-w-3xl px-6">
-        <div className="text-center">
-          <p className="text-sm font-semibold uppercase tracking-widest text-fire-500">
-            {t('marketing.faq.eyebrow')}
-          </p>
-          <h2 className="mt-3 text-3xl font-bold leading-tight md:text-5xl">
-            {t('marketing.faq.title')}
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-zinc-600 dark:text-zinc-400">
-            {t('marketing.faq.subtitle')}
-          </p>
-        </div>
-
-        <div className="mt-10 divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-          {FAQ_KEYS.map((key) => {
-            const isOpen = openKey === key;
-            const panelId = `faq-panel-${key}`;
-            const buttonId = `faq-button-${key}`;
-            return (
-              <div key={key}>
-                <button
-                  type="button"
-                  id={buttonId}
-                  aria-expanded={isOpen}
-                  aria-controls={panelId}
-                  onClick={() => setOpenKey(isOpen ? null : key)}
-                  className="flex w-full items-center justify-between gap-4 py-5 text-left transition-colors hover:text-fire-500"
-                >
-                  <span className="text-base font-semibold text-zinc-900 dark:text-white md:text-lg">
-                    {t(`marketing.faq.items.${key}.question`)}
-                  </span>
-                  <ChevronDown
-                    className={`h-5 w-5 shrink-0 text-fire-500 transition-transform duration-200 ${
-                      isOpen ? 'rotate-180' : ''
-                    }`}
-                    aria-hidden
-                  />
-                </button>
-                <div
-                  id={panelId}
-                  role="region"
-                  aria-labelledby={buttonId}
-                  className={`grid transition-[grid-template-rows] duration-200 ease-out ${
-                    isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                  }`}
-                >
-                  <div className="overflow-hidden">
-                    <p className="pb-5 pr-8 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 md:text-base">
-                      {t(`marketing.faq.items.${key}.answer`)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
     </section>

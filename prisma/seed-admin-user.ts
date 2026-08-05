@@ -9,12 +9,12 @@ const SALT_ROUNDS = 10;
 const PLATFORM_ADMIN_USERS = [
   {
     email: 'ammaryounas0001@gmail.com',
-    name: 'Platform Admin',
+    name: 'Admin SaaS',
     username: 'ammaryounas_admin',
   },
   {
     email: 'cermicrip.uk@gmail.com',
-    name: 'Platform Admin',
+    name: 'Admin SaaS',
     username: 'cermicrip_admin',
   },
 ] as const;

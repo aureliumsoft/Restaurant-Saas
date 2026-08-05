@@ -257,7 +257,7 @@ export function AdminDashboardOverview() {
     <div className="space-y-8">
       <AdminPageHeader
         eyebrow="Overview"
-        title={`Welcome back, ${firstName}`}
+        title={`Welcome Back, ${firstName}`}
         description={`Showing ${rangeLabel} — updated ${format(new Date(), 'EEEE, MMM d')}`}
         actions={
           <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
