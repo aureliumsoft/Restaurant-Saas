@@ -34,23 +34,46 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const existing = await db.documentationHeading.findMany({
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((h) => h.id));
+    if (
+      orderedIds.length !== existingIds.size ||
+      orderedIds.some((id) => !existingIds.has(id))
+    ) {
+      return NextResponse.json(
+        { error: 'orderedIds must include all headings exactly once' },
+        { status: 400 }
+      );
+    }
+
     await db.$transaction(
       orderedIds.map((id, index) =>
-        db.documentationModule.update({
+        db.documentationHeading.update({
           where: { id },
           data: { sortOrder: index },
         })
       )
     );
 
-    const items = await db.documentationModule.findMany({
+    const items = await db.documentationHeading.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        subHeadings: {
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          include: {
+            _count: { select: { pages: true } },
+          },
+        },
+        _count: { select: { subHeadings: true, pages: true } },
+      },
     });
     return NextResponse.json({ data: items });
   } catch (e) {
-    console.error('admin/documentation/reorder', e);
+    console.error('admin/documentation-headings/reorder', e);
     return NextResponse.json(
-      { error: 'Failed to reorder modules' },
+      { error: 'Failed to reorder headings' },
       { status: 500 }
     );
   }

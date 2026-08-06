@@ -312,7 +312,7 @@ export default function AdminFaqsPage() {
                       className="mt-0.5 flex shrink-0 cursor-grab items-center gap-1 text-muted-foreground active:cursor-grabbing"
                       title="Drag to reorder"
                     >
-                      <div className="flex flex-col items-start">
+                      <div className="flex flex-col items-center">
                         <div className="flex flex-wrap items-center">
                         <GripVertical className="h-5 w-5" />
                           <span className="w-5 text-center text-xs font-semibold tabular-nums">
@@ -320,7 +320,6 @@ export default function AdminFaqsPage() {
                           </span>
                         </div>
 
-                        <div className="flex flex-col items-start">
                           <Button
                             type="button"
                             size="sm"
@@ -328,7 +327,7 @@ export default function AdminFaqsPage() {
                             disabled={reordering || index === 0}
                             title="Move up"
                             onClick={() => moveBy(item.id, -1)}
-                            className="mt-2 px-0"
+                            className="p-0 w-7 h-7"
                           >
                             <ChevronUp className="h-4 w-4" />
                           </Button>
@@ -339,11 +338,10 @@ export default function AdminFaqsPage() {
                             disabled={reordering || index === items.length - 1}
                             title="Move down"
                             onClick={() => moveBy(item.id, 1)}
-                            className="mb-2 px-0"
+                            className="p-0 w-7 h-7"
                           >
                             <ChevronDown className="h-4 w-4" />
                           </Button>
-                        </div>
                       </div>
                     </div>
 

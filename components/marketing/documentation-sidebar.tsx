@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { BookOpen, ChevronRight, Search } from 'lucide-react';
@@ -29,11 +29,19 @@ export function DocumentationSidebar({ nav }: Props) {
     typeof params.subheadingSlug === 'string' ? params.subheadingSlug : null;
 
   const [query, setQuery] = useState('');
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
-    const open: Record<string, boolean> = {};
-    for (const h of nav.headings) open[h.id] = true;
-    return open;
-  });
+  /** Headings closed by default; `true` means expanded. */
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  // Open the active branch so the current page is visible in the tree.
+  useEffect(() => {
+    if (!activeHeadingSlug) return;
+    const heading = nav.headings.find((h) => h.slug === activeHeadingSlug);
+    if (!heading?.subHeadings.some((s) => s.pages[0])) return;
+    setExpanded((prev) => {
+      if (prev[heading.id]) return prev;
+      return { ...prev, [heading.id]: true };
+    });
+  }, [activeHeadingSlug, nav.headings]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -109,11 +117,9 @@ export function DocumentationSidebar({ nav }: Props) {
 
         {filtered.map((h) => {
           const hasSubHeadings = h.subHeadings.some((s) => s.pages[0]);
-          // Default open; explicit false means collapsed. Heading content route
-          // must not force-open (that made ChevronRight appear broken).
           const childrenVisible =
             hasSubHeadings &&
-            (Boolean(query.trim()) || expanded[h.id] !== false);
+            (Boolean(query.trim()) || expanded[h.id] === true);
           const hasDirect = Boolean(h.pages[0]);
           const headingSelected =
             h.slug === activeHeadingSlug && !activeSubSlug;
@@ -122,7 +128,7 @@ export function DocumentationSidebar({ nav }: Props) {
           function toggleExpanded() {
             setExpanded((prev) => ({
               ...prev,
-              [h.id]: prev[h.id] === false,
+              [h.id]: !prev[h.id],
             }));
           }
 

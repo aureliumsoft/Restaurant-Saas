@@ -5,9 +5,6 @@ import Link from 'next/link';
 import axios from 'axios';
 import {
   BookOpen,
-  ChevronDown,
-  ChevronUp,
-  GripVertical,
   Loader2,
   Pencil,
   Plus,
@@ -59,26 +56,10 @@ type DocModule = {
   } | null;
 };
 
-function reorderList(
-  list: DocModule[],
-  fromId: string,
-  toId: string
-): DocModule[] {
-  const from = list.findIndex((i) => i.id === fromId);
-  const to = list.findIndex((i) => i.id === toId);
-  if (from < 0 || to < 0 || from === to) return list;
-  const next = [...list];
-  const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved);
-  return next.map((item, index) => ({ ...item, sortOrder: index }));
-}
-
 export default function AdminDocumentationPage() {
   const [items, setItems] = useState<DocModule[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [reordering, setReordering] = useState(false);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -88,7 +69,7 @@ export default function AdminDocumentationPage() {
       );
       const rows = [...(res.data.data ?? [])].sort(
         (a, b) =>
-          a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt)
+          a.createdAt.localeCompare(b.createdAt) || a.name.localeCompare(b.name)
       );
       setItems(rows);
     } catch {
@@ -101,43 +82,6 @@ export default function AdminDocumentationPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  async function persistOrder(next: DocModule[]) {
-    setReordering(true);
-    const prev = items;
-    setItems(next);
-    try {
-      const res = await axios.post<{ data: DocModule[] }>(
-        '/api/admin/documentation/reorder',
-        { orderedIds: next.map((i) => i.id) }
-      );
-      setItems(
-        [...(res.data.data ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
-      );
-    } catch {
-      setItems(prev);
-      toast.error('Could not reorder modules.');
-    } finally {
-      setReordering(false);
-      setDraggingId(null);
-    }
-  }
-
-  function onDropReorder(targetId: string) {
-    if (!draggingId || draggingId === targetId || reordering) {
-      setDraggingId(null);
-      return;
-    }
-    void persistOrder(reorderList(items, draggingId, targetId));
-  }
-
-  function moveBy(id: string, delta: -1 | 1) {
-    if (reordering) return;
-    const index = items.findIndex((i) => i.id === id);
-    const target = index + delta;
-    if (index < 0 || target < 0 || target >= items.length) return;
-    void persistOrder(reorderList(items, id, items[target].id));
-  }
 
   async function toggleStatus(item: DocModule) {
     const next = item.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
@@ -177,20 +121,26 @@ export default function AdminDocumentationPage() {
       <AdminPageHeader
         eyebrow="Content"
         title="Documentation"
-        description="Pages for the public /documentation site. Group them under headings and sub headings (sidebar navigation)."
+        description="Pages for the public documentation site. Order of headings and sub headings is managed under Headings."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              disabled={loading || reordering}
+              disabled={loading}
               onClick={() => {
                 setLoading(true);
                 void load();
               }}
             >
               <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+            </Button>
+            <Button type="button" variant="secondary" asChild>
+              <Link href="/admin/documentation/headings">
+                <BookOpen className="mr-2 h-4 w-4" />
+                Headings
+              </Link>
             </Button>
             <Button type="button" asChild>
               <Link href="/admin/documentation/new">
@@ -214,8 +164,8 @@ export default function AdminDocumentationPage() {
               No modules yet
             </CardTitle>
             <CardDescription>
-              Create documentation pages with a heading and sub heading for the
-              public sidebar.
+              Create documentation pages with a heading and optional sub heading
+              for the public sidebar.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -229,90 +179,31 @@ export default function AdminDocumentationPage() {
         </Card>
       ) : (
         <div className="grid gap-3">
-          {items.map((item, index) => (
-            <Card
-              key={item.id}
-              draggable={!reordering}
-              onDragStart={() => setDraggingId(item.id)}
-              onDragEnd={() => {
-                if (!reordering) setDraggingId(null);
-              }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                onDropReorder(item.id);
-              }}
-              className={cn(
-                adminCardClass,
-                'overflow-hidden transition-colors',
-                draggingId === item.id &&
-                  'border-primary bg-muted/40 opacity-90',
-                draggingId && draggingId !== item.id && 'border-dashed'
-              )}
-            >
+          {items.map((item) => (
+            <Card key={item.id} className={cn(adminCardClass, 'overflow-hidden')}>
               <CardHeader className="space-y-2 pb-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="flex min-w-0 flex-1 items-start gap-2">
-                    <div
-                      className="mt-0.5 flex shrink-0 cursor-grab items-center gap-1 text-muted-foreground active:cursor-grabbing"
-                      title="Drag to reorder"
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Badge
+                      variant={
+                        item.status === 'PUBLISHED' ? 'default' : 'secondary'
+                      }
                     >
-                      <div className="flex flex-col items-start justify-start gap-1">
-                        <div className="flex items-start justify-start gap-1">
-                          <GripVertical className="h-5 w-5" />
-                          <span className="w-5 text-center text-xs font-semibold tabular-nums">
-                            {index + 1}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-col items-start justify-start gap-1">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            disabled={reordering || index === 0}
-                            title="Move up"
-                            onClick={() => moveBy(item.id, -1)}
-                            className="mt-2 p-0"
-                          >
-                            <ChevronUp className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            disabled={reordering || index === items.length - 1}
-                            title="Move down"
-                            onClick={() => moveBy(item.id, 1)}
-                            className="mb-2 p-0"
-                          >
-                            <ChevronDown className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <Badge
-                        variant={
-                          item.status === 'PUBLISHED' ? 'default' : 'secondary'
-                        }
-                      >
-                        {item.status === 'PUBLISHED' ? 'Published' : 'Draft'}
-                      </Badge>
-                      <CardTitle className="text-base leading-snug">
-                        {item.name}
-                      </CardTitle>
-                      {(item.heading || item.subHeading) && (
-                        <p className="text-xs text-muted-foreground">
-                          {[item.heading?.name, item.subHeading?.name]
-                            .filter(Boolean)
-                            .join(' → ')}
-                        </p>
-                      )}
-                      <CardDescription className="line-clamp-2">
-                        {item.shortDescription}
-                      </CardDescription>
-                    </div>
+                      {item.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                    </Badge>
+                    <CardTitle className="text-base leading-snug">
+                      {item.name}
+                    </CardTitle>
+                    {(item.heading || item.subHeading) && (
+                      <p className="text-xs text-muted-foreground">
+                        {[item.heading?.name, item.subHeading?.name]
+                          .filter(Boolean)
+                          .join(' → ')}
+                      </p>
+                    )}
+                    <CardDescription className="line-clamp-2">
+                      {item.shortDescription}
+                    </CardDescription>
                   </div>
                   <div className="flex flex-wrap items-center gap-1">
                     <Button
@@ -320,7 +211,7 @@ export default function AdminDocumentationPage() {
                       variant={
                         item.status === 'PUBLISHED' ? 'secondary' : 'default'
                       }
-                      disabled={busyId === item.id || reordering}
+                      disabled={busyId === item.id}
                       onClick={() => void toggleStatus(item)}
                     >
                       {busyId === item.id ? (
@@ -342,7 +233,7 @@ export default function AdminDocumentationPage() {
                       size="icon"
                       variant="ghost"
                       className="text-destructive hover:text-destructive"
-                      disabled={busyId === item.id || reordering}
+                      disabled={busyId === item.id}
                       onClick={() => setDeleteId(item.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -352,12 +243,6 @@ export default function AdminDocumentationPage() {
               </CardHeader>
             </Card>
           ))}
-          {reordering ? (
-            <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Saving order…
-            </p>
-          ) : null}
         </div>
       )}
 

@@ -16,6 +16,12 @@ export async function GET(req: NextRequest) {
     const items = await db.documentationHeading.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       include: {
+        subHeadings: {
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          include: {
+            _count: { select: { pages: true } },
+          },
+        },
         _count: { select: { subHeadings: true, pages: true } },
       },
     });

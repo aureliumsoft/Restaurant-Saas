@@ -356,17 +356,6 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
                   }
                   maxLength={200}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Leave blank to show content at{' '}
-                  <code className="rounded bg-muted px-1">
-                    /documentation/[heading]
-                  </code>
-                  . When filled, content opens at{' '}
-                  <code className="rounded bg-muted px-1">
-                    /documentation/[heading]/[subheading]
-                  </code>
-                  .
-                </p>
               </div>
             </>
           )}
