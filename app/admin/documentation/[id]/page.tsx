@@ -15,6 +15,9 @@ type ModuleDto = {
   contentHtml: string;
   status: string;
   sortOrder: number;
+  headingId: string | null;
+  subHeadingId: string | null;
+  subHeading?: { id: string; name: string; slug: string } | null;
 };
 
 export default function AdminDocumentationEditPage() {
@@ -33,7 +36,7 @@ export default function AdminDocumentationEditPage() {
         );
         if (!cancelled) setMod(res.data.data);
       } catch {
-        if (!cancelled) toast.error('Could not load module.');
+        if (!cancelled) toast.error('Could not load page.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -53,7 +56,7 @@ export default function AdminDocumentationEditPage() {
 
   if (!mod) {
     return (
-      <p className="text-sm text-muted-foreground">Module not found.</p>
+      <p className="text-sm text-muted-foreground">Documentation page not found.</p>
     );
   }
 
@@ -62,6 +65,8 @@ export default function AdminDocumentationEditPage() {
       mode="edit"
       moduleId={mod.id}
       initial={{
+        headingId: mod.headingId ?? '',
+        subHeadingName: mod.subHeading?.name ?? '',
         name: mod.name,
         shortDescription: mod.shortDescription,
         contentHtml: mod.contentHtml,

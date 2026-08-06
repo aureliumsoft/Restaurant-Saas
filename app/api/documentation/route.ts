@@ -1,22 +1,23 @@
 import { NextResponse } from 'next/server';
 
-import { db } from '@/lib/db';
+import {
+  loadPublicDocModules,
+  loadPublicDocNav,
+} from '@/lib/documentation/public';
 
-/** Public published documentation modules for /documentation. */
+/** Public published documentation (nav tree + flat modules for index cards). */
 export async function GET() {
   try {
-    const items = await db.documentationModule.findMany({
-      where: { status: 'PUBLISHED' },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      select: {
-        id: true,
-        name: true,
-        shortDescription: true,
-        contentHtml: true,
-        sortOrder: true,
+    const [nav, modules] = await Promise.all([
+      loadPublicDocNav(),
+      loadPublicDocModules(),
+    ]);
+    return NextResponse.json({
+      data: {
+        headings: nav.headings,
+        modules,
       },
     });
-    return NextResponse.json({ data: items });
   } catch (e) {
     console.error('documentation GET', e);
     return NextResponse.json(

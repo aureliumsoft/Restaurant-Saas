@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ArrowRight, BookOpen, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -12,12 +12,11 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
-export type PublicDocModule = {
+export type PublicDocModuleListItem = {
   id: string;
   name: string;
   shortDescription: string;
-  contentHtml: string;
-  sortOrder: number;
+  sortOrder?: number;
 };
 
 type FallbackModule = {
@@ -27,37 +26,78 @@ type FallbackModule = {
   contentHtml: string;
 };
 
+type ActiveDetail = {
+  id: string;
+  name: string;
+  shortDescription: string;
+  contentHtml: string;
+};
+
 type Props = {
-  /** Static fallback when admin has not published any modules yet. */
+  /** Published modules from the server (dynamic). */
+  modules?: PublicDocModuleListItem[];
+  /** Static blurbs only if no published modules exist. */
   fallbackModules?: FallbackModule[];
 };
 
-export function DocumentationModulesSection({ fallbackModules = [] }: Props) {
-  const [items, setItems] = useState<PublicDocModule[] | null>(null);
-  const [active, setActive] = useState<PublicDocModule | FallbackModule | null>(
-    null
-  );
+/**
+ * Index “Dashboard modules” cards from published DocumentationModule rows.
+ * Full HTML is loaded on Read more so the page payload stays small.
+ */
+export function DocumentationModulesSection({
+  modules = [],
+  fallbackModules = [],
+}: Props) {
+  const usingDynamic = modules.length > 0;
+  const rows: (PublicDocModuleListItem | FallbackModule)[] = usingDynamic
+    ? modules
+    : fallbackModules;
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/documentation');
-        if (!res.ok) throw new Error('load failed');
-        const json = (await res.json()) as { data?: PublicDocModule[] };
-        if (cancelled) return;
-        setItems(Array.isArray(json.data) ? json.data : []);
-      } catch {
-        if (!cancelled) setItems([]);
+  const [active, setActive] = useState<ActiveDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  async function openReadMore(
+    item: PublicDocModuleListItem | FallbackModule
+  ) {
+    // Static fallback already has body HTML.
+    if ('contentHtml' in item && item.contentHtml) {
+      setActive({
+        id: item.id,
+        name: item.name,
+        shortDescription: item.shortDescription,
+        contentHtml: item.contentHtml,
+      });
+      return;
+    }
+
+    setDetailLoading(true);
+    setActive({
+      id: item.id,
+      name: item.name,
+      shortDescription: item.shortDescription,
+      contentHtml: '',
+    });
+    try {
+      const res = await fetch(
+        `/api/documentation/${encodeURIComponent(item.id)}`,
+        { cache: 'no-store' }
+      );
+      if (!res.ok) throw new Error('load failed');
+      const json = (await res.json()) as { data?: ActiveDetail };
+      if (json.data) {
+        setActive(json.data);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const rows: (PublicDocModule | FallbackModule)[] =
-    (items?.length ?? 0) > 0 ? (items as PublicDocModule[]) : fallbackModules;
+    } catch {
+      setActive({
+        id: item.id,
+        name: item.name,
+        shortDescription: item.shortDescription,
+        contentHtml: '<p>Could not load details. Please try again.</p>',
+      });
+    } finally {
+      setDetailLoading(false);
+    }
+  }
 
   return (
     <section id="modules" className="mt-16 scroll-mt-24">
@@ -67,14 +107,10 @@ export function DocumentationModulesSection({ fallbackModules = [] }: Props) {
       <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
         After you sign in and open the operator workspace, the sidebar lists
         modules. Access depends on your role and your restaurant&apos;s
-        subscription tier. Hover a card and open Read more for full detail.
+        subscription tier. Open Read more for full detail.
       </p>
 
-      {items === null ? (
-        <div className="mt-10 flex justify-center py-12">
-          <Loader2 className="h-7 w-7 animate-spin text-fire-500" />
-        </div>
-      ) : rows.length === 0 ? (
+      {rows.length === 0 ? (
         <div className="mt-10 rounded-2xl border border-dashed border-zinc-300 px-6 py-12 text-center dark:border-zinc-700">
           <BookOpen className="mx-auto h-10 w-10 text-zinc-400" />
           <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
@@ -101,17 +137,11 @@ export function DocumentationModulesSection({ fallbackModules = [] }: Props) {
                       {m.shortDescription}
                     </p>
                   </div>
-                  <div
-                    className={cn(
-                      'shrink-0 self-start opacity-0 transition-opacity duration-200',
-                      'group-hover:opacity-100 group-focus-within:opacity-100',
-                      'max-sm:opacity-100'
-                    )}
-                  >
+                  <div className="shrink-0 self-start">
                     <Button
                       type="button"
                       variant="default"
-                      onClick={() => setActive(m)}
+                      onClick={() => void openReadMore(m)}
                     >
                       Read more
                       <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
@@ -127,7 +157,10 @@ export function DocumentationModulesSection({ fallbackModules = [] }: Props) {
       <Dialog
         open={Boolean(active)}
         onOpenChange={(open) => {
-          if (!open) setActive(null);
+          if (!open) {
+            setActive(null);
+            setDetailLoading(false);
+          }
         }}
       >
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
@@ -151,14 +184,22 @@ export function DocumentationModulesSection({ fallbackModules = [] }: Props) {
                   <p className="text-xs font-semibold uppercase tracking-wider text-fire-500">
                     Details
                   </p>
-                  <div
-                    className={cn(
-                      'prose prose-sm mt-3 max-w-none dark:prose-invert',
-                      'prose-headings:font-semibold prose-a:text-fire-600 dark:prose-a:text-fire-400',
-                      '[&_h2]:text-lg [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6'
-                    )}
-                    dangerouslySetInnerHTML={{ __html: active.contentHtml }}
-                  />
+                  {detailLoading ? (
+                    <div className="mt-6 flex justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-fire-500" />
+                    </div>
+                  ) : (
+                    <div
+                      className={cn(
+                        'prose prose-sm mt-3 max-w-none dark:prose-invert',
+                        'prose-headings:font-semibold prose-a:text-fire-600 dark:prose-a:text-fire-400',
+                        '[&_h2]:text-lg [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6'
+                      )}
+                      dangerouslySetInnerHTML={{
+                        __html: active.contentHtml || '<p></p>',
+                      }}
+                    />
+                  )}
                 </section>
               </div>
             </>

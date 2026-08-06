@@ -492,6 +492,43 @@ export function fakePlatformFaqComplete() {
     updatedAt: faker.date.anytime(),
   };
 }
+export function fakeDocumentationHeading() {
+  return {
+    name: faker.person.fullName(),
+    slug: faker.lorem.words(5),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeDocumentationHeadingComplete() {
+  return {
+    id: faker.string.uuid(),
+    name: faker.person.fullName(),
+    slug: faker.lorem.words(5),
+    sortOrder: 0,
+    status: 'PUBLISHED',
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeDocumentationSubHeading() {
+  return {
+    name: faker.person.fullName(),
+    slug: faker.lorem.words(5),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeDocumentationSubHeadingComplete() {
+  return {
+    id: faker.string.uuid(),
+    headingId: faker.string.uuid(),
+    name: faker.person.fullName(),
+    slug: faker.lorem.words(5),
+    sortOrder: 0,
+    status: 'PUBLISHED',
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
 export function fakeDocumentationModule() {
   return {
     name: faker.person.fullName(),
@@ -508,6 +545,8 @@ export function fakeDocumentationModuleComplete() {
     contentHtml: faker.lorem.words(5),
     sortOrder: 0,
     status: 'PUBLISHED',
+    headingId: undefined,
+    subHeadingId: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };

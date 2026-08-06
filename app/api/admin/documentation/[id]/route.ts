@@ -3,7 +3,9 @@ import { NextResponse } from 'next/server';
 
 import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import {
+  documentationModuleInclude,
   documentationModuleWriteSchema,
+  resolveDocumentationLinks,
   sanitizeDocHtml,
 } from '@/lib/documentation/module';
 import { db } from '@/lib/db';
@@ -16,7 +18,10 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
   const { id } = await ctx.params;
   try {
-    const item = await db.documentationModule.findUnique({ where: { id } });
+    const item = await db.documentationModule.findUnique({
+      where: { id },
+      include: documentationModuleInclude,
+    });
     if (!item) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -48,7 +53,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   try {
     const existing = await db.documentationModule.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, headingId: true, subHeadingId: true },
     });
     if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -60,6 +65,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       contentHtml?: string;
       sortOrder?: number;
       status?: string;
+      headingId?: string | null;
+      subHeadingId?: string | null;
     } = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
     if (parsed.data.shortDescription !== undefined) {
@@ -71,7 +78,42 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     if (parsed.data.sortOrder !== undefined) data.sortOrder = parsed.data.sortOrder;
     if (parsed.data.status !== undefined) data.status = parsed.data.status;
 
-    const item = await db.documentationModule.update({ where: { id }, data });
+    if (
+      parsed.data.headingId !== undefined ||
+      parsed.data.subHeadingId !== undefined ||
+      parsed.data.subHeadingName !== undefined
+    ) {
+      const link = await resolveDocumentationLinks({
+        headingId:
+          parsed.data.headingId !== undefined
+            ? parsed.data.headingId
+            : existing.headingId,
+        subHeadingId:
+          parsed.data.subHeadingName !== undefined
+            ? undefined
+            : parsed.data.subHeadingId !== undefined
+              ? parsed.data.subHeadingId
+              : existing.subHeadingId,
+        subHeadingName: parsed.data.subHeadingName,
+      });
+      if (!link.ok) {
+        return NextResponse.json({ error: link.error }, { status: link.status });
+      }
+      if (!link.headingId) {
+        return NextResponse.json(
+          { error: 'Heading is required' },
+          { status: 400 }
+        );
+      }
+      data.headingId = link.headingId;
+      data.subHeadingId = link.subHeadingId;
+    }
+
+    const item = await db.documentationModule.update({
+      where: { id },
+      data,
+      include: documentationModuleInclude,
+    });
     return NextResponse.json({ data: item });
   } catch (e) {
     console.error('admin/documentation/[id] PATCH', e);

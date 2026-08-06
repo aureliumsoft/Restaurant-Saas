@@ -50,6 +50,13 @@ type DocModule = {
   status: string;
   createdAt: string;
   updatedAt: string;
+  heading?: { id: string; name: string; slug: string } | null;
+  subHeading?: {
+    id: string;
+    name: string;
+    slug: string;
+    headingId: string;
+  } | null;
 };
 
 function reorderList(
@@ -170,7 +177,7 @@ export default function AdminDocumentationPage() {
       <AdminPageHeader
         eyebrow="Content"
         title="Documentation"
-        description="Modules for the public /documentation page. Drag to reorder."
+        description="Pages for the public /documentation site. Group them under headings and sub headings (sidebar navigation)."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -188,7 +195,7 @@ export default function AdminDocumentationPage() {
             <Button type="button" asChild>
               <Link href="/admin/documentation/new">
                 <Plus className="mr-2 h-4 w-4" />
-                Add module
+                Add page
               </Link>
             </Button>
           </div>
@@ -207,14 +214,15 @@ export default function AdminDocumentationPage() {
               No modules yet
             </CardTitle>
             <CardDescription>
-              Create modules on a full page form with unsaved-change protection.
+              Create documentation pages with a heading and sub heading for the
+              public sidebar.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button type="button" asChild>
               <Link href="/admin/documentation/new">
                 <Plus className="mr-2 h-4 w-4" />
-                Add module
+                Add page
               </Link>
             </Button>
           </CardContent>
@@ -294,6 +302,13 @@ export default function AdminDocumentationPage() {
                       <CardTitle className="text-base leading-snug">
                         {item.name}
                       </CardTitle>
+                      {(item.heading || item.subHeading) && (
+                        <p className="text-xs text-muted-foreground">
+                          {[item.heading?.name, item.subHeading?.name]
+                            .filter(Boolean)
+                            .join(' → ')}
+                        </p>
+                      )}
                       <CardDescription className="line-clamp-2">
                         {item.shortDescription}
                       </CardDescription>
@@ -354,9 +369,9 @@ export default function AdminDocumentationPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete module?</AlertDialogTitle>
+            <AlertDialogTitle>Delete page?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the module from the public documentation page.
+              This removes the page from the public documentation site.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

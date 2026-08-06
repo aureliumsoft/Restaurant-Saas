@@ -508,7 +508,44 @@ model PlatformFaq {
   @@index([createdAt])
 }
 
-/// Platform documentation modules (admin-managed; /documentation Modules section).
+/// Sidebar section (e.g. Getting Started, Core Tasks).
+model DocumentationHeading {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  sortOrder Int      @default(0)
+  /// DRAFT | PUBLISHED
+  status    String   @default("PUBLISHED")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subHeadings DocumentationSubHeading[]
+  pages       DocumentationModule[]
+
+  @@index([status, sortOrder])
+}
+
+/// Nested nav item under a heading (category of a page).
+model DocumentationSubHeading {
+  id        String   @id @default(cuid())
+  headingId String
+  name      String
+  slug      String
+  sortOrder Int      @default(0)
+  /// DRAFT | PUBLISHED
+  status    String   @default("PUBLISHED")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  heading DocumentationHeading  @relation(fields: [headingId], references: [id], onDelete: Cascade)
+  pages   DocumentationModule[]
+
+  @@unique([headingId, slug])
+  @@index([headingId, sortOrder])
+  @@index([status, sortOrder])
+}
+
+/// Platform documentation pages (admin-managed; /documentation tree).
 model DocumentationModule {
   id               String   @id @default(cuid())
   name             String
@@ -518,11 +555,18 @@ model DocumentationModule {
   sortOrder        Int      @default(0)
   /// DRAFT | PUBLISHED
   status           String   @default("PUBLISHED")
+  headingId        String?
+  subHeadingId     String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  heading    DocumentationHeading?    @relation(fields: [headingId], references: [id], onDelete: SetNull)
+  subHeading DocumentationSubHeading? @relation(fields: [subHeadingId], references: [id], onDelete: SetNull)
+
   @@index([status, sortOrder])
   @@index([createdAt])
+  @@index([headingId])
+  @@index([subHeadingId])
 }
 
 model Employee {

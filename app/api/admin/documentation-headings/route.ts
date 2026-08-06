@@ -3,10 +3,8 @@ import { NextResponse } from 'next/server';
 
 import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import {
-  documentationModuleInclude,
-  documentationModuleWriteSchema,
-  resolveDocumentationLinks,
-  sanitizeDocHtml,
+  documentationHeadingWriteSchema,
+  slugifyDocLabel,
 } from '@/lib/documentation/module';
 import { db } from '@/lib/db';
 
@@ -15,15 +13,17 @@ export async function GET(req: NextRequest) {
   if ('error' in auth) return auth.error;
 
   try {
-    const items = await db.documentationModule.findMany({
+    const items = await db.documentationHeading.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      include: documentationModuleInclude,
+      include: {
+        _count: { select: { subHeadings: true, pages: true } },
+      },
     });
     return NextResponse.json({ data: items });
   } catch (e) {
-    console.error('admin/documentation GET', e);
+    console.error('admin/documentation-headings GET', e);
     return NextResponse.json(
-      { error: 'Failed to load documentation modules' },
+      { error: 'Failed to load headings' },
       { status: 500 }
     );
   }
@@ -40,52 +40,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const parsed = documentationModuleWriteSchema.safeParse(json);
+  const parsed = documentationHeadingWriteSchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
   try {
-    const link = await resolveDocumentationLinks({
-      headingId: parsed.data.headingId,
-      subHeadingId: parsed.data.subHeadingId,
-      subHeadingName: parsed.data.subHeadingName,
-    });
-    if (!link.ok) {
-      return NextResponse.json({ error: link.error }, { status: link.status });
-    }
-    if (!link.headingId) {
-      return NextResponse.json(
-        { error: 'Heading is required' },
-        { status: 400 }
-      );
-    }
-
     let sortOrder = parsed.data.sortOrder;
     if (sortOrder === undefined) {
-      const max = await db.documentationModule.aggregate({
+      const max = await db.documentationHeading.aggregate({
         _max: { sortOrder: true },
       });
       sortOrder = (max._max.sortOrder ?? -1) + 1;
     }
 
-    const item = await db.documentationModule.create({
+    const baseSlug = parsed.data.slug ?? slugifyDocLabel(parsed.data.name);
+    let slug = baseSlug;
+    for (let i = 0; i < 8; i++) {
+      const clash = await db.documentationHeading.findUnique({
+        where: { slug },
+        select: { id: true },
+      });
+      if (!clash) break;
+      slug = `${baseSlug}-${i + 2}`;
+    }
+
+    const item = await db.documentationHeading.create({
       data: {
         name: parsed.data.name,
-        shortDescription: parsed.data.shortDescription,
-        contentHtml: sanitizeDocHtml(parsed.data.contentHtml),
+        slug,
         sortOrder,
         status: parsed.data.status ?? 'PUBLISHED',
-        headingId: link.headingId,
-        subHeadingId: link.subHeadingId,
       },
-      include: documentationModuleInclude,
     });
     return NextResponse.json({ data: item }, { status: 201 });
   } catch (e) {
-    console.error('admin/documentation POST', e);
+    console.error('admin/documentation-headings POST', e);
     return NextResponse.json(
-      { error: 'Failed to create module' },
+      { error: 'Failed to create heading' },
       { status: 500 }
     );
   }
