@@ -9,6 +9,8 @@ export const queryKeys = {
   orderDisplay: (date?: string) => ['order-display', date ?? 'today'] as const,
   kioskPendingCash: (branchId?: string | null) =>
     ['kiosk', 'pending-cash', branchId ?? 'all'] as const,
+  tableOpenOrders: (branchId?: string | null) =>
+    ['pos', 'table-open-orders', branchId ?? 'all'] as const,
   posRecentOrders: (branchId?: string | null) =>
     ['pos', 'recent-orders', branchId ?? 'all'] as const,
   salesOrders: (params: string) => ['sales', 'orders', params] as const,

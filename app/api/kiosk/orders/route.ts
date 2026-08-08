@@ -320,34 +320,43 @@ export async function POST(req: NextRequest) {
         })
       );
 
-      const ticket = await tx.kitchenTicket.create({
-        data: {
-          restaurantId: restaurant.id,
-          orderId: order.id,
-          status: 'pending',
-          selectedMinutes: SELECTED_MINUTES_KIOSK,
-        },
-      });
+      // Table + unpaid (or pending) → hold for POS table sheet; do not send kitchen yet.
+      // Paid orders (cash completed / card) still get a kitchen ticket immediately.
+      const resolvedPaymentStatus = paymentStatus ?? 'completed';
+      const isTableOpenCheck =
+        Boolean(selectedTableId) &&
+        resolvedPaymentStatus.toLowerCase() === 'pending';
 
-      await tx.kitchenTicketItem.createMany({
-        data: lines.map((line) => ({
-          kitchenTicketId: ticket.id,
-          productName: ticketProductName(line.productName, line.modifiers),
-          quantity: line.quantity,
-        })),
-      });
+      if (!isTableOpenCheck) {
+        const ticket = await tx.kitchenTicket.create({
+          data: {
+            restaurantId: restaurant.id,
+            orderId: order.id,
+            status: 'pending',
+            selectedMinutes: SELECTED_MINUTES_KIOSK,
+          },
+        });
+
+        await tx.kitchenTicketItem.createMany({
+          data: lines.map((line) => ({
+            kitchenTicketId: ticket.id,
+            productName: ticketProductName(line.productName, line.modifiers),
+            quantity: line.quantity,
+          })),
+        });
+      }
 
       await tx.payment.create({
         data: {
           orderId: order.id,
           amount: computedTotal,
-          status: paymentStatus ?? 'completed',
+          status: resolvedPaymentStatus,
           method: paymentMethod?.trim() || 'Kiosk',
           restaurantId: restaurant.id,
         },
       });
 
-      return { order, ticketNumber };
+      return { order, ticketNumber, isTableOpenCheck };
     }, { timeout: 20000, maxWait: 10000 });
 
     publishOrderLifecycleUpdate({

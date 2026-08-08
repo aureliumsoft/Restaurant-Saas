@@ -30,12 +30,23 @@ export async function GET(req: NextRequest) {
     );
     const branchId = branchScope?.activeBranchId ?? null;
 
+    // Open table tabs (pending payment) are managed from the table-orders sheet.
     const orders = await db.order.findMany({
       where: {
         restaurantId: auth.restaurantId,
         ...orderBranchWhere(branchId),
         sourceType: OrderSourceType.POS,
         status: { in: ['pending', 'pedding'] },
+        OR: [
+          { diningTableId: null },
+          {
+            payments: {
+              none: {
+                status: { equals: 'pending', mode: 'insensitive' },
+              },
+            },
+          },
+        ],
         kitchenTickets: {
           none: {
             status: { equals: 'making', mode: 'insensitive' },

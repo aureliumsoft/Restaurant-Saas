@@ -49,6 +49,7 @@ import {
   type PosOrderDetail,
 } from '@/components/pos/pos-recent-orders-sheet';
 import { PosKioskOrdersSheet } from '@/components/pos/pos-kiosk-orders-sheet';
+import { PosTableOrdersSheet } from '@/components/pos/pos-table-orders-sheet';
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
 import {
   parseRestaurantServiceCharges,
@@ -104,6 +105,10 @@ import axios from 'axios';
 import eventBus from '@/lib/even';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { useKioskPendingCash, revalidateKioskPendingCash } from '@/hooks/use-kiosk-pending-cash';
+import {
+  useOpenTableOrders,
+  revalidateOpenTableOrders,
+} from '@/hooks/use-open-table-orders';
 import { useStaffRestaurantBranding } from '@/hooks/use-staff-permissions';
 import { MenuOfferChoiceDialog } from '@/components/order/menu-offer-choice-dialog';
 import {
@@ -541,12 +546,14 @@ export function PosScreen() {
   const [shiftSheetOpen, setShiftSheetOpen] = useState(false);
   const [recentOrdersOpen, setRecentOrdersOpen] = useState(false);
   const [kioskOrdersOpen, setKioskOrdersOpen] = useState(false);
+  const [tableOrdersOpen, setTableOrdersOpen] = useState(false);
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
   const productButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const proceedOrderButtonRef = useRef<HTMLButtonElement | null>(null);
   const placeOrderButtonRef = useRef<HTMLButtonElement | null>(null);
   const posBranchId = selectedBranchId || activeBranchId || null;
   const { count: kioskPendingCount } = useKioskPendingCash(posBranchId);
+  const { tableCount: openTableCount } = useOpenTableOrders(posBranchId);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [editingOrderLabel, setEditingOrderLabel] = useState<string | null>(
     null
@@ -1747,14 +1754,24 @@ export function PosScreen() {
       toast.warn('Add at least one product to the cart.');
       return;
     }
-    if (!isEditingKiosk && !effectivePayment.trim()) {
-      toast.warn('Enter the payment amount before saving.');
-      return;
-    }
     const nameTrim = customerName.trim();
     const phoneTrim = customerPhone.trim();
     const tableTrim = tableId.trim();
     const addressTrim = orderAddress.trim();
+    // Table + cash (or unpaid) → open check: payment stays pending; kitchen is later.
+    const isTableOpenCheck =
+      isTableMode &&
+      Boolean(tableTrim) &&
+      effectivePaymentMode !== 'card' &&
+      effectivePaymentMode !== 'card_terminal';
+    if (
+      !isEditingKiosk &&
+      !isTableOpenCheck &&
+      !effectivePayment.trim()
+    ) {
+      toast.warn('Enter the payment amount before saving.');
+      return;
+    }
     if (!isEditingKiosk) {
       if (nameTrim && !phoneTrim) {
         toast.warn(
@@ -1775,14 +1792,22 @@ export function PosScreen() {
     try {
       const isEditing = Boolean(editingOrderId);
       const isTerminal = effectivePaymentMode === 'card_terminal';
+      // Card (or terminal after success) completes pay at place; cash table tabs stay pending.
+      const resolvedPaymentStatus = isTerminal
+        ? 'pending'
+        : isTableOpenCheck
+          ? 'pending'
+          : 'completed';
       const paymentAmount = isTerminal
         ? grandTotal.toFixed(2)
-        : effectivePayment.trim();
+        : isTableOpenCheck
+          ? (effectivePayment.trim() || grandTotal.toFixed(2))
+          : effectivePayment.trim();
       const orderPayload = {
         grandTotal,
         payment: paymentAmount,
         paymentMode: effectivePaymentMode,
-        paymentStatus: isTerminal ? 'pending' : 'completed',
+        paymentStatus: resolvedPaymentStatus,
         address: addressTrim || undefined,
         taxAmount,
         discountAmount: disAmount,
@@ -1879,12 +1904,23 @@ export function PosScreen() {
           setCustomerPhone('');
           setTableId('');
           setCheckoutOpen(false);
-          openKitchenSendDialog({
-            id: localId,
-            shortOrderId: localId.replace(/^offline-/, '').slice(0, 8).toUpperCase(),
-            ticketNumber: null,
-            items: kitchenItems,
-          });
+          if (isTableOpenCheck) {
+            toast.info('Table tab saved offline — send to kitchen when online.');
+            eventBus.emit('refreshTableOrders');
+            if (selectedBranchId || activeBranchId) {
+              revalidateOpenTableOrders(selectedBranchId || activeBranchId);
+            }
+          } else {
+            openKitchenSendDialog({
+              id: localId,
+              shortOrderId: localId
+                .replace(/^offline-/, '')
+                .slice(0, 8)
+                .toUpperCase(),
+              ticketNumber: null,
+              items: kitchenItems,
+            });
+          }
           return;
         }
         savedOrder = {
@@ -1977,13 +2013,22 @@ export function PosScreen() {
       toast.success(
         isEditing
           ? `Order updated — ${itemsCount} items · ${formatMoney(grandTotal)}`
-          : `Order saved — ${itemsCount} items · ${formatMoney(grandTotal)} · ${effectivePaymentMode}`
+          : isTableOpenCheck
+            ? `Table tab opened — ${itemsCount} items · ${formatMoney(grandTotal)} · pay later`
+            : `Order saved — ${itemsCount} items · ${formatMoney(grandTotal)} · ${effectivePaymentMode}`
       );
-      printOrderReceipt(trackingId, ticketNumber, {
-        mode: effectivePaymentMode,
-        paid: Number(paymentAmount) || 0,
-      });
+      if (!isTableOpenCheck) {
+        printOrderReceipt(trackingId, ticketNumber, {
+          mode: effectivePaymentMode,
+          paid: Number(paymentAmount) || 0,
+        });
+      }
       eventBus.emit('refreshSalesOrders');
+      if (isTableOpenCheck) {
+        eventBus.emit('refreshTableOrders');
+        const branchForTable = selectedBranchId || activeBranchId || '';
+        if (branchForTable) revalidateOpenTableOrders(branchForTable);
+      }
       clearCart();
       setPayment('');
       setAmountPaid('');
@@ -1994,7 +2039,8 @@ export function PosScreen() {
       setCustomerPhone('');
       setTableId('');
       setCheckoutOpen(false);
-      if (!isEditing) {
+      // Paid-at-place still offers kitchen dialog; open table tabs do not auto-send kitchen.
+      if (!isEditing && !isTableOpenCheck) {
         openKitchenSendDialog({
           id: dbOrderId,
           shortOrderId: trackingId,
@@ -2188,6 +2234,21 @@ export function PosScreen() {
             {kioskPendingCount > 0 ? (
               <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
                 {kioskPendingCount}
+              </span>
+            ) : null}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn('relative h-9 w-9 rounded-xl', POS_GHOST_ICON_BTN)}
+            title="Table orders"
+            onClick={() => setTableOrdersOpen(true)}
+          >
+            <UtensilsCrossed className="h-4 w-4" />
+            {openTableCount > 0 ? (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
+                {openTableCount}
               </span>
             ) : null}
           </Button>
@@ -3202,6 +3263,12 @@ export function PosScreen() {
                               </span>
                             )}
                           </div>
+                        ) : isTableMode ? (
+                          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                            Opens a table tab with payment pending. Use Table
+                            orders to send kitchen or collect pay. Extra rounds
+                            stay on the same tab until paid.
+                          </div>
                         ) : (
                           <div className="space-y-1">
                             <label className="text-xs text-muted-foreground">
@@ -3262,7 +3329,9 @@ export function PosScreen() {
                   ? false
                   : isCardMode
                     ? !isCardPaymentComplete
-                    : amountPaid.trim() === '')
+                    : isTableMode
+                      ? false
+                      : amountPaid.trim() === '')
               }
               onClick={() => {
                 if (isEditingKioskOrder) {
@@ -3618,6 +3687,21 @@ export function PosScreen() {
           const branchId = selectedBranchId || activeBranchId || '';
           if (branchId) {
             void refreshShiftSummary(branchId);
+          }
+        }}
+      />
+
+      <PosTableOrdersSheet
+        open={tableOrdersOpen}
+        onOpenChange={setTableOrdersOpen}
+        branchId={selectedBranchId || activeBranchId || null}
+        onOrdersChanged={() => {
+          eventBus.emit('refreshRecentOrders');
+          void loadPendingKitchenOrders();
+          const branchId = selectedBranchId || activeBranchId || '';
+          if (branchId) {
+            void refreshShiftSummary(branchId);
+            revalidateOpenTableOrders(branchId);
           }
         }}
       />

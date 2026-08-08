@@ -47,11 +47,13 @@ export async function GET(req: NextRequest) {
       branchId = branchIdFromQuery;
     }
 
+    // Table tabs with pending pay live in the POS table-orders sheet, not here.
     const pendingCashWhere: Prisma.OrderWhereInput = {
       restaurantId: auth.restaurantId,
       ...orderBranchWhere(branchId),
       sourceType: OrderSourceType.KIOSK,
       status: { notIn: ['canceled', 'cancelled', 'failed'] },
+      diningTableId: null,
       payments: {
         some: {
           status: 'pending',
