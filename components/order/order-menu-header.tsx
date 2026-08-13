@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronLeft,
   Info,
+  Loader2,
   Menu,
   ShoppingBag,
   User,
@@ -532,14 +533,19 @@ type OrderCartCheckoutButtonProps = {
   total: number;
   formattedTotal?: string;
   label: string;
+  loadingLabel?: string;
+  loading?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 };
 
 export function OrderCartCheckoutButton({
-  itemCount,
   total,
   formattedTotal,
   label,
+  loadingLabel,
+  loading = false,
+  disabled = false,
   onClick,
 }: OrderCartCheckoutButtonProps) {
   const totalLabel =
@@ -549,12 +555,19 @@ export function OrderCartCheckoutButton({
     <Button
       variant="default"
       onClick={onClick}
+      disabled={disabled || loading}
       className="flex h-12 w-full items-center gap-2 rounded-xl px-3 transition"
     >
       <span className="relative flex h-8 w-8 shrink-0 items-center justify-center">
-        <ShoppingBag className="h-5 w-5" strokeWidth={2.25} aria-hidden />
+        {loading ? (
+          <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+        ) : (
+          <ShoppingBag className="h-5 w-5" strokeWidth={2.25} aria-hidden />
+        )}
       </span>
-      <span className="flex-1 text-center text-sm font-bold">{label}</span>
+      <span className="flex-1 text-center text-sm font-bold">
+        {loading && loadingLabel ? loadingLabel : label}
+      </span>
       <span className="shrink-0 text-sm font-bold">{totalLabel}</span>
     </Button>
   );

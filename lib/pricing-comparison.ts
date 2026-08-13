@@ -23,12 +23,12 @@ export const PRICING_COMPARISON_ROWS: PricingComparisonRow[] = [
   {
     id: 'one_branch',
     label: '1 branch maximum',
-    included: (plan) => plan === SubscriptionPlan.STARTER,
+    included: (plan) => plan === SubscriptionPlan.STARTER || plan === SubscriptionPlan.GROWTH || plan === SubscriptionPlan.SCALE,
   },
   {
     id: 'five_branches',
     label: 'Up to 5 branches',
-    included: (plan) => plan === SubscriptionPlan.GROWTH,
+    included: (plan) => plan === SubscriptionPlan.GROWTH || plan === SubscriptionPlan.SCALE,
   },
   {
     id: 'unlimited_branches',

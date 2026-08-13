@@ -3,6 +3,9 @@ import type { Prisma } from '@prisma/client';
 /** Synthetic phone prefix for dine-in kiosk customers (one row per table). */
 export const KIOSK_DINE_PHONE_PREFIX = 'kiosk-dine:';
 
+/** Prefix for mobile QR dine-in customers (real guest, keyed by account). */
+export const KIOSK_MOBILE_QR_PHONE_PREFIX = 'kiosk-mobile:';
+
 /** Display + speech name for dine-in, e.g. "Table 1 Customer". */
 export function kioskDineInCustomerDisplayName(tableName: string): string {
   const t = tableName.trim();
@@ -37,8 +40,45 @@ export async function upsertKioskOrderCustomer(
     tableName?: string;
     customerName?: string;
     customerPhone?: string;
+    customerEmail?: string;
+    customerAccountId?: string;
+    mobileTableQr?: boolean;
   }
 ): Promise<string | null> {
+  if (
+    opts.fulfillment === 'dine_in' &&
+    opts.mobileTableQr &&
+    opts.customerAccountId
+  ) {
+    const accountId = opts.customerAccountId.trim();
+    const name = opts.customerName?.trim() || 'Guest';
+    const email = opts.customerEmail?.trim() || null;
+    const phone = `${KIOSK_MOBILE_QR_PHONE_PREFIX}${accountId}`.slice(0, 40);
+
+    const existing = await tx.customer.findFirst({
+      where: { restaurantId, accountId },
+      select: { id: true },
+    });
+    if (existing) {
+      await tx.customer.update({
+        where: { id: existing.id },
+        data: { name, email, phone },
+      });
+      return existing.id;
+    }
+
+    const created = await tx.customer.create({
+      data: {
+        restaurantId,
+        accountId,
+        name,
+        email,
+        phone,
+      },
+    });
+    return created.id;
+  }
+
   if (opts.fulfillment === 'dine_in') {
     const tableId = opts.tableId?.trim();
     const tableName = opts.tableName?.trim();

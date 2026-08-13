@@ -54,12 +54,16 @@ type BlogListItem = {
   imageUrl: string | null;
   shortDescription: string;
   status: string;
+  featured?: boolean;
   publishedAt: string | null;
   updatedAt: string;
 };
 
 type BlogDetail = BlogListItem & {
   contentHtml: string;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  seoImageUrl?: string | null;
 };
 
 export default function AdminBlogListPage() {
@@ -116,6 +120,10 @@ export default function AdminBlogListPage() {
         imageUrl: full.imageUrl ?? '',
         shortDescription: full.shortDescription,
         contentHtml: full.contentHtml,
+        seoTitle: full.seoTitle ?? '',
+        seoDescription: full.seoDescription ?? '',
+        seoImageUrl: full.seoImageUrl ?? '',
+        featured: Boolean(full.featured),
         status: next,
       });
       toast.success(
@@ -246,13 +254,18 @@ export default function AdminBlogListPage() {
                 </div>
                 <CardHeader className="space-y-2 pb-2">
                   <div className="flex items-center justify-between gap-2">
-                    <Badge
-                      variant={
-                        post.status === 'PUBLISHED' ? 'default' : 'secondary'
-                      }
-                    >
-                      {post.status === 'PUBLISHED' ? 'Published' : 'Draft'}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge
+                        variant={
+                          post.status === 'PUBLISHED' ? 'default' : 'secondary'
+                        }
+                      >
+                        {post.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                      </Badge>
+                      {post.featured ? (
+                        <Badge variant="outline">Featured</Badge>
+                      ) : null}
+                    </div>
                     <span className="text-xs text-muted-foreground">
                       {format(new Date(post.updatedAt), 'MMM d, yyyy')}
                     </span>

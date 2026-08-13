@@ -1,4 +1,8 @@
 import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
+import {
+  isCustomerOrderFlowPath,
+  parseStorefrontSlugFromPath,
+} from '@/lib/customer-storefront-paths';
 
 export const DEFAULT_DOCUMENT_TITLE = 'Foodluk';
 export const DEFAULT_FAVICON_HREF = '/Logo.png';
@@ -60,10 +64,9 @@ export function customerBrandingRouteFromLocation(
   }
 
   const orderFlow =
-    parts[0] === 'order' ||
-    parts[0] === 'track-order' ||
-    (parts[0] === 'web-app' &&
-      (parts[1] === 'order' || parts[1] === 'track-order'));
+    isCustomerOrderFlowPath(path) ||
+    path === '/track-order' ||
+    path.startsWith('/track-order/');
 
   if (orderFlow) {
     return {
@@ -72,19 +75,19 @@ export function customerBrandingRouteFromLocation(
     };
   }
 
-  if (parts[0] === 'web-app') {
-    if (parts[1] && parts[1] !== 'order' && parts[1] !== 'track-order') {
-      return {
-        slug: decodeURIComponent(parts[1]),
-        pageSuffix: webAppPageSuffix(path),
-      };
-    }
-    if (slugFromQuery) {
-      return {
-        slug: slugFromQuery,
-        pageSuffix: webAppPageSuffix(path),
-      };
-    }
+  const pathSlug = parseStorefrontSlugFromPath(path);
+  if (pathSlug) {
+    return {
+      slug: pathSlug,
+      pageSuffix: webAppPageSuffix(path),
+    };
+  }
+
+  if (slugFromQuery) {
+    return {
+      slug: slugFromQuery,
+      pageSuffix: webAppPageSuffix(path),
+    };
   }
 
   return null;

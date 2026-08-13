@@ -11,7 +11,8 @@ import { clearOnlineOrderPreferences } from '@/lib/online-order-preferences';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { OrderInfo } from '@/components/order/order-types';
-import { TrackNextIcon } from '@radix-ui/react-icons';
+import { restaurantStorefrontPath, restaurantTrackOrderPath } from '@/lib/customer-storefront-paths';
+import { useOrderInfo } from '@/hooks/use-order-info';
 
 function formatTokenNumber(ticket: number | null): string {
   if (ticket == null || ticket < 0) return '—';
@@ -35,8 +36,9 @@ export function OnlinePaymentSuccess({
   sessionId,
   token,
   orderType,
-  orderInfo,
+  orderInfo: initialOrderInfo,
 }: Props) {
+  const orderInfo = useOrderInfo(flowOrderId, orderType, initialOrderInfo);
   const router = useRouter();
   const [paid, setPaid] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
@@ -59,7 +61,7 @@ export function OnlinePaymentSuccess({
     }
   }, [displayTrackingId]);
   const restaurantSlug = orderInfo?.restaurantSlug?.trim() || '';
-  const storefrontHome = `/web-app/${encodeURIComponent(restaurantSlug)}`;
+  const storefrontHome = restaurantStorefrontPath(restaurantSlug);
 
   useEffect(() => {
     try {
@@ -213,11 +215,9 @@ export function OnlinePaymentSuccess({
               </Button>
               <Button asChild>
                 <Link
-                  href={`/web-app/${encodeURIComponent(restaurantSlug)}/track-order${
-                    displayTrackingId
-                      ? `?orderId=${encodeURIComponent(displayTrackingId)}`
-                      : ''
-                  }`}
+                  href={restaurantTrackOrderPath(restaurantSlug, {
+                    orderId: displayTrackingId ?? undefined,
+                  })}
                 >
                   Track your order
                   <ArrowRight className="h-4 w-4 ml-2" />

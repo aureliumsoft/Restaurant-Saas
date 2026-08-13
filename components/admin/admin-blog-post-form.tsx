@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Send, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Send, Star, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
@@ -34,6 +34,10 @@ export type BlogPostFormValues = {
   imageUrl: string;
   shortDescription: string;
   contentHtml: string;
+  seoTitle: string;
+  seoDescription: string;
+  seoImageUrl: string;
+  featured: boolean;
 };
 
 type BlogPostFormProps = {
@@ -47,6 +51,10 @@ const empty: BlogPostFormValues = {
   imageUrl: '',
   shortDescription: '',
   contentHtml: '',
+  seoTitle: '',
+  seoDescription: '',
+  seoImageUrl: '',
+  featured: false,
 };
 
 function snapshot(v: BlogPostFormValues) {
@@ -55,6 +63,10 @@ function snapshot(v: BlogPostFormValues) {
     imageUrl: v.imageUrl.trim(),
     shortDescription: v.shortDescription.trim(),
     contentHtml: v.contentHtml.trim(),
+    seoTitle: v.seoTitle.trim(),
+    seoDescription: v.seoDescription.trim(),
+    seoImageUrl: v.seoImageUrl.trim(),
+    featured: Boolean(v.featured),
   });
 }
 
@@ -112,8 +124,11 @@ export function AdminBlogPostForm({
       imageUrl: initial.imageUrl ?? '',
       shortDescription: initial.shortDescription,
       contentHtml: initial.contentHtml,
+      seoTitle: initial.seoTitle ?? '',
+      seoDescription: initial.seoDescription ?? '',
+      seoImageUrl: initial.seoImageUrl ?? '',
+      featured: Boolean(initial.featured),
     });
-    // Hydrate when loaded post fields change (string compare), not on new object identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional field deps
   }, [
     postId,
@@ -121,6 +136,10 @@ export function AdminBlogPostForm({
     initial?.imageUrl,
     initial?.shortDescription,
     initial?.contentHtml,
+    initial?.seoTitle,
+    initial?.seoDescription,
+    initial?.seoImageUrl,
+    initial?.featured,
   ]);
 
   function setField<K extends keyof BlogPostFormValues>(
@@ -156,6 +175,10 @@ export function AdminBlogPostForm({
         imageUrl: form.imageUrl?.trim() ? form.imageUrl : '',
         shortDescription: form.shortDescription,
         contentHtml: form.contentHtml || '<p></p>',
+        seoTitle: form.seoTitle?.trim() ? form.seoTitle : '',
+        seoDescription: form.seoDescription?.trim() ? form.seoDescription : '',
+        seoImageUrl: form.seoImageUrl?.trim() ? form.seoImageUrl : '',
+        featured: Boolean(form.featured),
         status,
       };
       const axiosOpts = {
@@ -276,6 +299,72 @@ export function AdminBlogPostForm({
             onChange={(html) => setField('contentHtml', html)}
             helperText="Full article content (rich text)."
           />
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-border"
+              checked={form.featured}
+              onChange={(e) => setField('featured', e.target.checked)}
+            />
+            <span className="space-y-0.5">
+              <span className="flex items-center gap-1.5 text-sm font-medium">
+                <Star className="h-4 w-4 text-fire-500" />
+                Featured blog
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Show this post in the left featured sidebar on the public blog.
+              </span>
+            </span>
+          </label>
+
+          <div className="space-y-4 rounded-xl border border-border/70 bg-muted/15 p-4">
+            <div>
+              <p className="text-sm font-semibold">Google snippet tags</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                How this post appears in Google search and social previews.
+                Leave blank to fall back to the title, short description, and
+                cover image.
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="blog-seo-title">
+                Paragraph / title (search title)
+              </Label>
+              <Input
+                id="blog-seo-title"
+                value={form.seoTitle}
+                onChange={(e) => setField('seoTitle', e.target.value)}
+                placeholder={form.title || 'Title shown in Google'}
+                maxLength={200}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="blog-seo-desc">Description (search detail)</Label>
+              <Textarea
+                id="blog-seo-desc"
+                value={form.seoDescription}
+                onChange={(e) => setField('seoDescription', e.target.value)}
+                placeholder={
+                  form.shortDescription ||
+                  'Short detail shown under the Google title'
+                }
+                maxLength={500}
+                className="min-h-[88px]"
+              />
+            </div>
+
+            <Base64ImageUploadField
+              label="Photo (Google / social image)"
+              value={form.seoImageUrl}
+              onChange={(v) => setField('seoImageUrl', v)}
+              helperText="Preferred: public image URL (https). Used as og:image for indexing cards. Falls back to cover image."
+              maxMb={8}
+              maxEncodedMb={1.8}
+            />
+          </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-4">
             <div className="flex items-center gap-2">

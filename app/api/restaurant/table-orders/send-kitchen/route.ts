@@ -37,7 +37,7 @@ function buildKitchenRows(
 }
 
 /**
- * Create kitchen tickets for unsent open table orders (payment stays pending).
+ * Create kitchen tickets for open table orders (paid or unpaid).
  */
 export async function POST(req: NextRequest) {
   try {

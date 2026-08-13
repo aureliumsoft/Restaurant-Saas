@@ -83,15 +83,15 @@ export function SalesOrdersList({
         <h3 className="text-sm font-semibold">All orders</h3>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
+          size="icon"
           className="h-8 gap-1"
           disabled={loading}
           onClick={() => load()}
         >
           <RefreshCw
-            className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
+            className={cn('h-4 w-4', loading && 'animate-spin')}
           />
-          Refresh
         </Button>
       </div>
       {error && (

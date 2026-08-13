@@ -43,6 +43,7 @@ import { useStaffPermissions, useStaffRestaurantBranding } from '@/hooks/use-sta
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
 import { kioskBasePath } from '@/lib/kiosk-path';
+import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
 import { canAccessDashboardModule } from '@/lib/restaurant-roles';
 import { cn } from '@/lib/utils';
 import { IconExternalLink } from '@tabler/icons-react';
@@ -368,7 +369,7 @@ export default function DashboardAnalytics() {
           <div className="flex flex-wrap gap-2">
             <Button asChild className="rounded-xl shadow-sm">
               <a
-                href={`/web-app/${encodeURIComponent(slug)}`}
+                href={restaurantStorefrontPath(slug)}
                 target="_blank"
                 rel="noopener noreferrer"
               >

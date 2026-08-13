@@ -30,6 +30,9 @@ export function mapBlogWritePayload(
   previousPublishedAt: Date | null
 ) {
   const image = (input.imageUrl ?? '').trim();
+  const seoImage = (input.seoImageUrl ?? '').trim();
+  const seoTitle = (input.seoTitle ?? '').trim();
+  const seoDescription = (input.seoDescription ?? '').trim();
   const publishedAt =
     input.status === 'PUBLISHED'
       ? previousPublishedAt ?? new Date()
@@ -41,6 +44,10 @@ export function mapBlogWritePayload(
     imageUrl: image || null,
     shortDescription: input.shortDescription.trim(),
     contentHtml: sanitizeBlogHtml(input.contentHtml.trim()),
+    seoTitle: seoTitle || null,
+    seoDescription: seoDescription || null,
+    seoImageUrl: seoImage || null,
+    featured: Boolean(input.featured),
     status: input.status,
     publishedAt,
   };

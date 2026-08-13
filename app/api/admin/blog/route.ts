@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
         imageUrl: true,
         shortDescription: true,
         status: true,
+        featured: true,
         publishedAt: true,
         createdAt: true,
         updatedAt: true,

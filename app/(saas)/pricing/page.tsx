@@ -106,7 +106,7 @@ export default async function PricingPage() {
       <div className="pointer-events-none absolute -left-16 top-36 h-56 w-56 rounded-full bg-fire-200/40 blur-3xl dark:bg-fire-900/30" />
       <div className="pointer-events-none absolute -right-16 bottom-16 h-56 w-56 rounded-full bg-fire-100/40 blur-3xl dark:bg-fire-900/25" />
 
-      <div className="relative mx-auto max-w-6xl p-8 md:p-12">
+      <div className="relative mx-auto w-full p-8 md:p-12">
         <div className="mb-10 text-center md:mb-12">
           <span className="inline-flex items-center rounded-full border border-fire-300/70 bg-fire-100 px-4 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-fire-700 dark:border-fire-500/40 dark:bg-fire-500/10 dark:text-fire-300">
             Pricing table

@@ -4,11 +4,23 @@ import {
   PublicBlogList,
   type PublicBlogCard,
 } from '@/components/marketing/public-blog-list';
+import { PublicBlogShell } from '@/components/marketing/public-blog-shell';
+import {
+  loadFeaturedBlogPosts,
+  loadRecentBlogPosts,
+} from '@/lib/blog/public-queries';
 import { db } from '@/lib/db';
 
 export const metadata: Metadata = {
   title: 'Blog | Foodluk',
-  description: 'News, product updates, and restaurant industry tips from Foodluk.',
+  description:
+    'News, product updates, and restaurant industry tips from Foodluk.',
+  openGraph: {
+    title: 'Blog | Foodluk',
+    description:
+      'News, product updates, and restaurant industry tips from Foodluk.',
+    type: 'website',
+  },
 };
 
 export const dynamic = 'force-dynamic';
@@ -38,12 +50,16 @@ async function loadFirstPage() {
 }
 
 export default async function BlogPage() {
-  const { posts, nextCursor, hasMore } = await loadFirstPage();
+  const [{ posts, nextCursor, hasMore }, featured, recent] = await Promise.all([
+    loadFirstPage(),
+    loadFeaturedBlogPosts(6),
+    loadRecentBlogPosts(8),
+  ]);
 
   return (
     <div className="flex min-h-[100vh] flex-col bg-gradient-to-b from-zinc-50 via-white to-zinc-50 dark:from-zinc-950 dark:via-black dark:to-zinc-950">
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-20 pt-28 sm:px-6">
-        <header className="mb-12 max-w-2xl">
+      <div className="mx-auto flex w-full flex-1 flex-col px-4 pb-20 pt-28 sm:px-6">
+        <header className="mb-10 max-w-2xl">
           <p className="text-sm font-semibold uppercase tracking-wider text-fire-500">
             Blog
           </p>
@@ -55,11 +71,13 @@ export default async function BlogPage() {
           </p>
         </header>
 
-        <PublicBlogList
-          initialPosts={posts}
-          initialNextCursor={nextCursor}
-          initialHasMore={hasMore}
-        />
+        <PublicBlogShell featured={featured} recent={recent}>
+          <PublicBlogList
+            initialPosts={posts}
+            initialNextCursor={nextCursor}
+            initialHasMore={hasMore}
+          />
+        </PublicBlogShell>
       </div>
     </div>
   );

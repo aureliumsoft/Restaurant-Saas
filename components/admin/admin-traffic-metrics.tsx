@@ -109,13 +109,13 @@ export function AdminTrafficMetrics() {
             </Select>
             <Button
               type="button"
-              size="icon"
               variant="ghost"
+              size="icon"
               disabled={loading}
               onClick={() => void load({ refresh: true })}
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <RefreshCw className="h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}

@@ -1,16 +1,13 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
 import { requirePlatformAdmin } from "@/lib/auth/adminRequest";
-import { saveAndBroadcastNewsletter } from "@/lib/newsletter/broadcast";
 import { getSmtpConfigError } from "@/lib/email/smtp";
-
-const sendSchema = z.object({
-  subject: z.string().trim().min(3).max(200),
-  htmlBody: z.string().trim().min(10).max(50_000),
-  textBody: z.string().trim().max(50_000).optional().nullable(),
-});
+import { saveAndBroadcastNewsletter } from "@/lib/newsletter/broadcast";
+import {
+  newsletterSendSchema,
+  normalizeNewsletterSendInput,
+} from "@/lib/newsletter/newsletter";
 
 export async function POST(req: NextRequest) {
   const auth = await requirePlatformAdmin(req);
@@ -31,21 +28,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const parsed = sendSchema.safeParse(json);
+  const parsed = newsletterSendSchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Subject and message body are required." },
-      { status: 400 }
-    );
+    const msg =
+      parsed.error.issues[0]?.message ??
+      "Subject and message body are required.";
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 
-  const { subject, htmlBody, textBody } = parsed.data;
+  const payload = normalizeNewsletterSendInput(parsed.data);
 
   try {
     const result = await saveAndBroadcastNewsletter({
-      subject,
-      htmlBody,
-      textBody,
+      ...payload,
       sentByEmail: auth.email,
     });
 

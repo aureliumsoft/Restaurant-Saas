@@ -18,7 +18,7 @@ export default async function RootLayout({
   return (
     <>
       <Header />
-      <main className="flex flex-col min-h-screen">{children}</main>
+      <main className="flex flex-col min-h-screen w-full">{children}</main>
       <Footer />
     </>
   );

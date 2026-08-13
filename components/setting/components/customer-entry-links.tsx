@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { kioskBasePath } from '@/lib/kiosk-path';
+import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
 
 type BranchRow = { id: string; name: string };
 
@@ -56,7 +57,7 @@ export function CustomerEntryLinks() {
     setPublicBase(typeof window !== 'undefined' ? window.location.origin : '');
   }, []);
 
-  const webAppPath = slug ? `/web-app/${encodeURIComponent(slug)}` : '';
+  const webAppPath = slug ? restaurantStorefrontPath(slug) : '';
 
   const webAppUrl =
     publicBase && webAppPath ? `${publicBase}${webAppPath}` : webAppPath;

@@ -20,7 +20,7 @@ async function fetchOpenTableCards(
   return res.data.data ?? [];
 }
 
-/** Open table tabs (pending payment), badge + sheet, SSE refresh. */
+/** Open table tabs (unpaid and/or not in kitchen), badge + sheet, SSE refresh. */
 export function useOpenTableOrders(branchId: string | null) {
   const key = branchId ? queryKeys.tableOpenOrders(branchId) : null;
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

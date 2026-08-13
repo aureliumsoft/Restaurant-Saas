@@ -188,6 +188,7 @@ export async function POST(req: NextRequest) {
       select: {
         id: true,
         branchId: true,
+        diningTableId: true,
         payments: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -206,7 +207,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    if (isPendingPaymentStatus(order.payments[0]?.status)) {
+    const isTableTab = Boolean(order.diningTableId);
+
+    if (
+      !isTableTab &&
+      isPendingPaymentStatus(order.payments[0]?.status)
+    ) {
       return NextResponse.json(
         {
           error:

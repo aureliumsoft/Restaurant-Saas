@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CreditCard, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -114,8 +114,13 @@ export function JazzCashCheckoutButton({
       onClick={handlePay}
       disabled={disabled || loading}
     >
-      {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-      Pay with JazzCash
+      {loading ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        <>
+          <CreditCard className="mr-2 h-4 w-4" /> Pay with JazzCash
+        </>
+      )}
     </Button>
   );
 }

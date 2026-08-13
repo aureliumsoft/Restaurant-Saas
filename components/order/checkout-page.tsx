@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
@@ -25,6 +25,7 @@ import { CutleryOption } from '@/components/order/cutlery-option';
 import { OrderPreferencesSummary } from '@/components/order/order-preferences-summary';
 import { useRestaurantServiceCharges } from '@/hooks/use-restaurant-service-charges';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useOrderInfo } from '@/hooks/use-order-info';
 import {
   clearOnlineOrderPreferences,
   readCutleryPreference,
@@ -156,8 +157,9 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
 export default function CheckoutPageClient({
   orderType,
   orderId,
-  orderInfo,
+  orderInfo: initialOrderInfo,
 }: CheckoutPageProps) {
+  const orderInfo = useOrderInfo(orderId, orderType, initialOrderInfo);
   const { t } = useTranslation();
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
@@ -224,7 +226,7 @@ export default function CheckoutPageClient({
     };
   }, [orderInfo?.restaurantSlug]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setCart(parseCartFromStorage(localStorage.getItem(`cart-${orderId}`)));
     setCutlery(readCutleryPreference(orderId));
     setComment(readOrderCommentPreference(orderId));
@@ -452,8 +454,7 @@ export default function CheckoutPageClient({
               restaurantName={orderInfo?.restaurantName}
               subtitle={
                 <>
-                  {orderType === 'delivery' ? 'Delivery' : 'Pick-Up'} order ·{' '}
-                  {orderId}
+                  {orderType === 'delivery' ? 'Delivery' : 'Pick-Up'} Order
                 </>
               }
             />
@@ -658,7 +659,6 @@ export default function CheckoutPageClient({
                         disabled={submitting}
                         onProcessingChange={setSubmitting}
                         onApproved={async ({ capture }) => {
-                          const slug = orderInfo?.restaurantSlug ?? '';
                           const ref =
                             capture.shortOrderId ?? capture.orderId ?? '';
                           localStorage.removeItem(`cart-${orderId}`);
@@ -672,7 +672,6 @@ export default function CheckoutPageClient({
                           toast.success('Payment received. Order placed.');
                           const qs = new URLSearchParams({
                             orderId: ref,
-                            ...(slug ? { restaurantSlug: slug } : {}),
                             ...(typeof capture.ticketNumber === 'number'
                               ? { ticket: String(capture.ticketNumber) }
                               : {}),
@@ -705,9 +704,7 @@ export default function CheckoutPageClient({
                         }}
                         successPath={`/order/${orderType}/${encodeURIComponent(
                           orderId
-                        )}/success?session_id={CHECKOUT_SESSION_ID}&restaurantSlug=${encodeURIComponent(
-                          orderInfo.restaurantSlug
-                        )}`}
+                        )}/success?session_id={CHECKOUT_SESSION_ID}`}
                         cancelPath={orderPathWithQuery(
                           `/order/${orderType}/${encodeURIComponent(orderId)}`,
                           orderInfo
@@ -740,9 +737,7 @@ export default function CheckoutPageClient({
                             }}
                             successPath={`/order/${orderType}/${encodeURIComponent(
                               orderId
-                            )}/success?orderId={orderId}&restaurantSlug=${encodeURIComponent(
-                              orderInfo.restaurantSlug
-                            )}`}
+                            )}/success?orderId={orderId}`}
                             cancelPath={orderPathWithQuery(
                               `/order/${orderType}/${encodeURIComponent(
                                 orderId
@@ -775,9 +770,7 @@ export default function CheckoutPageClient({
                             }}
                             successPath={`/order/${orderType}/${encodeURIComponent(
                               orderId
-                            )}/success?orderId={orderId}&restaurantSlug=${encodeURIComponent(
-                              orderInfo.restaurantSlug
-                            )}`}
+                            )}/success?orderId={orderId}`}
                             cancelPath={orderPathWithQuery(
                               `/order/${orderType}/${encodeURIComponent(orderId)}`,
                               orderInfo

@@ -9,6 +9,7 @@ import { useCustomerAccount } from '@/components/customer-app/customer-account-c
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { restaurantOrdersPath } from '@/lib/customer-storefront-paths';
 
 type OrderDetail = {
   id: string;
@@ -109,9 +110,7 @@ export default function CustomerOrderDetailPage() {
           type="button"
           variant="ghost"
           size="icon"
-          onClick={() =>
-            router.push(`/web-app/${encodeURIComponent(slug)}/orders`)
-          }
+          onClick={() => router.push(restaurantOrdersPath(slug))}
           aria-label={t('customerOrderBack')}
         >
           <ChevronLeft className="h-5 w-5" />

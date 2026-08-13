@@ -59,10 +59,17 @@ export const blogPostWriteSchema = z
     contentHtml: z.string().trim().min(1, 'Blog detail is required').max(2_800_000),
     status: z.enum(BLOG_STATUSES),
     slug: z.string().trim().max(100).optional().or(z.literal('')),
+    seoTitle: z.string().trim().max(200).optional().or(z.literal('')),
+    seoDescription: z.string().trim().max(500).optional().or(z.literal('')),
+    seoImageUrl: z.string().max(5_500_000).optional().or(z.literal('')),
+    featured: z.boolean().optional(),
   })
   .superRefine((val, ctx) => {
     if (val.imageUrl !== undefined && val.imageUrl !== '') {
       assertImage('Image', val.imageUrl, ctx, ['imageUrl']);
+    }
+    if (val.seoImageUrl !== undefined && val.seoImageUrl !== '') {
+      assertImage('Google snippet photo', val.seoImageUrl, ctx, ['seoImageUrl']);
     }
   });
 

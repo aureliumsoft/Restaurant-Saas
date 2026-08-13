@@ -10,6 +10,11 @@ import { useCustomerAccount } from '@/components/customer-app/customer-account-c
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import {
+  restaurantOrderDetailPath,
+  restaurantOrdersPath,
+  restaurantStorefrontPath,
+} from '@/lib/customer-storefront-paths';
 
 type OrderListItem = {
   id: string;
@@ -88,7 +93,7 @@ export default function CustomerOrdersPage() {
           type="button"
           variant="ghost"
           size="icon"
-          onClick={() => router.push(`/web-app/${encodeURIComponent(slug)}`)}
+          onClick={() => router.push(restaurantStorefrontPath(slug))}
           aria-label={t('back')}
         >
           <ChevronLeft className="h-5 w-5" />
@@ -137,7 +142,7 @@ export default function CustomerOrdersPage() {
         {orders.map((order) => (
           <Link
             key={order.id}
-            href={`/web-app/${encodeURIComponent(slug)}/orders/${encodeURIComponent(order.id)}`}
+            href={restaurantOrderDetailPath(slug, order.id)}
             className="block rounded-2xl border border-[#ececf0] bg-white p-4 shadow-sm transition hover:border-primary/40"
           >
             <div className="flex items-start justify-between gap-3">

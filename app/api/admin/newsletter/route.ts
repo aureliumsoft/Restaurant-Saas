@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   if ("error" in auth) return auth.error;
 
   try {
-    const [subscribers, campaigns, activeCount] = await Promise.all([
+    const [subscribers, campaigns, activeCount, campaignTotal] = await Promise.all([
       db.newsletterSubscriber.findMany({
         orderBy: { createdAt: "desc" },
         select: {
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
         },
       }),
       db.newsletterCampaign.findMany({
-        orderBy: { sentAt: "desc" },
+        orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
         take: 50,
         select: {
           id: true,
@@ -33,17 +33,21 @@ export async function GET(req: NextRequest) {
           sentByEmail: true,
           sentAt: true,
           status: true,
+          buttonTitle: true,
+          buttonLink: true,
         },
       }),
       db.newsletterSubscriber.count({
         where: { unsubscribedAt: null },
       }),
+      db.newsletterCampaign.count(),
     ]);
 
     return NextResponse.json(
       {
         data: {
           activeCount,
+          campaignTotal,
           subscribers: subscribers.map((s) => ({
             ...s,
             createdAt: s.createdAt.toISOString(),

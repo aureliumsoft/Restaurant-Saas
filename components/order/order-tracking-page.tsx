@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
 
 type TrackingResult = {
   id: string;
@@ -91,7 +92,7 @@ export function OrderTrackingPage({
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push(`/web-app/${encodeURIComponent(restaurantSlug)}`)}
+              onClick={() => router.push(restaurantStorefrontPath(restaurantSlug))}
               disabled={!restaurantSlug.trim()}
             >
               Back to Home

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { AcceptedPaymentMethods } from '@/components/payments/accepted-payment-methods';
 import { cn } from '@/lib/utils';
 import '@/lib/i18n/client';
+import { parseStorefrontSlugFromPath } from '@/lib/customer-storefront-paths';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 
 const LEGAL_LINKS = [
@@ -31,11 +32,10 @@ export function Footer({
   const { t } = useTranslation();
   const year = new Date().getFullYear();
 
-  const slug = useMemo(() => {
-    const match = pathname?.match(/^\/web-app\/([^/]+)/)?.[1];
-    if (!match || match === 'order' || match === 'track-order') return null;
-    return decodeURIComponent(match);
-  }, [pathname]);
+  const slug = useMemo(
+    () => (pathname ? parseStorefrontSlugFromPath(pathname) : null),
+    [pathname]
+  );
 
   const [restaurantName, setRestaurantName] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);

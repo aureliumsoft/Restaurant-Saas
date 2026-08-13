@@ -1527,6 +1527,9 @@ export function PosScreen() {
         );
         resetKitchenSendDialog();
         void loadPendingKitchenOrders();
+        eventBus.emit('refreshTableOrders');
+        const branchId = selectedBranchId || activeBranchId || '';
+        if (branchId) revalidateOpenTableOrders(branchId);
         return;
       }
 
@@ -1556,6 +1559,9 @@ export function PosScreen() {
       }
       resetKitchenSendDialog();
       void loadPendingKitchenOrders();
+      eventBus.emit('refreshTableOrders');
+      const branchId = selectedBranchId || activeBranchId || '';
+      if (branchId) revalidateOpenTableOrders(branchId);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Could not send to kitchen.';
       toast.error(msg);
@@ -2039,8 +2045,7 @@ export function PosScreen() {
       setCustomerPhone('');
       setTableId('');
       setCheckoutOpen(false);
-      // Paid-at-place still offers kitchen dialog; open table tabs do not auto-send kitchen.
-      if (!isEditing && !isTableOpenCheck) {
+      if (!isEditing) {
         openKitchenSendDialog({
           id: dbOrderId,
           shortOrderId: trackingId,

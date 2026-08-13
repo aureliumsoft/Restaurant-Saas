@@ -9,6 +9,7 @@ import {
 import { usePathname, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 
+import { parseStorefrontSlugFromPath } from '@/lib/customer-storefront-paths';
 import { formatCurrency } from '@/lib/format-money';
 import {
   DEFAULT_RESTAURANT_REGIONAL,
@@ -50,14 +51,8 @@ function resolveSlugFromLocation(
     searchParams?.get('slug')?.trim();
   if (fromQuery) return fromQuery;
 
-  const match = pathname?.match(/^\/web-app\/([^/]+)/);
-  const segment = match?.[1];
-  if (
-    segment &&
-    segment !== 'order' &&
-    segment !== 'track-order'
-  ) {
-    return decodeURIComponent(segment);
+  if (pathname) {
+    return parseStorefrontSlugFromPath(pathname);
   }
   return null;
 }

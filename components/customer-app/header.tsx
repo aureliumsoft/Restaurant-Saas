@@ -23,6 +23,10 @@ import {
 import '@/lib/i18n/client';
 import { buildCustomerLightSurfaceVars, buildThemeCssVars } from '@/lib/restaurant-theme';
 import type { UiLanguage } from '@/lib/i18n/resources';
+import {
+  isCustomerOrderFlowPath,
+  parseStorefrontSlugFromPath,
+} from '@/lib/customer-storefront-paths';
 
 const WELCOME_BY_LANG: Record<UiLanguage, string> = {
   en: 'Welcome',
@@ -47,16 +51,8 @@ export function Header() {
     searchParams.get('restaurantSlug')?.trim() ||
     searchParams.get('slug')?.trim() ||
     undefined;
-  const pathSlugRaw = pathname?.match(/^\/web-app\/([^/]+)/)?.[1] ?? undefined;
-  const pathSlug =
-    pathSlugRaw && pathSlugRaw !== 'order' && pathSlugRaw !== 'track-order'
-      ? decodeURIComponent(pathSlugRaw)
-      : undefined;
-  const isOrderFlowPath =
-    pathname?.startsWith('/order/') ||
-    pathname === '/order' ||
-    pathname?.startsWith('/track-order') ||
-    pathname === '/track-order';
+  const pathSlug = pathname ? parseStorefrontSlugFromPath(pathname) ?? undefined : undefined;
+  const isOrderFlowPath = pathname ? isCustomerOrderFlowPath(pathname) : false;
   const slugForApi = queryRestaurantSlug ?? (isOrderFlowPath ? undefined : pathSlug);
   const isStorefront = Boolean(pathSlug && !isOrderFlowPath);
 

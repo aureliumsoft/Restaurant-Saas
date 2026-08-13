@@ -4,10 +4,11 @@ import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
 import { cn } from '@/lib/utils';
 
 export function restaurantWebAppHref(slug: string) {
-  return `/web-app/${encodeURIComponent(slug.trim())}`;
+  return restaurantStorefrontPath(slug);
 }
 
 export function AdminRestaurantStorefrontLink({

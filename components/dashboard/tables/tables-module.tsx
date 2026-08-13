@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
-import { Loader2, Pencil, Plus, RefreshCcw, RefreshCw, Save, Trash2 } from 'lucide-react';
+import {
+  Loader2,
+  Pencil,
+  Plus,
+  QrCode,
+  RefreshCcw,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { Button } from '@/components/ui/button';
@@ -41,11 +49,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  useBranchContext,
-  withBranchQuery,
-} from '@/hooks/use-branch-context';
+import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
 import { TablePagination } from '@/components/ui/table-pagination';
+import {
+  TableQrCard,
+  TableQrDialog,
+} from '@/components/dashboard/tables/table-qr-card';
 
 export type DiningTableRow = {
   id: string;
@@ -58,8 +67,11 @@ export type DiningTableRow = {
 const PAGE_SIZE = 20;
 
 export function TablesModule() {
-  const { activeBranchId, loading: branchLoading, branches } =
-    useBranchContext();
+  const {
+    activeBranchId,
+    loading: branchLoading,
+    branches,
+  } = useBranchContext();
   const activeBranchName =
     branches.find((b) => b.id === activeBranchId)?.name ?? null;
   const [rows, setRows] = useState<DiningTableRow[]>([]);
@@ -78,6 +90,28 @@ export function TablesModule() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DiningTableRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [restaurantSlug, setRestaurantSlug] = useState<string | null>(null);
+  const [qrTarget, setQrTarget] = useState<DiningTableRow | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get<{ data: { slug?: string } | null }>(
+          '/api/restaurant'
+        );
+        const slug = res.data?.data?.slug?.trim();
+        if (!cancelled) {
+          setRestaurantSlug(slug && slug.length > 0 ? slug : null);
+        }
+      } catch {
+        if (!cancelled) setRestaurantSlug(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,7 +169,10 @@ export function TablesModule() {
       toast.error('Name is required');
       return;
     }
-    const sort = Math.min(9999, Math.max(0, Math.floor(Number(sortOrder) || 0)));
+    const sort = Math.min(
+      9999,
+      Math.max(0, Math.floor(Number(sortOrder) || 0))
+    );
 
     if (!editing && !activeBranchId) {
       toast.error('Select a branch before adding tables');
@@ -203,68 +240,134 @@ export function TablesModule() {
             <Plus className="mr-2 h-4 w-4" />
             Add table
           </Button>
-          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-            {loading ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> <span>Refreshing...</span></> : <><RefreshCcw className="mr-2 h-4 w-4" /> <span>Refresh</span></>}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => void load()}
+            disabled={loading}
+          >
+            {loading ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCcw className="h-4 w-4" />
+            )}
           </Button>
         </div>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground"><Loader2 className="animate-spin text-primary text-center mx-auto" /></p>
+          <p className="text-sm text-muted-foreground">
+            <Loader2 className="animate-spin text-primary text-center mx-auto" />
+          </p>
         ) : rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No tables yet. Add one so staff can select it on the POS screen.
           </p>
         ) : (
           <>
-          <DashboardTableWrapper>
-            <DashboardTable>
-              <DashboardTableHeader>
-                <DashboardTableRow>
-                  <DashboardTableHead>Name</DashboardTableHead>
-                  <DashboardTableHead className="text-right">Sort</DashboardTableHead>
-                  <DashboardTableHead className="text-right">Actions</DashboardTableHead>
-                </DashboardTableRow>
-              </DashboardTableHeader>
-              <DashboardTableBody>
-                {rows.map((row) => (
-                  <DashboardTableRow key={row.id}>
-                    <DashboardTableCell className="font-medium">{row.name}</DashboardTableCell>
-                    <DashboardTableCell className="text-right tabular-nums">{row.sortOrder}</DashboardTableCell>
-                    <DashboardTableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="rounded-lg"
-                          aria-label={`Edit ${row.name}`}
-                          onClick={() => openEdit(row)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="rounded-lg text-destructive"
-                          aria-label={`Delete ${row.name}`}
-                          onClick={() => setDeleteTarget(row)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </DashboardTableCell>
+            <DashboardTableWrapper>
+              <DashboardTable>
+                <DashboardTableHeader>
+                  <DashboardTableRow>
+                    <DashboardTableHead>Name</DashboardTableHead>
+                    <DashboardTableHead className="text-right">
+                      Sort
+                    </DashboardTableHead>
+                    <DashboardTableHead className="text-right">
+                      Actions
+                    </DashboardTableHead>
                   </DashboardTableRow>
-                ))}
-              </DashboardTableBody>
-            </DashboardTable>
-          </DashboardTableWrapper>
-          <TablePagination
-            pagination={pagination}
-            page={page}
-            onPageChange={setPage}
-            loading={loading}
-          />
+                </DashboardTableHeader>
+                <DashboardTableBody>
+                  {rows.map((row) => (
+                    <DashboardTableRow key={row.id}>
+                      <DashboardTableCell className="font-medium">
+                        {row.name}
+                      </DashboardTableCell>
+                      <DashboardTableCell className="text-right tabular-nums">
+                        {row.sortOrder}
+                      </DashboardTableCell>
+                      <DashboardTableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="rounded-lg"
+                            aria-label={`QR code for ${row.name}`}
+                            disabled={!restaurantSlug || !activeBranchId}
+                            title={
+                              restaurantSlug && activeBranchId
+                                ? 'View / download QR'
+                                : 'Restaurant slug or branch missing'
+                            }
+                            onClick={() => setQrTarget(row)}
+                          >
+                            <QrCode className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="rounded-lg"
+                            aria-label={`Edit ${row.name}`}
+                            onClick={() => openEdit(row)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="rounded-lg text-destructive"
+                            aria-label={`Delete ${row.name}`}
+                            onClick={() => setDeleteTarget(row)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </DashboardTableCell>
+                    </DashboardTableRow>
+                  ))}
+                </DashboardTableBody>
+              </DashboardTable>
+            </DashboardTableWrapper>
+            <TablePagination
+              pagination={pagination}
+              page={page}
+              onPageChange={setPage}
+              loading={loading}
+            />
+
+            {restaurantSlug && activeBranchId ? (
+              <div className="space-y-3 pt-2">
+                <div>
+                  <h3 className="text-sm font-semibold">Table QR codes</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Scan opens kiosk dine-in for that table. Guests use mobile
+                    links; fixed terminals can use the kiosk variant from the QR
+                    dialog.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                  {rows.map((row) => (
+                    <button
+                      key={`qr-${row.id}`}
+                      type="button"
+                      className="text-left transition hover:opacity-90"
+                      onClick={() => setQrTarget(row)}
+                    >
+                      <TableQrCard
+                        tableName={row.name}
+                        tableId={row.id}
+                        slug={restaurantSlug}
+                        branchId={activeBranchId}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </>
         )}
 
@@ -294,21 +397,53 @@ export function TablesModule() {
                   value={sortOrder}
                   onChange={(e) => setSortOrder(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">Lower numbers appear first in POS.</p>
+                <p className="text-xs text-muted-foreground">
+                  Lower numbers appear first in POS.
+                </p>
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+              >
                 Cancel
               </Button>
-              <Button type="button" disabled={saving} onClick={() => void handleSave()}>
-                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> <span>Creating...</span></> : <><Plus className="h-4 w-4 mr-2" /> <span>Create Table</span></>}
+              <Button
+                type="button"
+                disabled={saving}
+                onClick={() => void handleSave()}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
+                    <span>Creating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" /> <span>Create Table</span>
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        {restaurantSlug && activeBranchId ? (
+          <TableQrDialog
+            open={!!qrTarget}
+            onOpenChange={(open) => !open && setQrTarget(null)}
+            table={qrTarget}
+            slug={restaurantSlug}
+            branchId={activeBranchId}
+          />
+        ) : null}
+
+        <AlertDialog
+          open={!!deleteTarget}
+          onOpenChange={(o) => !o && setDeleteTarget(null)}
+        >
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Delete table?</AlertDialogTitle>

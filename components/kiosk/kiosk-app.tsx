@@ -83,8 +83,15 @@ import {
   kioskCartStorageKey,
   kioskCheckoutDraftKey,
   kioskSuccessPath,
+  parseKioskDeepLinkParams,
 } from '@/lib/kiosk-path';
 import { submitKioskOrder } from '@/lib/offline/submit-order';
+import { useCustomerAccountOptional } from '@/components/customer-app/customer-account-context';
+import { KioskQrSignInDialog } from '@/components/kiosk/kiosk-qr-sign-in-dialog';
+import {
+  loadKioskQrContext,
+  saveKioskQrContext,
+} from '@/lib/kiosk-qr-context-storage';
 import {
   buildKioskMenuCategoriesUrl,
   buildKioskMenuCategoryItemsUrl,
@@ -350,9 +357,19 @@ export function KioskApp({
   >([]);
   const [cookingNote, setCookingNote] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedTableId, setSelectedTableId] = useState('');
   const [diningTables, setDiningTables] = useState<DiningTableOption[]>([]);
+  const [diningTablesLoaded, setDiningTablesLoaded] = useState(false);
+  const [isMobileScan, setIsMobileScan] = useState(false);
+  const [fromTableQr, setFromTableQr] = useState(false);
+  const deepLinkAppliedRef = useRef(false);
+
+  useEffect(() => {
+    deepLinkAppliedRef.current = false;
+    setFromTableQr(false);
+  }, [slug, branchId]);
   const [pendingFulfillment, setPendingFulfillment] = useState<
     'dine_in' | null
   >(null);
@@ -364,6 +381,30 @@ export function KioskApp({
   const [branchValid, setBranchValid] = useState<boolean | null>(null);
   const { t, i18n } = useTranslation();
   const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
+  const customerAccount = useCustomerAccountOptional();
+  const requiresMobileQrSignIn = fromTableQr && isMobileScan;
+  const qrCustomerReady =
+    !requiresMobileQrSignIn || Boolean(customerAccount?.account);
+
+  useEffect(() => {
+    const saved = loadKioskQrContext(slug, branchId);
+    if (!saved) return;
+    setFromTableQr(true);
+    setIsMobileScan(saved.isMobileScan);
+    setSelectedTableId(saved.tableId);
+    setFulfillment('dine_in');
+    setStep('menu');
+    if (saved.isMobileScan) {
+      setPaymentMode('cash');
+    }
+  }, [slug, branchId]);
+
+  useEffect(() => {
+    const account = customerAccount?.account;
+    if (!account) return;
+    setCustomerName(account.name.trim());
+    setCustomerEmail(account.email.trim());
+  }, [customerAccount?.account]);
 
   const categoryItemsUrl = useCallback(
     (id: string, page: number, limit: number) =>
@@ -502,6 +543,7 @@ export function KioskApp({
 
   useEffect(() => {
     let cancelled = false;
+    setDiningTablesLoaded(false);
     (async () => {
       try {
         const tableParams = new URLSearchParams({ slug });
@@ -528,12 +570,57 @@ export function KioskApp({
           setDiningTables([]);
           setSelectedTableId('');
         }
+      } finally {
+        if (!cancelled) setDiningTablesLoaded(true);
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [slug, branchId]);
+
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    if (searchParams.get('session_id')?.trim()) return;
+    if (!diningTablesLoaded) return;
+
+    const { mobile, method, tableId } = parseKioskDeepLinkParams(searchParams);
+    if (mobile !== null) setIsMobileScan(mobile);
+
+    const hasDeepLinkParams =
+      mobile !== null || method !== null || Boolean(tableId);
+    if (!hasDeepLinkParams) return;
+
+    if (method === 'dine_in' && tableId) {
+      const valid = diningTables.some((t) => t.id === tableId);
+      if (valid) {
+        setSelectedTableId(tableId);
+        setFulfillment('dine_in');
+        setFromTableQr(true);
+        setPaymentMode('cash');
+        setStep('menu');
+        saveKioskQrContext(slug, branchId, {
+          fromTableQr: true,
+          isMobileScan: mobile !== false,
+          tableId,
+          fulfillment: 'dine_in',
+        });
+        deepLinkAppliedRef.current = true;
+        router.replace(kioskPath);
+        return;
+      }
+      toast.warn('Table from this QR link is not available.');
+    }
+
+    deepLinkAppliedRef.current = true;
+    router.replace(kioskPath);
+  }, [
+    diningTables,
+    diningTablesLoaded,
+    kioskPath,
+    router,
+    searchParams,
+  ]);
 
   const allProducts = useMemo(() => {
     if (!menu) return [];
@@ -791,8 +878,18 @@ export function KioskApp({
       subtotal: cartSubtotal,
       total: cartGrandTotal,
       cookingNote: cookingNote.trim() || undefined,
-      customerName: customerName.trim() || undefined,
+      customerName: requiresMobileQrSignIn
+        ? customerAccount?.account?.name?.trim() ||
+          customerName.trim() ||
+          undefined
+        : customerName.trim() || undefined,
+      customerEmail: requiresMobileQrSignIn
+        ? customerAccount?.account?.email?.trim() ||
+          customerEmail.trim() ||
+          undefined
+        : undefined,
       customerPhone: customerPhone.trim() || undefined,
+      mobileTableQr: requiresMobileQrSignIn || undefined,
       paymentStatus: payment.paymentStatus,
       paymentMethod: payment.paymentMethod,
     };
@@ -850,7 +947,11 @@ export function KioskApp({
   };
 
   const confirmCheckoutOrder = () => {
-    if (paymentMode === 'card') {
+    if (requiresMobileQrSignIn && !customerAccount?.account) {
+      toast.warn('Sign in with Google before placing your order.');
+      return;
+    }
+    if (!fromTableQr && paymentMode === 'card') {
       if (!cardPayment.isCardPaymentComplete) {
         toast.warn('Complete card payment before confirming your order.');
         return;
@@ -875,13 +976,24 @@ export function KioskApp({
     const q = qtyOnMenu(p.id);
 
     return (
-      <Card className="overflow-hidden border border-[#e2e8f0] bg-white shadow-sm">
+      <Card
+        role="button"
+        tabIndex={0}
+        className="cursor-pointer overflow-hidden border border-[#e2e8f0] bg-white shadow-sm transition hover:shadow-md active:scale-[0.99]"
+        onClick={() => onProductTap(p)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onProductTap(p);
+          }
+        }}
+      >
         <CardContent className="p-3">
           <LazyMenuProductImage
             src={p.imageUrl}
             hasImage={p.hasImage ?? Boolean(p.imageUrl)}
             alt={p.name}
-            className="aspect-square w-full rounded-lg"
+            className="aspect-square w-full rounded-lg pointer-events-none"
           />
           <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-tight">
             {p.name}
@@ -896,7 +1008,10 @@ export function KioskApp({
               </span>
             ) : null}
           </div>
-          <div className="mt-3 flex items-center gap-2">
+          <div
+            className="mt-3 flex items-center gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
             {q > 0 ? (
               <>
                 <Button
@@ -1022,7 +1137,10 @@ export function KioskApp({
 
   return (
     <div
-      className="relative flex min-h-screen flex-1 flex-col text-[#0f172a]"
+      className={cn(
+        'relative flex min-h-screen flex-1 flex-col text-[#0f172a]',
+        isMobileScan && 'mx-auto w-full max-w-lg shadow-xl'
+      )}
       style={kioskThemeVars}
     >
       <div
@@ -1031,6 +1149,13 @@ export function KioskApp({
           !hasBanner && 'bg-[#f8fafc]'
         )}
       >
+        <KioskQrSignInDialog
+          open={requiresMobileQrSignIn && !customerAccount?.account}
+          loading={Boolean(customerAccount?.loading)}
+          slug={slug}
+          branchId={branchId}
+        />
+
         <header className="sticky top-0 z-50 border-b border-[#e2e8f0] bg-white/95 px-4 py-3 text-[#0f172a] backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
@@ -1119,7 +1244,7 @@ export function KioskApp({
           </div>
         </header>
 
-        {step === 'mode' && (
+        {qrCustomerReady && step === 'mode' && (
           <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 py-12 relative z-10">
             {hasBanner ? (
               <>
@@ -1171,7 +1296,7 @@ export function KioskApp({
           </div>
         )}
 
-        {step === 'menu' && (
+        {qrCustomerReady && step === 'menu' && (
           <>
             <div className="mx-auto flex w-full max-w-5xl flex-1 gap-0 md:gap-4">
               <aside className="hidden w-36 shrink-0 border-r border-[#e2e8f0] bg-[#fafafa] py-4 md:block">
@@ -1397,7 +1522,7 @@ export function KioskApp({
           </>
         )}
 
-        {step === 'cart' && (
+        {qrCustomerReady && step === 'cart' && (
           <div className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 py-6">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-bold">Cart</h1>
@@ -1541,6 +1666,31 @@ export function KioskApp({
                     </span>
                   </div>
                 </div>
+                {requiresMobileQrSignIn && fulfillment === 'dine_in' ? (
+                  <div className="space-y-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#64748b]">
+                      {t('customerDetails')}
+                    </p>
+                    <div className="space-y-1">
+                      <Label htmlFor="kiosk-qr-customer-name">{t('yourName')}</Label>
+                      <Input
+                        id="kiosk-qr-customer-name"
+                        value={customerName}
+                        readOnly
+                        className="border-[#e2e8f0] bg-white text-[#0f172a]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="kiosk-qr-customer-email">Email</Label>
+                      <Input
+                        id="kiosk-qr-customer-email"
+                        value={customerEmail}
+                        readOnly
+                        className="border-[#e2e8f0] bg-white text-[#0f172a]"
+                      />
+                    </div>
+                  </div>
+                ) : null}
                 {fulfillment === 'take_away' ? (
                   <div className="space-y-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-[#64748b]">
@@ -1623,15 +1773,20 @@ export function KioskApp({
           </div>
         )}
 
-        {step === 'checkout' && (
+        {qrCustomerReady && step === 'checkout' && (
           <div className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 py-6">
             <h1 className="text-2xl font-bold">Checkout</h1>
             <p className="text-sm text-[#64748b]">
               {fulfillment === 'dine_in'
-                ? `Dine in · Table ${
-                    diningTables.find((t) => t.id === selectedTableId)?.name ??
-                    selectedTableId
-                  }`
+                ? requiresMobileQrSignIn
+                  ? `Dine in · Table ${
+                      diningTables.find((t) => t.id === selectedTableId)?.name ??
+                      selectedTableId
+                    } · ${customerName || 'Guest'} · ${customerEmail || 'No email'}`
+                  : `Dine in · Table ${
+                      diningTables.find((t) => t.id === selectedTableId)?.name ??
+                      selectedTableId
+                    }`
                 : `Take away · ${customerName || 'Guest'} · ${customerPhone || 'No phone'}`}
             </p>
             <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-sm text-[#0f172a]">
@@ -1710,78 +1865,93 @@ export function KioskApp({
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#64748b]">
                   Payment method
                 </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={paymentMode === 'cash' ? 'default' : 'outline'}
-                    className="h-12 justify-start gap-2"
-                    onClick={() => handleSelectPaymentMode('cash')}
-                  >
-                    <Banknote className="h-4 w-4" />
-                    Cash
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={paymentMode === 'card' ? 'default' : 'outline'}
-                    className="h-12 justify-start gap-2"
-                    onClick={() => handleSelectPaymentMode('card')}
-                  >
-                    <CreditCard className="h-4 w-4" />
-                    Card
-                  </Button>
-                </div>
-                {paymentMode === 'card' ? (
-                  <div className="mt-3 space-y-2">
-                    <Button
-                      type="button"
-                      className={cn(
-                        'w-full gap-2',
-                        cardPayment.cardPaymentStatus === 'success' &&
-                          'bg-emerald-600 hover:bg-emerald-600/90',
-                        (cardPayment.cardPaymentStatus === 'error' ||
-                          cardPayment.cardPaymentStatus === 'cancelled') &&
-                          'bg-destructive hover:bg-destructive/90'
-                      )}
-                      disabled={
-                        cardPayment.cardPaymentStatus === 'processing' ||
-                        cardPayment.cardPaymentStatus === 'success'
-                      }
-                      onClick={() => void cardPayment.handleCardPayClick()}
-                    >
-                      {cardPayment.cardPaymentStatus === 'success' ? (
-                        <>
-                          <CheckCircle2 className="h-4 w-4" />
-                          Paid
-                        </>
-                      ) : cardPayment.cardPaymentStatus === 'error' ||
-                        cardPayment.cardPaymentStatus === 'cancelled' ? (
-                        <>
-                          <XCircle className="h-4 w-4" />
-                          Pay {formatMoney(cartGrandTotal)}
-                        </>
-                      ) : cardPayment.cardPaymentStatus === 'processing' ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Processing…
-                        </>
-                      ) : (
-                        <>
-                          <CreditCard className="h-4 w-4" />
-                          Pay {formatMoney(cartGrandTotal)}
-                        </>
-                      )}
-                    </Button>
-                    <p className="text-xs text-[#64748b]">
-                      {cardPayment.isCardPaymentComplete
-                        ? 'Payment complete — confirm your order below.'
-                        : 'Pay by card before confirming your order.'}
-                    </p>
+                {fromTableQr ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3 py-3">
+                    <Banknote className="h-5 w-5 shrink-0 text-primary" />
+                    <div>
+                      <p className="text-sm font-semibold">Cash at counter</p>
+                      <p className="text-xs text-[#64748b]">
+                        Table QR orders are cash only. Pay staff when your order
+                        is ready.
+                      </p>
+                    </div>
                   </div>
                 ) : (
-                  <p className="mt-3 text-xs text-[#64748b]">
-                    Pay with cash at the counter. Your order will be created
-                    with payment pending until staff sends it to the kitchen.
-                  </p>
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant={paymentMode === 'cash' ? 'default' : 'outline'}
+                        className="h-12 justify-start gap-2"
+                        onClick={() => handleSelectPaymentMode('cash')}
+                      >
+                        <Banknote className="h-4 w-4" />
+                        Cash
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={paymentMode === 'card' ? 'default' : 'outline'}
+                        className="h-12 justify-start gap-2"
+                        onClick={() => handleSelectPaymentMode('card')}
+                      >
+                        <CreditCard className="h-4 w-4" />
+                        Card
+                      </Button>
+                    </div>
+                    {paymentMode === 'card' ? (
+                      <div className="mt-3 space-y-2">
+                        <Button
+                          type="button"
+                          className={cn(
+                            'w-full gap-2',
+                            cardPayment.cardPaymentStatus === 'success' &&
+                              'bg-emerald-600 hover:bg-emerald-600/90',
+                            (cardPayment.cardPaymentStatus === 'error' ||
+                              cardPayment.cardPaymentStatus === 'cancelled') &&
+                              'bg-destructive hover:bg-destructive/90'
+                          )}
+                          disabled={
+                            cardPayment.cardPaymentStatus === 'processing' ||
+                            cardPayment.cardPaymentStatus === 'success'
+                          }
+                          onClick={() => void cardPayment.handleCardPayClick()}
+                        >
+                          {cardPayment.cardPaymentStatus === 'success' ? (
+                            <>
+                              <CheckCircle2 className="h-4 w-4" />
+                              Paid
+                            </>
+                          ) : cardPayment.cardPaymentStatus === 'error' ||
+                            cardPayment.cardPaymentStatus === 'cancelled' ? (
+                            <>
+                              <XCircle className="h-4 w-4" />
+                              Pay {formatMoney(cartGrandTotal)}
+                            </>
+                          ) : cardPayment.cardPaymentStatus === 'processing' ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Processing…
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="h-4 w-4" />
+                              Pay {formatMoney(cartGrandTotal)}
+                            </>
+                          )}
+                        </Button>
+                        <p className="text-xs text-[#64748b]">
+                          {cardPayment.isCardPaymentComplete
+                            ? 'Payment complete — confirm your order below.'
+                            : 'Pay by card before confirming your order.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-[#64748b]">
+                        Pay with cash at the counter. Your order will be created
+                        with payment pending until staff sends it to the kitchen.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -1791,8 +1961,10 @@ export function KioskApp({
                 disabled={
                   placing ||
                   cart.length === 0 ||
-                  cardPayment.cardPaymentStatus === 'processing' ||
-                  (paymentMode === 'card' && !cardPayment.isCardPaymentComplete)
+                  (!fromTableQr &&
+                    (cardPayment.cardPaymentStatus === 'processing' ||
+                      (paymentMode === 'card' &&
+                        !cardPayment.isCardPaymentComplete)))
                 }
                 onClick={confirmCheckoutOrder}
               >
@@ -1823,22 +1995,24 @@ export function KioskApp({
               </Button>
             </div>
 
-            <CardPaymentDialogs
-              amount={cartGrandTotal}
-              cardPaymentStatus={cardPayment.cardPaymentStatus}
-              cardTransactionId={cardPayment.cardTransactionId}
-              cardProcessingOpen={cardPayment.cardProcessingOpen}
-              cardPaymentOutcomeOpen={cardPayment.cardPaymentOutcomeOpen}
-              setCardPaymentOutcomeOpen={cardPayment.setCardPaymentOutcomeOpen}
-              setCardProcessingOpen={cardPayment.setCardProcessingOpen}
-              onBypass={cardPayment.handleCardPaymentBypass}
-              onCancel={cardPayment.handleCardPaymentCancel}
-              formatMoney={formatMoney}
-            />
+            {!fromTableQr ? (
+              <CardPaymentDialogs
+                amount={cartGrandTotal}
+                cardPaymentStatus={cardPayment.cardPaymentStatus}
+                cardTransactionId={cardPayment.cardTransactionId}
+                cardProcessingOpen={cardPayment.cardProcessingOpen}
+                cardPaymentOutcomeOpen={cardPayment.cardPaymentOutcomeOpen}
+                setCardPaymentOutcomeOpen={cardPayment.setCardPaymentOutcomeOpen}
+                setCardProcessingOpen={cardPayment.setCardProcessingOpen}
+                onBypass={cardPayment.handleCardPaymentBypass}
+                onCancel={cardPayment.handleCardPaymentCancel}
+                formatMoney={formatMoney}
+              />
+            ) : null}
           </div>
         )}
 
-        {step === 'done' && (
+        {qrCustomerReady && step === 'done' && (
           <div className="mx-auto flex max-w-lg flex-1 flex-col items-center justify-center gap-6 px-6 py-16 text-center">
             <div className="rounded-full bg-[#fff7ed] p-6 text-primary">
               <ShoppingBag className="h-12 w-12" />

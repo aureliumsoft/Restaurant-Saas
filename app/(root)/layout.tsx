@@ -18,6 +18,7 @@ import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
 import { BranchSwitcher } from '@/components/dashboard/branch-switcher';
 import { useRestaurantBranding } from '@/components/layout/restaurant-branding-provider';
 import { BranchProvider } from '@/hooks/use-branch-context';
+import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
 import {
   useStaffAccessGate,
   useStaffPermissions,
@@ -258,7 +259,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
                 sidebarOpen={sidebarOpen}
                 sidebarHeader={
                   <Link
-                    href={restaurantSlug ? `/web-app/${restaurantSlug}` : '/'}
+                    href={restaurantSlug ? restaurantStorefrontPath(restaurantSlug) : '/'}
                     target={restaurantSlug ? '_blank' : undefined}
                     className="flex items-center gap-2 font-semibold transition-opacity hover:opacity-90"
                   >

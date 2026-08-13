@@ -1,15 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, useTransition, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
-import { IconArrowLeft, IconMinus, IconPlus, IconTrash } from '@tabler/icons-react';
+import {
+  IconArrowLeft,
+  IconArrowRight,
+  IconMinus,
+  IconPlus,
+  IconTrash,
+} from '@tabler/icons-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -19,16 +24,18 @@ import {
 } from '@/components/ui/dialog';
 
 import type { OrderInfo } from '@/components/order/order-types';
-import {
-  inferHostSubdomainForMenu,
-} from '@/lib/customer-menu-client';
+import { inferHostSubdomainForMenu } from '@/lib/customer-menu-client';
 import { resolveWebCustomerName } from '@/lib/web-customer';
 import {
   cartLineTitle,
   cartModifierDisplayLines,
   resolveCartLineImageUrl,
 } from '@/lib/cart-line-display';
-import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
+import {
+  cartLineTotal,
+  cartLineUnitTotal,
+  normalizeCartModifiers,
+} from '@/lib/cart-normalize';
 import {
   onlineCartStorageKey,
   writeCartToLocalStorage,
@@ -40,6 +47,7 @@ import { OrderPreferencesSummary } from '@/components/order/order-preferences-su
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import { useRestaurantServiceCharges } from '@/hooks/use-restaurant-service-charges';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useOrderInfo } from '@/hooks/use-order-info';
 import {
   readCutleryPreference,
   readOrderCommentPreference,
@@ -109,8 +117,14 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
     for (const row of parsed) {
       if (!row || typeof row !== 'object') continue;
 
-      const maybeLine = row as Partial<CartLine> & { lineId?: string; baseUnitPrice?: number };
-      if (typeof maybeLine.lineId === 'string' && typeof maybeLine.baseUnitPrice === 'number') {
+      const maybeLine = row as Partial<CartLine> & {
+        lineId?: string;
+        baseUnitPrice?: number;
+      };
+      if (
+        typeof maybeLine.lineId === 'string' &&
+        typeof maybeLine.baseUnitPrice === 'number'
+      ) {
         out.push({
           lineId: maybeLine.lineId,
           menuItemId: String(maybeLine.menuItemId ?? ''),
@@ -121,7 +135,8 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
           quantity: Number(maybeLine.quantity ?? 1),
           variationId: (maybeLine as CartLine).variationId ?? null,
           variationName: (maybeLine as CartLine).variationName ?? null,
-          variationPriceOverride: (maybeLine as CartLine).variationPriceOverride,
+          variationPriceOverride: (maybeLine as CartLine)
+            .variationPriceOverride,
           modifiers: normalizeCartModifiers((maybeLine as any).modifiers),
           modifiersSignature: String(maybeLine.modifiersSignature ?? ''),
         });
@@ -130,7 +145,11 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
 
       // Legacy: { product: {id,name,price,image,description...}, quantity }
       const legacy = row as any;
-      if (legacy?.product?.id && typeof legacy.quantity === 'number' && typeof legacy.product.price === 'number') {
+      if (
+        legacy?.product?.id &&
+        typeof legacy.quantity === 'number' &&
+        typeof legacy.product.price === 'number'
+      ) {
         const p = legacy.product;
         out.push({
           lineId: `legacy-${p.id}`,
@@ -152,7 +171,12 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
   }
 }
 
-export default function CartPageClient({ orderType, orderId, orderInfo }: CartPageProps) {
+export default function CartPageClient({
+  orderType,
+  orderId,
+  orderInfo: initialOrderInfo,
+}: CartPageProps) {
+  const orderInfo = useOrderInfo(orderId, orderType, initialOrderInfo);
   const { t } = useTranslation();
   const [cart, setCart] = useState<CartLine[]>([]);
   const [productImages, setProductImages] = useState<
@@ -160,12 +184,15 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
   >({});
   const [cartOffers, setCartOffers] = useState<CartOfferItem[]>([]);
   const [offersOpen, setOffersOpen] = useState(false);
-  const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(null);
+  const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
+    null
+  );
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [cutlery, setCutlery] = useState(false);
   const [comment, setComment] = useState('');
   const router = useRouter();
+  const [isProceeding, startProceedTransition] = useTransition();
 
   useEffect(() => {
     setCart(parseCartFromStorage(localStorage.getItem(`cart-${orderId}`)));
@@ -225,12 +252,14 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
       toast.error(t('customerDetailsRequired'));
       return;
     }
-    router.push(
-      orderPathWithQuery(
-        `/order/${orderType}/${encodeURIComponent(orderId)}/checkout`,
-        orderInfoWithCustomer
-      )
-    );
+    startProceedTransition(() => {
+      router.push(
+        orderPathWithQuery(
+          `/order/${orderType}/${encodeURIComponent(orderId)}/checkout`,
+          orderInfoWithCustomer
+        )
+      );
+    });
   };
 
   const updateCart = (next: CartLine[]) => {
@@ -240,7 +269,11 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
 
   const adjustQuantity = (lineId: string, delta: number) => {
     const newCart = cart
-      .map((item) => (item.lineId === lineId ? { ...item, quantity: item.quantity + delta } : item))
+      .map((item) =>
+        item.lineId === lineId
+          ? { ...item, quantity: item.quantity + delta }
+          : item
+      )
       .filter((item) => item.quantity > 0);
     updateCart(newCart);
   };
@@ -249,7 +282,10 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
     updateCart(cart.filter((item) => item.lineId !== lineId));
   };
 
-  const total = useMemo(() => cart.reduce((sum, item) => sum + lineTotal(item), 0), [cart]);
+  const total = useMemo(
+    () => cart.reduce((sum, item) => sum + lineTotal(item), 0),
+    [cart]
+  );
   const { serviceChargeAmount } = useRestaurantServiceCharges(
     orderInfo?.restaurantSlug,
     'online'
@@ -415,10 +451,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
           <WebAppRestaurantTitle
             restaurantName={orderInfo?.restaurantName}
             subtitle={
-              <>
-                {orderType === 'delivery' ? 'Delivery' : 'Pick-Up'} order ·{' '}
-                {orderId}
-              </>
+              <>{orderType === 'delivery' ? 'Delivery' : 'Pick-Up'} Order</>
             }
           />
           <h2 className="text-2xl font-bold">{t('yourCart')}</h2>
@@ -435,8 +468,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                   <strong>{t('mode')}:</strong> {orderInfo.mode}
                 </div>
                 <div>
-                  <strong>{t('name')}:</strong>{' '}
-                  {resolvedCustomerName || 'N/A'}
+                  <strong>{t('name')}:</strong> {resolvedCustomerName || 'N/A'}
                 </div>
                 <div>
                   <strong>{t('phoneLabel')}:</strong>{' '}
@@ -445,22 +477,27 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                 {orderInfo.mode === 'delivery' ? (
                   <>
                     <div>
-                      <strong>{t('address')}:</strong> {orderInfo.address || 'N/A'}
+                      <strong>{t('address')}:</strong>{' '}
+                      {orderInfo.address || 'N/A'}
                     </div>
                     <div>
-                      <strong>{t('apartment')}:</strong> {orderInfo.apartment || 'N/A'}
+                      <strong>{t('apartment')}:</strong>{' '}
+                      {orderInfo.apartment || 'N/A'}
                     </div>
                     <div>
-                      <strong>{t('gateCode')}:</strong> {orderInfo.gateCode || 'N/A'}
+                      <strong>{t('gateCode')}:</strong>{' '}
+                      {orderInfo.gateCode || 'N/A'}
                     </div>
                   </>
                 ) : (
                   <>
                     <div>
-                      <strong>{t('store')}:</strong> {orderInfo.storeName || 'N/A'}
+                      <strong>{t('store')}:</strong>{' '}
+                      {orderInfo.storeName || 'N/A'}
                     </div>
                     <div>
-                      <strong>{t('storeAddress')}:</strong> {orderInfo.storeAddress || 'N/A'}
+                      <strong>{t('storeAddress')}:</strong>{' '}
+                      {orderInfo.storeAddress || 'N/A'}
                     </div>
                   </>
                 )}
@@ -501,84 +538,90 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                   productImageById
                 );
                 return (
-                <Card key={line.lineId}>
-                  <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-start gap-4 min-w-0">
-                      {displayImageUrl ? (
-                        <img src={displayImageUrl} alt={line.productName} className="h-16 w-16 rounded object-cover" />
-                      ) : (
-                        <div className="flex h-16 w-16 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
-                          —
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <h3 className="font-semibold">
-                          {cartLineTitle(line.productName, line.variationName)}
-                        </h3>
-                        {modifierLines.length > 0 ? (
-                          <div className="mt-2 space-y-0.5">
-                            {modifierLines.map((modLine, index) => (
-                              <p
-                                key={`${line.lineId}-mod-${index}`}
-                                className={`truncate text-xs text-muted-foreground${
-                                  modLine.prefix === 'dash' ? ' pl-3' : ''
-                                }`}
-                              >
-                                {modLine.prefix === 'branch' ? '↳ ' : '- '}
-                                {modLine.name}
-                                {modLine.unitPrice > 0
-                                  ? ` (+${formatMoney(modLine.unitPrice)})`
-                                  : ''}
-                              </p>
-                            ))}
+                  <Card key={line.lineId}>
+                    <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-4 min-w-0">
+                        {displayImageUrl ? (
+                          <img
+                            src={displayImageUrl}
+                            alt={line.productName}
+                            className="h-16 w-16 rounded object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-16 w-16 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
+                            —
                           </div>
-                        ) : null}
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          {t('unitPrice')}: {formatMoney(lineUnitTotal(line))}
-                        </p>
+                        )}
+                        <div className="min-w-0">
+                          <h3 className="font-semibold">
+                            {cartLineTitle(
+                              line.productName,
+                              line.variationName
+                            )}
+                          </h3>
+                          {modifierLines.length > 0 ? (
+                            <div className="mt-2 space-y-0.5">
+                              {modifierLines.map((modLine, index) => (
+                                <p
+                                  key={`${line.lineId}-mod-${index}`}
+                                  className={`truncate text-xs text-muted-foreground${
+                                    modLine.prefix === 'dash' ? ' pl-3' : ''
+                                  }`}
+                                >
+                                  {modLine.prefix === 'branch' ? '↳ ' : '- '}
+                                  {modLine.name}
+                                  {modLine.unitPrice > 0
+                                    ? ` (+${formatMoney(modLine.unitPrice)})`
+                                    : ''}
+                                </p>
+                              ))}
+                            </div>
+                          ) : null}
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {t('unitPrice')}: {formatMoney(lineUnitTotal(line))}
+                          </p>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex shrink-0 flex-col items-end gap-2">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => adjustQuantity(line.lineId, -1)}
-                          disabled={line.quantity <= 1}
-                          type="button"
-                        >
-                          <IconMinus className="h-4 w-4" />
-                        </Button>
-                        <span className="w-8 text-center text-sm font-medium">
-                          {line.quantity}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => adjustQuantity(line.lineId, 1)}
-                          type="button"
-                        >
-                          <IconPlus className="h-4 w-4" />
-                        </Button>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => adjustQuantity(line.lineId, -1)}
+                            disabled={line.quantity <= 1}
+                            type="button"
+                          >
+                            <IconMinus className="h-4 w-4" />
+                          </Button>
+                          <span className="w-8 text-center text-sm font-medium">
+                            {line.quantity}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => adjustQuantity(line.lineId, 1)}
+                            type="button"
+                          >
+                            <IconPlus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex w-full items-center justify-between gap-3">
+                          <span className="text-right font-semibold">
+                            {formatMoney(lineTotal(line))}
+                          </span>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => removeFromCart(line.lineId)}
+                            type="button"
+                          >
+                            <IconTrash className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex w-full items-center justify-between gap-3">
-                      <span className="text-right font-semibold">
-                          {formatMoney(lineTotal(line))}
-                        </span>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => removeFromCart(line.lineId)}
-                          type="button"
-                        >
-                          <IconTrash className="h-4 w-4" />
-                        </Button>
-                        
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
@@ -603,13 +646,17 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                 </div>
                 {serviceChargeAmount > 0 ? (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">{t('serviceFees')}</span>
+                    <span className="text-muted-foreground">
+                      {t('serviceFees')}
+                    </span>
                     <span>{formatMoney(serviceChargeAmount)}</span>
                   </div>
                 ) : null}
                 <div className="flex items-center justify-between border-t border-border pt-2">
                   <span className="text-lg font-semibold">{t('total')}</span>
-                  <span className="text-lg font-bold">{formatMoney(grandTotal)}</span>
+                  <span className="text-lg font-bold">
+                    {formatMoney(grandTotal)}
+                  </span>
                 </div>
                 {offeredProducts.length > 0 ? (
                   <Button
@@ -622,12 +669,21 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                   </Button>
                 ) : null}
                 <Button
-                  className="w-full"
-                  disabled={cart.length === 0 || !customerDetailsValid}
+                  className="w-full gap-2"
+                  disabled={
+                    cart.length === 0 ||
+                    !customerDetailsValid ||
+                    isProceeding
+                  }
                   onClick={proceedToCheckout}
                   type="button"
                 >
-                  {t('proceedToCheckout')}
+                  {isProceeding ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <IconArrowRight className="h-4 w-4" aria-hidden />
+                  )}
+                  {isProceeding ? t('processing') : t('proceedToCheckout')}
                 </Button>
               </CardContent>
             </Card>
@@ -650,7 +706,6 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
           ) : (
             <div className="max-h-80 space-y-3 overflow-y-auto py-1">
               {offeredProducts.map((p) => (
-              
                 <div
                   key={p.id}
                   className="flex items-center justify-between gap-3 rounded-lg border border-border p-2 text-sm cursor-pointer"
@@ -685,7 +740,7 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
                       size="sm"
                       type="button"
                       onClick={() => handleAddOffered(p)}
-                      >
+                    >
                       {t('add')}
                     </Button>
                   </div>
@@ -707,4 +762,3 @@ export default function CartPageClient({ orderType, orderId, orderInfo }: CartPa
     </div>
   );
 }
-

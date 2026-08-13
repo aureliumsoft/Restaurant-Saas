@@ -7,12 +7,17 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { AdminBlogPostForm } from '@/components/admin/admin-blog-post-form';
+
 type PostDto = {
   id: string;
   title: string;
   imageUrl: string | null;
   shortDescription: string;
   contentHtml: string;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  seoImageUrl: string | null;
+  featured: boolean;
   status: string;
 };
 
@@ -63,6 +68,10 @@ export default function AdminBlogEditPage() {
         imageUrl: post.imageUrl ?? '',
         shortDescription: post.shortDescription,
         contentHtml: post.contentHtml,
+        seoTitle: post.seoTitle ?? '',
+        seoDescription: post.seoDescription ?? '',
+        seoImageUrl: post.seoImageUrl ?? '',
+        featured: Boolean(post.featured),
         status: post.status,
       }}
     />

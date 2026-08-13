@@ -96,6 +96,18 @@ function OrderStatusBadges({ order }: { order: OpenTableOrderRow }) {
       >
         Kitchen: {kitchen}
       </Badge>
+      <Badge
+        variant="outline"
+        className={cn(
+          'text-[10px] font-medium',
+          payment === 'Paid' &&
+            'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300',
+          payment === 'Pay pending' &&
+            'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+        )}
+      >
+        {payment}
+      </Badge>
       <Badge variant="outline" className="text-[10px] font-medium">
         {status}
       </Badge>
@@ -255,6 +267,10 @@ export function PosTableOrdersSheet({
   };
 
   const openPay = (card: OpenTableCard) => {
+    if (card.totalDue <= 0) {
+      toast.info('This table has no unpaid tickets.');
+      return;
+    }
     if (card.kitchenPendingCount > 0) {
       toast.warn(
         `Send all tickets to kitchen first (${card.kitchenPendingCount} still held).`
@@ -330,8 +346,9 @@ export function PosTableOrdersSheet({
               ) : null}
             </SheetTitle>
             <SheetDescription>
-              Each ticket has cancel and kitchen actions. Payment is for the
-              whole table tab.
+              Tickets stay here until paid and sent to kitchen. Each ticket can
+              be canceled or sent separately; pay settles unpaid tickets for
+              the table.
             </SheetDescription>
           </SheetHeader>
 
@@ -342,7 +359,7 @@ export function PosTableOrdersSheet({
               </div>
             ) : cards.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                No open table orders with payment pending.
+                No open table orders — nothing waiting for kitchen or payment.
               </p>
             ) : (
               <ul className="space-y-4">
@@ -361,6 +378,9 @@ export function PosTableOrdersSheet({
                           <p className="mt-0.5 text-xs text-muted-foreground">
                             {card.orderCount} ticket
                             {card.orderCount === 1 ? '' : 's'}
+                            {card.unpaidCount > 0
+                              ? ` · ${card.unpaidCount} unpaid`
+                              : ' · all paid'}
                             {card.kitchenPendingCount > 0
                               ? ` · ${card.kitchenPendingCount} held`
                               : ''}
@@ -369,9 +389,15 @@ export function PosTableOrdersSheet({
                               : ''}
                           </p>
                         </div>
-                        <p className="shrink-0 text-lg font-semibold tabular-nums">
-                          {formatMoney(card.totalDue)}
-                        </p>
+                        {card.totalDue > 0 ? (
+                          <p className="shrink-0 text-lg font-semibold tabular-nums">
+                            {formatMoney(card.totalDue)}
+                          </p>
+                        ) : (
+                          <p className="shrink-0 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                            Paid
+                          </p>
+                        )}
                       </div>
 
                       <ul className="mt-3 space-y-3 border-t border-border/60 pt-3">
@@ -445,20 +471,29 @@ export function PosTableOrdersSheet({
                       </ul>
 
                       <div className="mt-3 space-y-1.5">
-                        {card.kitchenPendingCount > 0 ? (
-                          <p className="text-center text-xs text-amber-700 dark:text-amber-300">
-                            Send all tickets to kitchen before paying (
-                            {card.kitchenPendingCount} held).
+                        {card.totalDue > 0 ? (
+                          <>
+                            {card.kitchenPendingCount > 0 ? (
+                              <p className="text-center text-xs text-amber-700 dark:text-amber-300">
+                                Send all tickets to kitchen before paying (
+                                {card.kitchenPendingCount} held).
+                              </p>
+                            ) : null}
+                            <Button
+                              type="button"
+                              className="w-full"
+                              disabled={anyBusy || card.kitchenPendingCount > 0}
+                              onClick={() => openPay(card)}
+                            >
+                              Pay table · {formatMoney(card.totalDue)}
+                            </Button>
+                          </>
+                        ) : card.kitchenPendingCount > 0 ? (
+                          <p className="text-center text-xs text-muted-foreground">
+                            All tickets paid — send {card.kitchenPendingCount}{' '}
+                            to kitchen when ready.
                           </p>
                         ) : null}
-                        <Button
-                          type="button"
-                          className="w-full"
-                          disabled={anyBusy || card.kitchenPendingCount > 0}
-                          onClick={() => openPay(card)}
-                        >
-                          Pay table · {formatMoney(card.totalDue)}
-                        </Button>
                       </div>
                     </li>
                   );

@@ -462,6 +462,10 @@ model NewsletterCampaign {
   subject        String
   htmlBody       String
   textBody       String?
+  /// Optional CTA button label in the email body.
+  buttonTitle    String?
+  /// Optional CTA button URL (http/https).
+  buttonLink     String?
   status         String   @default("SENT")
   recipientCount Int      @default(0)
   successCount   Int      @default(0)
@@ -482,6 +486,14 @@ model BlogPost {
   imageUrl         String?
   shortDescription String
   contentHtml      String
+  /// Google search / social snippet title (falls back to title).
+  seoTitle         String?
+  /// Google search / social snippet description (falls back to shortDescription).
+  seoDescription   String?
+  /// Google / OG image URL (falls back to imageUrl).
+  seoImageUrl      String?
+  /// Shown in the public featured blogs sidebar.
+  featured         Boolean   @default(false)
   /// DRAFT | PUBLISHED
   status           String    @default("DRAFT")
   publishedAt      DateTime?
@@ -489,6 +501,7 @@ model BlogPost {
   updatedAt        DateTime  @updatedAt
 
   @@index([status, publishedAt])
+  @@index([status, featured, publishedAt])
   @@index([createdAt])
 }
 

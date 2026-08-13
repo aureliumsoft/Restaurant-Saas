@@ -4,6 +4,10 @@ import { getToken } from "next-auth/jwt";
 
 import { isPlatformAdmin } from "@/lib/auth/admin";
 import { DASHBOARD_MODULES } from "@/constant/dashboardModules";
+import {
+  isCustomerOrderFlowPath,
+  legacyWebAppRedirectPath,
+} from "@/lib/customer-storefront-paths";
 
 /** Same fallback as `authOptions.secret` in `lib/auth-options.ts` (dev only). */
 function resolveNextAuthJwtSecret(): string | undefined {
@@ -53,6 +57,14 @@ function getSubdomainFromHost(hostname: string) {
   return null;
 }
 
+function isSubdomainStorefrontGlobalPath(pathname: string): boolean {
+  if (isCustomerOrderFlowPath(pathname)) return true;
+  if (pathname === "/track-order" || pathname.startsWith("/track-order/")) {
+    return true;
+  }
+  return false;
+}
+
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
   const pathname = url.pathname;
@@ -91,31 +103,37 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // Legacy `/web-app/*` → route-group URLs (no `/web-app` segment).
+  if (pathname === "/web-app" || pathname.startsWith("/web-app/")) {
+    url.pathname = legacyWebAppRedirectPath(pathname);
+    return NextResponse.redirect(url, 308);
+  }
+
   const hostname = (req.headers.get("host") || "").split(":")[0];
   const subdomain = getSubdomainFromHost(hostname);
 
-  // No subdomain => marketing/auth/dashboard; short `/order` URLs map to web-app routes.
-  // Do not match `/orders` — that path is reserved for the dashboard (see /sales list).
   if (!subdomain) {
-    // Match only `/order` and `/order/...` (not `/order-path`).
-    const isWebAppOrderPath =
-      (pathname === "/order" || pathname.startsWith("/order/")) &&
-      !pathname.startsWith("/orders");
-    if (isWebAppOrderPath) {
-      url.pathname = `/web-app${pathname}`;
-      return NextResponse.rewrite(url);
-    }
     return NextResponse.next();
   }
 
   // Keep API untouched so handlers can read host/subdomain directly.
   if (pathname.startsWith("/api")) return NextResponse.next();
 
-  // Already under storefront app — no second rewrite.
-  if (pathname.startsWith("/web-app")) return NextResponse.next();
+  const tenantPrefix = `/${subdomain}`;
+  if (pathname === tenantPrefix || pathname.startsWith(`${tenantPrefix}/`)) {
+    return NextResponse.next();
+  }
 
-  // Subdomain traffic serves the same Next routes as /web-app/*.
-  url.pathname = `/web-app${pathname}`;
+  if (isSubdomainStorefrontGlobalPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  if (pathname === "/") {
+    url.pathname = tenantPrefix;
+    return NextResponse.rewrite(url);
+  }
+
+  url.pathname = `${tenantPrefix}${pathname}`;
   return NextResponse.rewrite(url);
 }
 

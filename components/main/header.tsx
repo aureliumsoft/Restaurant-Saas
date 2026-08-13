@@ -28,13 +28,12 @@ export default function Header() {
     { href: '/restaurant-signup', label: t('marketing.nav.restaurantSignup') },
     { href: '/pricing', label: t('marketing.nav.pricing') },
     { href: '/blog', label: t('marketing.nav.blog') },
-    { href: '/documentation', label: t('marketing.nav.documentation') },
   ];
 
   return (
     <>
       <header className="fixed inset-x-0 top-0 z-50 w-full px-3 py-3 backdrop-blur-xl bg-transparent sm:px-4">
-        <div className="relative mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white/85 px-3 shadow-[0_10px_40px_-10px] shadow-black/10 backdrop-blur-md dark:border-zinc-800/80 dark:bg-black/80 dark:shadow-black/60 sm:px-4">
+        <div className="relative mx-auto flex h-16 items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white/85 px-3 shadow-[0_10px_40px_-10px] shadow-black/10 backdrop-blur-md dark:border-zinc-800/80 dark:bg-black/80 dark:shadow-black/60 sm:px-4">
           {/* Logo tile */}
           <Link
             href="/"

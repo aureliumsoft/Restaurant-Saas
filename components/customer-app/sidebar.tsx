@@ -23,11 +23,13 @@ import { Loader2 } from 'lucide-react';
 import { useCustomerAccountOptional } from '@/components/customer-app/customer-account-context';
 import { cn } from '@/lib/utils';
 import { WEB_CUSTOMER_TAKEAWAY_NAME } from '@/lib/web-customer';
+import { writeOrderContext } from '@/lib/order-context-storage';
 import {
   getBranchCloseTimeToday,
   isBranchOpenNow,
   type BranchOpeningHours,
 } from '@/lib/order-time-slots';
+import type { OrderInfo } from '@/components/order/order-types';
 
 function splitAddressLines(address: string): [string, string] {
   const parts = address
@@ -96,6 +98,7 @@ export function Sidebar({
   const [bannerIndex, setBannerIndex] = useState(0);
   const [deliveryInfoOpen, setDeliveryInfoOpen] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
+  const [isStartingOrder, setIsStartingOrder] = useState(false);
 
   const selectDeliveryBranch = (storeId: string) => {
     setSelectedStoreId(storeId);
@@ -196,6 +199,8 @@ export function Sidebar({
   }, [menuBanners]);
 
   const createOrder = () => {
+    if (isStartingOrder) return;
+
     const orderId =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID().replace(/-/g, '')
@@ -203,8 +208,9 @@ export function Sidebar({
 
     const selectedStore = activeStores?.find((s) => s.id === selectedStoreId);
 
-    const paramsObj: Record<string, string> = {
-      mode,
+    const orderType = mode === 'delivery' ? 'delivery' : 'pickUp';
+    const orderInfo: OrderInfo = {
+      mode: orderType,
       storeId: selectedStoreId || '',
       storeName: selectedStore?.name || '',
       storeAddress: selectedStore?.address || '',
@@ -214,20 +220,18 @@ export function Sidebar({
       addressName:
         mode === 'takeaway' ? WEB_CUSTOMER_TAKEAWAY_NAME : addressName,
       customerPhone: mode === 'takeaway' ? '' : customerPhone,
+      ...(restaurantSlug?.trim() ? { restaurantSlug: restaurantSlug.trim() } : {}),
+      ...(restaurantName ? { restaurantName } : {}),
     };
-    if (restaurantSlug?.trim()) {
-      paramsObj.restaurantSlug = restaurantSlug.trim();
-    }
-    if (restaurantName) {
-      paramsObj.restaurantName = restaurantName;
-    }
-    const params = new URLSearchParams(paramsObj).toString();
+
+    writeOrderContext(orderId, orderInfo);
 
     const path =
-      mode === 'delivery'
-        ? `/order/delivery/${orderId}?${params}`
-        : `/order/pickUp/${orderId}?${params}`;
+      orderType === 'delivery'
+        ? `/order/delivery/${orderId}`
+        : `/order/pickUp/${orderId}`;
 
+    setIsStartingOrder(true);
     setDeliveryInfoOpen(false);
     window.location.href = path;
   };
@@ -451,12 +455,16 @@ export function Sidebar({
         </div>
         <DialogFooter className="w-full border-t border-[#e2e8f0] pt-4">
           <Button
-            className="w-full bg-primary text-primary-foreground hover:brightness-95"
+            className="w-full gap-2 bg-primary text-primary-foreground hover:brightness-95"
             onClick={createOrder}
-            disabled={!canProceedDelivery}
+            disabled={!canProceedDelivery || isStartingOrder}
           >
-            <IconShoppingCart className="mr-2 h-4 w-4" />
-            {t('proceedOrder')}
+            {isStartingOrder ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <IconShoppingCart className="h-4 w-4" aria-hidden />
+            )}
+            {isStartingOrder ? t('processing') : t('proceedOrder')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -466,7 +474,7 @@ export function Sidebar({
 
   if (variant === 'storefront') {
     const handleTakeawayProceed = () => {
-      if (!selectedStoreId) return;
+      if (!selectedStoreId || isStartingOrder) return;
       createOrder();
     };
 
@@ -688,11 +696,16 @@ export function Sidebar({
           activeStores?.find((s) => s.id === selectedStoreId)?.openingHours
         ) ? (
           <Button
-            className="h-12 w-full rounded-2xl text-sm font-semibold"
+            className="h-12 w-full gap-2 rounded-2xl text-sm font-semibold"
             onClick={handleTakeawayProceed}
+            disabled={isStartingOrder}
           >
-            <IconShoppingCart className="mr-2 h-4 w-4" />
-            {t('proceedOrder')}
+            {isStartingOrder ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <IconShoppingCart className="h-4 w-4" aria-hidden />
+            )}
+            {isStartingOrder ? t('processing') : t('proceedOrder')}
           </Button>
         ) : null}
 

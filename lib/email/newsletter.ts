@@ -10,12 +10,37 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function buildNewsletterButtonHtml(opts: {
+  buttonTitle: string;
+  buttonLink: string;
+}): string {
+  const title = escapeHtml(opts.buttonTitle.trim());
+  const href = escapeHtml(opts.buttonLink.trim());
+  return `
+<table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px auto 8px">
+  <tr>
+    <td align="center" style="border-radius:10px;background:#e05d38">
+      <a href="${href}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;line-height:1.2">${title}</a>
+    </td>
+  </tr>
+</table>`.trim();
+}
+
 /** Wrap admin-authored newsletter HTML in a simple branded shell. */
 export function wrapNewsletterHtml(opts: {
   subject: string;
   bodyHtml: string;
+  buttonTitle?: string | null;
+  buttonLink?: string | null;
 }): string {
   const body = opts.bodyHtml.trim();
+  const buttonTitle = (opts.buttonTitle ?? "").trim();
+  const buttonLink = (opts.buttonLink ?? "").trim();
+  const buttonBlock =
+    buttonTitle && buttonLink && /^https?:\/\//i.test(buttonLink)
+      ? buildNewsletterButtonHtml({ buttonTitle, buttonLink })
+      : "";
+
   return `
 <!DOCTYPE html>
 <html>
@@ -32,7 +57,8 @@ export function wrapNewsletterHtml(opts: {
             <tr>
               <td style="padding:24px;font-size:15px;line-height:1.6">
                 <h1 style="margin:0 0 16px;font-size:20px;line-height:1.3">${escapeHtml(opts.subject)}</h1>
-                <div>${body}</div>
+                <div class="newsletter-body" style="font-size:15px;line-height:1.65;color:#3f3f46">${body}</div>
+                ${buttonBlock}
               </td>
             </tr>
             <tr>
@@ -49,23 +75,43 @@ export function wrapNewsletterHtml(opts: {
   `.trim();
 }
 
+function appendButtonToPlainText(
+  text: string,
+  buttonTitle?: string | null,
+  buttonLink?: string | null
+): string {
+  const title = (buttonTitle ?? "").trim();
+  const link = (buttonLink ?? "").trim();
+  if (!title || !link) return text;
+  return `${text.trim()}\n\n${title}: ${link}`;
+}
+
 export async function sendNewsletterToSubscriber(opts: {
   to: string;
   subject: string;
   htmlBody: string;
   textBody?: string | null;
+  buttonTitle?: string | null;
+  buttonLink?: string | null;
 }): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
   const html = wrapNewsletterHtml({
     subject: opts.subject,
     bodyHtml: opts.htmlBody,
+    buttonTitle: opts.buttonTitle,
+    buttonLink: opts.buttonLink,
   });
+  const text = appendButtonToPlainText(
+    opts.textBody ?? "",
+    opts.buttonTitle,
+    opts.buttonLink
+  );
   return sendMail({
     to: opts.to,
     subject: opts.subject.startsWith("Foodluk")
       ? opts.subject
       : `Foodluk — ${opts.subject}`,
     html,
-    text: opts.textBody ?? undefined,
+    text: text || undefined,
     fromName: "Foodluk",
   });
 }

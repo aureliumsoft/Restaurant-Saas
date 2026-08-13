@@ -11,7 +11,7 @@ export const resources = {
       addPlus: 'Add +',
       cart: 'Cart',
       viewCart: 'View cart',
-      orderSeeMyOrder: 'See my order',
+      orderSeeMyOrder: 'View My Order',
       whereEatingToday: 'Where are you eating today?',
       tapOptionToBrowse: 'Tap an option to browse the menu on this kiosk.',
       dineIn: 'Dine in',

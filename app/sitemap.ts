@@ -5,12 +5,8 @@ import {
   docPath,
   loadPublicDocNav,
 } from '@/lib/documentation/public';
-
-function getBaseUrl(): string {
-  const env = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (env) return env.replace(/\/$/, '');
-  return 'http://localhost:3000';
-}
+import { db } from '@/lib/db';
+import { getBaseUrl } from '@/lib/public-app-origin-server';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = getBaseUrl();
@@ -20,6 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     '/',
     '/pricing',
     '/documentation',
+    '/blog',
     '/demo-request',
     '/restaurant-signup',
     '/order-path/click-and-collect',
@@ -67,6 +64,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   } catch {
     // Sitemap still returns static routes if docs DB is unavailable.
+  }
+
+  try {
+    const posts = await db.blogPost.findMany({
+      where: { status: 'PUBLISHED' },
+      select: { slug: true, updatedAt: true, publishedAt: true },
+      orderBy: { publishedAt: 'desc' },
+      take: 500,
+    });
+    for (const post of posts) {
+      entries.push({
+        url: `${baseUrl}/blog/${post.slug}`,
+        lastModified: post.updatedAt ?? post.publishedAt ?? now,
+        changeFrequency: 'weekly',
+        priority: 0.65,
+      });
+    }
+  } catch {
+    // Blog posts optional if DB unavailable.
   }
 
   return entries;

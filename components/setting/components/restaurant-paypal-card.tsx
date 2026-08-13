@@ -23,7 +23,7 @@ type PayPalStatusDto = {
   accountStatus: string | null;
   paymentsReceivable: boolean;
   primaryEmail: string | null;
-  countryCode: string | null;
+  countryCode: string | null; 
   currencyCode: string | null;
   onboardedAt: string | null;
   paymentsReady: boolean;

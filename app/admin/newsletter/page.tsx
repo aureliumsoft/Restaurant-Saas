@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
-import { Loader2, Mail, Trash2, Send } from 'lucide-react';
+import {
+  Copy,
+  Eye,
+  Loader2,
+  Mail,
+  RefreshCw,
+  Trash2,
+  Send,
+} from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
@@ -20,12 +28,23 @@ import {
   AdminTableRow,
   AdminTableWrapper,
 } from '@/components/admin/admin-table';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
+import {
+  DeleteConfirmation,
+  SaveConfirmation,
+} from '@/components/ui/confirmation-dialogs';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { plainTextFromHtml } from '@/lib/blog/blog';
 import { cn } from '@/lib/utils';
 
 type SubscriberRow = {
@@ -46,29 +65,58 @@ type CampaignRow = {
   sentByEmail: string | null;
   sentAt: string;
   status: string;
+  buttonTitle?: string | null;
+  buttonLink?: string | null;
+};
+
+type CampaignDetail = CampaignRow & {
+  htmlBody: string;
+  textBody: string | null;
+  createdAt: string;
 };
 
 type NewsletterPayload = {
   activeCount: number;
+  campaignTotal: number;
   subscribers: SubscriberRow[];
   campaigns: CampaignRow[];
 };
+
+const EMPTY_EDITOR = '<p><br></p>';
+
+function resetComposeFields() {
+  return {
+    subject: '',
+    bodyHtml: EMPTY_EDITOR,
+    buttonTitle: '',
+    buttonLink: '',
+  };
+}
 
 export default function AdminNewsletterPage() {
   const [data, setData] = useState<NewsletterPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
+  const [bodyHtml, setBodyHtml] = useState(EMPTY_EDITOR);
+  const [buttonTitle, setButtonTitle] = useState('');
+  const [buttonLink, setButtonLink] = useState('');
+  const [composeFormKey, setComposeFormKey] = useState(0);
   const [sending, setSending] = useState(false);
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<CampaignDetail | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [deleteCampaignId, setDeleteCampaignId] = useState<string | null>(null);
+  const [deletingCampaign, setDeletingCampaign] = useState(false);
+  const [campaignBusyId, setCampaignBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
       const r = await axios.get<{ data: NewsletterPayload }>(
-        '/api/admin/newsletter'
+        '/api/admin/newsletter',
+        { params: { _t: Date.now() } }
       );
       setData(r.data.data);
     } catch {
@@ -87,9 +135,48 @@ export default function AdminNewsletterPage() {
   const inactiveSubscribers =
     data?.subscribers.filter((s) => s.unsubscribedAt) ?? [];
 
+  const clearComposeForm = () => {
+    const empty = resetComposeFields();
+    setSubject(empty.subject);
+    setBodyHtml(empty.bodyHtml);
+    setButtonTitle(empty.buttonTitle);
+    setButtonLink(empty.buttonLink);
+    setComposeFormKey((k) => k + 1);
+  };
+
+  const prependCampaign = (row: CampaignRow) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      const campaigns = [
+        row,
+        ...prev.campaigns.filter((c) => c.id !== row.id),
+      ].slice(0, 50);
+      return { ...prev, campaigns };
+    });
+  };
+
   const requestSave = () => {
-    if (!subject.trim() || body.trim().length < 10) {
-      toast.error('Enter a subject and a message (at least a short paragraph).');
+    const plain = plainTextFromHtml(bodyHtml);
+    if (!subject.trim()) {
+      toast.error('Enter a subject.');
+      return;
+    }
+    if (plain.length < 10) {
+      toast.error('Enter a message with at least a short paragraph.');
+      return;
+    }
+    const titleTrim = buttonTitle.trim();
+    const linkTrim = buttonLink.trim();
+    if (titleTrim && !linkTrim) {
+      toast.error('Enter a button link or clear the button title.');
+      return;
+    }
+    if (linkTrim && !titleTrim) {
+      toast.error('Enter a button title or clear the button link.');
+      return;
+    }
+    if (linkTrim && !/^https?:\/\//i.test(linkTrim)) {
+      toast.error('Button link must start with http:// or https://');
       return;
     }
     setShowSaveConfirmation(true);
@@ -98,35 +185,44 @@ export default function AdminNewsletterPage() {
   const onSend = async () => {
     setSending(true);
     try {
-      // Convert plain text / simple line breaks to HTML paragraphs.
-      const htmlBody = body
-        .split(/\n{2,}/)
-        .map((para) => para.trim())
-        .filter(Boolean)
-        .map((para) => `<p>${para.replace(/\n/g, '<br/>')}</p>`)
-        .join('\n');
-
+      const plain = plainTextFromHtml(bodyHtml);
       const r = await axios.post<{
         data: CampaignRow & { errors?: string[] };
       }>('/api/admin/newsletter/send', {
         subject: subject.trim(),
-        htmlBody,
-        textBody: body.trim(),
+        htmlBody: bodyHtml.trim() || '<p></p>',
+        textBody: plain,
+        buttonTitle: buttonTitle.trim() || '',
+        buttonLink: buttonLink.trim() || '',
       });
 
-      if (r.data.data.recipientCount === 0) {
+      const created = r.data.data;
+
+      if (created.recipientCount === 0) {
         toast.success('Message saved. New subscribers will receive it by email.');
       } else {
         toast.success(
-          `Saved and sent to ${r.data.data.successCount} of ${r.data.data.recipientCount} subscribers.`
+          `Saved and sent to ${created.successCount} of ${created.recipientCount} subscribers.`
         );
       }
-      if (r.data.data.errors?.length) {
-        toast.warn(r.data.data.errors[0]);
+      if (created.errors?.length) {
+        toast.warn(created.errors[0]);
       }
-      setSubject('');
-      setBody('');
+
       setShowSaveConfirmation(false);
+      clearComposeForm();
+      prependCampaign({
+        id: created.id,
+        subject: created.subject,
+        recipientCount: created.recipientCount,
+        successCount: created.successCount,
+        failureCount: created.failureCount,
+        sentByEmail: null,
+        sentAt: created.sentAt,
+        status: created.status,
+        buttonTitle: buttonTitle.trim() || null,
+        buttonLink: buttonLink.trim() || null,
+      });
       await load();
     } catch (e) {
       const msg =
@@ -152,6 +248,74 @@ export default function AdminNewsletterPage() {
     } finally {
       setRemovingId(null);
     }
+  };
+
+  const openPreview = async (id: string) => {
+    setPreviewLoading(true);
+    setPreview(null);
+    setCampaignBusyId(id);
+    try {
+      const res = await axios.get<{ data: CampaignDetail }>(
+        `/api/admin/newsletter/campaigns/${id}`
+      );
+      setPreview(res.data.data);
+    } catch {
+      toast.error('Could not load message preview.');
+    } finally {
+      setPreviewLoading(false);
+      setCampaignBusyId(null);
+    }
+  };
+
+  const loadIntoCompose = async (id: string) => {
+    setCampaignBusyId(id);
+    try {
+      const res = await axios.get<{ data: CampaignDetail }>(
+        `/api/admin/newsletter/campaigns/${id}`
+      );
+      const c = res.data.data;
+      setSubject(c.subject);
+      setBodyHtml(c.htmlBody?.trim() || EMPTY_EDITOR);
+      setButtonTitle(c.buttonTitle ?? '');
+      setButtonLink(c.buttonLink ?? '');
+      setComposeFormKey((k) => k + 1);
+      toast.success('Message loaded into the compose form.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      toast.error('Could not load message.');
+    } finally {
+      setCampaignBusyId(null);
+    }
+  };
+
+  const confirmDeleteCampaign = async () => {
+    if (!deleteCampaignId) return;
+    setDeletingCampaign(true);
+    try {
+      await axios.delete(
+        `/api/admin/newsletter/campaigns/${deleteCampaignId}`
+      );
+      toast.success('Message deleted.');
+      setDeleteCampaignId(null);
+      await load();
+    } catch {
+      toast.error('Could not delete message.');
+    } finally {
+      setDeletingCampaign(false);
+    }
+  };
+
+  const statusBadge = (status: string) => {
+    if (status === 'SENT') {
+      return <Badge variant="default">Sent</Badge>;
+    }
+    if (status === 'SAVED') {
+      return <Badge variant="secondary">Saved</Badge>;
+    }
+    if (status === 'FAILED') {
+      return <Badge variant="destructive">Failed</Badge>;
+    }
+    return <Badge variant="outline">{status}</Badge>;
   };
 
   return (
@@ -195,13 +359,13 @@ export default function AdminNewsletterPage() {
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold tabular-nums">
-              {loading ? '—' : (data?.campaigns.length ?? 0)}
+              {loading ? '—' : (data?.campaignTotal ?? 0)}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <Card className={adminCardClass}>
+      <Card className={adminCardClass} key={composeFormKey}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Send className="h-4 w-4" />
@@ -220,22 +384,45 @@ export default function AdminNewsletterPage() {
               disabled={sending}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="newsletter-body">Message</Label>
-            <Textarea
-              id="newsletter-body"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Write your update. Use a blank line between paragraphs."
-              rows={8}
-              disabled={sending}
-            />
-            <p className="text-xs text-muted-foreground">
-              Saving stores this as the latest newsletter, emails every active
-              subscriber, and sends this message automatically to anyone who
-              subscribes later.
-            </p>
+          <RichTextEditor
+            key={`newsletter-body-${composeFormKey}`}
+            id="newsletter-body"
+            label="Message"
+            value={bodyHtml}
+            onChange={setBodyHtml}
+            helperText="Rich text is sent as HTML in the email. Formatting (bold, lists, links) appears as you compose it."
+          />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="newsletter-button-title">Button title</Label>
+              <Input
+                id="newsletter-button-title"
+                value={buttonTitle}
+                onChange={(e) => setButtonTitle(e.target.value)}
+                placeholder="Read more"
+                maxLength={120}
+                disabled={sending}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newsletter-button-link">Button link</Label>
+              <Input
+                id="newsletter-button-link"
+                value={buttonLink}
+                onChange={(e) => setButtonLink(e.target.value)}
+                placeholder="https://foodluk.com/pricing"
+                maxLength={2048}
+                disabled={sending}
+              />
+            </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Optional call-to-action button shown below the message in the email.
+            Saving stores this as the latest newsletter, emails every active
+            subscriber, and sends this message automatically to anyone who
+            subscribes later.
+          </p>
           <Button
             type="button"
             onClick={requestSave}
@@ -280,6 +467,7 @@ export default function AdminNewsletterPage() {
           if (!sending) setShowSaveConfirmation(false);
         }}
       />
+
       <Card className={cn(adminCardClass, 'min-w-0 max-w-full')}>
         <CardHeader>
           <CardTitle>Subscribers</CardTitle>
@@ -351,8 +539,20 @@ export default function AdminNewsletterPage() {
       </Card>
 
       <Card className={cn(adminCardClass, 'min-w-0 max-w-full')}>
-        <CardHeader>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle>Saved &amp; sent messages</CardTitle>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            disabled={loading}
+            onClick={() => {
+              setLoading(true);
+              void load();
+            }}
+          >
+            <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+          </Button>
         </CardHeader>
         <CardContent className="min-w-0 p-0">
           <AdminTableWrapper>
@@ -361,13 +561,15 @@ export default function AdminNewsletterPage() {
             ) : !data?.campaigns.length ? (
               <AdminTableEmpty>No messages saved yet.</AdminTableEmpty>
             ) : (
-              <AdminTable minWidth={720}>
+              <AdminTable minWidth={860}>
                 <AdminTableHeader>
                   <AdminTableRow>
                     <AdminTableHead>Subject</AdminTableHead>
+                    <AdminTableHead>Status</AdminTableHead>
                     <AdminTableHead>Delivered</AdminTableHead>
                     <AdminTableHead>Sent</AdminTableHead>
                     <AdminTableHead>By</AdminTableHead>
+                    <AdminTableHead className="text-right">Actions</AdminTableHead>
                   </AdminTableRow>
                 </AdminTableHeader>
                 <AdminTableBody>
@@ -375,7 +577,13 @@ export default function AdminNewsletterPage() {
                     <AdminTableRow key={c.id}>
                       <AdminTableCell>
                         <span className="font-medium">{c.subject}</span>
+                        {c.buttonTitle ? (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            Button: {c.buttonTitle}
+                          </p>
+                        ) : null}
                       </AdminTableCell>
+                      <AdminTableCell>{statusBadge(c.status)}</AdminTableCell>
                       <AdminTableCell>
                         <AdminTableMuted>
                           {c.successCount}/{c.recipientCount}
@@ -392,6 +600,45 @@ export default function AdminNewsletterPage() {
                       <AdminTableCell>
                         <AdminTableMuted>{c.sentByEmail ?? '—'}</AdminTableMuted>
                       </AdminTableCell>
+                      <AdminTableCell className="text-right">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            title="Preview"
+                            disabled={campaignBusyId === c.id}
+                            onClick={() => void openPreview(c.id)}
+                          >
+                            {campaignBusyId === c.id && previewLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            title="Load into compose form"
+                            disabled={campaignBusyId === c.id}
+                            onClick={() => void loadIntoCompose(c.id)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="text-destructive hover:bg-destructive/10"
+                            title="Delete"
+                            disabled={campaignBusyId === c.id}
+                            onClick={() => setDeleteCampaignId(c.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </AdminTableCell>
                     </AdminTableRow>
                   ))}
                 </AdminTableBody>
@@ -400,6 +647,65 @@ export default function AdminNewsletterPage() {
           </AdminTableWrapper>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={previewLoading || Boolean(preview)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreview(null);
+            setPreviewLoading(false);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{preview?.subject ?? 'Message preview'}</DialogTitle>
+          </DialogHeader>
+          {previewLoading && !preview ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : preview ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+                {statusBadge(preview.status)}
+                <span>
+                  {format(new Date(preview.sentAt), 'MMM d, yyyy · h:mm a')}
+                </span>
+                <span>
+                  Delivered {preview.successCount}/{preview.recipientCount}
+                </span>
+              </div>
+              <div
+                className="prose prose-sm max-w-none dark:prose-invert [&_ol]:list-decimal [&_ul]:list-disc"
+                dangerouslySetInnerHTML={{ __html: preview.htmlBody }}
+              />
+              {preview.buttonTitle && preview.buttonLink ? (
+                <div className="pt-2">
+                  <span className="inline-block rounded-lg bg-fire-500 px-4 py-2 text-sm font-semibold text-white">
+                    {preview.buttonTitle}
+                  </span>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {preview.buttonLink}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <DeleteConfirmation
+        open={deleteCampaignId != null}
+        title="Delete saved message"
+        description="This removes the message from history. It does not undo emails already sent."
+        loading={deletingCampaign}
+        confirmText="Delete"
+        onConfirm={() => void confirmDeleteCampaign()}
+        onCancel={() => {
+          if (!deletingCampaign) setDeleteCampaignId(null);
+        }}
+      />
     </div>
   );
 }

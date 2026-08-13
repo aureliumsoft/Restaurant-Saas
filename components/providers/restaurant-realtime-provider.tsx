@@ -15,17 +15,15 @@ import {
   type RestaurantRealtimeEvent,
   type RestaurantRealtimeEventType,
 } from '@/lib/realtime/types';
+import { isCustomerAppRoute } from '@/lib/customer-storefront-paths';
 
 function isStaffRealtimeRoute(pathname: string): boolean {
   const path = pathname.split('?')[0] ?? pathname;
   if (path.startsWith('/admin')) return false;
   if (path.startsWith('/login') || path.startsWith('/register')) return false;
   if (path === '/' || path.startsWith('/pricing')) return false;
-  if (
-    path.startsWith('/web-app') ||
-    path.startsWith('/kiosk') ||
-    path.startsWith('/invite')
-  ) {
+  if (isCustomerAppRoute(path)) return false;
+  if (path.startsWith('/kiosk') || path.startsWith('/invite')) {
     return false;
   }
   return true;

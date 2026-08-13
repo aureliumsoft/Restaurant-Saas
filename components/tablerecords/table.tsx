@@ -170,16 +170,11 @@ export function Records() {
               : 'Unified transaction records for orders, subscriptions, and register sales.'}
           </p>
         </div>
-        <Button type="button" variant="outline" onClick={() => void load()}>
+        <Button type="button" variant="ghost" size="icon" onClick={() => void load()}>
           {loading ? (
-            <>
-              <RefreshCcw className="h-4 w-4 mr-2 animate-spin" />{' '}
-              <span>Refreshing...</span>
-            </>
+            <RefreshCcw className="h-4 w-4 animate-spin" />
           ) : (
-            <>
-              <RefreshCcw className="mr-2 h-4 w-4" /> <span>Refresh</span>
-            </>
+            <RefreshCcw className="h-4 w-4" />
           )}
         </Button>
       </div>

@@ -1,4 +1,4 @@
-/** Seeded demo store for the marketing “View Demo” link (`/web-app/{slug}`). */
+/** Seeded demo store for the marketing “View Demo” link (`/{slug}`). */
 export const DEMO_RESTAURANT_SLUG = 'restaurant' as const;
 
 /** Shared demo login used on the demo request page and admin reply emails. */

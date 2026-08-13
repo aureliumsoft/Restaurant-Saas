@@ -23,6 +23,7 @@ import {
   pageTitleSuffixForPath,
   restoreDefaultDocumentBranding,
 } from '@/lib/restaurant-document-branding';
+import { isCustomerAppRoute } from '@/lib/customer-storefront-paths';
 
 type RestaurantBranding = {
   restaurantName: string;
@@ -40,11 +41,8 @@ function isRestaurantStaffRoute(pathname: string): boolean {
   if (path.startsWith('/admin')) return false;
   if (path.startsWith('/login') || path.startsWith('/register')) return false;
   if (path === '/' || path.startsWith('/pricing')) return false;
-  if (
-    path.startsWith('/web-app') ||
-    path.startsWith('/kiosk') ||
-    path.startsWith('/invite')
-  ) {
+  if (isCustomerAppRoute(path)) return false;
+  if (path.startsWith('/kiosk') || path.startsWith('/invite')) {
     return false;
   }
   return (

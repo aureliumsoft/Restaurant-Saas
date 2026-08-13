@@ -12,25 +12,12 @@ import {
 } from '@/components/customer-app/customer-account-context';
 import { CustomerAccountSheetHost } from '@/components/customer-app/customer-account-sheet';
 import { CustomerRegionalProvider } from '@/components/layout/customer-regional-provider';
+import {
+  isCustomerOrderFlowPath,
+  isStorefrontHomePath,
+  parseStorefrontSlugFromPath,
+} from '@/lib/customer-storefront-paths';
 import { cn } from '@/lib/utils';
-
-function isStorefrontHome(pathname: string | null) {
-  if (!pathname) return false;
-  const match = pathname.match(/^\/web-app\/([^/]+)$/);
-  if (!match) return false;
-  const slug = match[1];
-  return slug !== 'order' && slug !== 'track-order';
-}
-
-function isOrderFlow(pathname: string | null) {
-  if (!pathname) return false;
-  return (
-    pathname === '/order' ||
-    pathname.startsWith('/order/') ||
-    pathname === '/web-app/order' ||
-    pathname.startsWith('/web-app/order/')
-  );
-}
 
 function CustomerAccountSlugSync({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -42,13 +29,7 @@ function CustomerAccountSlugSync({ children }: { children: ReactNode }) {
       searchParams.get('restaurantSlug')?.trim() ||
       searchParams.get('slug')?.trim() ||
       null;
-    const pathSlugRaw = pathname?.match(/^\/web-app\/([^/]+)/)?.[1] ?? null;
-    const pathSlug =
-      pathSlugRaw &&
-      pathSlugRaw !== 'order' &&
-      pathSlugRaw !== 'track-order'
-        ? decodeURIComponent(pathSlugRaw)
-        : null;
+    const pathSlug = pathname ? parseStorefrontSlugFromPath(pathname) : null;
     const slug = querySlug || pathSlug;
     if (slug) {
       setRestaurantContext({ restaurantSlug: slug });
@@ -60,8 +41,8 @@ function CustomerAccountSlugSync({ children }: { children: ReactNode }) {
 
 export function WebAppLayoutShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const hideLayoutFooter = isStorefrontHome(pathname);
-  const hideLayoutChrome = isOrderFlow(pathname);
+  const hideLayoutFooter = isStorefrontHomePath(pathname ?? '');
+  const hideLayoutChrome = isCustomerOrderFlowPath(pathname ?? '');
 
   return (
     <CustomerAccountProvider>

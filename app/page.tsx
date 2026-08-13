@@ -65,7 +65,7 @@ function HeroSection() {
 
   return (
     <section className="relative overflow-hidden">
-      <div className="relative grid w-full grid-cols-1 items-center gap-10 px-6 pb-20 pt-10 sm:px-10 md:pb-28 md:pt-16 lg:grid-cols-2 lg:px-16 xl:px-24 2xl:px-32">
+      <div className="relative grid w-full grid-cols-1 items-center gap-10 px-6 pb-20 pt-10 sm:px-10 lg:px-16 xl:px-24 md:pb-28 md:pt-16 lg:grid-cols-2 2xl:px-32">
         {/* Left: copy */}
         <div>
           <span className="inline-flex items-center gap-2 rounded-full border border-fire-500/40 bg-fire-500/5 px-4 py-1.5 text-xs font-medium text-fire-500 dark:text-fire-400">
@@ -196,8 +196,8 @@ function FeaturesSection() {
   ];
 
   return (
-    <section className="relative bg-white py-20 dark:bg-black md:py-24">
-      <div className="mx-auto max-w-7xl px-6">
+    <section className="relative bg-white py-20 dark:bg-black md:py-24 ">
+      <div className="mx-auto w-full px-6 sm:px-10 lg:px-16 xl:px-24">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-bold tracking-tight md:text-5xl">
             {t('marketing.features.titleA')}{' '}
@@ -341,7 +341,7 @@ function StatsSection() {
 
   return (
     <section className="relative bg-white pb-20 dark:bg-black">
-      <div className="mx-auto max-w-7xl px-6">
+      <div className="mx-auto w-full px-6 sm:px-10 lg:px-16 xl:px-24">
         {/* Gradient fire-glow border wrapper */}
         <div className="relative rounded-3xl bg-gradient-to-br from-fire-500/60 via-zinc-300 to-fire-500/60 p-px shadow-[0_30px_80px_-30px] shadow-fire-500/30 dark:via-zinc-800 dark:shadow-fire-500/20">
           <div className="rounded-[calc(1.5rem-1px)] bg-white dark:bg-black">
@@ -431,7 +431,7 @@ function ContactSection() {
 
   return (
     <section className="relative bg-white py-20 dark:bg-black md:py-24">
-      <div className="mx-auto max-w-7xl px-6">
+      <div className="mx-auto w-full px-6 sm:px-10 lg:px-16 xl:px-24">
         <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
           {/* Left: copy + contact info */}
           <div>
@@ -637,12 +637,12 @@ function NewsletterSection() {
   }
 
   return (
-    <section className="relative overflow-hidden border-y border-zinc-200 bg-zinc-50 py-20 dark:border-zinc-900 dark:bg-zinc-950 md:py-24">
+    <section className="relative overflow-hidden border-y border-zinc-200 bg-zinc-50 py-20 dark:border-zinc-900 dark:bg-zinc-950 md:py-24 sm:px-10 lg:px-16 xl:px-24">
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(237,110,64,0.12),_transparent_55%)] dark:bg-[radial-gradient(ellipse_at_top,_rgba(237,110,64,0.18),_transparent_55%)]"
         aria-hidden
       />
-      <div className="relative mx-auto max-w-3xl px-6 text-center">
+      <div className="relative mx-auto w-full text-center">
         <p className="text-sm font-semibold uppercase tracking-widest text-fire-500">
           {t('marketing.newsletter.eyebrow')}
         </p>
@@ -739,84 +739,5 @@ function FormField({
         className="h-11 rounded-none border-0 border-b border-zinc-300/80 bg-transparent px-0 text-sm text-zinc-900 shadow-none placeholder:text-zinc-500 focus-visible:border-fire-500 focus-visible:ring-0 focus-visible:ring-offset-0 dark:border-white/30 dark:text-white dark:placeholder:text-white/50 dark:focus-visible:border-fire-400"
       />
     </div>
-  );
-}
-
-function RecommendationsSection() {
-  const { t } = useTranslation();
-
-  const items = [
-    { name: 'The Garden Bistro', tone: 'from-fire-600/40 to-amber-700/30' },
-    { name: 'Urban Diner', tone: 'from-rose-600/40 to-fire-700/30' },
-    { name: 'Sunset Grill', tone: 'from-amber-500/40 to-fire-600/30' },
-    { name: 'Bloom Cafe', tone: 'from-emerald-600/30 to-teal-700/30' },
-    { name: 'Harbor Kitchen', tone: 'from-fire-500/40 to-rose-700/30' },
-  ];
-
-  return (
-    <section className="relative bg-white pb-24 dark:bg-black">
-      <div className="mx-auto max-w-7xl px-6">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight md:text-5xl">
-            {t('marketing.recommendations.titleA')}{' '}
-            <span className="text-fire-500">
-              {t('marketing.recommendations.titleHighlight')}
-            </span>{' '}
-            {t('marketing.recommendations.titleB')}
-          </h2>
-          <p className="mt-4 text-zinc-600 dark:text-zinc-400">
-            {t('marketing.recommendations.subtitle')}
-          </p>
-        </div>
-
-        <div className="mt-12 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-          {items.map((item) => (
-            <article
-              key={item.name}
-              className={`group relative aspect-[3/4] overflow-hidden rounded-3xl border border-zinc-200 bg-gradient-to-br ${item.tone} ring-1 ring-black/5 transition-transform hover:-translate-y-1 dark:border-zinc-800 dark:ring-white/5`}
-            >
-              <div className="absolute inset-0 bg-black/30 transition-opacity group-hover:bg-black/20 dark:bg-black/40 dark:group-hover:bg-black/30" />
-
-              {/* Stylized restaurant interior placeholder */}
-              <div className="absolute inset-0 opacity-70">
-                <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent" />
-                <div className="absolute left-4 right-4 top-6 grid grid-cols-3 gap-2">
-                  <div className="aspect-square rounded-lg bg-white/10" />
-                  <div className="aspect-square rounded-lg bg-white/10" />
-                  <div className="aspect-square rounded-lg bg-white/10" />
-                </div>
-                <div className="absolute bottom-12 left-4 right-4 space-y-1.5">
-                  <div className="h-1.5 w-2/3 rounded-full bg-white/40" />
-                  <div className="h-1.5 w-1/2 rounded-full bg-white/20" />
-                </div>
-              </div>
-
-              {/* Play button */}
-              <button
-                type="button"
-                aria-label={
-                  t('marketing.recommendations.playLabel', {
-                    name: item.name,
-                  }) as string
-                }
-                className="absolute inset-0 z-10 flex items-center justify-center"
-              >
-                <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-white/95 text-fire-600 shadow-2xl transition-transform group-hover:scale-110">
-                  <Play className="h-6 w-6 fill-current" />
-                </span>
-              </button>
-
-              <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between text-xs text-white">
-                <span className="font-medium">{item.name}</span>
-                <span className="inline-flex items-center gap-1 text-amber-300">
-                  <Star className="h-3 w-3 fill-current" />
-                  4.9
-                </span>
-              </div>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
   );
 }

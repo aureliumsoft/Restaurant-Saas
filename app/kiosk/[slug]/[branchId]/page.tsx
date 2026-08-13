@@ -1,6 +1,4 @@
-import { Suspense } from 'react';
-
-import { KioskApp } from '@/components/kiosk/kiosk-app';
+import { KioskBranchClient } from '@/components/kiosk/kiosk-branch-client';
 
 import '../../kiosk-light.css';
 
@@ -12,12 +10,10 @@ export default async function KioskBranchPage({ params }: Props) {
   const { slug, branchId } = await params;
   return (
     <div className="kiosk-light-root min-h-screen bg-[#f8fafc]">
-      <Suspense fallback={null}>
-        <KioskApp
-          slug={decodeURIComponent(slug)}
-          branchId={decodeURIComponent(branchId)}
-        />
-      </Suspense>
+      <KioskBranchClient
+        slug={decodeURIComponent(slug)}
+        branchId={decodeURIComponent(branchId)}
+      />
     </div>
   );
 }

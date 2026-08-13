@@ -11,7 +11,7 @@ const CANCELED: string[] = [
   'cancel',
 ];
 
-/** Open table tabs: table-linked orders with pending payment. */
+/** Open table tabs: unpaid and/or not yet sent to kitchen. */
 export function openTableOrdersWhere(
   restaurantId: string,
   branchId: string | null
@@ -21,12 +21,27 @@ export function openTableOrdersWhere(
     diningTableId: { not: null },
     status: { notIn: CANCELED },
     ...orderBranchWhere(branchId),
-    payments: {
-      some: {
-        status: { equals: 'pending', mode: 'insensitive' },
+    OR: [
+      {
+        payments: {
+          some: {
+            status: { equals: 'pending', mode: 'insensitive' },
+          },
+        },
       },
-    },
+      {
+        kitchenTickets: {
+          none: {
+            status: { notIn: ['canceled', 'cancelled'] },
+          },
+        },
+      },
+    ],
   };
+}
+
+function isPendingPaymentStatus(status: string | null | undefined): boolean {
+  return String(status ?? 'pending').toLowerCase() === 'pending';
 }
 
 export type OpenTableOrderLine = {
@@ -58,7 +73,9 @@ export type OpenTableCard = {
   diningTableId: string;
   tableLabel: string;
   orderCount: number;
+  /** Sum of tickets still awaiting payment. */
   totalDue: number;
+  unpaidCount: number;
   kitchenPendingCount: number;
   kitchenSentCount: number;
   sources: string[];
@@ -91,9 +108,6 @@ export async function loadOpenTableOrderCards(opts: {
         },
       },
       payments: {
-        where: {
-          status: { equals: 'pending', mode: 'insensitive' },
-        },
         orderBy: { createdAt: 'desc' },
         take: 1,
         select: { method: true, status: true, amount: true },
@@ -155,7 +169,12 @@ export async function loadOpenTableOrderCards(opts: {
       diningTableId,
       tableLabel,
       orderCount: tableOrders.length,
-      totalDue: tableOrders.reduce((s, o) => s + o.total, 0),
+      totalDue: tableOrders
+        .filter((o) => isPendingPaymentStatus(o.paymentStatus))
+        .reduce((s, o) => s + o.total, 0),
+      unpaidCount: tableOrders.filter((o) =>
+        isPendingPaymentStatus(o.paymentStatus)
+      ).length,
       kitchenPendingCount: tableOrders.filter((o) => !o.kitchenSent).length,
       kitchenSentCount: tableOrders.filter((o) => o.kitchenSent).length,
       sources,

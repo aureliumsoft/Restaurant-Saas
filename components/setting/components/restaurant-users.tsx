@@ -759,20 +759,17 @@ export default function RestaurantUsersCard({
       <CardFooter className="border-t px-6 py-4">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
+          size="icon"
           onClick={() => void fetchAll()}
           disabled={loading}
         >
           {loading ? (
-            <>
-              <RefreshCcw className="h-4 w-4 mr-2 animate-spin" />{' '}
-              <span>Refreshing...</span>
-            </>
-          ) : (
-            <>
-              <RefreshCcw className="h-4 w-4 mr-2" /> <span>Refresh</span>
-            </>
-          )}
+            
+              <RefreshCcw className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCcw className="h-4 w-4" />
+            )}
         </Button>
       </CardFooter>
 

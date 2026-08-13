@@ -8,6 +8,8 @@ export type NewsletterMessage = {
   subject: string;
   htmlBody: string;
   textBody: string | null;
+  buttonTitle: string | null;
+  buttonLink: string | null;
 };
 
 /** Most recent campaign saved by admin (latest message for new subscribers). */
@@ -19,6 +21,8 @@ export async function getLatestNewsletterMessage(): Promise<NewsletterMessage | 
       subject: true,
       htmlBody: true,
       textBody: true,
+      buttonTitle: true,
+      buttonLink: true,
     },
   });
   return row;
@@ -43,6 +47,8 @@ export async function saveAndBroadcastNewsletter(opts: {
   subject: string;
   htmlBody: string;
   textBody?: string | null;
+  buttonTitle?: string | null;
+  buttonLink?: string | null;
   sentByEmail: string | null;
 }): Promise<BroadcastResult> {
   const subscribers = await db.newsletterSubscriber.findMany({
@@ -61,6 +67,8 @@ export async function saveAndBroadcastNewsletter(opts: {
       subject: opts.subject,
       htmlBody: opts.htmlBody,
       textBody: opts.textBody,
+      buttonTitle: opts.buttonTitle,
+      buttonLink: opts.buttonLink,
     });
     if (result.ok) {
       successCount += 1;
@@ -84,6 +92,8 @@ export async function saveAndBroadcastNewsletter(opts: {
       subject: opts.subject,
       htmlBody: opts.htmlBody,
       textBody: opts.textBody ?? null,
+      buttonTitle: opts.buttonTitle ?? null,
+      buttonLink: opts.buttonLink ?? null,
       status,
       recipientCount: subscribers.length,
       successCount,
@@ -127,6 +137,8 @@ export async function sendLatestNewsletterToEmail(
     subject: latest.subject,
     htmlBody: latest.htmlBody,
     textBody: latest.textBody,
+    buttonTitle: latest.buttonTitle,
+    buttonLink: latest.buttonLink,
   });
 
   if (!result.ok) {

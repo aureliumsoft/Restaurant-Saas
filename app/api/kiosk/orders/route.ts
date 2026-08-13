@@ -4,6 +4,7 @@ import { OrderSourceType } from '@prisma/client';
 import { z } from 'zod';
 
 import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
+import { getCustomerAccountSession } from '@/lib/customer-auth/session';
 import { findDiningTableForBranch } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
 import {
@@ -64,10 +65,12 @@ const postSchema = z.object({
   total: z.number().finite().nonnegative(),
   cookingNote: z.string().max(2000).optional(),
   customerName: z.string().max(120).optional(),
+  customerEmail: z.string().email().max(320).optional(),
   customerPhone: z.string().max(40).optional(),
   branchId: z.string().uuid().optional(),
   paymentStatus: z.enum(['pending', 'completed']).optional(),
   paymentMethod: z.string().min(1).max(100).optional(),
+  mobileTableQr: z.boolean().optional(),
 });
 
 function buildKioskAddressSnapshot(
@@ -75,14 +78,19 @@ function buildKioskAddressSnapshot(
   tableName?: string,
   cookingNote?: string,
   customerName?: string,
-  customerPhone?: string
+  customerPhone?: string,
+  customerEmail?: string,
+  mobileTableQr?: boolean
 ): string {
   const lines: string[] = [
     'Source: Kiosk',
     `Fulfillment: ${fulfillment === 'dine_in' ? 'Dine in' : 'Take away'}`,
   ];
   if (tableName?.trim()) lines.push(`Table: ${tableName.trim()}`);
-  if (fulfillment === 'dine_in' && tableName?.trim()) {
+  if (mobileTableQr) {
+    if (customerName?.trim()) lines.push(`Name: ${customerName.trim()}`);
+    if (customerEmail?.trim()) lines.push(`Email: ${customerEmail.trim()}`);
+  } else if (fulfillment === 'dine_in' && tableName?.trim()) {
     lines.push(`Name: ${kioskDineInCustomerDisplayName(tableName)}`);
   } else {
     if (customerName?.trim()) lines.push(`Name: ${customerName.trim()}`);
@@ -137,9 +145,11 @@ export async function POST(req: NextRequest) {
     cookingNote,
     customerName,
     customerPhone,
+    customerEmail,
     branchId: bodyBranchId,
     paymentStatus,
     paymentMethod,
+    mobileTableQr,
   } = parsed.data;
 
   const slug = restaurantSlug.trim();
@@ -151,6 +161,26 @@ export async function POST(req: NextRequest) {
   if (!restaurant) {
     return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
   }
+
+  const customerSession = mobileTableQr
+    ? await getCustomerAccountSession(req, { restaurantId: restaurant.id })
+    : null;
+
+  if (mobileTableQr && !customerSession) {
+    return NextResponse.json(
+      { error: 'Sign in is required for mobile table QR orders.' },
+      { status: 401 }
+    );
+  }
+
+  const resolvedCustomerName =
+    mobileTableQr && customerSession
+      ? customerSession.name.trim() || customerName?.trim()
+      : customerName?.trim();
+  const resolvedCustomerEmail =
+    mobileTableQr && customerSession
+      ? customerSession.email.trim() || customerEmail?.trim()
+      : customerEmail?.trim();
 
   const idempotencyKey = parseOrderIdempotencyKey(req);
   const idempotentHit = await respondIfIdempotentOrderExists(
@@ -240,8 +270,10 @@ export async function POST(req: NextRequest) {
     fulfillment,
     selectedTableName,
     cookingNote,
-    customerName,
-    customerPhone
+    resolvedCustomerName,
+    customerPhone,
+    resolvedCustomerEmail,
+    mobileTableQr
   );
 
   try {
@@ -257,8 +289,11 @@ export async function POST(req: NextRequest) {
         fulfillment,
         tableId: selectedTableId,
         tableName: selectedTableName,
-        customerName,
+        customerName: resolvedCustomerName,
         customerPhone,
+        customerEmail: resolvedCustomerEmail,
+        customerAccountId: customerSession?.accountId,
+        mobileTableQr,
       });
 
       let order: Awaited<ReturnType<typeof tx.order.create>> | undefined;

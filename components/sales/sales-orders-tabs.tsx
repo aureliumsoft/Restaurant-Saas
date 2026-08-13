@@ -528,7 +528,8 @@ export function SalesOrdersTabs() {
 
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
+            size="icon"
             className="gap-2 rounded-xl"
             disabled={loading}
             onClick={() => load()}
@@ -536,7 +537,6 @@ export function SalesOrdersTabs() {
             <RefreshCw
               className={cn('h-4 w-4', loading && 'animate-spin')}
             />
-            Refresh
           </Button>
         </div>
       </div>

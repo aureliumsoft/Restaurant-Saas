@@ -748,14 +748,12 @@ export function OrderDisplayScreen() {
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
+            size="icon"
             onClick={() => void load()}
             disabled={refreshing}
           >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
-            />
-            {copy.refresh}
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </header>

@@ -3,15 +3,17 @@ import { NextResponse } from 'next/server';
 
 import {
   getBranchScopeFromRequest,
-  orderBranchWhere,
   validateBranchForRestaurant,
 } from '@/lib/branch/branch-scope';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
-import { loadOpenTableOrderCards } from '@/lib/table-open-orders';
+import {
+  loadOpenTableOrderCards,
+  openTableOrdersWhere,
+} from '@/lib/table-open-orders';
 import { db } from '@/lib/db';
 
 /**
- * Open table tabs: dine-in orders with pending payment, grouped by table.
+ * Open table tabs: dine-in orders not fully settled (unpaid and/or not in kitchen).
  * Used by the POS table sheet (POS + kiosk sources).
  */
 export async function GET(req: NextRequest) {
@@ -57,19 +59,7 @@ export async function GET(req: NextRequest) {
 
     if (countOnly) {
       const count = await db.order.count({
-        where: {
-          restaurantId: auth.restaurantId,
-          diningTableId: { not: null },
-          status: {
-            notIn: ['canceled', 'cancelled', 'failed', 'cancel'],
-          },
-          ...orderBranchWhere(branchId),
-          payments: {
-            some: {
-              status: { equals: 'pending', mode: 'insensitive' },
-            },
-          },
-        },
+        where: openTableOrdersWhere(auth.restaurantId, branchId),
       });
       return NextResponse.json({ count });
     }

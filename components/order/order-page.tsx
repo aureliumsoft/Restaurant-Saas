@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -55,6 +55,7 @@ import {
   writeCartToLocalStorage,
 } from '@/lib/cart-storage';
 import { orderPathWithQuery } from '@/lib/order-search-params';
+import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
 import { setUiLanguage } from '@/lib/i18n/client';
 import type { UiLanguage } from '@/lib/i18n/resources';
 import { buildStorefrontThemeVars } from '@/lib/restaurant-theme';
@@ -70,6 +71,7 @@ import {
 } from '@/components/order/order-menu-header';
 import { cn } from '@/lib/utils';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useOrderInfo } from '@/hooks/use-order-info';
 import { ArrowUp, Minus, Pencil, Plus, Search, X } from 'lucide-react';
 import type { BranchOpeningHours } from '@/lib/order-time-slots';
 
@@ -484,16 +486,17 @@ function ProductCard({
 export default function OrderPageClient({
   orderType,
   orderId,
-  orderInfo,
+  orderInfo: initialOrderInfo,
 }: OrderPageProps) {
+  const orderInfo = useOrderInfo(orderId, orderType, initialOrderInfo);
   const restaurantSlug =
     orderInfo?.restaurantSlug?.trim() || orderInfo?.storeId?.trim() || '';
   const { formatMoney } = useRestaurantRegional(
     restaurantSlug || undefined
   );
   const storefrontPath = restaurantSlug
-    ? `/web-app/${encodeURIComponent(restaurantSlug)}`
-    : '/web-app';
+    ? restaurantStorefrontPath(restaurantSlug)
+    : '/';
 
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -577,6 +580,7 @@ export default function OrderPageClient({
 
   const { theme, resolvedTheme } = useTheme();
   const router = useRouter();
+  const [isViewingCart, startViewCartTransition] = useTransition();
   const searchParams = useSearchParams();
   const orderInfoRef = useRef(orderInfo);
   orderInfoRef.current = orderInfo;
@@ -1050,10 +1054,14 @@ export default function OrderPageClient({
       total={total}
       formattedTotal={formatMoney(total)}
       label={t('orderSeeMyOrder')}
+      loadingLabel={t('processing')}
+      loading={isViewingCart}
       onClick={() =>
-        router.push(
-          orderPathWithQuery(`/order/${orderType}/${orderId}/cart`, orderInfo)
-        )
+        startViewCartTransition(() => {
+          router.push(
+            orderPathWithQuery(`/order/${orderType}/${orderId}/cart`, orderInfo)
+          );
+        })
       }
     />
   );

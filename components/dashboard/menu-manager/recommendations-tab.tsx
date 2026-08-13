@@ -1129,7 +1129,7 @@ export function RecommendationsTab(_props?: Props) {
         });
         bumpFormReset(variant);
         toast.success('Recommendation saved');
-        allowNextNavigation();
+      allowNextNavigation();
       }
       return true;
     } catch (e: unknown) {
@@ -1178,8 +1178,8 @@ export function RecommendationsTab(_props?: Props) {
       if (options?.resetAfter !== false) {
         setOfferCategoryIds([]);
         setSelectedOfferProductIds([]);
-        toast.success('Offered products added');
-        allowNextNavigation();
+      toast.success('Offered products added');
+      allowNextNavigation();
       }
       return true;
     } catch (e: unknown) {
@@ -1789,11 +1789,11 @@ export function RecommendationsTab(_props?: Props) {
                         >
                           <div className="relative aspect-[4/3] w-full bg-muted">
                             <LazyProductImage
-                              src={p.imageUrl}
+                                src={p.imageUrl}
                               hasImage={p.hasImage ?? Boolean(p.imageUrl)}
                               className="absolute inset-0 h-full w-full"
                               emptyLabel="No photo"
-                            />
+                              />
                             <span
                               className={cn(
                                 'absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border-2 bg-background/90 text-xs font-bold shadow-sm backdrop-blur-sm transition',
@@ -1862,7 +1862,7 @@ export function RecommendationsTab(_props?: Props) {
               <p className="text-sm text-muted-foreground">
                 Loading product configuration…
               </p>
-            </div>
+                    </div>
           ) : selected ? (
             <RecommendationConfigSections
               selected={selected}
@@ -1890,8 +1890,8 @@ export function RecommendationsTab(_props?: Props) {
               onSaveOffers={() => setSaveOffersConfirmOpen(true)}
               onDeleteOffer={(offerId) => {
                 setDeletingOfferId(offerId);
-                setDeleteOfferConfirmOpen(true);
-              }}
+                              setDeleteOfferConfirmOpen(true);
+                            }}
               deletingOffer={deletingOffer}
               deletingOfferId={deletingOfferId}
               toggleInArray={toggleInArray}
@@ -1933,8 +1933,8 @@ export function RecommendationsTab(_props?: Props) {
             onDeleteGroup={(groupId, isDraft) => {
               if (isDraft) return;
               setDeletingRuleId(groupId);
-              setDeleteRuleConfirmOpen(true);
-            }}
+                              setDeleteRuleConfirmOpen(true);
+                            }}
             deletingRuleId={deletingRuleId}
             deletingRule={deletingRule}
             savingAll={savingAll}
@@ -1944,7 +1944,7 @@ export function RecommendationsTab(_props?: Props) {
             previewPersonalizeByGroup={previewPersonalizeByGroup}
             onPersonalizePreviewChange={(groupId, ids) =>
               setPreviewPersonalizeByGroup((prev) => ({
-                ...prev,
+                                          ...prev,
                 [groupId]: ids,
               }))
             }
