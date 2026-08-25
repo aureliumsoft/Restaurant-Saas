@@ -214,9 +214,9 @@ export function Sidebar({
       storeId: selectedStoreId || '',
       storeName: selectedStore?.name || '',
       storeAddress: selectedStore?.address || '',
-      address: deliveryAddress,
-      apartment: apartmentDoorNumber,
-      gateCode,
+      address: deliveryAddress.trim(),
+      apartment: '',
+      gateCode: '',
       addressName:
         mode === 'takeaway' ? WEB_CUSTOMER_TAKEAWAY_NAME : addressName,
       customerPhone: mode === 'takeaway' ? '' : customerPhone,
@@ -435,6 +435,7 @@ export function Sidebar({
             value={addressName}
             onChange={(event) => setAddressName(event.target.value)}
             className="rounded-xl border-[#e2e8f0]"
+            autoComplete="name"
           />
           <Input
             type="tel"
@@ -445,13 +446,27 @@ export function Sidebar({
               setCustomerPhone(value);
             }}
             className="rounded-xl border-[#e2e8f0]"
+            autoComplete="tel"
           />
           <Input
-            placeholder={t('apartmentOrDoor')}
-            value={apartmentDoorNumber}
-            onChange={(event) => setApartmentDoorNumber(event.target.value)}
-            className="rounded-xl border-[#e2e8f0]"
+            placeholder={t('yourAddressRequired')}
+            value={deliveryAddress}
+            onChange={(event) => {
+              setDeliveryAddress(event.target.value);
+              if (apartmentDoorNumber) setApartmentDoorNumber('');
+            }}
+            className={
+              deliveryAddress.trim()
+                ? 'rounded-xl border-[#e2e8f0]'
+                : 'rounded-xl border-primary/70 ring-1 ring-primary/30'
+            }
+            autoComplete="street-address"
           />
+          {!canProceedDelivery ? (
+            <p className="text-xs text-[#64748b]">
+              {t('deliveryProceedRequired')}
+            </p>
+          ) : null}
         </div>
         <DialogFooter className="w-full border-t border-[#e2e8f0] pt-4">
           <Button

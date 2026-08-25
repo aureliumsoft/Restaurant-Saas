@@ -41,8 +41,10 @@ export const resources = {
       enterDeliveryDetails: 'Enter delivery details',
       optional: 'optional',
       customerDetailsRequired: 'Please enter your name and phone number.',
+      deliveryProceedRequired:
+        'Name, phone, and full address are required to continue.',
       customerNameRequired: 'Please enter your name to continue.',
-      yourAddressRequired: 'Your Address *',
+      yourAddressRequired: 'Full address *',
       apartmentOrDoor: 'Apartment or door number',
       gateCodeIntercom: 'Gate code, intercom...',
       deliveryInfoHint:
@@ -543,8 +545,10 @@ export const resources = {
       enterDeliveryDetails: 'Introducir datos de entrega',
       optional: 'opcional',
       customerDetailsRequired: 'Introduce tu nombre y numero de telefono.',
+      deliveryProceedRequired:
+        'Nombre, telefono y direccion completa son obligatorios para continuar.',
       customerNameRequired: 'Introduce tu nombre para continuar.',
-      yourAddressRequired: 'Tu direccion *',
+      yourAddressRequired: 'Direccion completa *',
       apartmentOrDoor: 'Apartamento o numero de puerta',
       gateCodeIntercom: 'Codigo de puerta, intercom...',
       deliveryInfoHint:
