@@ -37,6 +37,12 @@ export type CsvImportPersonalizeGroup = {
   options: string[];
 };
 
+export type CsvImportIngredient = {
+  ingredientName: string;
+  quantity: number;
+  variationLabel: string | null;
+};
+
 export type CsvImportProduct = {
   name: string;
   description: string | null;
@@ -47,6 +53,7 @@ export type CsvImportProduct = {
   recommendations: CsvImportRecommendation[];
   offerProductNames: string[];
   personalizeGroups: CsvImportPersonalizeGroup[];
+  ingredients: CsvImportIngredient[];
 };
 
 export type ParsedProductsCsvImport = {
@@ -90,6 +97,12 @@ export const PRODUCT_IMPORT_FIELDS = [
     key: 'variations',
     label: 'Variations',
     table: 'MenuItemVariation',
+    required: false,
+  },
+  {
+    key: 'ingredients',
+    label: 'Ingredients',
+    table: 'MenuItemIngredient',
     required: false,
   },
   {
@@ -165,11 +178,17 @@ export function parseCsv(text: string): string[][] {
   }
   row.push(cell);
   if (row.some((c) => c.trim() !== '')) rows.push(row);
-  return rows;
+  const width = rows.reduce((max, r) => Math.max(max, r.length), 0);
+  return rows.map((r) =>
+    r.length >= width ? r : [...r, ...Array(width - r.length).fill('')]
+  );
 }
 
 function normalizeHeader(h: string): string {
-  return h.trim().toLowerCase().replace(/\s+/g, '');
+  return h
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
 }
 
 const HEADER_ALIASES: Record<string, ProductImportFieldKey> = {
@@ -187,6 +206,14 @@ const HEADER_ALIASES: Record<string, ProductImportFieldKey> = {
   recommendations: 'recommendations',
   offers: 'offers',
   personalize: 'personalize',
+  ingredients: 'ingredients',
+  ingredient: 'ingredients',
+  recipe: 'ingredients',
+  recipes: 'ingredients',
+  recipeingredients: 'ingredients',
+  ingredientrecipes: 'ingredients',
+  linkedingredients: 'ingredients',
+  productingredients: 'ingredients',
 };
 
 export function emptyColumnMapping(): ColumnMapping {
@@ -200,7 +227,19 @@ export function emptyColumnMapping(): ColumnMapping {
     recommendations: '',
     offers: '',
     personalize: '',
+    ingredients: '',
   };
+}
+
+function guessFieldFromHeader(header: string): ProductImportFieldKey | null {
+  const normalized = normalizeHeader(header);
+  if (!normalized) return null;
+  const alias = HEADER_ALIASES[normalized];
+  if (alias) return alias;
+  if (normalized.includes('ingredient') || normalized.endsWith('recipes')) {
+    return 'ingredients';
+  }
+  return null;
 }
 
 /** Auto-map CSV headers to product fields using aliases (WordPress-style guess). */
@@ -208,7 +247,7 @@ export function guessColumnMapping(headers: string[]): ColumnMapping {
   const mapping = emptyColumnMapping();
   const usedHeaders = new Set<string>();
   for (const header of headers) {
-    const alias = HEADER_ALIASES[normalizeHeader(header)];
+    const alias = guessFieldFromHeader(header);
     if (!alias) continue;
     if (mapping[alias]) continue; // first match wins
     if (usedHeaders.has(header)) continue;
@@ -252,6 +291,94 @@ function splitSemi(value: string): string[] {
     .split(';')
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function mergeUniqueNames(a: string[], b: string[] = []): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of [...a, ...b]) {
+    const name = raw.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
+/** Categories may be one cell (`A; B`) or one-per-row with the same product name. */
+function splitCategoryNames(value: string): string[] {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  let parts: string[];
+  if (trimmed.includes(';')) {
+    parts = splitSemi(trimmed);
+  } else if (trimmed.includes('|')) {
+    parts = trimmed.split('|').map((s) => s.trim()).filter(Boolean);
+  } else if (trimmed.includes(',')) {
+    parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+  } else {
+    parts = [trimmed];
+  }
+  return mergeUniqueNames(parts);
+}
+
+function mergeIngredients(
+  a: CsvImportIngredient[],
+  b: CsvImportIngredient[]
+): CsvImportIngredient[] {
+  const seen = new Set<string>();
+  const out: CsvImportIngredient[] = [];
+  for (const row of [...a, ...b]) {
+    const key = `${(row.variationLabel ?? '').trim().toLowerCase()}::${row.ingredientName.trim().toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
+function mergeVariations(
+  a: CsvImportVariation[],
+  b: CsvImportVariation[]
+): CsvImportVariation[] {
+  const seen = new Set<string>();
+  const out: CsvImportVariation[] = [];
+  for (const row of [...a, ...b]) {
+    const key = (row.title || row.name).trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...row, sortOrder: out.length });
+  }
+  return out;
+}
+
+function mergeCsvProducts(
+  base: CsvImportProduct,
+  extra: CsvImportProduct
+): CsvImportProduct {
+  return {
+    ...base,
+    description: base.description || extra.description,
+    price: base.price || extra.price,
+    salePrice: base.salePrice ?? extra.salePrice,
+    categoryNames: mergeUniqueNames(base.categoryNames, extra.categoryNames),
+    variations: mergeVariations(base.variations, extra.variations),
+    recommendations:
+      base.recommendations.length > 0
+        ? base.recommendations
+        : extra.recommendations,
+    offerProductNames: mergeUniqueNames(
+      base.offerProductNames,
+      extra.offerProductNames
+    ),
+    personalizeGroups:
+      base.personalizeGroups.length > 0
+        ? base.personalizeGroups
+        : extra.personalizeGroups,
+    ingredients: mergeIngredients(base.ingredients, extra.ingredients),
+  };
 }
 
 function parseVariationsField(raw: string): CsvImportVariation[] {
@@ -425,6 +552,70 @@ function parsePersonalizeField(raw: string): CsvImportPersonalizeGroup[] {
     });
 }
 
+function parseIngredientQtyPairs(raw: string): Array<{ name: string; quantity: number }> {
+  return splitSemi(raw)
+    .map((segment) => {
+      const m = segment
+        .trim()
+        .match(/^(.*?)(?:\s*[:=x×]\s*)([0-9]+(?:\.[0-9]+)?)\s*$/i);
+      if (!m) return null;
+      const name = m[1]!.trim();
+      const quantity = Number(m[2]);
+      if (!name || !Number.isFinite(quantity) || quantity <= 0) return null;
+      return { name, quantity };
+    })
+    .filter((row): row is { name: string; quantity: number } => Boolean(row));
+}
+
+export function formatIngredientsPreview(rows: CsvImportIngredient[]): string {
+  if (rows.length === 0) return '';
+  return rows
+    .map((i) =>
+      i.variationLabel
+        ? `${i.variationLabel}: ${i.ingredientName}×${i.quantity}`
+        : `${i.ingredientName}×${i.quantity}`
+    )
+    .join('; ');
+}
+
+function stripVariationCatalog(label: string): { label: string; catalog: string | null } {
+  const m = label.match(/^(.*)\s+\[([^\]]+)\]\s*$/);
+  if (m) {
+    return { label: m[1]!.trim(), catalog: m[2]!.trim() || null };
+  }
+  return { label: label.trim(), catalog: null };
+}
+
+function parseIngredientsField(raw: string): CsvImportIngredient[] {
+  if (!raw.trim()) return [];
+  const out: CsvImportIngredient[] = [];
+  for (const group of raw
+    .split('||')
+    .map((s) => s.trim())
+    .filter(Boolean)) {
+    const pipe = group.indexOf('|');
+    let variationLabel: string | null = null;
+    let rest = group;
+    if (pipe >= 0) {
+      const left = group.slice(0, pipe).trim();
+      const looksLikeQtyPair = /:\s*[0-9]+(?:\.[0-9]+)?\s*$/.test(left);
+      if (left && !looksLikeQtyPair) {
+        const stripped = stripVariationCatalog(left);
+        variationLabel = stripped.label || stripped.catalog || left;
+        rest = group.slice(pipe + 1).trim();
+      }
+    }
+    for (const pair of parseIngredientQtyPairs(rest)) {
+      out.push({
+        ingredientName: pair.name,
+        quantity: pair.quantity,
+        variationLabel,
+      });
+    }
+  }
+  return out;
+}
+
 function resolveColIndex(
   headers: string[],
   mappedHeader: string
@@ -484,7 +675,7 @@ export function parseProductsCsvImport(
   }
 
   const products: CsvImportProduct[] = [];
-  const seenInFile = new Set<string>();
+  const indexByName = new Map<string, number>();
 
   for (let r = 1; r < matrix.length; r++) {
     const line = matrix[r]!;
@@ -500,27 +691,20 @@ export function parseProductsCsvImport(
       continue;
     }
 
-    const key = name.toLowerCase();
-    if (seenInFile.has(key)) {
-      errors.push(`Row ${r + 1}: duplicate name "${name}" in file (skipped)`);
-      continue;
-    }
-    seenInFile.add(key);
-
     const priceRaw = get('price');
     const price = toNumber(priceRaw, 0);
     if (priceRaw && !Number.isFinite(Number(priceRaw.replace(/,/g, '')))) {
       errors.push(`Row ${r + 1}: invalid price for "${name}" (using 0)`);
     }
 
-    const categoryNames = splitSemi(get('categories'));
+    const categoryNames = splitCategoryNames(get('categories'));
     if (categoryNames.length === 0 && colIndex.categories != null) {
       errors.push(
         `Row ${r + 1}: product "${name}" has empty categories — will use Uncategorized`
       );
     }
 
-    products.push({
+    const next: CsvImportProduct = {
       name,
       description: get('description') || null,
       price,
@@ -530,7 +714,20 @@ export function parseProductsCsvImport(
       recommendations: parseRecommendationsField(get('recommendations')),
       offerProductNames: splitSemi(get('offers')),
       personalizeGroups: parsePersonalizeField(get('personalize')),
-    });
+      ingredients: parseIngredientsField(get('ingredients')),
+    };
+
+    const key = name.toLowerCase();
+    const existingIndex = indexByName.get(key);
+    if (existingIndex != null) {
+      products[existingIndex] = mergeCsvProducts(
+        products[existingIndex]!,
+        next
+      );
+      continue;
+    }
+    indexByName.set(key, products.length);
+    products.push(next);
   }
 
   return { products, errors };

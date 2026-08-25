@@ -56,6 +56,11 @@ export const PRICING_COMPARISON_ROWS: PricingComparisonRow[] = [
     included: (plan) => getPlanFeatures(plan).recommendations,
   },
   {
+    id: 'mobile_app',
+    label: 'Branded iOS & Android app',
+    included: (plan) => getPlanFeatures(plan).mobileApp,
+  },
+  {
     id: 'priority_support',
     label: 'Priority support',
     included: (plan) => plan === SubscriptionPlan.SCALE,

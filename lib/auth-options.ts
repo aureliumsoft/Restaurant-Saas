@@ -8,6 +8,7 @@ import { legacyRoleFromAccountRole } from "@/lib/auth/account-role";
 import { isPlatformAdmin, jwtRoleFromAccount } from "@/lib/auth/admin";
 import { ensureGlobalSignupRolesExist } from "@/lib/ensure-global-signup-roles";
 import { GLOBAL_ROLE_SLUG, getGlobalRoleIdBySlug } from "@/lib/global-roles";
+import { upsertNewsletterSubscriber } from "@/lib/newsletter/subscribe";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -123,6 +124,14 @@ export const authOptions: NextAuthOptions = {
             },
           });
         }
+
+        const displayName =
+          user.name ?? (profile as any)?.name ?? (profile as any)?.given_name;
+        await upsertNewsletterSubscriber({
+          email,
+          name: typeof displayName === "string" ? displayName : null,
+          source: "google",
+        });
       }
 
       return true;

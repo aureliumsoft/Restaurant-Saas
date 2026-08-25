@@ -8,6 +8,8 @@ export type PlanFeatureMatrix = {
   roleBasedSettings: boolean;
   branding: boolean;
   advancedAnalytics: boolean;
+  /** Branded Play Store / App Store listing for this restaurant. */
+  mobileApp: boolean;
 };
 
 export function getPlanFeatures(plan: SubscriptionPlan | string | null): PlanFeatureMatrix {
@@ -19,6 +21,7 @@ export function getPlanFeatures(plan: SubscriptionPlan | string | null): PlanFea
       roleBasedSettings: true,
       branding: true,
       advancedAnalytics: true,
+      mobileApp: true,
     };
   }
   if (plan === SubscriptionPlan.GROWTH) {
@@ -29,6 +32,7 @@ export function getPlanFeatures(plan: SubscriptionPlan | string | null): PlanFea
       roleBasedSettings: true,
       branding: true,
       advancedAnalytics: true,
+      mobileApp: true,
     };
   }
   return {
@@ -38,6 +42,7 @@ export function getPlanFeatures(plan: SubscriptionPlan | string | null): PlanFea
     roleBasedSettings: false,
     branding: false,
     advancedAnalytics: false,
+    mobileApp: false,
   };
 }
 

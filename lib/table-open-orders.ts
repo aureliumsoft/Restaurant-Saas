@@ -3,6 +3,7 @@ import { OrderSourceType } from '@prisma/client';
 
 import { orderBranchWhere } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
+import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 
 const CANCELED: string[] = [
   'canceled',
@@ -104,6 +105,7 @@ export async function loadOpenTableOrderCards(opts: {
       items: {
         select: {
           quantity: true,
+          productName: true,
           menuItem: { select: { name: true } },
         },
       },
@@ -149,7 +151,7 @@ export async function loadOpenTableOrderCards(opts: {
       itemCount: o.items.reduce((s, it) => s + it.quantity, 0),
       items: o.items.map((it) => ({
         quantity: it.quantity,
-        name: it.menuItem.name,
+        name: orderItemDisplayName(it),
       })),
     };
     const list = byTable.get(o.diningTableId) ?? [];

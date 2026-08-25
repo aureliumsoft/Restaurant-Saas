@@ -21,7 +21,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroupDef[] = [
   },
   {
     label: 'Catalog',
-    moduleKeys: ['categories', 'variations', 'product', 'recommendations'],
+    moduleKeys: ['categories', 'variations', 'product', 'inventory', 'recommendations'],
   },
   {
     label: 'Finance',

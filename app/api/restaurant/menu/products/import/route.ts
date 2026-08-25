@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import {
   AttributeSelectionType,
+  Prisma,
   RecommendationMultipleMode,
   RecommendationSourceType,
 } from '@prisma/client';
@@ -12,7 +13,9 @@ import {
   type ColumnMapping,
 } from '@/lib/menu/import-products-csv';
 import { syncMenuItemCategoryLinks } from '@/lib/menu/menu-item-categories';
+import { syncMenuItemIngredients } from '@/lib/inventory/sync-recipe';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
+import { publishInventoryStockUpdate } from '@/lib/realtime/publish';
 import {
   getRestaurantPlanFeatures,
   subscriptionPlanDeniedResponse,
@@ -171,6 +174,190 @@ export async function POST(req: NextRequest) {
           return created.id;
         };
 
+        const ingredients = await tx.ingredient.findMany({
+          where: { restaurantId },
+          select: { id: true, name: true, isActive: true },
+        });
+        const ingredientByName = new Map(
+          ingredients.map((i) => [
+            i.name.trim().toLowerCase(),
+            i,
+          ])
+        );
+
+        const ensureIngredient = async (
+          name: string
+        ): Promise<{ id: string; created: boolean }> => {
+          const trimmed = name.trim();
+          const key = trimmed.toLowerCase();
+          const hit = ingredientByName.get(key);
+          if (hit) {
+            if (!hit.isActive) {
+              await tx.ingredient.update({
+                where: { id: hit.id },
+                data: { isActive: true },
+              });
+              hit.isActive = true;
+            }
+            return { id: hit.id, created: false };
+          }
+          try {
+            const created = await tx.ingredient.create({
+              data: {
+                restaurantId,
+                name: trimmed,
+                quantity: 0,
+                unit: 'PCS',
+                isMajor: false,
+                isActive: true,
+              },
+              select: { id: true, name: true, isActive: true },
+            });
+            ingredientByName.set(created.name.trim().toLowerCase(), created);
+            ingredientByName.set(key, created);
+            return { id: created.id, created: true };
+          } catch (e) {
+            if (
+              e instanceof Prisma.PrismaClientKnownRequestError &&
+              e.code === 'P2002'
+            ) {
+              const existing = await tx.ingredient.findFirst({
+                where: {
+                  restaurantId,
+                  name: { equals: trimmed, mode: 'insensitive' },
+                },
+                select: { id: true, name: true, isActive: true },
+              });
+              if (existing) {
+                ingredientByName.set(existing.name.trim().toLowerCase(), existing);
+                ingredientByName.set(key, existing);
+                return { id: existing.id, created: false };
+              }
+            }
+            throw e;
+          }
+        };
+
+        let createdIngredients = 0;
+        const uniqueIngredientNames = new Set<string>();
+        for (const row of parsed.products) {
+          for (const line of row.ingredients) {
+            const n = line.ingredientName.trim();
+            if (n) uniqueIngredientNames.add(n);
+          }
+        }
+        for (const ingredientName of uniqueIngredientNames) {
+          const ensured = await ensureIngredient(ingredientName);
+          if (ensured.created) createdIngredients += 1;
+        }
+
+        const matchVariationTemplateId = (
+          label: string | null,
+          vars: Array<{
+            restaurantVariationId: string | null;
+            name: string;
+            title: string;
+            restaurantVariation: {
+              name: string;
+              shortLabel: string | null;
+            } | null;
+          }>
+        ): string | null => {
+          if (!label?.trim()) return null;
+          const raw = label.trim().toLowerCase();
+          const catalog = raw.match(/^(.*)\s+\[([^\]]+)\]\s*$/);
+          const title = (catalog?.[1] ?? raw).trim();
+          const short = (catalog?.[2] ?? '').trim();
+          const keys = new Set([raw, title, short].filter(Boolean));
+          for (const v of vars) {
+            const names = [
+              v.title,
+              v.name,
+              v.restaurantVariation?.name,
+              v.restaurantVariation?.shortLabel,
+            ]
+              .map((n) => n?.trim().toLowerCase())
+              .filter(Boolean);
+            if (names.some((n) => keys.has(n!))) {
+              return v.restaurantVariationId;
+            }
+          }
+          return null;
+        };
+
+        const attachIngredients = async (
+          productId: string,
+          productName: string
+        ) => {
+          const row = parsed.products.find(
+            (p) => p.name.trim().toLowerCase() === productName.trim().toLowerCase()
+          );
+          if (!row || row.ingredients.length === 0) return;
+
+          const vars = await tx.menuItemVariation.findMany({
+            where: { menuItemId: productId },
+            select: {
+              id: true,
+              name: true,
+              title: true,
+              restaurantVariationId: true,
+              restaurantVariation: {
+                select: { name: true, shortLabel: true },
+              },
+            },
+          });
+
+          const recipes: Array<{
+            ingredientId: string;
+            quantity: number;
+            restaurantVariationId?: string | null;
+          }> = [];
+
+          for (const line of row.ingredients) {
+            if (!line.ingredientName.trim()) continue;
+            const { id: ingredientId } = await ensureIngredient(
+              line.ingredientName
+            );
+            let restaurantVariationId: string | null = null;
+            if (vars.length > 0) {
+              restaurantVariationId = matchVariationTemplateId(
+                line.variationLabel,
+                vars
+              );
+              if (!restaurantVariationId && vars.length === 1) {
+                restaurantVariationId = vars[0]!.restaurantVariationId;
+              }
+              if (!restaurantVariationId) {
+                extraWarnings.push(
+                  `"${productName}": ingredient "${line.ingredientName}" needs a matching variation (skipped)`
+                );
+                continue;
+              }
+            } else if (line.variationLabel) {
+              extraWarnings.push(
+                `"${productName}": ingredient "${line.ingredientName}" has a variation label but the product has no variations (applied to product)`
+              );
+            }
+            recipes.push({
+              ingredientId,
+              quantity: line.quantity,
+              restaurantVariationId,
+            });
+          }
+
+          if (recipes.length === 0) return;
+          await syncMenuItemIngredients(tx, {
+            restaurantId,
+            menuItemId: productId,
+            variations: vars.map((v) => ({
+              id: v.id,
+              restaurantVariationId: v.restaurantVariationId,
+            })),
+            recipes,
+          });
+          ingredientsCount += recipes.length;
+        };
+
         let createdProducts = 0;
         let updatedProducts = 0;
         let skippedProducts = 0;
@@ -179,6 +366,8 @@ export async function POST(req: NextRequest) {
         let personalizeGroupsCount = 0;
         let personalizeOptionsCount = 0;
         let offersCount = 0;
+        let ingredientsCount = 0;
+        const extraWarnings: string[] = [];
 
         /** product name (lower) → menuItem id for newly created + existing */
         const nameToId = new Map(existingNameToId);
@@ -188,20 +377,50 @@ export async function POST(req: NextRequest) {
           const nameKey = row.name.trim().toLowerCase();
           const existingId = nameToId.get(nameKey);
 
+          const categoryNames =
+            row.categoryNames.length > 0
+              ? row.categoryNames
+              : existingId
+                ? []
+                : ['Uncategorized'];
+          const csvCategoryIds: string[] = [];
+          for (const cn of categoryNames) {
+            csvCategoryIds.push(await ensureCategory(cn));
+          }
+
           if (existingId && skipDuplicates) {
+            if (csvCategoryIds.length > 0) {
+              const existingLinks = await tx.menuItemCategory.findMany({
+                where: { menuItemId: existingId },
+                orderBy: { sortOrder: 'asc' },
+                select: { categoryId: true },
+              });
+              const mergedIds = [
+                ...existingLinks.map((l) => l.categoryId),
+              ];
+              for (const id of csvCategoryIds) {
+                if (!mergedIds.includes(id)) mergedIds.push(id);
+              }
+              const primaryCategoryId = mergedIds[0];
+              if (primaryCategoryId) {
+                await syncMenuItemCategoryLinks(tx, existingId, mergedIds);
+                await tx.menuItem.update({
+                  where: { id: existingId },
+                  data: { categoryId: primaryCategoryId },
+                });
+              }
+            }
             skippedProducts += 1;
             continue;
           }
 
-          const categoryNames =
-            row.categoryNames.length > 0
-              ? row.categoryNames
-              : ['Uncategorized'];
-          const categoryIds: string[] = [];
-          for (const cn of categoryNames) {
-            categoryIds.push(await ensureCategory(cn));
-          }
-          const primaryCategoryId = categoryIds[0]!;
+          const primaryCategoryId =
+            csvCategoryIds[0] ??
+            (await ensureCategory('Uncategorized'));
+          const categoryIds =
+            csvCategoryIds.length > 0
+              ? csvCategoryIds
+              : [primaryCategoryId];
 
           let productId: string;
           let isNew = false;
@@ -240,8 +459,13 @@ export async function POST(req: NextRequest) {
             isNew = true;
           }
 
-          // Only attach related data for newly created products (avoid wipe/duplication on update)
-          if (!isNew) continue;
+          // Attach recipes on create; on update only when the CSV has ingredients
+          if (!isNew) {
+            if (row.ingredients.length > 0) {
+              await attachIngredients(productId, row.name);
+            }
+            continue;
+          }
 
           for (const v of row.variations) {
             let restaurantVariationId: string | null = null;
@@ -377,6 +601,8 @@ export async function POST(req: NextRequest) {
               personalizeOptionsCount += 1;
             }
           }
+
+          await attachIngredients(productId, row.name);
         }
 
         // Offers — only for newly created base products
@@ -413,7 +639,9 @@ export async function POST(req: NextRequest) {
           offers: offersCount,
           personalizeGroups: personalizeGroupsCount,
           personalizeOptions: personalizeOptionsCount,
-          warnings: parsed.errors.slice(0, 30),
+          ingredients: ingredientsCount,
+          createdIngredients,
+          warnings: [...parsed.errors, ...extraWarnings].slice(0, 40),
         };
       },
       {
@@ -421,6 +649,10 @@ export async function POST(req: NextRequest) {
         timeout: 180_000,
       }
     );
+
+    if (result.createdIngredients > 0) {
+      publishInventoryStockUpdate(auth.restaurant.id);
+    }
 
     return NextResponse.json(
       {

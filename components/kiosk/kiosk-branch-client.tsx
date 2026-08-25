@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 
 import {
@@ -28,12 +29,13 @@ function KioskCustomerSlugSync({
 
 function KioskAuthErrorToast() {
   const searchParams = useSearchParams();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const err = searchParams.get('customerAuthError')?.trim();
     if (!err) return;
-    toast.error('Google sign-in failed. Please try again.');
-  }, [searchParams]);
+    toast.error(t('customerAuthGoogleError'));
+  }, [searchParams, t]);
 
   return null;
 }

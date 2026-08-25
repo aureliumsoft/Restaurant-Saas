@@ -16,6 +16,7 @@ import {
 import { getRequestOrigin } from '@/lib/request-origin';
 import { getRestaurantPayPalRuntimeConfigBySlug } from '@/lib/restaurant-payment-credentials';
 import { createRestaurantPayPalOrder } from '@/lib/restaurant-paypal-client';
+import { paymentStockBlockError } from '@/lib/inventory/assert-payment-stock';
 
 export const runtime = 'nodejs';
 
@@ -28,7 +29,22 @@ const bodySchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(500).optional(),
   metadata: z.record(z.string(), z.string()).optional(),
+  /** Used by the native app WebView; must stay on this origin. */
+  returnUrl: z.string().url().optional(),
+  cancelUrl: z.string().url().optional(),
 });
+
+function sameOriginUrl(candidate: string | undefined, origin: string): string | null {
+  if (!candidate) return null;
+  try {
+    const url = new URL(candidate);
+    const base = new URL(origin);
+    if (url.origin !== base.origin) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
 
 function isMerchantOrderSource(source: string | undefined): boolean {
   return source === 'online' || source === 'kiosk';
@@ -93,6 +109,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (isMerchantOrderSource(source)) {
+    const stockError = await paymentStockBlockError(
+      restaurantSlug,
+      parsed.data.payload
+    );
+    if (stockError) {
+      return NextResponse.json({ error: stockError }, { status: 400 });
+    }
+  }
+
   let customerAccountId: string | null = null;
   if (source === 'online' && restaurantSlug) {
     const restaurant = await resolveRestaurantIdBySlug(restaurantSlug);
@@ -127,8 +153,10 @@ export async function POST(req: NextRequest) {
     amount: parsed.data.amount,
     currency,
     title: parsed.data.title ?? 'Payment',
-    returnUrl: `${origin}/`,
-    cancelUrl: `${origin}/`,
+    returnUrl:
+      sameOriginUrl(parsed.data.returnUrl, origin) ?? `${origin}/`,
+    cancelUrl:
+      sameOriginUrl(parsed.data.cancelUrl, origin) ?? `${origin}/`,
     metadata,
   };
 
@@ -138,11 +166,11 @@ export async function POST(req: NextRequest) {
         restaurantPayPal.config,
         orderParams
       );
-      return NextResponse.json({ id: order.id }, { status: 200 });
+      return NextResponse.json({ id: order.id, url: order.url }, { status: 200 });
     }
 
     const order = await createPayPalOrder(orderParams);
-    return NextResponse.json({ id: order.id }, { status: 200 });
+    return NextResponse.json({ id: order.id, url: order.url }, { status: 200 });
   } catch (e) {
     console.error('PayPal create-order failed:', e);
     return NextResponse.json(

@@ -7,6 +7,7 @@ import {
   orderBranchWhere,
 } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
+import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
 /**
@@ -67,6 +68,7 @@ export async function GET(req: NextRequest) {
         items: {
           select: {
             quantity: true,
+            productName: true,
             menuItem: { select: { name: true } },
           },
         },
@@ -91,7 +93,7 @@ export async function GET(req: NextRequest) {
       paymentMethod: o.payments[0]?.method ?? null,
       items: o.items.map((it) => ({
         quantity: it.quantity,
-        name: it.menuItem.name,
+        name: orderItemDisplayName(it),
       })),
     }));
 

@@ -28,6 +28,10 @@ import {
 } from '@/lib/order-ticket-number';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 import {
+  consumeIngredientsForOrder,
+  isMajorIngredientOutOfStockError,
+} from '@/lib/inventory/stock';
+import {
   computeCheckoutTotal,
   parseRestaurantServiceCharges,
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
@@ -53,6 +57,7 @@ const lineSchema = z.object({
   quantity: z.number().int().positive(),
   unitPrice: z.number().finite().nonnegative(),
   productName: z.string().min(1),
+  variationId: z.string().uuid().optional().nullable(),
   modifiers: z.array(modifierGroupSchema).default([]),
 });
 
@@ -335,6 +340,7 @@ export async function POST(req: NextRequest) {
             data: {
               orderId: order.id,
               menuItemId: line.menuItemId,
+              productName: line.productName,
               quantity: line.quantity,
               price: line.unitPrice,
             },
@@ -391,6 +397,17 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      await consumeIngredientsForOrder(tx, {
+        restaurantId: restaurant.id,
+        orderId: order.id,
+        lines: lines.map((line) => ({
+          menuItemId: line.menuItemId,
+          quantity: line.quantity,
+          variationId: line.variationId,
+          modifiers: line.modifiers,
+        })),
+      });
+
       return { order, ticketNumber, isTableOpenCheck };
     }, { timeout: 20000, maxWait: 10000 });
 
@@ -411,6 +428,12 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (e) {
+    if (isMajorIngredientOutOfStockError(e)) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
+    if (e instanceof Error && e.message.includes('Select a variation')) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
     if (isPrismaUniqueViolation(e)) {
       const recovered = await recoverOrderFromIdempotencyConflict(
         idempotencyKey,

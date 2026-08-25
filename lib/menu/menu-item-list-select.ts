@@ -24,6 +24,10 @@ export const menuItemBrowseListSelect = {
       sourceType: true,
       required: true,
       linkedProduct: { select: { id: true } },
+      linkedCategory: { select: { id: true } },
+      linkedCategoryId: true,
+      linkedProductId: true,
+      productCategoryIds: true,
     },
   },
   personalizeGroups: {

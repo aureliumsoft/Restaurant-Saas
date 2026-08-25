@@ -70,6 +70,7 @@ async function fulfillWalletOrderIntent(params: {
     const created = await createCustomerOrder({
       data: orderData,
       customerAccountId: parsed.customerAccountId ?? null,
+      paidExternally: true,
     });
     if (!created.ok) {
       await db.platformSetting.update({

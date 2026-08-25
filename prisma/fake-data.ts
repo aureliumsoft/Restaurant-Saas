@@ -1,4 +1,4 @@
-import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, OrderSourceType, PosShiftStatus, CustomerPaymentProvider } from '@prisma/client';
+import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, IngredientUnit, IngredientStockEntrySource, OrderSourceType, PosShiftStatus, CustomerPaymentProvider } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import Decimal from 'decimal.js';
 
@@ -920,6 +920,7 @@ export function fakeOrderComplete() {
 }
 export function fakeOrderItem() {
   return {
+    productName: undefined,
     quantity: faker.number.int(),
     price: faker.number.float(),
     updatedAt: faker.date.anytime(),
@@ -929,7 +930,8 @@ export function fakeOrderItemComplete() {
   return {
     id: faker.string.uuid(),
     orderId: faker.string.uuid(),
-    menuItemId: faker.string.uuid(),
+    menuItemId: undefined,
+    productName: undefined,
     quantity: faker.number.int(),
     price: faker.number.float(),
     createdAt: new Date(),
@@ -973,6 +975,72 @@ export function fakePaymentComplete() {
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
     restaurantId: undefined,
+  };
+}
+export function fakeIngredient() {
+  return {
+    name: faker.person.fullName(),
+    description: undefined,
+    imageUrl: undefined,
+    sku: undefined,
+    minQuantity: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeIngredientComplete() {
+  return {
+    id: faker.string.uuid(),
+    restaurantId: faker.string.uuid(),
+    name: faker.person.fullName(),
+    description: undefined,
+    quantity: 0,
+    unit: IngredientUnit.PCS,
+    isMajor: false,
+    imageUrl: undefined,
+    sku: undefined,
+    minQuantity: undefined,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeMenuItemIngredient() {
+  return {
+    quantity: faker.number.float(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeMenuItemIngredientComplete() {
+  return {
+    id: faker.string.uuid(),
+    menuItemId: faker.string.uuid(),
+    menuItemVariationId: undefined,
+    ingredientId: faker.string.uuid(),
+    quantity: faker.number.float(),
+    sortOrder: 0,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeIngredientStockEntry() {
+  return {
+    quantity: faker.number.float(),
+    reason: faker.lorem.words(5),
+  };
+}
+export function fakeIngredientStockEntryComplete() {
+  return {
+    id: faker.string.uuid(),
+    restaurantId: faker.string.uuid(),
+    ingredientId: faker.string.uuid(),
+    menuItemId: undefined,
+    menuItemVariationId: undefined,
+    quantity: faker.number.float(),
+    reason: faker.lorem.words(5),
+    source: IngredientStockEntrySource.MANUAL,
+    orderId: undefined,
+    createdByUserId: undefined,
+    createdAt: new Date(),
   };
 }
 export function fakeProductStock() {

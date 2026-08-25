@@ -26,6 +26,10 @@ import {
   totalsMatch,
 } from '@/lib/restaurant-service-charge';
 import { resolveWebCustomerName } from '@/lib/web-customer';
+import {
+  consumeIngredientsForOrder,
+  isMajorIngredientOutOfStockError,
+} from '@/lib/inventory/stock';
 import type { NextResponse } from 'next/server';
 
 const SELECTED_MINUTES_ONLINE = 30;
@@ -47,27 +51,38 @@ const lineSchema = z.object({
   quantity: z.number().int().positive(),
   unitPrice: z.number().finite().nonnegative(),
   productName: z.string().min(1),
+  variationId: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() === '' ? null : value,
+    z.string().uuid().optional().nullable()
+  ),
   modifiers: z.array(modifierGroupSchema).default([]),
 });
 
+const optionalOrderString = z.string().optional().nullable();
+
 const orderInfoSchema = z.object({
   mode: z.enum(['delivery', 'pickUp']),
-  restaurantName: z.string().optional(),
-  storeId: z.string().optional(),
-  storeName: z.string().optional(),
-  storeAddress: z.string().optional(),
-  address: z.string().optional(),
-  apartment: z.string().optional(),
-  gateCode: z.string().optional(),
-  addressName: z.string().optional(),
-  customerPhone: z.string().optional(),
-  restaurantSlug: z.string().optional(),
+  restaurantName: optionalOrderString,
+  storeId: optionalOrderString,
+  storeName: optionalOrderString,
+  storeAddress: optionalOrderString,
+  address: optionalOrderString,
+  apartment: optionalOrderString,
+  gateCode: optionalOrderString,
+  addressName: optionalOrderString,
+  customerPhone: optionalOrderString,
+  restaurantSlug: optionalOrderString,
 });
 
 const orderScheduleSchema = z.object({
   mode: z.enum(['asap', 'later']).optional().default('asap'),
   slot: z.string().max(60).optional(),
-  slotDateTime: z.string().datetime().optional(),
+  slotDateTime: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().datetime().optional()
+  ),
 });
 
 export const customerOrderPostSchema = z
@@ -194,6 +209,8 @@ export async function createCustomerOrder(options: {
   /** Trusted account ID from session or payment intent — never from untrusted browser payload alone. */
   customerAccountId?: string | null;
   idempotencyKey?: string | null;
+  /** Payment already captured (Stripe / PayPal / wallet). Never fail the sale on stock. */
+  paidExternally?: boolean;
 }): Promise<CreateCustomerOrderResult> {
   const {
     restaurantSlug,
@@ -228,11 +245,13 @@ export async function createCustomerOrder(options: {
     return { ok: false, status: 200, error: 'idempotent', response: idempotentHit };
   }
 
+  const paidExternally = options.paidExternally === true;
+
   const computedSubtotal = lines.reduce(
     (sum, l) => sum + l.unitPrice * l.quantity,
     0
   );
-  if (Math.abs(computedSubtotal - subtotal) > 0.02) {
+  if (!paidExternally && Math.abs(computedSubtotal - subtotal) > 0.02) {
     return {
       ok: false,
       status: 400,
@@ -246,7 +265,11 @@ export async function createCustomerOrder(options: {
     serviceCharges,
     'online'
   );
-  if (!totalsMatch(computedTotal, total)) {
+  const orderTotal = paidExternally ? total : computedTotal;
+  const orderServiceCharge = paidExternally
+    ? Math.max(0, Number((total - computedSubtotal).toFixed(2)))
+    : serviceChargeAmount;
+  if (!paidExternally && !totalsMatch(computedTotal, total)) {
     return {
       ok: false,
       status: 400,
@@ -280,15 +303,29 @@ export async function createCustomerOrder(options: {
 
   const menuRows = await db.menuItem.findMany({
     where: { restaurantId: restaurant.id, id: { in: [...menuIds] } },
-    select: { id: true },
+    select: {
+      id: true,
+      variations: { select: { id: true }, orderBy: { sortOrder: 'asc' } },
+    },
   });
-  if (menuRows.length !== menuIds.size) {
+  if (!paidExternally && menuRows.length !== menuIds.size) {
     return {
       ok: false,
       status: 400,
       error: 'One or more menu items are invalid for this restaurant',
     };
   }
+  const validMenuIds = new Set(menuRows.map((m) => m.id));
+
+  const variationsByItemId = new Map(
+    menuRows.map((row) => [row.id, row.variations])
+  );
+  const resolvedLines = lines.map((line) => {
+    if (line.variationId?.trim()) return line;
+    const fallback = variationsByItemId.get(line.menuItemId)?.[0]?.id;
+    if (!fallback) return line;
+    return { ...line, variationId: fallback };
+  });
 
   let trustedAccountId: string | null = null;
   let accountEmail: string | null = null;
@@ -400,7 +437,7 @@ export async function createCustomerOrder(options: {
                 ticketDate,
                 ticketNumber,
                 status: 'pending',
-                total: computedTotal,
+                total: orderTotal,
                 sourceType: OrderSourceType.ONLINE,
                 address: addressSnapshot || null,
                 cutleryRequested: cutlery,
@@ -412,7 +449,7 @@ export async function createCustomerOrder(options: {
                   : null,
                 taxAmount: 0,
                 discountAmount: 0,
-                serviceChargeAmount,
+                serviceChargeAmount: orderServiceCharge,
                 idempotencyKey: idempotencyKey ?? undefined,
               },
             });
@@ -427,11 +464,14 @@ export async function createCustomerOrder(options: {
           throw new Error('Failed to create order after ticket retries');
         }
 
-        for (const line of lines) {
+        for (const line of resolvedLines) {
           const orderItem = await tx.orderItem.create({
             data: {
               orderId: order.id,
-              menuItemId: line.menuItemId,
+              menuItemId: validMenuIds.has(line.menuItemId)
+                ? line.menuItemId
+                : null,
+              productName: line.productName,
               quantity: line.quantity,
               price: line.unitPrice,
             },
@@ -461,7 +501,7 @@ export async function createCustomerOrder(options: {
         });
 
         await tx.kitchenTicketItem.createMany({
-          data: lines.map((line) => ({
+          data: resolvedLines.map((line) => ({
             kitchenTicketId: ticket.id,
             productName: ticketProductName(line.productName, line.modifiers),
             quantity: line.quantity,
@@ -471,11 +511,24 @@ export async function createCustomerOrder(options: {
         await tx.payment.create({
           data: {
             orderId: order.id,
-            amount: computedTotal,
+            amount: orderTotal,
             status: paymentStatus ?? 'completed',
             method: paymentMethod?.trim() || 'Online checkout',
             restaurantId: restaurant.id,
           },
+        });
+
+        await consumeIngredientsForOrder(tx, {
+          restaurantId: restaurant.id,
+          orderId: order.id,
+          requireAvailableStock: !paidExternally,
+          requireVariation: !paidExternally,
+          lines: resolvedLines.map((line) => ({
+            menuItemId: line.menuItemId,
+            quantity: line.quantity,
+            variationId: line.variationId,
+            modifiers: line.modifiers,
+          })),
         });
 
         return { order, ticketNumber };
@@ -496,6 +549,12 @@ export async function createCustomerOrder(options: {
       ticketNumber: result.ticketNumber,
     };
   } catch (e) {
+    if (isMajorIngredientOutOfStockError(e)) {
+      return { ok: false, status: 400, error: e.message };
+    }
+    if (e instanceof Error && e.message.includes('Select a variation')) {
+      return { ok: false, status: 400, error: e.message };
+    }
     if (isPrismaUniqueViolation(e)) {
       const recovered = await recoverOrderFromIdempotencyConflict(
         idempotencyKey,
@@ -520,7 +579,26 @@ export function parseCustomerOrderPayload(
   payload: unknown
 ): CustomerOrderPostInput | null {
   const parsed = customerOrderPostSchema.safeParse(payload);
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) {
+    console.error(
+      'Invalid customer order payload',
+      parsed.error.flatten()
+    );
+    return null;
+  }
+  return parsed.data;
+}
+
+export function customerOrderPayloadError(payload: unknown): string | null {
+  const parsed = customerOrderPostSchema.safeParse(payload);
+  if (parsed.success) return null;
+  const flat = parsed.error.flatten();
+  const field = Object.entries(flat.fieldErrors)
+    .map(([key, messages]) =>
+      messages?.length ? `${key}: ${messages.join(', ')}` : null
+    )
+    .find((row): row is string => Boolean(row));
+  return field ?? flat.formErrors[0] ?? 'Invalid order payload';
 }
 
 export { parseOrderIdempotencyKey };

@@ -121,6 +121,7 @@ export async function GET(req: NextRequest) {
           roleBasedSettings: f0.roleBasedSettings,
           branding: f0.branding,
           advancedAnalytics: f0.advancedAnalytics,
+          mobileApp: f0.mobileApp,
         },
         regional: parseRestaurantRegionalSettings(null),
         restaurant: null,
@@ -154,6 +155,7 @@ export async function GET(req: NextRequest) {
         roleBasedSettings: f.roleBasedSettings,
         branding: f.branding,
         advancedAnalytics: f.advancedAnalytics,
+        mobileApp: f.mobileApp,
       },
       regional: parseRestaurantRegionalSettings(
         restaurantPayload as {

@@ -37,3 +37,6 @@ components/payments/accepted-payment-methods.tsx
 # Assets
 public/payments/jazzcash.svg
 public/payments/easypaisa.svg
+
+
+Next Updated Files (Date)

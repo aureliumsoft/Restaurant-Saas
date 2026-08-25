@@ -10,7 +10,8 @@ export type RestaurantRealtimeEventType =
   | 'config.branding'
   | 'config.regional'
   | 'config.menu'
-  | 'config.service_charges';
+  | 'config.service_charges'
+  | 'inventory.stock';
 
 export type RestaurantRealtimeEvent = {
   type: RestaurantRealtimeEventType;
@@ -35,6 +36,7 @@ export const REALTIME_CLIENT_CHANNELS: Record<
   'config.regional': 'realtime:config.regional',
   'config.menu': 'realtime:config.menu',
   'config.service_charges': 'realtime:config.service_charges',
+  'inventory.stock': 'realtime:inventory.stock',
 };
 
 /** Slow fallback poll when SSE is disconnected (ms). */

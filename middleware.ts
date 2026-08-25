@@ -8,6 +8,7 @@ import {
   isCustomerOrderFlowPath,
   legacyWebAppRedirectPath,
 } from "@/lib/customer-storefront-paths";
+import { looksLikeCustomerGoogleOAuthState } from "@/lib/customer-auth/google-oauth-state-shape";
 
 /** Same fallback as `authOptions.secret` in `lib/auth-options.ts` (dev only). */
 function resolveNextAuthJwtSecret(): string | undefined {
@@ -68,6 +69,16 @@ function isSubdomainStorefrontGlobalPath(pathname: string): boolean {
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
   const pathname = url.pathname;
+
+  // Kiosk / customer Google login reuses NextAuth's registered redirect URI
+  // (`/api/auth/callback/google`) to avoid Google Error 400 redirect_uri_mismatch.
+  if (pathname === "/api/auth/callback/google") {
+    const state = url.searchParams.get("state");
+    if (looksLikeCustomerGoogleOAuthState(state)) {
+      url.pathname = "/api/customer-auth/google/callback";
+      return NextResponse.rewrite(url);
+    }
+  }
 
   const needsAuth =
     isStaffTerminalPath(pathname) ||

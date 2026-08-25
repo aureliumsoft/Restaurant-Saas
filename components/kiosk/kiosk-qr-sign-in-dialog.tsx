@@ -10,7 +10,6 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { kioskBasePath } from '@/lib/kiosk-path';
 import { cn } from '@/lib/utils';
 
 export function KioskQrSignInDialog({
@@ -24,9 +23,8 @@ export function KioskQrSignInDialog({
   branchId: string;
   loading?: boolean;
 }) {
-  const returnTo = kioskBasePath(slug, branchId);
-
   function startGoogleSignIn() {
+    const returnTo = `${window.location.pathname}${window.location.search}`;
     const params = new URLSearchParams({
       restaurantSlug: slug,
       returnTo,

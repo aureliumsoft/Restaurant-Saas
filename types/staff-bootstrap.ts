@@ -8,6 +8,7 @@ export type StaffBootstrapPlan = {
   roleBasedSettings: boolean;
   branding: boolean;
   advancedAnalytics: boolean;
+  mobileApp: boolean;
 };
 
 export type StaffBootstrapBranchScope = {

@@ -30,10 +30,20 @@ export function publishOrderLifecycleUpdate(params: {
     'pos.recent_orders',
     'sales.orders',
     'dashboard.analytics',
+    'inventory.stock',
   ];
   for (const type of types) {
     publishRestaurantRealtime(type, params);
   }
+  publishInventoryStockUpdate(params.restaurantId);
+}
+
+/** Restaurant-wide stock (not branch-scoped). */
+export function publishInventoryStockUpdate(restaurantId: string) {
+  publishRestaurantRealtime('inventory.stock', {
+    restaurantId,
+    branchId: null,
+  });
 }
 
 export function publishConfigUpdate(

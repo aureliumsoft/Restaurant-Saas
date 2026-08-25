@@ -9,6 +9,7 @@ import {
 } from '@/lib/customer-auth/session';
 import { getRequestOrigin } from '@/lib/request-origin';
 import { getRestaurantJazzCashRuntimeConfigBySlug } from '@/lib/restaurant-payment-credentials';
+import { paymentStockBlockError } from '@/lib/inventory/assert-payment-stock';
 import {
   buildJazzCashHostedCheckout,
   resolveJazzCashReturnUrl,
@@ -85,6 +86,14 @@ export async function POST(req: NextRequest) {
       },
       { status: 403 }
     );
+  }
+
+  const stockError = await paymentStockBlockError(
+    restaurantSlug,
+    parsed.data.payload
+  );
+  if (stockError) {
+    return NextResponse.json({ error: stockError }, { status: 400 });
   }
 
   const origin = await getRequestOrigin();

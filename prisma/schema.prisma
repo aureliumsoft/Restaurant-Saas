@@ -69,6 +69,19 @@ enum CatProduct {
 }
 
 // How the order was created: POS, web (online), walk-in register, kiosk, or other.
+enum IngredientUnit {
+  PCS
+  G
+  KG
+  ML
+  L
+}
+
+enum IngredientStockEntrySource {
+  MANUAL
+  ORDER
+}
+
 enum OrderSourceType {
   POS
   ONLINE
@@ -102,6 +115,7 @@ model User {
   subscriptionPayments SubscriptionPayment[] @relation("SubscriptionPaymentRecordedBy")
   posShiftsOpened      PosShift[]            @relation("PosShiftOpenedBy")
   posShiftsClosed      PosShift[]            @relation("PosShiftClosedBy")
+  ingredientStockEntries IngredientStockEntry[]
 }
 
 model Role {
@@ -188,6 +202,8 @@ model Restaurant {
   jazzCashCredentials    RestaurantJazzCashCredentials?
   easypaisaCredentials   RestaurantEasypaisaCredentials?
   posShifts              PosShift[]
+  ingredients            Ingredient[]
+  ingredientStockEntries IngredientStockEntry[]
 }
 
 enum CustomerPaymentProvider {
@@ -695,6 +711,8 @@ model MenuItem {
   linkedInRecommendationGroups MenuItemAttributeGroup[] @relation("RecommendationLinkedProduct")
   defaultInRecommendationGroups MenuItemAttributeGroup[] @relation("RecommendationCategoryDefault")
   personalizeGroups          MenuItemPersonalizeGroup[]
+  ingredientRecipes          MenuItemIngredient[]
+  ingredientStockEntries     IngredientStockEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -769,6 +787,8 @@ model MenuItemVariation {
   menuItem              MenuItem              @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
   restaurantVariation   RestaurantVariation?  @relation(fields: [restaurantVariationId], references: [id], onDelete: SetNull)
   configurationVariationLimits MenuItemAttributeGroupVariationLimit[]
+  ingredientRecipes     MenuItemIngredient[]
+  ingredientStockEntries IngredientStockEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -973,6 +993,7 @@ model Order {
   customerAccount CustomerAccount? @relation(fields: [customerAccountId], references: [id], onDelete: SetNull)
   diningTable    DiningTable?     @relation(fields: [diningTableId], references: [id], onDelete: SetNull)
   posShift       PosShift?        @relation(fields: [posShiftId], references: [id], onDelete: SetNull)
+  ingredientStockEntries IngredientStockEntry[]
 
   @@index([restaurantId])
   @@index([branchId])
@@ -987,14 +1008,16 @@ model Order {
 }
 
 model OrderItem {
-  id         String @id @default(uuid())
-  orderId    String
-  menuItemId String
-  quantity   Int
-  price      Float
+  id          String  @id @default(uuid())
+  orderId     String
+  menuItemId  String?
+  /// Snapshot kept when the live menu product is deleted.
+  productName String?
+  quantity    Int
+  price       Float
 
   order     Order               @relation(fields: [orderId], references: [id])
-  menuItem  MenuItem            @relation(fields: [menuItemId], references: [id])
+  menuItem  MenuItem?           @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
   modifiers OrderItemModifier[]
 
   createdAt DateTime @default(now())
@@ -1032,6 +1055,78 @@ model Payment {
   updatedAt    DateTime    @updatedAt
   restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
   restaurantId String?
+}
+
+model Ingredient {
+  id           String         @id @default(uuid())
+  restaurantId String
+  name         String
+  description  String?
+  quantity     Float          @default(0)
+  unit         IngredientUnit @default(PCS)
+  isMajor      Boolean        @default(false)
+  imageUrl     String?
+  sku          String?
+  minQuantity  Float?
+  isActive     Boolean        @default(true)
+
+  restaurant Restaurant             @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  recipes    MenuItemIngredient[]
+  entries    IngredientStockEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId, isMajor])
+  @@index([restaurantId, isActive])
+}
+
+/// Recipe line: product-level when menuItemVariationId is null, else per variation.
+model MenuItemIngredient {
+  id                  String  @id @default(uuid())
+  menuItemId          String
+  menuItemVariationId String?
+  ingredientId        String
+  quantity            Float
+  sortOrder           Int     @default(0)
+
+  menuItem    MenuItem           @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  variation   MenuItemVariation? @relation(fields: [menuItemVariationId], references: [id], onDelete: Cascade)
+  ingredient  Ingredient         @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([menuItemId])
+  @@index([ingredientId])
+  @@index([menuItemVariationId])
+}
+
+model IngredientStockEntry {
+  id                  String                      @id @default(uuid())
+  restaurantId        String
+  ingredientId        String
+  menuItemId          String?
+  menuItemVariationId String?
+  quantity            Float
+  reason              String
+  source              IngredientStockEntrySource  @default(MANUAL)
+  orderId             String?
+  createdByUserId     String?
+
+  restaurant  Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  ingredient  Ingredient          @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  menuItem    MenuItem?           @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  variation   MenuItemVariation?  @relation(fields: [menuItemVariationId], references: [id], onDelete: SetNull)
+  order       Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdBy   User?               @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([restaurantId, createdAt])
+  @@index([ingredientId, createdAt])
+  @@index([orderId])
 }
 
 model ProductStock {

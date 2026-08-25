@@ -7,6 +7,7 @@ import {
   orderBranchWhere,
 } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
+import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
 export async function GET(_req: NextRequest) {
@@ -55,6 +56,7 @@ export async function GET(_req: NextRequest) {
           select: {
             id: true,
             quantity: true,
+            productName: true,
             menuItem: { select: { name: true } },
             modifiers: { select: { name: true, quantity: true } },
           },
@@ -69,9 +71,15 @@ export async function GET(_req: NextRequest) {
 
     const data = pending.map((order) => {
       const latestPayment = order.payments[0] ?? null;
-      const { payments: _payments, ...rest } = order;
+      const { payments: _payments, items, ...rest } = order;
       return {
         ...rest,
+        items: items.map((it) => ({
+          id: it.id,
+          quantity: it.quantity,
+          menuItem: { name: orderItemDisplayName(it) },
+          modifiers: it.modifiers,
+        })),
         paymentStatus: latestPayment?.status ?? null,
         paymentMethod: latestPayment?.method ?? null,
         paymentAmount: latestPayment?.amount ?? null,

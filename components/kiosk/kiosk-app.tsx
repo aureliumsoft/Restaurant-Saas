@@ -694,6 +694,30 @@ export function KioskApp({
     orderIdPrefix: 'KIOSK-PRE',
     formatMoney,
     currency: regional.currencyCode,
+    beforeCharge: async () => {
+      if (cart.length === 0) return 'Cart is empty.';
+      try {
+        const res = await fetch('/api/kiosk/orders/check-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            restaurantSlug: slug,
+            lines: cart.map((line) => ({
+              menuItemId: line.menuItemId,
+              quantity: line.quantity,
+              variationId: line.variationId,
+              modifiers: line.modifiers,
+            })),
+          }),
+        });
+        if (res.ok) return null;
+        const body: unknown = await res.json().catch(() => null);
+        return formatKioskOrderApiError(body);
+      } catch {
+        return 'Could not check ingredient stock.';
+      }
+    },
+    onChargeBlocked: (msg) => toast.error(msg),
   });
 
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
@@ -866,6 +890,7 @@ export function KioskApp({
       quantity: line.quantity,
       unitPrice: lineUnitTotal(line),
       productName: cartLineDisplayName(line),
+      variationId: line.variationId,
       modifiers: line.modifiers,
     }));
     return {
@@ -932,7 +957,7 @@ export function KioskApp({
           ticketNumber != null
             ? `&ticket=${encodeURIComponent(String(ticketNumber))}`
             : ''
-        }`
+        }${isMobileScan ? '&Mobile=true' : ''}`
       );
     } catch (e: unknown) {
       const ex = e as { body?: unknown };
@@ -1298,7 +1323,7 @@ export function KioskApp({
 
         {qrCustomerReady && step === 'menu' && (
           <>
-            <div className="mx-auto flex w-full max-w-5xl flex-1 gap-0 md:gap-4">
+            <div className="mx-auto flex w-full flex-1 gap-0 md:gap-4">
               <aside className="hidden w-36 shrink-0 border-r border-[#e2e8f0] bg-[#fafafa] py-4 md:block">
                 <ScrollArea className="h-[calc(100vh-8rem)]">
                   <nav className="flex flex-col gap-1 px-2">

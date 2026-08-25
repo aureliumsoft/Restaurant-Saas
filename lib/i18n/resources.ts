@@ -119,6 +119,9 @@ export const resources = {
       customerAuthPasswordRequired: 'Password is required.',
       customerAuthInvalidCredentials: 'Invalid email or password.',
       customerAuthGenericError: 'Something went wrong. Please try again.',
+      customerAuthContinueWithGoogle: 'Continue with Google',
+      customerAuthOr: 'or',
+      customerAuthGoogleError: 'Google sign-in failed. Please try again.',
       customerOrdersTitle: 'My orders',
       customerOrdersEmpty: 'No orders yet.',
       customerOrdersEmptyHint:
@@ -248,6 +251,7 @@ export const resources = {
         nav: {
           demoRequest: 'Demo Request',
           restaurantSignup: 'Restaurant Signup',
+          platform: 'Platform',
           pricing: 'Pricing',
           blog: 'Blog',
           documentation: 'Documentation',
@@ -264,7 +268,7 @@ export const resources = {
             'that takes orders, manages branches, and grows revenue — automatically.',
           ctaPrimary: 'Start Free',
           ctaSecondary: 'Book a Demo',
-          fineprint: 'Setup in under 15 minutes · 14-day free trial · Cancel anytime',
+          fineprint: 'Setup in under 15 minutes · 30-day free trial · Cancel anytime',
           chip1: 'Grow Revenue 30%+',
           chip2: 'Save 12+ Hours Weekly',
           chip3: 'Delight Every Guest',
@@ -305,6 +309,8 @@ export const resources = {
           bodyEmphasis: 'your',
           body2: 'restaurant — no pitch, no pressure.',
           directHeading: 'Prefer a direct line?',
+          phone: '+923023552710',
+          email: 'aureliumsoft@gmail.com',
           businessHours: 'Monday to Friday — 9 AM to 6 PM (GMT)',
           formTitle: 'Get your personalised demo',
           formSubtitle: 'Most restaurants are live within 15 minutes of signing up.',
@@ -342,7 +348,7 @@ export const resources = {
             q4: {
               question: 'Is there a free trial?',
               answer:
-                'Yes — start with a free trial, explore the full product, and cancel anytime before you commit. Book a demo if you want a walkthrough mapped to your menu and branches first.',
+                'Yes — onboarding starts a 30-day trial. Explore the product and cancel anytime before you commit. Book a demo if you want a walkthrough mapped to your menu and branches first.',
             },
             q5: {
               question: 'How do payments and subscriptions work?',
@@ -389,6 +395,8 @@ export const resources = {
             aggregator: 'Order Aggregator',
             reviews: 'Reviews System (4.8/5)',
             callCenter: 'Customer Call Center',
+            posKitchen: 'POS & kitchen',
+            kiosk: 'Kiosk',
           },
           legalItems: {
             esg: 'ESG',
@@ -613,6 +621,9 @@ export const resources = {
       customerAuthPasswordRequired: 'La contrasena es obligatoria.',
       customerAuthInvalidCredentials: 'Correo o contrasena incorrectos.',
       customerAuthGenericError: 'Algo salio mal. Intentalo de nuevo.',
+      customerAuthContinueWithGoogle: 'Continuar con Google',
+      customerAuthOr: 'o',
+      customerAuthGoogleError: 'No se pudo iniciar sesion con Google. Intentalo de nuevo.',
       customerOrdersTitle: 'Mis pedidos',
       customerOrdersEmpty: 'Todavia no hay pedidos.',
       customerOrdersEmptyHint:
@@ -742,6 +753,7 @@ export const resources = {
         nav: {
           demoRequest: 'Solicitar demo',
           restaurantSignup: 'Registra tu restaurante',
+          platform: 'Plataforma',
           pricing: 'Precios',
           blog: 'Blog',
           documentation: 'Documentación',
@@ -760,7 +772,7 @@ export const resources = {
           ctaPrimary: 'Empieza gratis',
           ctaSecondary: 'Solicitar demo',
           fineprint:
-            'Listo en menos de 15 minutos · 14 días de prueba gratis · Cancela cuando quieras',
+            'Listo en menos de 15 minutos · 30 días de prueba gratis · Cancela cuando quieras',
           chip1: 'Aumenta los ingresos +30 %',
           chip2: 'Ahorra +12 horas a la semana',
           chip3: 'Encanta a cada cliente',
@@ -802,6 +814,8 @@ export const resources = {
           bodyEmphasis: 'tu',
           body2: 'restaurante — sin presión y sin compromiso.',
           directHeading: '¿Prefieres contacto directo?',
+          phone: '+34634603929',
+          email: 'cermicrip.uk@gmail.com',
           businessHours: 'De lunes a viernes — 9:00 a 18:00 (GMT)',
           formTitle: 'Recibe tu demo personalizada',
           formSubtitle:
@@ -840,7 +854,7 @@ export const resources = {
             q4: {
               question: '¿Hay periodo de prueba?',
               answer:
-                'Sí — empieza con una prueba gratuita, explora el producto completo y cancela cuando quieras antes de comprometerte. Reserva una demo si prefieres un recorrido adaptado a tu menú y sucursales.',
+                'Sí — al dar de alta el restaurante empieza una prueba de 30 días. Explora el producto y cancela cuando quieras antes de comprometerte. Reserva una demo si prefieres un recorrido adaptado a tu menú y sucursales.',
             },
             q5: {
               question: '¿Cómo funcionan pagos y suscripción?',
@@ -887,6 +901,8 @@ export const resources = {
             aggregator: 'Agregador de pedidos',
             reviews: 'Sistema de reseñas (4,8/5)',
             callCenter: 'Centro de atención al cliente',
+            posKitchen: 'TPV y cocina',
+            kiosk: 'Kiosco',
           },
           legalItems: {
             esg: 'ESG',

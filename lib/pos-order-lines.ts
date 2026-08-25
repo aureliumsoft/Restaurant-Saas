@@ -1,11 +1,20 @@
 import type { Prisma } from '@prisma/client';
 
+export type PosOrderLineModifier = {
+  selections: Array<{
+    menuItemId?: string | null;
+    variationId?: string | null;
+  }>;
+};
+
 export type PosOrderLineInput = {
   productId: string;
   name?: string;
   qty: number;
   unitPrice: number;
   lineDiscPct: number;
+  variationId?: string | null;
+  modifiers?: PosOrderLineModifier[];
 };
 
 export type NormalizedPosOrderLine = {
@@ -13,6 +22,8 @@ export type NormalizedPosOrderLine = {
   productName: string;
   quantity: number;
   price: number;
+  variationId: string | null;
+  modifiers: PosOrderLineModifier[];
 };
 
 export function paymentModeToMethodLabel(paymentMode: string): string {
@@ -78,6 +89,11 @@ export async function normalizePosOrderLines(params: {
             : menu.name,
         quantity: qty,
         price: unitAfterDisc,
+        variationId:
+          typeof line.variationId === 'string' && line.variationId.trim()
+            ? line.variationId.trim()
+            : null,
+        modifiers: Array.isArray(line.modifiers) ? line.modifiers : [],
       };
     })
     .filter((line): line is NormalizedPosOrderLine => line !== null);
@@ -92,6 +108,7 @@ export function posOrderItemCreateManyInput(
   return lines.map((line) => ({
     orderId,
     menuItemId: line.menuItemId,
+    productName: line.productName,
     quantity: line.quantity,
     price: line.price,
   }));

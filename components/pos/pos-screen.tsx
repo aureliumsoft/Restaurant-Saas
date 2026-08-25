@@ -142,6 +142,7 @@ import {
 import { submitKdsTicket, submitPosOrder } from '@/lib/offline/submit-order';
 import { upsertLocalTicket } from '@/lib/offline/local-tickets';
 import { isBrowserOffline } from '@/lib/offline/db';
+import { extractApiErrorMessage } from '@/lib/extract-api-error';
 
 const POS_PANEL_CLASS =
   'rounded-2xl border border-border bg-card text-card-foreground shadow-md dark:shadow-[0_8px_30px_rgba(0,0,0,0.25)]';
@@ -1714,8 +1715,34 @@ export function PosScreen() {
     }
   }
 
+  function posStockCheckItems() {
+    return cart.map((l) => ({
+      productId: l.menuItemId,
+      qty: l.qty,
+      variationId: l.variationId,
+      modifiers: l.modifiers,
+    }));
+  }
+
+  async function assertPosIngredientsAvailable(): Promise<string | null> {
+    if (cart.length === 0) return 'Add at least one product to the cart.';
+    try {
+      await axios.post('/api/restaurant/pos-order/check-stock', {
+        items: posStockCheckItems(),
+      });
+      return null;
+    } catch (e) {
+      return extractApiErrorMessage(e, 'Could not check ingredient stock.');
+    }
+  }
+
   async function handleCardPayClick() {
     if (cardPaymentStatus === 'success') return;
+    const stockError = await assertPosIngredientsAvailable();
+    if (stockError) {
+      toast.error(stockError);
+      return;
+    }
     cardPaymentCancelledRef.current = false;
     cardPaymentResolvedRef.current = false;
     setCardProcessingOpen(true);
@@ -1829,6 +1856,8 @@ export function PosScreen() {
           qty: l.qty,
           unitPrice: lineUnitTotal(l),
           lineDiscPct: l.lineDiscPct,
+          variationId: l.variationId,
+          modifiers: l.modifiers,
         })),
       };
       let savedOrder: {
@@ -1879,6 +1908,13 @@ export function PosScreen() {
         );
         savedOrder = patchRes.data.data;
       } else {
+        if (effectivePaymentMode === 'card_terminal') {
+          const stockError = await assertPosIngredientsAvailable();
+          if (stockError) {
+            toast.error(stockError);
+            return;
+          }
+        }
         if (effectivePaymentMode === 'card_terminal' && isBrowserOffline()) {
           toast.error(
             'Card terminal payments require an internet connection.'
@@ -2030,6 +2066,7 @@ export function PosScreen() {
         });
       }
       eventBus.emit('refreshSalesOrders');
+      eventBus.emit('realtime:inventory.stock');
       if (isTableOpenCheck) {
         eventBus.emit('refreshTableOrders');
         const branchForTable = selectedBranchId || activeBranchId || '';
@@ -2057,10 +2094,13 @@ export function PosScreen() {
       const branchId = selectedBranchId || activeBranchId || '';
       if (branchId) void refreshShiftSummary(branchId);
     } catch (e: unknown) {
+      const ex = e as { body?: { error?: unknown } };
+      const fromBody =
+        typeof ex.body?.error === 'string' ? ex.body.error : null;
       const msg =
         axios.isAxiosError(e) && e.response?.data?.error
           ? String(e.response.data.error)
-          : 'Could not save POS order.';
+          : fromBody || 'Could not save POS order.';
       toast.error(msg);
     } finally {
       setSavingOrder(false);

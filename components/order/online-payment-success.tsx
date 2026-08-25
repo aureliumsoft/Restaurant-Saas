@@ -208,7 +208,6 @@ export function OnlinePaymentSuccess({
                 type="button"
                 variant="outline"
                 onClick={() => router.push(storefrontHome)}
-                disabled={!restaurantSlug}
               >
                 <Home className="h-4 w-4 mr-2" />
                 Back to Home

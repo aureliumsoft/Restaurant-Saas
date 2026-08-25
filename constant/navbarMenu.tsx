@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
   type LucideIcon,
   GalleryVerticalEnd,
+  Boxes,
 } from 'lucide-react';
 import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
 import { NavItem } from '@/types/Navbar';
@@ -29,6 +30,7 @@ export const MODULE_ICONS: Record<
   branched: Store,
   categories: FolderTree,
   product: Package,
+  inventory: Boxes,
   variations: GalleryVerticalEnd,
   tables: LayoutGrid,
   recommendations: SlidersHorizontal,

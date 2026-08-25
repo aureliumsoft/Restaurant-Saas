@@ -75,21 +75,64 @@ export async function GET(req: NextRequest) {
       },
       select: {
         id: true,
-        imageUrl: true,
         offersFromThis: {
           orderBy: { sortOrder: 'asc' },
           take: 12,
           select: {
-            id: true,
-            sortOrder: true,
             offeredItem: {
               select: {
                 id: true,
                 name: true,
                 description: true,
-                imageUrl: true,
                 price: true,
                 salePrice: true,
+              },
+            },
+          },
+        },
+        attributeGroups: {
+          where: { required: false },
+          orderBy: { sortOrder: 'asc' },
+          take: 8,
+          select: {
+            sourceType: true,
+            linkedProduct: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                price: true,
+                salePrice: true,
+              },
+            },
+            linkedCategory: {
+              select: {
+                itemLinks: {
+                  orderBy: { sortOrder: 'asc' },
+                  take: 12,
+                  select: {
+                    menuItem: {
+                      select: {
+                        id: true,
+                        name: true,
+                        description: true,
+                        price: true,
+                        salePrice: true,
+                      },
+                    },
+                  },
+                },
+                items: {
+                  orderBy: { name: 'asc' },
+                  take: 12,
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true,
+                    price: true,
+                    salePrice: true,
+                  },
+                },
               },
             },
           },
@@ -97,24 +140,52 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const images: Record<string, string | null> = {};
-    const offerById = new Map<
-      string,
-      {
-        id: string;
-        name: string;
-        description: string | null;
-        imageUrl: string | null;
-        price: number;
-        salePrice: number | null;
-      }
-    >();
+    type OfferRow = {
+      id: string;
+      name: string;
+      description: string | null;
+      imageUrl: string | null;
+      price: number;
+      salePrice: number | null;
+    };
+
+    const offerById = new Map<string, OfferRow>();
+    const cartIdSet = new Set(itemIds);
+
+    const addOffer = (
+      row:
+        | {
+            id: string;
+            name: string;
+            description: string | null;
+            price: number;
+            salePrice: number | null;
+          }
+        | null
+        | undefined
+    ) => {
+      if (!row?.id || cartIdSet.has(row.id) || offerById.has(row.id)) return;
+      offerById.set(row.id, {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        imageUrl: null,
+        price: row.price,
+        salePrice: row.salePrice,
+      });
+    };
 
     for (const item of items) {
-      images[item.id] = item.imageUrl;
       for (const offer of item.offersFromThis) {
-        if (!offerById.has(offer.offeredItem.id)) {
-          offerById.set(offer.offeredItem.id, offer.offeredItem);
+        addOffer(offer.offeredItem);
+      }
+      for (const group of item.attributeGroups) {
+        addOffer(group.linkedProduct);
+        for (const linked of group.linkedCategory?.itemLinks ?? []) {
+          addOffer(linked.menuItem);
+        }
+        for (const extra of group.linkedCategory?.items ?? []) {
+          addOffer(extra);
         }
       }
     }
@@ -122,7 +193,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         data: {
-          images,
+          images: {},
           offers: Array.from(offerById.values()),
         },
       },

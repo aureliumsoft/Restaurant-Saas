@@ -288,6 +288,7 @@ export default function CheckoutPageClient({
           quantity: line.quantity,
           unitPrice: lineUnitTotal(line),
           productName: line.productName,
+          variationId: line.variationId,
           modifiers: line.modifiers,
         })),
         subtotal: total,
@@ -362,6 +363,7 @@ export default function CheckoutPageClient({
         quantity: line.quantity,
         unitPrice: lineUnitTotal(line),
         productName: line.productName,
+        variationId: line.variationId,
         modifiers: line.modifiers,
       })),
       subtotal: total,
@@ -737,7 +739,9 @@ export default function CheckoutPageClient({
                             }}
                             successPath={`/order/${orderType}/${encodeURIComponent(
                               orderId
-                            )}/success?orderId={orderId}`}
+                            )}/success?orderId={orderId}&restaurantSlug=${encodeURIComponent(
+                              orderInfo.restaurantSlug
+                            )}`}
                             cancelPath={orderPathWithQuery(
                               `/order/${orderType}/${encodeURIComponent(
                                 orderId
@@ -770,7 +774,9 @@ export default function CheckoutPageClient({
                             }}
                             successPath={`/order/${orderType}/${encodeURIComponent(
                               orderId
-                            )}/success?orderId={orderId}`}
+                            )}/success?orderId={orderId}&restaurantSlug=${encodeURIComponent(
+                              orderInfo.restaurantSlug
+                            )}`}
                             cancelPath={orderPathWithQuery(
                               `/order/${orderType}/${encodeURIComponent(orderId)}`,
                               orderInfo

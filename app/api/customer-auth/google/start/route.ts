@@ -2,7 +2,6 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { buildCustomerGoogleAuthUrl } from '@/lib/customer-auth/google-oauth';
-import { getBaseUrl } from '@/lib/public-app-origin-server';
 
 export async function GET(req: NextRequest) {
   const restaurantSlug = req.nextUrl.searchParams.get('restaurantSlug')?.trim();
@@ -17,12 +16,9 @@ export async function GET(req: NextRequest) {
     returnToRaw.startsWith('/') &&
     !returnToRaw.startsWith('//')
       ? returnToRaw
-      : `/kiosk/${encodeURIComponent(restaurantSlug)}`;
-
-  const origin = req.nextUrl.origin?.trim() || getBaseUrl();
+      : `/${encodeURIComponent(restaurantSlug)}`;
 
   const url = buildCustomerGoogleAuthUrl({
-    origin,
     restaurantSlug,
     returnTo,
   });

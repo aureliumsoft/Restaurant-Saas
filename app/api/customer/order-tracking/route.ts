@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
+import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 
 export async function GET(req: NextRequest) {
   const orderId = req.nextUrl.searchParams.get('orderId')?.trim();
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
     ticketNumber: true,
     status: true,
     total: true,
+    address: true,
     createdAt: true,
     updatedAt: true,
     customer: {
@@ -25,11 +27,20 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' as const },
       select: { id: true, amount: true, status: true, method: true, createdAt: true },
     },
+    kitchenTickets: {
+      orderBy: { createdAt: 'desc' as const },
+      take: 1,
+      select: { status: true },
+    },
+    branch: {
+      select: { name: true, address: true },
+    },
     items: {
       select: {
         id: true,
         quantity: true,
         price: true,
+        productName: true,
         menuItem: { select: { name: true } },
       },
     },
@@ -49,13 +60,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 });
   }
 
+  const fulfillment =
+    typeof order.address === 'string' &&
+    order.address.includes('Fulfillment: Delivery')
+      ? 'delivery'
+      : 'pickUp';
+
   return NextResponse.json({
     data: {
       id: order.id,
       shortOrderId: order.shortOrderId,
       ticketNumber: order.ticketNumber,
       status: order.status,
+      kitchenStatus: order.kitchenTickets[0]?.status ?? order.status,
+      fulfillment,
       total: order.total,
+      address: order.address,
+      branchName: order.branch?.name ?? null,
+      branchAddress: order.branch?.address ?? null,
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
       customer: order.customer,
@@ -69,7 +91,7 @@ export async function GET(req: NextRequest) {
         id: it.id,
         quantity: it.quantity,
         price: it.price,
-        name: it.menuItem.name,
+        name: orderItemDisplayName(it),
       })),
     },
   });

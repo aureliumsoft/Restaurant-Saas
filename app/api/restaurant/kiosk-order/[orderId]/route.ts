@@ -3,9 +3,11 @@ import { NextResponse } from 'next/server';
 import { OrderSourceType } from '@prisma/client';
 
 import { db } from '@/lib/db';
+import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 import {
   normalizePosOrderLines,
   paymentMethodToMode,
+  posOrderItemCreateManyInput,
   type PosOrderLineInput,
 } from '@/lib/pos-order-lines';
 import {
@@ -35,6 +37,7 @@ const orderSelect = {
       menuItemId: true,
       quantity: true,
       price: true,
+      productName: true,
       menuItem: { select: { name: true, imageUrl: true } },
       modifiers: {
         select: { name: true, unitPrice: true },
@@ -64,10 +67,11 @@ function mapOrderDetail(order: {
   customer: { name: string; phone: string | null } | null;
   items: Array<{
     id: string;
-    menuItemId: string;
+    menuItemId: string | null;
     quantity: number;
     price: number;
-    menuItem: { name: string; imageUrl: string | null };
+    productName: string | null;
+    menuItem: { name: string; imageUrl: string | null } | null;
     modifiers: Array<{ name: string; unitPrice: number }>;
   }>;
   payments: Array<{
@@ -101,10 +105,10 @@ function mapOrderDetail(order: {
     items: order.items.map((item) => ({
       id: item.id,
       menuItemId: item.menuItemId,
-      name: item.menuItem.name,
+      name: orderItemDisplayName(item),
       quantity: item.quantity,
       unitPrice: Number(item.price) || 0,
-      imageUrl: item.menuItem.imageUrl,
+      imageUrl: item.menuItem?.imageUrl ?? null,
       modifiers: item.modifiers.map((modifier) => ({
         name: modifier.name,
         unitPrice: Number(modifier.unitPrice) || 0,
@@ -247,12 +251,7 @@ export async function PATCH(
     await db.$transaction(async (tx) => {
       await tx.orderItem.deleteMany({ where: { orderId: existing.id } });
       await tx.orderItem.createMany({
-        data: normalizedItems.map((line) => ({
-          orderId: existing.id,
-          menuItemId: line.menuItemId,
-          quantity: line.quantity,
-          price: line.price,
-        })),
+        data: posOrderItemCreateManyInput(existing.id, normalizedItems),
       });
 
       await tx.order.update({

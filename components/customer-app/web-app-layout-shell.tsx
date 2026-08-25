@@ -1,8 +1,10 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Suspense, useEffect } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useRef } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'react-toastify';
 
 import { Header } from '@/components/customer-app/header';
 import { Footer } from '@/components/customer-app/footer';
@@ -39,6 +41,32 @@ function CustomerAccountSlugSync({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function CustomerGoogleAuthReturnHandler() {
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const { t } = useTranslation();
+  const { setSheetOpen, refreshSession } = useCustomerAccount();
+  const handled = useRef<string | null>(null);
+
+  useEffect(() => {
+    const err = searchParams.get('customerAuthError')?.trim();
+    if (!err || handled.current === err) return;
+    handled.current = err;
+
+    toast.error(t('customerAuthGoogleError'));
+    setSheetOpen(true);
+    void refreshSession();
+
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete('customerAuthError');
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [searchParams, pathname, router, t, setSheetOpen, refreshSession]);
+
+  return null;
+}
+
 export function WebAppLayoutShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const hideLayoutFooter = isStorefrontHomePath(pathname ?? '');
@@ -48,6 +76,9 @@ export function WebAppLayoutShell({ children }: { children: ReactNode }) {
     <CustomerAccountProvider>
       <div className="web-app-customer flex min-h-screen flex-col bg-white text-[#0f172a] antialiased">
         <div className="flex min-h-screen flex-col">
+          <Suspense fallback={null}>
+            <CustomerGoogleAuthReturnHandler />
+          </Suspense>
           <Suspense fallback={null}>
             <CustomerAccountSlugSync>
               {!hideLayoutChrome ? (

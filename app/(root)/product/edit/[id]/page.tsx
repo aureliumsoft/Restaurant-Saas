@@ -27,6 +27,10 @@ import {
   type VariationFormRow,
 } from '@/components/dashboard/menu-manager/product-form-fields';
 import { InventoryQuickActions } from '@/components/dashboard/menu-manager/inventory-quick-actions';
+import {
+  ingredientRowsFromItem,
+  type IngredientRecipeRow,
+} from '@/components/dashboard/menu-manager/product-ingredient-recipes';
 import type { MenuItemRow } from '@/components/dashboard/menu-manager/types';
 import { useMenuCategoriesCatalog } from '@/hooks/use-menu-categories-catalog';
 import ErrorBoundary from '@/components/toaster/toaster';
@@ -70,11 +74,15 @@ export default function ProductEditPage() {
     salePrice: '',
   });
   const [variationRows, setVariationRows] = useState<VariationFormRow[]>([]);
+  const [ingredientRows, setIngredientRows] = useState<IngredientRecipeRow[]>(
+    []
+  );
   const { variationTemplates, reloadVariationTemplates } =
     useRestaurantVariationTemplates();
   const initialRef = useRef<{
     form: ProductFormState;
     variationRows: VariationFormRow[];
+    ingredientRows: IngredientRecipeRow[];
   } | null>(null);
   const hydratedIdRef = useRef<string | null>(null);
 
@@ -123,11 +131,14 @@ export default function ProductEditPage() {
     if (!item || hydratedIdRef.current === item.id) return;
     const nextForm = productFormStateFromItem(item);
     const nextVariations = variationRowsFromItem(item);
+    const nextIngredients = ingredientRowsFromItem(item);
     setForm(nextForm);
     setVariationRows(nextVariations);
+    setIngredientRows(nextIngredients);
     initialRef.current = {
       form: nextForm,
       variationRows: nextVariations,
+      ingredientRows: nextIngredients,
     };
     hydratedIdRef.current = item.id;
   }, [item]);
@@ -142,8 +153,9 @@ export default function ProductEditPage() {
     return isProductEditFormDirty(initialRef.current, {
       form,
       variationRows,
+      ingredientRows,
     });
-  }, [form, variationRows]);
+  }, [form, variationRows, ingredientRows]);
 
   const {
     leaveOpen,
@@ -199,7 +211,12 @@ export default function ProductEditPage() {
 
   const save = async () => {
     if (!productId) return;
-    const payload = buildProductPayload(form, variationRows, variationTemplates);
+    const payload = buildProductPayload(
+      form,
+      variationRows,
+      variationTemplates,
+      ingredientRows
+    );
     if (!payload.ok) {
       toast.error(payload.error);
       return;
@@ -315,6 +332,8 @@ export default function ProductEditPage() {
                       }
                       variationRows={variationRows}
                       onVariationRowsChange={setVariationRows}
+                      ingredientRows={ingredientRows}
+                      onIngredientRowsChange={setIngredientRows}
                       onMenuRefresh={refreshCategories}
                       variationTemplates={variationTemplates}
                       onVariationTemplatesReload={reloadVariationTemplates}

@@ -29,6 +29,14 @@ import {
 
 import { CategoryPickerStrip } from './category-picker-strip';
 import { InventoryQuickActions } from './inventory-quick-actions';
+import {
+  ProductIngredientRecipes,
+  ingredientRowsEqual,
+  isIngredientRowsValid,
+  serializeIngredientPayload,
+  syncIngredientRowsWithVariations,
+  type IngredientRecipeRow,
+} from './product-ingredient-recipes';
 import type {
   MenuCategoryRow,
   MenuItemRow,
@@ -92,6 +100,8 @@ type Props = {
   onMenuRefresh?: () => Promise<void>;
   variationTemplates?: RestaurantVariationRow[];
   onVariationTemplatesReload?: () => Promise<void>;
+  ingredientRows?: IngredientRecipeRow[];
+  onIngredientRowsChange?: (rows: IngredientRecipeRow[]) => void;
 };
 
 function FieldLabel({
@@ -155,6 +165,8 @@ export function ProductFormFields({
   onMenuRefresh,
   variationTemplates: variationTemplatesProp,
   onVariationTemplatesReload,
+  ingredientRows = [],
+  onIngredientRowsChange,
 }: Props) {
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const internalTemplates = useRestaurantVariationTemplates();
@@ -187,9 +199,32 @@ export function ProductFormFields({
     : null;
 
   const updateVariation = (index: number, patch: Partial<VariationFormRow>) => {
-    onVariationRowsChange(
-      variationRows.map((row, i) => (i === index ? { ...row, ...patch } : row))
+    const next = variationRows.map((row, i) =>
+      i === index ? { ...row, ...patch } : row
     );
+    if (onIngredientRowsChange) {
+      onIngredientRowsChange(
+        syncIngredientRowsWithVariations(
+          variationRows,
+          next,
+          ingredientRows
+        )
+      );
+    }
+    onVariationRowsChange(next);
+  };
+
+  const setVariationRows = (next: VariationFormRow[]) => {
+    if (onIngredientRowsChange) {
+      onIngredientRowsChange(
+        syncIngredientRowsWithVariations(
+          variationRows,
+          next,
+          ingredientRows
+        )
+      );
+    }
+    onVariationRowsChange(next);
   };
 
   const handleVariationCreated = (variation: RestaurantVariationRow) => {
@@ -197,7 +232,7 @@ export function ProductFormFields({
       (r) => r.restaurantVariationId === variation.id
     );
     if (!alreadyUsed) {
-      onVariationRowsChange([
+      setVariationRows([
         ...variationRows,
         {
           name: variation.name,
@@ -420,7 +455,7 @@ export function ProductFormFields({
                       size="icon"
                       className="text-destructive"
                       onClick={() =>
-                        onVariationRowsChange(
+                        setVariationRows(
                           variationRows.filter((_, i) => i !== index)
                         )
                       }
@@ -443,7 +478,7 @@ export function ProductFormFields({
           onClick={() => {
             const next = availableTemplates[0];
             if (!next) return;
-            onVariationRowsChange([
+            setVariationRows([
               ...variationRows,
               {
                 name: next.name,
@@ -458,6 +493,15 @@ export function ProductFormFields({
           Add variation to product
         </Button>
       </div>
+
+      {onIngredientRowsChange ? (
+        <ProductIngredientRecipes
+          variationRows={variationRows}
+          variationTemplates={variationTemplates}
+          ingredientRows={ingredientRows}
+          onIngredientRowsChange={onIngredientRowsChange}
+        />
+      ) : null}
     </div>
   );
 }
@@ -514,21 +558,35 @@ function variationRowsEqual(a: VariationFormRow[], b: VariationFormRow[]) {
 }
 
 export function isProductEditFormDirty(
-  initial: { form: ProductFormState; variationRows: VariationFormRow[] },
-  current: { form: ProductFormState; variationRows: VariationFormRow[] }
+  initial: {
+    form: ProductFormState;
+    variationRows: VariationFormRow[];
+    ingredientRows?: IngredientRecipeRow[];
+  },
+  current: {
+    form: ProductFormState;
+    variationRows: VariationFormRow[];
+    ingredientRows?: IngredientRecipeRow[];
+  }
 ): boolean {
   return (
     !formStatesEqual(initial.form, current.form) ||
-    !variationRowsEqual(initial.variationRows, current.variationRows)
+    !variationRowsEqual(initial.variationRows, current.variationRows) ||
+    !ingredientRowsEqual(
+      initial.ingredientRows ?? [],
+      current.ingredientRows ?? []
+    )
   );
 }
 
 export function isProductFormValid(
   form: ProductFormState,
   variationRows: VariationFormRow[],
-  variationTemplates: RestaurantVariationRow[] = []
+  variationTemplates: RestaurantVariationRow[] = [],
+  ingredientRows: IngredientRecipeRow[] = []
 ): boolean {
   if (!form.name.trim() || form.categoryIds.length === 0) return false;
+  if (!isIngredientRowsValid(ingredientRows)) return false;
 
   if (variationRows.length > 0) {
     return variationRows.every((row) =>
@@ -548,7 +606,8 @@ export function isProductFormValid(
 
 export function isProductCreateFormDirty(
   form: ProductFormState,
-  variationRows: VariationFormRow[]
+  variationRows: VariationFormRow[],
+  ingredientRows: IngredientRecipeRow[] = []
 ): boolean {
   if (
     form.name.trim() ||
@@ -557,6 +616,13 @@ export function isProductCreateFormDirty(
     form.price.trim() ||
     form.salePrice.trim() ||
     form.categoryIds.length > 0
+  ) {
+    return true;
+  }
+  if (
+    ingredientRows.some(
+      (r) => r.ingredientId || r.quantity.trim() || r.restaurantVariationId
+    )
   ) {
     return true;
   }
@@ -571,7 +637,8 @@ export function isProductCreateFormDirty(
 export function buildProductPayload(
   form: ProductFormState,
   variationRows: VariationFormRow[],
-  variationTemplates: RestaurantVariationRow[] = []
+  variationTemplates: RestaurantVariationRow[] = [],
+  ingredientRows: IngredientRecipeRow[] = []
 ): {
   ok: true;
   body: {
@@ -587,6 +654,11 @@ export function buildProductPayload(
       priceDelta: number;
       restaurantVariationId?: string | null;
     }[];
+    ingredients: Array<{
+      ingredientId: string;
+      quantity: number;
+      restaurantVariationId?: string | null;
+    }>;
   };
 } | { ok: false; error: string } {
   if (!form.name.trim() || form.categoryIds.length === 0) {
@@ -610,6 +682,16 @@ export function buildProductPayload(
   }
 
   const hasVariations = variations.length > 0;
+  if (!isIngredientRowsValid(ingredientRows)) {
+    return {
+      ok: false,
+      error: 'Each recipe row needs an ingredient and a quantity greater than zero.',
+    };
+  }
+  const ingredients = serializeIngredientPayload(
+    ingredientRows,
+    hasVariations
+  );
 
   if (hasVariations) {
     const minPrice = Math.min(...variations.map((v) => v.priceDelta));
@@ -623,6 +705,7 @@ export function buildProductPayload(
         price: minPrice,
         salePrice: null,
         variations,
+        ingredients,
       },
     };
   }
@@ -649,6 +732,7 @@ export function buildProductPayload(
       imageUrl: form.imageUrl.trim() || null,
       price,
       salePrice: sale,
+      ingredients,
     },
   };
 }

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
+import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 
@@ -14,14 +15,15 @@ const bodySchema = z.object({
 function buildKitchenRows(
   lines: {
     quantity: number;
-    menuItem: { name: string };
+    productName?: string | null;
+    menuItem: { name: string } | null;
     modifiers: { name: string; quantity: number }[];
   }[]
 ): { productName: string; quantity: number }[] {
   const rows: { productName: string; quantity: number }[] = [];
   for (const line of lines) {
     rows.push({
-      productName: line.menuItem.name,
+      productName: orderItemDisplayName(line),
       quantity: line.quantity,
     });
     for (const mod of line.modifiers) {
@@ -79,6 +81,7 @@ export async function POST(req: NextRequest) {
         items: {
           select: {
             quantity: true,
+            productName: true,
             menuItem: { select: { name: true } },
             modifiers: { select: { name: true, quantity: true } },
           },

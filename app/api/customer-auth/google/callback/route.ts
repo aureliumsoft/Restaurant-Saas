@@ -16,12 +16,17 @@ import {
   setCustomerSessionCookie,
   upsertCustomerProfileForAccount,
 } from '@/lib/customer-auth/session';
-import { getBaseUrl } from '@/lib/public-app-origin-server';
 import { db } from '@/lib/db';
+import { upsertNewsletterSubscriber } from '@/lib/newsletter/subscribe';
 
-function redirectWithError(returnTo: string, code: string) {
-  const sep = returnTo.includes('?') ? '&' : '?';
-  return NextResponse.redirect(`${returnTo}${sep}customerAuthError=${encodeURIComponent(code)}`);
+function redirectToApp(req: NextRequest, returnTo: string) {
+  return NextResponse.redirect(new URL(returnTo, req.nextUrl.origin));
+}
+
+function redirectWithError(req: NextRequest, returnTo: string, code: string) {
+  const dest = new URL(returnTo, req.nextUrl.origin);
+  dest.searchParams.set('customerAuthError', code);
+  return NextResponse.redirect(dest);
 }
 
 export async function GET(req: NextRequest) {
@@ -33,19 +38,18 @@ export async function GET(req: NextRequest) {
   const fallbackReturn = state?.returnTo ?? '/';
 
   if (oauthError || !code || !state) {
-    return redirectWithError(fallbackReturn, oauthError || 'invalid_state');
+    return redirectWithError(req, fallbackReturn, oauthError || 'invalid_state');
   }
 
   const restaurant = await resolveRestaurantIdBySlug(state.restaurantSlug);
   if (!restaurant) {
-    return redirectWithError(fallbackReturn, 'restaurant_not_found');
+    return redirectWithError(req, fallbackReturn, 'restaurant_not_found');
   }
 
-  const origin = req.nextUrl.origin?.trim() || getBaseUrl();
-  const redirectUri = customerGoogleOAuthRedirectUri(origin);
+  const redirectUri = customerGoogleOAuthRedirectUri();
   const profile = await exchangeGoogleAuthCode(code, redirectUri);
   if (!profile?.email?.trim()) {
-    return redirectWithError(state.returnTo, 'google_profile');
+    return redirectWithError(req, state.returnTo, 'google_profile');
   }
 
   const email = profile.email.trim();
@@ -74,7 +78,7 @@ export async function GET(req: NextRequest) {
   });
 
   if (account?.disabledAt) {
-    return redirectWithError(state.returnTo, 'account_disabled');
+    return redirectWithError(req, state.returnTo, 'account_disabled');
   }
 
   if (!account) {
@@ -122,6 +126,12 @@ export async function GET(req: NextRequest) {
     phone: account.phone,
   });
 
+  await upsertNewsletterSubscriber({
+    email: account.email,
+    name: account.name,
+    source: 'google',
+  });
+
   const ip = clientIpFromRequest(req) ?? 'unknown';
   const session = await createCustomerAccountSession({
     accountId: account.id,
@@ -129,7 +139,7 @@ export async function GET(req: NextRequest) {
     ipAddress: ip,
   });
 
-  const res = NextResponse.redirect(state.returnTo);
+  const res = redirectToApp(req, state.returnTo);
   setCustomerSessionCookie(res, session.token, session.expiresAt);
   return res;
 }

@@ -24,6 +24,7 @@ export default function Header() {
     'rounded-lg bg-gradient-to-br from-fire-400 via-fire-500 to-fire-600 text-sm font-semibold text-white shadow-[0_10px_28px_-8px] shadow-fire-500/60 transition-all hover:from-fire-500 hover:to-fire-700 hover:shadow-fire-500/80';
 
   const navLinks = [
+    { href: '/#stations', label: t('marketing.nav.platform') },
     { href: '/demo-request', label: t('marketing.nav.demoRequest') },
     { href: '/restaurant-signup', label: t('marketing.nav.restaurantSignup') },
     { href: '/pricing', label: t('marketing.nav.pricing') },

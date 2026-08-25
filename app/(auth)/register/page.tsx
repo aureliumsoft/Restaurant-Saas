@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PublicAuthShell } from '@/components/marketing/public-auth-shell';
 import { REGISTER_ROLE_SLUG } from '@/lib/global-roles';
+import { IconBrandGoogleFilled } from '@tabler/icons-react';
 import { Loader2, UserPlus } from 'lucide-react';
 
 type GoogleSignupRole = 'OWNER' | 'WORKER';
@@ -35,6 +36,7 @@ export default function RegisterPage() {
   );
   const [rolesLoading, setRolesLoading] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,13 +137,13 @@ export default function RegisterPage() {
   }
 
   async function handleGoogleSignup(targetRole: GoogleSignupRole) {
-    setLoading(true);
+    setLoadingGoogle(true);
     try {
       await signIn('google', { callbackUrl: `/role?role=${targetRole}` });
     } catch (e: any) {
       toast.error(e?.message ?? 'Google signup failed.');
     } finally {
-      setLoading(false);
+      setLoadingGoogle(false);
     }
   }
 
@@ -150,25 +152,43 @@ export default function RegisterPage() {
       title="Create account"
       subtitle="Signup with your official information"
     >
-      {/* <div className="flex flex-col gap-2">
-          <Button
-            onClick={() => handleGoogleSignup('OWNER')}
-            disabled={loading}
-            variant="secondary"
-          >
-            Sign up with Google (Owner)
-          </Button>
-          <Button
-            onClick={() => handleGoogleSignup('WORKER')}
-            disabled={loading}
-            variant="secondary"
-          >
-            Sign up with Google (Worker)
-          </Button>
-        </div> */}
-
       <div className="mb-6 rounded-xl border border-fire-500/30 bg-fire-500/10 px-3 py-2 text-center text-xs font-medium text-fire-200">
         Set up your owner or worker access in one step
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Button
+          type="button"
+          onClick={() => {
+            const selected = registerRoles.find((r) => r.id === roleId);
+            const targetRole: GoogleSignupRole =
+              selected?.slug === REGISTER_ROLE_SLUG.OWNER ? 'OWNER' : 'WORKER';
+            void handleGoogleSignup(targetRole);
+          }}
+          disabled={loadingGoogle || loading || rolesLoading || registerRoles.length === 0}
+          variant="secondary"
+        >
+          {loadingGoogle ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <span>Loading…</span>
+            </>
+          ) : (
+            <>
+              <IconBrandGoogleFilled className="mr-1 h-4 w-4" /> Continue with
+              Google
+            </>
+          )}
+        </Button>
+        <p className="text-center text-xs text-zinc-600 dark:text-zinc-400">
+          Uses the role selected below.
+        </p>
+      </div>
+
+      <div className="flex flex-row items-center gap-2">
+        <div className="my-6 flex-1 border-t" />
+        <div className="text-center text-sm text-muted-foreground">OR</div>
+        <div className="my-6 flex-1 border-t" />
       </div>
 
       <form onSubmit={handleEmailSignup} className="space-y-4">
@@ -260,7 +280,7 @@ export default function RegisterPage() {
         </div>
 
         <Button
-          disabled={loading || rolesLoading || registerRoles.length === 0}
+          disabled={loading || loadingGoogle || rolesLoading || registerRoles.length === 0}
           type="submit"
           className="h-11 w-full bg-gradient-to-r from-fire-500 via-fire-600 to-fire-500 text-white shadow-[0_16px_34px_-14px] shadow-fire-500/70 hover:from-fire-400 hover:to-fire-500"
         >

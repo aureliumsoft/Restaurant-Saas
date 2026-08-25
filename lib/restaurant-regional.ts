@@ -99,6 +99,13 @@ export function localeForRegionalSettings(
   }
 }
 
+/** Storefront / native-app UI language derived from the restaurant country. */
+export function defaultUiLanguageForCountry(
+  country: string | null | undefined
+): 'en' | 'es' {
+  return normalizeRestaurantCountryCode(country) === 'PK' ? 'en' : 'es';
+}
+
 export type RestaurantRegionalInput = {
   currencyCode?: string | null;
   countryCode?: string | null;

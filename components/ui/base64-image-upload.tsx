@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, useState, type ChangeEvent } from 'react';
+import { useId, useRef, useState, type ChangeEvent, useEffect } from 'react';
 import { ImageIcon, Upload, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -44,7 +44,15 @@ export function Base64ImageUploadField({
   const [localError, setLocalError] = useState<string | null>(null);
 
   const previewOk = canPreviewImageValue(value);
-  const isData = isDataImageUrl(value) || value.trim().startsWith('data:image/');
+  const isData =
+    isDataImageUrl(value) || value.trim().startsWith('data:image/');
+
+  useEffect(() => {
+    if (value.trim()) return;
+    setUrlDraft('');
+    setLocalError(null);
+    if (fileRef.current) fileRef.current.value = '';
+  }, [value]);
 
   async function onFilePicked(e: ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -162,7 +170,8 @@ export function Base64ImageUploadField({
         ) : null}
         {isData && value.trim() ? (
           <span className="text-xs text-muted-foreground">
-            Image ready ({Math.max(1, Math.round(estimateDataUrlBytes(value) / 1024))} KB)
+            Image ready (
+            {Math.max(1, Math.round(estimateDataUrlBytes(value) / 1024))} KB)
           </span>
         ) : null}
       </div>
@@ -191,11 +200,6 @@ export function Base64ImageUploadField({
           autoComplete="off"
           className="w-full flex-1"
         />
-        {!isData ? (
-          <Button type="button" variant="secondary" onClick={applyUrl} disabled={busy}>
-            Use URL
-          </Button>
-        ) : null}
       </div>
 
       {helperText ? (

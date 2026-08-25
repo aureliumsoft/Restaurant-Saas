@@ -75,8 +75,6 @@ const exportSelect = {
   description: true,
   price: true,
   salePrice: true,
-  createdAt: true,
-  updatedAt: true,
   category: { select: { name: true } },
   categoryLinks: {
     orderBy: { sortOrder: 'asc' as const },
@@ -149,6 +147,23 @@ const exportSelect = {
       },
     },
   },
+  ingredientRecipes: {
+    orderBy: { sortOrder: 'asc' as const },
+    select: {
+      quantity: true,
+      menuItemVariationId: true,
+      ingredient: { select: { name: true } },
+      variation: {
+        select: {
+          name: true,
+          title: true,
+          restaurantVariation: {
+            select: { name: true, shortLabel: true },
+          },
+        },
+      },
+    },
+  },
 } satisfies Prisma.MenuItemSelect;
 
 export async function GET(req: NextRequest) {
@@ -174,7 +189,7 @@ export async function GET(req: NextRequest) {
   try {
     const products = await db.menuItem.findMany({
       where: { AND: andParts },
-      orderBy: [{ name: 'asc' }, { createdAt: 'desc' }],
+      orderBy: [{ name: 'asc' }],
       select: exportSelect,
     });
 

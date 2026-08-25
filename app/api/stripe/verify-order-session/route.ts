@@ -40,10 +40,15 @@ export async function GET(req: NextRequest) {
       sessionId
     );
     const baseUrl = resolveBaseUrlFromHeaders(req.headers);
-    let orderSync: 'skipped' | 'completed' | 'already_completed' = 'skipped';
+    let orderSync:
+      | 'skipped'
+      | 'completed'
+      | 'already_completed'
+      | 'failed' = 'skipped';
     let orderId: string | undefined;
     let shortOrderId: string | undefined;
     let ticketNumber: number | null | undefined;
+    let orderError: string | undefined;
 
     if (session.payment_status === 'paid') {
       const existing = await markExistingOrderPaidFromSession(session);
@@ -59,6 +64,7 @@ export async function GET(req: NextRequest) {
         orderId = intentResult.orderId;
         shortOrderId = intentResult.shortOrderId;
         ticketNumber = intentResult.ticketNumber ?? null;
+        orderError = intentResult.error;
       }
     }
 
@@ -69,6 +75,7 @@ export async function GET(req: NextRequest) {
       orderId,
       shortOrderId,
       ticketNumber,
+      error: orderError,
       metadata: session.metadata ?? {},
     });
   } catch (e) {

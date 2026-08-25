@@ -11,7 +11,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ReloadIcon } from '@radix-ui/react-icons';
 import { Loader2, Trash2, X } from 'lucide-react';
 
 interface DeleteConfirmationProps {
@@ -67,9 +66,10 @@ export function DeleteConfirmation({
             {cancelText}
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={() => {
+            onClick={(e) => {
+              e.preventDefault();
               confirmClickedRef.current = true;
-              onConfirm();
+              void onConfirm();
             }}
             disabled={loading}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

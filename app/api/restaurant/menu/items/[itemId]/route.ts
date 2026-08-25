@@ -10,6 +10,8 @@ import {
   validateMenuItemCategoryIds,
 } from "@/lib/menu/menu-item-categories";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
+import { syncMenuItemIngredients } from "@/lib/inventory/sync-recipe";
+import { recipeRowSchema } from "@/lib/inventory/validation";
 import {
   buildCustomerMenuAttributeGroupsSelect,
   customerMenuItemCoreSelect,
@@ -42,6 +44,21 @@ const detailSelect = {
           price: true,
           salePrice: true,
         },
+      },
+    },
+  },
+  ingredientRecipes: {
+    orderBy: { sortOrder: "asc" as const },
+    select: {
+      id: true,
+      quantity: true,
+      menuItemVariationId: true,
+      ingredientId: true,
+      ingredient: {
+        select: { id: true, name: true, unit: true, quantity: true, isMajor: true },
+      },
+      variation: {
+        select: { id: true, restaurantVariationId: true, name: true },
       },
     },
   },
@@ -174,6 +191,7 @@ const patchSchema = z
       )
       .max(50)
       .optional(),
+    ingredients: z.array(recipeRowSchema).max(200).optional(),
   })
   .superRefine((val, ctx) => {
     const check = (label: string, v: string | null | undefined, path: (string | number)[]) => {
@@ -281,45 +299,70 @@ export async function PATCH(
           .filter((v) => v.name.length > 0)
       : undefined;
 
-  const updated = await db.$transaction(async (tx) => {
-    const primaryCategoryId = categoryIds?.[0];
-    const item = await tx.menuItem.update({
-      where: { id: itemId },
-      data: {
-        ...(parsed.data.name !== undefined ? { name: parsed.data.name.trim() } : {}),
-        ...(description !== undefined ? { description } : {}),
-        ...(primaryCategoryId !== undefined ? { categoryId: primaryCategoryId } : {}),
-        ...(imageUrl !== undefined ? { imageUrl } : {}),
-        ...(parsed.data.price !== undefined ? { price: parsed.data.price } : {}),
-        ...(salePrice !== undefined ? { salePrice } : {}),
-        ...(variations !== undefined
-          ? {
-              variations: {
-                deleteMany: {},
-                ...(variations.length > 0 ? { create: variations } : {}),
-              },
-            }
-          : {}),
-      },
-      include: {
-        variations: { orderBy: { sortOrder: "asc" } },
-      },
+  try {
+    const updated = await db.$transaction(async (tx) => {
+      const primaryCategoryId = categoryIds?.[0];
+      const item = await tx.menuItem.update({
+        where: { id: itemId },
+        data: {
+          ...(parsed.data.name !== undefined ? { name: parsed.data.name.trim() } : {}),
+          ...(description !== undefined ? { description } : {}),
+          ...(primaryCategoryId !== undefined ? { categoryId: primaryCategoryId } : {}),
+          ...(imageUrl !== undefined ? { imageUrl } : {}),
+          ...(parsed.data.price !== undefined ? { price: parsed.data.price } : {}),
+          ...(salePrice !== undefined ? { salePrice } : {}),
+          ...(variations !== undefined
+            ? {
+                variations: {
+                  deleteMany: {},
+                  ...(variations.length > 0 ? { create: variations } : {}),
+                },
+              }
+            : {}),
+        },
+        include: {
+          variations: { orderBy: { sortOrder: "asc" } },
+        },
+      });
+
+      if (categoryIds) {
+        await syncMenuItemCategoryLinks(tx, itemId, categoryIds);
+      }
+
+      if (parsed.data.ingredients !== undefined) {
+        await syncMenuItemIngredients(tx, {
+          restaurantId: auth.restaurant.id,
+          menuItemId: itemId,
+          variations: item.variations.map((v) => ({
+            id: v.id,
+            restaurantVariationId: v.restaurantVariationId,
+          })),
+          recipes: parsed.data.ingredients,
+        });
+      }
+
+      return item;
     });
 
-    if (categoryIds) {
-      await syncMenuItemCategoryLinks(tx, itemId, categoryIds);
+    const resolvedCategoryIds =
+      categoryIds ?? (await getMenuItemCategoryIds(itemId));
+
+    return NextResponse.json(
+      { data: { ...updated, categoryIds: resolvedCategoryIds } },
+      { status: 200 }
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '';
+    if (
+      msg.includes('ingredient') ||
+      msg.includes('variation') ||
+      msg.includes('Duplicate')
+    ) {
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
-
-    return item;
-  });
-
-  const resolvedCategoryIds =
-    categoryIds ?? (await getMenuItemCategoryIds(itemId));
-
-  return NextResponse.json(
-    { data: { ...updated, categoryIds: resolvedCategoryIds } },
-    { status: 200 }
-  );
+    console.error(e);
+    return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
+  }
 }
 
 export async function DELETE(
@@ -338,11 +381,20 @@ export async function DELETE(
 
   const existing = await db.menuItem.findFirst({
     where: { id: itemId, restaurantId: auth.restaurant.id },
+    select: { id: true, name: true },
   });
   if (!existing) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
-  await db.menuItem.delete({ where: { id: itemId } });
+  await db.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      UPDATE "OrderItem"
+      SET "productName" = ${existing.name}
+      WHERE "menuItemId" = ${itemId}
+        AND ("productName" IS NULL OR "productName" = '')
+    `;
+    await tx.menuItem.delete({ where: { id: itemId } });
+  });
   return NextResponse.json({ ok: true }, { status: 200 });
 }

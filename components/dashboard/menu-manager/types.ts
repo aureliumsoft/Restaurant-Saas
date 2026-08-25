@@ -99,6 +99,24 @@ export type MenuItemRow = {
       salePrice: number | null;
     };
   }[];
+  ingredientRecipes?: {
+    id: string;
+    quantity: number;
+    menuItemVariationId: string | null;
+    ingredientId: string;
+    ingredient: {
+      id: string;
+      name: string;
+      unit: string;
+      quantity: number;
+      isMajor: boolean;
+    };
+    variation: {
+      id: string;
+      restaurantVariationId: string | null;
+      name: string;
+    } | null;
+  }[];
 };
 
 export type MenuCategoryRow = {

@@ -8,6 +8,8 @@ import {
   syncMenuItemCategoryLinks,
   validateMenuItemCategoryIds,
 } from "@/lib/menu/menu-item-categories";
+import { syncMenuItemIngredients } from "@/lib/inventory/sync-recipe";
+import { recipeRowSchema } from "@/lib/inventory/validation";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 
 const createSchema = z
@@ -36,6 +38,7 @@ const createSchema = z
       )
       .max(50)
       .optional(),
+    ingredients: z.array(recipeRowSchema).max(200).optional(),
   })
   .superRefine((val, ctx) => {
     const check = (label: string, v: string | null | undefined, path: (string | number)[]) => {
@@ -149,6 +152,15 @@ export async function POST(req: NextRequest) {
         },
       });
       await syncMenuItemCategoryLinks(tx, created.id, categoryIds);
+      await syncMenuItemIngredients(tx, {
+        restaurantId: auth.restaurant.id,
+        menuItemId: created.id,
+        variations: created.variations.map((v) => ({
+          id: v.id,
+          restaurantVariationId: v.restaurantVariationId,
+        })),
+        recipes: parsed.data.ingredients ?? [],
+      });
       return created;
     });
     return NextResponse.json(
@@ -156,6 +168,14 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (e) {
+    const msg = e instanceof Error ? e.message : '';
+    if (
+      msg.includes('ingredient') ||
+      msg.includes('variation') ||
+      msg.includes('Duplicate')
+    ) {
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
     console.error(e);
     return NextResponse.json({ error: "Failed to create product" }, { status: 500 });
   }

@@ -36,6 +36,7 @@ export async function GET(_req: NextRequest) {
           roleBasedSettings: f0.roleBasedSettings,
           branding: f0.branding,
           advancedAnalytics: f0.advancedAnalytics,
+          mobileApp: f0.mobileApp,
         },
       });
     }
@@ -58,6 +59,7 @@ export async function GET(_req: NextRequest) {
         roleBasedSettings: f.roleBasedSettings,
         branding: f.branding,
         advancedAnalytics: f.advancedAnalytics,
+        mobileApp: f.mobileApp,
       },
     });
   } catch (e) {

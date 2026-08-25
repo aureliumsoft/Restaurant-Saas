@@ -28,6 +28,7 @@ import {
   emptyColumnMapping,
   guessColumnMapping,
   parseCsvHeadersAndSample,
+  formatIngredientsPreview,
   parseProductsCsvImport,
   type ColumnMapping,
   type ProductImportFieldKey,
@@ -52,6 +53,8 @@ type ImportResult = {
   offers: number;
   personalizeGroups: number;
   personalizeOptions: number;
+  ingredients?: number;
+  createdIngredients?: number;
   warnings?: string[];
 };
 
@@ -71,6 +74,7 @@ export function ProductCsvImportWizard({
   const [file, setFile] = useState<File | null>(null);
   const [csvText, setCsvText] = useState('');
   const [headers, setHeaders] = useState<string[]>([]);
+  const [sampleRow, setSampleRow] = useState<string[]>([]);
   const [totalDataRows, setTotalDataRows] = useState(0);
   const [skipDuplicates, setSkipDuplicates] = useState(true);
   const [mapping, setMapping] = useState<ColumnMapping>(emptyColumnMapping());
@@ -84,6 +88,7 @@ export function ProductCsvImportWizard({
     setFile(null);
     setCsvText('');
     setHeaders([]);
+    setSampleRow([]);
     setTotalDataRows(0);
     setSkipDuplicates(true);
     setMapping(emptyColumnMapping());
@@ -116,8 +121,11 @@ export function ProductCsvImportWizard({
     }
     try {
       const text = await picked.text();
-      const { headers: hdrs, totalDataRows: total } =
-        parseCsvHeadersAndSample(text, 8);
+      const {
+        headers: hdrs,
+        dataRows,
+        totalDataRows: total,
+      } = parseCsvHeadersAndSample(text, 8);
       if (hdrs.length === 0 || total === 0) {
         toast.error('CSV has no data rows');
         return;
@@ -125,6 +133,7 @@ export function ProductCsvImportWizard({
       setFile(picked);
       setCsvText(text);
       setHeaders(hdrs);
+      setSampleRow(dataRows[0] ?? []);
       setTotalDataRows(total);
       setMapping(guessColumnMapping(hdrs));
       setResult(null);
@@ -205,6 +214,17 @@ export function ProductCsvImportWizard({
     }));
   };
 
+  const sampleForField = (field: ProductImportFieldKey): string => {
+    const header = mapping[field];
+    if (!header) return '';
+    const colRef = header.match(/^__col_(\d+)$/);
+    const idx = colRef
+      ? Number(colRef[1])
+      : headers.findIndex((h) => h === header);
+    if (idx == null || idx < 0) return '';
+    return (sampleRow[idx] ?? '').trim();
+  };
+
   return (
     <>
       <Dialog
@@ -219,7 +239,7 @@ export function ProductCsvImportWizard({
         }}
       >
         <DialogContent
-          className="flex max-h-[90vh] w-full max-w-3xl flex-col gap-0 overflow-hidden p-0"
+          className="flex h-[min(90vh,880px)] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0"
           onInteractOutside={(e) => e.preventDefault()}
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => {
@@ -301,8 +321,9 @@ export function ProductCsvImportWizard({
                     </span>
                     <span className="mt-0.5 block text-xs text-muted-foreground">
                       When checked, products with the same name already in the
-                      database are not imported. Uncheck to update name, price,
-                      description, and categories on matches.
+                      database are not recreated. Extra categories from the file
+                      are still assigned to that one product. Uncheck to also
+                      update name, price, and description on matches.
                     </span>
                   </span>
                 </label>
@@ -313,13 +334,29 @@ export function ProductCsvImportWizard({
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
                   Match each file column to a product field / table. Product
-                  name is required.
+                  name is required. A sample from the first row is shown under
+                  each mapping.
                 </p>
+                {headers.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    File columns:{' '}
+                    {headers.map((h, i) => (
+                      <span
+                        key={`${i}-${h}`}
+                        className="mr-1 inline-block rounded border bg-muted/50 px-1.5 py-0.5 font-medium text-foreground"
+                      >
+                        {h || `(Column ${i + 1})`}
+                      </span>
+                    ))}
+                  </p>
+                ) : null}
                 <div className="space-y-3">
-                  {PRODUCT_IMPORT_FIELDS.map((field) => (
+                  {PRODUCT_IMPORT_FIELDS.map((field) => {
+                    const sample = sampleForField(field.key);
+                    return (
                     <div
                       key={field.key}
-                      className="grid gap-2 sm:grid-cols-[1fr_minmax(0,1.2fr)] sm:items-center"
+                      className="grid gap-2 sm:grid-cols-[1fr_minmax(0,1.2fr)] sm:items-start"
                     >
                       <div>
                         <p className="text-sm font-medium">
@@ -332,6 +369,7 @@ export function ProductCsvImportWizard({
                           {field.table}
                         </p>
                       </div>
+                      <div className="space-y-1">
                       <Select
                         value={mapping[field.key] || SKIP_MAP}
                         onValueChange={(v) => setFieldMapping(field.key, v)}
@@ -353,8 +391,22 @@ export function ProductCsvImportWizard({
                           ))}
                         </SelectContent>
                       </Select>
+                      {mapping[field.key] ? (
+                        <p
+                          className="line-clamp-2 text-xs text-muted-foreground"
+                          title={sample || undefined}
+                        >
+                          {sample || 'Mapped — first row is empty'}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Do not import
+                        </p>
+                      )}
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : null}
@@ -368,8 +420,20 @@ export function ProductCsvImportWizard({
                   </strong>{' '}
                   mapped product(s) — scroll the table to view every row.
                   {skipDuplicates
-                    ? ' Existing names will be skipped.'
-                    : ' Existing names will be updated (core fields).'}
+                    ? ' Same names in the file become one product with every listed category. Existing catalog products are reused and extra categories are added.'
+                    : ' Same names in the file become one product with every listed category. Existing catalog products are updated.'}{' '}
+                  Ingredients:{' '}
+                  <strong className="text-foreground">
+                    {mapping.ingredients || 'not mapped'}
+                  </strong>
+                  {previewParsed
+                    ? ` · ${
+                        previewParsed.products.filter(
+                          (p) => p.ingredients.length > 0
+                        ).length
+                      } with recipes`
+                    : ''}
+                  .
                 </p>
                 {previewParsed && previewParsed.errors.length > 0 ? (
                   <div className="max-h-28 shrink-0 overflow-y-auto rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
@@ -387,6 +451,9 @@ export function ProductCsvImportWizard({
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
                           Name
+                        </th>
+                        <th className="whitespace-nowrap px-3 py-2 font-medium">
+                          Ingredients
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
                           Description
@@ -426,6 +493,9 @@ export function ProductCsvImportWizard({
                           <td className="max-w-[160px] whitespace-normal break-words px-3 py-2 font-medium">
                             {p.name}
                           </td>
+                          <td className="max-w-[220px] whitespace-normal break-words px-3 py-2">
+                            {formatIngredientsPreview(p.ingredients) || '—'}
+                          </td>
                           <td className="max-w-[200px] whitespace-normal break-words px-3 py-2 text-muted-foreground">
                             {p.description || '—'}
                           </td>
@@ -462,7 +532,7 @@ export function ProductCsvImportWizard({
                       {(previewParsed?.products.length ?? 0) === 0 ? (
                         <tr>
                           <td
-                            colSpan={10}
+                            colSpan={11}
                             className="px-3 py-6 text-center text-muted-foreground"
                           >
                             No rows to preview. Go back and fix mapping.
@@ -491,11 +561,15 @@ export function ProductCsvImportWizard({
                       <li>
                         Duplicates:{' '}
                         {skipDuplicates
-                          ? 'skip existing names'
-                          : 'update existing core fields'}
+                          ? 'reuse existing names and add extra categories'
+                          : 'update existing core fields and set categories from the file'}
                       </li>
                       <li>
                         Name column: {mapping.name || '(not mapped)'}
+                      </li>
+                      <li>
+                        Ingredients column:{' '}
+                        {mapping.ingredients || '(not mapped)'}
                       </li>
                     </ul>
                     <p className="text-xs text-muted-foreground">
@@ -515,6 +589,10 @@ export function ProductCsvImportWizard({
                       <li>Variations: {result.variations}</li>
                       <li>Recommendations: {result.recommendations}</li>
                       <li>Offers: {result.offers}</li>
+                      <li>
+                        Ingredients created: {result.createdIngredients ?? 0}
+                      </li>
+                      <li>Recipe lines: {result.ingredients ?? 0}</li>
                     </ul>
                   </div>
                 )}
@@ -591,8 +669,8 @@ export function ProductCsvImportWizard({
         title="Finish import"
         description={
           skipDuplicates
-            ? `Import products from "${file?.name ?? 'CSV'}"? Existing products with the same name will be skipped.`
-            : `Import products from "${file?.name ?? 'CSV'}"? Existing products with the same name will be updated.`
+            ? `Import products from "${file?.name ?? 'CSV'}"? Existing products with the same name will not be duplicated. Extra categories from the file will still be assigned.`
+            : `Import products from "${file?.name ?? 'CSV'}"? Existing products with the same name will be updated, including categories from the file.`
         }
         confirmText="Import now"
         loading={importing}

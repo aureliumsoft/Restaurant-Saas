@@ -12,7 +12,12 @@ import {
 import {
   parseRestaurantRegionalSettings,
   RESTAURANT_REGIONAL_DB_SELECT,
+  defaultUiLanguageForCountry,
+  localeForRegionalSettings,
 } from "@/lib/restaurant-regional";
+import { publicGoogleSignInConfig } from "@/lib/customer-auth/google-oauth";
+import { getRestaurantPlanFeatures } from "@/lib/subscription-plan-enforcement";
+import { publicRestaurantImageUrls } from "@/lib/stored-image-response";
 
 function getSubdomainFromHost(hostname: string) {
   if (hostname.endsWith(".localhost")) {
@@ -43,9 +48,19 @@ async function findCustomerRestaurant(
       select: selectWithCharges,
     });
     if (!restaurant) return null;
+    const plan = await getRestaurantPlanFeatures(restaurant.id);
+    const regional = parseRestaurantRegionalSettings(restaurant);
+    const media = publicRestaurantImageUrls(restaurant.slug, restaurant);
     return {
       ...withServiceChargesPayload(restaurant),
-      regional: parseRestaurantRegionalSettings(restaurant),
+      ...media,
+      regional: {
+        ...regional,
+        locale: localeForRegionalSettings(regional),
+        defaultUiLanguage: defaultUiLanguageForCountry(regional.countryCode),
+      },
+      mobileApp: plan.mobileApp,
+      googleSignIn: publicGoogleSignInConfig(),
     };
   } catch (error) {
     if (!isPrismaUnknownFieldError(error)) throw error;
@@ -54,9 +69,19 @@ async function findCustomerRestaurant(
       select: RESTAURANT_BRANDING_DB_SELECT,
     });
     if (!restaurant) return null;
+    const plan = await getRestaurantPlanFeatures(restaurant.id);
+    const regional = parseRestaurantRegionalSettings(null);
+    const media = publicRestaurantImageUrls(restaurant.slug, restaurant);
     return {
       ...withDefaultServiceChargesPayload(restaurant),
-      regional: parseRestaurantRegionalSettings(null),
+      ...media,
+      regional: {
+        ...regional,
+        locale: localeForRegionalSettings(regional),
+        defaultUiLanguage: defaultUiLanguageForCountry(regional.countryCode),
+      },
+      mobileApp: plan.mobileApp,
+      googleSignIn: publicGoogleSignInConfig(),
     };
   }
 }

@@ -65,15 +65,52 @@ export function decodeCustomerGoogleOAuthState(
   }
 }
 
-export function customerGoogleOAuthRedirectUri(origin: string): string {
-  const base = origin.replace(/\/$/, '');
-  return `${base}/api/customer-auth/google/callback`;
+/**
+ * Origin Google already allows for this OAuth client (NextAuth).
+ * Do not use the request host — 127.0.0.1 vs localhost (or a LAN IP)
+ * causes Google Error 400 redirect_uri_mismatch.
+ */
+export function customerGoogleOAuthOrigin(): string {
+  const fromEnv =
+    process.env.NEXTAUTH_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.APP_URL?.trim();
+  if (fromEnv) {
+    const withProto = fromEnv.startsWith('http') ? fromEnv : `https://${fromEnv}`;
+    return withProto.replace(/\/$/, '');
+  }
+  return 'http://localhost:3000';
+}
+
+/**
+ * Must match an Authorized redirect URI on the Google OAuth client.
+ * Staff Google login already registers `/api/auth/callback/google`; kiosk
+ * customer login reuses that URI (middleware rewrites customer `state`).
+ */
+export function customerGoogleOAuthRedirectUri(origin?: string): string {
+  const base = (origin?.trim() || customerGoogleOAuthOrigin()).replace(
+    /\/$/,
+    ''
+  );
+  return `${base}/api/auth/callback/google`;
+}
+
+/** Public Google Sign-In settings for storefront + native restaurant apps. */
+export function publicGoogleSignInConfig(): {
+  enabled: boolean;
+  clientId: string | null;
+} {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || null;
+  return {
+    enabled: Boolean(clientId),
+    clientId,
+  };
 }
 
 export function buildCustomerGoogleAuthUrl(options: {
-  origin: string;
   restaurantSlug: string;
   returnTo: string;
+  origin?: string;
 }): string | null {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   if (!clientId) return null;
@@ -147,4 +184,54 @@ export async function exchangeGoogleAuthCode(
     return null;
   }
   return profile;
+}
+
+function allowedGoogleClientIds(): string[] {
+  return [
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_ANDROID_CLIENT_ID,
+    process.env.GOOGLE_IOS_CLIENT_ID,
+  ]
+    .map((value) => value?.trim())
+    .filter((value): value is string => !!value);
+}
+
+/** Verify a native Google Sign-In ID token (aud must be a configured client id). */
+export async function verifyGoogleIdToken(
+  idToken: string
+): Promise<GoogleUserInfo | null> {
+  const token = idToken.trim();
+  const audiences = allowedGoogleClientIds();
+  if (!token || audiences.length === 0) return null;
+
+  const res = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`,
+    { cache: 'no-store' }
+  );
+  const json = (await res.json().catch(() => ({}))) as {
+    sub?: string;
+    email?: string;
+    aud?: string;
+    email_verified?: boolean | string;
+    name?: string;
+    given_name?: string;
+    picture?: string;
+    error?: string;
+  };
+  if (!res.ok || !json.email?.trim() || !json.aud) {
+    console.error('customer google id token verify failed', json.error);
+    return null;
+  }
+  if (!audiences.includes(json.aud)) {
+    console.error('customer google id token audience mismatch');
+    return null;
+  }
+  return {
+    sub: json.sub ?? '',
+    email: json.email,
+    email_verified: json.email_verified === true || json.email_verified === 'true',
+    name: json.name,
+    given_name: json.given_name,
+    picture: json.picture,
+  };
 }

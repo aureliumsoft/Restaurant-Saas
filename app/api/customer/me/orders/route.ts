@@ -6,6 +6,7 @@ import {
   resolveRestaurantIdBySlug,
 } from '@/lib/customer-auth/session';
 import { db } from '@/lib/db';
+import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 
 export async function GET(req: NextRequest) {
   try {
@@ -67,6 +68,7 @@ export async function GET(req: NextRequest) {
         items: {
           select: {
             quantity: true,
+            productName: true,
             menuItem: { select: { name: true } },
           },
           take: 4,
@@ -102,7 +104,7 @@ export async function GET(req: NextRequest) {
             paymentMethod: order.payments[0]?.method ?? null,
             itemCount: order._count.items,
             itemPreview: order.items.map(
-              (item) => `${item.quantity}× ${item.menuItem.name}`
+              (item) => `${item.quantity}× ${orderItemDisplayName(item)}`
             ),
           };
         }),

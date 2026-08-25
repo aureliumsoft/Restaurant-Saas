@@ -34,6 +34,9 @@ type UseCardPaymentFlowOptions = {
   orderIdPrefix?: string;
   formatMoney?: (n: number) => string;
   currency?: string;
+  /** Return an error message to skip the terminal charge (e.g. ingredient stock). */
+  beforeCharge?: () => Promise<string | null>;
+  onChargeBlocked?: (message: string) => void;
 };
 
 function defaultFormatMoney(n: number) {
@@ -48,7 +51,13 @@ export function useCardPaymentFlow({
   orderIdPrefix = 'PRE',
   formatMoney = defaultFormatMoney,
   currency = 'EUR',
+  beforeCharge,
+  onChargeBlocked,
 }: UseCardPaymentFlowOptions) {
+  const beforeChargeRef = useRef(beforeCharge);
+  beforeChargeRef.current = beforeCharge;
+  const onChargeBlockedRef = useRef(onChargeBlocked);
+  onChargeBlockedRef.current = onChargeBlocked;
   const [cardPaymentStatus, setCardPaymentStatus] =
     useState<CardPaymentStatus>('idle');
   const [cardProcessingOpen, setCardProcessingOpen] = useState(false);
@@ -140,6 +149,11 @@ export function useCardPaymentFlow({
 
   async function handleCardPayClick() {
     if (cardPaymentStatus === 'success') return;
+    const blocked = await beforeChargeRef.current?.();
+    if (blocked) {
+      onChargeBlockedRef.current?.(blocked);
+      return;
+    }
     cardPaymentCancelledRef.current = false;
     cardPaymentResolvedRef.current = false;
     setCardProcessingOpen(true);

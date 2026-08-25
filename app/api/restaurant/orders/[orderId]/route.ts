@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
+import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
 export async function GET(
@@ -46,6 +47,8 @@ export async function GET(
             id: true,
             quantity: true,
             price: true,
+            menuItemId: true,
+            productName: true,
             menuItem: { select: { id: true, name: true } },
             modifiers: {
               select: {
@@ -77,6 +80,16 @@ export async function GET(
       ...order,
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
+      items: order.items.map((item) => ({
+        id: item.id,
+        quantity: item.quantity,
+        price: item.price,
+        menuItem: {
+          id: item.menuItem?.id ?? item.menuItemId ?? '',
+          name: orderItemDisplayName(item),
+        },
+        modifiers: item.modifiers,
+      })),
       payments: order.payments.map((p) => ({
         ...p,
         createdAt: p.createdAt.toISOString(),

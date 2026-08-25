@@ -10,6 +10,7 @@ import {
 import { getRequestOrigin } from '@/lib/request-origin';
 import { getRestaurantEasypaisaRuntimeConfigBySlug } from '@/lib/restaurant-payment-credentials';
 import { buildEasypaisaHostedCheckout } from '@/lib/restaurant-easypaisa-client';
+import { paymentStockBlockError } from '@/lib/inventory/assert-payment-stock';
 
 export const runtime = 'nodejs';
 
@@ -61,6 +62,14 @@ export async function POST(req: NextRequest) {
       },
       { status: 403 }
     );
+  }
+
+  const stockError = await paymentStockBlockError(
+    restaurantSlug,
+    parsed.data.payload
+  );
+  if (stockError) {
+    return NextResponse.json({ error: stockError }, { status: 400 });
   }
 
   const origin = await getRequestOrigin();

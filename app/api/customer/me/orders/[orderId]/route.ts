@@ -6,6 +6,7 @@ import {
   resolveRestaurantIdBySlug,
 } from '@/lib/customer-auth/session';
 import { db } from '@/lib/db';
+import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 
@@ -76,6 +77,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
             id: true,
             quantity: true,
             price: true,
+            productName: true,
             menuItem: { select: { id: true, name: true, imageUrl: true } },
             modifiers: {
               select: {
@@ -132,8 +134,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
             id: item.id,
             quantity: item.quantity,
             unitPrice: item.price,
-            name: item.menuItem.name,
-            imageUrl: item.menuItem.imageUrl,
+            name: orderItemDisplayName(item),
+            imageUrl: item.menuItem?.imageUrl ?? null,
             modifiers: item.modifiers,
           })),
         },

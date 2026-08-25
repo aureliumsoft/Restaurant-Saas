@@ -82,6 +82,7 @@ export async function GET(req: NextRequest) {
             roleBasedSettings: limits.roleBasedSettings,
             branding: limits.branding,
             advancedAnalytics: limits.advancedAnalytics,
+            mobileApp: limits.mobileApp,
           },
         },
       },

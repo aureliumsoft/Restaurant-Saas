@@ -16,6 +16,10 @@ interface CreateProductSaveConfirmationProps {
   open: boolean;
   itemName?: string;
   loading?: boolean;
+  title?: string;
+  description?: string;
+  saveAndCloseText?: string;
+  saveAndAddNewText?: string;
   onCancel: () => void;
   onSaveAndClose: () => void | Promise<void>;
   onSaveAndAddNew: () => void | Promise<void>;
@@ -25,6 +29,10 @@ export function CreateProductSaveConfirmation({
   open,
   itemName,
   loading = false,
+  title,
+  description = 'Choose how you want to save this new menu item.',
+  saveAndCloseText = 'Save & close',
+  saveAndAddNewText = 'Save & add new',
   onCancel,
   onSaveAndClose,
   onSaveAndAddNew,
@@ -39,10 +47,10 @@ export function CreateProductSaveConfirmation({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {itemName ? `Create "${itemName}"?` : 'Create product?'}
+            {title ?? (itemName ? `Create "${itemName}"?` : 'Create product?')}
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Choose how you want to save this new menu item.
+            {description}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
@@ -70,7 +78,7 @@ export function CreateProductSaveConfirmation({
               ) : (
                 <>
                   <Plus className="mr-2 h-4 w-4" />
-                  <span>Save & add new</span>
+                  <span>{saveAndAddNewText}</span>
                 </>
               )}
             </Button>
@@ -87,7 +95,7 @@ export function CreateProductSaveConfirmation({
               ) : (
                 <>
                   <Save className="mr-2 h-4 w-4" />
-                  <span>Save & close</span>
+                  <span>{saveAndCloseText}</span>
                 </>
               )}
             </Button>

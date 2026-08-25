@@ -198,6 +198,7 @@ export async function applyPayPalPostCapture(opts: {
             const created = await createCustomerOrder({
               data: orderData,
               customerAccountId: intent.customerAccountId ?? null,
+              paidExternally: true,
             });
             if (!created.ok) {
               throw new Error(

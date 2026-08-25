@@ -25,8 +25,6 @@ export type ProductCsvExportItem = {
   description: string | null;
   price: number;
   salePrice: number | null;
-  createdAt: Date;
-  updatedAt: Date;
   category: { name: string } | null;
   categoryLinks: Array<{
     sortOrder: number;
@@ -80,6 +78,19 @@ export type ProductCsvExportItem = {
       name: string;
       sortOrder: number;
     }>;
+  }>;
+  ingredientRecipes: Array<{
+    quantity: number;
+    menuItemVariationId: string | null;
+    ingredient: { name: string } | null;
+    variation: {
+      name: string;
+      title: string;
+      restaurantVariation: {
+        name: string;
+        shortLabel: string | null;
+      } | null;
+    } | null;
   }>;
 };
 
@@ -170,6 +181,55 @@ function personalizeValue(p: ProductCsvExportItem): string {
     .join(' || ');
 }
 
+function variationRecipeLabel(
+  variation: NonNullable<ProductCsvExportItem['ingredientRecipes'][number]['variation']>
+): string {
+  const label = (variation.title || variation.name || '').trim();
+  const catalog = variation.restaurantVariation
+    ? variation.restaurantVariation.shortLabel || variation.restaurantVariation.name
+    : '';
+  if (catalog && catalog.trim() && catalog.trim().toLowerCase() !== label.toLowerCase()) {
+    return `${label} [${catalog.trim()}]`;
+  }
+  return label;
+}
+
+/**
+ * Simple: `Beef patty:1; Burger bun:1`
+ * Per variation: `Small | Cola syrup:30 || Large | Cola syrup:50`
+ */
+function ingredientsValue(p: ProductCsvExportItem): string {
+  const recipes = (p.ingredientRecipes ?? []).filter(
+    (r) => r.ingredient?.name?.trim() && r.quantity > 0
+  );
+  if (recipes.length === 0) return '';
+
+  const lineText = (rows: typeof recipes) =>
+    rows
+      .map((r) => `${r.ingredient!.name.trim()}:${r.quantity}`)
+      .join('; ');
+
+  const simple = recipes.filter((r) => !r.menuItemVariationId);
+  const byVariation = new Map<string, typeof recipes>();
+  for (const r of recipes) {
+    if (!r.menuItemVariationId) continue;
+    const key = r.menuItemVariationId;
+    const list = byVariation.get(key) ?? [];
+    list.push(r);
+    byVariation.set(key, list);
+  }
+
+  const parts: string[] = [];
+  if (simple.length > 0) parts.push(lineText(simple));
+  for (const rows of byVariation.values()) {
+    const label = rows[0]?.variation
+      ? variationRecipeLabel(rows[0].variation)
+      : 'Variation';
+    parts.push(`${label} | ${lineText(rows)}`);
+  }
+  return parts.join(' || ');
+}
+
 /**
  * Single CSV: one row per product, all non-image field values, no IDs.
  */
@@ -184,34 +244,21 @@ export function buildProductsCsv(products: ProductCsvExportItem[]): string {
     'recommendations',
     'offers',
     'personalize',
-    'createdAt',
-    'updatedAt',
+    'ingredients',
   ];
 
-  const rows = products.map((p) => {
-    const created =
-      p.createdAt instanceof Date
-        ? p.createdAt.toISOString()
-        : String(p.createdAt ?? '');
-    const updated =
-      p.updatedAt instanceof Date
-        ? p.updatedAt.toISOString()
-        : String(p.updatedAt ?? '');
-
-    return [
-      p.name ?? '',
-      p.description ?? '',
-      p.price ?? 0,
-      p.salePrice ?? '',
-      categoryNames(p),
-      variationsValue(p),
-      recommendationsValue(p),
-      offersValue(p),
-      personalizeValue(p),
-      created,
-      updated,
-    ];
-  });
+  const rows = products.map((p) => [
+    p.name ?? '',
+    p.description ?? '',
+    p.price ?? 0,
+    p.salePrice ?? '',
+    categoryNames(p),
+    variationsValue(p),
+    recommendationsValue(p),
+    offersValue(p),
+    personalizeValue(p),
+    ingredientsValue(p),
+  ]);
 
   return rowsToCsv(headers, rows);
 }

@@ -7,12 +7,15 @@ import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import {
   Download,
+  LayoutGrid,
+  LayoutList,
   ListFilter,
   Loader2,
   Pencil,
   Plus,
   Search,
   Trash2,
+  X,
   Upload,
 } from 'lucide-react';
 
@@ -32,7 +35,10 @@ import {
   DashboardTableRow,
   DashboardTableWrapper,
 } from '@/components/dashboard/dashboard-table';
-import { DeleteConfirmation, SaveConfirmation } from '@/components/ui/confirmation-dialogs';
+import {
+  DeleteConfirmation,
+  SaveConfirmation,
+} from '@/components/ui/confirmation-dialogs';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -54,6 +60,7 @@ import type { MenuItemRow } from './types';
 
 const PRODUCTS_PAGE_SIZE = 12;
 const ALL_CATEGORIES = 'all';
+const PRODUCT_VIEW_KEY = 'foodluk.products.view';
 const SKELETON_BONE = 'bg-[#e2e8f0] dark:bg-[#3f3f46] animate-pulse';
 
 type ProductListItem = MenuItemRow & {
@@ -80,15 +87,6 @@ type CachedPage = {
   pagination: ProductsApiResponse['data']['pagination'];
   categories?: Array<{ id: string; name: string }>;
 };
-
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const id = window.setTimeout(() => setDebounced(value), delayMs);
-    return () => window.clearTimeout(id);
-  }, [value, delayMs]);
-  return debounced;
-}
 
 function formatMenuItemDate(iso: string | undefined) {
   if (!iso) return '—';
@@ -140,6 +138,19 @@ function ProductRowSkeleton() {
   );
 }
 
+function ProductCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border">
+      <div className={cn('aspect-[4/3] w-full', SKELETON_BONE)} />
+      <div className="space-y-2 p-3">
+        <div className={cn('h-4 w-3/4 rounded', SKELETON_BONE)} />
+        <div className={cn('h-3 w-1/2 rounded', SKELETON_BONE)} />
+        <div className={cn('h-4 w-16 rounded', SKELETON_BONE)} />
+      </div>
+    </div>
+  );
+}
+
 type Props = {
   /** Optional menu refresh (e.g. after inventoring quick actions that create categories). */
   onRefresh?: () => Promise<void>;
@@ -160,13 +171,22 @@ export function ProductsTab({
   const canDeleteProducts = canDelete('product');
 
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebouncedValue(search, 300);
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
+  const [view, setView] = useState<'list' | 'grid'>(() => {
+    if (typeof window === 'undefined') return 'grid';
+    try {
+      const stored = window.localStorage.getItem(PRODUCT_VIEW_KEY);
+      return stored === 'list' ? 'list' : 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
   const [page, setPage] = useState(1);
   const [products, setProducts] = useState<ProductListItem[]>([]);
-  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>(
-    []
-  );
+  const [categories, setCategories] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
   const [pagination, setPagination] = useState({
     page: 1,
     pageSize: PRODUCTS_PAGE_SIZE,
@@ -182,6 +202,26 @@ export function ProductsTab({
     null
   );
   const [deleting, setDeleting] = useState(false);
+
+  const applySearch = () => {
+    setPage(1);
+    setAppliedSearch(search.trim());
+  };
+
+  const clearSearch = () => {
+    setSearch('');
+    setPage(1);
+    setAppliedSearch('');
+  };
+
+  const changeView = (next: 'list' | 'grid') => {
+    setView(next);
+    try {
+      window.localStorage.setItem(PRODUCT_VIEW_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const requestIdRef = useRef(0);
   const cacheRef = useRef<Map<string, CachedPage>>(new Map());
@@ -226,13 +266,12 @@ export function ProductsTab({
       const payload = res.data.data;
       const cached: CachedPage = {
         products: payload.products ?? [],
-        pagination:
-          payload.pagination ?? {
-            page: targetPage,
-            pageSize: PRODUCTS_PAGE_SIZE,
-            total: 0,
-            totalPages: 1,
-          },
+        pagination: payload.pagination ?? {
+          page: targetPage,
+          pageSize: PRODUCTS_PAGE_SIZE,
+          total: 0,
+          totalPages: 1,
+        },
         categories: payload.categories,
       };
       cacheRef.current.set(
@@ -261,7 +300,7 @@ export function ProductsTab({
 
   const loadProducts = useCallback(async () => {
     const requestId = ++requestIdRef.current;
-    const key = cacheKey(page, debouncedSearch, categoryFilter);
+    const key = cacheKey(page, appliedSearch, categoryFilter);
     const cached = cacheRef.current.get(key);
 
     // Always show loading for the requested page until data is ready.
@@ -272,17 +311,17 @@ export function ProductsTab({
       if (requestId !== requestIdRef.current) return;
       applyPayload(cached, true);
       setLoading(false);
-      prefetchNextPage(cached, debouncedSearch, categoryFilter);
+      prefetchNextPage(cached, appliedSearch, categoryFilter);
       return;
     }
 
     try {
-      const payload = await fetchPage(page, debouncedSearch, categoryFilter, {
+      const payload = await fetchPage(page, appliedSearch, categoryFilter, {
         includeCategories: categoriesRef.current.length === 0,
       });
       if (requestId !== requestIdRef.current || !payload) return;
       applyPayload(payload, true);
-      prefetchNextPage(payload, debouncedSearch, categoryFilter);
+      prefetchNextPage(payload, appliedSearch, categoryFilter);
     } catch (e: unknown) {
       if (requestId !== requestIdRef.current) return;
       const err = e as { response?: { data?: { error?: string } } };
@@ -295,7 +334,7 @@ export function ProductsTab({
     }
   }, [
     page,
-    debouncedSearch,
+    appliedSearch,
     categoryFilter,
     applyPayload,
     fetchPage,
@@ -310,7 +349,7 @@ export function ProductsTab({
     setPage(1);
     // Filter/search change invalidates cached pages for previous filters.
     cacheRef.current.clear();
-  }, [debouncedSearch, categoryFilter]);
+  }, [appliedSearch, categoryFilter]);
 
   const refreshAll = async () => {
     cacheRef.current.clear();
@@ -322,7 +361,7 @@ export function ProductsTab({
     setExporting(true);
     try {
       const params = new URLSearchParams();
-      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (appliedSearch) params.set('search', appliedSearch);
       if (categoryFilter !== ALL_CATEGORIES) {
         params.set('categoryId', categoryFilter);
       }
@@ -356,9 +395,7 @@ export function ProductsTab({
       setShowExportConfirmation(false);
       toast.success('Products exported to CSV');
     } catch (e: unknown) {
-      toast.error(
-        e instanceof Error ? e.message : 'Could not export products'
-      );
+      toast.error(e instanceof Error ? e.message : 'Could not export products');
     } finally {
       setExporting(false);
     }
@@ -381,6 +418,35 @@ export function ProductsTab({
     }
   };
 
+  const productActions = (item: ProductListItem) => (
+    <div className="flex gap-1">
+      {canEditProducts ? (
+        <Button type="button" size="icon" variant="outline" asChild>
+          <Link
+            href={`/product/edit/${item.id}`}
+            aria-label={`Edit ${item.name}`}
+          >
+            <Pencil className="h-4 w-4" />
+          </Link>
+        </Button>
+      ) : null}
+      {canDeleteProducts ? (
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="text-destructive"
+          onClick={() => {
+            setDeletingProduct(item);
+            setDeleteConfirmOpen(true);
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      ) : null}
+    </div>
+  );
+
   const noCategories =
     !categoriesLoading &&
     !loading &&
@@ -390,7 +456,7 @@ export function ProductsTab({
   const showEmptyInventory =
     !loading &&
     pagination.total === 0 &&
-    !debouncedSearch &&
+    !appliedSearch &&
     categoryFilter === ALL_CATEGORIES &&
     categories.length > 0;
 
@@ -398,7 +464,7 @@ export function ProductsTab({
     !noCategories &&
     (loading ||
       pagination.total > 0 ||
-      debouncedSearch.length > 0 ||
+      appliedSearch.length > 0 ||
       categoryFilter !== ALL_CATEGORIES ||
       categories.length > 0);
 
@@ -425,7 +491,7 @@ export function ProductsTab({
             {exporting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-            <Upload className="mr-2 h-4 w-4" />
+              <Upload className="mr-2 h-4 w-4" />
             )}
             Export CSV
           </Button>
@@ -474,21 +540,47 @@ export function ProductsTab({
                   </Link>
                 </Button>
               ) : null}
-              <div className="relative min-w-0 flex-1">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden
-                />
-                <Input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by name, description, or category…"
-                  className="h-10 bg-background pl-9"
-                  autoComplete="off"
-                  aria-label="Search products"
-                />
-              </div>
+              <form
+                className="flex min-w-0 flex-1 gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  applySearch();
+                }}
+              >
+                <div className="relative min-w-0 flex-1">
+                  <Input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search by name, description, or category…"
+                    className={cn(
+                      'h-10 bg-background [&::-webkit-search-cancel-button]:hidden'
+                    )}
+                    aria-label="Search products"
+                  />
+                  {appliedSearch && search.trim() === appliedSearch ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-1/2 h-10 w-10 -translate-y-1/2"
+                      aria-label="Clear search"
+                      onClick={clearSearch}
+                    >
+                      <X className="h-4 w-4 font-bold" />
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      variant="default"
+                      className="absolute right-0 top-1/2 h-10 -translate-y-1/2"
+                    > 
+                      <Search className="mr-2 h-4 w-4" />
+                      Search
+                    </Button>
+                  )}
+                </div>
+              </form>
               <div className="flex w-full items-center gap-2 sm:w-auto sm:min-w-[12rem]">
                 <ListFilter
                   className="h-4 w-4 shrink-0 text-muted-foreground"
@@ -496,7 +588,10 @@ export function ProductsTab({
                 />
                 <Select
                   value={categoryFilter}
-                  onValueChange={setCategoryFilter}
+                  onValueChange={(value) => {
+                    setPage(1);
+                    setCategoryFilter(value);
+                  }}
                 >
                   <SelectTrigger className="h-10 w-full bg-background">
                     <SelectValue placeholder="Category" />
@@ -513,6 +608,30 @@ export function ProductsTab({
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex shrink-0 rounded-md border border-border p-0.5">
+                <Button
+                  type="button"
+                  variant={view === 'list' ? 'default' : 'ghost'}
+                  size="icon"
+                  className="h-9 w-9"
+                  aria-pressed={view === 'list'}
+                  aria-label="List view"
+                  onClick={() => changeView('list')}
+                >
+                  <LayoutList className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant={view === 'grid' ? 'default' : 'ghost'}
+                  size="icon"
+                  className="h-9 w-9"
+                  aria-pressed={view === 'grid'}
+                  aria-label="Grid view"
+                  onClick={() => changeView('grid')}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <p className="text-xs text-muted-foreground">
@@ -525,146 +644,192 @@ export function ProductsTab({
 
             {loading || pagination.total > 0 ? (
               <>
-                <DashboardTableWrapper>
-                  <DashboardTable minWidth={1040}>
-                    <DashboardTableHeader>
-                      <DashboardTableRow>
-                        <DashboardTableHead className="w-16">
-                          Photo
-                        </DashboardTableHead>
-                        <DashboardTableHead>Name</DashboardTableHead>
-                        <DashboardTableHead>Category</DashboardTableHead>
-                        <DashboardTableHead>Price</DashboardTableHead>
-                        <DashboardTableHead>Sale</DashboardTableHead>
-                        <DashboardTableHead className="hidden lg:table-cell">
-                          Created
-                        </DashboardTableHead>
-                        <DashboardTableHead className="hidden md:table-cell">
-                          Modified
-                        </DashboardTableHead>
-                        <DashboardTableHead className="w-28" />
-                      </DashboardTableRow>
-                    </DashboardTableHeader>
-                    <DashboardTableBody>
-                      {loading
-                        ? Array.from({ length: PRODUCTS_PAGE_SIZE }).map(
-                            (_, i) => (
-                              <ProductRowSkeleton key={`product-skel-${i}`} />
+                {view === 'list' ? (
+                  <DashboardTableWrapper>
+                    <DashboardTable minWidth={1040}>
+                      <DashboardTableHeader>
+                        <DashboardTableRow>
+                          <DashboardTableHead className="w-16">
+                            Photo
+                          </DashboardTableHead>
+                          <DashboardTableHead>Name</DashboardTableHead>
+                          <DashboardTableHead>Category</DashboardTableHead>
+                          <DashboardTableHead>Price</DashboardTableHead>
+                          <DashboardTableHead>Sale</DashboardTableHead>
+                          <DashboardTableHead className="hidden lg:table-cell">
+                            Created
+                          </DashboardTableHead>
+                          <DashboardTableHead className="hidden md:table-cell">
+                            Modified
+                          </DashboardTableHead>
+                          <DashboardTableHead className="w-28" />
+                        </DashboardTableRow>
+                      </DashboardTableHeader>
+                      <DashboardTableBody>
+                        {loading
+                          ? Array.from({ length: PRODUCTS_PAGE_SIZE }).map(
+                              (_, i) => (
+                                <ProductRowSkeleton key={`product-skel-${i}`} />
+                              )
                             )
-                          )
-                        : products.map((item) => {
-                            const display = getMenuItemDisplayPrice(item);
-                            const variationCount = item.variations?.length ?? 0;
-                            const categoryNames = item.categoryNames ?? [
-                              item.categoryName,
-                            ];
-                            return (
-                              <DashboardTableRow key={item.id}>
-                                <DashboardTableCell>
-                                  <LazyProductImage
-                                    src={item.imageUrl}
-                                    hasImage={item.hasImage}
-                                    className="h-12 w-12 rounded-md border border-border"
-                                    emptyLabel="—"
-                                  />
-                                </DashboardTableCell>
-                                <DashboardTableCell>
-                                  <div className="font-medium">{item.name}</div>
-                                  {item.description ? (
-                                    <div className="line-clamp-2 text-wrap text-xs font-light text-muted-foreground">
-                                      {item.description}
+                          : products.map((item) => {
+                              const display = getMenuItemDisplayPrice(item);
+                              const variationCount =
+                                item.variations?.length ?? 0;
+                              const categoryNames = item.categoryNames ?? [
+                                item.categoryName,
+                              ];
+                              return (
+                                <DashboardTableRow key={item.id}>
+                                  <DashboardTableCell>
+                                    <LazyProductImage
+                                      src={item.imageUrl}
+                                      hasImage={item.hasImage}
+                                      className="h-12 w-12 rounded-md border border-border"
+                                      emptyLabel="—"
+                                    />
+                                  </DashboardTableCell>
+                                  <DashboardTableCell>
+                                    <div className="font-medium">
+                                      {item.name}
                                     </div>
-                                  ) : null}
-                                  {variationCount > 0 ? (
-                                    <div className="mt-0.5 text-[11px] text-muted-foreground">
-                                      {variationCount} variation
-                                      {variationCount === 1 ? '' : 's'}
-                                    </div>
-                                  ) : null}
-                                </DashboardTableCell>
-                                <DashboardTableCell className="text-muted-foreground">
-                                  {categoryNames.length > 1
-                                    ? categoryNames.join(', ')
-                                    : item.categoryName}
-                                </DashboardTableCell>
-                                <DashboardTableCell className="tabular-nums">
-                                  {display.hasVariations ? (
-                                    <>
-                                      <span className="text-xs text-muted-foreground">
-                                        From{' '}
+                                    {item.description ? (
+                                      <div className="line-clamp-2 text-wrap text-xs font-light text-muted-foreground">
+                                        {item.description}
+                                      </div>
+                                    ) : null}
+                                    {variationCount > 0 ? (
+                                      <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                        {variationCount} variation
+                                        {variationCount === 1 ? '' : 's'}
+                                      </div>
+                                    ) : null}
+                                  </DashboardTableCell>
+                                  <DashboardTableCell className="text-muted-foreground">
+                                    {categoryNames.length > 1
+                                      ? categoryNames.join(', ')
+                                      : item.categoryName}
+                                  </DashboardTableCell>
+                                  <DashboardTableCell className="tabular-nums">
+                                    {display.hasVariations ? (
+                                      <>
+                                        <span className="text-xs text-muted-foreground">
+                                          From{' '}
+                                        </span>
+                                        <span className="font-medium">
+                                          {formatMoney(display.amount)}
+                                        </span>
+                                      </>
+                                    ) : display.compareAt != null ? (
+                                      <span className="text-muted-foreground line-through">
+                                        {formatMoney(display.compareAt!)}
                                       </span>
+                                    ) : (
                                       <span className="font-medium">
                                         {formatMoney(display.amount)}
                                       </span>
-                                    </>
+                                    )}
+                                  </DashboardTableCell>
+                                  <DashboardTableCell className="tabular-nums">
+                                    {display.hasVariations ? (
+                                      <span className="text-xs text-muted-foreground">
+                                        via variations
+                                      </span>
+                                    ) : display.compareAt != null ? (
+                                      <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                                        {formatMoney(display.amount)}
+                                      </span>
+                                    ) : (
+                                      '—'
+                                    )}
+                                  </DashboardTableCell>
+                                  <DashboardTableCell className="hidden text-xs text-muted-foreground lg:table-cell">
+                                    {formatMenuItemDate(item.createdAt)}
+                                  </DashboardTableCell>
+                                  <DashboardTableCell className="hidden text-xs text-muted-foreground md:table-cell">
+                                    {formatMenuItemDate(item.updatedAt)}
+                                  </DashboardTableCell>
+                                  <DashboardTableCell>
+                                    {productActions(item)}
+                                  </DashboardTableCell>
+                                </DashboardTableRow>
+                              );
+                            })}
+                      </DashboardTableBody>
+                    </DashboardTable>
+                  </DashboardTableWrapper>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {loading
+                      ? Array.from({ length: PRODUCTS_PAGE_SIZE }).map(
+                          (_, i) => (
+                            <ProductCardSkeleton
+                              key={`product-card-skel-${i}`}
+                            />
+                          )
+                        )
+                      : products.map((item) => {
+                          const display = getMenuItemDisplayPrice(item);
+                          const variationCount = item.variations?.length ?? 0;
+                          const categoryNames = item.categoryNames ?? [
+                            item.categoryName,
+                          ];
+                          return (
+                            <div
+                              key={item.id}
+                              className="overflow-hidden rounded-lg border border-border bg-card"
+                            >
+                              <LazyProductImage
+                                src={item.imageUrl}
+                                hasImage={item.hasImage}
+                                alt=""
+                                className="aspect-[4/3] w-full"
+                                emptyLabel="—"
+                              />
+                              <div className="space-y-2 p-3">
+                                <div>
+                                  <p className="line-clamp-2 font-medium leading-snug">
+                                    {item.name}
+                                  </p>
+                                  <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                                    {categoryNames.length > 1
+                                      ? categoryNames.join(', ')
+                                      : item.categoryName}
+                                  </p>
+                                  {variationCount > 0 ? (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {variationCount} variation
+                                      {variationCount === 1 ? '' : 's'}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <div className="tabular-nums text-sm">
+                                  {display.hasVariations ? (
+                                    <span className="font-medium">
+                                      From {formatMoney(display.amount)}
+                                    </span>
                                   ) : display.compareAt != null ? (
-                                    <span className="text-muted-foreground line-through">
-                                      {formatMoney(display.compareAt!)}
+                                    <span>
+                                      <span className="mr-1.5 text-muted-foreground line-through">
+                                        {formatMoney(display.compareAt)}
+                                      </span>
+                                      <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                                        {formatMoney(display.amount)}
+                                      </span>
                                     </span>
                                   ) : (
                                     <span className="font-medium">
                                       {formatMoney(display.amount)}
                                     </span>
                                   )}
-                                </DashboardTableCell>
-                                <DashboardTableCell className="tabular-nums">
-                                  {display.hasVariations ? (
-                                    <span className="text-xs text-muted-foreground">
-                                      via variations
-                                    </span>
-                                  ) : display.compareAt != null ? (
-                                    <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                                      {formatMoney(display.amount)}
-                                    </span>
-                                  ) : (
-                                    '—'
-                                  )}
-                                </DashboardTableCell>
-                                <DashboardTableCell className="hidden text-xs text-muted-foreground lg:table-cell">
-                                  {formatMenuItemDate(item.createdAt)}
-                                </DashboardTableCell>
-                                <DashboardTableCell className="hidden text-xs text-muted-foreground md:table-cell">
-                                  {formatMenuItemDate(item.updatedAt)}
-                                </DashboardTableCell>
-                                <DashboardTableCell>
-                                  <div className="flex gap-1">
-                                    {canEditProducts ? (
-                                      <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="outline"
-                                        asChild
-                                      >
-                                        <Link
-                                          href={`/product/edit/${item.id}`}
-                                          aria-label={`Edit ${item.name}`}
-                                        >
-                                          <Pencil className="h-4 w-4" />
-                                        </Link>
-                                      </Button>
-                                    ) : null}
-                                    {canDeleteProducts ? (
-                                      <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="outline"
-                                        className="text-destructive"
-                                        onClick={() => {
-                                          setDeletingProduct(item);
-                                          setDeleteConfirmOpen(true);
-                                        }}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    ) : null}
-                                  </div>
-                                </DashboardTableCell>
-                              </DashboardTableRow>
-                            );
-                          })}
-                    </DashboardTableBody>
-                  </DashboardTable>
-                </DashboardTableWrapper>
+                                </div>
+                                {productActions(item)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                  </div>
+                )}
 
                 <TablePagination
                   pagination={pagination}
@@ -697,7 +862,7 @@ export function ProductsTab({
         open={showExportConfirmation}
         title="Export products"
         description={
-          debouncedSearch || categoryFilter !== ALL_CATEGORIES
+          appliedSearch || categoryFilter !== ALL_CATEGORIES
             ? 'Download a CSV of products matching your current search and category filters? Images are not included.'
             : 'Download a CSV of all products? Images are not included.'
         }

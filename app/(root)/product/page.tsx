@@ -9,8 +9,8 @@ export default function ProductPage() {
     <div className="w-full">
       <ErrorBoundary>
         <MenuPageShell
-          title="Inventory"
-          description="Manage your full menu inventory on one page — add categories, variation templates, and products without leaving this screen."
+          title="Products"
+          description="Manage menu products — add categories, variation templates, and items without leaving this screen."
           loading={false}
         >
           <ProductsTab />

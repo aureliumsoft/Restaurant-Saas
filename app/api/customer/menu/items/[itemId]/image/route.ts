@@ -2,8 +2,10 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
-import { isDataImageUrl, isHttpImageUrl } from '@/lib/image-data-url';
 import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query';
+import { responseFromStoredImage } from '@/lib/stored-image-response';
+
+export const runtime = 'nodejs';
 
 type RouteContext = { params: Promise<{ itemId: string }> };
 
@@ -57,42 +59,13 @@ export async function GET(req: NextRequest, context: RouteContext) {
     });
 
     const raw = item?.imageUrl?.trim();
-    if (!raw) {
-      return new NextResponse(null, { status: 404 });
-    }
-
-    if (isHttpImageUrl(raw)) {
-      return NextResponse.redirect(raw, 302);
-    }
-
-    if (isDataImageUrl(raw) || raw.startsWith('data:image/')) {
-      const commaIdx = raw.indexOf(',');
-      if (commaIdx <= 0) {
-        return new NextResponse(null, { status: 404 });
-      }
-      const meta = raw.slice(0, commaIdx);
-      const b64 = raw.slice(commaIdx + 1).replace(/\s+/g, '');
-      const contentType =
-        meta.match(/^data:([^;]+)/i)?.[1]?.trim() || 'image/jpeg';
-      const buffer = Buffer.from(b64, 'base64');
-      const etag = `"${item!.updatedAt.getTime().toString(36)}-${buffer.length.toString(36)}"`;
-
-      if (req.headers.get('if-none-match') === etag) {
-        return new NextResponse(null, { status: 304 });
-      }
-
-      return new NextResponse(buffer, {
-        status: 200,
-        headers: {
-          'Content-Type': contentType,
-          'Content-Length': String(buffer.length),
-          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
-          ETag: etag,
-        },
-      });
-    }
-
-    return new NextResponse(null, { status: 404 });
+    const etag = item
+      ? `"${item.updatedAt.getTime().toString(36)}-${itemId}"`
+      : undefined;
+    return await responseFromStoredImage(raw, {
+      etag,
+      ifNoneMatch: req.headers.get('if-none-match'),
+    });
   } catch (e) {
     console.error('customer menu item image GET failed', e);
     return NextResponse.json(

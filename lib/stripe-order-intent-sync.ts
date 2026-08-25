@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { db } from '@/lib/db';
 import {
   createCustomerOrder,
+  customerOrderPayloadError,
   parseCustomerOrderPayload,
 } from '@/lib/orders/create-customer-order';
 import { fromStripeUnitAmount } from '@/lib/stripe-server';
@@ -38,10 +39,11 @@ export async function processOrderIntentFromSession(
   session: Stripe.Checkout.Session,
   baseUrl: string
 ): Promise<{
-  status: 'skipped' | 'completed' | 'already_completed';
+  status: 'skipped' | 'completed' | 'already_completed' | 'failed';
   orderId?: string;
   shortOrderId?: string;
   ticketNumber?: number | null;
+  error?: string;
 }> {
   if (session.payment_status !== 'paid') return { status: 'skipped' };
   const intentId =
@@ -87,21 +89,17 @@ export async function processOrderIntentFromSession(
   }
 
   if (parsed.endpoint === '/api/customer/orders') {
-    const orderData = parseCustomerOrderPayload({
+    const orderPayload = {
       ...(typeof parsed.payload === 'object' && parsed.payload !== null
         ? parsed.payload
         : {}),
       paymentStatus: 'completed',
       paymentMethod: 'Stripe',
-    });
+    };
+    const orderData = parseCustomerOrderPayload(orderPayload);
     if (!orderData) {
-      throw new Error(`Invalid order payload for ${key}`);
-    }
-    const created = await createCustomerOrder({
-      data: orderData,
-      customerAccountId: parsed.customerAccountId ?? null,
-    });
-    if (!created.ok) {
+      const reason =
+        customerOrderPayloadError(orderPayload) ?? 'Invalid order payload';
       await db.platformSetting.update({
         where: { key },
         data: {
@@ -109,18 +107,43 @@ export async function processOrderIntentFromSession(
             ...parsed,
             status: 'failed',
             stripeSessionId: session.id,
-            lastError:
-              typeof created.error === 'string'
-                ? created.error.slice(0, 500)
-                : 'Order creation failed',
+            lastError: reason.slice(0, 500),
+            lastAttemptedAt: new Date().toISOString(),
+          }),
+        },
+      });
+      return { status: 'failed', error: reason };
+    }
+    const created = await createCustomerOrder({
+      data: orderData,
+      customerAccountId: parsed.customerAccountId ?? null,
+      paidExternally: true,
+    });
+    if (!created.ok) {
+      if (created.status < 400) {
+        return { status: 'already_completed' };
+      }
+      const reason =
+        typeof created.error === 'string'
+          ? created.error.slice(0, 500)
+          : 'Order creation failed';
+      await db.platformSetting.update({
+        where: { key },
+        data: {
+          value: JSON.stringify({
+            ...parsed,
+            status: 'failed',
+            stripeSessionId: session.id,
+            lastError: reason,
             lastStatusCode: created.status,
             lastAttemptedAt: new Date().toISOString(),
           }),
         },
       });
-      throw new Error(
-        `Order creation failed for ${parsed.endpoint} (${created.status})`
+      console.error(
+        `Stripe order intent ${intentId} failed (${created.status}): ${reason}`
       );
+      return { status: 'failed', error: reason };
     }
 
     await db.platformSetting.update({
@@ -159,6 +182,7 @@ export async function processOrderIntentFromSession(
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
+    const reason = body.slice(0, 500) || `Order creation failed (${res.status})`;
     await db.platformSetting.update({
       where: { key },
       data: {
@@ -166,15 +190,16 @@ export async function processOrderIntentFromSession(
           ...parsed,
           status: 'failed',
           stripeSessionId: session.id,
-          lastError: body.slice(0, 500),
+          lastError: reason,
           lastStatusCode: res.status,
           lastAttemptedAt: new Date().toISOString(),
         }),
       },
     });
-    throw new Error(
-      `Order creation failed for ${parsed.endpoint} (${res.status}): ${body.slice(0, 500)}`
+    console.error(
+      `Stripe order intent ${intentId} failed for ${parsed.endpoint} (${res.status}): ${reason}`
     );
+    return { status: 'failed', error: reason };
   }
 
   const body = (await res.json().catch(() => ({}))) as {

@@ -17,6 +17,7 @@ import {
   type VariationFormRow,
 } from '@/components/dashboard/menu-manager/product-form-fields';
 import { InventoryQuickActions } from '@/components/dashboard/menu-manager/inventory-quick-actions';
+import type { IngredientRecipeRow } from '@/components/dashboard/menu-manager/product-ingredient-recipes';
 import { useMenuCategoriesCatalog } from '@/hooks/use-menu-categories-catalog';
 import ErrorBoundary from '@/components/toaster/toaster';
 import {
@@ -60,6 +61,9 @@ export default function ProductCreatePage() {
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const [form, setForm] = useState<ProductFormState>(EMPTY_PRODUCT_FORM);
   const [variationRows, setVariationRows] = useState<VariationFormRow[]>([]);
+  const [ingredientRows, setIngredientRows] = useState<IngredientRecipeRow[]>(
+    []
+  );
   const { variationTemplates, reloadVariationTemplates } =
     useRestaurantVariationTemplates();
 
@@ -67,13 +71,19 @@ export default function ProductCreatePage() {
     !categoriesLoading && categories.length === 0;
 
   const isDirty = useMemo(
-    () => isProductCreateFormDirty(form, variationRows),
-    [form, variationRows]
+    () => isProductCreateFormDirty(form, variationRows, ingredientRows),
+    [form, variationRows, ingredientRows]
   );
 
   const canCreate = useMemo(
-    () => isProductFormValid(form, variationRows, variationTemplates),
-    [form, variationRows, variationTemplates]
+    () =>
+      isProductFormValid(
+        form,
+        variationRows,
+        variationTemplates,
+        ingredientRows
+      ),
+    [form, variationRows, variationTemplates, ingredientRows]
   );
 
   const {
@@ -131,10 +141,16 @@ export default function ProductCreatePage() {
   const resetForm = () => {
     setForm({ ...EMPTY_PRODUCT_FORM });
     setVariationRows([]);
+    setIngredientRows([]);
   };
 
   const save = async (mode: 'close' | 'add-new') => {
-    const payload = buildProductPayload(form, variationRows, variationTemplates);
+    const payload = buildProductPayload(
+      form,
+      variationRows,
+      variationTemplates,
+      ingredientRows
+    );
     if (!payload.ok) {
       toast.error(payload.error);
       return;
@@ -217,6 +233,8 @@ export default function ProductCreatePage() {
                     }
                     variationRows={variationRows}
                     onVariationRowsChange={setVariationRows}
+                    ingredientRows={ingredientRows}
+                    onIngredientRowsChange={setIngredientRows}
                     showRequired
                     onMenuRefresh={refreshCategories}
                     variationTemplates={variationTemplates}

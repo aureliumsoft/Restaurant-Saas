@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { OrderSourceType } from '@prisma/client';
 
 import { db } from '@/lib/db';
+import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 
 export async function GET(req: NextRequest) {
   const orderId = req.nextUrl.searchParams.get('orderId')?.trim();
@@ -38,6 +39,7 @@ export async function GET(req: NextRequest) {
           id: true,
           quantity: true,
           price: true,
+          productName: true,
           menuItem: { select: { name: true } },
           modifiers: {
             select: {
@@ -79,7 +81,7 @@ export async function GET(req: NextRequest) {
         id: it.id,
         quantity: it.quantity,
         price: it.price,
-        name: it.menuItem.name,
+        name: orderItemDisplayName(it),
         modifiers: it.modifiers.map((m) => ({
           id: m.id,
           name: m.name,

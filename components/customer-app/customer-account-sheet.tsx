@@ -8,6 +8,10 @@ import {
   useCustomerAccount,
   type CustomerAccountInfo,
 } from '@/components/customer-app/customer-account-context';
+import {
+  CustomerAuthOrDivider,
+  CustomerGoogleSignInButton,
+} from '@/components/customer-app/customer-google-sign-in-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -415,6 +419,11 @@ export function CustomerAccountSheet({
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-6">
           {step === 'email' ? (
             <div className="space-y-5">
+              <CustomerGoogleSignInButton
+                restaurantSlug={restaurantSlug}
+                disabled={busy}
+              />
+              <CustomerAuthOrDivider />
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-primary">
                   {t('customerAuthEmailLabel')} *
@@ -546,6 +555,11 @@ export function CustomerAccountSheet({
 
           {step === 'login' ? (
             <div className="space-y-4">
+              <CustomerGoogleSignInButton
+                restaurantSlug={restaurantSlug}
+                disabled={busy}
+              />
+              <CustomerAuthOrDivider />
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-primary">
                   {t('customerAuthEmailLabel')} *

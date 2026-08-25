@@ -27,6 +27,10 @@ module.exports = {
       },
     },
     extend: {
+      fontFamily: {
+        'story-display': ['var(--font-story-display)', 'Georgia', 'serif'],
+        'story-mono': ['var(--font-story-mono)', 'ui-monospace', 'monospace'],
+      },
       colors: {
         fire: {
           50: '#FFF4ED',

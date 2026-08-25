@@ -22,10 +22,15 @@ import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { resolvePosPaymentLedgerAmount } from '@/lib/order-payment';
 import { getOrOpenPosShift } from '@/lib/pos-shift';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
+import {
+  consumeIngredientsForOrder,
+  isMajorIngredientOutOfStockError,
+} from '@/lib/inventory/stock';
 
 import {
   normalizePosOrderLines,
   paymentModeToMethodLabel,
+  posOrderItemCreateManyInput,
   type PosOrderLineInput,
 } from '@/lib/pos-order-lines';
 import {
@@ -308,11 +313,18 @@ export async function POST(req: NextRequest) {
         }
 
         await tx.orderItem.createMany({
-          data: normalizedItems.map((line) => ({
-            orderId: order?.id ?? '',
+          data: posOrderItemCreateManyInput(order?.id ?? '', normalizedItems),
+        });
+
+        await consumeIngredientsForOrder(tx, {
+          restaurantId,
+          orderId: order.id,
+          createdByUserId: auth.userId,
+          lines: normalizedItems.map((line) => ({
             menuItemId: line.menuItemId,
             quantity: line.quantity,
-            price: line.price,
+            variationId: line.variationId,
+            modifiers: line.modifiers,
           })),
         });
 
@@ -355,6 +367,12 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (e) {
+    if (isMajorIngredientOutOfStockError(e)) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
+    if (e instanceof Error && e.message.includes('Select a variation')) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
     if (isPrismaUniqueViolation(e)) {
       const recovered = await recoverOrderFromIdempotencyConflict(
         idempotencyKey,

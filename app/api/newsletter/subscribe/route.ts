@@ -2,24 +2,13 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { db } from "@/lib/db";
-import { sendLatestNewsletterToEmail } from "@/lib/newsletter/broadcast";
-import { getSmtpConfigError } from "@/lib/email/smtp";
+import { upsertNewsletterSubscriber } from "@/lib/newsletter/subscribe";
 
 const subscribeSchema = z.object({
   email: z.string().trim().email().max(200),
   name: z.string().trim().max(120).optional().nullable(),
   source: z.string().trim().max(60).optional().nullable(),
 });
-
-async function maybeSendLatestWelcome(email: string) {
-  if (getSmtpConfigError()) return;
-  try {
-    await sendLatestNewsletterToEmail(email);
-  } catch (e) {
-    console.error("[newsletter/subscribe] welcome email", e);
-  }
-}
 
 export async function POST(req: NextRequest) {
   let json: unknown;
@@ -37,50 +26,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const email = parsed.data.email.toLowerCase();
-  const name = parsed.data.name?.trim() || null;
-  const source = parsed.data.source?.trim() || "footer";
+  const result = await upsertNewsletterSubscriber({
+    email: parsed.data.email,
+    name: parsed.data.name,
+    source: parsed.data.source ?? "footer",
+  });
 
-  try {
-    const existing = await db.newsletterSubscriber.findUnique({
-      where: { email },
-      select: { id: true, unsubscribedAt: true },
-    });
-
-    if (existing && !existing.unsubscribedAt) {
-      return NextResponse.json(
-        { data: { id: existing.id }, alreadySubscribed: true },
-        { status: 200 }
-      );
-    }
-
-    if (existing?.unsubscribedAt) {
-      const row = await db.newsletterSubscriber.update({
-        where: { email },
-        data: {
-          unsubscribedAt: null,
-          name: name ?? undefined,
-          source,
-        },
-        select: { id: true },
-      });
-      await maybeSendLatestWelcome(email);
-      return NextResponse.json({ data: row, reactivated: true }, { status: 200 });
-    }
-
-    const row = await db.newsletterSubscriber.create({
-      data: { email, name, source },
-      select: { id: true },
-    });
-
-    await maybeSendLatestWelcome(email);
-
-    return NextResponse.json({ data: row }, { status: 201 });
-  } catch (e) {
-    console.error("[newsletter/subscribe]", e);
+  if (!result) {
     return NextResponse.json(
       { error: "Could not subscribe right now. Please try again." },
       { status: 500 }
     );
   }
+
+  if (result.alreadySubscribed) {
+    return NextResponse.json(
+      { data: { id: result.id }, alreadySubscribed: true },
+      { status: 200 }
+    );
+  }
+
+  if (result.reactivated) {
+    return NextResponse.json(
+      { data: { id: result.id }, reactivated: true },
+      { status: 200 }
+    );
+  }
+
+  return NextResponse.json({ data: { id: result.id } }, { status: 201 });
 }

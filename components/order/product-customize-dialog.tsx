@@ -1283,7 +1283,7 @@ export function ProductCustomizeDialog({
           variationPickerBaseline,
           regional
         ),
-        imageUrl: v.imageUrl ?? productImageUrl ?? null,
+        imageUrl: v.imageUrl ?? null,
         selected: selectedVariationId === v.id,
         quantity: undefined,
         onChoose: () => {

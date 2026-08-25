@@ -16,6 +16,7 @@ type Props = {
   ticketFromQuery: number | null;
   sessionId: string | null;
   token?: string | null;
+  isMobile?: boolean;
 };
 
 export function KioskPaymentSuccess({
@@ -25,6 +26,7 @@ export function KioskPaymentSuccess({
   ticketFromQuery,
   sessionId,
   token,
+  isMobile = false,
 }: Props) {
   const router = useRouter();
   const [ticket, setTicket] = useState<number | null>(ticketFromQuery);
@@ -98,13 +100,14 @@ export function KioskPaymentSuccess({
   const autoPrintedRef = useRef(false);
 
   useEffect(() => {
+    if (isMobile) return;
     if (!orderId || autoPrintedRef.current) return;
     autoPrintedRef.current = true;
     const timer = window.setTimeout(() => {
       void printKioskReceipt({ slug, branchId, orderId });
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [orderId, slug, branchId]);
+  }, [orderId, slug, branchId, isMobile]);
 
   const printTicket = async () => {
     if (!orderId) {
@@ -137,19 +140,29 @@ export function KioskPaymentSuccess({
               </p>
             </div>
             <div className="flex gap-2">
+              {isMobile ? null : (
+                <Button
+                  type="button"
+                  className="bg-primary text-white hover:bg-primary/90"
+                  onClick={printTicket}
+                >
+                  <IconPrinter className="w-4 h-4 mr-2" />
+                  Print Ticket
+                </Button>
+              )}
               <Button
                 type="button"
-                className="bg-primary text-white hover:bg-primary/90"
-                onClick={printTicket}
-              >
-                <IconPrinter className="w-4 h-4 mr-2" />
-                Print Ticket
-              </Button>
-              <Button
-                type="button"
-                className="border border-primary bg-white text-primary hover:bg-primary/10 hover:text-primary"
+                className={
+                  isMobile
+                    ? 'w-full bg-primary text-white hover:bg-primary/90'
+                    : 'border border-primary bg-white text-primary hover:bg-primary/10 hover:text-primary'
+                }
                 onClick={() =>
-                  router.push(kioskBasePath(slug, branchId))
+                  router.push(
+                    isMobile
+                      ? `${kioskBasePath(slug, branchId)}?Mobile=true`
+                      : kioskBasePath(slug, branchId)
+                  )
                 }
               >
                 <IconHome className="w-4 h-4 mr-2" />

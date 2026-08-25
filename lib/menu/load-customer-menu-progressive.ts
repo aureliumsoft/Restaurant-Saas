@@ -19,10 +19,13 @@ import { loadSingleCategoryWithLinkedItems, getMenuItemCategoryIds } from '@/lib
 import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
 import { menuItemBrowseListSelect } from '@/lib/menu/menu-item-list-select';
 import {
+  attachCustomerLazyImages,
   customerMenuItemImageUrl,
   hasImageByMenuItemIds,
   mapBrowseListItem,
+  stampBrowseVariationImages,
 } from '@/lib/menu/menu-item-image-utils';
+import { customerCategoryImageUrl, publicRestaurantImageUrls } from '@/lib/stored-image-response';
 import { withRecommendationPoolCache } from '@/lib/menu/recommendation-pool-cache';
 import {
   parseRestaurantServiceCharges,
@@ -152,10 +155,14 @@ async function loadRecommendationPool(
 }
 
 function restaurantMetaPayload<
-  T extends { id: string } & RestaurantServiceChargeRow,
+  T extends { id: string; slug: string } & RestaurantServiceChargeRow & {
+    logoUrl?: string | null;
+    mainBannerUrl?: string | null;
+  },
 >(restaurant: T) {
   return {
     ...restaurant,
+    ...publicRestaurantImageUrls(restaurant.slug, restaurant),
     serviceCharges: parseRestaurantServiceCharges(restaurant),
   };
 }
@@ -182,7 +189,12 @@ export async function loadCustomerMenuCategoriesMeta(options: {
     const menus = categories.map((c) => ({
       id: c.id,
       name: c.name,
-      imageUrl: c.imageUrl,
+      imageUrl: c.imageUrl
+        ? customerCategoryImageUrl(c.id, {
+            slug: options.slug,
+            subdomain: options.subdomain,
+          })
+        : null,
       items: [],
     }));
 
@@ -231,14 +243,17 @@ export async function loadCustomerMenuCategoryItems(options: {
       subdomain: options.subdomain,
     };
 
-    const items = category.items.map((item) =>
-      mapBrowseListItem(
-        item,
-        imageFlags.get(item.id) ?? false,
-        imageFlags.get(item.id)
-          ? customerMenuItemImageUrl(item.id, imageQuery)
-          : null
-      )
+    const items = await stampBrowseVariationImages(
+      category.items.map((item) =>
+        mapBrowseListItem(
+          item,
+          imageFlags.get(item.id) ?? false,
+          imageFlags.get(item.id)
+            ? customerMenuItemImageUrl(item.id, imageQuery)
+            : null
+        )
+      ),
+      imageQuery
     );
 
     return {
@@ -276,14 +291,7 @@ export async function loadCustomerMenuProductDetail(options: {
       slug: options.slug,
       subdomain: options.subdomain,
     };
-    const [pool, imageFlags] = await Promise.all([
-      loadRecommendationPool(restaurant.id, mode),
-      hasImageByMenuItemIds([options.itemId]),
-    ]);
-    const hasImage = imageFlags.get(options.itemId) ?? false;
-    const lazyImage = hasImage
-      ? customerMenuItemImageUrl(options.itemId, imageQuery)
-      : null;
+    const pool = await loadRecommendationPool(restaurant.id, mode);
 
     const enriched = applyProductRecommendationPools(
       {
@@ -295,8 +303,6 @@ export async function loadCustomerMenuProductDetail(options: {
               {
                 ...item,
                 categoryIds,
-                hasImage,
-                imageUrl: lazyImage,
               },
             ],
           },
@@ -311,40 +317,11 @@ export async function loadCustomerMenuProductDetail(options: {
     const detail = sanitized?.menus?.[0]?.items?.[0] ?? null;
     if (!detail) return null;
 
-    const offered = (
-      detail as {
-        offersFromThis?: Array<{
-          offeredItem?: { id: string; imageUrl?: string | null } | null;
-        }>;
-      }
-    ).offersFromThis;
-    const offerIds = (offered ?? [])
-      .map((o) => o.offeredItem?.id)
-      .filter((id): id is string => Boolean(id));
-    const offerImageFlags =
-      offerIds.length > 0 ? await hasImageByMenuItemIds(offerIds) : new Map();
-
+    const withImages = await attachCustomerLazyImages(detail, imageQuery);
     return {
-      ...detail,
-      hasImage,
-      imageUrl: lazyImage,
+      ...withImages,
       categoryIds:
         categoryIds.length > 0 ? categoryIds : [detail.categoryId],
-      offersFromThis: (offered ?? []).map((row) => {
-        const oid = row.offeredItem?.id;
-        if (!oid || !row.offeredItem) return row;
-        const oh = offerImageFlags.get(oid) ?? false;
-        return {
-          ...row,
-          offeredItem: {
-            ...row.offeredItem,
-            hasImage: oh,
-            imageUrl: oh
-              ? customerMenuItemImageUrl(oid, imageQuery)
-              : null,
-          },
-        };
-      }),
     };
   });
 }

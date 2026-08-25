@@ -106,7 +106,7 @@ function truncateDescription(value: string | null | undefined): string | null {
 
 export async function GET(req: NextRequest) {
   const auth = await getRestaurantForOwnerRequest(req, {
-    moduleKeys: ['product', 'pos', 'recommendations'],
+    moduleKeys: ['product', 'pos', 'recommendations', 'inventory'],
     action: 'access',
   });
   if ('error' in auth) {
