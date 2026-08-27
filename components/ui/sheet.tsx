@@ -5,7 +5,7 @@ import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
-import { isRadixPortaledLayerTarget } from "@/lib/radix-portal-hit";
+import { shouldIgnoreRadixOutsideDismiss } from "@/lib/radix-portal-hit";
 
 const Sheet = SheetPrimitive.Root;
 
@@ -66,15 +66,15 @@ function SheetContent({
         className={cn(sheetVariants({ side }), className)}
         {...props}
         onInteractOutside={(e) => {
-          if (isRadixPortaledLayerTarget(e.target)) e.preventDefault();
+          if (shouldIgnoreRadixOutsideDismiss(e)) e.preventDefault();
           onInteractOutside?.(e);
         }}
         onPointerDownOutside={(e) => {
-          if (isRadixPortaledLayerTarget(e.target)) e.preventDefault();
+          if (shouldIgnoreRadixOutsideDismiss(e)) e.preventDefault();
           onPointerDownOutside?.(e);
         }}
         onFocusOutside={(e) => {
-          if (isRadixPortaledLayerTarget(e.target)) e.preventDefault();
+          if (shouldIgnoreRadixOutsideDismiss(e)) e.preventDefault();
           onFocusOutside?.(e);
         }}
       >

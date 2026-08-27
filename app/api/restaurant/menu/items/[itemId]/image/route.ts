@@ -33,6 +33,13 @@ export async function GET(
     });
 
     const raw = item?.imageUrl?.trim();
+    if (!raw) {
+      return new NextResponse(null, {
+        status: 404,
+        headers: { 'Cache-Control': 'private, max-age=300' },
+      });
+    }
+
     const etag = item
       ? `"${item.updatedAt.getTime().toString(36)}-${itemId}"`
       : undefined;

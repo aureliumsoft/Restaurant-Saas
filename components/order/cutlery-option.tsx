@@ -47,10 +47,10 @@ export function CutleryOption({ value, onChange, className }: CutleryOptionProps
           )}
         >
           <span
-            className={cn(
-              'pointer-events-none block h-5 w-5 rounded-full bg-background shadow transition-transform',
-              value ? 'translate-x-5' : 'translate-x-0'
-            )}
+          className={cn(
+            'pointer-events-none block h-5 w-5 rounded-full bg-white shadow transition-transform',
+            value ? 'translate-x-5' : 'translate-x-0'
+          )}
           />
         </button>
       </div>

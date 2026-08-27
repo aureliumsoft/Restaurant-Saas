@@ -26,7 +26,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     id: 'payments',
     title: 'Payment methods',
-    description: 'Service charges, PayPal or Stripe, and customer payments.',
+    description: 'Service charges, table pay timing, PayPal or Stripe, and customer payments.',
     icon: CreditCard,
   },
   {

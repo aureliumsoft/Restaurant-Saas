@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Sheet,
   SheetContent,
@@ -75,6 +76,27 @@ type Props = {
   onEditOrder: (order: PosOrderDetail, source: 'pos' | 'kiosk') => void;
 };
 
+const PAGE_SIZE = 20;
+
+function RecentOrderSkeletonRow() {
+  return (
+    <li className="flex items-start gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1 space-y-2">
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-3 w-16" />
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-2">
+        <Skeleton className="h-4 w-14" />
+        <div className="flex gap-1">
+          <Skeleton className="h-8 w-8 rounded-md" />
+          <Skeleton className="h-8 w-8 rounded-md" />
+        </div>
+      </div>
+    </li>
+  );
+}
+
 export function PosRecentOrdersSheet({
   open,
   onOpenChange,
@@ -87,42 +109,98 @@ export function PosRecentOrdersSheet({
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const [orders, setOrders] = useState<PosRecentOrderRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [printBusyId, setPrintBusyId] = useState<string | null>(null);
   const [editBusyId, setEditBusyId] = useState<string | null>(null);
   const loadRequestRef = useRef(0);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const loadOrders = useCallback(async (opts?: { silent?: boolean }) => {
-    const requestId = ++loadRequestRef.current;
-    if (!opts?.silent) setLoading(true);
-    try {
-      const res = await axios.get<{ data: PosRecentOrderRow[] }>(
-        '/api/restaurant/pos-order/recent',
-        { params: branchId ? { branchId } : undefined }
-      );
-      if (requestId !== loadRequestRef.current) return;
-      setOrders(res.data.data ?? []);
-    } catch (error) {
-      if (requestId !== loadRequestRef.current) return;
-      if (!opts?.silent) {
-        setOrders([]);
-        toast.error(apiErrorMessage(error, 'Could not load recent orders.'));
+  const loadOrders = useCallback(
+    async (opts?: { silent?: boolean; append?: boolean; offset?: number }) => {
+      const requestId = ++loadRequestRef.current;
+      const append = Boolean(opts?.append);
+      const offset = opts?.offset ?? 0;
+      if (append) setLoadingMore(true);
+      else if (!opts?.silent) setLoading(true);
+      try {
+        const res = await axios.get<{
+          data: PosRecentOrderRow[];
+          pagination?: {
+            nextOffset: number | null;
+            hasMore: boolean;
+          };
+        }>('/api/restaurant/pos-order/recent', {
+          params: {
+            ...(branchId ? { branchId } : {}),
+            limit: PAGE_SIZE,
+            offset,
+          },
+        });
+        if (requestId !== loadRequestRef.current) return;
+        const page = res.data.data ?? [];
+        setOrders((prev) => {
+          if (!append) return page;
+          const seen = new Set(prev.map((o) => o.id));
+          const merged = [...prev];
+          for (const row of page) {
+            if (!seen.has(row.id)) merged.push(row);
+          }
+          return merged;
+        });
+        setHasMore(Boolean(res.data.pagination?.hasMore));
+        setNextOffset(res.data.pagination?.nextOffset ?? null);
+      } catch (error) {
+        if (requestId !== loadRequestRef.current) return;
+        if (!opts?.silent && !append) {
+          setOrders([]);
+          setHasMore(false);
+          setNextOffset(null);
+          toast.error(apiErrorMessage(error, 'Could not load recent orders.'));
+        }
+      } finally {
+        if (requestId === loadRequestRef.current) {
+          if (append) setLoadingMore(false);
+          else if (!opts?.silent) setLoading(false);
+        }
       }
-    } finally {
-      if (!opts?.silent && requestId === loadRequestRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [branchId]);
+    },
+    [branchId]
+  );
 
   useEffect(() => {
     if (!open) return;
-    void loadOrders();
-    const onRefresh = () => void loadOrders({ silent: true });
+    setOrders([]);
+    setHasMore(false);
+    setNextOffset(null);
+    void loadOrders({ offset: 0 });
+    const onRefresh = () => void loadOrders({ silent: true, offset: 0 });
     eventBus.on('refreshRecentOrders', onRefresh);
     return () => {
       eventBus.removeListener('refreshRecentOrders', onRefresh);
     };
   }, [open, branchId, loadOrders]);
+
+  const loadMore = useCallback(() => {
+    if (loading || loadingMore || !hasMore || nextOffset == null) return;
+    void loadOrders({ append: true, offset: nextOffset });
+  }, [hasMore, loadOrders, loading, loadingMore, nextOffset]);
+
+  useEffect(() => {
+    if (!open) return;
+    const root = scrollRef.current;
+    if (!root) return;
+
+    const onScroll = () => {
+      const remaining =
+        root.scrollHeight - root.scrollTop - root.clientHeight;
+      if (remaining < 120) loadMore();
+    };
+
+    root.addEventListener('scroll', onScroll, { passive: true });
+    return () => root.removeEventListener('scroll', onScroll);
+  }, [open, loadMore]);
 
   const orderSource = (row: PosRecentOrderRow): 'pos' | 'kiosk' =>
     row.sourceType === 'KIOSK' ? 'kiosk' : 'pos';
@@ -218,11 +296,16 @@ export function PosRecentOrdersSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
+        <div
+          ref={scrollRef}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4"
+        >
+          {loading && orders.length === 0 ? (
+            <ul className="divide-y overflow-hidden rounded-xl border">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <RecentOrderSkeletonRow key={i} />
+              ))}
+            </ul>
           ) : orders.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               No orders today yet.
@@ -290,38 +373,38 @@ export function PosRecentOrdersSheet({
                       <div className="flex items-center gap-1">
                         {!canceled ? (
                           <>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title="Print receipt"
-                          disabled={printBusy || editBusy}
-                          onClick={() => void handlePrint(order)}
-                        >
-                          {printBusy ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Printer className="h-4 w-4" />
-                          )}
-                        </Button>
-                        {!isKiosk ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title="Edit order"
-                          disabled={printBusy || editBusy}
-                          onClick={() => void handleEdit(order)}
-                        >
-                          {editBusy ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Pencil className="h-4 w-4" />
-                          )}
-                        </Button>
-                        ) : null}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Print receipt"
+                              disabled={printBusy || editBusy}
+                              onClick={() => void handlePrint(order)}
+                            >
+                              {printBusy ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Printer className="h-4 w-4" />
+                              )}
+                            </Button>
+                            {!isKiosk ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                title="Edit order"
+                                disabled={printBusy || editBusy}
+                                onClick={() => void handleEdit(order)}
+                              >
+                                {editBusy ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Pencil className="h-4 w-4" />
+                                )}
+                              </Button>
+                            ) : null}
                           </>
                         ) : null}
                       </div>
@@ -329,8 +412,26 @@ export function PosRecentOrdersSheet({
                   </li>
                 );
               })}
+              {loadingMore ? (
+                <>
+                  <RecentOrderSkeletonRow />
+                  <RecentOrderSkeletonRow />
+                </>
+              ) : null}
             </ul>
           )}
+          {!loading && hasMore && !loadingMore ? (
+            <div className="pt-3">
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={loadMore}
+              >
+                Load more
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <div className="shrink-0 border-t px-6 py-3">
@@ -338,8 +439,13 @@ export function PosRecentOrdersSheet({
             type="button"
             variant="outline"
             className="w-full"
-            disabled={loading}
-            onClick={() => void loadOrders()}
+            disabled={loading || loadingMore}
+            onClick={() => {
+              setOrders([]);
+              setHasMore(false);
+              setNextOffset(null);
+              void loadOrders({ offset: 0 });
+            }}
           >
             Refresh
           </Button>

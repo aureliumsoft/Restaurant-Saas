@@ -28,9 +28,9 @@ export function AdminSidebarFooter({ className }: { className?: string }) {
 
   return (
     <div className={cn('space-y-2', className)}>
-      <div className="rounded-xl bg-muted/50 p-3 dark:bg-white/[0.04]">
+      <div className="rounded-2xl bg-white/70 p-3 shadow-sm dark:bg-white/10">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-fire-500/12 text-sm font-semibold text-fire-600 dark:text-fire-400">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-fire-400 to-fire-600 text-sm font-semibold text-white shadow-md shadow-fire-500/30">
             {initial}
           </div>
           <div className="min-w-0 flex-1">

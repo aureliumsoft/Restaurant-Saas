@@ -76,6 +76,7 @@ export default function Header() {
 
           {/* Desktop actions */}
           <div className="hidden items-center gap-2 md:flex">
+            <LanguageSwitcher variant="inline" />
             <ThemeToggle />
             <LandingAuthActions
               loggedOutLabel={t('marketing.nav.getStarted')}
@@ -87,6 +88,7 @@ export default function Header() {
 
           {/* Mobile actions */}
           <div className="flex items-center gap-2 md:hidden">
+            <LanguageSwitcher variant="inline" />
             <ThemeToggle />
 
             <details className="group">
@@ -130,7 +132,6 @@ export default function Header() {
           </div>
         </div>
       </header>
-      <LanguageSwitcher />
     </>
   );
 }

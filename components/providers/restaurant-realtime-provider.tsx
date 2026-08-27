@@ -30,13 +30,20 @@ function isStaffRealtimeRoute(pathname: string): boolean {
 }
 
 function invalidateConfigCaches(type: RestaurantRealtimeEventType) {
-  void revalidateStaffBootstrap();
+  // Only config events should refresh staff bootstrap — operational events
+  // (KDS, orders, inventory) were revalidating /api/me/bootstrap on every push.
   switch (type) {
     case 'config.regional':
+      void revalidateStaffBootstrap();
       void mutate(queryKeys.regional());
       break;
     case 'config.branding':
+      void revalidateStaffBootstrap();
       void mutate(queryKeys.branding());
+      break;
+    case 'config.menu':
+    case 'config.service_charges':
+      void revalidateStaffBootstrap();
       break;
     default:
       break;

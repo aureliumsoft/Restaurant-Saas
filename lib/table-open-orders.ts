@@ -42,7 +42,9 @@ export function openTableOrdersWhere(
 }
 
 function isPendingPaymentStatus(status: string | null | undefined): boolean {
-  return String(status ?? 'pending').toLowerCase() === 'pending';
+  const s = String(status ?? '').trim().toLowerCase();
+  // Match pay API: only real pending rows are chargeable (missing ≠ pending).
+  return s === 'pending' || s === 'pedding';
 }
 
 export type OpenTableOrderLine = {

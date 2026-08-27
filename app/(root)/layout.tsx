@@ -54,7 +54,7 @@ function AccessLoadingScreen({
   return (
     <div
       className={cn(
-        'fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 bg-[#f4f4f5] text-sm text-muted-foreground transition-opacity duration-300 ease-out dark:bg-zinc-950',
+        'fire-mesh-bg fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground transition-opacity duration-300 ease-out',
         fading ? 'pointer-events-none opacity-0' : 'opacity-100'
       )}
       aria-busy={!fading}
@@ -261,9 +261,9 @@ const RootLayout = ({ children }: RootLayoutProps) => {
                   <Link
                     href={restaurantSlug ? restaurantStorefrontPath(restaurantSlug) : '/'}
                     target={restaurantSlug ? '_blank' : undefined}
-                    className="flex items-center gap-2 font-semibold transition-opacity hover:opacity-90"
+                    className="group flex min-w-0 items-center gap-3 transition-opacity hover:opacity-90"
                   >
-                    <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary/10 text-xs font-semibold uppercase ring-1 ring-primary/15">
+                    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-fire-400 to-fire-600 text-sm font-bold uppercase text-white shadow-lg shadow-fire-500/30">
                       {restaurantLogoUrl && !logoFailed ? (
                         <img
                           src={restaurantLogoUrl}
@@ -275,31 +275,40 @@ const RootLayout = ({ children }: RootLayoutProps) => {
                         <span>{restaurantName.charAt(0)}</span>
                       )}
                     </div>
-                    <span className="truncate">{restaurantName}</span>
+                    <div className="min-w-0 leading-tight">
+                      <span className="block truncate text-sm font-semibold tracking-tight">
+                        {restaurantName}
+                      </span>
+                      <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-fire-600 dark:text-fire-400">
+                        Portal
+                      </span>
+                    </div>
                   </Link>
                 }
                 sidebarNav={<Navbar />}
-                sidebarFooter={<UserMenu className="w-full justify-start" />}
+                sidebarFooter={
+                  <UserMenu className="h-11 w-full justify-start gap-2 rounded-2xl border-0 bg-white/70 px-3 text-foreground shadow-sm hover:bg-white dark:bg-white/10 dark:hover:bg-white/15" />
+                }
                 header={
                   <>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="shrink-0 rounded-xl text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                      className="h-9 w-9 shrink-0 rounded-xl bg-white/70 text-muted-foreground shadow-sm hover:bg-white hover:text-foreground dark:bg-white/10 dark:hover:bg-white/15"
                       aria-label="Toggle navigation"
                       title="Show or hide the sidebar with navigation links"
                       onClick={toggleNav}
                     >
                       <span className="hidden md:inline-flex" aria-hidden>
                         {sidebarOpen ? (
-                          <PanelLeftClose className="h-5 w-5" />
+                          <PanelLeftClose className="h-[1.1rem] w-[1.1rem]" />
                         ) : (
-                          <PanelLeft className="h-5 w-5" />
+                          <PanelLeft className="h-[1.1rem] w-[1.1rem]" />
                         )}
                       </span>
                       <span className="inline-flex md:hidden" aria-hidden>
-                        <Menu className="h-5 w-5" />
+                        <Menu className="h-[1.1rem] w-[1.1rem]" />
                       </span>
                     </Button>
 
@@ -313,7 +322,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
                         sidebarOpen && 'md:hidden'
                       )}
                     >
-                      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-sm font-semibold uppercase ring-1 ring-border">
+                      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-fire-400 to-fire-600 text-xs font-bold uppercase text-white shadow-sm shadow-fire-500/30">
                         {restaurantLogoUrl && !logoFailed ? (
                           <img
                             src={restaurantLogoUrl}
@@ -325,21 +334,24 @@ const RootLayout = ({ children }: RootLayoutProps) => {
                           <span>{restaurantName.charAt(0)}</span>
                         )}
                       </div>
-                      <span className="truncate text-sm font-semibold">
+                      <span className="hidden truncate text-sm font-semibold sm:inline">
                         {restaurantName}
                       </span>
                     </div>
 
                     <Bread />
-                    <BranchSwitcher />
-                    <ModeToggle />
-                    <div
-                      className={cn(
-                        'ml-auto flex items-center gap-2',
-                        sidebarOpen && 'md:hidden'
-                      )}
-                    >
-                      <UserMenu />
+
+                    <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+                      <BranchSwitcher />
+                      <ModeToggle />
+                      <div
+                        className={cn(
+                          'flex items-center',
+                          sidebarOpen && 'md:hidden'
+                        )}
+                      >
+                        <UserMenu className="h-9 rounded-xl border-0 bg-white/70 px-3 shadow-sm hover:bg-white dark:bg-white/10 dark:hover:bg-white/15" />
+                      </div>
                     </div>
                   </>
                 }

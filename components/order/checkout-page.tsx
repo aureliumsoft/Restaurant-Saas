@@ -1,12 +1,17 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useState, useTransition } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Loader2, UtensilsCrossed } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import type { OrderInfo } from '@/components/order/order-types';
 import {
@@ -34,6 +39,11 @@ import {
   writeOrderCommentPreference,
 } from '@/lib/online-order-preferences';
 import { readOrderSchedule } from '@/lib/order-time-slots';
+import {
+  buildCustomerLightSurfaceVars,
+  buildStorefrontThemeVars,
+} from '@/lib/restaurant-theme';
+import { cn } from '@/lib/utils';
 
 function formatOrderApiError(body: unknown): string {
   if (!body || typeof body !== 'object') {
@@ -177,6 +187,50 @@ export default function CheckoutPageClient({
     };
   } | null>(null);
   const [paymentConfigLoading, setPaymentConfigLoading] = useState(true);
+  const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
+    null
+  );
+
+  useEffect(() => {
+    const slug = orderInfo?.restaurantSlug?.trim();
+    if (!slug) {
+      setThemePrimaryColor(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/customer/restaurant?slug=${encodeURIComponent(slug)}`,
+          { cache: 'no-store' }
+        );
+        const json = await res.json().catch(() => ({}));
+        const c =
+          typeof json?.data?.themePrimaryColor === 'string'
+            ? json.data.themePrimaryColor.trim()
+            : '';
+        if (!cancelled) setThemePrimaryColor(c || null);
+      } catch {
+        if (!cancelled) setThemePrimaryColor(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orderInfo?.restaurantSlug]);
+
+  const pageThemeVars = useMemo(
+    () =>
+      ({
+        ...buildStorefrontThemeVars(themePrimaryColor),
+        ...buildCustomerLightSurfaceVars(themePrimaryColor),
+        colorScheme: 'light',
+      }) as CSSProperties,
+    [themePrimaryColor]
+  );
+
+  const panelClass =
+    'overflow-hidden border border-[#e8eaef] bg-white shadow-[0_1px_4px_rgba(15,23,42,0.08)]';
 
   useEffect(() => {
     const slug = orderInfo?.restaurantSlug?.trim();
@@ -384,88 +438,91 @@ export default function CheckoutPageClient({
 
   if (!cartHydrated) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>{t('preparingCheckout')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-muted-foreground">{t('loadingYourCart')}</p>
-            <Button
-              type="button"
-              variant="default"
-              className="gap-2"
-              onClick={() =>
-                router.push(
-                  orderPathWithQuery(
-                    `/order/${orderType}/${encodeURIComponent(orderId)}`,
-                    orderInfo
-                  )
+      <div
+        className="web-app-customer flex min-h-screen items-center justify-center bg-[#f4f4f6] text-[#1f1f2e]"
+        style={pageThemeVars}
+      >
+        <div className={cn(panelClass, 'w-full max-w-md p-6 text-center')}>
+          <h2 className="text-lg font-bold text-primary">
+            {t('preparingCheckout')}
+          </h2>
+          <p className="mt-2 text-sm text-[#8e8e9a]">{t('loadingYourCart')}</p>
+          <Button
+            type="button"
+            className="mt-6 gap-2"
+            onClick={() =>
+              router.push(
+                orderPathWithQuery(
+                  `/order/${orderType}/${encodeURIComponent(orderId)}`,
+                  orderInfo
                 )
-              }
-            >
-              <ArrowLeft className="h-4 w-4" aria-hidden />
-              {t('backToOrder')}
-            </Button>
-          </CardContent>
-        </Card>
+              )
+            }
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            {t('backToOrder')}
+          </Button>
+        </div>
       </div>
     );
   }
 
   if (cart.length === 0) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>{t('noItemsToCheckout')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">{t('cartEmpty')}</p>
-            <Button
-              onClick={() =>
-                router.push(
-                  orderPathWithQuery(
-                    `/order/${orderType}/${encodeURIComponent(orderId)}`,
-                    orderInfo
-                  )
+      <div
+        className="web-app-customer flex min-h-screen items-center justify-center bg-[#f4f4f6] text-[#1f1f2e]"
+        style={pageThemeVars}
+      >
+        <div className={cn(panelClass, 'w-full max-w-md p-6 text-center')}>
+          <h2 className="text-lg font-bold text-primary">
+            {t('noItemsToCheckout')}
+          </h2>
+          <p className="mt-2 text-sm text-[#8e8e9a]">{t('cartEmpty')}</p>
+          <Button
+            className="mt-6 gap-2"
+            onClick={() =>
+              router.push(
+                orderPathWithQuery(
+                  `/order/${orderType}/${encodeURIComponent(orderId)}`,
+                  orderInfo
                 )
-              }
-              type="button"
-              variant="default"
-              className="gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" aria-hidden />
-              {t('backToOrder')}
-            </Button>
-          </CardContent>
-        </Card>
+              )
+            }
+            type="button"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            {t('backToOrder')}
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
     <div
-      className="min-h-screen bg-background text-foreground"
+      className="web-app-customer min-h-screen bg-[#f4f4f6] text-[#1f1f2e]"
+      style={pageThemeVars}
       aria-busy={submitting}
     >
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-6 pb-[max(2rem,env(safe-area-inset-bottom))] sm:py-8">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-4">
+          <div className="space-y-3">
             <WebAppRestaurantTitle
               restaurantName={orderInfo?.restaurantName}
               subtitle={
-                <>
-                  {orderType === 'delivery' ? 'Delivery' : 'Pick-Up'} Order
-                </>
+                <span className="font-medium text-[#8e8e9a]">
+                  {orderType === 'delivery'
+                    ? t('delivery')
+                    : t('orderPickUpLabel')}
+                </span>
               }
             />
-            <h2 className="text-2xl font-bold">{t('checkout')}</h2>
+            <h2 className="text-2xl font-bold text-primary">{t('checkout')}</h2>
           </div>
           <Button
             type="button"
-            variant="default"
-            className="shrink-0 gap-2"
+            variant="outline"
+            className="h-10 shrink-0 gap-2 border-[#e8eaef] bg-white text-primary hover:bg-white"
             onClick={() =>
               router.push(
                 orderPathWithQuery(
@@ -480,172 +537,185 @@ export default function CheckoutPageClient({
           </Button>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('orderInformation')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-3 text-sm text-muted-foreground">
-                  {orderInfo?.mode === 'delivery' ? (
-                    <>
-                      <div>
-                        <strong>{t('deliveryAddress')}:</strong>{' '}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.9fr)] lg:gap-6">
+          <div className="space-y-4">
+            <section className={panelClass}>
+              <div className="border-b border-[#ececf0] bg-primary px-4 py-3 text-primary-foreground">
+                <h3 className="text-sm font-bold">{t('orderInformation')}</h3>
+              </div>
+              <div className="grid gap-2.5 px-4 py-4 text-sm text-[#1f1f2e]">
+                {orderInfo?.mode === 'delivery' ? (
+                  <>
+                    <div className="flex justify-between gap-3">
+                      <span className="shrink-0 text-[#8e8e9a]">
+                        {t('deliveryAddress')}
+                      </span>
+                      <span className="break-words text-right font-semibold">
                         {orderInfo.address || 'N/A'}
-                      </div>
-                      <div>
-                        <strong>{t('name')}:</strong>{' '}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[#8e8e9a]">{t('name')}</span>
+                      <span className="font-semibold">
                         {orderInfo.addressName || 'N/A'}
-                      </div>
-                      <div>
-                        <strong>{t('phoneLabel')}:</strong>{' '}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[#8e8e9a]">{t('phoneLabel')}</span>
+                      <span className="font-semibold">
                         {orderInfo.customerPhone || 'N/A'}
-                      </div>
-                      <div>
-                        <strong>{t('apartmentDoor')}:</strong>{' '}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[#8e8e9a]">{t('apartmentDoor')}</span>
+                      <span className="font-semibold">
                         {orderInfo.apartment || 'N/A'}
-                      </div>
-                      <div>
-                        <strong>{t('gateCode')}:</strong>{' '}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[#8e8e9a]">{t('gateCode')}</span>
+                      <span className="font-semibold">
                         {orderInfo.gateCode || 'N/A'}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <strong>{t('pickupLocation')}:</strong>{' '}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[#8e8e9a]">{t('pickupLocation')}</span>
+                      <span className="break-words text-right font-semibold">
                         {orderInfo?.storeName || 'N/A'}
-                      </div>
-                      <div>
-                        <strong>{t('storeAddress')}:</strong>{' '}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="shrink-0 text-[#8e8e9a]">
+                        {t('storeAddress')}
+                      </span>
+                      <span className="break-words text-right font-semibold">
                         {orderInfo?.storeAddress || 'N/A'}
-                      </div>
-                      <div>
-                        <strong>{t('name')}:</strong>{' '}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[#8e8e9a]">{t('name')}</span>
+                      <span className="font-semibold">
                         {orderInfo?.addressName || 'N/A'}
-                      </div>
-                      <div>
-                        <strong>{t('phoneLabel')}:</strong>{' '}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[#8e8e9a]">{t('phoneLabel')}</span>
+                      <span className="font-semibold">
                         {orderInfo?.customerPhone || 'N/A'}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </section>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {t('orderDetailsCard')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CutleryOption value={cutlery} onChange={setCutleryChoice} />
-                <div className="mt-4">
-                  <p className="text-sm font-semibold">{t('comment')}</p>
-                  <textarea
-                    value={comment}
-                    onChange={(e) => setCommentChoice(e.target.value)}
-                    className="mt-2 w-full rounded-lg border border-border bg-background p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder={t('commentPlaceholder')}
-                    rows={4}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* <Card>
-              <CardHeader>
-                <CardTitle>{t('promotions')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center space-x-2 justify-between rounded-lg border border-border bg-card px-3 py-3">
-                  <input id="promo-code" type="text" className="text-sm p-2 rounded-lg w-full" placeholder={t('addPromoCode')} />
-                  <Button type="button" className="w-full" >{t('apply')}</Button>
-                </div>
-              </CardContent>
-            </Card> */}
+            <section className={cn(panelClass, 'p-4')}>
+              <h3 className="mb-3 text-sm font-bold text-primary">
+                {t('orderDetailsCard')}
+              </h3>
+              <CutleryOption value={cutlery} onChange={setCutleryChoice} />
+              <div className="mt-4">
+                <p className="text-sm font-bold text-primary">{t('comment')}</p>
+                <textarea
+                  value={comment}
+                  onChange={(e) => setCommentChoice(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-[#e8eaef] bg-[#f4f4f6] p-3 text-sm text-[#1f1f2e] placeholder:text-[#9ca3af] focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder={t('commentPlaceholder')}
+                  rows={4}
+                />
+              </div>
+            </section>
           </div>
 
-          <div className="space-y-4">
-            <Card className="border-2 border-primary">
-              <CardHeader>
-                <CardTitle>{t('basket')}</CardTitle>
-              </CardHeader>
-              <CardContent>
+          <div className="lg:sticky lg:top-6 lg:self-start">
+            <section className={panelClass}>
+              <div className="border-b border-[#ececf0] bg-primary px-4 py-3 text-primary-foreground">
+                <h3 className="text-sm font-bold">{t('basket')}</h3>
+              </div>
+              <div className="space-y-4 p-4">
                 <div className="space-y-3">
                   {cart.map((line) => {
                     const modifierLines = cartModifierDisplayLines(line.modifiers);
                     return (
-                    <div key={line.lineId} className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <p className="font-medium">
-                          {cartLineTitle(line.productName, line.variationName)}
-                        </p>
-                        <p>{formatMoney(lineTotal(line))}</p>
-                      </div>
-                      {modifierLines.length > 0 ? (
-                        <div className="space-y-0.5">
-                          {modifierLines.map((modLine, index) => (
-                            <p
-                              key={`${line.lineId}-mod-${index}`}
-                              className={`text-xs text-muted-foreground${
-                                modLine.prefix === 'dash' ? ' pl-3' : ''
-                              }`}
-                            >
-                              {modLine.prefix === 'branch' ? '↳ ' : '- '}
-                              {modLine.name}
-                              {modLine.unitPrice > 0
-                                ? ` (+${formatMoney(modLine.unitPrice)})`
-                                : ''}
-                            </p>
-                          ))}
+                      <div key={line.lineId} className="space-y-1">
+                        <div className="flex justify-between gap-3 text-sm">
+                          <p className="min-w-0 font-bold text-primary">
+                            {cartLineTitle(line.productName, line.variationName)}
+                          </p>
+                          <p className="shrink-0 font-bold text-primary">
+                            {formatMoney(lineTotal(line))}
+                          </p>
                         </div>
-                      ) : null}
-                      <p className="text-xs text-muted-foreground">
-                        x{line.quantity}
-                      </p>
-                    </div>
+                        {modifierLines.length > 0 ? (
+                          <div className="space-y-0.5">
+                            {modifierLines.map((modLine, index) => (
+                              <p
+                                key={`${line.lineId}-mod-${index}`}
+                                className={cn(
+                                  'text-xs text-primary/75',
+                                  modLine.prefix === 'dash' && 'pl-3'
+                                )}
+                              >
+                                {modLine.prefix === 'branch' ? '↳ ' : '- '}
+                                {modLine.name}
+                                {modLine.unitPrice > 0
+                                  ? ` (+${formatMoney(modLine.unitPrice)})`
+                                  : ''}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                        <p className="text-xs text-[#8e8e9a]">x{line.quantity}</p>
+                      </div>
                     );
                   })}
                 </div>
 
                 <OrderPreferencesSummary
-                  className="mt-3"
                   cutlery={cutlery}
                   comment={comment}
+                  className="border-[#ececf0] bg-[#f8f8fa] text-[#1f1f2e]"
                 />
 
-                <div className="mt-4 space-y-2 border-t border-border pt-2 text-sm">
+                <div className="space-y-2 border-t border-[#ececf0] pt-3 text-sm">
                   <div className="flex justify-between">
-                    <span>{t('subtotal')}</span>
-                    <span>{formatMoney(total)}</span>
+                    <span className="text-[#8e8e9a]">{t('subtotal')}</span>
+                    <span className="font-semibold">{formatMoney(total)}</span>
                   </div>
                   {serviceChargeAmount > 0 ? (
                     <div className="flex justify-between">
-                      <span>{t('serviceFees')}</span>
-                      <span>{formatMoney(serviceChargeAmount)}</span>
+                      <span className="text-[#8e8e9a]">{t('serviceFees')}</span>
+                      <span className="font-semibold">
+                        {formatMoney(serviceChargeAmount)}
+                      </span>
                     </div>
                   ) : null}
-                  <div className="flex justify-between font-bold">
-                    <span>{t('total')}</span>
-                    <span>{formatMoney(grandTotal)}</span>
+                  <div className="flex justify-between pt-1">
+                    <span className="text-base font-bold text-primary">
+                      {t('total')}
+                    </span>
+                    <span className="text-lg font-bold text-primary">
+                      {formatMoney(grandTotal)}
+                    </span>
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-2">
+                <div className="space-y-2">
                   {orderInfo?.restaurantSlug ? (
                     paymentConfigLoading ? (
-                      <div className="flex items-center justify-center">
+                      <div className="flex items-center justify-center py-3">
                         <Loader2 className="h-4 w-4 animate-spin text-primary" />
                       </div>
                     ) : paymentConfig?.ready &&
                       paymentConfig.provider === 'PAYPAL' ? (
                       <PayPalCheckoutButtons
                         amount={grandTotal}
-                        currency={paymentConfig.currencyCode ?? regional.currencyCode}
+                        currency={
+                          paymentConfig.currencyCode ?? regional.currencyCode
+                        }
                         restaurantSlug={orderInfo.restaurantSlug}
                         title={`Online order (${
                           orderType === 'delivery' ? 'Delivery' : 'Pick-up'
@@ -691,7 +761,9 @@ export default function CheckoutPageClient({
                       paymentConfig.provider === 'STRIPE' ? (
                       <StripeCheckoutButton
                         amount={grandTotal}
-                        currency={paymentConfig.currencyCode ?? regional.currencyCode}
+                        currency={
+                          paymentConfig.currencyCode ?? regional.currencyCode
+                        }
                         restaurantSlug={orderInfo.restaurantSlug}
                         title={`Online order (${
                           orderType === 'delivery' ? 'Delivery' : 'Pick-up'
@@ -788,24 +860,22 @@ export default function CheckoutPageClient({
                         ) : null}
                       </div>
                     ) : (
-                      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                         Online payments are not available for this restaurant
                         yet. The owner must configure PayPal, Stripe, or
                         JazzCash / Easypaisa wallets in settings.
                       </p>
                     )
                   ) : (
-                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                       Missing store link. Reopen the menu from your restaurant
                       page.
                     </p>
                   )}
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {t('confirmOrderHint')}
-                </p>
-              </CardContent>
-            </Card>
+                <p className="text-xs text-[#8e8e9a]">{t('confirmOrderHint')}</p>
+              </div>
+            </section>
           </div>
         </div>
       </div>

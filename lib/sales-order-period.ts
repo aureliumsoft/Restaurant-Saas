@@ -32,6 +32,39 @@ export function salesOrderFilterTimezone(): string {
   return getOrderDisplayTimezone();
 }
 
+/** Calendar YYYY-MM-DD for a Date in an IANA timezone (no DB round-trip). */
+export function calendarDayKeyInTimezone(date: Date, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+}
+
+/** Last `n` calendar day keys ending today in `timeZone` (oldest → newest). */
+export function lastNCalendarDayKeys(n: number, timeZone: string): string[] {
+  const today = calendarDayKeyInTimezone(new Date(), timeZone);
+  const [y, m, d] = today.split('-').map(Number);
+  if (!y || !m || !d) {
+    return Array.from({ length: n }, (_, i) => {
+      const dt = new Date();
+      dt.setUTCDate(dt.getUTCDate() - (n - 1 - i));
+      return dt.toISOString().slice(0, 10);
+    });
+  }
+  const keys: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const dt = new Date(Date.UTC(y, m - 1, d - i));
+    keys.push(dt.toISOString().slice(0, 10));
+  }
+  return keys;
+}
+
 /** Calendar date (YYYY-MM-DD) for "now" in the given IANA timezone. */
 export async function getTodayDayKeyInTimezone(
   database: typeof db,
@@ -40,7 +73,7 @@ export async function getTodayDayKeyInTimezone(
   const rows = await database.$queryRaw<Array<{ d: string }>>(
     Prisma.sql`SELECT (timezone(${tz}::text, now()))::date::text AS d`
   );
-  return rows[0]?.d ?? new Date().toISOString().slice(0, 10);
+  return rows[0]?.d ?? calendarDayKeyInTimezone(new Date(), tz);
 }
 
 /** UTC instants for the start (inclusive) and end (exclusive) of today in `tz`. */

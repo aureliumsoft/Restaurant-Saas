@@ -134,9 +134,15 @@ export async function submitKdsTicket(
   }
 
   try {
-    const { ok, status } = await postOrderJson(url, body, idempotencyKey);
+    const { ok, status, json } = await postOrderJson(url, body, idempotencyKey);
     if (ok || status === 201) return { status: 'sent' };
-    throw new Error(`Kitchen ticket failed: ${status}`);
+    const apiError =
+      json &&
+      typeof json === 'object' &&
+      typeof (json as { error?: unknown }).error === 'string'
+        ? String((json as { error: string }).error)
+        : null;
+    throw new Error(apiError || `Kitchen ticket failed: ${status}`);
   } catch (e) {
     if (isBrowserOffline() || isLikelyNetworkFailure(e)) {
       if (opts?.linkedOutboxKey) {

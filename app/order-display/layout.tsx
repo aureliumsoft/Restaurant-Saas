@@ -10,7 +10,7 @@ export default function OrderDisplayLayout({
     <OperationalRealtimeShell>
       {/* h-screen + overflow-hidden so the customer display never spills past
           the viewport — the screen is meant to be wall-mounted, not scrolled. */}
-      <div className="flex h-screen max-h-screen flex-col overflow-hidden bg-muted/30 dark:bg-background">
+      <div className="fire-mesh-bg flex h-screen max-h-screen flex-col overflow-hidden">
         <KdsLayoutHeader />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {children}

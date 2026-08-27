@@ -4,7 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { cn } from "@/lib/utils";
-import { isRadixPortaledLayerTarget } from "@/lib/radix-portal-hit";
+import { shouldIgnoreRadixOutsideDismiss } from "@/lib/radix-portal-hit";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -47,15 +47,15 @@ function DialogContent({
         )}
         {...props}
         onInteractOutside={(e) => {
-          if (isRadixPortaledLayerTarget(e.target)) e.preventDefault();
+          if (shouldIgnoreRadixOutsideDismiss(e)) e.preventDefault();
           onInteractOutside?.(e);
         }}
         onPointerDownOutside={(e) => {
-          if (isRadixPortaledLayerTarget(e.target)) e.preventDefault();
+          if (shouldIgnoreRadixOutsideDismiss(e)) e.preventDefault();
           onPointerDownOutside?.(e);
         }}
         onFocusOutside={(e) => {
-          if (isRadixPortaledLayerTarget(e.target)) e.preventDefault();
+          if (shouldIgnoreRadixOutsideDismiss(e)) e.preventDefault();
           onFocusOutside?.(e);
         }}
       >

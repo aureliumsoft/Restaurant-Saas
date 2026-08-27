@@ -14,6 +14,9 @@ import {
 } from '@/lib/sales-order-period';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 50;
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await getRestaurantIdForRequest(req, {
@@ -51,28 +54,40 @@ export async function GET(req: NextRequest) {
       branchId = branchIdFromQuery;
     }
 
+    const limitRaw = Number(req.nextUrl.searchParams.get('limit'));
+    const offsetRaw = Number(req.nextUrl.searchParams.get('offset'));
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(limitRaw)))
+      : DEFAULT_PAGE_SIZE;
+    const offset = Number.isFinite(offsetRaw)
+      ? Math.max(0, Math.floor(offsetRaw))
+      : 0;
+
     const tz = salesOrderFilterTimezone();
     const todayBounds = await getTodayCreatedAtBounds(db, tz);
 
+    const where = {
+      restaurantId: auth.restaurantId,
+      ...orderBranchWhere(branchId),
+      createdAt: todayBounds,
+      status: { notIn: ['failed'] },
+      OR: [
+        { sourceType: OrderSourceType.POS },
+        {
+          sourceType: OrderSourceType.KIOSK,
+          OR: [
+            { posShiftId: { not: null } },
+            { status: { in: ['canceled', 'cancelled'] } },
+          ],
+        },
+      ],
+    };
+
     const orders = await db.order.findMany({
-      where: {
-        restaurantId: auth.restaurantId,
-        ...orderBranchWhere(branchId),
-        createdAt: todayBounds,
-        status: { notIn: ['failed'] },
-        OR: [
-          { sourceType: OrderSourceType.POS },
-          {
-            sourceType: OrderSourceType.KIOSK,
-            OR: [
-              { posShiftId: { not: null } },
-              { status: { in: ['canceled', 'cancelled'] } },
-            ],
-          },
-        ],
-      },
+      where,
       orderBy: { createdAt: 'desc' },
-      take: 200,
+      skip: offset,
+      take: limit + 1,
       select: {
         id: true,
         shortOrderId: true,
@@ -91,7 +106,10 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const data = orders.map((order) => ({
+    const hasMore = orders.length > limit;
+    const page = hasMore ? orders.slice(0, limit) : orders;
+
+    const data = page.map((order) => ({
       id: order.id,
       shortOrderId: order.shortOrderId,
       ticketNumber: order.ticketNumber,
@@ -105,7 +123,15 @@ export async function GET(req: NextRequest) {
       itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
     }));
 
-    return NextResponse.json({ data });
+    return NextResponse.json({
+      data,
+      pagination: {
+        limit,
+        offset,
+        nextOffset: hasMore ? offset + limit : null,
+        hasMore,
+      },
+    });
   } catch (error) {
     console.error('pos-order recent GET', error);
     return NextResponse.json(

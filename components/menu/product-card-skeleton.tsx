@@ -18,18 +18,18 @@ export function ProductCardSkeleton({
     return (
       <div
         className={cn(
-          'flex flex-col overflow-hidden rounded-2xl p-2.5 text-left text-foreground',
+          'flex flex-col overflow-hidden rounded-xl border border-border bg-card text-left',
           className
         )}
         aria-hidden
       >
-        <Skeleton className="aspect-square w-full rounded-xl" />
-        <div className="mt-2.5 flex min-h-[3.25rem] flex-col justify-between px-0.5">
-          <div className="space-y-1.5">
-            <Skeleton className="h-3.5 w-full rounded-sm" />
-            <Skeleton className="h-3.5 w-[88%] rounded-sm" />
+        <Skeleton className="aspect-square w-full rounded-none" />
+        <div className="flex items-stretch border-t border-border">
+          <div className="min-w-0 flex-1 space-y-1.5 px-2 py-2">
+            <Skeleton className="h-3 w-[85%] rounded-sm" />
+            <Skeleton className="h-4 w-[40%] rounded-sm" />
           </div>
-          <Skeleton className="mt-1 h-3 w-[36%] rounded-sm" />
+          <Skeleton className="w-9 shrink-0 rounded-none sm:w-10" />
         </div>
       </div>
     );

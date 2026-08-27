@@ -1,4 +1,4 @@
-import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, IngredientUnit, IngredientStockEntrySource, OrderSourceType, PosShiftStatus, CustomerPaymentProvider } from '@prisma/client';
+import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, IngredientUnit, IngredientStockEntrySource, OrderSourceType, PosShiftStatus, CustomerPaymentProvider, DineInPaymentTiming } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import Decimal from 'decimal.js';
 
@@ -91,6 +91,7 @@ export function fakeRestaurantComplete() {
     kioskServiceChargeAmount: 0,
     onlineServiceChargeEnabled: false,
     onlineServiceChargeAmount: 0,
+    dineInPaymentTiming: DineInPaymentTiming.ON_LEAVE,
     currencyCode: 'EUR',
     countryCode: 'ES',
     paymentTerminalIp: undefined,

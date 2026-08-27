@@ -12,7 +12,6 @@ import {
   Shield,
 } from 'lucide-react';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
 
 import { AdminBreadcrumb } from '@/components/admin/admin-breadcrumb';
 import { AdminSidebarFooter } from '@/components/admin/admin-sidebar-footer';
@@ -22,7 +21,6 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { ModeToggle } from '@/components/darkmode/darkmode';
 import UserMenu from '@/components/dashboard/UserMenu';
-import { ADMIN_NAV_GROUPS } from '@/constant/adminNav';
 import { cn } from '@/lib/utils';
 import { isPlatformAdminSession } from '@/lib/auth/admin';
 
@@ -33,69 +31,32 @@ function AdminMobileNav({
 }: {
   onOpenChange: (o: boolean) => void;
 }) {
-  const pathname = usePathname();
-
   return (
     <SheetContent
       side="left"
-      className="flex w-[min(100vw,18rem)] flex-col bg-white p-0 dark:bg-zinc-900"
+      className="flex w-[min(100vw,19rem)] flex-col border-0 bg-white/80 p-0 backdrop-blur-2xl dark:bg-black/80"
     >
-      <div className="px-5 py-4">
+      <div className="px-5 py-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-fire-500/10 ring-1 ring-fire-500/20">
-            <Image src="/Logo.png" alt="Foodluk Admin" width={22} height={22} />
+          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-fire-400 to-fire-600 shadow-lg shadow-fire-500/30">
+            <Image src="/Logo.png" alt="Foodluk Admin" width={24} height={24} />
           </div>
           <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-semibold">Foodluk Admin</p>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-fire-600 dark:text-fire-400">
-              Platform
+            <p className="truncate text-sm font-semibold tracking-tight">
+              Foodluk
+            </p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-fire-600 dark:text-fire-400">
+              Admin
             </p>
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
-        {ADMIN_NAV_GROUPS.map((group) => (
-          <div key={group.label}>
-            <p className="mb-2 px-3 text-xs font-medium text-muted-foreground">
-              {group.label}
-            </p>
-            <div className="grid gap-0.5">
-              {group.items.map((item) => {
-                const active =
-                  pathname === item.path || pathname.startsWith(`${item.path}/`);
-                return (
-                  <Link
-                    key={item.path}
-                    href={item.path}
-                    onClick={() => onOpenChange(false)}
-                    className={cn(
-                      'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
-                      active
-                        ? 'bg-fire-500 text-white shadow-md shadow-fire-500/20'
-                        : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                        active
-                          ? 'bg-white/20 text-white'
-                          : 'bg-muted/50'
-                      )}
-                    >
-                      {item.icon}
-                    </span>
-                    <span className="truncate">{item.title}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
+      <div className="flex-1 overflow-y-auto px-2 pb-4">
+        <AdminSidebarNav onNavigate={() => onOpenChange(false)} />
+      </div>
 
-      <div className="p-3">
+      <div className="px-3 pb-4">
         <AdminSidebarFooter />
       </div>
     </SheetContent>
@@ -139,7 +100,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   if (status === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-950">
+      <div className="fire-mesh-bg flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-10 w-10 animate-spin text-fire-500" />
           <p className="text-sm text-muted-foreground">Loading admin panel…</p>
@@ -150,7 +111,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   if (!canAccessAdmin) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-100 p-6 text-center dark:bg-zinc-950">
+      <div className="fire-mesh-bg flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-fire-500/10">
           <Shield className="h-7 w-7 text-fire-600 dark:text-fire-400" />
         </div>
@@ -174,13 +135,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <AdminAppShell
       sidebarOpen={sidebarOpen}
       sidebarHeader={
-        <Link href="/admin/dashboard" className="flex items-center gap-3 transition-opacity hover:opacity-90">
-          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-fire-500/10">
+        <Link href="/admin/dashboard" className="group flex min-w-0 items-center gap-3 transition-opacity hover:opacity-90">
+          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-fire-400 to-fire-600 shadow-lg shadow-fire-500/30">
             <Image src="/Logo.png" alt="Foodluk Admin" width={24} height={24} />
           </div>
           <div className="min-w-0 flex flex-col leading-tight">
             <span className="truncate text-sm font-semibold tracking-tight">Foodluk</span>
-            <span className="text-xs font-medium text-fire-600 dark:text-fire-400">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-fire-600 dark:text-fire-400">
               Admin
             </span>
           </div>
@@ -194,19 +155,19 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             type="button"
             variant="ghost"
             size="icon"
-            className="shrink-0 rounded-xl text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+            className="h-9 w-9 shrink-0 rounded-xl bg-white/70 text-muted-foreground shadow-sm hover:bg-white hover:text-foreground dark:bg-white/10 dark:hover:bg-white/15"
             aria-label="Toggle navigation"
             onClick={toggleDesktop}
           >
             <span className="hidden md:inline-flex" aria-hidden>
               {sidebarOpen ? (
-                <PanelLeftClose className="h-5 w-5" />
+                <PanelLeftClose className="h-[1.1rem] w-[1.1rem]" />
               ) : (
-                <PanelLeft className="h-5 w-5" />
+                <PanelLeft className="h-[1.1rem] w-[1.1rem]" />
               )}
             </span>
             <span className="inline-flex md:hidden" aria-hidden>
-              <Menu className="h-5 w-5" />
+              <Menu className="h-[1.1rem] w-[1.1rem]" />
             </span>
           </Button>
 
@@ -220,7 +181,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <Button
               variant="ghost"
               size="sm"
-              className="hidden rounded-xl text-muted-foreground hover:text-foreground lg:inline-flex"
+              className="hidden h-9 rounded-xl bg-white/70 px-3 text-muted-foreground shadow-sm hover:bg-white hover:text-foreground dark:bg-white/10 dark:hover:bg-white/15 lg:inline-flex"
               asChild
             >
               <Link href="/" target="_blank" rel="noopener noreferrer">
@@ -230,7 +191,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </Button>
             <ModeToggle />
             <div className={cn('hidden items-center', !sidebarOpen && 'md:flex')}>
-              <UserMenu confirmLogout />
+              <UserMenu
+                confirmLogout
+                className="h-9 rounded-xl border-0 bg-white/70 px-3 shadow-sm hover:bg-white dark:bg-white/10 dark:hover:bg-white/15"
+              />
             </div>
           </div>
         </>
