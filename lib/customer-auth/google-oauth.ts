@@ -1,8 +1,14 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
+import {
+  getConfiguredAppOrigin,
+  normalizeAppOrigin,
+} from '@/lib/public-app-origin-server';
+
 export type CustomerGoogleOAuthState = {
   restaurantSlug: string;
   returnTo: string;
+  origin?: string;
   nonce: string;
   exp: number;
 };
@@ -22,10 +28,12 @@ function signPayload(json: string): string {
 export function encodeCustomerGoogleOAuthState(payload: {
   restaurantSlug: string;
   returnTo: string;
+  origin: string;
 }): string {
   const data: CustomerGoogleOAuthState = {
     restaurantSlug: payload.restaurantSlug.trim(),
     returnTo: payload.returnTo.trim(),
+    origin: payload.origin.trim(),
     nonce: randomBytes(16).toString('base64url'),
     exp: Date.now() + 10 * 60 * 1000,
   };
@@ -59,7 +67,10 @@ export function decodeCustomerGoogleOAuthState(
     if (!data.returnTo.startsWith('/') || data.returnTo.startsWith('//')) {
       return null;
     }
-    return data;
+    return {
+      ...data,
+      origin: data.origin?.trim() || undefined,
+    };
   } catch {
     return null;
   }
@@ -67,19 +78,10 @@ export function decodeCustomerGoogleOAuthState(
 
 /**
  * Origin Google already allows for this OAuth client (NextAuth).
- * Do not use the request host — 127.0.0.1 vs localhost (or a LAN IP)
- * causes Google Error 400 redirect_uri_mismatch.
+ * Prefer NEXT_PUBLIC_APP_URL so redirects stay on the live domain, not localhost.
  */
 export function customerGoogleOAuthOrigin(): string {
-  const fromEnv =
-    process.env.NEXTAUTH_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.APP_URL?.trim();
-  if (fromEnv) {
-    const withProto = fromEnv.startsWith('http') ? fromEnv : `https://${fromEnv}`;
-    return withProto.replace(/\/$/, '');
-  }
-  return 'http://localhost:3000';
+  return getConfiguredAppOrigin();
 }
 
 /**
@@ -110,15 +112,18 @@ export function publicGoogleSignInConfig(): {
 export function buildCustomerGoogleAuthUrl(options: {
   restaurantSlug: string;
   returnTo: string;
-  origin?: string;
+  origin: string;
 }): string | null {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   if (!clientId) return null;
 
-  const redirectUri = customerGoogleOAuthRedirectUri(options.origin);
+  const returnOrigin =
+    normalizeAppOrigin(options.origin) || customerGoogleOAuthOrigin();
+  const redirectUri = customerGoogleOAuthRedirectUri();
   const state = encodeCustomerGoogleOAuthState({
     restaurantSlug: options.restaurantSlug,
     returnTo: options.returnTo,
+    origin: returnOrigin,
   });
 
   const params = new URLSearchParams({

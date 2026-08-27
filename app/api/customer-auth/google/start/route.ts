@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { buildCustomerGoogleAuthUrl } from '@/lib/customer-auth/google-oauth';
+import { requestOrigin } from '@/lib/public-app-origin-server';
 
 export async function GET(req: NextRequest) {
   const restaurantSlug = req.nextUrl.searchParams.get('restaurantSlug')?.trim();
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
   const url = buildCustomerGoogleAuthUrl({
     restaurantSlug,
     returnTo,
+    origin: requestOrigin(req),
   });
 
   if (!url) {

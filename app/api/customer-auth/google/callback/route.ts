@@ -18,13 +18,25 @@ import {
 } from '@/lib/customer-auth/session';
 import { db } from '@/lib/db';
 import { upsertNewsletterSubscriber } from '@/lib/newsletter/subscribe';
+import { absoluteAppUrl } from '@/lib/public-app-origin-server';
 
-function redirectToApp(req: NextRequest, returnTo: string) {
-  return NextResponse.redirect(new URL(returnTo, req.nextUrl.origin));
+function redirectToApp(
+  req: NextRequest,
+  returnTo: string,
+  stateOrigin?: string | null
+) {
+  return NextResponse.redirect(
+    absoluteAppUrl(returnTo, { req, stateOrigin })
+  );
 }
 
-function redirectWithError(req: NextRequest, returnTo: string, code: string) {
-  const dest = new URL(returnTo, req.nextUrl.origin);
+function redirectWithError(
+  req: NextRequest,
+  returnTo: string,
+  code: string,
+  stateOrigin?: string | null
+) {
+  const dest = new URL(absoluteAppUrl(returnTo, { req, stateOrigin }));
   dest.searchParams.set('customerAuthError', code);
   return NextResponse.redirect(dest);
 }
@@ -38,18 +50,28 @@ export async function GET(req: NextRequest) {
   const fallbackReturn = state?.returnTo ?? '/';
 
   if (oauthError || !code || !state) {
-    return redirectWithError(req, fallbackReturn, oauthError || 'invalid_state');
+    return redirectWithError(
+      req,
+      fallbackReturn,
+      oauthError || 'invalid_state',
+      state?.origin
+    );
   }
 
   const restaurant = await resolveRestaurantIdBySlug(state.restaurantSlug);
   if (!restaurant) {
-    return redirectWithError(req, fallbackReturn, 'restaurant_not_found');
+    return redirectWithError(
+      req,
+      fallbackReturn,
+      'restaurant_not_found',
+      state.origin
+    );
   }
 
   const redirectUri = customerGoogleOAuthRedirectUri();
   const profile = await exchangeGoogleAuthCode(code, redirectUri);
   if (!profile?.email?.trim()) {
-    return redirectWithError(req, state.returnTo, 'google_profile');
+    return redirectWithError(req, state.returnTo, 'google_profile', state.origin);
   }
 
   const email = profile.email.trim();
@@ -78,7 +100,7 @@ export async function GET(req: NextRequest) {
   });
 
   if (account?.disabledAt) {
-    return redirectWithError(req, state.returnTo, 'account_disabled');
+    return redirectWithError(req, state.returnTo, 'account_disabled', state.origin);
   }
 
   if (!account) {
@@ -139,7 +161,7 @@ export async function GET(req: NextRequest) {
     ipAddress: ip,
   });
 
-  const res = redirectToApp(req, state.returnTo);
+  const res = redirectToApp(req, state.returnTo, state.origin);
   setCustomerSessionCookie(res, session.token, session.expiresAt);
   return res;
 }
