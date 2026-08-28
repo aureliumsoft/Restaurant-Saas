@@ -2,31 +2,32 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, Globe, Menu, User } from 'lucide-react';
+import { CalendarDays, Filter, Menu, User, X } from 'lucide-react';
 
 import { useUiLanguageSnapshot } from '@/components/i18n/ui-language-context';
 import { LanguageSwitcher } from '@/components/main/language-switcher';
 import { useCustomerAccount } from '@/components/customer-app/customer-account-context';
-import { Button } from '@/components/ui/button';
 import {
   Sheet,
   SheetClose,
   SheetContent,
-  SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
 import '@/lib/i18n/client';
-import { buildCustomerLightSurfaceVars, buildThemeCssVars } from '@/lib/restaurant-theme';
+import {
+  buildCustomerLightSurfaceVars,
+  buildThemeCssVars,
+} from '@/lib/restaurant-theme';
 import type { UiLanguage } from '@/lib/i18n/resources';
 import {
   isCustomerOrderFlowPath,
   parseStorefrontSlugFromPath,
 } from '@/lib/customer-storefront-paths';
+import type { CSSProperties } from 'react';
 
 const WELCOME_BY_LANG: Record<UiLanguage, string> = {
   en: 'Welcome',
@@ -150,134 +151,162 @@ export function Header() {
     });
   };
 
-  const menuSheetStyle = useMemo(
-    () => buildCustomerLightSurfaceVars(brand.themePrimaryColor) as CSSProperties,
-    [brand.themePrimaryColor]
-  );
-
   const logoBlock = (
-    <div className="flex min-w-0 items-center gap-2.5">
+    <div className="flex min-w-0 items-center">
       {normalizedLogoUrl && !logoLoadFailed ? (
         <img
           key={normalizedLogoUrl}
           src={normalizedLogoUrl}
           alt={brand.name ?? 'Restaurant'}
-          className="h-9 max-w-[min(160px,42vw)] shrink-0 object-contain object-left sm:h-10 lg:h-10 lg:w-10 lg:max-w-none lg:rounded-full lg:object-cover lg:ring-2 lg:ring-white/25"
+          className="h-10 max-h-10 w-auto max-w-[min(220px,58vw)] object-contain object-left sm:h-11 sm:max-h-11 sm:max-w-[260px]"
           onError={() => setLogoLoadFailed(true)}
         />
       ) : (
-        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm font-bold text-white ring-2 ring-white/25 sm:h-10 sm:w-10">
-          {(brand.name ?? 'R').charAt(0)}
+        <span className="inline-flex items-center gap-2.5">
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-base font-bold text-white ring-2 ring-white/30 sm:h-11 sm:w-11">
+            {(brand.name ?? 'R').charAt(0)}
+          </span>
+          <span
+            className="truncate text-lg font-extrabold uppercase tracking-wide sm:text-xl"
+            style={{
+              color: 'var(--restaurant-glow, #f5d76e)',
+              textShadow:
+                '0 1px 0 color-mix(in srgb, var(--restaurant-primary, #501d8e) 85%, black)',
+            }}
+          >
+            {brand.name ?? 'Restaurant'}
+          </span>
         </span>
       )}
-      <span className="hidden truncate text-sm font-bold uppercase tracking-wide text-primary-foreground sm:text-base lg:inline lg:text-lg">
-        {brand.name ?? 'Restaurant'}
-      </span>
     </div>
   );
 
   if (isStorefront) {
+    const loginLabel = account
+      ? account.name || t('customerAuthAccountTitle')
+      : t('storefrontToLogIn');
+
     return (
-      <header className="fixed inset-x-0 top-0 z-50 bg-primary px-4 py-3 text-primary-foreground sm:px-6">
-        <div className="flex h-12 w-full items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-center lg:hidden">
-            {normalizedLogoUrl && !logoLoadFailed ? (
-              logoBlock
-            ) : (
-              <span className="truncate text-base font-bold uppercase tracking-wide text-primary-foreground">
-                {brand.name ?? 'Restaurant'}
-              </span>
-            )}
-          </div>
-
-          <div className="hidden min-w-0 flex-1 justify-center px-2 lg:flex">
+      <header className="fixed inset-x-0 top-0 z-50 bg-primary px-4 py-2.5 text-primary-foreground sm:px-6">
+        <div className="flex h-[52px] w-full items-center justify-between gap-3 sm:h-14">
+          {/* Left: logo + name (Enjoy Tacos style) */}
+          <Link
+            href={pathSlug ? `/${encodeURIComponent(pathSlug)}` : '/'}
+            className="flex min-w-0 flex-1 items-center no-underline"
+          >
             {logoBlock}
-          </div>
+          </Link>
 
-          <div className="flex shrink-0 items-center justify-end gap-2 lg:gap-3">
+          {/* Right: To log in + MENU */}
+          <div className="flex shrink-0 items-center gap-3 sm:gap-4">
             <button
               type="button"
               onClick={openLogin}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#f5d76e] transition hover:text-white lg:hidden"
-              aria-label={account ? t('customerAuthAccountTitle') : t('storefrontLogin')}
+              className="inline-flex items-center gap-2 text-sm font-medium transition hover:brightness-110"
+              style={{ color: 'var(--restaurant-glow, #f5d76e)' }}
+              aria-label={loginLabel}
             >
-              <User className="h-6 w-6" strokeWidth={1.5} />
+              <User className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+              <span className="hidden sm:inline">{loginLabel}</span>
             </button>
 
             <Sheet>
               <SheetTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex h-10 w-10 items-center justify-center text-[#f5d76e] transition hover:text-white lg:hidden"
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-3.5 text-sm font-bold uppercase tracking-wide text-primary shadow-sm transition hover:bg-white/90 sm:px-4"
                   aria-label={t('storefrontMenu')}
                 >
-                  <Menu className="h-6 w-6" strokeWidth={1.5} />
+                  <Menu className="h-5 w-5" strokeWidth={2} />
+                  <span className="hidden sm:inline">{t('storefrontMenu')}</span>
                 </button>
-              </SheetTrigger>
-              <SheetTrigger asChild>
-                <Button
-                  size="sm"
-                  className="hidden h-9 rounded-lg border-0 bg-white px-3 text-xs font-bold uppercase tracking-wide text-[#1a1033] shadow-sm hover:bg-white/90 lg:inline-flex"
-                >
-                  <Menu className="mr-1.5 h-4 w-4" />
-                  {t('storefrontMenu')}
-                </Button>
               </SheetTrigger>
               <SheetContent
                 side="right"
-                className="w-[min(100vw-2rem,320px)] border-border bg-background text-foreground"
-                style={menuSheetStyle}
+                className="flex h-full w-[min(100vw,420px)] max-w-[420px] flex-col gap-0 border-0 bg-white p-0 text-[#1f1f2e] shadow-2xl sm:w-[min(32vw,420px)]"
+                style={
+                  {
+                    ...buildCustomerLightSurfaceVars(brand.themePrimaryColor),
+                    ...buildThemeCssVars(brand.themePrimaryColor),
+                  } as CSSProperties
+                }
               >
-                <SheetHeader>
-                  <SheetTitle>{brand.name ?? 'Restaurant'}</SheetTitle>
-                </SheetHeader>
+                <div className="flex shrink-0 items-center justify-between bg-primary px-5 py-6 text-primary-foreground">
+                  <SheetTitle className="m-0 text-left text-[15px] font-extrabold uppercase tracking-[0.06em] text-primary-foreground">
+                    {account
+                      ? account.name || t('customerAuthAccountTitle')
+                      : t('storefrontGuestMode')}
+                  </SheetTitle>
+                  <SheetClose asChild>
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center text-primary-foreground transition hover:opacity-80"
+                      aria-label="Close"
+                    >
+                      <X className="h-5 w-5" strokeWidth={2.5} />
+                    </button>
+                  </SheetClose>
+                </div>
+
                 <nav
-                  className="mt-6 flex flex-col gap-1"
-                  aria-label={t('storefrontLogin')}
+                  className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain bg-white"
+                  aria-label={t('storefrontMenu')}
                 >
                   <SheetClose asChild>
                     <button
                       type="button"
                       onClick={openLogin}
-                      className="flex items-center gap-2 rounded-lg px-2 py-3 text-left text-sm font-medium text-foreground transition hover:bg-muted"
+                      className="flex w-full items-center gap-3.5 border-b border-[#e8e8ec] px-5 py-[1.15rem] text-left text-[15px] font-medium text-[#1f1f2e] transition hover:bg-[#fafafa]"
                     >
-                      <User className="h-4 w-4" />
-                      {account
-                        ? account.name || t('customerAuthAccountTitle')
-                        : t('storefrontLogin')}
+                      <User
+                        className="h-[18px] w-[18px] shrink-0 text-primary"
+                        strokeWidth={1.75}
+                      />
+                      {loginLabel}
                     </button>
                   </SheetClose>
+
                   <SheetClose asChild>
                     <button
                       type="button"
                       onClick={openMyOrders}
-                      className="flex items-center gap-2 rounded-lg px-2 py-3 text-left text-sm font-medium text-foreground transition hover:bg-muted"
+                      className="flex w-full items-center gap-3.5 border-b border-[#e8e8ec] px-5 py-[1.15rem] text-left text-[15px] font-medium text-[#1f1f2e] transition hover:bg-[#fafafa]"
                     >
-                      <CalendarDays className="h-4 w-4" />
+                      <CalendarDays
+                        className="h-[18px] w-[18px] shrink-0 text-primary"
+                        strokeWidth={1.75}
+                      />
                       {t('customerAuthMyOrders')}
                     </button>
                   </SheetClose>
+
+                  <SheetClose asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3.5 border-b border-[#e8e8ec] px-5 py-[1.15rem] text-left text-[15px] font-medium text-[#1f1f2e] transition hover:bg-[#fafafa]"
+                      onClick={() =>
+                        openAccountSheet({
+                          restaurantSlug: slugForApi ?? pathSlug ?? null,
+                        })
+                      }
+                    >
+                      <Filter
+                        className="h-[18px] w-[18px] shrink-0 text-primary"
+                        strokeWidth={1.75}
+                      />
+                      {t('storefrontDietary')}
+                    </button>
+                  </SheetClose>
                 </nav>
-                <div className="mt-6 border-t border-border pt-5">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Globe className="h-4 w-4 text-muted-foreground" />
+
+                <div className="relative z-10 shrink-0 overflow-visible border-t border-[#e8e8ec] bg-white px-5 py-5">
+                  <p className="mb-2.5 text-sm font-medium text-[#1f1f2e]">
                     {t('language')}
-                  </div>
-                  <LanguageSwitcher variant="toggle" tone="default" />
+                  </p>
+                  <LanguageSwitcher variant="toggle" tone="brand" />
                 </div>
               </SheetContent>
             </Sheet>
-
-            <button
-              type="button"
-              onClick={openLogin}
-              className="hidden items-center gap-1.5 text-sm font-medium text-primary-foreground/90 transition hover:text-white lg:inline-flex"
-            >
-              <User className="h-4 w-4" />
-              {account
-                ? account.name || t('customerAuthAccountTitle')
-                : t('storefrontLogin')}
-            </button>
           </div>
         </div>
       </header>

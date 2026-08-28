@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 
 import { Sidebar } from '@/components/customer-app/sidebar';
 import { StorefrontBrandHero } from '@/components/customer-app/storefront/storefront-brand-hero';
+import { ORDER_SIDEBAR_WIDTH_PX } from '@/components/order/order-menu-header';
 import { buildStorefrontThemeVars } from '@/lib/restaurant-theme';
 
 type RestaurantBrand = {
@@ -90,7 +91,7 @@ export function WebAppStorefront({ slug }: { slug: string }) {
 
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col bg-white"
+      className="flex min-h-0 flex-1 flex-col bg-[#f4f4f6]"
       style={themeVars}
     >
       {brandLoading ? (
@@ -101,49 +102,64 @@ export function WebAppStorefront({ slug }: { slug: string }) {
           />
         </div>
       ) : (
-        <div className="relative w-full lg:pt-[72px]">
+        <div className="relative w-full lg:mt-[72px] lg:h-[calc(100dvh-72px)] lg:max-h-[calc(100dvh-72px)] lg:overflow-hidden">
+          {/* Desktop: poster fills remaining viewport height; never taller than screen */}
           <section
             aria-label={displayName}
-            className="relative hidden min-h-[calc(100dvh-72px)] w-full lg:block lg:pr-[min(100%,420px)]"
+            className="relative hidden h-full bg-white lg:block"
+            style={{ width: `calc(100% - ${ORDER_SIDEBAR_WIDTH_PX}px)` }}
           >
             {bannerUrl ? (
               <img
                 src={bannerUrl}
                 alt={`${displayName} banner`}
-                className="block h-full min-h-[calc(100dvh-72px)] w-full object-cover object-center"
+                className="absolute inset-0 h-full w-full object-cover object-center"
                 decoding="async"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <StorefrontBrandHero
-                restaurantName={displayName}
-                logoUrl={logoUrl || null}
-              />
+              <div className="absolute inset-0">
+                <StorefrontBrandHero
+                  restaurantName={displayName}
+                  logoUrl={logoUrl || null}
+                />
+              </div>
             )}
           </section>
 
           <aside
             id="order"
-            className="fixed inset-x-0 top-[72px] z-30 h-[calc(100dvh-72px)] overflow-y-auto overscroll-contain bg-white lg:inset-x-auto lg:right-0 lg:w-[min(100%,420px)]"
+            className="fixed inset-x-0 top-[72px] z-30 flex h-[calc(100dvh-72px)] max-h-[calc(100dvh-72px)] flex-col bg-[#f4f4f6] p-3 lg:inset-x-auto lg:right-0 lg:w-[var(--order-sidebar-width)]"
+            style={
+              {
+                ['--order-sidebar-width' as string]: `${ORDER_SIDEBAR_WIDTH_PX}px`,
+              } as CSSProperties
+            }
           >
-            <Sidebar
-              mode={mode}
-              setMode={setMode}
-              deliveryAddress={deliveryAddress}
-              setDeliveryAddress={setDeliveryAddress}
-              apartmentDoorNumber={apartmentDoorNumber}
-              setApartmentDoorNumber={setApartmentDoorNumber}
-              gateCode={gateCode}
-              setGateCode={setGateCode}
-              addressName={addressName}
-              setAddressName={setAddressName}
-              customerPhone={customerPhone}
-              setCustomerPhone={setCustomerPhone}
-              selectedStoreId={selectedStoreId}
-              setSelectedStoreId={setSelectedStoreId}
-              restaurantSlug={slug}
-              variant="storefront"
-            />
+            <div className="mx-auto flex h-full min-h-0 w-full max-w-lg flex-col lg:mx-0 lg:max-w-none">
+              <div className="flex h-full min-h-0 flex-col overflow-hidden border border-[#e8eaef] bg-white shadow-[0_1px_4px_rgba(15,23,42,0.08)]">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <Sidebar
+                    mode={mode}
+                    setMode={setMode}
+                    deliveryAddress={deliveryAddress}
+                    setDeliveryAddress={setDeliveryAddress}
+                    apartmentDoorNumber={apartmentDoorNumber}
+                    setApartmentDoorNumber={setApartmentDoorNumber}
+                    gateCode={gateCode}
+                    setGateCode={setGateCode}
+                    addressName={addressName}
+                    setAddressName={setAddressName}
+                    customerPhone={customerPhone}
+                    setCustomerPhone={setCustomerPhone}
+                    selectedStoreId={selectedStoreId}
+                    setSelectedStoreId={setSelectedStoreId}
+                    restaurantSlug={slug}
+                    variant="storefront"
+                  />
+                </div>
+              </div>
+            </div>
           </aside>
         </div>
       )}

@@ -10,29 +10,53 @@ import {
 import { countDiningTables } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
-import { analyticsActiveOrderStatusWhere, orderCountsTowardRevenue } from '@/lib/sales-order-status';
+import {
+  analyticsActiveOrderStatusWhere,
+  isCanceledOrderStatus,
+  orderCountsTowardRevenue,
+} from '@/lib/sales-order-status';
 import {
   enforceAnalyticsDays,
   getTodayCreatedAtBounds,
   getTodayDayKeyInTimezone,
+  lastNCalendarDayKeys,
+  calendarDayKeyInTimezone,
   salesOrderFilterTimezone,
 } from '@/lib/sales-order-period';
 import { getRestaurantPlanFeatures } from '@/lib/subscription-plan-enforcement';
 
-function utcDayKey(d: Date): string {
-  return d.toISOString().slice(0, 10);
+function hourInTimezone(date: Date, timeZone: string): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour: 'numeric',
+      hourCycle: 'h23',
+    }).formatToParts(date);
+    const h = Number(parts.find((p) => p.type === 'hour')?.value);
+    return Number.isFinite(h) ? h : date.getHours();
+  } catch {
+    return date.getHours();
+  }
 }
 
-function lastNDayKeys(n: number): string[] {
-  const keys: string[] = [];
-  const now = new Date();
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i)
-    );
-    keys.push(utcDayKey(d));
+function normalizePaymentMethod(
+  method: string | null | undefined
+): 'cash' | 'card' | 'other' {
+  const m = String(method ?? '').trim().toLowerCase();
+  if (!m) return 'other';
+  if (m.includes('cash')) return 'cash';
+  if (
+    m.includes('card') ||
+    m.includes('visa') ||
+    m.includes('master') ||
+    m.includes('stripe') ||
+    m.includes('terminal') ||
+    m.includes('debit') ||
+    m.includes('credit')
+  ) {
+    return 'card';
   }
-  return keys;
+  return 'other';
 }
 
 async function resolveRestaurantId(req: NextRequest) {
@@ -71,8 +95,13 @@ export async function GET(_req: NextRequest) {
     const auth = await resolveRestaurantId(_req);
     if ('error' in auth) return auth.error;
 
-    const { restaurantId, activeBranchId, activeBranchName, orderBranchFilter, canViewHistorical } =
-      auth;
+    const {
+      restaurantId,
+      activeBranchId,
+      activeBranchName,
+      orderBranchFilter,
+      canViewHistorical,
+    } = auth;
     const branchId = orderBranchFilter.branchId ?? null;
     const planFeatures = await getRestaurantPlanFeatures(restaurantId);
     const url = new URL(_req.url);
@@ -90,10 +119,12 @@ export async function GET(_req: NextRequest) {
     const dayKeys =
       days === 1
         ? [await getTodayDayKeyInTimezone(db, filterTz)]
-        : lastNDayKeys(days);
+        : lastNCalendarDayKeys(days, filterTz);
     const from =
       todayBounds?.gte ??
-      new Date(`${dayKeys[0]}T00:00:00.000Z`);
+      new Date(
+        new Date(`${dayKeys[0]}T00:00:00.000Z`).getTime() - 36 * 60 * 60 * 1000
+      );
     const activeOrderStatus = analyticsActiveOrderStatusWhere();
     const orderDateFilter = todayBounds
       ? { createdAt: { gte: todayBounds.gte, lt: todayBounds.lt } }
@@ -103,6 +134,13 @@ export async function GET(_req: NextRequest) {
       ...orderBranchFilter,
       ...activeOrderStatus,
       ...orderDateFilter,
+    };
+    const windowWhere = {
+      restaurantId,
+      ...orderBranchFilter,
+      ...(todayBounds
+        ? { createdAt: { gte: todayBounds.gte, lt: todayBounds.lt } }
+        : { createdAt: { gte: from } }),
     };
 
     const [
@@ -118,6 +156,7 @@ export async function GET(_req: NextRequest) {
       kdsOpen,
       orderDisplayQueue,
       employees,
+      openTableTabs,
       ordersWindow,
     ] = await Promise.all([
       db.branch.count({ where: { restaurantId } }),
@@ -139,8 +178,8 @@ export async function GET(_req: NextRequest) {
         },
       }),
       db.menuItemOffer.count({
-        where: { baseItem: { restaurantId } } },
-      ),
+        where: { baseItem: { restaurantId } },
+      }),
       db.kitchenTicket.count({
         where: {
           restaurantId,
@@ -166,11 +205,24 @@ export async function GET(_req: NextRequest) {
           ...(branchId ? { branches: { some: { branchId } } } : {}),
         },
       }),
-      db.order.findMany({
+      db.order.count({
         where: {
-          ...orderScope,
-          ...(todayBounds ? {} : { createdAt: { gte: from } }),
+          restaurantId,
+          ...orderBranchFilter,
+          diningTableId: { not: null },
+          NOT: {
+            OR: [
+              { status: { equals: 'canceled', mode: 'insensitive' } },
+              { status: { equals: 'cancelled', mode: 'insensitive' } },
+              { status: { equals: 'failed', mode: 'insensitive' } },
+              { status: { equals: 'completed', mode: 'insensitive' } },
+              { status: { equals: 'complete', mode: 'insensitive' } },
+            ],
+          },
         },
+      }),
+      db.order.findMany({
+        where: windowWhere,
         select: {
           createdAt: true,
           total: true,
@@ -179,7 +231,16 @@ export async function GET(_req: NextRequest) {
           payments: {
             orderBy: { createdAt: 'desc' },
             take: 1,
-            select: { status: true, amount: true },
+            select: { status: true, amount: true, method: true },
+          },
+          items: {
+            select: {
+              quantity: true,
+              price: true,
+              productName: true,
+              menuItemId: true,
+              menuItem: { select: { name: true } },
+            },
           },
         },
       }),
@@ -214,13 +275,37 @@ export async function GET(_req: NextRequest) {
       orders: { online: 0, pos: 0, kiosk: 0 },
       revenue: { online: 0, pos: 0, kiosk: 0 },
     };
+    const hourlyOrders = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      label:
+        hour === 0
+          ? '12a'
+          : hour < 12
+            ? `${hour}a`
+            : hour === 12
+              ? '12p'
+              : `${hour - 12}p`,
+      orders: 0,
+    }));
+    const itemAgg = new Map<
+      string,
+      { name: string; quantity: number; revenue: number }
+    >();
+    const paymentMix = { cash: 0, card: 0, other: 0 };
+    let canceledOrders = 0;
+    let revenueOrders = 0;
+
     for (const row of ordersWindow) {
+      if (isCanceledOrderStatus(row.status)) {
+        canceledOrders += 1;
+        continue;
+      }
+
       const k =
         days === 1
           ? dayKeys[0]
-          : utcDayKey(new Date(row.createdAt));
+          : calendarDayKeyInTimezone(new Date(row.createdAt), filterTz);
       const bucket = byDay.get(k);
-      if (!bucket) continue;
       const latestPayment = row.payments[0];
       const revenueEligible = orderCountsTowardRevenue({
         orderStatus: row.status,
@@ -229,10 +314,39 @@ export async function GET(_req: NextRequest) {
       const total = revenueEligible
         ? Number(latestPayment?.amount ?? row.total) || 0
         : 0;
+
+      hourlyOrders[hourInTimezone(new Date(row.createdAt), filterTz)].orders +=
+        1;
+
+      if (!bucket) continue;
+
       bucket.orders += 1;
       if (revenueEligible) {
         bucket.revenue += total;
+        revenueOrders += 1;
+        const method = normalizePaymentMethod(latestPayment?.method);
+        paymentMix[method] += total;
+
+        for (const item of row.items) {
+          const qty = Number(item.quantity) || 0;
+          if (qty <= 0) continue;
+          const name =
+            item.productName?.trim() ||
+            item.menuItem?.name?.trim() ||
+            'Item';
+          const key = item.menuItemId || name.toLowerCase();
+          const line = qty * (Number(item.price) || 0);
+          const prev = itemAgg.get(key) ?? {
+            name,
+            quantity: 0,
+            revenue: 0,
+          };
+          prev.quantity += qty;
+          prev.revenue += line;
+          itemAgg.set(key, prev);
+        }
       }
+
       if (row.sourceType === 'ONLINE') {
         bucket.onlineOrders += 1;
         if (revenueEligible) {
@@ -248,7 +362,6 @@ export async function GET(_req: NextRequest) {
         }
         channelTotals.orders.kiosk += 1;
       } else {
-        // Treat POS and other in-store sources as POS channel for analytics.
         bucket.posOrders += 1;
         if (revenueEligible) {
           bucket.posRevenue += total;
@@ -273,33 +386,34 @@ export async function GET(_req: NextRequest) {
       };
     });
 
-    if (!planFeatures.advancedAnalytics) {
-      return NextResponse.json({
-        counts: {
-          branches,
-          categories,
-          menuItems,
-          variations,
-          tables,
-          orders: ordersTotal,
-          posOrders,
-          customers,
-          recommendations: 0,
-          kdsOpen,
-          orderDisplayQueue,
-          employees,
-        },
-        series,
-        channelTotals,
-        days,
-        analyticsTier: 'basic' as const,
-        activeBranchId,
-        activeBranchName,
-        branchScoped: Boolean(branchId),
-        canViewHistorical,
-        dataScope: canViewHistorical ? ('all' as const) : ('today' as const),
-      });
-    }
+    const topItems = [...itemAgg.values()]
+      .sort((a, b) => b.quantity - a.quantity || b.revenue - a.revenue)
+      .slice(0, 5)
+      .map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        revenue: Math.round(item.revenue * 100) / 100,
+      }));
+
+    const peakHour = hourlyOrders.reduce(
+      (best, row) => (row.orders > best.orders ? row : best),
+      hourlyOrders[0]
+    );
+
+    const ops = {
+      kdsOpen,
+      openTableTabs,
+      orderDisplayQueue,
+      canceledOrders,
+      revenueOrders,
+      peakHour: peakHour.orders > 0 ? peakHour.hour : null,
+      peakHourLabel: peakHour.orders > 0 ? peakHour.label : null,
+      peakHourOrders: peakHour.orders,
+    };
+
+    const analyticsTier = planFeatures.advancedAnalytics
+      ? ('advanced' as const)
+      : ('basic' as const);
 
     return NextResponse.json({
       counts: {
@@ -311,15 +425,20 @@ export async function GET(_req: NextRequest) {
         orders: ordersTotal,
         posOrders,
         customers,
-        recommendations,
+        recommendations: planFeatures.advancedAnalytics ? recommendations : 0,
         kdsOpen,
         orderDisplayQueue,
         employees,
+        openTableTabs,
       },
       series,
       channelTotals,
+      hourlyOrders,
+      topItems,
+      paymentMix,
+      ops,
       days,
-      analyticsTier: 'advanced' as const,
+      analyticsTier,
       activeBranchId,
       activeBranchName,
       branchScoped: Boolean(branchId),

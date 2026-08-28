@@ -11,6 +11,7 @@ import { RestaurantRegionalSettingsCard } from './components/restaurant-regional
 import { RestaurantPaymentProviderCard } from './components/restaurant-payment-provider-card';
 import { RestaurantBillingCard } from './components/restaurant-billing-card';
 import { RestaurantServiceChargesCard } from './components/restaurant-service-charges-card';
+import { RestaurantDineInPaymentCard } from './components/restaurant-dine-in-payment-card';
 import { SettingsSectionNav } from './settings-section-nav';
 import {
   parseSettingsSection,
@@ -103,6 +104,7 @@ export function Setting() {
 
               {activeSection === 'payments' ? (
                 <>
+                  <RestaurantDineInPaymentCard />
                   <RestaurantServiceChargesCard />
                   <RestaurantRegionalSettingsCard />
                   <RestaurantPaymentProviderCard />

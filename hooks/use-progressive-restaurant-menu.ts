@@ -13,6 +13,7 @@ import {
 type RestaurantMenuMeta = {
   themePrimaryColor?: string | null;
   serviceCharges?: unknown;
+  dineInPaymentTiming?: string | null;
 };
 
 type PosMenuCachePayload<TItem> = {
@@ -57,8 +58,8 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
     const isStale = () => cancelled || runId !== runIdRef.current;
 
     (async () => {
-      reset();
-      setCategoriesLoading(true);
+      setError(null);
+      setFromOfflineCache(false);
 
       const applyCache = async () => {
         const cached = await getOfflineCache<PosMenuCachePayload<TItem>>(
@@ -80,127 +81,93 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
         return true;
       };
 
+      // Paint cached menu immediately, then refresh in background.
+      const hadCache = await applyCache();
+      if (isStale()) return;
+
+      if (!hadCache) {
+        setCategoriesLoading(true);
+        setMenuComplete(false);
+      }
+
       try {
         if (isBrowserOffline()) {
-          const ok = await applyCache();
-          if (!ok && !isStale()) {
+          if (!hadCache && !isStale()) {
             setError('You are offline and no cached POS menu is available.');
             setCategoriesLoading(false);
           }
           return;
         }
 
-        const metaRes = await fetch('/api/restaurant/menu/categories', {
-          cache: 'default',
-        });
-        const metaBody = (await metaRes.json().catch(() => ({}))) as {
+        const catalogRes = await fetch(
+          '/api/restaurant/menu/categories?catalog=1',
+          { cache: 'default' }
+        );
+        const catalogBody = (await catalogRes.json().catch(() => ({}))) as {
           data?: {
             themePrimaryColor?: string | null;
             serviceCharges?: unknown;
+            dineInPaymentTiming?: string | null;
             menus?: Array<{
               id: string;
               name: string;
               imageUrl?: string | null;
+              items?: TItem[];
             }>;
           };
           error?: string;
         };
         if (isStale()) return;
 
-        if (!metaRes.ok || !metaBody.data) {
-          const ok = await applyCache();
-          if (!ok) {
+        if (!catalogRes.ok || !catalogBody.data) {
+          if (!hadCache) {
             setError(
-              typeof metaBody.error === 'string'
-                ? metaBody.error
+              typeof catalogBody.error === 'string'
+                ? catalogBody.error
                 : 'Failed to load menu categories.'
             );
+            setCategoriesLoading(false);
           }
           return;
         }
 
-        const menus = metaBody.data.menus ?? [];
+        const menus = catalogBody.data.menus ?? [];
         const nextMeta: RestaurantMenuMeta = {
-          themePrimaryColor: metaBody.data.themePrimaryColor,
-          serviceCharges: metaBody.data.serviceCharges,
+          themePrimaryColor: catalogBody.data.themePrimaryColor,
+          serviceCharges: catalogBody.data.serviceCharges,
+          dineInPaymentTiming: catalogBody.data.dineInPaymentTiming,
         };
+
+        const loadedCategories: ProgressiveMenuCategory<TItem>[] = menus.map(
+          (c) => ({
+            id: c.id,
+            name: c.name,
+            imageUrl: c.imageUrl ?? null,
+            items: Array.isArray(c.items) ? c.items : [],
+            loaded: true,
+            loading: false,
+          })
+        );
+
         setMeta(nextMeta);
-
-        const initial: ProgressiveMenuCategory<TItem>[] = menus.map((c) => ({
-          id: c.id,
-          name: c.name,
-          imageUrl: c.imageUrl ?? null,
-          items: [],
-          loaded: false,
-          loading: false,
-        }));
-        setCategories(initial);
+        setCategories(loadedCategories);
         setCategoriesLoading(false);
+        setMenuComplete(true);
+        setFromOfflineCache(false);
+        setError(null);
 
-        const loadedCategories: ProgressiveMenuCategory<TItem>[] = [];
-
-        for (const category of initial) {
-          if (isStale()) return;
-
-          setCategories((prev) =>
-            prev.map((c) =>
-              c.id === category.id ? { ...c, loading: true } : c
-            )
-          );
-
-          try {
-            const itemsRes = await fetch(
-              `/api/restaurant/menu/categories/${encodeURIComponent(category.id)}`,
-              { cache: 'default' }
-            );
-            const itemsBody = (await itemsRes.json().catch(() => ({}))) as {
-              data?: { items?: TItem[] };
-            };
-            if (isStale()) return;
-
-            const items = Array.isArray(itemsBody.data?.items)
-              ? itemsBody.data!.items!
-              : [];
-
-            const nextCat: ProgressiveMenuCategory<TItem> = {
-              ...category,
-              items,
-              loaded: true,
-              loading: false,
-            };
-            loadedCategories.push(nextCat);
-
-            setCategories((prev) =>
-              prev.map((c) => (c.id === category.id ? nextCat : c))
-            );
-          } catch {
-            if (isStale()) return;
-            const nextCat: ProgressiveMenuCategory<TItem> = {
-              ...category,
-              items: [],
-              loaded: true,
-              loading: false,
-            };
-            loadedCategories.push(nextCat);
-            setCategories((prev) =>
-              prev.map((c) => (c.id === category.id ? nextCat : c))
-            );
-          }
-        }
-
-        if (!isStale()) {
-          setMenuComplete(true);
-          void setOfflineCache(OFFLINE_CACHE_KEYS.posMenu, {
-            meta: nextMeta,
-            categories: loadedCategories,
-          } satisfies PosMenuCachePayload<TItem>);
-        }
+        void setOfflineCache(OFFLINE_CACHE_KEYS.posMenu, {
+          meta: nextMeta,
+          categories: loadedCategories,
+        } satisfies PosMenuCachePayload<TItem>);
       } catch {
         if (isStale()) return;
-        const ok = await applyCache();
-        if (!ok) {
-          setError('Failed to load menu products for POS.');
-          setCategoriesLoading(false);
+        if (!hadCache) {
+          const ok = await applyCache();
+          if (!ok) {
+            setError('Failed to load menu products for POS.');
+            setCategoriesLoading(false);
+          }
         }
       }
     })();

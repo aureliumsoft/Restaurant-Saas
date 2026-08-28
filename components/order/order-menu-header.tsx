@@ -10,11 +10,13 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronLeft,
+  Filter,
   Info,
   Loader2,
   Menu,
   ShoppingBag,
   User,
+  X,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -30,7 +32,6 @@ import {
   Sheet,
   SheetClose,
   SheetContent,
-  SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
@@ -39,7 +40,7 @@ import { useCustomerAccountOptional } from '@/components/customer-app/customer-a
 import { OrderTimePickerDialog } from '@/components/order/order-time-picker-dialog';
 import { OrderStoreInfoSheet } from '@/components/order/order-store-info-sheet';
 import { cn } from '@/lib/utils';
-import { buildCustomerLightSurfaceVars } from '@/lib/restaurant-theme';
+import { buildCustomerLightSurfaceVars, buildThemeCssVars } from '@/lib/restaurant-theme';
 import {
   generateOrderTimeSlots,
   isBranchClosedToday,
@@ -53,10 +54,14 @@ export const ORDER_INFO_ROW_HEIGHT_PX = 68;
 export const ORDER_MENU_HEADER_HEIGHT_PX =
   ORDER_TOP_BAR_HEIGHT_PX + ORDER_INFO_ROW_HEIGHT_PX;
 export const ORDER_CATEGORY_BAR_HEIGHT_PX = 72;
-export const ORDER_SIDEBAR_WIDTH_PX = 320;
+export const ORDER_SIDEBAR_WIDTH_PX = 420;
 export const ORDER_PAGE_MAX_WIDTH_PX = 1280;
 export const ORDER_TOP_OFFSET_PX =
   ORDER_MENU_HEADER_HEIGHT_PX + ORDER_CATEGORY_BAR_HEIGHT_PX;
+
+/** Sticky offset when the delivery/info row is collapsed on scroll. */
+export const ORDER_TOP_OFFSET_COMPACT_PX =
+  ORDER_TOP_BAR_HEIGHT_PX + ORDER_CATEGORY_BAR_HEIGHT_PX;
 
 const ORDER_ACCENT_GOLD = '#f5d76e';
 
@@ -81,6 +86,8 @@ type OrderMenuHeaderProps = {
     closeTime: string;
   }> | null;
   slotDurationMinutes?: number;
+  /** Fires when the second info row hides/shows on scroll. */
+  onInfoRowHiddenChange?: (hidden: boolean) => void;
 };
 
 export function OrderMenuHeader({
@@ -97,6 +104,7 @@ export function OrderMenuHeader({
   className,
   branchHours,
   slotDurationMinutes = 30,
+  onInfoRowHiddenChange,
 }: OrderMenuHeaderProps) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -108,6 +116,7 @@ export function OrderMenuHeader({
   const [methodChangeOpen, setMethodChangeOpen] = useState(false);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
   const [storeInfoOpen, setStoreInfoOpen] = useState(false);
+  const [infoRowHidden, setInfoRowHidden] = useState(false);
   const timeSlots = useMemo(
     () =>
       generateOrderTimeSlots(branchHours, {
@@ -176,6 +185,44 @@ export function OrderMenuHeader({
     });
   }, [setRestaurantContext, restaurantSlug, themePrimaryColor]);
 
+  useEffect(() => {
+    let lastY = typeof window !== 'undefined' ? window.scrollY : 0;
+    let ticking = false;
+
+    const apply = () => {
+      ticking = false;
+      const y = window.scrollY;
+      const goingDown = y > lastY + 2;
+      const goingUp = y < lastY - 2;
+      lastY = y;
+
+      if (y < 40) {
+        setInfoRowHidden(false);
+        return;
+      }
+      if (goingDown && y > 72) {
+        setInfoRowHidden(true);
+        return;
+      }
+      if (goingUp) {
+        setInfoRowHidden(false);
+      }
+    };
+
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(apply);
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    onInfoRowHiddenChange?.(infoRowHidden);
+  }, [infoRowHidden, onInfoRowHiddenChange]);
+
   const handleConfirmOrderMethodChange = () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(`cart-${orderId}`);
@@ -212,7 +259,11 @@ export function OrderMenuHeader({
     logoUrl && logoUrl.trim().length > 0 ? logoUrl.trim() : null;
 
   const menuSheetStyle = useMemo(
-    () => buildCustomerLightSurfaceVars(themePrimaryColor) as CSSProperties,
+    () =>
+      ({
+        ...buildCustomerLightSurfaceVars(themePrimaryColor),
+        ...buildThemeCssVars(themePrimaryColor),
+      }) as CSSProperties,
     [themePrimaryColor]
   );
 
@@ -230,7 +281,7 @@ export function OrderMenuHeader({
       <SheetTrigger asChild>
         <Button
           size="sm"
-          className="hidden h-9 rounded-lg border-0 bg-white px-3 text-xs font-bold uppercase tracking-wide text-[#1a1033] shadow-none hover:bg-white/90 sm:inline-flex"
+          className="hidden h-9 rounded-lg border-0 bg-white px-3 text-xs font-bold uppercase tracking-wide text-primary shadow-none hover:bg-white/90 sm:inline-flex"
         >
           <Menu className="mr-1.5 h-4 w-4" />
           {t('storefrontMenu')}
@@ -238,50 +289,91 @@ export function OrderMenuHeader({
       </SheetTrigger>
       <SheetContent
         side="right"
-        className="w-[min(100vw-2rem,320px)] border-border bg-background text-foreground"
+        className="flex h-full w-[min(100vw,420px)] max-w-[420px] flex-col gap-0 border-0 bg-white p-0 text-[#1f1f2e] shadow-2xl"
         style={menuSheetStyle}
       >
-        <SheetHeader>
-          <SheetTitle>{brandLabel}</SheetTitle>
-        </SheetHeader>
-        <nav className="mt-6 flex flex-col gap-1">
+        <div className="flex shrink-0 items-center justify-between bg-primary px-5 py-6 text-primary-foreground">
+          <SheetTitle className="m-0 text-left text-[15px] font-extrabold uppercase tracking-[0.06em] text-primary-foreground">
+            {customerAccount?.account
+              ? customerAccount.account.name || t('customerAuthAccountTitle')
+              : t('storefrontGuestMode')}
+          </SheetTitle>
+          <SheetClose asChild>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center text-primary-foreground transition hover:opacity-80"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" strokeWidth={2.5} />
+            </button>
+          </SheetClose>
+        </div>
+
+        <nav
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain bg-white"
+          aria-label={t('storefrontMenu')}
+        >
           <SheetClose asChild>
             <Link
               href={backHref}
-              className="flex items-center gap-2 rounded-lg px-2 py-3 text-sm font-medium text-foreground transition hover:bg-muted"
+              className="flex w-full items-center gap-3.5 border-b border-[#e8e8ec] px-5 py-[1.15rem] text-left text-[15px] font-medium text-[#1f1f2e] transition hover:bg-[#fafafa]"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft
+                className="h-[18px] w-[18px] shrink-0 text-primary"
+                strokeWidth={1.75}
+              />
               {t('orderBack')}
             </Link>
           </SheetClose>
+
           <SheetClose asChild>
             <button
               type="button"
               onClick={openLogin}
-              className="flex items-center gap-2 rounded-lg px-2 py-3 text-left text-sm font-medium text-foreground transition hover:bg-muted lg:hidden"
+              className="flex w-full items-center gap-3.5 border-b border-[#e8e8ec] px-5 py-[1.15rem] text-left text-[15px] font-medium text-[#1f1f2e] transition hover:bg-[#fafafa]"
             >
-              <User className="h-4 w-4" />
+              <User
+                className="h-[18px] w-[18px] shrink-0 text-primary"
+                strokeWidth={1.75}
+              />
               {loginLabel}
             </button>
           </SheetClose>
-          {customerAccount ? (
-            <SheetClose asChild>
-              <button
-                type="button"
-                onClick={openMyOrders}
-                className="flex items-center gap-2 rounded-lg px-2 py-3 text-left text-sm font-medium text-foreground transition hover:bg-muted"
-              >
-                <CalendarDays className="h-4 w-4" />
-                {t('customerAuthMyOrders')}
-              </button>
-            </SheetClose>
-          ) : null}
+
+          <SheetClose asChild>
+            <button
+              type="button"
+              onClick={openMyOrders}
+              className="flex w-full items-center gap-3.5 border-b border-[#e8e8ec] px-5 py-[1.15rem] text-left text-[15px] font-medium text-[#1f1f2e] transition hover:bg-[#fafafa]"
+            >
+              <CalendarDays
+                className="h-[18px] w-[18px] shrink-0 text-primary"
+                strokeWidth={1.75}
+              />
+              {t('customerAuthMyOrders')}
+            </button>
+          </SheetClose>
+
+          <SheetClose asChild>
+            <button
+              type="button"
+              onClick={openLogin}
+              className="flex w-full items-center gap-3.5 border-b border-[#e8e8ec] px-5 py-[1.15rem] text-left text-[15px] font-medium text-[#1f1f2e] transition hover:bg-[#fafafa]"
+            >
+              <Filter
+                className="h-[18px] w-[18px] shrink-0 text-primary"
+                strokeWidth={1.75}
+              />
+              {t('storefrontDietary')}
+            </button>
+          </SheetClose>
         </nav>
-        <div className="mt-6 border-t border-border pt-5">
-          <p className="mb-3 text-sm font-medium text-foreground">
+
+        <div className="relative z-10 shrink-0 overflow-visible border-t border-[#e8e8ec] bg-white px-5 py-5">
+          <p className="mb-2.5 text-sm font-medium text-[#1f1f2e]">
             {t('language')}
           </p>
-          <LanguageSwitcher variant="toggle" tone="default" />
+          <LanguageSwitcher variant="toggle" tone="brand" />
         </div>
       </SheetContent>
     </Sheet>
@@ -353,20 +445,28 @@ export function OrderMenuHeader({
         </div>
       </div>
 
-      <div className="border-t border-white/20 bg-primary">
+      <div
+        className={cn(
+          'overflow-hidden border-t border-white/20 bg-primary transition-[max-height,opacity,border-color] duration-300 ease-out',
+          infoRowHidden
+            ? 'max-h-0 border-transparent opacity-0'
+            : 'max-h-[88px] opacity-100'
+        )}
+        aria-hidden={infoRowHidden}
+      >
         <div
           className="mx-auto flex w-full max-w-[1280px] flex-row items-stretch divide-x divide-white/25 px-4 sm:px-6"
           style={{ minHeight: ORDER_INFO_ROW_HEIGHT_PX }}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-2.5 py-3 sm:gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 px-1 py-2.5 sm:gap-3 sm:px-0 sm:py-3">
             <ShoppingBag
-              className="h-4 w-4 shrink-0 text-white sm:h-5 sm:w-5"
+              className="hidden h-5 w-5 shrink-0 text-white sm:block"
               strokeWidth={1.75}
             />
             <div className="min-w-0">
               <button
                 type="button"
-                className="inline-flex max-w-full items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white sm:text-xs"
+                className="inline-flex max-w-full items-center gap-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-white sm:gap-1 sm:text-xs sm:tracking-[0.14em]"
                 onClick={() => setMethodChangeOpen(true)}
               >
                 <span className="truncate">
@@ -374,11 +474,11 @@ export function OrderMenuHeader({
                     ? t('delivery')
                     : t('orderPickUpLabel')}
                 </span>
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white" />
+                <ChevronDown className="h-3 w-3 shrink-0 text-white sm:h-3.5 sm:w-3.5" />
               </button>
               {locationLine ? (
                 <p
-                  className="mt-1 truncate text-[10px] font-medium sm:text-xs"
+                  className="mt-0.5 truncate text-[9px] font-medium sm:mt-1 sm:text-xs"
                   style={{ color: ORDER_ACCENT_GOLD }}
                 >
                   {locationLine}
@@ -387,15 +487,15 @@ export function OrderMenuHeader({
             </div>
           </div>
 
-          <div className="flex min-w-0 flex-1 items-center px-3 py-3 sm:px-4">
+          <div className="flex min-w-0 flex-1 items-center px-1.5 py-2.5 sm:px-4 sm:py-3">
             <div className="min-w-0">
               {branchClosed ? (
                 <>
-                  <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-white sm:text-xs">
+                  <p className="truncate text-[9px] font-bold uppercase tracking-[0.1em] text-white sm:text-xs sm:tracking-[0.14em]">
                     {schedulePrimaryLabel}
                   </p>
                   <p
-                    className="mt-1 truncate text-[10px] font-medium sm:text-xs"
+                    className="mt-0.5 truncate text-[9px] font-medium sm:mt-1 sm:text-xs"
                     style={{ color: ORDER_ACCENT_GOLD }}
                   >
                     {scheduleSecondaryLabel}
@@ -405,14 +505,14 @@ export function OrderMenuHeader({
                 <>
                   <button
                     type="button"
-                    className="inline-flex max-w-full items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white sm:text-xs"
+                    className="inline-flex max-w-full items-center gap-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-white sm:gap-1 sm:text-xs sm:tracking-[0.14em]"
                     onClick={() => setTimePickerOpen(true)}
                   >
                     <span className="truncate">{schedulePrimaryLabel}</span>
-                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-white sm:h-3.5 sm:w-3.5" />
                   </button>
                   <p
-                    className="mt-1 truncate text-[10px] font-medium sm:text-xs"
+                    className="mt-0.5 truncate text-[9px] font-medium sm:mt-1 sm:text-xs"
                     style={{ color: ORDER_ACCENT_GOLD }}
                   >
                     {scheduleSecondaryLabel}
@@ -422,14 +522,14 @@ export function OrderMenuHeader({
             </div>
           </div>
 
-          <div className="flex min-w-0 flex-1 items-center px-3 py-3 sm:px-4">
+          <div className="flex min-w-0 flex-1 items-center px-1.5 py-2.5 sm:px-4 sm:py-3">
             <div className="min-w-0">
-              <p className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-white sm:text-xs">
+              <p className="truncate text-[9px] font-bold uppercase tracking-[0.08em] text-white sm:text-xs sm:tracking-[0.12em]">
                 {branchLabel}
               </p>
               <button
                 type="button"
-                className="mt-1 truncate text-left text-[10px] font-medium underline underline-offset-2 sm:text-xs"
+                className="mt-0.5 truncate text-left text-[9px] font-medium underline underline-offset-2 sm:mt-1 sm:text-xs"
                 style={{ color: ORDER_ACCENT_GOLD }}
                 onClick={() => setStoreInfoOpen(true)}
               >
@@ -507,7 +607,7 @@ type OrderCartPanelProps = {
 
 export function OrderCartPanel({ isEmpty, children, footer }: OrderCartPanelProps) {
   return (
-    <div className="flex min-h-0 flex-col overflow-hidden rounded-t-xl border border-[#e8eaef] bg-white shadow-[0_1px_4px_rgba(15,23,42,0.08)]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden border border-[#e8eaef] bg-white shadow-[0_1px_4px_rgba(15,23,42,0.08)]">
       <OrderCartPanelHeader />
       <div
         className={cn(
@@ -529,7 +629,7 @@ export function OrderCartPanel({ isEmpty, children, footer }: OrderCartPanelProp
 }
 
 type OrderCartCheckoutButtonProps = {
-  itemCount: number;
+  itemCount?: number;
   total: number;
   formattedTotal?: string;
   label: string;
@@ -540,6 +640,7 @@ type OrderCartCheckoutButtonProps = {
 };
 
 export function OrderCartCheckoutButton({
+  itemCount = 0,
   total,
   formattedTotal,
   label,
@@ -556,7 +657,7 @@ export function OrderCartCheckoutButton({
       variant="default"
       onClick={onClick}
       disabled={disabled || loading}
-      className="flex h-12 w-full items-center gap-2 rounded-xl px-3 transition"
+      className="flex h-12 w-full items-center gap-2 rounded-none px-3 transition"
     >
       <span className="relative flex h-8 w-8 shrink-0 items-center justify-center">
         {loading ? (
@@ -564,6 +665,11 @@ export function OrderCartCheckoutButton({
         ) : (
           <ShoppingBag className="h-5 w-5" strokeWidth={2.25} aria-hidden />
         )}
+        {!loading && itemCount > 0 ? (
+          <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold leading-none text-primary">
+            {itemCount > 99 ? '99+' : itemCount}
+          </span>
+        ) : null}
       </span>
       <span className="flex-1 text-center text-sm font-bold">
         {loading && loadingLabel ? loadingLabel : label}

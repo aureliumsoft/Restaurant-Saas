@@ -2,47 +2,45 @@ import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
-/** Flat section surface — matches admin panel styling. */
-export const dashboardSectionClass =
-  'rounded-2xl bg-zinc-50/90 dark:bg-zinc-800/35';
+/** Flat section surface — transparent over fire mesh. */
+export const dashboardSectionClass = 'rounded-3xl bg-transparent';
 
 const dashboardCardShadowClass =
-  'shadow-[0_2px_16px_-4px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_16px_-4px_rgba(0,0,0,0.35)]';
+  'shadow-[0_12px_40px_-16px_rgba(15,23,42,0.18),0_0_0_1px_rgba(240,90,32,0.06)] dark:shadow-[0_16px_48px_-18px_rgba(0,0,0,0.75),0_0_0_1px_rgba(240,90,32,0.14)]';
 
 export const dashboardCardClass = cn(
-  'rounded-2xl border border-border/50 bg-card text-card-foreground',
+  'rounded-3xl border-0 bg-white/85 text-card-foreground backdrop-blur-xl dark:bg-zinc-950/75',
   dashboardCardShadowClass,
-  'transition-[box-shadow,border-color] duration-200 dark:border-border/40'
+  'transition-shadow duration-200'
 );
 
 export const dashboardGridCardClass = cn(
   dashboardCardClass,
-  'dashboard-grid-card overflow-hidden hover:border-primary/20 hover:shadow-md'
+  'dashboard-grid-card overflow-hidden hover:shadow-[0_18px_50px_-18px_rgba(240,90,32,0.22)]'
 );
 
 export const dashboardNestedCardClass = cn(
-  'dashboard-nested-card rounded-xl border border-border/40 bg-muted/25 text-card-foreground shadow-none',
-  'dark:border-border/30 dark:bg-muted/15'
+  'dashboard-nested-card rounded-2xl border-0 bg-fire-500/[0.06] text-card-foreground shadow-none',
+  'dark:bg-fire-500/10'
 );
 
 export const dashboardStatCardClass = cn(
-  'dashboard-stat-card rounded-xl border border-border/50 bg-gradient-to-br from-card to-muted/30 text-card-foreground',
-  'shadow-sm transition-[box-shadow,border-color] duration-200',
-  'dark:from-card dark:to-muted/20'
+  'dashboard-stat-card rounded-2xl border-0 bg-gradient-to-br from-white/90 to-fire-50/60 text-card-foreground backdrop-blur-xl',
+  'shadow-[0_10px_32px_-14px_rgba(15,23,42,0.16),0_0_0_1px_rgba(240,90,32,0.08)] transition-shadow duration-200',
+  'dark:from-zinc-950/80 dark:to-fire-950/40 dark:shadow-[0_14px_40px_-16px_rgba(0,0,0,0.7),0_0_0_1px_rgba(240,90,32,0.16)]'
 );
 
-export const dashboardCardHeaderClass =
-  'border-b border-border/40 bg-muted/20 pb-5 dark:bg-muted/10';
+export const dashboardCardHeaderClass = 'border-0 bg-transparent pb-4';
 
 export const dashboardCardTitleClass = 'text-base font-semibold tracking-tight';
 
 export const dashboardCardDescriptionClass = 'text-sm leading-relaxed';
 
 export const dashboardInsetClass =
-  'rounded-xl bg-white/60 dark:bg-zinc-900/40';
+  'rounded-2xl bg-fire-500/[0.06] dark:bg-fire-500/10';
 
 export function dashboardNavGroupLabelClass() {
-  return 'mb-1.5 px-3 text-xs font-medium text-muted-foreground';
+  return 'mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
 }
 
 type DashboardSectionProps = {

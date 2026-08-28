@@ -11,10 +11,12 @@ const paySchema = z.object({
   diningTableId: z.string().uuid(),
   paid: z.number().min(0),
   method: z.string().min(1).max(100).optional(),
+  /** Explicit unpaid ticket ids from the POS dialog — prevents under/over settle races. */
+  orderIds: z.array(z.string().uuid()).min(1).max(50).optional(),
 });
 
 /**
- * Complete payment for all pending table-linked orders on a dining table.
+ * Complete payment for pending table-linked orders on a dining table.
  * Ends the open check; a new place on that table starts a new card.
  */
 export async function POST(req: NextRequest) {
@@ -39,8 +41,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { diningTableId, paid, method } = parsed.data;
+    const { diningTableId, paid, method, orderIds } = parsed.data;
     const methodLabel = method?.trim() || 'Cash';
+    const requestedIds = orderIds ? [...new Set(orderIds)] : null;
 
     const orders = await db.order.findMany({
       where: {
@@ -49,6 +52,7 @@ export async function POST(req: NextRequest) {
         status: {
           notIn: ['canceled', 'cancelled', 'failed', 'cancel'],
         },
+        ...(requestedIds ? { id: { in: requestedIds } } : {}),
         payments: {
           some: {
             status: { equals: 'pending', mode: 'insensitive' },
@@ -81,6 +85,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'No open unpaid orders for this table.' },
         { status: 404 }
+      );
+    }
+
+    if (requestedIds && orders.length !== requestedIds.length) {
+      return NextResponse.json(
+        {
+          error:
+            'Some selected tickets are no longer unpaid. Refresh Table orders and try again.',
+          foundOrderIds: orders.map((o) => o.id),
+        },
+        { status: 409 }
       );
     }
 
@@ -140,19 +155,38 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    const remainingUnpaid = await db.order.count({
+      where: {
+        restaurantId: auth.restaurantId,
+        diningTableId,
+        status: {
+          notIn: ['canceled', 'cancelled', 'failed', 'cancel'],
+        },
+        payments: {
+          some: {
+            status: { equals: 'pending', mode: 'insensitive' },
+          },
+        },
+      },
+    });
+
     publishOrderLifecycleUpdate({
       restaurantId: auth.restaurantId,
       branchId,
+      exclude: ['kiosk.pending_cash', 'dashboard.analytics'],
     });
 
     return NextResponse.json({
       data: {
         diningTableId,
         orderIds: orders.map((o) => o.id),
+        ticketCount: orders.length,
         totalDue,
         paid,
         change: Math.max(0, paid - totalDue),
         paymentStatus: 'completed',
+        remainingUnpaidCount: remainingUnpaid,
+        tableCleared: remainingUnpaid === 0,
       },
     });
   } catch (e) {

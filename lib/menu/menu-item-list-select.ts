@@ -38,3 +38,41 @@ export const menuItemBrowseListSelect = {
     },
   },
 } as const;
+
+/**
+ * POS catalog: enough for grid + customize-gate + progressive variation picker.
+ * Skips unused join fields on attribute groups.
+ */
+export const menuItemPosCatalogSelect = {
+  id: true,
+  name: true,
+  description: true,
+  price: true,
+  salePrice: true,
+  categoryId: true,
+  variations: {
+    orderBy: { sortOrder: 'asc' as const },
+    select: {
+      id: true,
+      name: true,
+      title: true,
+      swatchHex: true,
+      priceDelta: true,
+      sortOrder: true,
+    },
+  },
+  attributeGroups: {
+    orderBy: { sortOrder: 'asc' as const },
+    select: {
+      sourceType: true,
+      required: true,
+    },
+  },
+  personalizeGroups: {
+    orderBy: { sortOrder: 'asc' as const },
+    select: {
+      id: true,
+      options: { select: { id: true }, take: 1 },
+    },
+  },
+} as const;

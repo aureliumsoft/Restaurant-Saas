@@ -8,6 +8,7 @@ import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 import { orderItemDisplayName } from '@/lib/orders/order-item-name';
+import { isDineInPayBeforeKitchen } from '@/lib/restaurant-dine-in-payment';
 
 const MIN_PREP_MINUTES = 1;
 const MAX_PREP_MINUTES = 240;
@@ -210,10 +211,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
+    const restaurant = await db.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: { dineInPaymentTiming: true },
+    });
     const isTableTab = Boolean(order.diningTableId);
+    const tableAllowsUnpaidKitchen =
+      isTableTab && !isDineInPayBeforeKitchen(restaurant?.dineInPaymentTiming);
 
     if (
-      !isTableTab &&
+      !tableAllowsUnpaidKitchen &&
       isPendingPaymentStatus(order.payments[0]?.status)
     ) {
       return NextResponse.json(
@@ -274,6 +281,15 @@ export async function POST(req: NextRequest) {
       publishOrderLifecycleUpdate({
         restaurantId,
         branchId: order.branchId,
+        exclude: isTableTab
+          ? [
+              'kiosk.pending_cash',
+              'dashboard.analytics',
+              'pos.recent_orders',
+              'sales.orders',
+              'inventory.stock',
+            ]
+          : ['kiosk.pending_cash', 'dashboard.analytics', 'inventory.stock'],
       });
 
       return NextResponse.json({ data: { id: activeTicket.id } }, { status: 200 });
@@ -311,6 +327,15 @@ export async function POST(req: NextRequest) {
     publishOrderLifecycleUpdate({
       restaurantId,
       branchId: order.branchId,
+      exclude: isTableTab
+        ? [
+            'kiosk.pending_cash',
+            'dashboard.analytics',
+            'pos.recent_orders',
+            'sales.orders',
+            'inventory.stock',
+          ]
+        : ['kiosk.pending_cash', 'dashboard.analytics', 'inventory.stock'],
     });
 
     return NextResponse.json({ data: { id: ticket.id } }, { status: 201 });

@@ -496,7 +496,7 @@ export function Sidebar({
     return (
       <section
         className={cn(
-          'flex flex-col gap-5 bg-white px-4 pb-8 pt-3 sm:gap-6 sm:px-5 sm:pb-10 sm:pt-4 lg:p-6',
+          'flex flex-col gap-5 bg-white px-4 pb-8 pt-4 sm:gap-6 sm:px-5 sm:pb-10 sm:pt-5 lg:px-5 lg:pb-8 lg:pt-5',
           className
         )}
       >

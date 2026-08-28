@@ -9,8 +9,8 @@ export function PosLayoutShell({ children }: { children: ReactNode }) {
   return (
     <OperationalRealtimeShell>
       <PosCartGuardProvider>
-        <div className="flex h-dvh flex-col overflow-hidden bg-background">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-3">
+        <div className="fire-mesh-bg flex h-dvh flex-col overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {children}
           </div>
         </div>

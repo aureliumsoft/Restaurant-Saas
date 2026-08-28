@@ -8,7 +8,7 @@ export default function KdsScreenLayout({
 }) {
   return (
     <OperationalRealtimeShell>
-      <div className="flex min-h-screen flex-col bg-muted/30 dark:bg-background">
+      <div className="fire-mesh-bg flex min-h-screen flex-col">
         <KdsLayoutHeader />
         <div className="flex min-h-0 flex-1 flex-col p-3 md:p-4">{children}</div>
       </div>

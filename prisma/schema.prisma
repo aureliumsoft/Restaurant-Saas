@@ -168,6 +168,8 @@ model Restaurant {
   /// Flat system service charge for online checkout (when enabled).
   onlineServiceChargeEnabled Boolean @default(false)
   onlineServiceChargeAmount  Float   @default(0)
+  /// Table / dine-in: collect payment before kitchen, or when the guest leaves.
+  dineInPaymentTiming DineInPaymentTiming @default(ON_LEAVE)
   /// ISO 4217 currency for POS, kiosk, storefront, and customer payments.
   currencyCode   String @default("EUR")
   /// ISO 3166-1 alpha-2 country (e.g. ES, PK).
@@ -212,6 +214,14 @@ enum CustomerPaymentProvider {
   STRIPE
   /// JazzCash and/or Easypaisa (customer picks wallet at checkout).
   WALLETS
+}
+
+/// When POS / kiosk table (dine-in) orders collect payment.
+enum DineInPaymentTiming {
+  /// Open a tab; pay when the customer leaves (current default).
+  ON_LEAVE
+  /// Require payment before the order can go to the kitchen.
+  BEFORE_KITCHEN
 }
 
 /// Restaurant-owned PayPal REST API credentials for customer order payments.

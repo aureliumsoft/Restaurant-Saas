@@ -8,9 +8,11 @@ type DetailCacheEntry = {
   expiresAt: number;
 };
 
-const DETAIL_CACHE_TTL_MS = 60_000;
+const DETAIL_CACHE_TTL_MS = 5 * 60_000;
 const customerDetailCache = new Map<string, DetailCacheEntry>();
 const restaurantDetailCache = new Map<string, DetailCacheEntry>();
+const restaurantInflight = new Map<string, Promise<unknown>>();
+const customerInflight = new Map<string, Promise<unknown>>();
 
 function cacheGet<T>(
   map: Map<string, DetailCacheEntry>,
@@ -54,12 +56,23 @@ export async function fetchCustomerMenuProductDetail<T>(
   if (!url) return null;
   const cached = cacheGet<T>(customerDetailCache, url);
   if (cached) return cached;
-  const res = await fetch(url, { cache: 'default' });
-  if (!res.ok) return null;
-  const body = (await res.json().catch(() => ({}))) as { data?: T };
-  const data = body.data ?? null;
-  if (data) cacheSet(customerDetailCache, url, data);
-  return data;
+
+  const existing = customerInflight.get(url) as Promise<T | null> | undefined;
+  if (existing) return existing;
+
+  const request = (async () => {
+    const res = await fetch(url, { cache: 'default' });
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => ({}))) as { data?: T };
+    const data = body.data ?? null;
+    if (data) cacheSet(customerDetailCache, url, data);
+    return data;
+  })().finally(() => {
+    customerInflight.delete(url);
+  });
+
+  customerInflight.set(url, request);
+  return request;
 }
 
 export async function fetchRestaurantMenuProductDetail<T>(
@@ -68,15 +81,35 @@ export async function fetchRestaurantMenuProductDetail<T>(
   const key = `lite:${itemId}`;
   const cached = cacheGet<T>(restaurantDetailCache, key);
   if (cached) return cached;
-  const res = await fetch(
-    `/api/restaurant/menu/items/${encodeURIComponent(itemId)}?lite=1`,
-    { cache: 'default' }
-  );
-  if (!res.ok) return null;
-  const body = (await res.json().catch(() => ({}))) as { data?: T };
-  const data = body.data ?? null;
-  if (data) cacheSet(restaurantDetailCache, key, data);
-  return data;
+
+  const existing = restaurantInflight.get(key) as Promise<T | null> | undefined;
+  if (existing) return existing;
+
+  const request = (async () => {
+    const res = await fetch(
+      `/api/restaurant/menu/items/${encodeURIComponent(itemId)}?lite=1`,
+      { cache: 'default' }
+    );
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => ({}))) as { data?: T };
+    const data = body.data ?? null;
+    if (data) cacheSet(restaurantDetailCache, key, data);
+    return data;
+  })().finally(() => {
+    restaurantInflight.delete(key);
+  });
+
+  restaurantInflight.set(key, request);
+  return request;
+}
+
+/** Warm the POS customize cache (hover / focus) without blocking UI. */
+export function prefetchRestaurantMenuProductDetail(itemId: string): void {
+  if (!itemId) return;
+  const key = `lite:${itemId}`;
+  if (cacheGet(restaurantDetailCache, key)) return;
+  if (restaurantInflight.has(key)) return;
+  void fetchRestaurantMenuProductDetail(itemId);
 }
 
 export function productNeedsDetailFetch(product: {

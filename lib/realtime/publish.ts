@@ -1,6 +1,17 @@
 import { getRealtimeHub } from '@/lib/realtime/hub';
 import type { RestaurantRealtimeEventType } from '@/lib/realtime/types';
 
+const ORDER_LIFECYCLE_TYPES: RestaurantRealtimeEventType[] = [
+  'kds.tickets',
+  'kds.manager',
+  'order_display',
+  'kiosk.pending_cash',
+  'pos.recent_orders',
+  'sales.orders',
+  'dashboard.analytics',
+  'inventory.stock',
+];
+
 export function publishRestaurantRealtime(
   type: RestaurantRealtimeEventType,
   params: { restaurantId: string; branchId?: string | null }
@@ -17,25 +28,18 @@ export function publishRestaurantRealtime(
   }
 }
 
-/** Broadcast all operational channels after a major order lifecycle change. */
+/** Broadcast operational channels after a major order lifecycle change. */
 export function publishOrderLifecycleUpdate(params: {
   restaurantId: string;
   branchId?: string | null;
+  /** Skip channels that are irrelevant for this mutation (reduces refresh storms). */
+  exclude?: RestaurantRealtimeEventType[];
 }) {
-  const types: RestaurantRealtimeEventType[] = [
-    'kds.tickets',
-    'kds.manager',
-    'order_display',
-    'kiosk.pending_cash',
-    'pos.recent_orders',
-    'sales.orders',
-    'dashboard.analytics',
-    'inventory.stock',
-  ];
-  for (const type of types) {
+  const skip = new Set(params.exclude ?? []);
+  for (const type of ORDER_LIFECYCLE_TYPES) {
+    if (skip.has(type)) continue;
     publishRestaurantRealtime(type, params);
   }
-  publishInventoryStockUpdate(params.restaurantId);
 }
 
 /** Restaurant-wide stock (not branch-scoped). */

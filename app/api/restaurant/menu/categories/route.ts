@@ -4,7 +4,10 @@ import { z } from 'zod';
 
 import { db } from '@/lib/db';
 import { estimateDataUrlBytes, isAcceptedImageValue } from '@/lib/image-data-url';
-import { loadRestaurantMenuCategoriesMeta } from '@/lib/menu/load-restaurant-menu-progressive';
+import {
+  loadRestaurantMenuCategoriesMeta,
+  loadRestaurantPosMenuCatalog,
+} from '@/lib/menu/load-restaurant-menu-progressive';
 import {
   buildPaginationMeta,
   clampPage,
@@ -107,6 +110,26 @@ export async function GET(req: NextRequest) {
           },
         },
         { status: 200 }
+      );
+    }
+
+    // One-shot POS catalog: meta + all front categories with browse items.
+    if (req.nextUrl.searchParams.get('catalog') === '1') {
+      const data = await loadRestaurantPosMenuCatalog(auth.restaurant.id);
+      if (!data) {
+        return NextResponse.json(
+          { error: 'Restaurant not found' },
+          { status: 404 }
+        );
+      }
+      return NextResponse.json(
+        { data },
+        {
+          status: 200,
+          headers: {
+            'Cache-Control': 'private, max-age=30, stale-while-revalidate=120',
+          },
+        }
       );
     }
 

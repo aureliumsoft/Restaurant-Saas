@@ -2033,7 +2033,7 @@ export function ProductCustomizeDialog({
                   type="button"
                   disabled={requiredMissing || isLoading}
                   onClick={handleConfirm}
-                  className="h-12 min-h-[3rem] flex-1 rounded-xl border-0 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 px-5 text-base font-bold text-white shadow-md transition-opacity hover:opacity-95 disabled:opacity-50 sm:min-w-[12rem]"
+                  className="h-12 min-h-[3rem] flex-1 rounded-xl border-0 bg-gradient-to-r from-primary to-[var(--restaurant-primary-dark,var(--primary))] px-5 text-base font-bold text-primary-foreground shadow-md shadow-primary/30 transition-opacity hover:opacity-95 disabled:opacity-50 sm:min-w-[12rem]"
                 >
                   <span className="flex w-full items-center justify-between gap-4">
                     <span>{isLoading ? 'Loading…' : 'Add'}</span>

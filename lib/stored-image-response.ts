@@ -80,7 +80,13 @@ export async function responseFromStoredImage(
   options?: { etag?: string; ifNoneMatch?: string | null }
 ): Promise<NextResponse> {
   if (!raw?.trim()) {
-    return new NextResponse(null, { status: 404 });
+    return new NextResponse(null, {
+      status: 404,
+      headers: {
+        // Browser/CDN can cache “no image” so POS does not re-hit auth on every render.
+        'Cache-Control': 'private, max-age=300',
+      },
+    });
   }
 
   const value = raw.trim();
@@ -88,11 +94,17 @@ export async function responseFromStoredImage(
     try {
       const upstream = await fetch(value, { redirect: 'follow' });
       if (!upstream.ok) {
-        return new NextResponse(null, { status: 404 });
+        return new NextResponse(null, {
+          status: 404,
+          headers: { 'Cache-Control': 'private, max-age=120' },
+        });
       }
       const buffer = Buffer.from(await upstream.arrayBuffer());
       if (buffer.length < 24) {
-        return new NextResponse(null, { status: 404 });
+        return new NextResponse(null, {
+          status: 404,
+          headers: { 'Cache-Control': 'private, max-age=120' },
+        });
       }
       const upstreamType = upstream.headers.get('content-type') || 'image/jpeg';
       return imageResponse(buffer, upstreamType, options);
@@ -114,7 +126,10 @@ export async function responseFromStoredImage(
 
   const buffer = decodeBase64Image(b64);
   if (!buffer) {
-    return new NextResponse(null, { status: 404 });
+    return new NextResponse(null, {
+      status: 404,
+      headers: { 'Cache-Control': 'private, max-age=120' },
+    });
   }
 
   return imageResponse(buffer, contentType, options);

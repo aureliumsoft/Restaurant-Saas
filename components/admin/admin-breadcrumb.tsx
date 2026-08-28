@@ -13,21 +13,27 @@ export function AdminBreadcrumb({ className }: { className?: string }) {
   return (
     <nav
       aria-label="Breadcrumb"
-      className={cn('flex min-w-0 items-center gap-2 text-sm', className)}
+      className={cn('flex min-w-0 flex-1 items-center gap-1.5 text-sm', className)}
     >
       <Link
         href="/admin/dashboard"
         className={cn(
-          'shrink-0 rounded-lg px-2.5 py-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
-          !pageTitle && 'bg-muted/50 font-medium text-foreground'
+          'shrink-0 rounded-lg px-2.5 py-1 text-muted-foreground transition-colors hover:bg-white/60 hover:text-foreground dark:hover:bg-white/10',
+          !pageTitle &&
+            'bg-fire-500/10 font-semibold text-fire-700 dark:text-fire-300'
         )}
       >
         Admin
       </Link>
       {pageTitle ? (
-        <span className="truncate rounded-lg bg-muted/50 px-2.5 py-1 font-medium text-foreground">
-          {pageTitle}
-        </span>
+        <>
+          <span className="text-muted-foreground/40" aria-hidden>
+            /
+          </span>
+          <span className="truncate rounded-lg bg-fire-500/10 px-2.5 py-1 font-semibold text-fire-700 dark:text-fire-300">
+            {pageTitle}
+          </span>
+        </>
       ) : null}
     </nav>
   );

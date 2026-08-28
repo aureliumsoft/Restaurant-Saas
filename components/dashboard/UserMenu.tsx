@@ -13,13 +13,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { clearStaffBootstrapSessionCache } from '@/lib/query/bootstrap-fetcher';
+import { cn } from '@/lib/utils';
 
 export default function UserMenu({
   className,
   confirmLogout = false,
+  iconOnly = false,
 }: {
   className?: string;
   confirmLogout?: boolean;
+  /** Trigger shows only the user icon (name still appears in the dropdown). */
+  iconOnly?: boolean;
 }) {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -34,8 +38,16 @@ export default function UserMenu({
 
   if (status === 'loading') {
     return (
-      <Button disabled variant="secondary" className={className}>
-        <Loader2 className="h-4 w-4 mr-2 animate-spin text-primary" />
+      <Button
+        disabled
+        variant="secondary"
+        size={iconOnly ? 'icon' : 'default'}
+        className={className}
+        aria-label="Loading user"
+      >
+        <Loader2
+          className={cn('h-4 w-4 animate-spin text-primary', !iconOnly && 'mr-2')}
+        />
       </Button>
     );
   }
@@ -44,13 +56,13 @@ export default function UserMenu({
     return (
       <Button
         variant="secondary"
+        size={iconOnly ? 'icon' : 'default'}
         className={className}
         onClick={() => router.push('/login')}
+        aria-label="Sign in"
       >
-        <>
-          <LogIn className="h-4 w-4 mr-2" />
-          <span>Sign in</span>
-        </>
+        <LogIn className={cn('h-4 w-4', !iconOnly && 'mr-2')} />
+        {iconOnly ? null : <span>Sign in</span>}
       </Button>
     );
   }
@@ -74,9 +86,15 @@ export default function UserMenu({
     <>
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="default" className={className}>
-          <User className="mr-2 h-4 w-4" />
-          <span className="truncate">{name}</span>
+        <Button
+          variant="default"
+          size={iconOnly ? 'icon' : 'default'}
+          className={className}
+          aria-label={name}
+          title={name}
+        >
+          <User className={cn('h-4 w-4', !iconOnly && 'mr-2')} />
+          {iconOnly ? null : <span className="truncate">{name}</span>}
         </Button>
       </DropdownMenuTrigger>
 

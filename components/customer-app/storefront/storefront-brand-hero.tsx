@@ -20,7 +20,7 @@ export function StorefrontBrandHero({
     typeof logoUrl === 'string' && logoUrl.trim() ? logoUrl.trim() : null;
 
   return (
-    <div className="relative h-full min-h-[240px] w-full overflow-hidden sm:min-h-[320px] lg:min-h-[calc(100dvh-72px)]">
+    <div className="relative h-full min-h-[240px] w-full overflow-hidden sm:min-h-[320px] lg:min-h-0">
       <StorefrontBackground hasBanner={false} />
 
       <div

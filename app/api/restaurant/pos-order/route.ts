@@ -18,6 +18,7 @@ import {
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
   resolveServiceChargeAmount,
 } from '@/lib/restaurant-service-charge';
+import { isDineInPayBeforeKitchen } from '@/lib/restaurant-dine-in-payment';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { resolvePosPaymentLedgerAmount } from '@/lib/order-payment';
 import { getOrOpenPosShift } from '@/lib/pos-shift';
@@ -180,7 +181,10 @@ export async function POST(req: NextRequest) {
 
     const restaurantCharges = await db.restaurant.findUnique({
       where: { id: restaurantId },
-      select: RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+      select: {
+        ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+        dineInPaymentTiming: true,
+      },
     });
     const expectedServiceCharge = resolveServiceChargeAmount(
       parseRestaurantServiceCharges(restaurantCharges),
@@ -215,6 +219,23 @@ export async function POST(req: NextRequest) {
       }
       diningTableId = diningTable.id;
       tableLabel = diningTable.name;
+    }
+
+    // Pay-before-kitchen: table orders must be paid at POS (card terminal may stay
+    // pending until the terminal callback completes payment).
+    if (
+      diningTableId &&
+      initialPaymentStatus === 'pending' &&
+      paymentMode !== 'card_terminal' &&
+      isDineInPayBeforeKitchen(restaurantCharges?.dineInPaymentTiming)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'This restaurant requires payment before table orders go to the kitchen. Collect payment at the POS first, or switch Settings → Payments → “Pay when guest leaves”.',
+        },
+        { status: 400 }
+      );
     }
 
     const normalizedItems = await normalizePosOrderLines({
@@ -346,9 +367,21 @@ export async function POST(req: NextRequest) {
       { maxWait: 10_000, timeout: 30_000 }
     );
 
+    // Table place: kitchen ticket (and KDS UI) comes on a follow-up POST — don't
+    // fan out kds/order_display yet. Keep inventory + recent for stock/shift only.
     publishOrderLifecycleUpdate({
       restaurantId,
       branchId: result.order.branchId,
+      exclude: diningTableId
+        ? [
+            'kiosk.pending_cash',
+            'dashboard.analytics',
+            'kds.tickets',
+            'kds.manager',
+            'order_display',
+            'sales.orders',
+          ]
+        : ['dashboard.analytics', 'kiosk.pending_cash'],
     });
 
     return NextResponse.json(

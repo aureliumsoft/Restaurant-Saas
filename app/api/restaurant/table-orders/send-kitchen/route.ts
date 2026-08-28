@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
+import { isDineInPayBeforeKitchen } from '@/lib/restaurant-dine-in-payment';
 
 const bodySchema = z.object({
   orderIds: z.array(z.string().uuid()).min(1).max(50),
@@ -66,6 +67,14 @@ export async function POST(req: NextRequest) {
     const selectedMinutes = parsed.data.selectedMinutes ?? 15;
     const orderIds = [...new Set(parsed.data.orderIds)];
 
+    const restaurant = await db.restaurant.findUnique({
+      where: { id: auth.restaurantId },
+      select: { dineInPaymentTiming: true },
+    });
+    const requirePaidBeforeKitchen = isDineInPayBeforeKitchen(
+      restaurant?.dineInPaymentTiming
+    );
+
     const orders = await db.order.findMany({
       where: {
         id: { in: orderIds },
@@ -93,11 +102,32 @@ export async function POST(req: NextRequest) {
           select: { id: true },
           take: 1,
         },
+        payments: {
+          select: { status: true },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
       },
     });
 
     if (orders.length === 0) {
       return NextResponse.json({ error: 'No matching table orders' }, { status: 404 });
+    }
+
+    if (requirePaidBeforeKitchen) {
+      const unpaid = orders.filter(
+        (o) => !o.payments.some((p) => p.status === 'completed')
+      );
+      if (unpaid.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              'This restaurant requires payment before sending table orders to the kitchen.',
+            unpaidOrderIds: unpaid.map((o) => o.id),
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const created: string[] = [];
@@ -138,6 +168,13 @@ export async function POST(req: NextRequest) {
     publishOrderLifecycleUpdate({
       restaurantId: auth.restaurantId,
       branchId,
+      exclude: [
+        'kiosk.pending_cash',
+        'dashboard.analytics',
+        'pos.recent_orders',
+        'sales.orders',
+        'inventory.stock',
+      ],
     });
 
     return NextResponse.json({

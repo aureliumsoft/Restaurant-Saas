@@ -14,7 +14,6 @@ import {
   Table as TableIcon,
   Truck,
   ShoppingBag,
-  ArrowRight,
   CreditCard,
   Banknote,
   X,
@@ -30,8 +29,8 @@ import {
   XCircle,
   ChevronLeft,
   ChevronRight,
-  LayoutDashboard,
-  List,
+  ChevronDown,
+  WifiOff,
 } from 'lucide-react';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
@@ -52,10 +51,19 @@ import { PosKioskOrdersSheet } from '@/components/pos/pos-kiosk-orders-sheet';
 import { PosTableOrdersSheet } from '@/components/pos/pos-table-orders-sheet';
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
 import {
+  PosOnScreenKeyboard,
+} from '@/components/pos/pos-on-screen-keyboard';
+import {
   parseRestaurantServiceCharges,
   resolveServiceChargeAmount,
   type RestaurantServiceCharges,
 } from '@/lib/restaurant-service-charge';
+import {
+  DEFAULT_DINE_IN_PAYMENT_TIMING,
+  isDineInPayBeforeKitchen,
+  parseDineInPaymentTiming,
+  type DineInPaymentTiming,
+} from '@/lib/restaurant-dine-in-payment';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -91,14 +99,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-toastify';
 import axios from 'axios';
@@ -108,6 +108,8 @@ import { useKioskPendingCash, revalidateKioskPendingCash } from '@/hooks/use-kio
 import {
   useOpenTableOrders,
   revalidateOpenTableOrders,
+  upsertOptimisticOpenTableOrder,
+  markOpenTableOrderKitchenSent,
 } from '@/hooks/use-open-table-orders';
 import { useStaffRestaurantBranding } from '@/hooks/use-staff-permissions';
 import { MenuOfferChoiceDialog } from '@/components/order/menu-offer-choice-dialog';
@@ -144,25 +146,34 @@ import { upsertLocalTicket } from '@/lib/offline/local-tickets';
 import { isBrowserOffline } from '@/lib/offline/db';
 import { extractApiErrorMessage } from '@/lib/extract-api-error';
 
-const POS_PANEL_CLASS =
-  'rounded-2xl border border-border bg-card text-card-foreground shadow-md dark:shadow-[0_8px_30px_rgba(0,0,0,0.25)]';
+const POS_PANEL_CLASS = '';
 const POS_ACCENT_BTN =
-  'bg-fire-500 text-white shadow-md shadow-fire-500/20 hover:bg-fire-600';
+  'bg-fire-500 text-white shadow-md shadow-fire-500/20 hover:bg-fire-600 active:scale-[0.99] transition-all duration-150';
 const POS_ACCENT_TEXT = 'text-fire-600 dark:text-fire-400';
 const POS_INPUT_CLASS =
-  'border-border bg-muted/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-fire-500/40 dark:bg-background/80';
-const POS_INSET_SURFACE =
-  'rounded-xl border border-border bg-muted/40 dark:bg-background/80';
+  'border-transparent bg-muted/50 text-foreground placeholder:text-muted-foreground/70 focus-visible:border-fire-500/40 focus-visible:bg-background focus-visible:ring-fire-500/25';
+const POS_INSET_SURFACE = 'rounded-2xl bg-muted/40';
 const POS_GHOST_ICON_BTN =
-  'text-muted-foreground hover:bg-accent hover:text-foreground';
+  'rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground';
 const POS_OUTLINE_BTN =
-  'border-border bg-transparent text-foreground hover:bg-accent';
+  'border-border/40 bg-transparent text-foreground hover:bg-muted/70';
 const POS_PRODUCT_CARD =
-  'group flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-2.5 text-left text-card-foreground transition-all duration-200 hover:border-fire-500/35 hover:shadow-lg hover:shadow-fire-500/10 active:scale-[0.98]';
+  'group relative flex flex-col overflow-hidden rounded-xl bg-white text-left text-card-foreground shadow-sm transition-all duration-150 hover:shadow-md hover:shadow-fire-500/10 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fire-500/40 dark:bg-zinc-900';
+/** More products visible beside ticket */
+const POS_PRODUCT_GRID =
+  'grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6';
 const POS_CATEGORY_ACTIVE =
-  'bg-fire-500 text-white shadow-md shadow-fire-500/25';
+  'bg-fire-500 text-white shadow-sm shadow-fire-500/20';
 const POS_CATEGORY_INACTIVE =
-  'border border-border bg-card text-foreground/90 hover:border-fire-500/30 hover:bg-accent';
+  'bg-muted/50 text-foreground/75 hover:bg-muted hover:text-foreground';
+const POS_SHELL =
+  'flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent text-foreground';
+/** Top chrome — glass strip like the portal header */
+const POS_HEADER =
+  'flex shrink-0 flex-wrap items-center gap-2 border-b border-fire-500/10 bg-white/75 px-3 py-2 shadow-[0_8px_28px_-18px_rgba(15,23,42,0.22)] backdrop-blur-xl dark:border-fire-500/15 dark:bg-zinc-950/80 dark:shadow-[0_8px_28px_-18px_rgba(0,0,0,0.65)] sm:gap-2.5 sm:px-4';
+/** Order ticket / payment column */
+const POS_TICKET_SIDEBAR =
+  'flex min-h-0 max-h-[52dvh] flex-col overflow-hidden border-l border-fire-500/10 bg-white/80 backdrop-blur-xl transition-[box-shadow] duration-300 dark:border-fire-500/15 dark:bg-zinc-950/85 lg:max-h-full';
 
 export type OrderMode = 'new' | 'tables' | 'delivery' | 'takeaway' | 'queue';
 
@@ -283,6 +294,7 @@ type Category = {
   id: string;
   label: string;
   imageUrl?: string | null;
+  itemCount?: number;
 };
 
 type RestaurantMenuApi = {
@@ -487,7 +499,7 @@ export function PosScreen() {
     }),
     [restaurantName, staffLogoUrl]
   );
-  const [orderMode, setOrderMode] = useState<OrderMode>('tables');
+  const [orderMode, setOrderMode] = useState<OrderMode>('takeaway');
   const [categoryId, setCategoryId] = useState<string>('all');
   const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
     null
@@ -506,6 +518,8 @@ export function PosScreen() {
     useState<RestaurantServiceCharges>(() =>
       parseRestaurantServiceCharges(undefined)
     );
+  const [dineInPaymentTiming, setDineInPaymentTiming] =
+    useState<DineInPaymentTiming>(DEFAULT_DINE_IN_PAYMENT_TIMING);
 
   const [srChPct, setSrChPct] = useState('0');
   const [taxPct, setTaxPct] = useState('0');
@@ -530,13 +544,20 @@ export function PosScreen() {
 
   const [now, setNow] = useState<Date>(() => new Date());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
   const [amountPaid, setAmountPaid] = useState('');
+  type PosKeyboardField =
+    | 'name'
+    | 'phone'
+    | 'address'
+    | 'amount'
+    | 'prepCustom';
+  const [keyboardField, setKeyboardField] = useState<PosKeyboardField | null>(
+    null
+  );
   const [cardPaymentStatus, setCardPaymentStatus] =
     useState<CardPaymentStatus>('idle');
   const [cardProcessingOpen, setCardProcessingOpen] = useState(false);
-  const [cardPaymentOutcomeOpen, setCardPaymentOutcomeOpen] = useState<
-    'success' | 'error' | null
-  >(null);
   const [cardTransactionId, setCardTransactionId] = useState<
     string | undefined
   >();
@@ -552,6 +573,15 @@ export function PosScreen() {
   const productButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const proceedOrderButtonRef = useRef<HTMLButtonElement | null>(null);
   const placeOrderButtonRef = useRef<HTMLButtonElement | null>(null);
+  const cartFlyTargetRef = useRef<HTMLElement | null>(null);
+  const lastFlyFromRef = useRef<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [cartBump, setCartBump] = useState(false);
+  const cartBumpTimerRef = useRef<number | null>(null);
   const posBranchId = selectedBranchId || activeBranchId || null;
   const { count: kioskPendingCount } = useKioskPendingCash(posBranchId);
   const { tableCount: openTableCount } = useOpenTableOrders(posBranchId);
@@ -568,21 +598,27 @@ export function PosScreen() {
   >(null);
   const [lastShiftEndedAt, setLastShiftEndedAt] = useState<string | null>(null);
   const shiftSummaryBranchRef = useRef('');
+  const shiftRealtimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const categoryScrollRef = useRef<HTMLDivElement>(null);
-  const [clockLabel, setClockLabel] = useState('');
+  const productScrollRootRef = useRef<HTMLDivElement>(null);
+  const ignoreCategorySpyUntilRef = useRef(0);
+  const [scrollActiveCategoryId, setScrollActiveCategoryId] = useState('all');
+  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
-    const tick = () => {
-      setClockLabel(
-        new Date().toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        })
-      );
+    const sync = () => setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
+    sync();
+    window.addEventListener('online', sync);
+    window.addEventListener('offline', sync);
+    return () => {
+      window.removeEventListener('online', sync);
+      window.removeEventListener('offline', sync);
+      if (cartBumpTimerRef.current != null) {
+        window.clearTimeout(cartBumpTimerRef.current);
+      }
     };
-    tick();
-    const id = window.setInterval(tick, 30_000);
-    return () => window.clearInterval(id);
   }, []);
 
   const scrollCategories = (direction: 'left' | 'right') => {
@@ -593,6 +629,75 @@ export function PosScreen() {
       behavior: 'smooth',
     });
   };
+
+  const scrollCategoryPillIntoView = useCallback((id: string) => {
+    const strip = categoryScrollRef.current;
+    if (!strip) return;
+    const pill = strip.querySelector<HTMLElement>(
+      `[data-pos-category-pill="${id}"]`
+    );
+    pill?.scrollIntoView({
+      behavior: 'smooth',
+      inline: 'center',
+      block: 'nearest',
+    });
+  }, []);
+
+  const scrollProductCategoryIntoView = useCallback((id: string) => {
+    const root = productScrollRootRef.current;
+    const viewport = root?.querySelector(
+      '[data-radix-scroll-area-viewport]'
+    ) as HTMLElement | null;
+    if (id === 'all') {
+      if (viewport) viewport.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    const section = root?.querySelector<HTMLElement>(
+      `[data-pos-category-section="${id}"]`
+    );
+    if (!section || !viewport) {
+      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    const top =
+      section.getBoundingClientRect().top -
+      viewport.getBoundingClientRect().top +
+      viewport.scrollTop -
+      8;
+    viewport.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  }, []);
+
+  const onCategoryPillClick = useCallback(
+    (id: string) => {
+      if (id === 'all') {
+        setCategoryId('all');
+        setScrollActiveCategoryId('all');
+        ignoreCategorySpyUntilRef.current = Date.now() + 600;
+        scrollProductCategoryIntoView('all');
+        scrollCategoryPillIntoView('all');
+        return;
+      }
+
+      // While browsing all sections, jump to that category instead of filtering.
+      if (categoryId === 'all' && !search.trim()) {
+        setScrollActiveCategoryId(id);
+        ignoreCategorySpyUntilRef.current = Date.now() + 600;
+        scrollProductCategoryIntoView(id);
+        scrollCategoryPillIntoView(id);
+        return;
+      }
+
+      setCategoryId(id);
+      setScrollActiveCategoryId(id);
+      scrollCategoryPillIntoView(id);
+    },
+    [
+      categoryId,
+      search,
+      scrollCategoryPillIntoView,
+      scrollProductCategoryIntoView,
+    ]
+  );
 
   const KITCHEN_PREP_PRESETS = [10, 15, 30] as const;
   const KITCHEN_PREP_MIN = 1;
@@ -608,6 +713,10 @@ export function PosScreen() {
     Record<string, number>
   >({});
   const [kitchenCustomMinutes, setKitchenCustomMinutes] = useState('');
+  const [kitchenPrepKeyboardOpen, setKitchenPrepKeyboardOpen] = useState(false);
+  const [tableCheckoutPrepMinutes, setTableCheckoutPrepMinutes] = useState(15);
+  const [tableCheckoutCustomMinutes, setTableCheckoutCustomMinutes] =
+    useState('');
   const [sendingToKitchen, setSendingToKitchen] = useState(false);
   const [pendingKitchenOpen, setPendingKitchenOpen] = useState(false);
   const [pendingKitchenOrders, setPendingKitchenOrders] = useState<
@@ -629,12 +738,22 @@ export function PosScreen() {
   >();
 
   const categories = useMemo<Category[]>(() => {
-    const next: Category[] = [{ id: 'all', label: 'ALL' }];
+    const next: Category[] = [
+      {
+        id: 'all',
+        label: 'ALL',
+        itemCount: progressiveCategories.reduce(
+          (n, menu) => n + (menu.items?.length ?? 0),
+          0
+        ),
+      },
+    ];
     for (const menu of progressiveCategories) {
       next.push({
         id: menu.id,
         label: String(menu.name || 'UNNAMED').toUpperCase(),
         imageUrl: getCategoryDisplayImageUrl(menu),
+        itemCount: menu.items?.length ?? 0,
       });
     }
     return next;
@@ -689,12 +808,36 @@ export function PosScreen() {
     }
   }, [selectedBranchId, activeBranchId]);
 
+  const pendingKitchenRefreshTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const schedulePendingKitchenRefresh = useCallback(() => {
+    if (pendingKitchenRefreshTimerRef.current) {
+      clearTimeout(pendingKitchenRefreshTimerRef.current);
+    }
+    pendingKitchenRefreshTimerRef.current = setTimeout(() => {
+      pendingKitchenRefreshTimerRef.current = null;
+      void loadPendingKitchenOrders();
+    }, 800);
+  }, [loadPendingKitchenOrders]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingKitchenRefreshTimerRef.current) {
+        clearTimeout(pendingKitchenRefreshTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!menuMeta) return;
     setThemePrimaryColor(menuMeta.themePrimaryColor?.trim() || null);
     setServiceCharges(
       (menuMeta.serviceCharges as RestaurantServiceCharges | undefined) ??
       parseRestaurantServiceCharges(undefined)
+    );
+    setDineInPaymentTiming(
+      parseDineInPaymentTiming(menuMeta.dineInPaymentTiming)
     );
   }, [menuMeta]);
 
@@ -705,9 +848,9 @@ export function PosScreen() {
   }, [menuLoadError]);
 
   useRealtimeRefresh(
-    ['refreshRecentOrders', 'realtime:kds.tickets'],
+    'refreshRecentOrders',
     () => {
-      void loadPendingKitchenOrders();
+      schedulePendingKitchenRefresh();
     }
   );
 
@@ -861,9 +1004,80 @@ export function PosScreen() {
   const showCategorySections =
     categoryId === 'all' && !search.trim() && !categoriesLoading;
 
+  const activeCategoryPillId = showCategorySections
+    ? scrollActiveCategoryId
+    : categoryId;
+
+  useEffect(() => {
+    if (!showCategorySections) return;
+
+    const root = productScrollRootRef.current;
+    const viewport = root?.querySelector(
+      '[data-radix-scroll-area-viewport]'
+    ) as HTMLElement | null;
+    if (!viewport || !root) return;
+
+    const sections = Array.from(
+      root.querySelectorAll<HTMLElement>('[data-pos-category-section]')
+    );
+    if (sections.length === 0) return;
+
+    const ratios = new Map<string, number>();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = (entry.target as HTMLElement).dataset.posCategorySection;
+          if (!id) continue;
+          ratios.set(id, entry.isIntersecting ? entry.intersectionRatio : 0);
+        }
+        if (Date.now() < ignoreCategorySpyUntilRef.current) return;
+
+        let bestId = sections[0]?.dataset.posCategorySection ?? 'all';
+        let bestRatio = -1;
+        for (const section of sections) {
+          const id = section.dataset.posCategorySection;
+          if (!id) continue;
+          const ratio = ratios.get(id) ?? 0;
+          if (ratio > bestRatio) {
+            bestRatio = ratio;
+            bestId = id;
+          }
+        }
+        if (bestRatio <= 0) return;
+        setScrollActiveCategoryId((prev) => {
+          if (prev === bestId) return prev;
+          scrollCategoryPillIntoView(bestId);
+          return bestId;
+        });
+      },
+      {
+        root: viewport,
+        threshold: [0.15, 0.35, 0.55, 0.75],
+        rootMargin: '-10% 0px -55% 0px',
+      }
+    );
+
+    for (const section of sections) observer.observe(section);
+    return () => observer.disconnect();
+  }, [
+    showCategorySections,
+    progressiveCategories,
+    scrollCategoryPillIntoView,
+  ]);
+
   const visibleProducts = useMemo(() => {
     return showCategorySections ? products : filteredProducts;
   }, [products, filteredProducts, showCategorySections]);
+
+  useEffect(() => {
+    if (!showCategorySections) return;
+    setScrollActiveCategoryId((prev) =>
+      prev === 'all' || progressiveCategories.some((c) => c.id === prev)
+        ? prev
+        : 'all'
+    );
+  }, [showCategorySections, progressiveCategories]);
 
   useEffect(() => {
     if (visibleProducts.length === 0) {
@@ -884,6 +1098,7 @@ export function PosScreen() {
         !isSearchInput;
 
       if (event.key === 'F9') {
+        if (savingOrder || terminalProcessing || sendingToKitchen) return;
         if (checkoutOpen) {
           if (placeOrderButtonRef.current && !placeOrderButtonRef.current.disabled) {
             event.preventDefault();
@@ -929,9 +1144,21 @@ export function PosScreen() {
       // Add Enter key support for search mode to select product
       if (event.key === 'Enter' && search.trim() && isSearchInput) {
         event.preventDefault();
+        if (savingOrder || terminalProcessing || sendingToKitchen) return;
         if (activeProductId) {
           const product = visibleProducts.find((p) => p.id === activeProductId);
           if (product) {
+            const btn = productButtonRefs.current[product.id];
+            const img = btn?.querySelector('img');
+            const rect = (img ?? btn)?.getBoundingClientRect();
+            if (rect && rect.width > 0 && rect.height > 0) {
+              lastFlyFromRef.current = {
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                height: rect.height,
+              };
+            }
             void handleProductSelect(product);
           }
         }
@@ -971,7 +1198,7 @@ export function PosScreen() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [checkoutOpen, visibleProducts, activeProductId, search]);
+  }, [checkoutOpen, visibleProducts, activeProductId, search, savingOrder, terminalProcessing, sendingToKitchen]);
 
   const showProductSkeletons = useMemo(() => {
     if (search.trim()) {
@@ -1035,11 +1262,22 @@ export function PosScreen() {
     0,
     afterSr + taxAmount - disAmount + activeServiceChargeAmount
   );
+  const cartItemCount = useMemo(
+    () => cart.reduce((n, line) => n + line.qty, 0),
+    [cart]
+  );
   const isEditingKioskOrder =
     Boolean(editingOrderId) && editingOrderSource === 'kiosk';
 
   const isTableMode = orderMode === 'tables';
   const isDeliveryMode = orderMode === 'delivery';
+  /** Settings → Payments: pay when guest leaves (open tab) vs pay before kitchen. */
+  const tablePayOnLeave =
+    isTableMode && !isDineInPayBeforeKitchen(dineInPaymentTiming);
+  const tablePayBeforeKitchen =
+    isTableMode && isDineInPayBeforeKitchen(dineInPaymentTiming);
+  /** Block menu/cart edits while placing or sending to kitchen. */
+  const posBusy = savingOrder || terminalProcessing || sendingToKitchen;
   const posBranches = scopedBranches.length > 0 ? scopedBranches : branches;
   const selectedBranchName =
     posBranches.find((b) => b.id === selectedBranchId)?.name ??
@@ -1134,7 +1372,13 @@ export function PosScreen() {
   const refreshShiftOnRealtime = useCallback(() => {
     const branchId = selectedBranchId || activeBranchId || '';
     if (!branchId) return;
-    void refreshShiftSummary(branchId);
+    if (shiftRealtimeTimerRef.current) {
+      clearTimeout(shiftRealtimeTimerRef.current);
+    }
+    shiftRealtimeTimerRef.current = setTimeout(() => {
+      shiftRealtimeTimerRef.current = null;
+      void refreshShiftSummary(branchId);
+    }, 1_200);
   }, [selectedBranchId, activeBranchId, refreshShiftSummary]);
 
   useRealtimeRefresh('refreshRecentOrders', refreshShiftOnRealtime, {
@@ -1199,11 +1443,173 @@ export function PosScreen() {
     if (!ok) toast.error('Could not open print preview.');
   }
 
+  const spawnFlyToCart = useCallback(
+    (product: { id: string; name: string; imageUrl: string | null }) => {
+      if (typeof document === 'undefined' || typeof window === 'undefined') {
+        return;
+      }
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        setCartBump(true);
+        if (cartBumpTimerRef.current != null) {
+          window.clearTimeout(cartBumpTimerRef.current);
+        }
+        cartBumpTimerRef.current = window.setTimeout(() => {
+          setCartBump(false);
+          cartBumpTimerRef.current = null;
+        }, 280);
+        return;
+      }
+
+      const toEl = cartFlyTargetRef.current;
+      const fromEl = productButtonRefs.current[product.id];
+      const fromImg = fromEl?.querySelector('img') ?? null;
+
+      const captured = lastFlyFromRef.current;
+      lastFlyFromRef.current = null;
+
+      const fromRect =
+        captured ??
+        fromImg?.getBoundingClientRect() ??
+        fromEl?.getBoundingClientRect() ??
+        null;
+      const toRect = toEl?.getBoundingClientRect() ?? null;
+      if (!toRect || toRect.width < 2 || toRect.height < 2) return;
+
+      const size = fromRect
+        ? Math.max(36, Math.min(64, Math.min(fromRect.width, fromRect.height) * 0.75))
+        : 48;
+
+      const startLeft = fromRect
+        ? fromRect.left + fromRect.width / 2 - size / 2
+        : Math.max(16, window.innerWidth * 0.35 - size / 2);
+      const startTop = fromRect
+        ? fromRect.top + fromRect.height / 2 - size / 2
+        : Math.max(16, window.innerHeight * 0.4 - size / 2);
+
+      const endLeft = toRect.left + toRect.width / 2 - size / 2;
+      const endTop = toRect.top + toRect.height / 2 - size / 2;
+      const dx = endLeft - startLeft;
+      const dy = endTop - startTop;
+
+      // Skip tiny moves (same spot) — still bump cart
+      if (Math.hypot(dx, dy) < 24) {
+        setCartBump(true);
+        if (cartBumpTimerRef.current != null) {
+          window.clearTimeout(cartBumpTimerRef.current);
+        }
+        cartBumpTimerRef.current = window.setTimeout(() => {
+          setCartBump(false);
+          cartBumpTimerRef.current = null;
+        }, 280);
+        return;
+      }
+
+      const ghost = document.createElement('div');
+      ghost.setAttribute('aria-hidden', 'true');
+      ghost.className = 'pos-fly-to-cart-ghost';
+      Object.assign(ghost.style, {
+        position: 'fixed',
+        left: `${startLeft}px`,
+        top: `${startTop}px`,
+        width: `${size}px`,
+        height: `${size}px`,
+        zIndex: '2147483000',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
+        background: '#2a2a2a',
+        margin: '0',
+        padding: '0',
+        transform: 'translate3d(0,0,0) scale(1)',
+        opacity: '1',
+        willChange: 'transform, opacity',
+      } as CSSStyleDeclaration);
+
+      if (product.imageUrl) {
+        const img = document.createElement('img');
+        img.src = product.imageUrl;
+        img.alt = '';
+        img.draggable = false;
+        Object.assign(img.style, {
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+        } as CSSStyleDeclaration);
+        ghost.appendChild(img);
+      } else {
+        ghost.style.display = 'flex';
+        ghost.style.alignItems = 'center';
+        ghost.style.justifyContent = 'center';
+        ghost.style.fontWeight = '700';
+        ghost.style.fontSize = `${Math.round(size * 0.36)}px`;
+        ghost.style.color = '#f5f5f5';
+        ghost.textContent = (product.name || '?').charAt(0).toUpperCase();
+      }
+
+      document.body.appendChild(ghost);
+
+      // Force layout before animating so the first frame is painted
+      void ghost.offsetWidth;
+
+      const midX = dx * 0.45;
+      const midY = dy * 0.35 - Math.min(80, Math.abs(dy) * 0.25 + 28);
+
+      const anim = ghost.animate(
+        [
+          {
+            transform: 'translate3d(0px, 0px, 0) scale(1)',
+            opacity: 1,
+          },
+          {
+            transform: `translate3d(${midX}px, ${midY}px, 0) scale(0.85)`,
+            opacity: 1,
+            offset: 0.55,
+          },
+          {
+            transform: `translate3d(${dx}px, ${dy}px, 0) scale(0.28)`,
+            opacity: 0.2,
+          },
+        ],
+        {
+          duration: 700,
+          easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+          fill: 'forwards',
+        }
+      );
+
+      const cleanup = () => {
+        ghost.remove();
+        if (cartBumpTimerRef.current != null) {
+          window.clearTimeout(cartBumpTimerRef.current);
+        }
+        setCartBump(true);
+        cartBumpTimerRef.current = window.setTimeout(() => {
+          setCartBump(false);
+          cartBumpTimerRef.current = null;
+        }, 280);
+      };
+
+      anim.finished.then(cleanup).catch(() => {
+        ghost.remove();
+      });
+    },
+    []
+  );
+
   const addToCart = (
     product: PosMenuProduct,
     modifiers: CartModifierSelection[],
     variation?: SelectedProductVariation | null
   ) => {
+    if (savingOrder || terminalProcessing || sendingToKitchen) return;
+    spawnFlyToCart({
+      id: product.id,
+      name: product.name,
+      imageUrl: product.imageUrl ?? null,
+    });
+
     const baseUnitPrice = effectiveUnitPrice(product.price, product.salePrice);
     const variationId = variation?.id ?? null;
     const modifiersSignature = getModifiersSignature(modifiers, variationId);
@@ -1255,6 +1661,7 @@ export function PosScreen() {
     p: PosMenuProduct,
     options?: { loading?: boolean }
   ) => {
+    if (savingOrder || terminalProcessing || sendingToKitchen) return;
     setCustomizeProduct(p);
     setCustomizeLoading(options?.loading ?? false);
     setCustomizeOpen(true);
@@ -1306,6 +1713,7 @@ export function PosScreen() {
   };
 
   const handleProductSelect = (p: PosMenuProduct) => {
+    if (savingOrder || terminalProcessing || sendingToKitchen) return;
     const bundles = findBundleParentProducts(p.id, products);
     if (bundles.length > 0) {
       setMenuOfferProduct(p);
@@ -1317,6 +1725,7 @@ export function PosScreen() {
   };
 
   function setQty(lineId: string, qty: number) {
+    if (savingOrder || terminalProcessing || sendingToKitchen) return;
     if (qty < 1) {
       setCart((prev) => prev.filter((l) => l.lineId !== lineId));
       return;
@@ -1327,6 +1736,7 @@ export function PosScreen() {
   }
 
   function setLineDisc(lineId: string, pct: number) {
+    if (savingOrder || terminalProcessing || sendingToKitchen) return;
     const v = Math.min(100, Math.max(0, pct));
     setCart((prev) =>
       prev.map((l) => (l.lineId === lineId ? { ...l, lineDiscPct: v } : l))
@@ -1338,6 +1748,8 @@ export function PosScreen() {
     setEditingOrderId(null);
     setEditingOrderLabel(null);
     setEditingOrderSource(null);
+    setTableId('');
+    setOrderMode('takeaway');
   }
 
   function cancelEditingOrder() {
@@ -1347,7 +1759,6 @@ export function PosScreen() {
     setCustomerName('');
     setCustomerPhone('');
     setOrderAddress('');
-    setTableId('');
     setCheckoutOpen(false);
     toast.info('Order edit canceled.');
   }
@@ -1476,11 +1887,95 @@ export function PosScreen() {
     return null;
   }
 
+  function resolveTableCheckoutPrepMinutes(): number | null {
+    const custom = tableCheckoutCustomMinutes.trim();
+    if (custom) {
+      const n = Math.round(Number(custom));
+      if (
+        Number.isFinite(n) &&
+        n >= KITCHEN_PREP_MIN &&
+        n <= KITCHEN_PREP_MAX
+      ) {
+        return n;
+      }
+      return null;
+    }
+    if (
+      tableCheckoutPrepMinutes >= KITCHEN_PREP_MIN &&
+      tableCheckoutPrepMinutes <= KITCHEN_PREP_MAX
+    ) {
+      return tableCheckoutPrepMinutes;
+    }
+    return null;
+  }
+
   function resetKitchenSendDialog() {
     setKitchenSendOpen(false);
     setKitchenSendOrder(null);
     setKitchenCustomMinutes('');
+    setKitchenPrepKeyboardOpen(false);
     setKitchenPrepMinutes({});
+  }
+
+  async function dispatchKitchenForOrder(order: {
+    id: string;
+    shortOrderId: string;
+    ticketNumber: number | null;
+    items: Array<{ id: string; productName: string; quantity: number }>;
+    minutes: number;
+  }): Promise<'sent' | 'queued'> {
+    const linkedOutboxKey = isOfflineLocalOrderId(order.id)
+      ? order.id.replace(/^offline-/, '')
+      : undefined;
+
+    if (linkedOutboxKey) {
+      const { updateOrderOutbox } = await import('@/lib/offline/outbox');
+      await updateOrderOutbox(linkedOutboxKey, {
+        followUp: {
+          kind: 'kds_ticket',
+          url: '/api/restaurant/kds/tickets',
+          bodyTemplate: JSON.stringify({
+            orderId: '{{orderId}}',
+            selectedMinutes: order.minutes,
+          }),
+        },
+      });
+      await upsertLocalTicket({
+        id: `local-ticket-${order.id}`,
+        orderId: order.id,
+        shortOrderId: order.shortOrderId,
+        ticketNumber: order.ticketNumber,
+        status: 'making',
+        startedAt: new Date().toISOString(),
+        selectedMinutes: order.minutes,
+        items: order.items,
+        source: 'pos_offline',
+        createdAt: Date.now(),
+      });
+      return 'queued';
+    }
+
+    const result = await submitKdsTicket({
+      orderId: order.id,
+      selectedMinutes: order.minutes,
+    });
+
+    if (result.status === 'queued') {
+      await upsertLocalTicket({
+        id: `local-ticket-${order.id}`,
+        orderId: order.id,
+        shortOrderId: order.shortOrderId,
+        ticketNumber: order.ticketNumber,
+        status: 'making',
+        startedAt: new Date().toISOString(),
+        selectedMinutes: order.minutes,
+        items: order.items,
+        source: 'pos_offline',
+        createdAt: Date.now(),
+      });
+      return 'queued';
+    }
+    return 'sent';
   }
 
   async function sendOrderToKitchen() {
@@ -1494,64 +1989,11 @@ export function PosScreen() {
     }
     setSendingToKitchen(true);
     try {
-      const linkedOutboxKey = isOfflineLocalOrderId(kitchenSendOrder.id)
-        ? kitchenSendOrder.id.replace(/^offline-/, '')
-        : undefined;
-
-      // Offline-created orders cannot hit the cloud kitchen API until synced.
-      if (linkedOutboxKey) {
-        const { updateOrderOutbox } = await import('@/lib/offline/outbox');
-        await updateOrderOutbox(linkedOutboxKey, {
-          followUp: {
-            kind: 'kds_ticket',
-            url: '/api/restaurant/kds/tickets',
-            bodyTemplate: JSON.stringify({
-              orderId: '{{orderId}}',
-              selectedMinutes: minutes,
-            }),
-          },
-        });
-        await upsertLocalTicket({
-          id: `local-ticket-${kitchenSendOrder.id}`,
-          orderId: kitchenSendOrder.id,
-          shortOrderId: kitchenSendOrder.shortOrderId,
-          ticketNumber: kitchenSendOrder.ticketNumber,
-          status: 'making',
-          startedAt: new Date().toISOString(),
-          selectedMinutes: minutes,
-          items: kitchenSendOrder.items,
-          source: 'pos_offline',
-          createdAt: Date.now(),
-        });
-        toast.success(
-          `Kitchen ticket saved offline · ${minutes} min (will sync when online)`
-        );
-        resetKitchenSendDialog();
-        void loadPendingKitchenOrders();
-        eventBus.emit('refreshTableOrders');
-        const branchId = selectedBranchId || activeBranchId || '';
-        if (branchId) revalidateOpenTableOrders(branchId);
-        return;
-      }
-
-      const result = await submitKdsTicket({
-        orderId: kitchenSendOrder.id,
-        selectedMinutes: minutes,
+      const status = await dispatchKitchenForOrder({
+        ...kitchenSendOrder,
+        minutes,
       });
-
-      if (result.status === 'queued') {
-        await upsertLocalTicket({
-          id: `local-ticket-${kitchenSendOrder.id}`,
-          orderId: kitchenSendOrder.id,
-          shortOrderId: kitchenSendOrder.shortOrderId,
-          ticketNumber: kitchenSendOrder.ticketNumber,
-          status: 'making',
-          startedAt: new Date().toISOString(),
-          selectedMinutes: minutes,
-          items: kitchenSendOrder.items,
-          source: 'pos_offline',
-          createdAt: Date.now(),
-        });
+      if (status === 'queued') {
         toast.success(
           `Kitchen ticket saved offline · ${minutes} min (will sync when online)`
         );
@@ -1560,9 +2002,11 @@ export function PosScreen() {
       }
       resetKitchenSendDialog();
       void loadPendingKitchenOrders();
-      eventBus.emit('refreshTableOrders');
       const branchId = selectedBranchId || activeBranchId || '';
-      if (branchId) revalidateOpenTableOrders(branchId);
+      if (branchId && kitchenSendOrder) {
+        markOpenTableOrderKitchenSent(branchId, kitchenSendOrder.id);
+        revalidateOpenTableOrders(branchId, 1_200);
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Could not send to kitchen.';
       toast.error(msg);
@@ -1611,6 +2055,7 @@ export function PosScreen() {
       items: order.items ?? [],
     });
     setKitchenCustomMinutes('');
+    setKitchenPrepKeyboardOpen(false);
     setKitchenPrepMinutes((prev) => ({
       ...prev,
       [order.id]: prev[order.id] ?? 15,
@@ -1621,7 +2066,6 @@ export function PosScreen() {
   function resetCardPayment() {
     setCardPaymentStatus('idle');
     setCardTransactionId(undefined);
-    setCardPaymentOutcomeOpen(null);
     cardPaymentCancelledRef.current = false;
     cardPaymentResolvedRef.current = false;
   }
@@ -1632,13 +2076,36 @@ export function PosScreen() {
       resetCardPayment();
       setPaymentMode('cash');
       setAmountPaid('');
+      setCardProcessingOpen(false);
+      setKeyboardField(null);
     }
   }
+
+  useEffect(() => {
+    if (!checkoutOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleCheckoutOpenChange(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [checkoutOpen]);
 
   function handleSelectPaymentMode(mode: 'cash' | 'card') {
     setPaymentMode(mode);
     resetCardPayment();
     setAmountPaid('');
+    if (
+      mode === 'cash' &&
+      !isEditingKioskOrder &&
+      (!isTableMode || tablePayBeforeKitchen)
+    ) {
+      setKeyboardField('amount');
+    } else if (mode === 'card') {
+      setKeyboardField(null);
+    }
   }
 
   function finalizeCardPayment(
@@ -1655,14 +2122,12 @@ export function PosScreen() {
       const pay = grandTotal.toFixed(2);
       setAmountPaid(pay);
       setPayment(pay);
-      setCardPaymentOutcomeOpen('success');
       return;
     }
     setCardPaymentStatus(result === 'cancelled' ? 'cancelled' : 'error');
     setCardTransactionId(undefined);
     setAmountPaid('');
     setPayment('');
-    setCardPaymentOutcomeOpen('error');
   }
 
   async function runTerminalCardCharge(): Promise<{
@@ -1791,9 +2256,10 @@ export function PosScreen() {
     const phoneTrim = customerPhone.trim();
     const tableTrim = tableId.trim();
     const addressTrim = orderAddress.trim();
-    // Table + cash (or unpaid) → open check: payment stays pending; kitchen is later.
+    // Table + pay-on-leave + cash → open check: payment stays pending; kitchen is later.
+    // Table + pay-before-kitchen requires completed payment at place (same as takeaway).
     const isTableOpenCheck =
-      isTableMode &&
+      tablePayOnLeave &&
       Boolean(tableTrim) &&
       effectivePaymentMode !== 'card' &&
       effectivePaymentMode !== 'card_terminal';
@@ -1803,6 +2269,27 @@ export function PosScreen() {
       !effectivePayment.trim()
     ) {
       toast.warn('Enter the payment amount before saving.');
+      return;
+    }
+    if (
+      !isEditingKiosk &&
+      tablePayBeforeKitchen &&
+      effectivePaymentMode !== 'card' &&
+      effectivePaymentMode !== 'card_terminal' &&
+      !(Number(effectivePayment) > 0)
+    ) {
+      toast.warn(
+        'This restaurant requires payment before kitchen. Enter amount paid, or change Settings → Payments to “Pay when guest leaves”.'
+      );
+      return;
+    }
+    const tableKitchenMinutes = isTableOpenCheck
+      ? resolveTableCheckoutPrepMinutes()
+      : null;
+    if (isTableOpenCheck && tableKitchenMinutes === null) {
+      toast.warn(
+        `Select a prep time (${KITCHEN_PREP_MIN}–${KITCHEN_PREP_MAX} minutes) before sending to kitchen.`
+      );
       return;
     }
     if (!isEditingKiosk) {
@@ -1946,7 +2433,32 @@ export function PosScreen() {
           setCustomerPhone('');
           setTableId('');
           setCheckoutOpen(false);
-          if (isTableOpenCheck) {
+          if (isTableOpenCheck && tableKitchenMinutes != null) {
+            try {
+              await dispatchKitchenForOrder({
+                id: localId,
+                shortOrderId: localId
+                  .replace(/^offline-/, '')
+                  .slice(0, 8)
+                  .toUpperCase(),
+                ticketNumber: null,
+                items: kitchenItems,
+                minutes: tableKitchenMinutes,
+              });
+              toast.success(
+                `Table tab · kitchen ${tableKitchenMinutes} min (syncs when online)`
+              );
+            } catch {
+              toast.info(
+                'Table tab saved offline — kitchen will sync when online.'
+              );
+            }
+            eventBus.emit('refreshTableOrders');
+            if (selectedBranchId || activeBranchId) {
+              revalidateOpenTableOrders(selectedBranchId || activeBranchId);
+            }
+            void loadPendingKitchenOrders();
+          } else if (isTableOpenCheck) {
             toast.info('Table tab saved offline — send to kitchen when online.');
             eventBus.emit('refreshTableOrders');
             if (selectedBranchId || activeBranchId) {
@@ -2055,9 +2567,11 @@ export function PosScreen() {
       toast.success(
         isEditing
           ? `Order updated — ${itemsCount} items · ${formatMoney(grandTotal)}`
-          : isTableOpenCheck
-            ? `Table tab opened — ${itemsCount} items · ${formatMoney(grandTotal)} · pay later`
-            : `Order saved — ${itemsCount} items · ${formatMoney(grandTotal)} · ${effectivePaymentMode}`
+          : isTableOpenCheck && tableKitchenMinutes != null
+            ? `Table · sent to kitchen · ${tableKitchenMinutes} min · pay when guest leaves`
+            : isTableOpenCheck
+              ? `Table tab opened — ${itemsCount} items · ${formatMoney(grandTotal)} · pay later`
+              : `Order saved — ${itemsCount} items · ${formatMoney(grandTotal)} · ${effectivePaymentMode}`
       );
       if (!isTableOpenCheck) {
         printOrderReceipt(trackingId, ticketNumber, {
@@ -2065,34 +2579,112 @@ export function PosScreen() {
           paid: Number(paymentAmount) || 0,
         });
       }
-      eventBus.emit('refreshSalesOrders');
-      eventBus.emit('realtime:inventory.stock');
-      if (isTableOpenCheck) {
-        eventBus.emit('refreshTableOrders');
-        const branchForTable = selectedBranchId || activeBranchId || '';
-        if (branchForTable) revalidateOpenTableOrders(branchForTable);
-      }
-      clearCart();
-      setPayment('');
-      setAmountPaid('');
-      resetCardPayment();
-      setPaymentMode('cash');
-      setOrderAddress('');
-      setCustomerName('');
-      setCustomerPhone('');
-      setTableId('');
-      setCheckoutOpen(false);
-      if (!isEditing) {
-        openKitchenSendDialog({
-          id: dbOrderId,
-          shortOrderId: trackingId,
-          ticketNumber,
-          items: kitchenItemsForDialog,
-        });
-        void loadPendingKitchenOrders();
-      }
+
       const branchId = selectedBranchId || activeBranchId || '';
-      if (branchId) void refreshShiftSummary(branchId);
+      const tableLabelForOptimistic =
+        diningTables.find((t) => t.id === tableTrim)?.name ?? tableTrim;
+      const optimisticTableOrder =
+        isTableOpenCheck && tableTrim
+          ? {
+              diningTableId: tableTrim,
+              tableLabel: tableLabelForOptimistic,
+              order: {
+                id: dbOrderId,
+                shortOrderId: trackingId,
+                ticketNumber,
+                total: grandTotal,
+                status: 'pending',
+                sourceType: 'POS',
+                tableLabel: tableLabelForOptimistic,
+                diningTableId: tableTrim,
+                createdAt: new Date().toISOString(),
+                kitchenSent: false,
+                kitchenStatus: null as string | null,
+                customerName: nameTrim || null,
+                paymentMethod: null as string | null,
+                paymentStatus: 'pending',
+                itemCount: itemsCount,
+                items: kitchenItemsForDialog.map((i) => ({
+                  quantity: i.quantity,
+                  name: i.productName,
+                })),
+              },
+            }
+          : null;
+
+      // Non-table: keep sales/inventory refresh. Table path uses optimistic cache.
+      if (!isTableOpenCheck) {
+        eventBus.emit('refreshSalesOrders');
+        eventBus.emit('realtime:inventory.stock');
+      }
+
+      const resetAfterPlace = () => {
+        clearCart();
+        setPayment('');
+        setAmountPaid('');
+        resetCardPayment();
+        setPaymentMode('cash');
+        setOrderAddress('');
+        setCustomerName('');
+        setCustomerPhone('');
+        setTableId('');
+        setCheckoutOpen(false);
+        setTableCheckoutPrepMinutes(15);
+        setTableCheckoutCustomMinutes('');
+      };
+
+      // Table pay-on-leave: keep checkout locked until kitchen ticket is created,
+      // so staff cannot add items into a half-finished place/send.
+      if (!isEditing && isTableOpenCheck && tableKitchenMinutes != null) {
+        if (optimisticTableOrder && branchId) {
+          upsertOptimisticOpenTableOrder(branchId, optimisticTableOrder);
+        }
+        try {
+          await dispatchKitchenForOrder({
+            id: dbOrderId,
+            shortOrderId: trackingId,
+            ticketNumber,
+            items: kitchenItemsForDialog,
+            minutes: tableKitchenMinutes,
+          });
+          if (branchId) {
+            markOpenTableOrderKitchenSent(branchId, dbOrderId);
+            revalidateOpenTableOrders(branchId, 1_500);
+          }
+          resetAfterPlace();
+        } catch (e: unknown) {
+          const msg =
+            e instanceof Error
+              ? e.message
+              : 'Order saved but kitchen send failed.';
+          toast.error(msg);
+          resetAfterPlace();
+          openKitchenSendDialog({
+            id: dbOrderId,
+            shortOrderId: trackingId,
+            ticketNumber,
+            items: kitchenItemsForDialog,
+          });
+          if (branchId) revalidateOpenTableOrders(branchId, 800);
+        }
+        // Already in kitchen — no pending-kitchen list refresh needed.
+      } else {
+        if (isTableOpenCheck && optimisticTableOrder && branchId) {
+          upsertOptimisticOpenTableOrder(branchId, optimisticTableOrder);
+          revalidateOpenTableOrders(branchId, 1_200);
+        }
+        resetAfterPlace();
+        if (!isEditing) {
+          openKitchenSendDialog({
+            id: dbOrderId,
+            shortOrderId: trackingId,
+            ticketNumber,
+            items: kitchenItemsForDialog,
+          });
+          void loadPendingKitchenOrders();
+        }
+        if (branchId) void refreshShiftSummary(branchId);
+      }
     } catch (e: unknown) {
       const ex = e as { body?: { error?: unknown } };
       const fromBody =
@@ -2117,53 +2709,123 @@ export function PosScreen() {
       { id: 'takeaway', label: 'Take-away', icon: ShoppingBag },
     ];
 
-  const renderPosProductButton = (p: PosMenuProduct) => (
-    <button
-      key={p.id}
-      type="button"
-      ref={(el) => {
-        productButtonRefs.current[p.id] = el;
-      }}
-      onClick={() => {
-        setActiveProductId(p.id);
-        void handleProductSelect(p);
-      }}
-      onFocus={() => setActiveProductId(p.id)}
-      className={cn(
-        POS_PRODUCT_CARD,
-        activeProductId === p.id &&
-          'border-fire-500/70 ring-2 ring-fire-500/20 shadow-lg shadow-fire-500/10'
-      )}
-      tabIndex={0}
-    >
-      <div className="aspect-square w-full overflow-hidden rounded-xl bg-muted">
-        {p.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- POS accepts external image URLs
-          <img
-            src={p.imageUrl}
-            alt={p.name}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-fire-500/90 text-2xl font-bold text-white">
-            {p.name.charAt(0).toUpperCase()}
-          </div>
+  const selectedTableName =
+    diningTables.find((t) => t.id === tableId)?.name ?? null;
+
+  function selectOrderMode(mode: OrderMode) {
+    setOrderMode(mode);
+    if (mode !== 'tables') setTableId('');
+  }
+
+  function selectDiningTable(id: string) {
+    setTableId(id);
+    setOrderMode('tables');
+  }
+
+  function beginTableSelection() {
+    setOrderMode('tables');
+  }
+
+  function canProceedWithOrderMode(): boolean {
+    if (orderMode === 'tables' && !tableId.trim()) {
+      toast.warn('Select a table before continuing.');
+      return false;
+    }
+    return true;
+  }
+
+  const renderPosProductButton = (p: PosMenuProduct) => {
+    const unit = effectiveUnitPrice(p.price, p.salePrice);
+    const onSale =
+      p.salePrice != null && p.salePrice > 0 && p.salePrice < p.price;
+    const isActive = activeProductId === p.id;
+
+    return (
+      <button
+        key={p.id}
+        type="button"
+        ref={(el) => {
+          productButtonRefs.current[p.id] = el;
+        }}
+        onClick={() => {
+          const btn = productButtonRefs.current[p.id];
+          const img = btn?.querySelector('img');
+          const rect = (img ?? btn)?.getBoundingClientRect();
+          if (rect && rect.width > 0 && rect.height > 0) {
+            lastFlyFromRef.current = {
+              left: rect.left,
+              top: rect.top,
+              width: rect.width,
+              height: rect.height,
+            };
+          } else {
+            lastFlyFromRef.current = null;
+          }
+          setActiveProductId(p.id);
+          void handleProductSelect(p);
+        }}
+        onFocus={() => setActiveProductId(p.id)}
+        className={cn(
+          POS_PRODUCT_CARD,
+          isActive && 'bg-fire-500/8 ring-2 ring-fire-500/35'
         )}
-      </div>
-      <div className="mt-2.5 flex min-h-[3.25rem] flex-col justify-between px-0.5">
-        <span className="line-clamp-2 text-sm font-semibold leading-snug">
-          {p.name}
-        </span>
-        <span className="mt-1 text-xs font-medium tabular-nums text-muted-foreground">
-          {formatMoney(effectiveUnitPrice(p.price, p.salePrice))}
-        </span>
-      </div>
-    </button>
-  );
+        tabIndex={0}
+      >
+        <div className="relative aspect-[5/4] w-full overflow-hidden bg-muted/70">
+          {p.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- POS accepts external image URLs
+            <img
+              src={p.imageUrl}
+              alt={p.name}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-muted">
+              <UtensilsCrossed className="h-6 w-6 text-muted-foreground/35" />
+            </div>
+          )}
+          {onSale ? (
+            <span className="absolute left-1.5 top-1.5 rounded-md bg-fire-500 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white">
+              −{Math.round(((p.price - unit) / p.price) * 100)}%
+            </span>
+          ) : null}
+          <span
+            className={cn(
+              'absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full shadow-sm transition-colors',
+              isActive
+                ? 'bg-fire-500 text-white'
+                : 'bg-white text-fire-600 group-hover:bg-fire-500 group-hover:text-white dark:bg-zinc-900 dark:text-fire-400'
+            )}
+            aria-hidden
+          >
+            <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </span>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-0.5 px-2 py-2">
+          <p className="line-clamp-2 text-left text-[11px] font-semibold leading-snug text-foreground sm:text-xs">
+            {p.name}
+          </p>
+          <div className="flex items-baseline gap-1">
+            <span className={cn('text-sm font-bold tabular-nums', POS_ACCENT_TEXT)}>
+              {formatMoney(unit)}
+            </span>
+            {onSale ? (
+              <span className="text-[10px] tabular-nums text-muted-foreground line-through">
+                {formatMoney(p.price)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </button>
+    );
+  };
 
   const orderModeLabel =
     orderMode === 'tables'
-      ? 'Table order'
+      ? selectedTableName
+        ? `Table · ${selectedTableName}`
+        : 'Select a table'
       : orderMode === 'delivery'
         ? 'Delivery order'
         : orderMode === 'takeaway'
@@ -2171,22 +2833,22 @@ export function PosScreen() {
           : 'New order';
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-background text-foreground shadow-xl">
+    <div className={POS_SHELL}>
       {/* Header */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
-        <div>
-          <Button
-            type="button"
-            variant="destructive"
-            size="icon"
-            onClick={requestDashboard}
-          >
-            <ChevronLeft />
-          </Button>
-        </div>
+      <div className={POS_HEADER}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 shrink-0 rounded-2xl hover:bg-muted"
+          onClick={requestDashboard}
+          title="Back to dashboard"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
 
         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-card ring-1 ring-border sm:h-11 sm:w-11">
+          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-2xl shadow-sm sm:h-11 sm:w-11">
             {branding.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- POS accepts external image URLs
               <img
@@ -2195,13 +2857,13 @@ export function PosScreen() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center bg-fire-500 text-sm font-bold text-white">
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-fire-500 to-fire-600 text-sm font-bold text-white">
                 {(branding.name || 'R').slice(0, 1).toUpperCase()}
               </div>
             )}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold sm:text-base">
+            <div className="truncate text-sm font-semibold tracking-tight sm:text-[15px]">
               {branding.name || 'Restaurant'}
             </div>
             <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground sm:text-xs">
@@ -2214,7 +2876,14 @@ export function PosScreen() {
                   }}
                 >
                   <SelectTrigger className="h-7 max-w-[10rem] border-0 bg-transparent px-0 text-xs text-muted-foreground shadow-none focus:ring-0 sm:max-w-[12rem]">
-                    <span className="mr-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                    <span
+                      className={cn(
+                        'mr-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full',
+                        isOnline
+                          ? 'bg-emerald-400'
+                          : 'bg-amber-400 animate-pulse'
+                      )}
+                    />
                     <SelectValue placeholder="Select branch" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2227,41 +2896,59 @@ export function PosScreen() {
                 </Select>
               ) : (
                 <>
-                  <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
-                  <span className="truncate">{selectedBranchName}</span>
+                  <span
+                    className={cn(
+                      'inline-block h-1.5 w-1.5 shrink-0 rounded-full',
+                      isOnline ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
+                    )}
+                  />
+                  <span className="truncate">
+                    {isOnline ? selectedBranchName : `${selectedBranchName} · Offline`}
+                  </span>
                 </>
               )}
             </div>
           </div>
         </div>
 
-        <div className="relative order-last w-full min-w-0 flex-1 sm:order-none sm:max-w-2xl">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="relative order-last w-full min-w-0 flex-1 sm:order-none sm:max-w-xl lg:max-w-2xl">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder={
               search.trim()
-                ? 'Press ↑↓ to navigate • Enter to select'
+                ? '↑↓ navigate • Enter to add'
                 : categoryId === 'all'
-                  ? 'Search all products...'
-                  : 'Search in this category...'
+                  ? 'Search menu…'
+                  : 'Search in category…'
             }
             className={cn(
-              'h-10 rounded-xl pl-9 pr-3',
-              search.trim() && 'ring-1 ring-fire-500/30',
+              'h-10 rounded-xl border-0 bg-muted/50 pl-10 pr-3 shadow-none',
+              search.trim() && 'bg-background ring-2 ring-fire-500/30',
               POS_INPUT_CLASS
             )}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            title={search.trim() ? 'Use arrow keys to navigate search results and press Enter to add to cart' : ''}
+            disabled={posBusy}
+            title={
+              search.trim()
+                ? 'Use arrow keys to navigate search results and press Enter to add to cart'
+                : ''
+            }
           />
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
+          {!isOnline ? (
+            <span className="mr-1 inline-flex items-center gap-1 rounded-lg bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+              <WifiOff className="h-3 w-3" />
+              Offline
+            </span>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className={cn('relative h-9 w-9 rounded-xl', POS_GHOST_ICON_BTN)}
+            className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
             title="Recent orders"
             onClick={() => setRecentOrdersOpen(true)}
           >
@@ -2271,7 +2958,7 @@ export function PosScreen() {
             type="button"
             variant="ghost"
             size="icon"
-            className={cn('relative h-9 w-9 rounded-xl', POS_GHOST_ICON_BTN)}
+            className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
             title="Kiosk orders"
             onClick={() => setKioskOrdersOpen(true)}
           >
@@ -2286,7 +2973,7 @@ export function PosScreen() {
             type="button"
             variant="ghost"
             size="icon"
-            className={cn('relative h-9 w-9 rounded-xl', POS_GHOST_ICON_BTN)}
+            className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
             title="Table orders"
             onClick={() => setTableOrdersOpen(true)}
           >
@@ -2297,52 +2984,48 @@ export function PosScreen() {
               </span>
             ) : null}
           </Button>
+          {(pendingKitchenOrders.length > 0) ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
+              title="Kitchen queue"
+              onClick={() => {
+                setPendingKitchenOpen(true);
+                void loadPendingKitchenOrders();
+              }}
+            >
+              <ChefHat className="h-4 w-4" />
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">
+                {pendingKitchenOrders.length}
+              </span>
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className={cn('h-9 w-9 rounded-xl', POS_GHOST_ICON_BTN)}
+            className={cn('h-9 w-9', POS_GHOST_ICON_BTN)}
             title="End shift"
             onClick={() => setShiftSheetOpen(true)}
           >
             <LogOut className="h-4 w-4 text-destructive" />
           </Button>
-          {lastClosingCashInLocker != null ? (
-            <div
-              className="hidden items-center gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2 py-1.5 text-xs lg:flex"
-              title={
-                lastShiftEndedAt
-                  ? `Left in locker at last shift end · ${new Date(lastShiftEndedAt).toLocaleString()}`
-                  : 'Cash left in locker from last shift end'
-              }
-            >
-              <Banknote className="h-4 w-4 shrink-0 text-emerald-400" />
-              <span className="font-semibold tabular-nums text-emerald-300">
-                {formatMoney(lastClosingCashInLocker)}
-              </span>
-            </div>
-          ) : null}
-          <div
-            className="hidden h-9 items-center rounded-xl border border-border bg-card px-3 text-sm font-medium tabular-nums text-foreground sm:flex"
-            aria-live="polite"
-          >
-            <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
-            {clockLabel || '—'}
-          </div>
           <ModeToggle />
-          <UserMenu />
+          <UserMenu iconOnly className="h-9 w-9 rounded-xl" />
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 pt-2 lg:grid-cols-[minmax(0,1fr)_minmax(300px,400px)] lg:grid-rows-1">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:grid-rows-1">
         {/* Menu area */}
-        <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
+        <div className="flex min-h-0 flex-col gap-2 overflow-hidden px-3 pt-2.5 sm:px-4 sm:pt-3 lg:pr-2">
           <div className="relative shrink-0">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="absolute left-0 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 rounded-full border border-border bg-card/95 text-foreground hover:bg-accent sm:flex"
+              className="absolute left-0 top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 rounded-full bg-background/90 text-foreground shadow-sm sm:flex"
               onClick={() => scrollCategories('left')}
               aria-label="Scroll categories left"
             >
@@ -2352,7 +3035,7 @@ export function PosScreen() {
               type="button"
               variant="ghost"
               size="icon"
-              className="absolute right-0 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 rounded-full border border-border bg-card/95 text-foreground hover:bg-accent sm:flex"
+              className="absolute right-0 top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 rounded-full bg-background/90 text-foreground shadow-sm sm:flex"
               onClick={() => scrollCategories('right')}
               aria-label="Scroll categories right"
             >
@@ -2360,7 +3043,7 @@ export function PosScreen() {
             </Button>
             <div
               ref={categoryScrollRef}
-              className="flex gap-2 overflow-x-auto scroll-smooth px-1 py-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:px-9 [&::-webkit-scrollbar]:hidden"
+              className="flex gap-1.5 overflow-x-auto scroll-smooth px-0.5 py-0.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:px-9 [&::-webkit-scrollbar]:hidden"
             >
               {categoriesLoading && progressiveCategories.length === 0 ? (
                 <>
@@ -2369,27 +3052,57 @@ export function PosScreen() {
                   <CategoryPillSkeleton className="h-10 w-24 shrink-0 rounded-full" />
                 </>
               ) : (
-                categories.map((c) => (
+                categories.map((c) => {
+                  const isActive = activeCategoryPillId === c.id;
+                  return (
                   <button
                     key={c.id}
                     type="button"
+                    data-pos-category-pill={c.id}
                     className={cn(
-                      'shrink-0 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition-all duration-200 sm:text-sm',
-                      categoryId === c.id
-                        ? POS_CATEGORY_ACTIVE
-                        : POS_CATEGORY_INACTIVE
+                      'inline-flex h-10 max-w-[11rem] shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-left text-xs font-semibold tracking-tight transition-colors sm:max-w-[12rem]',
+                      isActive ? POS_CATEGORY_ACTIVE : POS_CATEGORY_INACTIVE
                     )}
-                    onClick={() => setCategoryId(c.id)}
+                    onClick={() => onCategoryPillClick(c.id)}
                   >
-                    {c.label}
+                    {c.imageUrl ? (
+                      <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={c.imageUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(
+                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : 'bg-background/80 text-muted-foreground'
+                        )}
+                      >
+                        {c.id === 'all' ? '★' : c.label.charAt(0)}
+                      </span>
+                    )}
+                    <span className="min-w-0 truncate leading-none">{c.label}</span>
                   </button>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
 
-          <ScrollArea className={cn('min-h-0 flex-1', POS_INSET_SURFACE)}>
-            <div className="grid grid-cols-2 gap-2.5 p-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 xl:grid-cols-5">
+          <ScrollArea
+            ref={productScrollRootRef}
+            className={cn(
+              'min-h-0 flex-1',
+              posBusy && 'pointer-events-none opacity-60'
+            )}
+            aria-busy={posBusy}
+          >
+            <div className={cn(POS_PRODUCT_GRID, 'p-0.5 pb-4')}>
               {showCategorySections ? (
                 progressiveCategories.map((category) => {
                   const categoryProducts = category.items.map((item) => {
@@ -2421,15 +3134,16 @@ export function PosScreen() {
                     return (
                       <div
                         key={category.id}
-                        className="col-span-full space-y-2"
+                        data-pos-category-section={category.id}
+                        className="col-span-full space-y-2.5"
                       >
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/80">
                           {category.name}
                         </p>
                         <ProductCardSkeletonGrid
                           count={6}
                           variant="pos"
-                          gridClassName="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 xl:grid-cols-5"
+                          gridClassName={POS_PRODUCT_GRID}
                         />
                       </div>
                     );
@@ -2438,11 +3152,15 @@ export function PosScreen() {
                   if (categoryProducts.length === 0) return null;
 
                   return (
-                    <div key={category.id} className="col-span-full space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <div
+                      key={category.id}
+                      data-pos-category-section={category.id}
+                      className="col-span-full space-y-2.5"
+                    >
+                      <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/80">
                         {category.name}
                       </p>
-                      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 xl:grid-cols-5">
+                      <div className={POS_PRODUCT_GRID}>
                         {categoryProducts.map((p) => renderPosProductButton(p))}
                       </div>
                     </div>
@@ -2468,7 +3186,7 @@ export function PosScreen() {
                   <p>No products match this category or search.</p>
                   <Button
                     type="button"
-                    className={cn('mt-4 rounded-xl px-4', POS_ACCENT_BTN)}
+                    className={cn('mt-4 rounded-2xl px-5', POS_ACCENT_BTN)}
                     onClick={() => setCategoryId('all')}
                   >
                     <ArrowLeft className="mr-2 h-4 w-4" />
@@ -2480,331 +3198,1085 @@ export function PosScreen() {
           </ScrollArea>
         </div>
 
-        {/* Order ticket */}
+        {/* Order ticket / inline payment */}
         <div
           className={cn(
-            'flex min-h-0 max-h-[52dvh] flex-col gap-3 overflow-hidden lg:max-h-full',
-            POS_PANEL_CLASS
+            POS_TICKET_SIDEBAR,
+            checkoutOpen && 'max-h-[70dvh] bg-white/90 dark:bg-zinc-950/90',
+            cartBump && 'ring-2 ring-fire-500/40'
           )}
         >
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-4">
-            <div className="shrink-0">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="flex items-center gap-2 text-xl font-semibold leading-none sm:text-2xl">
-                  <List className={cn('h-5 w-5', POS_ACCENT_TEXT)} />
-                  Order Ticket
+          {checkoutOpen ? (
+            <div className="flex shrink-0 items-center gap-2 px-3 py-3 sm:px-4">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 rounded-xl"
+                onClick={() => handleCheckoutOpenChange(false)}
+                disabled={posBusy}
+                title="Back to cart"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold tracking-tight">
+                  {isEditingKioskOrder
+                    ? 'Update kiosk order'
+                    : editingOrderId
+                      ? 'Update order'
+                      : tablePayOnLeave
+                        ? 'Confirm'
+                        : 'Payment'}
                 </h3>
+                <p className="text-xs text-muted-foreground">
+                  {tablePayOnLeave
+                    ? 'Review order · send to kitchen'
+                    : `${orderModeLabel} · ${formatMoney(grandTotal)}`}
+                </p>
+              </div>
+              <span
+                ref={(el) => {
+                  cartFlyTargetRef.current = el;
+                }}
+                className="ml-auto h-3 w-3 shrink-0 rounded-full bg-fire-500/80 opacity-0"
+                aria-hidden
+              />
+            </div>
+          ) : (
+            <div className="flex shrink-0 flex-col gap-2 px-3 pt-3 sm:px-4">
+              <div className="flex items-center justify-between gap-2">
+                <p
+                  className={cn(
+                    'inline-flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors duration-200',
+                    cartBump && 'text-fire-600 dark:text-fire-400'
+                  )}
+                >
+                  <span
+                    ref={(el) => {
+                      if (!checkoutOpen) cartFlyTargetRef.current = el;
+                    }}
+                    className={cn(
+                      'inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums transition-transform duration-200',
+                      cartBump
+                        ? 'scale-110 bg-fire-500 text-white'
+                        : 'bg-muted text-foreground'
+                    )}
+                  >
+                    {cartItemCount}
+                  </span>
+                  {editingOrderId ? (
+                    <span className={POS_ACCENT_TEXT}>
+                      Editing {editingOrderLabel}
+                    </span>
+                  ) : cartItemCount > 0 ? (
+                    `item${cartItemCount === 1 ? '' : 's'}`
+                  ) : (
+                    'New order'
+                  )}
+                </p>
                 {editingOrderId ? (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-8 shrink-0 rounded-lg px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                    className="h-7 shrink-0 rounded-lg px-2 text-xs text-muted-foreground"
                     onClick={cancelEditingOrder}
                   >
-                    Cancel edit
+                    Cancel
                   </Button>
                 ) : null}
               </div>
-              {editingOrderId ? (
-                <p className={cn('mt-1 text-xs font-medium', POS_ACCENT_TEXT)}>
-                  {isEditingKioskOrder
-                    ? 'Editing kiosk order'
-                    : 'Editing order'}{' '}
-                  {editingOrderLabel}
-                </p>
-              ) : (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {orderModeLabel}
-                </p>
-              )}
-
-              <div className="mt-3 flex gap-1 overflow-x-auto rounded-xl bg-muted p-1 dark:bg-background [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {modeButtons.map((b) => {
-                  const active = orderMode === b.id;
-                  const Icon = b.icon;
-                  return (
-                    <button
-                      key={b.id}
-                      type="button"
-                      className={cn(
-                        'flex min-w-[4.5rem] flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-semibold transition-all duration-200 sm:min-w-0 sm:text-xs',
-                        active
-                          ? POS_CATEGORY_ACTIVE
-                          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                      )}
-                      onClick={() => setOrderMode(b.id)}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{b.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div
-              className={cn(
-                'min-h-[10rem] flex-1 overflow-hidden',
-                POS_INSET_SURFACE
-              )}
-            >
-              <ScrollArea className="h-full max-h-[min(280px,32dvh)] lg:max-h-[min(320px,40dvh)]">
-                <div className="space-y-3 p-3">
-                  {cart.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
-                      <Trash2 className="h-10 w-10 text-muted-foreground/50" />
-                      <p className="mt-3 text-sm font-medium">
-                        No Products in Cart!
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Add products to get started
-                      </p>
-                    </div>
-                  ) : (
-                    cart.map((line) => {
-                      const gross = lineUnitTotal(line) * line.qty;
-                      const discAmt = gross * (line.lineDiscPct / 100);
-                      const lineTotal = gross - discAmt;
-                      return (
-                        <div
-                          key={line.lineId}
-                          className="space-y-2 border-b border-border pb-3 last:border-b-0"
-                        >
-                          <div className="flex items-start gap-2 text-sm">
-                            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted">
-                              {line.imageUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element -- POS accepts external image URLs
-                                <img
-                                  src={line.imageUrl}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : null}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <PosCartLineSummary
-                                line={line}
-                                titleClassName="text-sm font-medium leading-snug"
-                                subItemClassName="text-[11px] text-muted-foreground"
-                              />
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {line.qty}x · {formatMoney(lineUnitTotal(line))} each
-                              </p>
-                            </div>
-                            <p className="shrink-0 tabular-nums">
-                              {formatMoney(lineTotal)}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className={cn(
-                                'h-7 w-7 rounded-lg bg-transparent',
-                                POS_OUTLINE_BTN
-                              )}
-                              onClick={() => setQty(line.lineId, line.qty - 1)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-6 text-center text-xs tabular-nums">
-                              {line.qty}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className={cn(
-                                'h-7 w-7 rounded-lg bg-transparent',
-                                POS_OUTLINE_BTN
-                              )}
-                              onClick={() => setQty(line.lineId, line.qty + 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                            <Input
-                              className={cn(
-                                'ml-1 h-7 w-16 rounded-lg px-1 text-center text-xs',
-                                POS_INPUT_CLASS
-                              )}
-                              inputMode="decimal"
-                              value={line.lineDiscPct || ''}
-                              placeholder="%"
-                              onChange={(e) =>
-                                setLineDisc(
-                                  line.lineId,
-                                  Number(e.target.value) || 0
-                                )
-                              }
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="ml-auto h-7 w-7 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                              onClick={() =>
-                                setCart((prev) =>
-                                  prev.filter((l) => l.lineId !== line.lineId)
-                                )
-                              }
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
-
-            <div className="shrink-0 space-y-2 text-sm">
-              <div className="flex justify-between text-muted-foreground">
-                <span>Subtotal</span>
-                <span className="tabular-nums text-foreground">
-                  {formatMoney(subtotal)}
-                </span>
-              </div>
-              <div className="flex justify-between text-muted-foreground">
-                <span>Tax ({taxPct || '0'}%)</span>
-                <span className="tabular-nums text-foreground">
-                  {formatMoney(taxAmount)}
-                </span>
-              </div>
-              <div className="flex justify-between text-muted-foreground">
-                <span>Discount ({disPct || '0'}%)</span>
-                <span className="tabular-nums text-foreground">
-                  {formatMoney(disAmount)}
-                </span>
-              </div>
-              {activeServiceChargeAmount > 0 ? (
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Service charge</span>
-                  <span className="tabular-nums text-foreground">
-                    {formatMoney(activeServiceChargeAmount)}
-                  </span>
-                </div>
-              ) : null}
-              <div className="mt-2 flex justify-between border-t border-dashed border-border pt-3 text-lg font-semibold">
-                <span>Total</span>
-                <span className={cn('tabular-nums', POS_ACCENT_TEXT)}>
-                  {formatMoney(grandTotal)}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid shrink-0 grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Tax %
-                </label>
-                <Input
-                  className={cn('h-9 rounded-xl text-xs', POS_INPUT_CLASS)}
-                  value={taxPct}
-                  onChange={(e) => setTaxPct(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Discount %
-                </label>
-                <Input
-                  className={cn('h-9 rounded-xl text-xs', POS_INPUT_CLASS)}
-                  value={disPct}
-                  onChange={(e) => setDisPct(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="shrink-0 space-y-2 border-t border-border p-3 sm:p-4">
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className={cn('h-10 flex-1 rounded-xl text-destructive', POS_OUTLINE_BTN)}
-                disabled={
-                  cart.length === 0 || savingOrder || terminalProcessing
-                }
-                onClick={clearCart}
-              >
-                <Trash2 className="mr-2 h-4 w-4 text-destructive" />
-                Clear Cart
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className={cn('h-10 flex-1 rounded-xl text-primary', POS_OUTLINE_BTN)}
-                disabled={
-                  cart.length === 0 || savingOrder || terminalProcessing
-                }
-                onClick={holdCurrentOrder}
-              >
-                <Clock className="mr-2 h-4 w-4 text-primary" />
-                Hold Order
-              </Button>
-
-              <div className="flex items-center gap-0">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="relative"
-                  title="Archived orders"
-                  onClick={() => setArchivedOrdersOpen(true)}
-                >
-                  <Archive className="h-4 w-4" />
-                  {archivedOrders.length > 0 ? (
-                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
-                      {archivedOrders.length}
-                    </span>
-                  ) : null}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="relative"
-                  title="Not sent to kitchen"
-                  onClick={() => {
-                    setPendingKitchenOpen(true);
-                    void loadPendingKitchenOrders();
+              <div className="flex items-center gap-1 rounded-xl bg-muted/60 p-1">
+                {/* Table — direct pick; expands when active */}
+                <Select
+                  value={orderMode === 'tables' && tableId ? tableId : undefined}
+                  onValueChange={selectDiningTable}
+                  onOpenChange={(open) => {
+                    if (open) beginTableSelection();
                   }}
                 >
-                  <ChefHat className="h-4 w-4" />
-                  {pendingKitchenOrders.length > 0 ? (
-                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
-                      {pendingKitchenOrders.length}
+                  <SelectTrigger
+                    className={cn(
+                      'h-9 gap-1.5 border-0 shadow-none transition-all focus:ring-0',
+                      '[&>span]:line-clamp-none [&>span]:inline-flex [&>span]:items-center',
+                      '[&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0',
+                      orderMode === 'tables'
+                        ? 'w-auto min-w-0 flex-[1.6] justify-start bg-fire-500 px-2.5 text-white shadow-sm shadow-fire-500/25 [&>svg]:opacity-90 [&>svg]:text-white'
+                        : 'w-9 shrink-0 justify-center bg-transparent px-0 text-muted-foreground hover:text-foreground [&>svg]:opacity-70 [&>svg:last-child]:hidden'
+                    )}
+                    aria-label={
+                      orderMode === 'tables' && selectedTableName
+                        ? selectedTableName
+                        : 'Select table'
+                    }
+                  >
+                    <span className="inline-flex min-w-0 items-center gap-1.5 overflow-hidden">
+                      <TableIcon className="h-3.5 w-3.5 shrink-0" />
+                      {orderMode === 'tables' ? (
+                        <span className="truncate text-xs font-semibold leading-none">
+                          {selectedTableName || 'Select table'}
+                        </span>
+                      ) : null}
                     </span>
-                  ) : null}
-                </Button>
+                  </SelectTrigger>
+                  <SelectContent align="start" className="max-h-64 min-w-[10rem]">
+                    {tablesLoading ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        Loading tables…
+                      </div>
+                    ) : diningTables.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        No tables available
+                      </div>
+                    ) : (
+                      diningTables.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+
+                {modeButtons
+                  .filter((b) => b.id !== 'tables')
+                  .map((b) => {
+                    const active = orderMode === b.id;
+                    const Icon = b.icon;
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        title={b.label}
+                        aria-label={b.label}
+                        aria-pressed={active}
+                        className={cn(
+                          'flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-all',
+                          active
+                            ? 'min-w-0 flex-[1.6] bg-fire-500 px-2.5 text-white shadow-sm shadow-fire-500/25'
+                            : 'w-9 shrink-0 text-muted-foreground hover:bg-background/50 hover:text-foreground'
+                        )}
+                        onClick={() => selectOrderMode(b.id)}
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        {active ? (
+                          <span className="truncate">{b.label}</span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
               </div>
             </div>
-            <Button
-              type="button"
-              className={cn(
-                'h-12 w-full rounded-xl text-base font-semibold',
-                POS_ACCENT_BTN
-              )}
-              disabled={cart.length === 0 || savingOrder || terminalProcessing}
-              ref={proceedOrderButtonRef}
-              onClick={() => {
-                resetCardPayment();
-                setPaymentMode('cash');
-                setAmountPaid(isEditingKioskOrder ? grandTotal.toFixed(2) : '');
-                setCheckoutOpen(true);
-              }}
-            >
-              {editingOrderId ? 'Update order (f9)' : 'Proceed Order (f9)'}
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </div>
+          )}
+
+          {checkoutOpen ? (
+            <>
+              <div className="relative flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 sm:px-4">
+                {tablePayOnLeave ? (
+                  <>
+                    <div className="shrink-0 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Order
+                        </p>
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-fire-500/10 px-2 py-0.5 text-[11px] font-semibold text-fire-600 dark:text-fire-400">
+                          <TableIcon className="h-3 w-3" />
+                          {selectedTableName || 'Select table'}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {cart.map((line) => {
+                          const gross = lineUnitTotal(line) * line.qty;
+                          const discAmt = gross * (line.lineDiscPct / 100);
+                          const lineTotal = gross - discAmt;
+                          return (
+                            <div
+                              key={line.lineId}
+                              className="flex items-start justify-between gap-2"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <PosCartLineSummary
+                                  line={line}
+                                  titleClassName="text-sm font-medium leading-snug"
+                                  subItemClassName="text-[11px] text-muted-foreground"
+                                />
+                                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                  {line.qty}×{' '}
+                                  {formatMoney(lineUnitTotal(line))}
+                                </p>
+                              </div>
+                              <span className="shrink-0 text-sm font-semibold tabular-nums">
+                                {formatMoney(lineTotal)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-baseline justify-between pt-2.5">
+                        <span className="text-sm text-muted-foreground">
+                          Total
+                        </span>
+                        <span
+                          className={cn(
+                            'text-xl font-bold tabular-nums',
+                            POS_ACCENT_TEXT
+                          )}
+                        >
+                          {formatMoney(grandTotal)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Table
+                      </label>
+                      <Select
+                        value={tableId || undefined}
+                        onValueChange={selectDiningTable}
+                        disabled={posBusy}
+                      >
+                        <SelectTrigger
+                          className={cn(
+                            'h-11 rounded-xl border-0 bg-muted/50 shadow-none',
+                            POS_INPUT_CLASS
+                          )}
+                        >
+                          <SelectValue
+                            placeholder={
+                              tablesLoading
+                                ? 'Loading tables…'
+                                : diningTables.length === 0
+                                  ? 'No tables available'
+                                  : 'Select table'
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {diningTables.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div
+                      className={cn(
+                        'space-y-2.5 rounded-2xl bg-gradient-to-b from-fire-500/10 to-transparent p-3 ring-1 ring-fire-500/20',
+                        posBusy && 'pointer-events-none opacity-70'
+                      )}
+                      aria-busy={posBusy}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-fire-500 text-white shadow-sm shadow-fire-500/30">
+                          {posBusy ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <ChefHat className="h-4 w-4" />
+                          )}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold">
+                            {posBusy ? 'Sending to kitchen…' : 'Prep time'}
+                          </p>
+                          <p className="text-[11px] leading-snug text-muted-foreground">
+                            {posBusy
+                              ? 'Please wait — prep time is locked for this ticket.'
+                              : 'Shown on the kitchen display. Guest pays later from Table orders.'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {KITCHEN_PREP_PRESETS.map((m) => {
+                          const selected =
+                            tableCheckoutPrepMinutes === m &&
+                            !tableCheckoutCustomMinutes.trim();
+                          return (
+                            <Button
+                              key={m}
+                              type="button"
+                              variant={selected ? 'default' : 'outline'}
+                              disabled={posBusy}
+                              className={cn(
+                                'h-12 rounded-xl text-sm font-semibold',
+                                selected && POS_ACCENT_BTN,
+                                !selected &&
+                                  'border-0 bg-background/80 hover:bg-background'
+                              )}
+                              onClick={() => {
+                                setTableCheckoutPrepMinutes(m);
+                                setTableCheckoutCustomMinutes('');
+                                setKeyboardField(null);
+                              }}
+                            >
+                              {m}
+                              <span className="ml-1 text-[11px] font-medium opacity-80">
+                                min
+                              </span>
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      <Input
+                        className={cn(
+                          'h-11 cursor-pointer rounded-xl border-0 bg-background/80 shadow-none',
+                          POS_INPUT_CLASS,
+                          keyboardField === 'prepCustom' &&
+                            'ring-2 ring-fire-500/40'
+                        )}
+                        inputMode="none"
+                        autoComplete="off"
+                        placeholder={`Custom (${KITCHEN_PREP_MIN}–${KITCHEN_PREP_MAX} min)`}
+                        value={tableCheckoutCustomMinutes}
+                        disabled={posBusy}
+                        onChange={(e) =>
+                          setTableCheckoutCustomMinutes(
+                            e.target.value.replace(/\D/g, '')
+                          )
+                        }
+                        onPointerDown={() => setKeyboardField('prepCustom')}
+                        onFocus={() => setKeyboardField('prepCustom')}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                <div className="shrink-0 space-y-1.5 rounded-xl bg-background/70 p-2.5 shadow-sm">
+                  {cart.map((line) => {
+                    const gross = lineUnitTotal(line) * line.qty;
+                    const discAmt = gross * (line.lineDiscPct / 100);
+                    const lineTotal = gross - discAmt;
+                    return (
+                      <div
+                        key={line.lineId}
+                        className="flex items-start justify-between gap-2 text-sm"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <PosCartLineSummary
+                            line={line}
+                            titleClassName="text-xs font-semibold leading-snug"
+                            subItemClassName="text-[10px] text-muted-foreground"
+                          />
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {line.qty}× {formatMoney(lineUnitTotal(line))}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-xs font-bold tabular-nums">
+                          {formatMoney(lineTotal)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-sm font-semibold">Total</span>
+                    <span
+                      className={cn(
+                        'text-lg font-bold tabular-nums',
+                        POS_ACCENT_TEXT
+                      )}
+                    >
+                      {formatMoney(grandTotal)}
+                    </span>
+                  </div>
+                </div>
+
+                {isTableMode ? (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Table
+                    </label>
+                    <Select
+                      value={tableId || undefined}
+                      onValueChange={selectDiningTable}
+                    >
+                      <SelectTrigger
+                        className={cn('h-11 rounded-xl', POS_INPUT_CLASS)}
+                      >
+                        <SelectValue
+                          placeholder={
+                            tablesLoading
+                              ? 'Loading tables…'
+                              : diningTables.length === 0
+                                ? 'No tables available'
+                                : 'Select table'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {diningTables.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+
+                {orderMode !== 'tables' ? (
+                  <div className="space-y-2.5">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Name
+                      </label>
+                      <Input
+                        className={cn(
+                          'h-11 cursor-pointer rounded-xl',
+                          POS_INPUT_CLASS,
+                          keyboardField === 'name' && 'ring-2 ring-fire-500/40'
+                        )}
+                        value={customerName}
+                        inputMode="none"
+                        autoComplete="off"
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        onPointerDown={() => setKeyboardField('name')}
+                        onFocus={() => setKeyboardField('name')}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Phone
+                      </label>
+                      <Input
+                        className={cn(
+                          'h-11 cursor-pointer rounded-xl',
+                          POS_INPUT_CLASS,
+                          keyboardField === 'phone' && 'ring-2 ring-fire-500/40'
+                        )}
+                        inputMode="none"
+                        autoComplete="off"
+                        value={customerPhone}
+                        onChange={(e) =>
+                          setCustomerPhone(e.target.value.replace(/\D/g, ''))
+                        }
+                        onPointerDown={() => setKeyboardField('phone')}
+                        onFocus={() => setKeyboardField('phone')}
+                      />
+                    </div>
+                    {isDeliveryMode ? (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Delivery address
+                        </label>
+                        <textarea
+                          className={cn(
+                            'flex min-h-[72px] w-full cursor-pointer rounded-xl border-0 px-3 py-2 text-sm shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fire-500/25',
+                            POS_INPUT_CLASS,
+                            keyboardField === 'address' &&
+                              'ring-2 ring-fire-500/40'
+                          )}
+                          placeholder="Enter delivery address"
+                          value={orderAddress}
+                          inputMode="none"
+                          autoComplete="off"
+                          onChange={(e) => setOrderAddress(e.target.value)}
+                          onPointerDown={() => setKeyboardField('address')}
+                          onFocus={() => setKeyboardField('address')}
+                          rows={3}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {isEditingKioskOrder ? (
+                  <div className="rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300">
+                    Cash payment stays pending until you collect payment from
+                    Kiosk orders.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Payment method
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          variant={paymentMode === 'cash' ? 'default' : 'outline'}
+                          className={cn(
+                            'h-11 justify-start gap-2 rounded-xl',
+                            paymentMode === 'cash' && POS_ACCENT_BTN
+                          )}
+                          onClick={() => handleSelectPaymentMode('cash')}
+                        >
+                          <Banknote className="h-4 w-4" />
+                          Cash
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={paymentMode === 'card' ? 'default' : 'outline'}
+                          className={cn(
+                            'h-11 justify-start gap-2 rounded-xl',
+                            paymentMode === 'card' && POS_ACCENT_BTN
+                          )}
+                          onClick={() => handleSelectPaymentMode('card')}
+                        >
+                          <CreditCard className="h-4 w-4" />
+                          Card
+                        </Button>
+                      </div>
+                    </div>
+
+                    {isCardMode ? (
+                      <div className="space-y-2">
+                        <Button
+                          type="button"
+                          className={cn(
+                            'h-11 w-full gap-2 rounded-xl',
+                            cardPaymentStatus === 'success' &&
+                              'bg-emerald-600 hover:bg-emerald-600/90',
+                            (cardPaymentStatus === 'error' ||
+                              cardPaymentStatus === 'cancelled') &&
+                              'bg-destructive hover:bg-destructive/90'
+                          )}
+                          disabled={
+                            cardPaymentStatus === 'processing' ||
+                            cardPaymentStatus === 'success'
+                          }
+                          onClick={() => void handleCardPayClick()}
+                        >
+                          {cardPaymentStatus === 'success' ? (
+                            <>
+                              <CheckCircle2 className="h-4 w-4" />
+                              Paid
+                            </>
+                          ) : cardPaymentStatus === 'error' ||
+                            cardPaymentStatus === 'cancelled' ? (
+                            <>
+                              <XCircle className="h-4 w-4" />
+                              Pay again
+                            </>
+                          ) : cardPaymentStatus === 'processing' ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Processing…
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="h-4 w-4" />
+                              Pay {formatMoney(grandTotal)}
+                            </>
+                          )}
+                        </Button>
+                        <div className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                          {isCardPaymentComplete ? (
+                            <span className="text-emerald-700 dark:text-emerald-400">
+                              Card paid — place the order.
+                            </span>
+                          ) : cardPaymentStatus === 'error' ||
+                            cardPaymentStatus === 'cancelled' ? (
+                            <span className="text-destructive">
+                              {cardPaymentStatus === 'cancelled'
+                                ? 'Cancelled. Tap Pay again.'
+                                : 'Failed. Tap Pay again.'}
+                            </span>
+                          ) : (
+                            <span>Complete card payment before placing.</span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Amount paid
+                        </label>
+                        {tablePayBeforeKitchen ? (
+                          <p className="text-[11px] text-muted-foreground">
+                            Pay before kitchen is on — collect payment now.
+                          </p>
+                        ) : null}
+                        <Input
+                          className={cn(
+                            'h-12 cursor-pointer rounded-xl text-base font-semibold tabular-nums',
+                            POS_INPUT_CLASS,
+                            keyboardField === 'amount' &&
+                              'ring-2 ring-fire-500/40'
+                          )}
+                          inputMode="none"
+                          autoComplete="off"
+                          placeholder="0.00"
+                          value={amountPaid}
+                          onChange={(e) => setAmountPaid(e.target.value)}
+                          onPointerDown={() => setKeyboardField('amount')}
+                          onFocus={() => setKeyboardField('amount')}
+                        />
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Change</span>
+                          <span className="font-semibold tabular-nums text-foreground">
+                            {formatMoney(
+                              Math.max(
+                                0,
+                                (Number(amountPaid) || 0) - grandTotal
+                              )
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                  </>
+                )}
+
+                {cardPaymentStatus === 'processing' || cardProcessingOpen ? (
+                  <div className="rounded-xl bg-background/80 p-4 shadow-sm">
+                    <div className="flex flex-col items-center gap-3 py-1">
+                      <CreditCard className="h-8 w-8 animate-bounce text-fire-500" />
+                      <p className="text-center text-sm text-muted-foreground">
+                        Insert or tap card…
+                      </p>
+                      <p className="text-lg font-semibold tabular-nums">
+                        {formatMoney(grandTotal)}
+                      </p>
+                      <div className="flex w-full flex-col gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-10 w-full rounded-xl"
+                          onClick={handleCardPaymentBypass}
+                        >
+                          Bypass (test)
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-10 w-full rounded-xl"
+                          onClick={handleCardPaymentCancel}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {keyboardField ? (
+                <PosOnScreenKeyboard
+                  mode={
+                    keyboardField === 'amount'
+                      ? 'numeric'
+                      : keyboardField === 'phone' ||
+                          keyboardField === 'prepCustom'
+                        ? 'phone'
+                        : 'text'
+                  }
+                  value={
+                    keyboardField === 'name'
+                      ? customerName
+                      : keyboardField === 'phone'
+                        ? customerPhone
+                        : keyboardField === 'address'
+                          ? orderAddress
+                          : keyboardField === 'prepCustom'
+                            ? tableCheckoutCustomMinutes
+                            : amountPaid
+                  }
+                  maxLength={
+                    keyboardField === 'phone'
+                      ? 20
+                      : keyboardField === 'amount'
+                        ? 12
+                        : keyboardField === 'prepCustom'
+                          ? 3
+                          : 160
+                  }
+                  onChange={(next) => {
+                    if (keyboardField === 'name') setCustomerName(next);
+                    else if (keyboardField === 'phone')
+                      setCustomerPhone(next.replace(/\D/g, ''));
+                    else if (keyboardField === 'address')
+                      setOrderAddress(next);
+                    else if (keyboardField === 'prepCustom')
+                      setTableCheckoutCustomMinutes(next.replace(/\D/g, ''));
+                    else setAmountPaid(next);
+                  }}
+                  onClose={() => setKeyboardField(null)}
+                />
+              ) : null}
+
+              <div className="shrink-0 space-y-2 px-3 py-3 sm:px-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn('h-10 w-full rounded-xl', POS_OUTLINE_BTN)}
+                  onClick={() => handleCheckoutOpenChange(false)}
+                  disabled={
+                    savingOrder ||
+                    terminalProcessing ||
+                    cardPaymentStatus === 'processing'
+                  }
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back
+                </Button>
+                <Button
+                  ref={placeOrderButtonRef}
+                  type="button"
+                  className={cn(
+                    'flex h-12 w-full items-center justify-between rounded-xl px-4 text-base font-semibold',
+                    POS_ACCENT_BTN
+                  )}
+                  disabled={
+                    cart.length === 0 ||
+                    savingOrder ||
+                    terminalProcessing ||
+                    cardPaymentStatus === 'processing' ||
+                    (isEditingKioskOrder || tablePayOnLeave
+                      ? isTableMode && !tableId.trim()
+                      : isCardMode
+                        ? !isCardPaymentComplete
+                        : isTableMode
+                          ? !tableId.trim() ||
+                            (tablePayBeforeKitchen &&
+                              amountPaid.trim() === '')
+                          : amountPaid.trim() === '')
+                  }
+                  onClick={() => {
+                    if (!canProceedWithOrderMode()) return;
+                    if (isEditingKioskOrder) {
+                      void saveOrder({
+                        paymentMode: 'cash',
+                        payment: grandTotal.toFixed(2),
+                      });
+                      return;
+                    }
+                    if (tablePayOnLeave) {
+                      // Payment method is chosen later in Table orders when guest leaves
+                      setPaymentMode('cash');
+                      setPayment(grandTotal.toFixed(2));
+                      void saveOrder({
+                        paymentMode: 'cash',
+                        payment: grandTotal.toFixed(2),
+                      });
+                      return;
+                    }
+                    const pm = isCardMode ? 'card' : 'cash';
+                    const pay = isCardMode
+                      ? grandTotal.toFixed(2)
+                      : (Number(amountPaid) || 0).toFixed(2);
+                    setPaymentMode(pm);
+                    setPayment(pay);
+                    void saveOrder({ paymentMode: pm, payment: pay });
+                  }}
+                >
+                  <span className="flex items-center gap-2">
+                    {savingOrder ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : tablePayOnLeave ? (
+                      <ChefHat className="h-4 w-4" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
+                    {editingOrderId
+                      ? 'Update'
+                      : tablePayOnLeave
+                        ? 'Send to kitchen'
+                        : 'Place order'}
+                  </span>
+                  <span className="font-bold tabular-nums">
+                    {formatMoney(grandTotal)}
+                  </span>
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pt-2 sm:px-4">
+                <ScrollArea className="min-h-0 flex-1">
+                  <div className="space-y-1 pb-2 pr-1">
+                    {cart.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center px-3 py-16 text-center">
+                        <ShoppingBag className="mb-2 h-7 w-7 text-muted-foreground/40" />
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Tap items to add
+                        </p>
+                      </div>
+                    ) : (
+                      cart.map((line) => {
+                        const gross = lineUnitTotal(line) * line.qty;
+                        const discAmt = gross * (line.lineDiscPct / 100);
+                        const lineTotal = gross - discAmt;
+                        return (
+                          <div
+                            key={line.lineId}
+                            className="rounded-xl px-1.5 py-2 hover:bg-muted/40"
+                          >
+                            <div className="flex items-start gap-2">
+                              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted">
+                                {line.imageUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={line.imageUrl}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-xs font-bold text-muted-foreground">
+                                    {line.productName.charAt(0)}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <PosCartLineSummary
+                                  line={line}
+                                  titleClassName="text-[13px] font-semibold leading-snug"
+                                  subItemClassName="text-[10px] text-muted-foreground"
+                                />
+                              </div>
+                              <p className="shrink-0 text-sm font-bold tabular-nums">
+                                {formatMoney(lineTotal)}
+                              </p>
+                            </div>
+                            <div className="mt-1.5 flex items-center gap-1 pl-12">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className={cn(
+                                  'h-7 w-7 rounded-lg',
+                                  POS_OUTLINE_BTN
+                                )}
+                                onClick={() =>
+                                  setQty(line.lineId, line.qty - 1)
+                                }
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <span className="w-6 text-center text-xs font-semibold tabular-nums">
+                                {line.qty}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className={cn(
+                                  'h-7 w-7 rounded-lg',
+                                  POS_OUTLINE_BTN
+                                )}
+                                onClick={() =>
+                                  setQty(line.lineId, line.qty + 1)
+                                }
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="ml-auto h-7 w-7 rounded-lg text-destructive hover:bg-destructive/10"
+                                onClick={() =>
+                                  setCart((prev) =>
+                                    prev.filter((l) => l.lineId !== line.lineId)
+                                  )
+                                }
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              <div className="shrink-0 space-y-2 px-3 py-3 sm:px-4">
+                {cart.length > 0 ? (
+                  <>
+                    <div className="flex items-end justify-between">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                        onClick={() => setAdjustOpen((v) => !v)}
+                      >
+                        Adjust
+                        <ChevronDown
+                          className={cn(
+                            'h-3.5 w-3.5 transition-transform',
+                            adjustOpen && 'rotate-180'
+                          )}
+                        />
+                      </button>
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Total
+                        </p>
+                        <p
+                          className={cn(
+                            'text-xl font-bold tabular-nums leading-none',
+                            POS_ACCENT_TEXT
+                          )}
+                        >
+                          {formatMoney(grandTotal)}
+                        </p>
+                      </div>
+                    </div>
+                    {adjustOpen ? (
+                      <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/40 p-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground">
+                            Tax %
+                          </label>
+                          <Input
+                            className={cn(
+                              'h-8 rounded-lg text-xs',
+                              POS_INPUT_CLASS
+                            )}
+                            value={taxPct}
+                            onChange={(e) => setTaxPct(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-muted-foreground">
+                            Discount %
+                          </label>
+                          <Input
+                            className={cn(
+                              'h-8 rounded-lg text-xs',
+                              POS_INPUT_CLASS
+                            )}
+                            value={disPct}
+                            onChange={(e) => setDisPct(e.target.value)}
+                          />
+                        </div>
+                        {(taxAmount > 0 ||
+                          disAmount > 0 ||
+                          activeServiceChargeAmount > 0) && (
+                          <div className="col-span-2 space-y-0.5 pt-1.5 text-[11px] text-muted-foreground">
+                            <div className="flex justify-between">
+                              <span>Subtotal</span>
+                              <span className="tabular-nums">
+                                {formatMoney(subtotal)}
+                              </span>
+                            </div>
+                            {taxAmount > 0 ? (
+                              <div className="flex justify-between">
+                                <span>Tax</span>
+                                <span className="tabular-nums">
+                                  {formatMoney(taxAmount)}
+                                </span>
+                              </div>
+                            ) : null}
+                            {disAmount > 0 ? (
+                              <div className="flex justify-between">
+                                <span>Discount</span>
+                                <span className="tabular-nums">
+                                  {formatMoney(disAmount)}
+                                </span>
+                              </div>
+                            ) : null}
+                            {activeServiceChargeAmount > 0 ? (
+                              <div className="flex justify-between">
+                                <span>Service</span>
+                                <span className="tabular-nums">
+                                  {formatMoney(activeServiceChargeAmount)}
+                                </span>
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11 shrink-0 rounded-xl text-destructive hover:bg-destructive/10"
+                    disabled={
+                      cart.length === 0 || savingOrder || terminalProcessing
+                    }
+                    title="Clear cart"
+                    onClick={clearCart}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11 shrink-0 rounded-xl"
+                    disabled={
+                      cart.length === 0 || savingOrder || terminalProcessing
+                    }
+                    title="Hold order"
+                    onClick={holdCurrentOrder}
+                  >
+                    <Clock className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="relative h-11 w-11 shrink-0 rounded-xl"
+                    title="Held orders"
+                    onClick={() => setArchivedOrdersOpen(true)}
+                  >
+                    <Archive className="h-4 w-4" />
+                    {archivedOrders.length > 0 ? (
+                      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
+                        {archivedOrders.length}
+                      </span>
+                    ) : null}
+                  </Button>
+                  <Button
+                    type="button"
+                    className={cn(
+                      'flex h-11 min-w-0 flex-1 items-center justify-between rounded-xl px-3 text-sm font-semibold',
+                      POS_ACCENT_BTN
+                    )}
+                    disabled={
+                      cart.length === 0 || savingOrder || terminalProcessing
+                    }
+                    ref={proceedOrderButtonRef}
+                    onClick={() => {
+                      if (!canProceedWithOrderMode()) return;
+                      resetCardPayment();
+                      setPaymentMode('cash');
+                      setAmountPaid(
+                        isEditingKioskOrder ? grandTotal.toFixed(2) : ''
+                      );
+                      setCheckoutOpen(true);
+                      if (tablePayOnLeave) {
+                        setTableCheckoutPrepMinutes(15);
+                        setTableCheckoutCustomMinutes('');
+                        setKeyboardField(null);
+                      } else if (!isEditingKioskOrder && tablePayBeforeKitchen) {
+                        setKeyboardField('amount');
+                      } else if (
+                        !isEditingKioskOrder &&
+                        orderMode !== 'tables'
+                      ) {
+                        // Prefer amount keypad for cash checkout on touch POS
+                        setKeyboardField('amount');
+                      } else if (orderMode !== 'tables') {
+                        setKeyboardField('name');
+                      } else {
+                        setKeyboardField(null);
+                      }
+                    }}
+                  >
+                    <span>{editingOrderId ? 'Update' : 'Checkout'}</span>
+                    <span className="tabular-nums">
+                      {formatMoney(grandTotal)}
+                    </span>
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
+
       <AlertDialog
         open={posLeaveGuardOpen}
         onOpenChange={(open) => {
@@ -3059,471 +4531,6 @@ export function PosScreen() {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={checkoutOpen} onOpenChange={handleCheckoutOpenChange}>
-        <DialogContent
-          className={cn(
-            'max-w-2xl flex max-h-[min(90dvh,42rem)] flex-col gap-0 overflow-hidden p-6',
-            'sm:max-h-[min(92dvh,44rem)]'
-          )}
-        >
-          <DialogHeader className="shrink-0 space-y-1.5 pb-2 text-left">
-            <DialogTitle>
-              {isEditingKioskOrder
-                ? 'Update kiosk order'
-                : editingOrderId
-                  ? 'Update order'
-                  : 'Checkout'}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-1 [-webkit-overflow-scrolling:touch]">
-            <div className="grid gap-4 pb-1 md:grid-cols-[1fr_280px]">
-              <div className="rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="text-xs">Item</TableHead>
-                      <TableHead className="text-center text-xs">Qty</TableHead>
-                      <TableHead className="text-right text-xs">
-                        Total
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cart.map((line) => {
-                      const gross = lineUnitTotal(line) * line.qty;
-                      const discAmt = gross * (line.lineDiscPct / 100);
-                      const lineTotal = gross - discAmt;
-                      return (
-                        <TableRow key={line.lineId}>
-                          <TableCell className="text-xs">
-                            <PosCartLineSummary
-                              line={line}
-                              titleClassName="text-xs font-medium leading-snug"
-                              subItemClassName="text-[11px] text-muted-foreground"
-                            />
-                          </TableCell>
-                          <TableCell className="text-center text-xs tabular-nums">
-                            {line.qty}
-                          </TableCell>
-                          <TableCell className="text-right text-xs tabular-nums">
-                            {formatMoney(lineTotal)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="space-y-3">
-                <div className="rounded-lg p-3 space-y-2">
-                  <div className="text-sm font-medium">Order details</div>
-                  {isTableMode ? (
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">
-                        Select table
-                      </label>
-                      <Select value={tableId} onValueChange={setTableId}>
-                        <SelectTrigger className="h-9 bg-background">
-                          <SelectValue
-                            placeholder={
-                              tablesLoading
-                                ? 'Loading tables…'
-                                : diningTables.length === 0
-                                  ? 'No tables available'
-                                  : 'Select table'
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {diningTables.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : null}
-
-                  {orderMode !== 'tables' ? (
-                    <div className="rounded-lg">
-                      <div className="mt-2 grid gap-2">
-                        <div className="space-y-1">
-                          <label className="text-xs text-muted-foreground">
-                            Name
-                          </label>
-                          <Input
-                            className="h-9 bg-background"
-                            value={customerName}
-                            onChange={(e) => setCustomerName(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-xs text-muted-foreground">
-                            Phone
-                          </label>
-                          <Input
-                            className="h-9 bg-background"
-                            inputMode="tel"
-                            value={customerPhone}
-                            onChange={(event) => {
-                              const value = event.target.value.replace(/\D/g, '');
-                              setCustomerPhone(value);
-                            }}
-                          />
-                        </div>
-                        {isDeliveryMode ? (
-                          <div className="space-y-1">
-                            <label className="text-xs text-muted-foreground">
-                              Delivery address
-                            </label>
-                            <textarea
-                              className="flex min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                              placeholder="Enter delivery address"
-                              value={orderAddress}
-                              onChange={(e) => setOrderAddress(e.target.value)}
-                              rows={3}
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : null}
-
-
-                  <div className="mt-2 grid gap-2">
-                    {isEditingKioskOrder ? (
-                      <div className="rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-                        Cash payment stays pending until you collect payment
-                        from Kiosk orders.
-                      </div>
-                    ) : (
-                      <>
-                        <div className="space-y-1">
-                          <label className="text-xs text-muted-foreground">
-                            Payment method
-                          </label>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button
-                              type="button"
-                              variant={
-                                paymentMode === 'cash' ? 'default' : 'outline'
-                              }
-                              className="justify-start gap-2"
-                              onClick={() => handleSelectPaymentMode('cash')}
-                            >
-                              <Banknote className="h-4 w-4" />
-                              Cash
-                            </Button>
-                            <Button
-                              type="button"
-                              variant={
-                                paymentMode === 'card' ? 'default' : 'outline'
-                              }
-                              className="justify-start gap-2"
-                              onClick={() => handleSelectPaymentMode('card')}
-                            >
-                              <CreditCard className="h-4 w-4" />
-                              Card
-                            </Button>
-                          </div>
-                          {isCardMode ? (
-                            <Button
-                              type="button"
-                              className={cn(
-                                'w-full gap-2',
-                                cardPaymentStatus === 'success' &&
-                                'bg-emerald-600 hover:bg-emerald-600/90',
-                                (cardPaymentStatus === 'error' ||
-                                  cardPaymentStatus === 'cancelled') &&
-                                'bg-destructive hover:bg-destructive/90'
-                              )}
-                              disabled={
-                                cardPaymentStatus === 'processing' ||
-                                cardPaymentStatus === 'success'
-                              }
-                              onClick={() => void handleCardPayClick()}
-                            >
-                              {cardPaymentStatus === 'success' ? (
-                                <>
-                                  <CheckCircle2 className="h-4 w-4" />
-                                  Paid
-                                </>
-                              ) : cardPaymentStatus === 'error' ||
-                                cardPaymentStatus === 'cancelled' ? (
-                                <>
-                                  <XCircle className="h-4 w-4" />
-                                  Pay
-                                </>
-                              ) : cardPaymentStatus === 'processing' ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  Processing…
-                                </>
-                              ) : (
-                                <>
-                                  <CreditCard className="h-4 w-4" />
-                                  Pay {formatMoney(grandTotal)}
-                                </>
-                              )}
-                            </Button>
-                          ) : null}
-                        </div>
-
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Subtotal</span>
-                          <span className="tabular-nums">
-                            {formatMoney(subtotal)}
-                          </span>
-                        </div>
-                        {activeServiceChargeAmount > 0 ? (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">
-                              Service charge
-                            </span>
-                            <span className="tabular-nums">
-                              {formatMoney(activeServiceChargeAmount)}
-                            </span>
-                          </div>
-                        ) : null}
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Total</span>
-                          <span className="font-semibold tabular-nums">
-                            {formatMoney(grandTotal)}
-                          </span>
-                        </div>
-
-                        {isCardMode ? (
-                          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                            {isCardPaymentComplete ? (
-                              <span className="text-emerald-700 dark:text-emerald-400">
-                                Card payment completed — you can place the
-                                order.
-                              </span>
-                            ) : (
-                              <span>
-                                Complete card payment before placing the order.
-                              </span>
-                            )}
-                          </div>
-                        ) : isTableMode ? (
-                          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                            Opens a table tab with payment pending. Use Table
-                            orders to send kitchen or collect pay. Extra rounds
-                            stay on the same tab until paid.
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <label className="text-xs text-muted-foreground">
-                              Total payment
-                            </label>
-                            <Input
-                              className="h-9 bg-background"
-                              inputMode="decimal"
-                              placeholder="0.00"
-                              value={amountPaid}
-                              onChange={(e) => setAmountPaid(e.target.value)}
-                            />
-                            <div className="flex justify-between text-xs text-muted-foreground">
-                              <span>Change</span>
-                              <span className="tabular-nums text-foreground">
-                                {formatMoney(
-                                  Math.max(
-                                    0,
-                                    (Number(amountPaid) || 0) - grandTotal
-                                  )
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="mt-3 shrink-0 gap-2 border-t border-border/60 bg-background pt-4 sm:gap-0 w-full">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => setCheckoutOpen(false)}
-            >
-              <>
-                <X className="mr-2 h-4 w-4" /> <span>Cancel</span>
-              </>
-            </Button>
-
-            <Button
-              ref={placeOrderButtonRef}
-              type="button"
-              className="w-full"
-              disabled={
-                cart.length === 0 ||
-                savingOrder ||
-                terminalProcessing ||
-                cardPaymentStatus === 'processing' ||
-                (isEditingKioskOrder
-                  ? false
-                  : isCardMode
-                    ? !isCardPaymentComplete
-                    : isTableMode
-                      ? false
-                      : amountPaid.trim() === '')
-              }
-              onClick={() => {
-                if (isEditingKioskOrder) {
-                  void saveOrder({
-                    paymentMode: 'cash',
-                    payment: grandTotal.toFixed(2),
-                  });
-                  return;
-                }
-                const pm = isCardMode ? 'card' : 'cash';
-                const pay = isCardMode
-                  ? grandTotal.toFixed(2)
-                  : (Number(amountPaid) || 0).toFixed(2);
-                setPaymentMode(pm);
-                setPayment(pay);
-                void saveOrder({ paymentMode: pm, payment: pay });
-              }}
-            >
-              <>
-                {savingOrder ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="h-4 w-4 mr-2" />{' '}
-                    <span>
-                      {editingOrderId ? 'Update order (f9)' : 'Place Order (f9)'}
-                    </span>
-                  </>
-                )}
-              </>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={cardProcessingOpen}
-        onOpenChange={(open) => {
-          if (!open && cardPaymentStatus === 'processing') return;
-          setCardProcessingOpen(open);
-        }}
-      >
-        <DialogContent
-          className="max-w-sm"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
-          <DialogHeader className="text-center sm:text-center">
-            <DialogTitle>Payment processing</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col items-center gap-4 py-2">
-            <div className="relative flex h-28 w-36 flex-col items-center justify-end rounded-xl border-2 border-primary/40 bg-muted/50 p-3 shadow-inner">
-              <div className="absolute inset-x-3 top-3 h-10 rounded-md bg-primary/15">
-                <div className="mx-auto mt-2 h-2 w-16 animate-pulse rounded-full bg-primary/50" />
-                <div className="mx-auto mt-2 h-1.5 w-10 animate-pulse rounded-full bg-primary/30 [animation-delay:150ms]" />
-              </div>
-              <div className="mb-1 flex h-10 w-full items-center justify-center rounded-md border border-primary/30 bg-background">
-                <CreditCard className="h-6 w-6 animate-bounce text-primary" />
-              </div>
-              <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                ATM
-              </div>
-            </div>
-            <p className="text-center text-sm text-muted-foreground">
-              Insert or tap card on the terminal…
-            </p>
-            <p className="text-lg font-semibold tabular-nums">
-              {formatMoney(grandTotal)}
-            </p>
-          </div>
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full"
-              onClick={handleCardPaymentBypass}
-            >
-              Bypass payment (test)
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={handleCardPaymentCancel}
-            >
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog
-        open={cardPaymentOutcomeOpen === 'success'}
-        onOpenChange={(open) => {
-          if (!open) setCardPaymentOutcomeOpen(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              Payment successful
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Card payment of {formatMoney(grandTotal)} was approved
-              {cardTransactionId ? ` (${cardTransactionId})` : ''}. You can now
-              place the order.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setCardPaymentOutcomeOpen(null)}>
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={cardPaymentOutcomeOpen === 'error'}
-        onOpenChange={(open) => {
-          if (!open) setCardPaymentOutcomeOpen(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-destructive" />
-              Payment failed
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {cardPaymentStatus === 'cancelled'
-                ? 'Card payment was cancelled. Tap Pay to try again.'
-                : 'Card payment could not be completed. Tap Pay to try again.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setCardPaymentOutcomeOpen(null)}>
-              OK
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <Dialog
         open={kitchenSendOpen}
         onOpenChange={() => {
@@ -3565,6 +4572,7 @@ export function PosScreen() {
                     <Button
                       key={m}
                       type="button"
+                      disabled={sendingToKitchen}
                       variant={
                         kitchenPrepMinutes[kitchenSendOrder.id] === m &&
                           !kitchenCustomMinutes.trim()
@@ -3577,6 +4585,7 @@ export function PosScreen() {
                           [kitchenSendOrder.id]: m,
                         }));
                         setKitchenCustomMinutes('');
+                        setKitchenPrepKeyboardOpen(false);
                       }}
                     >
                       {m} min
@@ -3584,13 +4593,30 @@ export function PosScreen() {
                   ))}
                 </div>
                 <Input
-                  type="number"
-                  min={KITCHEN_PREP_MIN}
-                  max={KITCHEN_PREP_MAX}
+                  className="cursor-pointer"
+                  inputMode="none"
+                  autoComplete="off"
                   placeholder={`Custom (${KITCHEN_PREP_MIN}–${KITCHEN_PREP_MAX})`}
                   value={kitchenCustomMinutes}
-                  onChange={(e) => setKitchenCustomMinutes(e.target.value)}
+                  disabled={sendingToKitchen}
+                  onChange={(e) =>
+                    setKitchenCustomMinutes(e.target.value.replace(/\D/g, ''))
+                  }
+                  onPointerDown={() => setKitchenPrepKeyboardOpen(true)}
+                  onFocus={() => setKitchenPrepKeyboardOpen(true)}
                 />
+                {kitchenPrepKeyboardOpen ? (
+                  <PosOnScreenKeyboard
+                    portal={false}
+                    mode="phone"
+                    value={kitchenCustomMinutes}
+                    maxLength={3}
+                    onChange={(next) =>
+                      setKitchenCustomMinutes(next.replace(/\D/g, ''))
+                    }
+                    onClose={() => setKitchenPrepKeyboardOpen(false)}
+                  />
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -3741,13 +4767,9 @@ export function PosScreen() {
         onOpenChange={setTableOrdersOpen}
         branchId={selectedBranchId || activeBranchId || null}
         onOrdersChanged={() => {
-          eventBus.emit('refreshRecentOrders');
-          void loadPendingKitchenOrders();
+          // Soft sync only — sheet already updated SWR optimistically.
           const branchId = selectedBranchId || activeBranchId || '';
-          if (branchId) {
-            void refreshShiftSummary(branchId);
-            revalidateOpenTableOrders(branchId);
-          }
+          if (branchId) revalidateOpenTableOrders(branchId, 1_500);
         }}
       />
 

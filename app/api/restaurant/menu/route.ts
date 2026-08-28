@@ -6,6 +6,7 @@ import {
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
   withServiceChargesPayload,
 } from '@/lib/restaurant-service-charge';
+import { RESTAURANT_DINE_IN_PAYMENT_DB_SELECT } from '@/lib/restaurant-dine-in-payment';
 import { applyProductRecommendationPools } from '@/lib/menu/apply-product-recommendation-pools';
 import {
   buildCustomerMenuAttributeGroupsSelect,
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest) {
         logoUrl: true,
         themePrimaryColor: true,
         ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+        ...RESTAURANT_DINE_IN_PAYMENT_DB_SELECT,
       },
     });
 

@@ -19,7 +19,6 @@ import {
 } from "@/lib/menu/customer-menu-attribute-groups-select";
 import { personalizeGroupsSelect } from "@/lib/menu/personalize-groups-select";
 import {
-  hasImageByMenuItemIds,
   restaurantMenuItemImageUrl,
 } from "@/lib/menu/menu-item-image-utils";
 
@@ -64,16 +63,16 @@ const detailSelect = {
   },
 } as const;
 
-/** POS customize: same shape, no embedded image blobs. */
+/** POS customize: shallow nests for fast first paint (nested sheets hydrate on demand). */
 const liteDetailSelect = {
   ...customerMenuLinkedItemCoreSelect,
   categoryId: true,
   createdAt: true,
   updatedAt: true,
-  attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
+  attributeGroups: buildCustomerMenuAttributeGroupsSelect(1),
   personalizeGroups: personalizeGroupsSelect,
   offersFromThis: {
-    orderBy: { sortOrder: "asc" as const },
+    orderBy: { sortOrder: 'asc' as const },
     select: {
       id: true,
       sortOrder: true,
@@ -112,44 +111,41 @@ export async function GET(
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
-  const categoryIds = await getMenuItemCategoryIds(itemId);
-
   if (lite) {
-    const offerIds = (item.offersFromThis ?? [])
-      .map((o) => o.offeredItem?.id)
-      .filter((id): id is string => Boolean(id));
-    const imageFlags = await hasImageByMenuItemIds([itemId, ...offerIds]);
-    const hasImage = imageFlags.get(itemId) ?? false;
-    const lazyImage = hasImage ? restaurantMenuItemImageUrl(itemId) : null;
-
+    // Skip extra category/image round-trips — POS uses lazy /image URLs and categoryId.
     return NextResponse.json(
       {
         data: {
           ...item,
-          hasImage,
-          imageUrl: lazyImage,
-          categoryIds:
-            categoryIds.length > 0 ? categoryIds : [item.categoryId],
+          hasImage: true,
+          imageUrl: restaurantMenuItemImageUrl(itemId),
+          categoryIds: [item.categoryId],
           createdAt: item.createdAt.toISOString(),
           updatedAt: item.updatedAt.toISOString(),
           offersFromThis: (item.offersFromThis ?? []).map((row) => {
             const oid = row.offeredItem?.id;
             if (!oid || !row.offeredItem) return row;
-            const oh = imageFlags.get(oid) ?? false;
             return {
               ...row,
               offeredItem: {
                 ...row.offeredItem,
-                hasImage: oh,
-                imageUrl: oh ? restaurantMenuItemImageUrl(oid) : null,
+                hasImage: true,
+                imageUrl: restaurantMenuItemImageUrl(oid),
               },
             };
           }),
         },
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
+        },
+      }
     );
   }
+
+  const categoryIds = await getMenuItemCategoryIds(itemId);
 
   return NextResponse.json(
     {
