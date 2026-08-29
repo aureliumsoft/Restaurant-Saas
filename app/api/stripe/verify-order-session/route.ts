@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import {
   getRestaurantStripeRuntimeConfigBySlug,
 } from '@/lib/restaurant-payment-credentials';
+import { db } from '@/lib/db';
 import {
   markExistingOrderPaidFromSession,
   processOrderIntentFromSession,
@@ -17,11 +18,20 @@ export async function GET(req: NextRequest) {
   const sessionId =
     req.nextUrl.searchParams.get('session_id')?.trim() ||
     req.nextUrl.searchParams.get('token')?.trim();
-  const restaurantSlug = req.nextUrl.searchParams.get('restaurantSlug')?.trim();
+  let restaurantSlug = req.nextUrl.searchParams.get('restaurantSlug')?.trim();
 
   if (!sessionId) {
     return NextResponse.json({ error: 'Missing session_id' }, { status: 400 });
   }
+
+  if (!restaurantSlug) {
+    const slugRow = await db.platformSetting.findUnique({
+      where: { key: `stripe_checkout_slug:${sessionId}` },
+      select: { value: true },
+    });
+    restaurantSlug = slugRow?.value?.trim() || '';
+  }
+
   if (!restaurantSlug) {
     return NextResponse.json({ error: 'Missing restaurantSlug' }, { status: 400 });
   }

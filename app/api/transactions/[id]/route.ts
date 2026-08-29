@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const prisma = new PrismaClient();
 
@@ -8,7 +9,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const { id } = await resolveRouteParams(params, ['id']);
 
   try {
     // Fetch transaction with the given id
@@ -74,7 +75,7 @@ export const PATCH = async (
 ) => {
   try {
     const prisma = new PrismaClient();
-    const { id: transactionId } = await params;
+    const { id: transactionId } = await resolveRouteParams(params, ['id']);
 
     const body = await request.json();
 
@@ -149,7 +150,7 @@ export const DELETE = async (
   { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
-    const { id } = await params;
+    const { id } = await resolveRouteParams(params, ['id']);
     // Delete transaction by id
     const transaction = await prisma.transaction.delete({
       where: {

@@ -35,6 +35,8 @@ export const ORDER_FLOW_PRESERVED_QUERY_KEYS = [
   'orderId',
   'ticket',
   'ticketNumber',
+  'restaurantSlug',
+  'slug',
 ] as const;
 
 export function orderInfoHasContext(info: OrderInfo | undefined): boolean {

@@ -14,9 +14,9 @@ import {
   normalizePosOrderLines,
   paymentMethodToMode,
   paymentModeToMethodLabel,
-  posOrderItemCreateManyInput,
   type PosOrderLineInput,
 } from '@/lib/pos-order-lines';
+import { createOrderItemsWithModifiers } from '@/lib/pos-order-modifiers';
 import {
   parseRestaurantServiceCharges,
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
@@ -24,6 +24,8 @@ import {
 } from '@/lib/restaurant-service-charge';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
+import { withUrlId } from '@/lib/with-url-id';
 
 const orderSelect = {
   id: true,
@@ -48,7 +50,7 @@ const orderSelect = {
       productName: true,
       menuItem: { select: { name: true, imageUrl: true } },
       modifiers: {
-        select: { name: true, unitPrice: true },
+        select: { name: true, unitPrice: true, menuItemId: true, quantity: true },
       },
     },
   },
@@ -80,7 +82,7 @@ function mapOrderDetail(order: {
     price: number;
     productName: string | null;
     menuItem: { name: string; imageUrl: string | null } | null;
-    modifiers: Array<{ name: string; unitPrice: number }>;
+    modifiers: Array<{ name: string; unitPrice: number; menuItemId: string | null; quantity: number }>;
   }>;
   payments: Array<{
     id: string;
@@ -90,7 +92,7 @@ function mapOrderDetail(order: {
   }>;
 }) {
   const payment = order.payments[0] ?? null;
-  return {
+  return withUrlId({
     id: order.id,
     shortOrderId: order.shortOrderId,
     ticketNumber: order.ticketNumber,
@@ -120,9 +122,11 @@ function mapOrderDetail(order: {
       modifiers: item.modifiers.map((modifier) => ({
         name: modifier.name,
         unitPrice: Number(modifier.unitPrice) || 0,
+        menuItemId: modifier.menuItemId,
+        quantity: modifier.quantity,
       })),
     })),
-  };
+  });
 }
 
 export async function GET(
@@ -138,12 +142,18 @@ export async function GET(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { orderId } = await ctx.params;
+    const { orderId } = await resolveRouteParams(ctx.params, ['orderId']);
     const order = await db.order.findFirst({
       where: {
         id: orderId,
         restaurantId: auth.restaurantId,
-        sourceType: OrderSourceType.POS,
+        sourceType: {
+          in: [
+            OrderSourceType.POS,
+            OrderSourceType.KIOSK,
+            OrderSourceType.ONLINE,
+          ],
+        },
       },
       select: orderSelect,
     });
@@ -174,7 +184,7 @@ export async function PATCH(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { orderId } = await ctx.params;
+    const { orderId } = await resolveRouteParams(ctx.params, ['orderId']);
     const existing = await db.order.findFirst({
       where: {
         id: orderId,
@@ -377,9 +387,7 @@ export async function PATCH(
 
     await db.$transaction(async (tx) => {
       await tx.orderItem.deleteMany({ where: { orderId: existing.id } });
-      await tx.orderItem.createMany({
-        data: posOrderItemCreateManyInput(existing.id, normalizedItems),
-      });
+      await createOrderItemsWithModifiers(tx, existing.id, normalizedItems);
 
       await tx.order.update({
         where: { id: existing.id },

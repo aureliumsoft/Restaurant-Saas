@@ -4,9 +4,10 @@ import { OrderSourceType } from '@prisma/client';
 
 import { db } from '@/lib/db';
 import { cancelOrderPayments } from '@/lib/order-payment';
-import { getOrOpenPosShift } from '@/lib/pos-shift';
+import { getOpenPosShift } from '@/lib/pos-shift';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 export async function PATCH(
   _req: NextRequest,
@@ -21,7 +22,7 @@ export async function PATCH(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { orderId } = await ctx.params;
+    const { orderId } = await resolveRouteParams(ctx.params, ['orderId']);
     const order = await db.order.findFirst({
       where: {
         id: orderId,
@@ -43,16 +44,21 @@ export async function PATCH(
       );
     }
 
-    const activeShift = await getOrOpenPosShift({
+    const openShift = await getOpenPosShift({
       restaurantId: auth.restaurantId,
       branchId: order.branchId,
-      userId: auth.userId,
     });
+    if (!openShift) {
+      return NextResponse.json(
+        { error: 'Start a new shift before canceling kiosk orders.' },
+        { status: 409 }
+      );
+    }
 
     await db.$transaction(async (tx) => {
       await tx.order.update({
         where: { id: order.id },
-        data: { status: 'canceled', posShiftId: activeShift.id },
+        data: { status: 'canceled', posShiftId: openShift.id },
       });
       await tx.kitchenTicket.updateMany({
         where: {

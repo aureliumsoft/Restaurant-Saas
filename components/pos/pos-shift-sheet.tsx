@@ -34,6 +34,8 @@ type Props = {
   branchName?: string | null;
   logoUrl?: string | null;
   isOwnerOrAdmin?: boolean;
+  /** After end shift, always sign out (logout flow). */
+  logoutAfterEnd?: boolean;
   onShiftUpdated?: (shift: PosShiftPayload | null) => void;
   onShiftClosed?: (summary: Pick<
     PosShiftSummary,
@@ -49,6 +51,7 @@ export function PosShiftSheet({
   branchName,
   logoUrl,
   isOwnerOrAdmin = false,
+  logoutAfterEnd = false,
   onShiftUpdated,
   onShiftClosed,
 }: Props) {
@@ -88,7 +91,7 @@ export function PosShiftSheet({
     const requestId = ++loadRequestRef.current;
     setLoading(true);
     try {
-      const res = await axios.get<{ data: PosShiftPayload }>(
+      const res = await axios.get<{ data: PosShiftPayload | null }>(
         '/api/restaurant/pos-shift',
         {
           params: branchId ? { branchId } : undefined,
@@ -122,12 +125,16 @@ export function PosShiftSheet({
   }, [open]);
 
   const handleAfterShiftEnded = useCallback(async () => {
+    if (logoutAfterEnd) {
+      await signOut({ callbackUrl: '/login' });
+      return;
+    }
     if (isOwnerOrAdmin) {
       router.push('/dashboard');
       return;
     }
     await signOut({ callbackUrl: '/login' });
-  }, [isOwnerOrAdmin, router]);
+  }, [logoutAfterEnd, isOwnerOrAdmin, router]);
 
   const requestEndShift = () => {
     if (!shift || ending) return;
@@ -164,21 +171,23 @@ export function PosShiftSheet({
     setEnding(true);
     try {
       const res = await axios.post<{
-        data: { closedShift: PosShiftPayload; nextShift: PosShiftPayload | null };
+        data: { closedShift: PosShiftPayload };
       }>('/api/restaurant/pos-shift', {
         shiftId: shift.id,
         closingCashInLocker: cashLeftInLocker,
         branchId: branchId || undefined,
       });
-      const { closedShift, nextShift } = res.data.data;
+      const { closedShift } = res.data.data;
       toast.success(
-        isOwnerOrAdmin
-          ? 'Shift ended. Returning to dashboard.'
-          : 'Shift ended. Signing you out.'
+        logoutAfterEnd
+          ? 'Shift ended. Signing you out.'
+          : isOwnerOrAdmin
+            ? 'Shift ended. Returning to dashboard.'
+            : 'Shift ended. Signing you out.'
       );
       setCashInLocker('');
-      setShift(nextShift);
-      onShiftUpdatedRef.current?.(nextShift);
+      setShift(null);
+      onShiftUpdatedRef.current?.(null);
       if (
         closedShift.closingCashInLocker != null &&
         closedShift.endedAt

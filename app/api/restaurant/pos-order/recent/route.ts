@@ -13,6 +13,7 @@ import {
   salesOrderFilterTimezone,
 } from '@/lib/sales-order-period';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { withUrlIds } from '@/lib/with-url-id';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -124,7 +125,7 @@ export async function GET(req: NextRequest) {
     }));
 
     return NextResponse.json({
-      data,
+      data: withUrlIds(data),
       pagination: {
         limit,
         offset,

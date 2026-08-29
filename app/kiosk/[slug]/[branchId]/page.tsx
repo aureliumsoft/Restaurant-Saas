@@ -1,4 +1,5 @@
 import { KioskBranchClient } from '@/components/kiosk/kiosk-branch-client';
+import { resolveRouteId } from '@/lib/resolve-route-id';
 
 import '../../kiosk-light.css';
 
@@ -7,12 +8,16 @@ type Props = {
 };
 
 export default async function KioskBranchPage({ params }: Props) {
-  const { slug, branchId } = await params;
+  const { slug, branchId: rawBranchId } = await params;
+  const decodedSlug = decodeURIComponent(slug);
+  const branchUrlId = decodeURIComponent(rawBranchId);
+  const branchId = resolveRouteId(branchUrlId);
   return (
     <div className="kiosk-light-root min-h-screen bg-[#f8fafc]">
       <KioskBranchClient
-        slug={decodeURIComponent(slug)}
-        branchId={decodeURIComponent(branchId)}
+        slug={decodedSlug}
+        branchId={branchId}
+        branchUrlId={branchUrlId}
       />
     </div>
   );

@@ -1,10 +1,20 @@
+import { urlSegment } from '@/lib/url-segment';
+
 /** Base path for a branch-specific kiosk install. */
-export function kioskBasePath(slug: string, branchId: string) {
-  return `/kiosk/${encodeURIComponent(slug)}/${encodeURIComponent(branchId)}`;
+export function kioskBasePath(
+  slug: string,
+  branchId: string,
+  branchUrlId?: string | null
+) {
+  return `/kiosk/${encodeURIComponent(slug)}/${encodeURIComponent(urlSegment(branchId, branchUrlId))}`;
 }
 
-export function kioskSuccessPath(slug: string, branchId: string) {
-  return `${kioskBasePath(slug, branchId)}/success`;
+export function kioskSuccessPath(
+  slug: string,
+  branchId: string,
+  branchUrlId?: string | null
+) {
+  return `${kioskBasePath(slug, branchId, branchUrlId)}/success`;
 }
 
 export function kioskCartStorageKey(slug: string, branchId: string) {
@@ -25,14 +35,17 @@ export function kioskTableDeepLink(
   slug: string,
   branchId: string,
   tableId: string,
-  opts?: KioskTableLinkOptions
+  opts?: KioskTableLinkOptions & {
+    branchUrlId?: string | null;
+    tableUrlId?: string | null;
+  }
 ): string {
   const params = new URLSearchParams({
     Method: 'dineIn',
-    tableID: tableId,
+    tableID: urlSegment(tableId, opts?.tableUrlId),
     Mobile: opts?.mobile === false ? 'false' : 'true',
   });
-  return `${kioskBasePath(slug, branchId)}?${params.toString()}`;
+  return `${kioskBasePath(slug, branchId, opts?.branchUrlId)}?${params.toString()}`;
 }
 
 export function kioskTableAbsoluteUrl(
@@ -40,7 +53,10 @@ export function kioskTableAbsoluteUrl(
   slug: string,
   branchId: string,
   tableId: string,
-  opts?: KioskTableLinkOptions
+  opts?: KioskTableLinkOptions & {
+    branchUrlId?: string | null;
+    tableUrlId?: string | null;
+  }
 ): string {
   const path = kioskTableDeepLink(slug, branchId, tableId, opts);
   const base = origin.replace(/\/$/, '');

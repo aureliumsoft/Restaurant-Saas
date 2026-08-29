@@ -50,6 +50,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
+import { tableApiPath } from '@/lib/dashboard-paths';
 import { TablePagination } from '@/components/ui/table-pagination';
 import {
   TableQrCard,
@@ -58,6 +59,7 @@ import {
 
 export type DiningTableRow = {
   id: string;
+  urlId?: string;
   name: string;
   sortOrder: number;
   createdAt: string;
@@ -69,6 +71,7 @@ const PAGE_SIZE = 20;
 export function TablesModule() {
   const {
     activeBranchId,
+    activeBranchUrlId,
     loading: branchLoading,
     branches,
   } = useBranchContext();
@@ -127,7 +130,8 @@ export function TablesModule() {
       }>(
         withBranchQuery(
           `/api/restaurant/tables?page=${page}&limit=${PAGE_SIZE}`,
-          activeBranchId
+          activeBranchId,
+          activeBranchUrlId
         )
       );
       setRows(Array.isArray(res.data?.data) ? res.data.data : []);
@@ -182,7 +186,7 @@ export function TablesModule() {
     setSaving(true);
     try {
       if (editing) {
-        await axios.patch(`/api/restaurant/tables/${editing.id}`, {
+        await axios.patch(tableApiPath(editing.id, '', editing.urlId), {
           name: nameTrim,
           sortOrder: sort,
         });
@@ -213,7 +217,7 @@ export function TablesModule() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await axios.delete(`/api/restaurant/tables/${deleteTarget.id}`);
+      await axios.delete(tableApiPath(deleteTarget.id, '', deleteTarget.urlId));
       toast.success('Table removed');
       setDeleteTarget(null);
       await load();

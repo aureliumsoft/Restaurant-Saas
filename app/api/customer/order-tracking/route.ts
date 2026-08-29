@@ -3,9 +3,10 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { orderItemDisplayName } from '@/lib/orders/order-item-name';
+import { resolveRouteId } from '@/lib/resolve-route-id';
 
 export async function GET(req: NextRequest) {
-  const orderId = req.nextUrl.searchParams.get('orderId')?.trim();
+  const orderId = resolveRouteId(req.nextUrl.searchParams.get('orderId'));
   const restaurantSlug = req.nextUrl.searchParams.get('restaurantSlug')?.trim();
   if (!orderId) {
     return NextResponse.json({ error: 'Missing orderId' }, { status: 400 });

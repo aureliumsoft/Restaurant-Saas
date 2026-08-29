@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { cancelOrderPayments } from '@/lib/order-payment';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 export async function PATCH(
   _req: NextRequest,
@@ -20,7 +21,7 @@ export async function PATCH(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { orderId } = await ctx.params;
+    const { orderId } = await resolveRouteParams(ctx.params, ['orderId']);
     if (!orderId) {
       return NextResponse.json({ error: 'Missing order id' }, { status: 400 });
     }
@@ -48,7 +49,12 @@ export async function PATCH(
     }
 
     const status = String(order.status ?? '').toLowerCase();
-    if (status === 'completed' || status === 'canceled' || status === 'cancelled') {
+    if (
+      status === 'completed' ||
+      status === 'delivered' ||
+      status === 'canceled' ||
+      status === 'cancelled'
+    ) {
       return NextResponse.json(
         { error: `Order is already ${status}` },
         { status: 409 }

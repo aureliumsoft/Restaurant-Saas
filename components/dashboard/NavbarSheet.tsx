@@ -4,7 +4,7 @@ import { DashboardSidebarNav } from '@/components/dashboard/dashboard-sidebar-na
 import { SheetContent } from '@/components/ui/sheet';
 import { useRestaurantBranding } from '@/components/layout/restaurant-branding-provider';
 
-import UserMenu from './UserMenu';
+import { ShiftAwareUserMenu } from '@/components/dashboard/shift-aware-user-menu';
 
 type NavbarSheetProps = {
   /** Called when a nav link is used (e.g. to close the mobile sheet). */
@@ -50,7 +50,7 @@ export function NavbarSheet({ onNavigate }: NavbarSheetProps) {
       </div>
 
       <div className="px-3 pb-4">
-        <UserMenu
+        <ShiftAwareUserMenu
           className="h-11 w-full justify-start gap-2 rounded-2xl border-0 bg-white/70 px-3 text-foreground shadow-sm hover:bg-white dark:bg-white/10 dark:hover:bg-white/15"
         />
       </div>

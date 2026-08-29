@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query';
+import { resolveRouteIdsList } from '@/lib/resolve-route-id';
 
 const MENU_CACHE_HEADERS = {
   'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
@@ -44,13 +45,7 @@ export async function GET(req: NextRequest) {
 
     const rawIds = req.nextUrl.searchParams.get('itemIds')?.trim() ?? '';
     const itemIds = [
-      ...new Set(
-        rawIds
-          .split(',')
-          .map((id) => id.trim())
-          .filter(Boolean)
-          .slice(0, 40)
-      ),
+      ...new Set(resolveRouteIdsList(rawIds).slice(0, 40)),
     ];
 
     if (itemIds.length === 0) {

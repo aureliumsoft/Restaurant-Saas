@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { menuItemApiPath, productEditPath } from '@/lib/dashboard-paths';
 import {
   DashboardCard,
   DashboardCardContent,
@@ -405,7 +406,9 @@ export function ProductsTab({
     if (!deletingProduct) return;
     setDeleting(true);
     try {
-      await axios.delete(`/api/restaurant/menu/items/${deletingProduct.id}`);
+      await axios.delete(
+        menuItemApiPath(deletingProduct.id, '', deletingProduct.urlId)
+      );
       toast.success('Deleted');
       setDeleteConfirmOpen(false);
       setDeletingProduct(null);
@@ -423,7 +426,7 @@ export function ProductsTab({
       {canEditProducts ? (
         <Button type="button" size="icon" variant="outline" asChild>
           <Link
-            href={`/product/edit/${item.id}`}
+            href={productEditPath(item.urlId ?? item.id)}
             aria-label={`Edit ${item.name}`}
           >
             <Pencil className="h-4 w-4" />

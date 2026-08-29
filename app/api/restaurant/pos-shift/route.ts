@@ -7,7 +7,7 @@ import {
   buildPosShiftPayload,
   buildPosShiftSummary,
   closePosShift,
-  getOrOpenPosShift,
+  getOpenPosShift,
 } from '@/lib/pos-shift';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 
@@ -60,12 +60,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data });
     }
 
-    const shift = await getOrOpenPosShift({
+    const openShift = await getOpenPosShift({
       restaurantId: auth.restaurantId,
       branchId,
-      userId: auth.userId,
     });
-    const data = await buildPosShiftPayload(shift.id, {
+    if (!openShift) {
+      return NextResponse.json({ data: null });
+    }
+    const data = await buildPosShiftPayload(openShift.id, {
       restaurantId: auth.restaurantId,
       branchId,
     });
@@ -126,31 +128,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const branchScope = await getBranchScopeFromRequest(
-      req,
-      auth.userId,
-      auth.restaurantId
-    );
-    const branchId =
-      parsed.data.branchId?.trim() ||
-      branchScope?.activeBranchId ||
-      closed.branchId ||
-      null;
-
-    const nextShift = await getOrOpenPosShift({
-      restaurantId: auth.restaurantId,
-      branchId,
-      userId: auth.userId,
-    });
-    const nextShiftData = await buildPosShiftPayload(nextShift.id, {
-      restaurantId: auth.restaurantId,
-      branchId,
-    });
-
     return NextResponse.json({
       data: {
         closedShift: closed,
-        nextShift: nextShiftData,
       },
     });
   } catch (error) {

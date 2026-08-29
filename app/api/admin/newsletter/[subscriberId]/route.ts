@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { requirePlatformAdmin } from "@/lib/auth/adminRequest";
 import { db } from "@/lib/db";
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 export async function DELETE(
   req: NextRequest,
@@ -11,7 +12,7 @@ export async function DELETE(
   const auth = await requirePlatformAdmin(req);
   if ("error" in auth) return auth.error;
 
-  const { subscriberId } = await ctx.params;
+  const { subscriberId } = await resolveRouteParams(ctx.params, ['subscriberId']);
   if (!subscriberId) {
     return NextResponse.json({ error: "Missing subscriber id" }, { status: 400 });
   }

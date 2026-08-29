@@ -66,6 +66,8 @@ export type RestaurantVariationRow = {
 
 export type MenuItemRow = {
   id: string;
+  /** Encrypted id for URLs (from API list/detail). */
+  urlId?: string;
   name: string;
   description: string | null;
   imageUrl: string | null;

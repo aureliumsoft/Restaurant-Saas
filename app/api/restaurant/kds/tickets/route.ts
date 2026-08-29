@@ -4,10 +4,15 @@ import { Prisma } from '@prisma/client';
 
 import { getBranchScopeFromRequest, orderBranchSql } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
+import {
+  buildKitchenTicketItemRows,
+  kitchenTicketItemsLookLegacy,
+} from '@/lib/kitchen-ticket-items';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
+import { withUrlId, withUrlIds } from '@/lib/with-url-id';
+import { resolveRouteId } from '@/lib/resolve-route-id';
 import { isPendingPaymentStatus } from '@/lib/sales-order-status';
-import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 import { isDineInPayBeforeKitchen } from '@/lib/restaurant-dine-in-payment';
 
 const MIN_PREP_MINUTES = 1;
@@ -25,28 +30,20 @@ type OrderLineForKitchen = {
   quantity: number;
   productName?: string | null;
   menuItem: { name: string } | null;
-  modifiers: { name: string; quantity: number }[];
+  modifiers: { name: string; quantity: number; menuItemId?: string | null }[];
 };
 
-function buildKitchenTicketItemRows(
+function buildKitchenTicketItemRowsFromOrder(
   lines: OrderLineForKitchen[]
 ): { productName: string; quantity: number }[] {
-  const rows: { productName: string; quantity: number }[] = [];
-  for (const line of lines) {
-    rows.push({
-      productName: orderItemDisplayName(line),
+  return buildKitchenTicketItemRows(
+    lines.map((line) => ({
       quantity: line.quantity,
-    });
-    for (const mod of line.modifiers) {
-      const modName = String(mod.name || '').trim();
-      if (!modName) continue;
-      rows.push({
-        productName: `+ ${modName}`,
-        quantity: mod.quantity,
-      });
-    }
-  }
-  return rows;
+      productName: line.productName,
+      menuItem: line.menuItem,
+      modifiers: line.modifiers,
+    }))
+  );
 }
 
 const KDS_TX_OPTIONS = { maxWait: 10_000, timeout: 30_000 } as const;
@@ -146,12 +143,91 @@ export async function GET(req: NextRequest) {
       itemsByTicket.set(it.kitchenTicketId, arr);
     }
 
-    const data = rows.map((r) => ({
-      ...r,
-      startedAt: r.startedAt.toISOString(),
-      createdAt: r.createdAt.toISOString(),
-      items: itemsByTicket.get(r.id) ?? [],
-    }));
+    const orderIds = [...new Set(rows.map((r) => r.orderId))];
+    const orderLines =
+      orderIds.length > 0
+        ? await db.orderItem.findMany({
+            where: { orderId: { in: orderIds } },
+            select: {
+              id: true,
+              orderId: true,
+              quantity: true,
+              productName: true,
+              menuItem: { select: { name: true } },
+              modifiers: {
+                select: { name: true, quantity: true, menuItemId: true },
+                orderBy: { id: 'asc' },
+              },
+            },
+            orderBy: { id: 'asc' },
+          })
+        : [];
+
+    const linesByOrderId = new Map<string, typeof orderLines>();
+    for (const line of orderLines) {
+      const arr = linesByOrderId.get(line.orderId) ?? [];
+      arr.push(line);
+      linesByOrderId.set(line.orderId, arr);
+    }
+
+    const syncTicketIds: string[] = [];
+
+    const data = withUrlIds(
+      rows.map((r) => {
+        const stored = itemsByTicket.get(r.id) ?? [];
+        const orderItems = linesByOrderId.get(r.orderId) ?? [];
+        const shouldHydrateFromOrder =
+          orderItems.length > 0 &&
+          (stored.length === 0 || kitchenTicketItemsLookLegacy(stored));
+
+        const hydratedRows = shouldHydrateFromOrder
+          ? buildKitchenTicketItemRowsFromOrder(orderItems)
+          : null;
+
+        if (hydratedRows) {
+          syncTicketIds.push(r.id);
+        }
+
+        const displayItems = hydratedRows
+          ? hydratedRows.map((row, index) => ({
+              id: `${r.id}-line-${index}`,
+              kitchenTicketId: r.id,
+              productName: row.productName,
+              quantity: row.quantity,
+            }))
+          : stored;
+
+        return {
+          ...r,
+          startedAt: r.startedAt.toISOString(),
+          createdAt: r.createdAt.toISOString(),
+          items: displayItems,
+        };
+      })
+    );
+
+    if (syncTicketIds.length > 0) {
+      await db.$transaction(async (tx) => {
+        for (const ticketId of syncTicketIds) {
+          const ticket = rows.find((r) => r.id === ticketId);
+          if (!ticket) continue;
+          const orderItems = linesByOrderId.get(ticket.orderId) ?? [];
+          const rebuilt = buildKitchenTicketItemRowsFromOrder(orderItems);
+          await tx.kitchenTicketItem.deleteMany({
+            where: { kitchenTicketId: ticketId },
+          });
+          if (rebuilt.length > 0) {
+            await tx.kitchenTicketItem.createMany({
+              data: rebuilt.map((row) => ({
+                kitchenTicketId: ticketId,
+                productName: row.productName,
+                quantity: row.quantity,
+              })),
+            });
+          }
+        }
+      });
+    }
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
@@ -172,7 +248,9 @@ export async function POST(req: NextRequest) {
     const restaurantId = auth.restaurantId;
 
     const body = await req.json().catch(() => ({}));
-    const orderId = typeof body?.orderId === 'string' ? body.orderId : '';
+    const orderId = resolveRouteId(
+      typeof body?.orderId === 'string' ? body.orderId : ''
+    );
     const selectedMinutes = parsePrepMinutes(body?.selectedMinutes);
     if (!orderId) {
       return NextResponse.json({ error: 'Missing order id' }, { status: 400 });
@@ -202,7 +280,7 @@ export async function POST(req: NextRequest) {
             quantity: true,
             productName: true,
             menuItem: { select: { name: true } },
-            modifiers: { select: { name: true, quantity: true } },
+            modifiers: { select: { name: true, quantity: true, menuItemId: true } },
           },
         },
       },
@@ -241,7 +319,7 @@ export async function POST(req: NextRequest) {
         LIMIT 1
       `
     );
-    const itemRows = buildKitchenTicketItemRows(order.items);
+    const itemRows = buildKitchenTicketItemRowsFromOrder(order.items);
 
     if (existing.length > 0) {
       const activeTicket = existing[0];
@@ -259,10 +337,10 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        const existingItemCount = await tx.kitchenTicketItem.count({
+        await tx.kitchenTicketItem.deleteMany({
           where: { kitchenTicketId: activeTicket.id },
         });
-        if (existingItemCount === 0 && itemRows.length > 0) {
+        if (itemRows.length > 0) {
           await tx.kitchenTicketItem.createMany({
             data: itemRows.map((row) => ({
               kitchenTicketId: activeTicket.id,
@@ -292,7 +370,10 @@ export async function POST(req: NextRequest) {
           : ['kiosk.pending_cash', 'dashboard.analytics', 'inventory.stock'],
       });
 
-      return NextResponse.json({ data: { id: activeTicket.id } }, { status: 200 });
+      return NextResponse.json(
+        { data: withUrlId({ id: activeTicket.id }) },
+        { status: 200 }
+      );
     }
 
     const ticket = await db.$transaction(async (tx) => {
@@ -338,7 +419,10 @@ export async function POST(req: NextRequest) {
         : ['kiosk.pending_cash', 'dashboard.analytics', 'inventory.stock'],
     });
 
-    return NextResponse.json({ data: { id: ticket.id } }, { status: 201 });
+    return NextResponse.json(
+      { data: withUrlId({ id: ticket.id }) },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('kds tickets post', error);
     return NextResponse.json({ error: 'Failed to create ticket' }, { status: 500 });

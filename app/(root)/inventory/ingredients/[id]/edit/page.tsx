@@ -17,6 +17,7 @@ import ErrorBoundary from '@/components/toaster/toaster';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { INGREDIENT_UNIT_VALUES } from '@/lib/inventory/validation';
+import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
 
 type IngredientDetail = {
   id: string;
@@ -34,6 +35,7 @@ type IngredientDetail = {
 export default function EditIngredientPage() {
   const params = useParams();
   const ingredientId = typeof params.id === 'string' ? params.id : '';
+  const { activeBranchId, activeBranchUrlId } = useBranchContext();
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [initial, setInitial] = useState<IngredientFormState | null>(null);
@@ -52,7 +54,11 @@ export default function EditIngredientPage() {
 
     void axios
       .get<{ data: IngredientDetail }>(
-        `/api/restaurant/inventory/ingredients/${ingredientId}`
+        withBranchQuery(
+          `/api/restaurant/inventory/ingredients/${ingredientId}`,
+          activeBranchId,
+          activeBranchUrlId
+        )
       )
       .then((res) => {
         if (cancelled) return;
@@ -90,7 +96,7 @@ export default function EditIngredientPage() {
     return () => {
       cancelled = true;
     };
-  }, [ingredientId]);
+  }, [ingredientId, activeBranchId, activeBranchUrlId]);
 
   return (
     <div className="w-full">

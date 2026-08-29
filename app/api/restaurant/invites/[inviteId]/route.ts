@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 export async function DELETE(
   req: NextRequest,
@@ -16,7 +17,7 @@ export async function DELETE(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { inviteId } = await context.params;
+  const { inviteId } = await resolveRouteParams(context.params, ['inviteId']);
   if (!inviteId) {
     return NextResponse.json({ error: 'Missing invite id' }, { status: 400 });
   }

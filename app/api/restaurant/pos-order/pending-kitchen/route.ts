@@ -9,6 +9,7 @@ import {
 import { db } from '@/lib/db';
 import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { withUrlIds } from '@/lib/with-url-id';
 
 /**
  * POS orders paid/saved but not yet on the kitchen display (no ticket in "making").
@@ -99,7 +100,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       {
-        data,
+        data: withUrlIds(data),
         branchId,
         branchName:
           branchId != null

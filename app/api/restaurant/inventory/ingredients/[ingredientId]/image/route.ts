@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { isDataImageUrl, isHttpImageUrl } from '@/lib/image-data-url';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
+import { resolveRouteId } from '@/lib/resolve-route-id';
 
 export async function GET(
   req: NextRequest,
@@ -17,7 +18,7 @@ export async function GET(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { ingredientId } = await ctx.params;
+  const ingredientId = resolveRouteId((await ctx.params).ingredientId);
   const item = await db.ingredient.findFirst({
     where: { id: ingredientId, restaurantId: auth.restaurant.id },
     select: { imageUrl: true, updatedAt: true },

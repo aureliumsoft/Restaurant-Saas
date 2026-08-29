@@ -22,7 +22,10 @@ import {
   type KdsOrderActionKind,
 } from '@/components/kds/kds-order-action-dialog';
 import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
+import eventBus from '@/lib/even';
+import { kdsTicketApiPath } from '@/lib/dashboard-paths';
 import { kdsAxiosErrorMessage } from '@/lib/kds-api-errors';
+import { parseKitchenTicketItemDisplay } from '@/lib/kitchen-ticket-items';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import {
   getOfflineCache,
@@ -39,6 +42,7 @@ import { enqueueOrderOutbox, isOfflineLocalOrderId } from '@/lib/offline/outbox'
 
 type Ticket = {
   id: string;
+  urlId?: string;
   orderId: string;
   status: string;
   selectedMinutes: number;
@@ -72,148 +76,6 @@ function trackingLabel(t: {
   orderId: string;
 }): string {
   return (t.shortOrderId ?? t.orderId.slice(0, 6)).toUpperCase();
-}
-
-type BoardLikeLines = {
-  main: { name: string; quantity: number } | null;
-  nested: { name: string; quantity: number }[];
-};
-
-function normalizeTicketItem(rawName: string, rawQty: number) {
-  const trimmed = String(rawName || '').trim();
-  const nested = trimmed.startsWith('+');
-  const withoutPrefix = nested ? trimmed.replace(/^\+\s*/, '') : trimmed;
-  const trailingQty = withoutPrefix.match(/^(.*)\s+x(\d+)$/i);
-
-  if (!trailingQty) {
-    return {
-      isNested: nested,
-      name: withoutPrefix,
-      quantity: rawQty,
-    };
-  }
-
-  const parsed = Number(trailingQty[2]);
-  const safeParsed = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-  const baseName = trailingQty[1].trim();
-  const effectiveQty = rawQty > 1 ? rawQty * safeParsed : safeParsed;
-
-  return {
-    isNested: nested,
-    name: baseName || withoutPrefix,
-    quantity: effectiveQty,
-  };
-}
-
-function normalizeRecommendedDisplay(rawName: string, rawQty: number) {
-  const normalized = normalizeTicketItem(rawName, rawQty);
-  return {
-    ...normalized,
-    name: normalized.name.replace(/\s{2,}/g, ' ').trim(),
-  };
-}
-
-function splitTopLevel(input: string, sep: string): string[] {
-  const out: string[] = [];
-  let depth = 0;
-  let buf = '';
-  for (let i = 0; i < input.length; i += 1) {
-    const ch = input[i]!;
-    if (ch === '(') depth += 1;
-    if (ch === ')') depth = Math.max(0, depth - 1);
-    if (ch === sep && depth === 0) {
-      if (buf.trim()) out.push(buf.trim());
-      buf = '';
-      continue;
-    }
-    buf += ch;
-  }
-  if (buf.trim()) out.push(buf.trim());
-  return out;
-}
-
-function extractTopLevelParenSegments(input: string) {
-  const segments: Array<{ start: number; end: number; content: string }> = [];
-  let depth = 0;
-  let start = -1;
-  for (let i = 0; i < input.length; i += 1) {
-    const ch = input[i]!;
-    if (ch === '(') {
-      if (depth === 0) start = i;
-      depth += 1;
-      continue;
-    }
-    if (ch === ')') {
-      if (depth > 0) depth -= 1;
-      if (depth === 0 && start >= 0) {
-        segments.push({
-          start,
-          end: i,
-          content: input.slice(start + 1, i).trim(),
-        });
-        start = -1;
-      }
-    }
-  }
-  return segments;
-}
-
-function parseQtySuffix(input: string, fallbackQty: number) {
-  const m = input.match(/^(.*)\s+x(\d+)$/i);
-  if (!m) return { name: input.trim(), qty: fallbackQty };
-  const n = Number(m[2]);
-  const safe = Number.isFinite(n) && n > 0 ? n : 1;
-  return { name: m[1].trim(), qty: safe };
-}
-
-function toBoardLikeLines(rawName: string, rawQty: number): BoardLikeLines {
-  const normalized = normalizeRecommendedDisplay(rawName, rawQty);
-  if (normalized.isNested) {
-    return {
-      main: null,
-      nested: [{ name: normalized.name, quantity: normalized.quantity }],
-    };
-  }
-
-  const segments = extractTopLevelParenSegments(normalized.name);
-  const recommendationSegments = segments.filter(
-    (s) => s.content.includes(':') || s.content.includes(';')
-  );
-  if (recommendationSegments.length === 0) {
-    return {
-      main: { name: normalized.name, quantity: normalized.quantity },
-      nested: [],
-    };
-  }
-
-  let baseName = normalized.name;
-  recommendationSegments
-    .sort((a, b) => b.start - a.start)
-    .forEach((s) => {
-      baseName =
-        `${baseName.slice(0, s.start)}${baseName.slice(s.end + 1)}`.trim();
-    });
-  baseName = baseName.replace(/\s{2,}/g, ' ').trim();
-
-  const nested: { name: string; quantity: number }[] = [];
-  for (const seg of recommendationSegments) {
-    const parts = splitTopLevel(seg.content.replace(/,\s*/g, ';'), ';');
-    for (const part of parts) {
-      const pair = part.match(/^([^:]+):\s*(.+)$/);
-      const valuesRaw = pair ? pair[2] : part;
-      const values = splitTopLevel(valuesRaw, ',');
-      for (const v of values) {
-        const parsed = parseQtySuffix(v.trim(), 1);
-        if (!parsed.name) continue;
-        nested.push({ name: parsed.name, quantity: parsed.qty });
-      }
-    }
-  }
-
-  return {
-    main: { name: baseName || normalized.name, quantity: normalized.quantity },
-    nested,
-  };
 }
 
 type MenuItemRow = {
@@ -442,7 +304,11 @@ export function KdsKitchenScreen() {
       if (isBrowserOffline()) {
         await enqueueOrderOutbox({
           idempotencyKey: `kds-status-${ticketId}-${status}`,
-          url: `/api/restaurant/kds/tickets/${encodeURIComponent(ticketId)}`,
+          url: kdsTicketApiPath(
+            ticketId,
+            '',
+            tickets.find((t) => t.id === ticketId)?.urlId
+          ),
           body: JSON.stringify({ status }),
           kind: 'kds_status',
           method: 'PATCH',
@@ -466,10 +332,15 @@ export function KdsKitchenScreen() {
         return true;
       }
 
-      await axios.patch(`/api/restaurant/kds/tickets/${ticketId}`, { status });
+      const ticketUrlId = tickets.find((t) => t.id === ticketId)?.urlId;
+
+      await axios.patch(kdsTicketApiPath(ticketId, '', ticketUrlId), { status });
       toast.success(
         status === 'completed' ? 'Order marked complete' : 'Order canceled'
       );
+      if (status === 'completed') {
+        eventBus.emit('refreshCompletedOrders');
+      }
       await load();
       return true;
     } catch (err) {
@@ -586,32 +457,40 @@ export function KdsKitchenScreen() {
 
                       <div className="space-y-1">
                         {t.items.map((it) => {
-                          const lines = toBoardLikeLines(
+                          const row = parseKitchenTicketItemDisplay(
                             it.productName,
                             it.quantity
                           );
+                          if (row.kind === 'personalize') {
+                            return (
+                              <p
+                                key={it.id}
+                                className="pl-4 text-sm leading-snug text-muted-foreground"
+                              >
+                                ↳ {row.name}
+                              </p>
+                            );
+                          }
+                          if (row.kind === 'addon') {
+                            return (
+                              <p
+                                key={it.id}
+                                className="pl-4 text-sm leading-snug text-muted-foreground"
+                              >
+                                <span className="font-semibold tabular-nums">
+                                  {row.quantity}×
+                                </span>{' '}
+                                {row.name}
+                              </p>
+                            );
+                          }
                           return (
-                            <div key={it.id} className="text-sm leading-snug">
-                              {lines.main ? (
-                                <p>
-                                  <span className="font-semibold tabular-nums">
-                                    {lines.main.quantity}×
-                                  </span>{' '}
-                                  {lines.main.name}
-                                </p>
-                              ) : null}
-                              {lines.nested.map((line, idx) => (
-                                <p
-                                  key={`${it.id}-nested-${idx}`}
-                                  className="pl-4 text-muted-foreground"
-                                >
-                                  <span className="font-semibold tabular-nums">
-                                    {line.quantity}×
-                                  </span>{' '}
-                                  {line.name}
-                                </p>
-                              ))}
-                            </div>
+                            <p key={it.id} className="text-sm leading-snug">
+                              <span className="font-semibold tabular-nums">
+                                {row.quantity}×
+                              </span>{' '}
+                              {row.name}
+                            </p>
                           );
                         })}
                       </div>

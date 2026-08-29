@@ -147,6 +147,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await db.platformSetting.upsert({
+      where: { key: `stripe_checkout_slug:${checkout.id}` },
+      create: {
+        key: `stripe_checkout_slug:${checkout.id}`,
+        value: restaurantSlug,
+      },
+      update: { value: restaurantSlug },
+    });
+
     return NextResponse.json({ url: checkout.url, id: checkout.id }, { status: 200 });
   } catch (e) {
     console.error('Create Stripe checkout failed:', e);

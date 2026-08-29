@@ -11,6 +11,7 @@ import {
   Save,
   Trash2,
 } from 'lucide-react';
+import { roleApiPath } from '@/lib/dashboard-paths';
 import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
 import {
   Collapsible,
@@ -52,6 +53,7 @@ const settingsCardClass = `${dashboardCardClass} my-5 min-w-0 w-full max-w-full 
 
 type RoleRow = {
   id: string;
+  urlId?: string;
   name: string;
   /** Preset roles: `owner` | `admin`; custom roles omit */
   slug?: string | null;
@@ -135,7 +137,7 @@ export default function RolesCard({
     }
     setSavingId(id);
     try {
-      await axios.patch(`/api/restaurant/roles/${id}`, {
+      await axios.patch(roleApiPath(id, '', drafts[id]?.urlId), {
         name: cur.name.trim(),
         permissions: cur.permissions,
       });
@@ -195,7 +197,8 @@ export default function RolesCard({
     }
     setDeleting(true);
     try {
-      await axios.delete(`/api/restaurant/roles/${deleteId}`);
+      const role = roles.find((r) => r.id === deleteId);
+      await axios.delete(roleApiPath(deleteId, '', role?.urlId));
       toast.success('Role deleted.');
       setDeleteId(null);
       await fetchRoles();

@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { List, Loader2, Package, PackagePlus, Pencil, Plus, RefreshCw, Save, Search, Trash2, X } from 'lucide-react';
 
+import { ingredientEditPath, ingredientApiPath } from '@/lib/dashboard-paths';
 import {
   DashboardCard,
   DashboardCardContent,
@@ -41,6 +42,7 @@ import {
 } from '@/components/ui/dialog';
 import { extractApiErrorMessage } from '@/lib/extract-api-error';
 import { formatIngredientUnit } from '@/lib/inventory/stock';
+import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
 import { useDashboardPermissions } from '@/hooks/use-dashboard-permissions';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { filterDecimalInput } from '@/lib/validation/fields';
@@ -90,6 +92,14 @@ export default function InventoryPage() {
   const { canEdit, canDelete } = useDashboardPermissions();
   const canEditInv = canEdit('inventory');
   const canDeleteInv = canDelete('inventory');
+  const {
+    activeBranchId,
+    activeBranchUrlId,
+    branches,
+    loading: branchLoading,
+  } = useBranchContext();
+  const activeBranchName =
+    branches.find((b) => b.id === activeBranchId)?.name ?? null;
 
   const [tab, setTab] = useState<'ingredients' | 'entries'>('ingredients');
   const [search, setSearch] = useState('');
@@ -132,16 +142,23 @@ export default function InventoryPage() {
         const res = await axios.get<{
           data: IngredientRow[];
           meta: { total: number; totalPages: number; page: number };
-        }>('/api/restaurant/inventory/ingredients', {
-          params: {
-            page: p,
-            limit: 20,
-            q: q || undefined,
-            active: '0',
-            _: Date.now(),
-          },
-          headers: NO_STORE_HEADERS,
-        });
+        }>(
+          withBranchQuery(
+            '/api/restaurant/inventory/ingredients',
+            activeBranchId,
+            activeBranchUrlId
+          ),
+          {
+            params: {
+              page: p,
+              limit: 20,
+              q: q || undefined,
+              active: '0',
+              _: Date.now(),
+            },
+            headers: NO_STORE_HEADERS,
+          }
+        );
         if (requestId !== ingredientLoadId.current) return;
         setRows(res.data.data ?? []);
         setTotal(res.data.meta?.total ?? 0);
@@ -156,7 +173,7 @@ export default function InventoryPage() {
         }
       }
     },
-    []
+    [activeBranchId, activeBranchUrlId]
   );
 
   const loadEntries = useCallback(async (p: number, opts?: { silent?: boolean }) => {
@@ -166,10 +183,17 @@ export default function InventoryPage() {
       const res = await axios.get<{
         data: EntryRow[];
         meta: { total: number; totalPages: number; page: number };
-      }>('/api/restaurant/inventory/entries', {
-        params: { page: p, limit: 20, _: Date.now() },
-        headers: NO_STORE_HEADERS,
-      });
+      }>(
+        withBranchQuery(
+          '/api/restaurant/inventory/entries',
+          activeBranchId,
+          activeBranchUrlId
+        ),
+        {
+          params: { page: p, limit: 20, _: Date.now() },
+          headers: NO_STORE_HEADERS,
+        }
+      );
       if (requestId !== entryLoadId.current) return;
       setEntries(res.data.data ?? []);
       setEntryTotal(res.data.meta?.total ?? 0);
@@ -183,12 +207,16 @@ export default function InventoryPage() {
         setEntriesLoading(false);
       }
     }
-  }, []);
+  }, [activeBranchId, activeBranchUrlId]);
 
   const loadActiveIngredients = useCallback(async () => {
     try {
       const res = await axios.get<{ data: IngredientRow[] }>(
-        '/api/restaurant/inventory/ingredients',
+        withBranchQuery(
+          '/api/restaurant/inventory/ingredients',
+          activeBranchId,
+          activeBranchUrlId
+        ),
         {
           params: { page: 1, limit: 100, active: '1', _: Date.now() },
           headers: NO_STORE_HEADERS,
@@ -198,7 +226,7 @@ export default function InventoryPage() {
     } catch {
       setIngredients([]);
     }
-  }, []);
+  }, [activeBranchId, activeBranchUrlId]);
 
   const applySearch = () => {
     const q = search.trim();
@@ -314,12 +342,19 @@ export default function InventoryPage() {
     }
     setSavingEntry(true);
     try {
-      await axios.post('/api/restaurant/inventory/entries', {
-        ingredientId: entryIngredientId,
+      await axios.post(
+        withBranchQuery(
+          '/api/restaurant/inventory/entries',
+          activeBranchId,
+          activeBranchUrlId
+        ),
+        {
+          ingredientId: entryIngredientId,
         quantity: Number(entryQty),
         reason: entryReason.trim(),
         menuItemId: entryProductId || null,
-      });
+        }
+      );
       toast.success('Stock entry saved.');
       setEntryQty('');
       setEntryReason('');
@@ -338,7 +373,7 @@ export default function InventoryPage() {
     if (!deleteId) return;
     setDeleting(true);
     try {
-      await axios.delete(`/api/restaurant/inventory/ingredients/${deleteId}`);
+      await axios.delete(ingredientApiPath(deleteId));
       toast.success('Ingredient removed.');
       setDeleteId(null);
       void loadIngredients(page, appliedSearch, { silent: true });
@@ -360,7 +395,11 @@ export default function InventoryPage() {
     setSavingStock(true);
     try {
       await axios.patch(
-        `/api/restaurant/inventory/ingredients/${stockRow.id}`,
+        withBranchQuery(
+          ingredientApiPath(stockRow.id),
+          activeBranchId,
+          activeBranchUrlId
+        ),
         { quantity: qty }
       );
       toast.success('Stock updated.');
@@ -382,8 +421,12 @@ export default function InventoryPage() {
   return (
     <MenuPageShell
       title="Inventory"
-      description="Track ingredients, recipes on products, and manual stock usage."
-      loading={false}
+      description={
+        activeBranchName
+          ? `Track ingredients and stock for ${activeBranchName}. Quantities are per branch.`
+          : 'Track ingredients, recipes on products, and manual stock usage.'
+      }
+      loading={branchLoading}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-2">
@@ -556,7 +599,7 @@ export default function InventoryPage() {
                                     </Button>
                                     <Button type="button" variant="ghost" size="icon" asChild>
                                       <Link
-                                        href={`/inventory/ingredients/${row.id}/edit`}
+                                        href={ingredientEditPath(row.id)}
                                       >
                                         <Pencil className="h-4 w-4" />
                                       </Link>

@@ -7,13 +7,13 @@ import {
 } from '@/lib/customer-auth/session';
 import { db } from '@/lib/db';
 import { orderItemDisplayName } from '@/lib/orders/order-item-name';
+import { resolveRouteId } from '@/lib/resolve-route-id';
 
 type RouteContext = { params: Promise<{ orderId: string }> };
 
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
-    const { orderId: rawId } = await context.params;
-    const orderId = rawId?.trim();
+    const orderId = resolveRouteId((await context.params).orderId);
     if (!orderId) {
       return NextResponse.json({ error: 'Missing order id.' }, { status: 400 });
     }
@@ -85,6 +85,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
                 name: true,
                 unitPrice: true,
                 quantity: true,
+                menuItemId: true,
               },
             },
           },

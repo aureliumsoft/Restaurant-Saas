@@ -18,6 +18,7 @@ import {
 
 type OrderListItem = {
   id: string;
+  urlId?: string;
   shortOrderId: string;
   status: string;
   total: number;
@@ -142,7 +143,7 @@ export default function CustomerOrdersPage() {
         {orders.map((order) => (
           <Link
             key={order.id}
-            href={restaurantOrderDetailPath(slug, order.id)}
+            href={restaurantOrderDetailPath(slug, order.urlId ?? order.id)}
             className="block rounded-2xl border border-[#ececf0] bg-white p-4 shadow-sm transition hover:border-primary/40"
           >
             <div className="flex items-start justify-between gap-3">

@@ -7,6 +7,7 @@ import {
   slugifyDocLabel,
 } from '@/lib/documentation/module';
 import { db } from '@/lib/db';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -14,7 +15,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const auth = await requirePlatformAdmin(req);
   if ('error' in auth) return auth.error;
 
-  const { id } = await ctx.params;
+  const { id } = await resolveRouteParams(ctx.params, ['id']);
   let json: unknown;
   try {
     json = await req.json();
@@ -66,7 +67,7 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
   const auth = await requirePlatformAdmin(req);
   if ('error' in auth) return auth.error;
 
-  const { id } = await ctx.params;
+  const { id } = await resolveRouteParams(ctx.params, ['id']);
   try {
     await db.documentationHeading.delete({ where: { id } });
     return NextResponse.json({ data: { ok: true } });

@@ -9,6 +9,10 @@ import {
   legacyWebAppRedirectPath,
 } from "@/lib/customer-storefront-paths";
 import { looksLikeCustomerGoogleOAuthState } from "@/lib/customer-auth/google-oauth-state-shape";
+import {
+  rewritePathnameForUrlIds,
+  rewriteSearchParamsForUrlIds,
+} from "@/lib/url-id-middleware";
 
 /** Same fallback as `authOptions.secret` in `lib/auth-options.ts` (dev only). */
 function resolveNextAuthJwtSecret(): string | undefined {
@@ -68,7 +72,21 @@ function isSubdomainStorefrontGlobalPath(pathname: string): boolean {
 
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
-  const pathname = url.pathname;
+  let pathname = url.pathname;
+  let urlIdsDecoded = false;
+
+  const rewrittenPath = rewritePathnameForUrlIds(pathname);
+  if (rewrittenPath !== pathname) {
+    url.pathname = rewrittenPath;
+    pathname = rewrittenPath;
+    urlIdsDecoded = true;
+  }
+  if (rewriteSearchParamsForUrlIds(url.searchParams)) {
+    urlIdsDecoded = true;
+  }
+
+  const finish = () =>
+    urlIdsDecoded ? NextResponse.rewrite(url) : NextResponse.next();
 
   // Kiosk / customer Google login reuses NextAuth's registered redirect URI
   // (`/api/auth/callback/google`) to avoid Google Error 400 redirect_uri_mismatch.
@@ -124,19 +142,19 @@ export async function middleware(req: NextRequest) {
   const subdomain = getSubdomainFromHost(hostname);
 
   if (!subdomain) {
-    return NextResponse.next();
+    return finish();
   }
 
   // Keep API untouched so handlers can read host/subdomain directly.
-  if (pathname.startsWith("/api")) return NextResponse.next();
+  if (pathname.startsWith("/api")) return finish();
 
   const tenantPrefix = `/${subdomain}`;
   if (pathname === tenantPrefix || pathname.startsWith(`${tenantPrefix}/`)) {
-    return NextResponse.next();
+    return finish();
   }
 
   if (isSubdomainStorefrontGlobalPath(pathname)) {
-    return NextResponse.next();
+    return finish();
   }
 
   if (pathname === "/") {

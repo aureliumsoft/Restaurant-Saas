@@ -37,6 +37,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
+import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
 
 export type IngredientFormState = {
   name: string;
@@ -84,6 +85,7 @@ export function IngredientForm({
   ingredientId?: string;
 }) {
   const router = useRouter();
+  const { activeBranchId, activeBranchUrlId } = useBranchContext();
   const [form, setForm] = useState<IngredientFormState>(
     initial ?? EMPTY_INGREDIENT_FORM
   );
@@ -134,7 +136,11 @@ export function IngredientForm({
     try {
       if (isEdit && ingredientId) {
         await axios.patch(
-          `/api/restaurant/inventory/ingredients/${ingredientId}`,
+          withBranchQuery(
+            `/api/restaurant/inventory/ingredients/${ingredientId}`,
+            activeBranchId,
+            activeBranchUrlId
+          ),
           payload
         );
         toast.success('Ingredient updated');
@@ -144,7 +150,14 @@ export function IngredientForm({
         return;
       }
 
-      await axios.post('/api/restaurant/inventory/ingredients', payload);
+      await axios.post(
+        withBranchQuery(
+          '/api/restaurant/inventory/ingredients',
+          activeBranchId,
+          activeBranchUrlId
+        ),
+        payload
+      );
       toast.success('Ingredient created');
       setConfirmOpen(false);
 

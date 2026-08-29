@@ -118,20 +118,22 @@ export function KioskPaymentSuccess({
   };
 
   return (
-    <div className="kiosk-success-root min-h-screen bg-[#f8fafc] px-4 py-10 text-[#0f172a]">
+    <div className="min-h-screen bg-[#f8fafc] px-4 py-10 text-[#0f172a]">
       <div className="mx-auto max-w-xl">
-        <Card className="border-[#e2e8f0] bg-white text-[#0f172a] shadow-sm">
+        <Card className="border border-[#e2e8f0] bg-white text-[#0f172a] shadow-sm dark:border-[#e2e8f0] dark:bg-white dark:text-[#0f172a] dark:shadow-sm">
           <CardHeader>
-            <CardTitle className="text-2xl">Kiosk order confirmed</CardTitle>
+            <CardTitle className="text-2xl text-[#0f172a] dark:text-[#0f172a]">
+              Kiosk order confirmed
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-lg border border-[#e2e8f0] p-4 text-center">
-              <p className="text-xs text-[#64748b]">Ticket Number</p>
-              <p className="text-4xl font-bold tabular-nums">
+            <div className="rounded-lg border border-[#e2e8f0] bg-white p-4 text-center dark:border-[#e2e8f0] dark:bg-white">
+              <p className="text-xs text-[#64748b] dark:text-[#64748b]">Ticket Number</p>
+              <p className="text-4xl font-bold tabular-nums text-[#0f172a] dark:text-[#0f172a]">
                 {ticket != null ? `#${ticket}` : '—'}
               </p>
             </div>
-            <div className="text-sm">
+            <div className="text-sm text-[#0f172a] dark:text-[#0f172a]">
               <p>
                 <strong>Tracking ID:</strong> {trackingId ?? '—'}
               </p>
@@ -143,7 +145,7 @@ export function KioskPaymentSuccess({
               {isMobile ? null : (
                 <Button
                   type="button"
-                  className="bg-primary text-white hover:bg-primary/90"
+                  className="bg-primary text-white hover:bg-primary/90 dark:bg-primary dark:text-white dark:hover:bg-primary/90"
                   onClick={printTicket}
                 >
                   <IconPrinter className="w-4 h-4 mr-2" />
@@ -154,8 +156,8 @@ export function KioskPaymentSuccess({
                 type="button"
                 className={
                   isMobile
-                    ? 'w-full bg-primary text-white hover:bg-primary/90'
-                    : 'border border-primary bg-white text-primary hover:bg-primary/10 hover:text-primary'
+                    ? 'w-full bg-primary text-white hover:bg-primary/90 dark:bg-primary dark:text-white dark:hover:bg-primary/90'
+                    : 'border border-primary bg-white text-primary hover:bg-primary/10 hover:text-primary dark:border-primary dark:bg-white dark:text-primary dark:hover:bg-primary/10'
                 }
                 onClick={() =>
                   router.push(

@@ -8,6 +8,7 @@ import { ChevronLeft, Loader2 } from 'lucide-react';
 import { useCustomerAccount } from '@/components/customer-app/customer-account-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ProductLineDetails } from '@/components/orders/product-line-details';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { restaurantOrdersPath } from '@/lib/customer-storefront-paths';
 
@@ -170,25 +171,17 @@ export default function CustomerOrderDetailPage() {
                   key={item.id}
                   className="flex items-start justify-between gap-3 border-b border-[#ececf0] pb-3 last:border-0 last:pb-0"
                 >
-                  <div className="min-w-0">
-                    <p className="font-semibold">
-                      {item.quantity}× {item.name}
-                    </p>
-                    {item.modifiers.length > 0 ? (
-                      <div className="mt-1 space-y-0.5">
-                        {item.modifiers.map((mod) => (
-                          <p
-                            key={mod.id}
-                            className="text-xs text-muted-foreground"
-                          >
-                            - {mod.name}
-                            {mod.unitPrice > 0
-                              ? ` (+${formatMoney(mod.unitPrice)})`
-                              : ''}
-                          </p>
-                        ))}
-                      </div>
-                    ) : null}
+                  <div className="min-w-0 flex-1">
+                    <ProductLineDetails
+                      productName={item.name}
+                      quantity={item.quantity}
+                      orderModifiers={item.modifiers}
+                      showPrices
+                      formatMoney={formatMoney}
+                      titleClassName="font-semibold"
+                      sectionLabelClassName="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      lineClassName="text-xs text-muted-foreground"
+                    />
                   </div>
                   <p className="shrink-0 font-medium">
                     {formatMoney(item.unitPrice * item.quantity)}

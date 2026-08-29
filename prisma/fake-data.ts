@@ -1033,6 +1033,7 @@ export function fakeIngredientStockEntryComplete() {
   return {
     id: faker.string.uuid(),
     restaurantId: faker.string.uuid(),
+    branchId: undefined,
     ingredientId: faker.string.uuid(),
     menuItemId: undefined,
     menuItemVariationId: undefined,
@@ -1042,6 +1043,23 @@ export function fakeIngredientStockEntryComplete() {
     orderId: undefined,
     createdByUserId: undefined,
     createdAt: new Date(),
+  };
+}
+export function fakeBranchIngredientStock() {
+  return {
+    minQuantity: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeBranchIngredientStockComplete() {
+  return {
+    id: faker.string.uuid(),
+    branchId: faker.string.uuid(),
+    ingredientId: faker.string.uuid(),
+    quantity: 0,
+    minQuantity: undefined,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
   };
 }
 export function fakeProductStock() {

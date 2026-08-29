@@ -86,6 +86,126 @@ export function cartLineTitle(
   return variation ? `${base} (${variation})` : base;
 }
 
+export type ModifierDisplaySection = {
+  kind: 'personalize' | 'recommendation';
+  label: string;
+  lines: Array<{
+    name: string;
+    unitPrice?: number;
+    quantity?: number;
+  }>;
+};
+
+/** Grouped personalize vs recommendation sections with labels for cart lines. */
+export function cartModifierDisplaySections(
+  modifiers: unknown
+): ModifierDisplaySection[] {
+  const normalized = normalizeCartModifiers(modifiers);
+  const personalizeLines: ModifierDisplaySection['lines'] = [];
+  const recommendationByGroup = new Map<string, ModifierDisplaySection['lines']>();
+
+  for (const group of normalized) {
+    for (const sel of group.selections) {
+      const line = { name: sel.name, unitPrice: sel.unitPrice };
+      if (isPersonalizeModifierMenuItemId(sel.menuItemId)) {
+        personalizeLines.push(line);
+      } else {
+        const label = group.groupName?.trim() || 'Add-ons';
+        const existing = recommendationByGroup.get(label) ?? [];
+        existing.push(line);
+        recommendationByGroup.set(label, existing);
+      }
+    }
+  }
+
+  const sections: ModifierDisplaySection[] = [];
+  if (personalizeLines.length > 0) {
+    sections.push({
+      kind: 'personalize',
+      label: 'Personalize',
+      lines: personalizeLines,
+    });
+  }
+  for (const [label, lines] of recommendationByGroup) {
+    sections.push({ kind: 'recommendation', label, lines });
+  }
+  return sections;
+}
+
+/** Grouped sections from persisted order modifiers (menuItemId null = personalize). */
+export function orderModifierDisplaySections(
+  modifiers: Array<{
+    name: string;
+    menuItemId?: string | null;
+    unitPrice?: number;
+    quantity?: number;
+  }>
+): ModifierDisplaySection[] {
+  const personalizeLines: ModifierDisplaySection['lines'] = [];
+  const addonLines: ModifierDisplaySection['lines'] = [];
+
+  for (const mod of modifiers) {
+    const name = String(mod.name ?? '').trim();
+    if (!name) continue;
+    const line = {
+      name,
+      unitPrice: mod.unitPrice,
+      quantity: mod.quantity,
+    };
+    if (!mod.menuItemId) {
+      personalizeLines.push(line);
+    } else {
+      addonLines.push(line);
+    }
+  }
+
+  const sections: ModifierDisplaySection[] = [];
+  if (personalizeLines.length > 0) {
+    sections.push({
+      kind: 'personalize',
+      label: 'Personalize',
+      lines: personalizeLines,
+    });
+  }
+  if (addonLines.length > 0) {
+    sections.push({
+      kind: 'recommendation',
+      label: 'Add-ons',
+      lines: addonLines,
+    });
+  }
+  return sections;
+}
+
+/** Kitchen ticket / receipt single-line label — selection names only, no group titles. */
+export function ticketProductName(
+  productName: string,
+  modifiers: unknown
+): string {
+  const groups = normalizeCartModifiers(modifiers);
+  if (!groups.length) return productName;
+  const names: string[] = [];
+  for (const group of groups) {
+    for (const sel of group.selections) {
+      const name = String(sel.name ?? '').trim();
+      if (name) names.push(name);
+    }
+  }
+  if (!names.length) return productName;
+  return `${productName} (${names.join(', ')})`;
+}
+
+export function cartLineDisplayName(
+  productName: string,
+  variationName: string | null | undefined,
+  modifiers: unknown
+): string {
+  return ticketProductName(
+    cartLineTitle(productName, variationName),
+    modifiers
+  );
+}
+
 export type ProductImageSource = {
   id: string;
   imageUrl?: string | null;

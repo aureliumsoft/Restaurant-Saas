@@ -9,10 +9,12 @@ import {
   parsePaginationParams,
 } from '@/lib/pagination';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
+import { encodeUrlId } from '@/lib/url-id';
+import { menuItemApiPath } from '@/lib/dashboard-paths';
 
 /** Lazy image URL — browser loads photo after list JSON (does not bloat list payload). */
 function lazyProductImageUrl(itemId: string): string {
-  return `/api/restaurant/menu/items/${encodeURIComponent(itemId)}/image`;
+  return `${menuItemApiPath(itemId)}/image`;
 }
 
 const listItemSelect = {
@@ -223,6 +225,7 @@ export async function GET(req: NextRequest) {
       const hasImage = hasImageById.get(item.id) === true;
       return {
         id: item.id,
+        urlId: encodeUrlId(item.id),
         name: item.name,
         description: truncateDescription(item.description),
         // Browser lazy-loads each photo via this endpoint after list JSON arrives.

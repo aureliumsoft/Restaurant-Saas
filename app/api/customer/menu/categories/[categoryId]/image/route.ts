@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query';
+import { resolveRouteId } from '@/lib/resolve-route-id';
 import { responseFromStoredImage } from '@/lib/stored-image-response';
 
 export const runtime = 'nodejs';
@@ -33,8 +34,8 @@ async function resolveRestaurantId(
 type RouteContext = { params: Promise<{ categoryId: string }> };
 
 export async function GET(req: NextRequest, context: RouteContext) {
-  const { categoryId } = await context.params;
-  if (!categoryId?.trim()) {
+  const categoryId = resolveRouteId((await context.params).categoryId);
+  if (!categoryId) {
     return NextResponse.json({ error: 'Missing category id' }, { status: 400 });
   }
 
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     }
 
     const category = await db.menuCategory.findFirst({
-      where: { id: categoryId.trim(), restaurantId },
+      where: { id: categoryId, restaurantId },
       select: { imageUrl: true, updatedAt: true },
     });
 

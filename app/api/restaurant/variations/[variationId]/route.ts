@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '@/lib/db';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const patchSchema = z.object({
   name: z.string().min(1).max(80).optional(),
@@ -23,7 +24,7 @@ export async function PATCH(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { variationId } = await ctx.params;
+  const { variationId } = await resolveRouteParams(ctx.params, ['variationId']);
 
   const existing = await db.restaurantVariation.findFirst({
     where: { id: variationId, restaurantId: auth.restaurant.id },
@@ -80,7 +81,7 @@ export async function DELETE(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { variationId } = await ctx.params;
+  const { variationId } = await resolveRouteParams(ctx.params, ['variationId']);
 
   const existing = await db.restaurantVariation.findFirst({
     where: { id: variationId, restaurantId: auth.restaurant.id },

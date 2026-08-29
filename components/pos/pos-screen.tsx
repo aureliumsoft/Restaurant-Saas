@@ -18,6 +18,7 @@ import {
   Banknote,
   X,
   LogOut,
+  PlayCircle,
   History,
   Monitor,
   Archive,
@@ -30,9 +31,15 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  PackageCheck,
   WifiOff,
 } from 'lucide-react';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { publicQueryParam } from '@/lib/public-id';
+import {
+  kioskOrderApiPath,
+  posOrderApiPath,
+} from '@/lib/dashboard-paths';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useProgressiveRestaurantMenu } from '@/hooks/use-progressive-restaurant-menu';
 import {
@@ -43,11 +50,14 @@ import {
   fetchPosShiftSummary,
   PosShiftSheet,
 } from '@/components/pos/pos-shift-sheet';
+import { PosStartShiftDialog } from '@/components/pos/pos-start-shift-dialog';
+import { PosLogoutShiftDialog } from '@/components/pos/pos-logout-shift-dialog';
 import {
   PosRecentOrdersSheet,
   type PosOrderDetail,
 } from '@/components/pos/pos-recent-orders-sheet';
 import { PosKioskOrdersSheet } from '@/components/pos/pos-kiosk-orders-sheet';
+import { PosCompletedOrdersSheet } from '@/components/pos/pos-completed-orders-sheet';
 import { PosTableOrdersSheet } from '@/components/pos/pos-table-orders-sheet';
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
 import {
@@ -105,6 +115,8 @@ import axios from 'axios';
 import eventBus from '@/lib/even';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { useKioskPendingCash, revalidateKioskPendingCash } from '@/hooks/use-kiosk-pending-cash';
+import { useShiftAwareLogout } from '@/hooks/use-shift-aware-logout';
+import { usePosCompletedOrders } from '@/hooks/use-pos-completed-orders';
 import {
   useOpenTableOrders,
   revalidateOpenTableOrders,
@@ -125,10 +137,11 @@ import { ModeToggle } from '@/components/darkmode/darkmode';
 import UserMenu from '@/components/dashboard/UserMenu';
 import { Cross2Icon } from '@radix-ui/react-icons';
 import {
+  cartLineDisplayName,
   cartLineTitle,
   cartModifierSelectionNames,
-  cartPersonalizeSelectionNames,
 } from '@/lib/cart-line-display';
+import { ProductLineDetails } from '@/components/orders/product-line-details';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
 import { restaurantMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
@@ -329,6 +342,7 @@ type BranchOption = {
 
 type PosPendingKitchenOrder = {
   id: string;
+  urlId?: string;
   shortOrderId: string;
   ticketNumber: number | null;
   total: number;
@@ -385,10 +399,11 @@ function lineUnitTotal(line: CartLine) {
 }
 
 function posCartLineDisplayName(line: CartLine) {
-  const base = cartLineTitle(line.productName, line.variationName);
-  const addonNames = cartModifierSelectionNames(line.modifiers);
-  if (!addonNames.length) return base;
-  return `${base} (${addonNames.join(', ')})`;
+  return cartLineDisplayName(
+    line.productName,
+    line.variationName,
+    line.modifiers
+  );
 }
 
 function normalizeCartLine(
@@ -442,48 +457,37 @@ function PosCartLineSummary({
   titleClassName?: string;
   subItemClassName?: string;
 }) {
-  const personalizeNames = cartPersonalizeSelectionNames(line.modifiers);
-  const addonNames = cartModifierSelectionNames(line.modifiers);
   return (
-    <>
-      <p className={titleClassName}>
-        {cartLineTitle(line.productName, line.variationName)}
-      </p>
-      {personalizeNames.length > 0 ? (
-        <div className="mt-1 space-y-0.5">
-          {personalizeNames.map((name, index) => (
-            <p
-              key={`${line.lineId}-personalize-${index}`}
-              className="text-xs font-medium text-foreground/90"
-            >
-              {name}
-            </p>
-          ))}
-        </div>
-      ) : null}
-      {addonNames.length > 0 ? (
-        <div className="mt-1 space-y-0.5">
-          {addonNames.map((name, index) => (
-            <p key={`${line.lineId}-sel-${index}`} className={subItemClassName}>
-              - {name}
-            </p>
-          ))}
-        </div>
-      ) : null}
-    </>
+    <ProductLineDetails
+      productName={line.productName}
+      variationName={line.variationName}
+      modifiers={line.modifiers}
+      titleClassName={titleClassName}
+      sectionLabelClassName="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+      lineClassName={subItemClassName}
+    />
   );
 }
 
 const POS_ARCHIVED_ORDERS_KEY = 'pos_archived_orders_v1';
 /** Badge count for pending kiosk cash — refreshed via SSE, not polling. */
 
-export function PosScreen() {
+type PosScreenProps = {
+  endShiftLogoutOnMount?: boolean;
+  onEndShiftLogoutMountHandled?: () => void;
+};
+
+export function PosScreen({
+  endShiftLogoutOnMount = false,
+  onEndShiftLogoutMountHandled,
+}: PosScreenProps = {}) {
   const router = useRouter();
   const { regional, formatMoney } = useOwnerRestaurantRegional();
   const { setPosCartHasItems } = usePosCartGuard();
   const {
     branches: scopedBranches,
     activeBranchId,
+    activeBranchUrlId,
     isOwnerOrAdmin,
     setActiveBranch,
   } = useBranchContext();
@@ -566,7 +570,15 @@ export function PosScreen() {
   const [archivedOrdersOpen, setArchivedOrdersOpen] = useState(false);
   const [archivedOrders, setArchivedOrders] = useState<ArchivedOrder[]>([]);
   const [shiftSheetOpen, setShiftSheetOpen] = useState(false);
+  const [startShiftDialogOpen, setStartShiftDialogOpen] = useState(false);
+  const [startingShift, setStartingShift] = useState(false);
+  const [logoutEndShiftFlow, setLogoutEndShiftFlow] = useState(false);
+  const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
+  const [shiftSummaryLoaded, setShiftSummaryLoaded] = useState(false);
+  const startShiftPromptedRef = useRef('');
+  const endShiftLogoutHandledRef = useRef(false);
   const [recentOrdersOpen, setRecentOrdersOpen] = useState(false);
+  const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
   const [kioskOrdersOpen, setKioskOrdersOpen] = useState(false);
   const [tableOrdersOpen, setTableOrdersOpen] = useState(false);
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
@@ -583,9 +595,28 @@ export function PosScreen() {
   const [cartBump, setCartBump] = useState(false);
   const cartBumpTimerRef = useRef<number | null>(null);
   const posBranchId = selectedBranchId || activeBranchId || null;
+  const openEndShiftForLogout = useCallback(() => {
+    setLogoutEndShiftFlow(true);
+    setShiftSheetOpen(true);
+  }, []);
+  const {
+    logoutChoiceOpen,
+    setLogoutChoiceOpen,
+    checkingShift: logoutCheckingShift,
+    requestLogout: handlePosLogout,
+    handleLogoutOnly,
+    handleLogoutEndShift,
+  } = useShiftAwareLogout({
+    branchId: posBranchId,
+    onEndShiftAndLogout: openEndShiftForLogout,
+  });
   const { count: kioskPendingCount } = useKioskPendingCash(posBranchId);
+  const { count: completedOrdersCount } = usePosCompletedOrders(posBranchId);
   const { tableCount: openTableCount } = useOpenTableOrders(posBranchId);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [editingOrderUrlId, setEditingOrderUrlId] = useState<string | null>(
+    null
+  );
   const [editingOrderLabel, setEditingOrderLabel] = useState<string | null>(
     null
   );
@@ -596,6 +627,7 @@ export function PosScreen() {
   const [lastClosingCashInLocker, setLastClosingCashInLocker] = useState<
     number | null
   >(null);
+  const [cashInLocker, setCashInLocker] = useState<number | null>(null);
   const [lastShiftEndedAt, setLastShiftEndedAt] = useState<string | null>(null);
   const shiftSummaryBranchRef = useRef('');
   const shiftRealtimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -793,7 +825,14 @@ export function PosScreen() {
     setLoadingPendingKitchen(true);
     try {
       const branchId = selectedBranchId || activeBranchId || '';
-      const query = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+      const branch =
+        scopedBranches.find((b) => b.id === branchId) ??
+        (branchId === activeBranchId
+          ? { id: branchId, urlId: activeBranchUrlId }
+          : null);
+      const query = branchId
+        ? `?${publicQueryParam('branchId', branchId, branch?.urlId)}`
+        : '';
       const res = await fetch(
         `/api/restaurant/pos-order/pending-kitchen${query}`,
         { cache: 'no-store' }
@@ -806,7 +845,7 @@ export function PosScreen() {
     } finally {
       setLoadingPendingKitchen(false);
     }
-  }, [selectedBranchId, activeBranchId]);
+  }, [selectedBranchId, activeBranchId, activeBranchUrlId, scopedBranches]);
 
   const pendingKitchenRefreshTimerRef = useRef<ReturnType<
     typeof setTimeout
@@ -932,8 +971,10 @@ export function PosScreen() {
     async function loadTables() {
       setTablesLoading(true);
       try {
-        const branchQuery = activeBranchId
-          ? `?branchId=${encodeURIComponent(activeBranchId)}`
+        const branchId = activeBranchId || '';
+        const branch = scopedBranches.find((b) => b.id === branchId);
+        const branchQuery = branchId
+          ? `?${publicQueryParam('branchId', branchId, branch?.urlId ?? activeBranchUrlId)}`
           : '';
         const res = await fetch(`/api/restaurant/tables${branchQuery}`, {
           method: 'GET',
@@ -1297,10 +1338,15 @@ export function PosScreen() {
 
   const applyShiftSummary = useCallback(
     (summary: {
+      id?: string | null;
       orderCount: number;
       lastClosingCashInLocker: number | null;
       lastShiftEndedAt: string | null;
+      cashInLocker?: number | null;
     }) => {
+      setActiveShiftId((prev) =>
+        prev === (summary.id ?? null) ? prev : (summary.id ?? null)
+      );
       setShiftOrderCount((prev) =>
         prev === summary.orderCount ? prev : summary.orderCount
       );
@@ -1308,6 +1354,11 @@ export function PosScreen() {
         prev === summary.lastClosingCashInLocker
           ? prev
           : summary.lastClosingCashInLocker
+      );
+      setCashInLocker((prev) =>
+        prev === (summary.cashInLocker ?? null)
+          ? prev
+          : (summary.cashInLocker ?? null)
       );
       setLastShiftEndedAt((prev) =>
         prev === summary.lastShiftEndedAt ? prev : summary.lastShiftEndedAt
@@ -1323,17 +1374,65 @@ export function PosScreen() {
         applyShiftSummary(summary);
       } catch {
         applyShiftSummary({
+          id: null,
           orderCount: 0,
           lastClosingCashInLocker: null,
           lastShiftEndedAt: null,
+          cashInLocker: null,
         });
+      } finally {
+        setShiftSummaryLoaded(true);
       }
     },
     [applyShiftSummary]
   );
 
+  const hasActiveShift = Boolean(activeShiftId);
+
+  const promptStartShift = useCallback(() => {
+    setStartShiftDialogOpen(true);
+  }, []);
+
+  const requireActiveShift = useCallback((): boolean => {
+    if (hasActiveShift) return true;
+    toast.error('Start a new shift before creating orders.');
+    promptStartShift();
+    return false;
+  }, [hasActiveShift, promptStartShift]);
+
+  const handleStartShift = useCallback(async () => {
+    const branchId = selectedBranchId || activeBranchId || '';
+    if (!branchId) {
+      toast.warn('Select a branch before starting a shift.');
+      return;
+    }
+    setStartingShift(true);
+    try {
+      const res = await axios.post<{ data: { id: string; orderCount: number } }>(
+        '/api/restaurant/pos-shift/start',
+        { branchId }
+      );
+      const shift = res.data.data;
+      setActiveShiftId(shift.id);
+      setShiftOrderCount(shift.orderCount);
+      setStartShiftDialogOpen(false);
+      toast.success('Shift started.');
+      void refreshShiftSummary(branchId);
+    } catch (error) {
+      toast.error(
+        extractApiErrorMessage(error, 'Could not start shift. Please try again.')
+      );
+    } finally {
+      setStartingShift(false);
+    }
+  }, [selectedBranchId, activeBranchId, refreshShiftSummary]);
+
   const handleShiftUpdated = useCallback(
-    (shift: { orderCount: number } | null) => {
+    (shift: { id?: string; orderCount: number } | null) => {
+      setActiveShiftId((prev) => {
+        const id = shift?.id ?? null;
+        return prev === id ? prev : id;
+      });
       setShiftOrderCount((prev) => {
         const count = shift?.orderCount ?? 0;
         return prev === count ? prev : count;
@@ -1347,9 +1446,13 @@ export function PosScreen() {
       lastClosingCashInLocker: number | null;
       lastShiftEndedAt: string | null;
     }) => {
+      setActiveShiftId(null);
+      setLogoutEndShiftFlow(false);
       applyShiftSummary({
+        id: null,
         orderCount: 0,
         ...summary,
+        cashInLocker: summary.lastClosingCashInLocker,
       });
     },
     [applyShiftSummary]
@@ -1361,13 +1464,43 @@ export function PosScreen() {
       setShiftOrderCount(0);
       setLastClosingCashInLocker(null);
       setLastShiftEndedAt(null);
+      setCashInLocker(null);
+      setActiveShiftId(null);
+      setShiftSummaryLoaded(false);
       shiftSummaryBranchRef.current = '';
+      startShiftPromptedRef.current = '';
       return;
     }
     if (shiftSummaryBranchRef.current === branchId) return;
     shiftSummaryBranchRef.current = branchId;
+    setShiftSummaryLoaded(false);
+    startShiftPromptedRef.current = '';
     void refreshShiftSummary(branchId);
   }, [selectedBranchId, activeBranchId, refreshShiftSummary]);
+
+  useEffect(() => {
+    const branchId = selectedBranchId || activeBranchId || '';
+    if (!branchId || !shiftSummaryLoaded || hasActiveShift) return;
+    if (endShiftLogoutOnMount) return;
+    if (startShiftPromptedRef.current === branchId) return;
+    startShiftPromptedRef.current = branchId;
+    setStartShiftDialogOpen(true);
+  }, [
+    selectedBranchId,
+    activeBranchId,
+    shiftSummaryLoaded,
+    hasActiveShift,
+    endShiftLogoutOnMount,
+  ]);
+
+  useEffect(() => {
+    if (!endShiftLogoutOnMount || endShiftLogoutHandledRef.current) return;
+    endShiftLogoutHandledRef.current = true;
+    setLogoutEndShiftFlow(true);
+    setShiftSheetOpen(true);
+    setStartShiftDialogOpen(false);
+    onEndShiftLogoutMountHandled?.();
+  }, [endShiftLogoutOnMount, onEndShiftLogoutMountHandled]);
 
   const refreshShiftOnRealtime = useCallback(() => {
     const branchId = selectedBranchId || activeBranchId || '';
@@ -1746,6 +1879,7 @@ export function PosScreen() {
   function clearCart() {
     setCart([]);
     setEditingOrderId(null);
+    setEditingOrderUrlId(null);
     setEditingOrderLabel(null);
     setEditingOrderSource(null);
     setTableId('');
@@ -1767,26 +1901,54 @@ export function PosScreen() {
     detail: PosOrderDetail,
     source: 'pos' | 'kiosk' = 'pos'
   ) {
-    const lines: CartLine[] = detail.items.map((item) =>
-      normalizeCartLine({
+    const lines: CartLine[] = detail.items.map((item) => {
+      const personalize = (item.modifiers ?? []).filter((m) => !m.menuItemId);
+      const addons = (item.modifiers ?? []).filter((m) => m.menuItemId);
+      const modifiers: CartModifierSelection[] = [];
+      if (personalize.length > 0) {
+        modifiers.push({
+          attributeGroupId: 'personalize',
+          groupName: 'Personalize',
+          selections: personalize.map((m) => ({
+            menuItemId: `personalize:${m.name}`,
+            name: m.name,
+            unitPrice: m.unitPrice,
+          })),
+        });
+      }
+      if (addons.length > 0) {
+        modifiers.push({
+          attributeGroupId: 'addons',
+          groupName: 'Add-ons',
+          selections: addons.map((m) => ({
+            menuItemId: m.menuItemId!,
+            name: m.name,
+            unitPrice: m.unitPrice,
+          })),
+        });
+      }
+      return normalizeCartLine({
         lineId:
           typeof crypto !== 'undefined' && 'randomUUID' in crypto
             ? crypto.randomUUID()
             : `edit-${item.id}`,
         menuItemId: item.menuItemId,
-        name: item.name,
+        productName: item.name,
         unitPrice: item.unitPrice,
         qty: item.quantity,
         lineDiscPct: 0,
         imageUrl: item.imageUrl,
-      })
-    );
+        modifiers,
+        modifiersSignature: getModifiersSignature(modifiers, null),
+      });
+    });
     const loadedSubtotal = lines.reduce(
       (sum, line) => sum + lineUnitTotal(line) * line.qty,
       0
     );
     setCart(lines);
     setEditingOrderId(detail.id);
+    setEditingOrderUrlId(detail.urlId ?? null);
     setEditingOrderSource(source);
     const editLabel =
       detail.ticketNumber != null
@@ -2020,7 +2182,11 @@ export function PosScreen() {
     setCancellingKitchenOrder(true);
     try {
       const res = await fetch(
-        `/api/restaurant/pos-order/${encodeURIComponent(cancelKitchenOrder.id)}/cancel`,
+        posOrderApiPath(
+          cancelKitchenOrder.id,
+          'cancel',
+          cancelKitchenOrder.urlId
+        ),
         { method: 'PATCH' }
       );
       const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -2193,6 +2359,7 @@ export function PosScreen() {
     if (cart.length === 0) return 'Add at least one product to the cart.';
     try {
       await axios.post('/api/restaurant/pos-order/check-stock', {
+        branchId: selectedBranchId || activeBranchId || undefined,
         items: posStockCheckItems(),
       });
       return null;
@@ -2203,6 +2370,7 @@ export function PosScreen() {
 
   async function handleCardPayClick() {
     if (cardPaymentStatus === 'success') return;
+    if (!requireActiveShift()) return;
     const stockError = await assertPosIngredientsAvailable();
     if (stockError) {
       toast.error(stockError);
@@ -2244,6 +2412,7 @@ export function PosScreen() {
   const isCardMode = paymentMode === 'card';
 
   async function saveOrder(opts?: { paymentMode?: string; payment?: string }) {
+    if (!requireActiveShift()) return;
     const effectivePaymentMode = opts?.paymentMode ?? paymentMode;
     const effectivePayment = opts?.payment ?? payment;
     const isEditingKiosk =
@@ -2349,6 +2518,7 @@ export function PosScreen() {
       };
       let savedOrder: {
         id?: string;
+        urlId?: string;
         shortOrderId?: string;
         ticketNumber?: number | null;
       };
@@ -2360,7 +2530,7 @@ export function PosScreen() {
             ticketNumber: number | null;
           };
         }>(
-          `/api/restaurant/kiosk-order/${encodeURIComponent(editingOrderId!)}`,
+          kioskOrderApiPath(editingOrderId!, '', editingOrderUrlId),
           {
             grandTotal,
             taxAmount,
@@ -2390,7 +2560,7 @@ export function PosScreen() {
             ticketNumber: number | null;
           };
         }>(
-          `/api/restaurant/pos-order/${encodeURIComponent(editingOrderId!)}`,
+          posOrderApiPath(editingOrderId!, '', editingOrderUrlId),
           orderPayload
         );
         savedOrder = patchRes.data.data;
@@ -2546,7 +2716,11 @@ export function PosScreen() {
           finalStatus = 'failed';
         } finally {
           await axios.post(
-            `/api/restaurant/pos-order/${encodeURIComponent(dbOrderId)}/terminal-payment`,
+            posOrderApiPath(
+              dbOrderId,
+              'terminal-payment',
+              savedOrder.urlId ?? editingOrderUrlId
+            ),
             {
               status: finalStatus,
               amount: grandTotal,
@@ -2689,11 +2863,15 @@ export function PosScreen() {
       const ex = e as { body?: { error?: unknown } };
       const fromBody =
         typeof ex.body?.error === 'string' ? ex.body.error : null;
+      const status = axios.isAxiosError(e) ? e.response?.status : undefined;
       const msg =
         axios.isAxiosError(e) && e.response?.data?.error
           ? String(e.response.data.error)
           : fromBody || 'Could not save POS order.';
       toast.error(msg);
+      if (status === 409) {
+        promptStartShift();
+      }
     } finally {
       setSavingOrder(false);
     }
@@ -2938,6 +3116,15 @@ export function PosScreen() {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
+          {cashInLocker != null ? (
+            <span
+              className="mr-1 inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400"
+              title="Expected cash in locker (opening float + cash sales)"
+            >
+              <Banknote className="h-3 w-3 shrink-0" />
+              <span className="tabular-nums">{formatMoney(cashInLocker)}</span>
+            </span>
+          ) : null}
           {!isOnline ? (
             <span className="mr-1 inline-flex items-center gap-1 rounded-lg bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
               <WifiOff className="h-3 w-3" />
@@ -2953,6 +3140,21 @@ export function PosScreen() {
             onClick={() => setRecentOrdersOpen(true)}
           >
             <History className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
+            title="Completed orders"
+            onClick={() => setCompletedOrdersOpen(true)}
+          >
+            <PackageCheck className="h-4 w-4" />
+            {completedOrdersCount > 0 ? (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
+                {completedOrdersCount}
+              </span>
+            ) : null}
           </Button>
           <Button
             type="button"
@@ -3006,14 +3208,33 @@ export function PosScreen() {
             type="button"
             variant="ghost"
             size="icon"
-            className={cn('h-9 w-9', POS_GHOST_ICON_BTN)}
-            title="End shift"
-            onClick={() => setShiftSheetOpen(true)}
+            className={cn(
+              'relative h-9 w-9',
+              hasActiveShift ? POS_GHOST_ICON_BTN : 'text-emerald-600 hover:bg-emerald-500/10'
+            )}
+            title={hasActiveShift ? 'End shift' : 'Start shift'}
+            onClick={() => {
+              if (hasActiveShift) {
+                setLogoutEndShiftFlow(false);
+                setShiftSheetOpen(true);
+              } else {
+                promptStartShift();
+              }
+            }}
           >
-            <LogOut className="h-4 w-4 text-destructive" />
+            {hasActiveShift ? (
+              <LogOut className="h-4 w-4 text-destructive" />
+            ) : (
+              <PlayCircle className="h-4 w-4" />
+            )}
           </Button>
           <ModeToggle />
-          <UserMenu iconOnly className="h-9 w-9 rounded-xl" />
+          <UserMenu
+            iconOnly
+            className="h-9 w-9 rounded-xl"
+            onLogout={handlePosLogout}
+            logoutLoading={logoutCheckingShift}
+          />
         </div>
       </div>
 
@@ -4240,6 +4461,7 @@ export function PosScreen() {
                     ref={proceedOrderButtonRef}
                     onClick={() => {
                       if (!canProceedWithOrderMode()) return;
+                      if (!requireActiveShift()) return;
                       resetCardPayment();
                       setPaymentMode('cash');
                       setAmountPaid(
@@ -4745,6 +4967,15 @@ export function PosScreen() {
         onEditOrder={(order) => loadOrderForEdit(order, 'pos')}
       />
 
+      <PosCompletedOrdersSheet
+        open={completedOrdersOpen}
+        onOpenChange={setCompletedOrdersOpen}
+        branchId={selectedBranchId || activeBranchId || null}
+        brandName={branding.name || 'Restaurant'}
+        branchName={selectedBranchName}
+        logoUrl={branding.logoUrl}
+      />
+
       <PosKioskOrdersSheet
         open={kioskOrdersOpen}
         onOpenChange={setKioskOrdersOpen}
@@ -4775,14 +5006,33 @@ export function PosScreen() {
 
       <PosShiftSheet
         open={shiftSheetOpen}
-        onOpenChange={setShiftSheetOpen}
+        onOpenChange={(open) => {
+          setShiftSheetOpen(open);
+          if (!open) setLogoutEndShiftFlow(false);
+        }}
         branchId={selectedBranchId || activeBranchId || null}
         brandName={branding.name || 'Restaurant'}
         branchName={selectedBranchName}
         logoUrl={branding.logoUrl}
         isOwnerOrAdmin={isOwnerOrAdmin}
+        logoutAfterEnd={logoutEndShiftFlow}
         onShiftUpdated={handleShiftUpdated}
         onShiftClosed={handleShiftClosed}
+      />
+
+      <PosStartShiftDialog
+        open={startShiftDialogOpen}
+        loading={startingShift}
+        branchName={selectedBranchName}
+        onStart={() => void handleStartShift()}
+        onDismiss={() => setStartShiftDialogOpen(false)}
+      />
+
+      <PosLogoutShiftDialog
+        open={logoutChoiceOpen}
+        onOpenChange={setLogoutChoiceOpen}
+        onLogoutOnly={handleLogoutOnly}
+        onEndShiftAndLogout={handleLogoutEndShift}
       />
     </div>
   );

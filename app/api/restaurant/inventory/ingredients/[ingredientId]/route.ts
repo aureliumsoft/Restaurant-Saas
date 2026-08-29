@@ -2,13 +2,20 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 
+import { getBranchScopeFromRequest } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
+import {
+  listBranchStockForIngredients,
+  setBranchIngredientQuantity,
+} from '@/lib/inventory/branch-stock';
 import { ingredientPatchSchema } from '@/lib/inventory/validation';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { publishInventoryStockUpdate } from '@/lib/realtime/publish';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
+import { ingredientApiPath } from '@/lib/dashboard-paths';
 
 function lazyImageUrl(id: string): string {
-  return `/api/restaurant/inventory/ingredients/${encodeURIComponent(id)}/image`;
+  return `${ingredientApiPath(id)}/image`;
 }
 
 export async function GET(
@@ -23,7 +30,14 @@ export async function GET(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { ingredientId } = await ctx.params;
+  const branchScope = await getBranchScopeFromRequest(
+    req,
+    auth.user.id,
+    auth.restaurant.id
+  );
+  const branchId = branchScope?.activeBranchId ?? null;
+
+  const { ingredientId } = await resolveRouteParams(ctx.params, ['ingredientId']);
   const row = await db.ingredient.findFirst({
     where: { id: ingredientId, restaurantId: auth.restaurant.id },
   });
@@ -31,9 +45,21 @@ export async function GET(
     return NextResponse.json({ error: 'Ingredient not found' }, { status: 404 });
   }
 
+  let quantity = row.quantity;
+  let minQuantity = row.minQuantity;
+  if (branchId) {
+    const stock = await listBranchStockForIngredients(branchId, [row.id]);
+    const branchRow = stock.get(row.id);
+    quantity = branchRow?.quantity ?? 0;
+    minQuantity = branchRow?.minQuantity ?? row.minQuantity;
+  }
+
   return NextResponse.json({
     data: {
       ...row,
+      quantity,
+      minQuantity,
+      branchId,
       hasImage: Boolean(row.imageUrl),
       imageUrl: row.imageUrl ? lazyImageUrl(row.id) : null,
       imageData: row.imageUrl,
@@ -53,7 +79,14 @@ export async function PATCH(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { ingredientId } = await ctx.params;
+  const branchScope = await getBranchScopeFromRequest(
+    req,
+    auth.user.id,
+    auth.restaurant.id
+  );
+  const branchId = branchScope?.activeBranchId ?? null;
+
+  const { ingredientId } = await resolveRouteParams(ctx.params, ['ingredientId']);
   const existing = await db.ingredient.findFirst({
     where: { id: ingredientId, restaurantId: auth.restaurant.id },
     select: { id: true },
@@ -74,39 +107,82 @@ export async function PATCH(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  if (
+    (parsed.data.quantity !== undefined || parsed.data.minQuantity !== undefined) &&
+    !branchId
+  ) {
+    return NextResponse.json(
+      { error: 'Select a branch to adjust stock.' },
+      { status: 400 }
+    );
+  }
+
   try {
-    const row = await db.ingredient.update({
-      where: { id: ingredientId },
-      data: {
-        ...(parsed.data.name !== undefined ? { name: parsed.data.name.trim() } : {}),
-        ...(parsed.data.description !== undefined
-          ? { description: parsed.data.description?.trim() || null }
-          : {}),
-        ...(parsed.data.quantity !== undefined
-          ? { quantity: parsed.data.quantity }
-          : {}),
-        ...(parsed.data.unit !== undefined ? { unit: parsed.data.unit } : {}),
-        ...(parsed.data.isMajor !== undefined
-          ? { isMajor: parsed.data.isMajor }
-          : {}),
-        ...(parsed.data.imageUrl !== undefined
-          ? { imageUrl: parsed.data.imageUrl?.trim() || null }
-          : {}),
-        ...(parsed.data.sku !== undefined
-          ? { sku: parsed.data.sku?.trim() || null }
-          : {}),
-        ...(parsed.data.minQuantity !== undefined
-          ? { minQuantity: parsed.data.minQuantity }
-          : {}),
-        ...(parsed.data.isActive !== undefined
-          ? { isActive: parsed.data.isActive }
-          : {}),
-      },
+    const row = await db.$transaction(async (tx) => {
+      if (parsed.data.quantity !== undefined && branchId) {
+        await setBranchIngredientQuantity(
+          tx,
+          branchId,
+          ingredientId,
+          parsed.data.quantity
+        );
+      }
+      if (parsed.data.minQuantity !== undefined && branchId) {
+        await tx.branchIngredientStock.upsert({
+          where: {
+            branchId_ingredientId: { branchId, ingredientId },
+          },
+          create: {
+            branchId,
+            ingredientId,
+            quantity: 0,
+            minQuantity: parsed.data.minQuantity,
+          },
+          update: { minQuantity: parsed.data.minQuantity },
+        });
+      }
+
+      return tx.ingredient.update({
+        where: { id: ingredientId },
+        data: {
+          ...(parsed.data.name !== undefined ? { name: parsed.data.name.trim() } : {}),
+          ...(parsed.data.description !== undefined
+            ? { description: parsed.data.description?.trim() || null }
+            : {}),
+          ...(parsed.data.unit !== undefined ? { unit: parsed.data.unit } : {}),
+          ...(parsed.data.isMajor !== undefined
+            ? { isMajor: parsed.data.isMajor }
+            : {}),
+          ...(parsed.data.imageUrl !== undefined
+            ? { imageUrl: parsed.data.imageUrl?.trim() || null }
+            : {}),
+          ...(parsed.data.sku !== undefined
+            ? { sku: parsed.data.sku?.trim() || null }
+            : {}),
+          ...(parsed.data.isActive !== undefined
+            ? { isActive: parsed.data.isActive }
+            : {}),
+          ...(parsed.data.minQuantity !== undefined && !branchId
+            ? { minQuantity: parsed.data.minQuantity }
+            : {}),
+        },
+      });
     });
-    publishInventoryStockUpdate(auth.restaurant.id);
+
+    let quantity = row.quantity;
+    if (branchId && parsed.data.quantity !== undefined) {
+      quantity = parsed.data.quantity;
+    } else if (branchId) {
+      const stock = await listBranchStockForIngredients(branchId, [ingredientId]);
+      quantity = stock.get(ingredientId)?.quantity ?? 0;
+    }
+
+    publishInventoryStockUpdate(auth.restaurant.id, branchId);
     return NextResponse.json({
       data: {
         ...row,
+        quantity,
+        branchId,
         hasImage: Boolean(row.imageUrl),
         imageUrl: row.imageUrl ? lazyImageUrl(row.id) : null,
       },
@@ -141,7 +217,7 @@ export async function DELETE(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { ingredientId } = await ctx.params;
+  const { ingredientId } = await resolveRouteParams(ctx.params, ['ingredientId']);
   const existing = await db.ingredient.findFirst({
     where: { id: ingredientId, restaurantId: auth.restaurant.id },
     select: { id: true },

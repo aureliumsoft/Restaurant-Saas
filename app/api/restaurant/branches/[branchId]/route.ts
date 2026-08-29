@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const openingHourSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6),
@@ -33,7 +34,7 @@ export async function PATCH(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { branchId } = await ctx.params;
+    const { branchId } = await resolveRouteParams(ctx.params, ['branchId']);
     const json = await req.json().catch(() => null);
     const parsed = updateBranchSchema.safeParse(json);
     if (!parsed.success) {
@@ -94,7 +95,7 @@ export async function DELETE(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { branchId } = await ctx.params;
+    const { branchId } = await resolveRouteParams(ctx.params, ['branchId']);
     const totalBranches = await db.branch.count({
       where: { restaurantId: auth.restaurantId },
     });

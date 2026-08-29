@@ -48,6 +48,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
+import { productEditPath, menuItemApiPath } from '@/lib/dashboard-paths';
+import { isEncodedUrlId } from '@/lib/url-id-shared';
 
 export default function ProductEditPage() {
   const router = useRouter();
@@ -102,7 +104,7 @@ export default function ProductEditPage() {
     setItem(null);
 
     void axios
-      .get<{ data: MenuItemRow }>(`/api/restaurant/menu/items/${productId}`)
+      .get<{ data: MenuItemRow }>(menuItemApiPath(productId))
       .then((res) => {
         if (cancelled) return;
         setItem(res.data.data);
@@ -126,6 +128,14 @@ export default function ProductEditPage() {
       cancelled = true;
     };
   }, [productId]);
+
+  useEffect(() => {
+    const publicId = item?.urlId?.trim();
+    if (!publicId || productId === publicId) return;
+    // Only rewrite legacy plain-uuid URLs; encrypted URLs are already correct.
+    if (isEncodedUrlId(productId)) return;
+    router.replace(productEditPath(publicId), { scroll: false });
+  }, [item?.urlId, productId, router]);
 
   useEffect(() => {
     if (!item || hydratedIdRef.current === item.id) return;
@@ -225,7 +235,7 @@ export default function ProductEditPage() {
     setSaving(true);
     try {
       await axios.patch(
-        `/api/restaurant/menu/items/${productId}`,
+        menuItemApiPath(productId, '', item?.urlId),
         payload.body
       );
       toast.success('Product updated');

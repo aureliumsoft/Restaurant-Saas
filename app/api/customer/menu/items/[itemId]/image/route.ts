@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query';
+import { resolveRouteId } from '@/lib/resolve-route-id';
 import { responseFromStoredImage } from '@/lib/stored-image-response';
 
 export const runtime = 'nodejs';
@@ -34,8 +35,8 @@ async function resolveRestaurantId(
 
 /** Public lazy image for kiosk / online menus. */
 export async function GET(req: NextRequest, context: RouteContext) {
-  const { itemId } = await context.params;
-  if (!itemId?.trim()) {
+  const itemId = resolveRouteId((await context.params).itemId);
+  if (!itemId) {
     return NextResponse.json({ error: 'Missing product id' }, { status: 400 });
   }
 
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     }
 
     const item = await db.menuItem.findFirst({
-      where: { id: itemId.trim(), restaurantId },
+      where: { id: itemId, restaurantId },
       select: { imageUrl: true, updatedAt: true },
     });
 

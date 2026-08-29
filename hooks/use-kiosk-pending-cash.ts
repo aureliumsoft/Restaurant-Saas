@@ -9,6 +9,7 @@ import { queryKeys } from '@/lib/query/keys';
 
 export type KioskPendingOrderRow = {
   id: string;
+  urlId?: string;
   shortOrderId: string;
   ticketNumber: number | null;
   total: number;

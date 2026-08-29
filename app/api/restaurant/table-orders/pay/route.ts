@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
-import { getOrOpenPosShift } from '@/lib/pos-shift';
+import { getOpenPosShift } from '@/lib/pos-shift';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 
@@ -126,11 +126,16 @@ export async function POST(req: NextRequest) {
     }
 
     const branchId = orders[0]?.branchId ?? null;
-    const activeShift = await getOrOpenPosShift({
+    const openShift = await getOpenPosShift({
       restaurantId: auth.restaurantId,
       branchId,
-      userId: auth.userId,
     });
+    if (!openShift) {
+      return NextResponse.json(
+        { error: 'Start a new shift before recording table payments.' },
+        { status: 409 }
+      );
+    }
 
     await db.$transaction(async (tx) => {
       for (const order of orders) {
@@ -148,7 +153,7 @@ export async function POST(req: NextRequest) {
         await tx.order.update({
           where: { id: order.id },
           data: {
-            posShiftId: activeShift.id,
+            posShiftId: openShift.id,
             status: 'completed',
           },
         });

@@ -357,6 +357,8 @@ model Branch {
   employees    EmployeeBranch[]
   diningTables DiningTable[]
   posShifts    PosShift[]
+  ingredientStocks BranchIngredientStock[]
+  ingredientStockEntries IngredientStockEntry[]
 
   @@index([restaurantId])
 }
@@ -1083,6 +1085,7 @@ model Ingredient {
   restaurant Restaurant             @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   recipes    MenuItemIngredient[]
   entries    IngredientStockEntry[]
+  branchStocks BranchIngredientStock[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1116,6 +1119,7 @@ model MenuItemIngredient {
 model IngredientStockEntry {
   id                  String                      @id @default(uuid())
   restaurantId        String
+  branchId            String?
   ingredientId        String
   menuItemId          String?
   menuItemVariationId String?
@@ -1126,6 +1130,7 @@ model IngredientStockEntry {
   createdByUserId     String?
 
   restaurant  Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branch      Branch?             @relation(fields: [branchId], references: [id], onDelete: SetNull)
   ingredient  Ingredient          @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
   menuItem    MenuItem?           @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
   variation   MenuItemVariation?  @relation(fields: [menuItemVariationId], references: [id], onDelete: SetNull)
@@ -1135,8 +1140,28 @@ model IngredientStockEntry {
   createdAt DateTime @default(now())
 
   @@index([restaurantId, createdAt])
+  @@index([branchId, createdAt])
   @@index([ingredientId, createdAt])
   @@index([orderId])
+}
+
+/// On-hand ingredient quantity per branch (catalog stays on Ingredient).
+model BranchIngredientStock {
+  id           String   @id @default(uuid())
+  branchId     String
+  ingredientId String
+  quantity     Float    @default(0)
+  minQuantity  Float?
+
+  branch     Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([branchId, ingredientId])
+  @@index([ingredientId])
+  @@index([branchId])
 }
 
 model ProductStock {

@@ -1,7 +1,14 @@
 import type { IngredientUnit, Prisma } from '@prisma/client';
 
+import { db } from '@/lib/db';
+
 import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
 import { INGREDIENT_UNIT_VALUES } from '@/lib/inventory/validation';
+import {
+  decrementBranchIngredientStock,
+  loadBranchStockQuantities,
+  resolveBranchIdForStock,
+} from '@/lib/inventory/branch-stock';
 
 export const INGREDIENT_UNITS: IngredientUnit[] = [...INGREDIENT_UNIT_VALUES];
 
@@ -49,7 +56,6 @@ export type StockOrderLine = {
 type RecipeIngredient = {
   id: string;
   name: string;
-  quantity: number;
   isMajor: boolean;
   isActive: boolean;
 };
@@ -67,55 +73,12 @@ type MenuItemWithRecipes = {
   ingredientRecipes: RecipeRow[];
 };
 
-type InventoryReadTx = {
-  menuItem: {
-    findMany: (args: {
-      where: { restaurantId: string; id: { in: string[] } };
-      select: {
-        id: true;
-        variations: { select: { id: true } };
-        ingredientRecipes: {
-          select: {
-            quantity: true;
-            menuItemVariationId: true;
-            ingredientId: true;
-            ingredient: {
-              select: {
-                id: true;
-                name: true;
-                quantity: true;
-                isMajor: true;
-                isActive: true;
-              };
-            };
-          };
-        };
-      };
-    }) => Promise<MenuItemWithRecipes[]>;
-  };
-};
+type InventoryReadTx = Pick<typeof db, 'menuItem' | 'branchIngredientStock'>;
 
-type InventoryTx = InventoryReadTx & {
-  ingredient: {
-    updateMany: (args: {
-      where: {
-        id: string;
-        restaurantId: string;
-        quantity?: { gte: number };
-      };
-      data: { quantity: { decrement: number } };
-    }) => Promise<{ count: number }>;
-    update: (args: {
-      where: { id: string };
-      data: { quantity: number };
-    }) => Promise<unknown>;
-  };
-  ingredientStockEntry: {
-    createMany: (args: {
-      data: Prisma.IngredientStockEntryCreateManyInput[];
-    }) => Promise<unknown>;
-  };
-};
+type InventoryTx = Pick<
+  typeof db,
+  'menuItem' | 'ingredient' | 'branchIngredientStock' | 'ingredientStockEntry'
+>;
 
 function collectMenuItemIds(lines: StockOrderLine[]): string[] {
   const ids = new Set<string>();
@@ -173,6 +136,18 @@ function recipesForAddon(
   );
 }
 
+async function applyBranchOnHand(
+  tx: InventoryReadTx,
+  branchId: string,
+  needed: Map<string, { name: string; needed: number; onHand: number }>
+): Promise<void> {
+  const ids = [...needed.keys()];
+  const stockMap = await loadBranchStockQuantities(tx, branchId, ids);
+  for (const [ingredientId, row] of needed) {
+    row.onHand = stockMap.get(ingredientId) ?? 0;
+  }
+}
+
 /**
  * Plan recipe usage for cart lines. Throws if a variation is required and missing.
  */
@@ -180,6 +155,7 @@ async function computeIngredientPlan(
   tx: InventoryReadTx,
   options: {
     restaurantId: string;
+    branchId: string;
     lines: StockOrderLine[];
     requireVariation: boolean;
   }
@@ -228,7 +204,6 @@ async function computeIngredientPlan(
             select: {
               id: true,
               name: true,
-              quantity: true,
               isMajor: true,
               isActive: true,
             },
@@ -256,7 +231,7 @@ async function computeIngredientPlan(
       needed.set(ingredient.id, {
         name: ingredient.name,
         needed: amount,
-        onHand: ingredient.quantity,
+        onHand: 0,
       });
     }
     const partKey = `${ingredient.id}|${menuItemId}|${variationId ?? ''}`;
@@ -311,20 +286,32 @@ async function computeIngredientPlan(
     }
   }
 
+  await applyBranchOnHand(tx, options.branchId, needed);
+
   return { needed, parts };
 }
 
-/** Throws MajorIngredientOutOfStockError if any recipe ingredient is short. */
+/** Throws MajorIngredientOutOfStockError if any recipe ingredient is short at this branch. */
 export async function assertIngredientsAvailableForOrder(
   tx: InventoryReadTx,
   options: {
     restaurantId: string;
+    branchId?: string | null;
     lines: StockOrderLine[];
     requireVariation?: boolean;
   }
 ): Promise<void> {
+  const branchId = await resolveBranchIdForStock(
+    options.restaurantId,
+    options.branchId
+  );
+  if (!branchId) {
+    throw new Error('No branch configured for inventory.');
+  }
+
   const { needed } = await computeIngredientPlan(tx, {
     restaurantId: options.restaurantId,
+    branchId,
     lines: options.lines,
     requireVariation: options.requireVariation !== false,
   });
@@ -336,14 +323,13 @@ export async function assertIngredientsAvailableForOrder(
 }
 
 /**
- * Deduct recipe quantities for an order. Throws MajorIngredientOutOfStockError
- * when any active recipe ingredient cannot cover the needed amount, unless
- * `requireAvailableStock` is false (paid-checkout fulfillment).
+ * Deduct recipe quantities for an order from the order branch only.
  */
 export async function consumeIngredientsForOrder(
   tx: InventoryTx,
   options: {
     restaurantId: string;
+    branchId?: string | null;
     orderId: string;
     lines: StockOrderLine[];
     createdByUserId?: string | null;
@@ -353,8 +339,17 @@ export async function consumeIngredientsForOrder(
 ): Promise<void> {
   const requireAvailableStock = options.requireAvailableStock !== false;
   const requireVariation = options.requireVariation !== false;
+  const branchId = await resolveBranchIdForStock(
+    options.restaurantId,
+    options.branchId
+  );
+  if (!branchId) {
+    throw new Error('No branch configured for inventory.');
+  }
+
   const { needed, parts } = await computeIngredientPlan(tx, {
     restaurantId: options.restaurantId,
+    branchId,
     lines: options.lines,
     requireVariation,
   });
@@ -372,15 +367,13 @@ export async function consumeIngredientsForOrder(
   for (const [ingredientId, row] of needed) {
     const deduct = row.needed;
     if (!(deduct > 0)) continue;
-    const updated = await tx.ingredient.updateMany({
-      where: {
-        id: ingredientId,
-        restaurantId: options.restaurantId,
-        ...(requireAvailableStock ? { quantity: { gte: row.needed } } : {}),
-      },
-      data: { quantity: { decrement: deduct } },
+    const ok = await decrementBranchIngredientStock(tx, {
+      branchId,
+      ingredientId,
+      amount: deduct,
+      requireAvailable: requireAvailableStock,
     });
-    if (requireAvailableStock && updated.count === 0) {
+    if (requireAvailableStock && !ok) {
       throw new MajorIngredientOutOfStockError(row.name);
     }
   }
@@ -390,6 +383,7 @@ export async function consumeIngredientsForOrder(
     if (!(part.quantity > 0)) continue;
     entries.push({
       restaurantId: options.restaurantId,
+      branchId,
       ingredientId: part.ingredientId,
       menuItemId: part.menuItemId,
       menuItemVariationId: part.menuItemVariationId,

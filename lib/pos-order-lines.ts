@@ -1,11 +1,9 @@
 import type { Prisma } from '@prisma/client';
 
-export type PosOrderLineModifier = {
-  selections: Array<{
-    menuItemId?: string | null;
-    variationId?: string | null;
-  }>;
-};
+import type { CartModifierSelectionNormalized } from '@/lib/cart-normalize';
+import { normalizeCartModifiers } from '@/lib/cart-normalize';
+
+export type PosOrderLineModifier = CartModifierSelectionNormalized;
 
 export type PosOrderLineInput = {
   productId: string;
@@ -93,7 +91,7 @@ export async function normalizePosOrderLines(params: {
           typeof line.variationId === 'string' && line.variationId.trim()
             ? line.variationId.trim()
             : null,
-        modifiers: Array.isArray(line.modifiers) ? line.modifiers : [],
+        modifiers: normalizeCartModifiers(line.modifiers),
       };
     })
     .filter((line): line is NormalizedPosOrderLine => line !== null);

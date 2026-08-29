@@ -17,6 +17,7 @@ import {
   parsePaginationParams,
 } from '@/lib/pagination';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
+import { withUrlIds } from '@/lib/with-url-id';
 
 const postSchema = z.object({
   name: z.string().min(1).max(120).trim(),
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
     const rows = await listDiningTables(auth.restaurant.id, activeBranchId);
     return NextResponse.json(
       {
-        data: rows,
+        data: withUrlIds(rows),
         activeBranchId,
       },
       { status: 200 }
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json(
     {
-      data: rows,
+      data: withUrlIds(rows),
       activeBranchId,
       pagination: buildPaginationMeta(page, pageSize, total),
     },

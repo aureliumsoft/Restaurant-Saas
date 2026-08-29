@@ -9,6 +9,7 @@ import {
 import { db } from '@/lib/db';
 import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { withUrlIds } from '@/lib/with-url-id';
 
 export async function GET(_req: NextRequest) {
   try {
@@ -58,7 +59,7 @@ export async function GET(_req: NextRequest) {
             quantity: true,
             productName: true,
             menuItem: { select: { name: true } },
-            modifiers: { select: { name: true, quantity: true } },
+            modifiers: { select: { name: true, quantity: true, menuItemId: true } },
           },
         },
         payments: {
@@ -86,7 +87,7 @@ export async function GET(_req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ data }, { status: 200 });
+    return NextResponse.json({ data: withUrlIds(data) }, { status: 200 });
   } catch (e) {
     console.error('kds manager-orders', e);
     return NextResponse.json(

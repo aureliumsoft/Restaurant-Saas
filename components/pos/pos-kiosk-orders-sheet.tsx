@@ -21,6 +21,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  kioskOrderApiPath,
+  posOrderApiPath,
+} from '@/lib/dashboard-paths';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import eventBus from '@/lib/even';
 import {
@@ -73,17 +77,17 @@ export function PosKioskOrdersSheet({
     }, 0);
   };
 
-  const fetchOrderDetail = async (orderId: string) => {
+  const fetchOrderDetail = async (orderId: string, orderUrlId?: string) => {
     const res = await axios.get<{ data: PosOrderDetail }>(
-      `/api/restaurant/kiosk-order/${encodeURIComponent(orderId)}`
+      kioskOrderApiPath(orderId, '', orderUrlId)
     );
     return res.data.data;
   };
 
-  const handlePrint = async (orderId: string) => {
-    setPrintBusyId(orderId);
+  const handlePrint = async (order: KioskPendingOrderRow) => {
+    setPrintBusyId(order.id);
     try {
-      const detail = await fetchOrderDetail(orderId);
+      const detail = await fetchOrderDetail(order.id, order.urlId);
       const subtotal = detail.items.reduce(
         (sum, item) => sum + item.unitPrice * item.quantity,
         0
@@ -123,10 +127,10 @@ export function PosKioskOrdersSheet({
     }
   };
 
-  const handleEdit = async (orderId: string) => {
-    setEditBusyId(orderId);
+  const handleEdit = async (order: KioskPendingOrderRow) => {
+    setEditBusyId(order.id);
     try {
-      const detail = await fetchOrderDetail(orderId);
+      const detail = await fetchOrderDetail(order.id, order.urlId);
       onEditOrder(detail);
       onOpenChange(false);
     } catch (error) {
@@ -136,7 +140,7 @@ export function PosKioskOrdersSheet({
     }
   };
 
-  const handleCancel = async (orderId: string) => {
+  const handleCancel = async (order: KioskPendingOrderRow) => {
     if (
       !window.confirm(
         'Cancel this kiosk order? Kitchen tickets will be canceled.'
@@ -144,13 +148,11 @@ export function PosKioskOrdersSheet({
     ) {
       return;
     }
-    setCancelBusyId(orderId);
+    setCancelBusyId(order.id);
     try {
-      await axios.patch(
-        `/api/restaurant/kiosk-order/${encodeURIComponent(orderId)}/cancel`
-      );
+      await axios.patch(kioskOrderApiPath(order.id, 'cancel', order.urlId));
       toast.success('Kiosk order canceled.');
-      notifyChanged(orderId);
+      notifyChanged(order.id);
     } catch (error) {
       toast.error(apiErrorMessage(error, 'Could not cancel order.'));
       confirmInBackground();
@@ -188,7 +190,7 @@ export function PosKioskOrdersSheet({
       const res = await axios.post<{
         data: { paid: number; change: number; paymentStatus: string };
       }>(
-        `/api/restaurant/kiosk-order/${encodeURIComponent(paidOrderId)}/pay`,
+        kioskOrderApiPath(paidOrderId, 'pay', payOrder.urlId),
         { paid }
       );
       const change = res.data.data?.change ?? payChange;
@@ -288,7 +290,7 @@ export function PosKioskOrdersSheet({
                             className="h-8 w-8"
                             title="Print receipt"
                             disabled={busy}
-                            onClick={() => void handlePrint(order.id)}
+                            onClick={() => void handlePrint(order)}
                           >
                             {printBusy ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -303,7 +305,7 @@ export function PosKioskOrdersSheet({
                             className="h-8 w-8"
                             title="Edit order"
                             disabled={busy}
-                            onClick={() => void handleEdit(order.id)}
+                            onClick={() => void handleEdit(order)}
                           >
                             {editBusy ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -326,7 +328,7 @@ export function PosKioskOrdersSheet({
                             variant="destructive"
                             size="sm"
                             disabled={busy}
-                            onClick={() => void handleCancel(order.id)}
+                            onClick={() => void handleCancel(order)}
                           >
                             {cancelBusy ? (
                               <Loader2 className="h-4 w-4 animate-spin" />

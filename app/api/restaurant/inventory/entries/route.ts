@@ -1,13 +1,19 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { getBranchScopeFromRequest } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
+import {
+  decrementBranchIngredientStock,
+  loadBranchStockQuantities,
+  resolveBranchIdForStock,
+} from '@/lib/inventory/branch-stock';
+import { stockEntryCreateSchema } from '@/lib/inventory/validation';
 import {
   buildPaginationMeta,
   clampPage,
   parsePaginationParams,
 } from '@/lib/pagination';
-import { stockEntryCreateSchema } from '@/lib/inventory/validation';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { publishInventoryStockUpdate } from '@/lib/realtime/publish';
 
@@ -20,12 +26,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
+  const branchScope = await getBranchScopeFromRequest(
+    req,
+    auth.user.id,
+    auth.restaurant.id
+  );
+  const branchId = branchScope?.activeBranchId ?? null;
+
   const { page, pageSize } = parsePaginationParams(req.nextUrl.searchParams, {
     defaultPageSize: 20,
     maxPageSize: 100,
   });
 
-  const where = { restaurantId: auth.restaurant.id };
+  const where = {
+    restaurantId: auth.restaurant.id,
+    ...(branchId ? { branchId } : {}),
+  };
   const total = await db.ingredientStockEntry.count({ where });
   const safePage = clampPage(page, total, pageSize);
   const rows = await db.ingredientStockEntry.findMany({
@@ -38,11 +54,13 @@ export async function GET(req: NextRequest) {
       quantity: true,
       reason: true,
       source: true,
+      branchId: true,
       createdAt: true,
       ingredient: { select: { id: true, name: true, unit: true } },
       menuItem: { select: { id: true, name: true } },
       variation: { select: { id: true, name: true } },
       createdBy: { select: { id: true, name: true, email: true } },
+      branch: { select: { id: true, name: true } },
     },
   });
 
@@ -62,6 +80,22 @@ export async function POST(req: NextRequest) {
   });
   if ('error' in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  const branchScope = await getBranchScopeFromRequest(
+    req,
+    auth.user.id,
+    auth.restaurant.id
+  );
+  const branchId = await resolveBranchIdForStock(
+    auth.restaurant.id,
+    branchScope?.activeBranchId
+  );
+  if (!branchId) {
+    return NextResponse.json(
+      { error: 'No branch configured for stock.' },
+      { status: 400 }
+    );
   }
 
   let json: unknown;
@@ -112,7 +146,9 @@ export async function POST(req: NextRequest) {
   }
 
   const deduct = parsed.data.quantity;
-  if (ingredient.quantity < deduct) {
+  const stockMap = await loadBranchStockQuantities(db, branchId, [ingredient.id]);
+  const onHand = stockMap.get(ingredient.id) ?? 0;
+  if (onHand < deduct) {
     return NextResponse.json(
       {
         error: `${ingredient.name} ingredient is not exist in stock`,
@@ -123,20 +159,19 @@ export async function POST(req: NextRequest) {
 
   try {
     const entry = await db.$transaction(async (tx) => {
-      const updated = await tx.ingredient.updateMany({
-        where: {
-          id: ingredient.id,
-          restaurantId: auth.restaurant.id,
-          quantity: { gte: deduct },
-        },
-        data: { quantity: { decrement: deduct } },
+      const ok = await decrementBranchIngredientStock(tx, {
+        branchId,
+        ingredientId: ingredient.id,
+        amount: deduct,
+        requireAvailable: true,
       });
-      if (updated.count === 0) {
+      if (!ok) {
         throw new Error(`${ingredient.name} ingredient is not exist in stock`);
       }
       return tx.ingredientStockEntry.create({
         data: {
           restaurantId: auth.restaurant.id,
+          branchId,
           ingredientId: ingredient.id,
           menuItemId,
           menuItemVariationId,
@@ -149,11 +184,12 @@ export async function POST(req: NextRequest) {
           ingredient: { select: { id: true, name: true, unit: true } },
           menuItem: { select: { id: true, name: true } },
           variation: { select: { id: true, name: true } },
+          branch: { select: { id: true, name: true } },
         },
       });
     });
 
-    publishInventoryStockUpdate(auth.restaurant.id);
+    publishInventoryStockUpdate(auth.restaurant.id, branchId);
     return NextResponse.json({ data: entry }, { status: 201 });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Could not save stock entry.';

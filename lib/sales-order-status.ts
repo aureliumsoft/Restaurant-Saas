@@ -1,9 +1,22 @@
 export type SalesOrderStatusBucket = 'completed' | 'pending' | 'canceled';
 
+/** Kitchen finished — awaiting handoff / delivery from POS. */
+export function isCompletedOrderStatus(status: string): boolean {
+  const s = status.trim().toLowerCase();
+  return s === 'completed' || s === 'complete';
+}
+
+/** Handed to customer / picked up — terminal fulfillment state. */
+export function isDeliveredOrderStatus(status: string): boolean {
+  return status.trim().toLowerCase() === 'delivered';
+}
+
 /** Normalize menu order / POS transaction status for sales reporting. */
 export function salesOrderStatusBucket(status: string): SalesOrderStatusBucket {
   const s = status.trim().toLowerCase();
-  if (s === 'completed' || s === 'complete') return 'completed';
+  if (s === 'completed' || s === 'complete' || s === 'delivered') {
+    return 'completed';
+  }
   if (
     s === 'canceled' ||
     s === 'cancelled' ||
@@ -16,7 +29,10 @@ export function salesOrderStatusBucket(status: string): SalesOrderStatusBucket {
 }
 
 export function isCompletedSalesStatus(status: string): boolean {
-  return salesOrderStatusBucket(status) === 'completed';
+  return (
+    salesOrderStatusBucket(status) === 'completed' ||
+    isDeliveredOrderStatus(status)
+  );
 }
 
 export function isCanceledOrderStatus(status: string): boolean {

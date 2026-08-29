@@ -21,6 +21,8 @@ import { personalizeGroupsSelect } from "@/lib/menu/personalize-groups-select";
 import {
   restaurantMenuItemImageUrl,
 } from "@/lib/menu/menu-item-image-utils";
+import { encodeUrlId } from "@/lib/url-id";
+import { resolveRouteId } from "@/lib/resolve-route-id";
 
 const detailSelect = {
   ...customerMenuItemCoreSelect,
@@ -101,7 +103,7 @@ export async function GET(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { itemId } = await ctx.params;
+  const itemId = resolveRouteId((await ctx.params).itemId);
   const lite = req.nextUrl.searchParams.get("lite") === "1";
   const item = await db.menuItem.findFirst({
     where: { id: itemId, restaurantId: auth.restaurant.id },
@@ -117,6 +119,7 @@ export async function GET(
       {
         data: {
           ...item,
+          urlId: encodeUrlId(itemId),
           hasImage: true,
           imageUrl: restaurantMenuItemImageUrl(itemId),
           categoryIds: [item.categoryId],
@@ -151,6 +154,7 @@ export async function GET(
     {
       data: {
         ...item,
+        urlId: encodeUrlId(itemId),
         categoryIds:
           categoryIds.length > 0 ? categoryIds : [item.categoryId],
         createdAt: item.createdAt.toISOString(),
@@ -224,7 +228,7 @@ export async function PATCH(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { itemId } = await ctx.params;
+  const itemId = resolveRouteId((await ctx.params).itemId);
 
   const existing = await db.menuItem.findFirst({
     where: { id: itemId, restaurantId: auth.restaurant.id },
@@ -373,7 +377,7 @@ export async function DELETE(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { itemId } = await ctx.params;
+  const itemId = resolveRouteId((await ctx.params).itemId);
 
   const existing = await db.menuItem.findFirst({
     where: { id: itemId, restaurantId: auth.restaurant.id },

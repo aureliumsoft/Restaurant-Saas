@@ -12,6 +12,7 @@ import axios from 'axios';
 
 import eventBus from '@/lib/even';
 import type { BranchOption } from '@/lib/branch/branch-scope';
+import { publicQueryParam } from '@/lib/public-id';
 import {
   revalidateStaffBootstrap,
   useStaffBootstrapSWR,
@@ -21,6 +22,7 @@ type BranchContextValue = {
   loading: boolean;
   branches: BranchOption[];
   activeBranchId: string | null;
+  activeBranchUrlId: string | null;
   canSwitchBranch: boolean;
   isOwnerOrAdmin: boolean;
   setActiveBranch: (branchId: string) => Promise<void>;
@@ -34,6 +36,7 @@ const emptyBranchValue: BranchContextValue = {
   loading: false,
   branches: [],
   activeBranchId: null,
+  activeBranchUrlId: null,
   canSwitchBranch: false,
   isOwnerOrAdmin: false,
   setActiveBranch: async () => {},
@@ -74,8 +77,9 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   );
 
   const activeBranchId = scope?.activeBranchId ?? null;
-  const branchQuery = activeBranchId
-    ? `branchId=${encodeURIComponent(activeBranchId)}`
+  const activeBranch = scope?.branches.find((b) => b.id === activeBranchId);
+  const branchQuery = activeBranch
+    ? publicQueryParam('branchId', activeBranch.id, activeBranch.urlId)
     : '';
 
   const value = useMemo<BranchContextValue>(
@@ -83,6 +87,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
       loading: isLoading && !data,
       branches: scope?.branches ?? [],
       activeBranchId,
+      activeBranchUrlId: activeBranch?.urlId ?? null,
       canSwitchBranch: Boolean(scope?.canSwitchBranch),
       isOwnerOrAdmin: Boolean(scope?.isOwnerOrAdmin),
       setActiveBranch,
@@ -94,6 +99,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
       data,
       scope,
       activeBranchId,
+      activeBranch?.urlId,
       setActiveBranch,
       branchQuery,
       reload,
@@ -114,8 +120,12 @@ export function useBranchContext() {
 }
 
 /** Append branchId to API URLs when an active branch is set. */
-export function withBranchQuery(url: string, branchId: string | null) {
+export function withBranchQuery(
+  url: string,
+  branchId: string | null,
+  branchUrlId?: string | null
+) {
   if (!branchId) return url;
   const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}branchId=${encodeURIComponent(branchId)}`;
+  return `${url}${sep}${publicQueryParam('branchId', branchId, branchUrlId)}`;
 }

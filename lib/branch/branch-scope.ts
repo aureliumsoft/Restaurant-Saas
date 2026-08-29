@@ -3,9 +3,12 @@ import { Prisma } from '@prisma/client';
 
 import { db } from '@/lib/db';
 import { RESTAURANT_ROLE_SLUG } from '@/lib/restaurant-roles';
+import { resolveRouteId } from '@/lib/resolve-route-id';
+import { withUrlIds } from '@/lib/with-url-id';
 
 export type BranchOption = {
   id: string;
+  urlId: string;
   name: string;
   address: string | null;
   phone: string | null;
@@ -126,7 +129,7 @@ export async function resolveBranchScope(
     activeBranchId,
     canSwitchBranch,
     isOwnerOrAdmin,
-    branches: visibleBranches,
+    branches: withUrlIds(visibleBranches),
   };
 }
 
@@ -135,7 +138,8 @@ export async function getBranchScopeFromRequest(
   userId: string,
   restaurantId: string
 ): Promise<BranchScope | null> {
-  const fromQuery = req.nextUrl.searchParams.get('branchId')?.trim() || null;
+  const fromQuery =
+    resolveRouteId(req.nextUrl.searchParams.get('branchId')) || null;
   const fromCookie = readActiveBranchCookie(req, restaurantId);
   const preferred = fromQuery || fromCookie;
   return resolveBranchScope(userId, restaurantId, preferred);

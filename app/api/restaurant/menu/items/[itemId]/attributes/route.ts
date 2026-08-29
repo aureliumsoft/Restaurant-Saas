@@ -10,6 +10,7 @@ import {
 } from "@/lib/subscription-plan-enforcement";
 import { attributeGroupInclude } from "@/lib/menu/attribute-group-include";
 import { recommendationGroupBodySchema } from "@/lib/validation/recommendation-group";
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const groupInclude = attributeGroupInclude;
 
@@ -30,7 +31,7 @@ export async function POST(
     return subscriptionPlanDeniedResponse("Recommendation groups");
   }
 
-  const { itemId } = await ctx.params;
+  const { itemId } = await resolveRouteParams(ctx.params, ['itemId']);
 
   const item = await db.menuItem.findFirst({
     where: { id: itemId, restaurantId: auth.restaurant.id },

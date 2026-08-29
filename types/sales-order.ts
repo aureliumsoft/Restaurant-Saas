@@ -1,6 +1,7 @@
 export type SalesOrderRow =
   | {
       id: string;
+      urlId?: string;
       kind: 'menu_order';
       trackingToken?: string | null;
       ticketNumber?: number | null;
@@ -15,6 +16,7 @@ export type SalesOrderRow =
     }
   | {
       id: string;
+      urlId?: string;
       kind: 'sale_transaction';
       trackingToken?: string | null;
       ticketNumber?: number | null;

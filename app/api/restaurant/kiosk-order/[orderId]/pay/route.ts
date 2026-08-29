@@ -4,9 +4,10 @@ import { OrderSourceType } from '@prisma/client';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
-import { getOrOpenPosShift } from '@/lib/pos-shift';
+import { getOpenPosShift } from '@/lib/pos-shift';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const paySchema = z.object({
   paid: z.number().min(0),
@@ -25,7 +26,7 @@ export async function POST(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { orderId } = await ctx.params;
+    const { orderId } = await resolveRouteParams(ctx.params, ['orderId']);
     const order = await db.order.findFirst({
       where: {
         id: orderId,
@@ -90,11 +91,16 @@ export async function POST(
       );
     }
 
-    const activeShift = await getOrOpenPosShift({
+    const openShift = await getOpenPosShift({
       restaurantId: auth.restaurantId,
       branchId: order.branchId,
-      userId: auth.userId,
     });
+    if (!openShift) {
+      return NextResponse.json(
+        { error: 'Start a new shift before recording payments.' },
+        { status: 409 }
+      );
+    }
 
     await db.$transaction(async (tx) => {
       await tx.payment.update({
@@ -107,7 +113,7 @@ export async function POST(
       });
       await tx.order.update({
         where: { id: order.id },
-        data: { posShiftId: activeShift.id },
+        data: { posShiftId: openShift.id },
       });
     });
 

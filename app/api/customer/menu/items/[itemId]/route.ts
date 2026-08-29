@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { loadCustomerMenuProductDetail } from '@/lib/menu/load-customer-menu-progressive';
 import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const MENU_CACHE_HEADERS = {
   'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
@@ -12,7 +13,7 @@ type RouteContext = { params: Promise<{ itemId: string }> };
 
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
-    const { itemId } = await context.params;
+    const { itemId } = await resolveRouteParams(context.params, ['itemId']);
     const trimmed = itemId?.trim();
     if (!trimmed) {
       return NextResponse.json({ error: 'Missing product id.' }, { status: 400 });

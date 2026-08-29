@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 type UpdateStatus = 'completed' | 'failed' | 'cancelled' | 'pending';
 
@@ -28,7 +29,7 @@ export async function POST(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { orderId } = await context.params;
+    const { orderId } = await resolveRouteParams(context.params, ['orderId']);
     if (!orderId || typeof orderId !== 'string') {
       return NextResponse.json({ error: 'Missing order id' }, { status: 400 });
     }

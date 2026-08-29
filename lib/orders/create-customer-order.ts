@@ -2,6 +2,7 @@ import { OrderSourceType } from '@prisma/client';
 import { z } from 'zod';
 
 import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
+import { buildKitchenTicketItemRows } from '@/lib/kitchen-ticket-items';
 import { db } from '@/lib/db';
 import {
   isPersonalizeModifierMenuItemId,
@@ -180,18 +181,6 @@ function buildAddressSnapshot(
   }
 
   return lines.join('\n');
-}
-
-function ticketProductName(
-  productName: string,
-  groups: z.infer<typeof modifierGroupSchema>[]
-): string {
-  if (!groups.length) return productName;
-  const bits = groups.map((g) => {
-    const names = g.selections.map((s) => s.name).join(', ');
-    return `${g.groupName}: ${names}`;
-  });
-  return `${productName} (${bits.join('; ')})`;
 }
 
 export type CreateCustomerOrderResult =
@@ -501,10 +490,22 @@ export async function createCustomerOrder(options: {
         });
 
         await tx.kitchenTicketItem.createMany({
-          data: resolvedLines.map((line) => ({
+          data: buildKitchenTicketItemRows(
+            resolvedLines.map((line) => ({
+              quantity: line.quantity,
+              productName: line.productName,
+              modifiers: line.modifiers.flatMap((group) =>
+                group.selections.map((sel) => ({
+                  name: sel.name,
+                  quantity: 1,
+                  menuItemId: sel.menuItemId,
+                }))
+              ),
+            }))
+          ).map((row) => ({
             kitchenTicketId: ticket.id,
-            productName: ticketProductName(line.productName, line.modifiers),
-            quantity: line.quantity,
+            productName: row.productName,
+            quantity: row.quantity,
           })),
         });
 
@@ -520,6 +521,7 @@ export async function createCustomerOrder(options: {
 
         await consumeIngredientsForOrder(tx, {
           restaurantId: restaurant.id,
+          branchId,
           orderId: order.id,
           requireAvailableStock: !paidExternally,
           requireVariation: !paidExternally,

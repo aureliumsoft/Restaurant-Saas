@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { normalizeDashboardPermissions } from '@/lib/dashboard-permissions';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from '@/lib/subscription-plan-enforcement';
+import { withUrlIds } from '@/lib/with-url-id';
 
 const createSchema = z.object({
   name: z.string().min(1).max(80).trim(),
@@ -28,12 +29,14 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json({
-    roles: roles.map((r) => ({
-      id: r.id,
-      name: r.name,
-      slug: r.slug,
-      permissions: r.permissions.map((p) => p.name),
-    })),
+    roles: withUrlIds(
+      roles.map((r) => ({
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+        permissions: r.permissions.map((p) => p.name),
+      }))
+    ),
   });
 }
 

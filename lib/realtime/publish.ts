@@ -7,6 +7,7 @@ const ORDER_LIFECYCLE_TYPES: RestaurantRealtimeEventType[] = [
   'order_display',
   'kiosk.pending_cash',
   'pos.recent_orders',
+  'pos.completed_orders',
   'sales.orders',
   'dashboard.analytics',
   'inventory.stock',
@@ -42,11 +43,14 @@ export function publishOrderLifecycleUpdate(params: {
   }
 }
 
-/** Restaurant-wide stock (not branch-scoped). */
-export function publishInventoryStockUpdate(restaurantId: string) {
+/** Branch-scoped stock refresh (pass branch when known). */
+export function publishInventoryStockUpdate(
+  restaurantId: string,
+  branchId?: string | null
+) {
   publishRestaurantRealtime('inventory.stock', {
     restaurantId,
-    branchId: null,
+    branchId: branchId ?? null,
   });
 }
 

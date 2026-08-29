@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { estimateDataUrlBytes, isAcceptedImageValue } from '@/lib/image-data-url';
 import { loadRestaurantMenuCategoryItems } from '@/lib/menu/load-restaurant-menu-progressive';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 type RouteContext = { params: Promise<{ categoryId: string }> };
 
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
   }
 
   try {
-    const { categoryId } = await context.params;
+    const { categoryId } = await resolveRouteParams(context.params, ['categoryId']);
     const trimmed = categoryId?.trim();
     if (!trimmed) {
       return NextResponse.json({ error: 'Missing category id.' }, { status: 400 });
@@ -90,7 +91,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { categoryId } = await context.params;
+  const { categoryId } = await resolveRouteParams(context.params, ['categoryId']);
   const trimmed = categoryId?.trim();
   if (!trimmed) {
     return NextResponse.json({ error: 'Missing category id.' }, { status: 400 });
@@ -172,7 +173,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { categoryId } = await context.params;
+  const { categoryId } = await resolveRouteParams(context.params, ['categoryId']);
   const trimmed = categoryId?.trim();
   if (!trimmed) {
     return NextResponse.json({ error: 'Missing category id.' }, { status: 400 });

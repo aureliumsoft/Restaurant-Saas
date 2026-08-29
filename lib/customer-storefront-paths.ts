@@ -3,6 +3,8 @@
  * does not appear in paths. Storefront home is `/{slug}`; order flow is `/order/...`.
  */
 
+import { pathSegmentId } from '@/lib/url-id-path';
+
 /** @deprecated Legacy prefix — only used for redirects from old links. */
 export const LEGACY_WEB_APP_PREFIX = '/web-app';
 
@@ -75,7 +77,7 @@ export function restaurantTrackOrderPath(
   const base = `/${encodeSlug(slug)}/track-order`;
   const orderId = query?.orderId?.trim();
   if (!orderId) return base;
-  return `${base}?orderId=${encodeURIComponent(orderId)}`;
+  return `${base}?orderId=${encodeURIComponent(pathSegmentId(orderId))}`;
 }
 
 export function restaurantOrdersPath(slug: string): string {
@@ -83,7 +85,7 @@ export function restaurantOrdersPath(slug: string): string {
 }
 
 export function restaurantOrderDetailPath(slug: string, orderId: string): string {
-  return `/${encodeSlug(slug)}/orders/${encodeURIComponent(orderId.trim())}`;
+  return `/${encodeSlug(slug)}/orders/${encodeURIComponent(pathSegmentId(orderId))}`;
 }
 
 export function isCustomerOrderFlowPath(pathname: string): boolean {

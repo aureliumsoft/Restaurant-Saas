@@ -21,7 +21,7 @@ import {
 import { isDineInPayBeforeKitchen } from '@/lib/restaurant-dine-in-payment';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { resolvePosPaymentLedgerAmount } from '@/lib/order-payment';
-import { getOrOpenPosShift } from '@/lib/pos-shift';
+import { getOpenPosShift } from '@/lib/pos-shift';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 import {
   consumeIngredientsForOrder,
@@ -31,9 +31,9 @@ import {
 import {
   normalizePosOrderLines,
   paymentModeToMethodLabel,
-  posOrderItemCreateManyInput,
   type PosOrderLineInput,
 } from '@/lib/pos-order-lines';
+import { createOrderItemsWithModifiers } from '@/lib/pos-order-modifiers';
 import {
   isPrismaUniqueViolation,
   parseOrderIdempotencyKey,
@@ -283,11 +283,13 @@ export async function POST(req: NextRequest) {
 
     const result = await db.$transaction(
       async (tx) => {
-        const activeShift = await getOrOpenPosShift({
+        const openShift = await getOpenPosShift({
           restaurantId,
           branchId,
-          userId: auth.userId,
         });
+        if (!openShift) {
+          throw new Error('NO_ACTIVE_SHIFT');
+        }
 
         const ticketDate = utcTicketDateFromNow();
         let ticketNumber = await allocateTicketNumber(tx, {
@@ -315,7 +317,7 @@ export async function POST(req: NextRequest) {
                 serviceChargeAmount: expectedServiceCharge,
                 diningTableId,
                 tableLabel,
-                posShiftId: activeShift.id,
+                posShiftId: openShift.id,
                 ...(idempotencyKey ? { idempotencyKey } : {}),
               },
             });
@@ -333,12 +335,11 @@ export async function POST(req: NextRequest) {
           throw new Error('Failed to create order after ticket retries');
         }
 
-        await tx.orderItem.createMany({
-          data: posOrderItemCreateManyInput(order?.id ?? '', normalizedItems),
-        });
+        await createOrderItemsWithModifiers(tx, order.id, normalizedItems);
 
         await consumeIngredientsForOrder(tx, {
           restaurantId,
+          branchId: order.branchId,
           orderId: order.id,
           createdByUserId: auth.userId,
           lines: normalizedItems.map((line) => ({
@@ -400,6 +401,12 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (e) {
+    if (e instanceof Error && e.message === 'NO_ACTIVE_SHIFT') {
+      return NextResponse.json(
+        { error: 'Start a new shift before creating orders.' },
+        { status: 409 }
+      );
+    }
     if (isMajorIngredientOutOfStockError(e)) {
       return NextResponse.json({ error: e.message }, { status: 400 });
     }

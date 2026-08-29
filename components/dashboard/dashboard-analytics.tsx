@@ -531,7 +531,7 @@ function InsightChip({
 export default function DashboardAnalytics() {
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
-  const { activeBranchId, loading: branchLoading, isOwnerOrAdmin } =
+  const { activeBranchId, activeBranchUrlId, loading: branchLoading, isOwnerOrAdmin } =
     useBranchContext();
   const { restaurantSlug } = useStaffRestaurantBranding();
   const [analytics, setAnalytics] = useState<AnalyticsPayload | null>(null);
@@ -541,14 +541,15 @@ export default function DashboardAnalytics() {
   const queryDays = isOwnerOrAdmin ? selectedDays : 1;
   const slug = restaurantSlug;
 
-  const load = useCallback(async (days: number, branchId: string | null) => {
+  const load = useCallback(async (days: number, branchId: string | null, branchUrlId: string | null) => {
     setError(null);
     setAnalyticsLoading(true);
     try {
       const dashRes = await axios.get<AnalyticsPayload>(
         withBranchQuery(
           `/api/restaurant/dashboard-analytics?days=${days}`,
-          branchId
+          branchId,
+          branchUrlId
         )
       );
       setAnalytics(dashRes.data);
@@ -562,14 +563,14 @@ export default function DashboardAnalytics() {
 
   useEffect(() => {
     if (branchLoading) return;
-    void load(queryDays, activeBranchId);
-  }, [load, queryDays, activeBranchId, branchLoading]);
+    void load(queryDays, activeBranchId, activeBranchUrlId);
+  }, [load, queryDays, activeBranchId, activeBranchUrlId, branchLoading]);
 
   useRealtimeRefresh(
     'realtime:dashboard.analytics',
     () => {
       if (branchLoading) return;
-      void load(queryDays, activeBranchId);
+      void load(queryDays, activeBranchId, activeBranchUrlId);
     },
     { runOnMount: false }
   );
@@ -743,7 +744,7 @@ export default function DashboardAnalytics() {
                 <a
                   href={
                     activeBranchId
-                      ? kioskBasePath(slug, activeBranchId)
+                      ? kioskBasePath(slug, activeBranchId, activeBranchUrlId)
                       : `/kiosk/${encodeURIComponent(slug)}`
                   }
                   target="_blank"

@@ -9,6 +9,7 @@ import {
 } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { withUrlIds } from '@/lib/with-url-id';
 
 export async function GET(req: NextRequest) {
   try {
@@ -113,7 +114,7 @@ export async function GET(req: NextRequest) {
       itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
     }));
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data: withUrlIds(data) });
   } catch (error) {
     console.error('kiosk-order pending-cash GET', error);
     return NextResponse.json(

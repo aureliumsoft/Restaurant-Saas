@@ -10,6 +10,7 @@ import {
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { branchCapacityAllows } from '@/lib/subscription-plan-features';
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from '@/lib/subscription-plan-enforcement';
+import { withUrlIds } from '@/lib/with-url-id';
 
 const openingHourSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6),
@@ -53,7 +54,7 @@ export async function GET(_req: NextRequest) {
         orderBy: { createdAt: 'asc' },
         select: branchSelect,
       });
-      return NextResponse.json({ data: branches }, { status: 200 });
+      return NextResponse.json({ data: withUrlIds(branches) }, { status: 200 });
     }
 
     const { page, pageSize, skip, take } = parsePaginationParams(
@@ -74,7 +75,7 @@ export async function GET(_req: NextRequest) {
 
     return NextResponse.json(
       {
-        data: branches,
+        data: withUrlIds(branches),
         pagination: buildPaginationMeta(page, pageSize, total),
       },
       { status: 200 }

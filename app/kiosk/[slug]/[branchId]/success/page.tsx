@@ -1,5 +1,7 @@
 import { KioskPaymentSuccess } from '@/components/kiosk/kiosk-payment-success';
 
+import '../../../kiosk-light.css';
+
 type Props = {
   params: Promise<{ slug: string; branchId: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -27,14 +29,16 @@ export default async function KioskBranchSuccessPage({
   const mobileRaw = (pick(sp, 'Mobile') || pick(sp, 'mobile')).trim().toLowerCase();
   const isMobile = mobileRaw === 'true' || mobileRaw === '1' || mobileRaw === 'yes';
   return (
-    <KioskPaymentSuccess
-      slug={decodeURIComponent(slug)}
-      branchId={decodeURIComponent(branchId)}
-      orderId={orderId}
-      sessionId={sessionId}
-      token={token}
-      ticketFromQuery={Number.isFinite(ticketFromQuery) ? ticketFromQuery : null}
-      isMobile={isMobile}
-    />
+    <div className="kiosk-light-root min-h-screen bg-[#f8fafc]">
+      <KioskPaymentSuccess
+        slug={decodeURIComponent(slug)}
+        branchId={decodeURIComponent(branchId)}
+        orderId={orderId}
+        sessionId={sessionId}
+        token={token}
+        ticketFromQuery={Number.isFinite(ticketFromQuery) ? ticketFromQuery : null}
+        isMobile={isMobile}
+      />
+    </div>
   );
 }

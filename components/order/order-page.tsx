@@ -43,9 +43,9 @@ import {
 import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
+import { ProductLineDetails } from '@/components/orders/product-line-details';
 import {
   cartLineTitle,
-  cartModifierDisplayLines,
 } from '@/lib/cart-line-display';
 import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
 import {
@@ -1234,40 +1234,28 @@ export default function OrderPageClient({
       ) : (
         <div className="divide-y divide-[#ececf0]">
           {cart.map((line) => {
-            const modifierLines = cartModifierDisplayLines(line.modifiers);
             const canModify =
               Boolean(line.variationId) || line.modifiers.length > 0;
 
             return (
               <div key={line.lineId} className="py-4 first:pt-1 last:pb-1">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="min-w-0 flex-1 text-sm font-bold leading-snug text-primary">
-                    {cartLineTitle(line.productName, line.variationName)}
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <ProductLineDetails
+                      productName={line.productName}
+                      variationName={line.variationName}
+                      modifiers={line.modifiers}
+                      showPrices
+                      formatMoney={formatMoney}
+                      titleClassName="text-sm font-bold leading-snug text-primary"
+                      sectionLabelClassName="text-[10px] font-semibold uppercase tracking-wide text-primary/60"
+                      lineClassName="text-xs leading-relaxed text-primary/75"
+                    />
+                  </div>
                   <span className="shrink-0 text-sm font-bold text-primary">
                     {formatMoney(lineTotal(line))}
                   </span>
                 </div>
-
-                {modifierLines.length > 0 ? (
-                  <div className="mt-2 space-y-0.5">
-                    {modifierLines.map((modLine, index) => (
-                      <p
-                        key={`${line.lineId}-mod-${index}`}
-                        className={cn(
-                          'text-xs leading-relaxed text-primary/75',
-                          modLine.prefix === 'dash' && 'pl-3'
-                        )}
-                      >
-                        {modLine.prefix === 'branch' ? '↳ ' : '- '}
-                        {modLine.name}
-                        {modLine.unitPrice > 0
-                          ? ` (+${formatMoney(modLine.unitPrice)})`
-                          : ''}
-                      </p>
-                    ))}
-                  </div>
-                ) : null}
 
                 <div className="mt-3 flex items-center gap-2">
                   <div className="flex items-center gap-2">

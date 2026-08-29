@@ -7,6 +7,7 @@ import {
 } from '@/lib/customer-auth/session';
 import { db } from '@/lib/db';
 import { orderItemDisplayName } from '@/lib/orders/order-item-name';
+import { encodeUrlId } from '@/lib/url-id';
 
 export async function GET(req: NextRequest) {
   try {
@@ -92,6 +93,7 @@ export async function GET(req: NextRequest) {
               : 'pickUp';
           return {
             id: order.id,
+            urlId: encodeUrlId(order.id),
             shortOrderId: order.shortOrderId,
             status: order.status,
             total: order.total,

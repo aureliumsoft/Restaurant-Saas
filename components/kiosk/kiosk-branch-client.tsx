@@ -43,16 +43,17 @@ function KioskAuthErrorToast() {
 type Props = {
   slug: string;
   branchId: string;
+  branchUrlId?: string;
 };
 
-export function KioskBranchClient({ slug, branchId }: Props) {
+export function KioskBranchClient({ slug, branchId, branchUrlId }: Props) {
   return (
     <CustomerAccountProvider>
       <KioskCustomerSlugSync slug={slug}>
         <Suspense fallback={null}>
           <KioskAuthErrorToast />
         </Suspense>
-        <KioskApp slug={slug} branchId={branchId} />
+        <KioskApp slug={slug} branchId={branchId} branchUrlId={branchUrlId} />
       </KioskCustomerSlugSync>
     </CustomerAccountProvider>
   );

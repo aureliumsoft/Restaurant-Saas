@@ -7,6 +7,7 @@ import { attributeGroupInclude } from "@/lib/menu/attribute-group-include";
 import { RECOMMENDATION_SOURCE_CATEGORY_WHERE } from "@/lib/menu/category-visibility";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from "@/lib/subscription-plan-enforcement";
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const patchSchema = z
   .object({
@@ -66,7 +67,7 @@ export async function PATCH(
     return subscriptionPlanDeniedResponse("Recommendation groups (add-on categories)");
   }
 
-  const { groupId } = await ctx.params;
+  const { groupId } = await resolveRouteParams(ctx.params, ['groupId']);
 
   const group = await db.menuItemAttributeGroup.findFirst({
     where: { id: groupId },
@@ -195,7 +196,7 @@ export async function DELETE(
     return subscriptionPlanDeniedResponse("Recommendation groups (add-on categories)");
   }
 
-  const { groupId } = await ctx.params;
+  const { groupId } = await resolveRouteParams(ctx.params, ['groupId']);
 
   const group = await db.menuItemAttributeGroup.findFirst({
     where: { id: groupId },

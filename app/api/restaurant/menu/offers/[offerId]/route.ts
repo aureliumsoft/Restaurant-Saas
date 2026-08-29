@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from "@/lib/subscription-plan-enforcement";
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 export async function DELETE(
   req: NextRequest,
@@ -22,7 +23,7 @@ export async function DELETE(
     return subscriptionPlanDeniedResponse("Product recommendations and add-on offers");
   }
 
-  const { offerId } = await ctx.params;
+  const { offerId } = await resolveRouteParams(ctx.params, ['offerId']);
 
   const offer = await db.menuItemOffer.findFirst({
     where: { id: offerId },

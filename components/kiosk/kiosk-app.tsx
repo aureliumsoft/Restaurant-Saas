@@ -64,15 +64,22 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
 import { customerMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
+import { ProductLineDetails } from '@/components/orders/product-line-details';
 import {
   buildProductImageByIdMap,
+  cartLineDisplayName,
   cartLineTitle,
-  cartModifierSelectionNames,
-  cartPersonalizeSelectionNames,
   resolveCartLineImageUrl,
 } from '@/lib/cart-line-display';
-import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
-import { compactCartImageUrl, writeCartToLocalStorage } from '@/lib/cart-storage';
+import {
+  cartLineTotal,
+  cartLineUnitTotal,
+  normalizeCartModifiers,
+} from '@/lib/cart-normalize';
+import {
+  compactCartImageUrl,
+  writeCartToLocalStorage,
+} from '@/lib/cart-storage';
 import { cn } from '@/lib/utils';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import { setUiLanguage } from '@/lib/i18n/client';
@@ -97,13 +104,25 @@ import {
   buildKioskMenuCategoryItemsUrl,
 } from '@/lib/customer-menu-client';
 import { useProgressiveCustomerMenu } from '@/hooks/use-progressive-customer-menu';
-import { ProductCardSkeletonGrid, CategoryPillSkeleton } from '@/components/menu/product-card-skeleton';
+import {
+  ProductCardSkeletonGrid,
+  CategoryPillSkeleton,
+} from '@/components/menu/product-card-skeleton';
 import {
   parseRestaurantServiceCharges,
   resolveServiceChargeAmount,
   type RestaurantServiceCharges,
 } from '@/lib/restaurant-service-charge';
-import { CardPaymentDialogs, useCardPaymentFlow } from '../payments/card-payment-flow';
+import {
+  CardPaymentDialogs,
+  useCardPaymentFlow,
+} from '../payments/card-payment-flow';
+import { encodeUrlIdClient } from '@/lib/encode-url-id-client';
+import { publicId } from '@/lib/public-id';
+
+/** Fixed light product tiles — kiosk stays light like online storefront (no dark mode). */
+const KIOSK_PRODUCT_CARD =
+  'cursor-pointer overflow-hidden rounded-lg border border-[#e2e8f0] bg-white text-[#0f172a] shadow-sm transition hover:shadow-md active:scale-[0.99] dark:border-[#e2e8f0] dark:bg-white dark:text-[#0f172a] dark:shadow-sm';
 
 function formatKioskOrderApiError(body: unknown): string {
   if (!body || typeof body !== 'object') {
@@ -308,21 +327,18 @@ function saveCart(slug: string, branchId: string, lines: CartLine[]) {
   writeCartToLocalStorage(kioskCartStorageKey(slug, branchId), lines);
 }
 
-/** Single-line label for cart / kitchen (matches server `ticketProductName` shape). */
-function cartLineDisplayName(line: CartLine): string {
-  const base = cartLineTitle(line.productName, line.variationName);
-  if (!line.modifiers.length) return base;
-  const bits = normalizeCartModifiers(line.modifiers).map((g) => {
-    const names = g.selections.map((s) => s.name).join(', ');
-    return names ? `${names}, ` : '';
-  });
-  return bits.some(Boolean) ? `${base} (${bits.join(', ')})` : base;
+function kioskCartLineLabel(line: CartLine): string {
+  return cartLineDisplayName(
+    line.productName,
+    line.variationName,
+    line.modifiers
+  );
 }
 
 function cartSummaryLines(cart: CartLine[], maxLines: number): string[] {
   return cart
     .slice(0, maxLines)
-    .map((l) => `${l.quantity}× ${cartLineDisplayName(l)}`);
+    .map((l) => `${l.quantity}× ${kioskCartLineLabel(l)}`);
 }
 
 type Step = 'mode' | 'menu' | 'cart' | 'checkout' | 'done';
@@ -330,14 +346,17 @@ type Step = 'mode' | 'menu' | 'cart' | 'checkout' | 'done';
 export function KioskApp({
   slug,
   branchId,
+  branchUrlId,
 }: {
   slug: string;
   branchId: string;
+  branchUrlId?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { formatMoney, regional } = useRestaurantRegional(slug);
-  const kioskPath = kioskBasePath(slug, branchId);
+  const kioskPublicBranchId = publicId(branchId, branchUrlId);
+  const kioskPath = kioskBasePath(slug, kioskPublicBranchId);
   const [step, setStep] = useState<Step>('mode');
   const [fulfillment, setFulfillment] = useState<
     'dine_in' | 'take_away' | null
@@ -548,7 +567,7 @@ export function KioskApp({
       try {
         const tableParams = new URLSearchParams({ slug });
         if (branchId?.trim()) {
-          tableParams.set('branchId', branchId.trim());
+          tableParams.set('branchId', kioskPublicBranchId.trim());
         }
         const res = await fetch(
           `/api/customer/tables?${tableParams.toString()}`,
@@ -614,13 +633,7 @@ export function KioskApp({
 
     deepLinkAppliedRef.current = true;
     router.replace(kioskPath);
-  }, [
-    diningTables,
-    diningTablesLoaded,
-    kioskPath,
-    router,
-    searchParams,
-  ]);
+  }, [diningTables, diningTablesLoaded, kioskPath, router, searchParams]);
 
   const allProducts = useMemo(() => {
     if (!menu) return [];
@@ -702,6 +715,7 @@ export function KioskApp({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             restaurantSlug: slug,
+            branchId,
             lines: cart.map((line) => ({
               menuItemId: line.menuItemId,
               quantity: line.quantity,
@@ -889,7 +903,7 @@ export function KioskApp({
       menuItemId: line.menuItemId,
       quantity: line.quantity,
       unitPrice: lineUnitTotal(line),
-      productName: cartLineDisplayName(line),
+      productName: cartLineTitle(line.productName, line.variationName),
       variationId: line.variationId,
       modifiers: line.modifiers,
     }));
@@ -952,8 +966,9 @@ export function KioskApp({
           ? 'Order placed — pay at counter when ready.'
           : 'Order placed'
       );
+      const publicOrderId = await encodeUrlIdClient(placedId);
       window.location.assign(
-        `${kioskSuccessPath(slug, branchId)}?orderId=${encodeURIComponent(placedId)}${
+        `${kioskSuccessPath(slug, kioskPublicBranchId)}?orderId=${encodeURIComponent(publicOrderId)}${
           ticketNumber != null
             ? `&ticket=${encodeURIComponent(String(ticketNumber))}`
             : ''
@@ -1004,7 +1019,7 @@ export function KioskApp({
       <Card
         role="button"
         tabIndex={0}
-        className="cursor-pointer overflow-hidden border border-[#e2e8f0] bg-white shadow-sm transition hover:shadow-md active:scale-[0.99]"
+        className={cn(KIOSK_PRODUCT_CARD, 'rounded-lg border')}
         onClick={() => onProductTap(p)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -1020,7 +1035,7 @@ export function KioskApp({
             alt={p.name}
             className="aspect-square w-full rounded-lg pointer-events-none"
           />
-          <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-tight">
+          <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-tight text-[#0f172a]">
             {p.name}
           </h3>
           <div className="mt-1 flex items-baseline gap-2">
@@ -1086,7 +1101,7 @@ export function KioskApp({
     if (products.length === 0) return null;
     return (
       <section className="mb-6">
-        <h2 className="mb-3 text-lg font-bold">{title}</h2>
+        <h2 className="mb-3 text-lg font-bold text-[#0f172a]">{title}</h2>
         <div className="flex gap-3 overflow-x-auto pb-2">
           {products.map((p) => (
             <div key={p.id} className="w-[140px] shrink-0">
@@ -1335,47 +1350,47 @@ export function KioskApp({
                       </>
                     ) : (
                       <>
-                    <button
-                      type="button"
-                      onClick={() => setCategoryId('all')}
-                      className={cn(
-                        'rounded-lg px-2 py-2 text-left text-xs font-medium transition',
-                        categoryId === 'all'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-[#f1f5f9]'
-                      )}
-                    >
-                      <Store className="mb-1 h-5 w-5" />
-                      All
-                    </button>
-                    {displayMenu.menus.map((c) => {
-                      const thumb = getCategoryDisplayImageUrl(c);
-                      return (
                         <button
-                          key={c.id}
                           type="button"
-                          onClick={() => setCategoryId(c.id)}
+                          onClick={() => setCategoryId('all')}
                           className={cn(
-                            'rounded-lg px-2 py-2 text-left text-xs transition',
-                            categoryId === c.id
+                            'rounded-lg px-2 py-2 text-left text-xs font-medium transition',
+                            categoryId === 'all'
                               ? 'bg-primary text-primary-foreground'
                               : 'hover:bg-[#f1f5f9]'
                           )}
                         >
-                          {thumb ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={thumb}
-                              alt=""
-                              className="mb-1 h-10 w-10 rounded-md object-cover"
-                            />
-                          ) : (
-                            <div className="mb-1 h-10 w-10 rounded-md bg-[#e2e8f0]" />
-                          )}
-                          <span className="line-clamp-2">{c.name}</span>
+                          <Store className="mb-1 h-5 w-5" />
+                          All
                         </button>
-                      );
-                    })}
+                        {displayMenu.menus.map((c) => {
+                          const thumb = getCategoryDisplayImageUrl(c);
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => setCategoryId(c.id)}
+                              className={cn(
+                                'rounded-lg px-2 py-2 text-left text-xs transition',
+                                categoryId === c.id
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'hover:bg-[#f1f5f9]'
+                              )}
+                            >
+                              {thumb ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={thumb}
+                                  alt=""
+                                  className="mb-1 h-10 w-10 rounded-md object-cover"
+                                />
+                              ) : (
+                                <div className="mb-1 h-10 w-10 rounded-md bg-[#e2e8f0]" />
+                              )}
+                              <span className="line-clamp-2">{c.name}</span>
+                            </button>
+                          );
+                        })}
                       </>
                     )}
                   </nav>
@@ -1392,34 +1407,36 @@ export function KioskApp({
                     </>
                   ) : (
                     <>
-                  <Button
-                    type="button"
-                    variant={categoryId === 'all' ? 'default' : 'outline'}
-                    onClick={() => setCategoryId('all')}
-                  >
-                    All
-                  </Button>
-                  {displayMenu.menus.map((c) => {
-                    const thumb = getCategoryDisplayImageUrl(c);
-                    return (
                       <Button
-                        key={c.id}
                         type="button"
-                        variant={categoryId === c.id ? 'default' : 'outline'}
-                        onClick={() => setCategoryId(c.id)}
+                        variant={categoryId === 'all' ? 'default' : 'outline'}
+                        onClick={() => setCategoryId('all')}
                       >
-                        {thumb ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={thumb}
-                            alt=""
-                            className="h-6 w-6 rounded-full object-cover"
-                          />
-                        ) : null}
-                        {c.name}
+                        All
                       </Button>
-                    );
-                  })}
+                      {displayMenu.menus.map((c) => {
+                        const thumb = getCategoryDisplayImageUrl(c);
+                        return (
+                          <Button
+                            key={c.id}
+                            type="button"
+                            variant={
+                              categoryId === c.id ? 'default' : 'outline'
+                            }
+                            onClick={() => setCategoryId(c.id)}
+                          >
+                            {thumb ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={thumb}
+                                alt=""
+                                className="h-6 w-6 rounded-full object-cover"
+                              />
+                            ) : null}
+                            {c.name}
+                          </Button>
+                        );
+                      })}
                     </>
                   )}
                 </div>
@@ -1432,80 +1449,87 @@ export function KioskApp({
                   />
                 ) : (
                   <>
-                <HorizontalRow
-                  title={t('recommended')}
-                  products={recommended}
-                />
-                <HorizontalRow
-                  title={t('offersAndAddons')}
-                  products={offeredPool}
-                />
+                    <HorizontalRow
+                      title={t('recommended')}
+                      products={recommended}
+                    />
+                    <HorizontalRow
+                      title={t('offersAndAddons')}
+                      products={offeredPool}
+                    />
 
-                {categoryId === 'all' ? (
-                  progressiveCategories.map((category) => (
-                    <section key={category.id} className="mb-6">
-                      <h2 className=" mb-3 text-lg font-bold">{category.name}</h2>
-                      {category.loading ||
-                      (!category.loaded && category.items.length === 0) ? (
-                        <ProductCardSkeletonGrid
-                          count={4}
-                          variant="kiosk"
-                          gridClassName="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                        />
-                      ) : category.items.length === 0 ? (
-                        <p className="text-sm text-[#64748b]">
-                          {t('noProductsInCategory')}
-                        </p>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                          {category.items.map((p) => (
-                            <ProductCard
-                              key={p.id}
-                              p={{ ...p, categoryId: category.id }}
+                    {categoryId === 'all' ? (
+                      progressiveCategories.map((category) => (
+                        <section key={category.id} className="mb-6">
+                          <h2 className=" mb-3 text-lg font-bold">
+                            {category.name}
+                          </h2>
+                          {category.loading ||
+                          (!category.loaded && category.items.length === 0) ? (
+                            <ProductCardSkeletonGrid
+                              count={4}
+                              variant="kiosk"
+                              gridClassName="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3"
                             />
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  ))
-                ) : (
-                  <section>
-                    <h2 className="mb-3 text-lg font-bold">
-                      {displayMenu.menus.find((c) => c.id === categoryId)?.name}
-                    </h2>
-                    {(() => {
-                      const active = progressiveCategories.find(
-                        (c) => c.id === categoryId
-                      );
-                      if (
-                        active?.loading ||
-                        (active && !active.loaded && active.items.length === 0)
-                      ) {
-                        return (
-                          <ProductCardSkeletonGrid
-                            count={4}
-                            variant="kiosk"
-                            gridClassName="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                          />
-                        );
-                      }
-                      if (displayedProducts.length === 0) {
-                        return (
-                          <p className="text-sm text-[#64748b]">
-                            {t('noProductsInCategory')}
-                          </p>
-                        );
-                      }
-                      return (
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                          {displayedProducts.map((p) => (
-                            <ProductCard key={p.id} p={p} />
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </section>
-                )}
+                          ) : category.items.length === 0 ? (
+                            <p className="text-sm text-[#64748b]">
+                              {t('noProductsInCategory')}
+                            </p>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                              {category.items.map((p) => (
+                                <ProductCard
+                                  key={p.id}
+                                  p={{ ...p, categoryId: category.id }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </section>
+                      ))
+                    ) : (
+                      <section>
+                        <h2 className="mb-3 text-lg font-bold">
+                          {
+                            displayMenu.menus.find((c) => c.id === categoryId)
+                              ?.name
+                          }
+                        </h2>
+                        {(() => {
+                          const active = progressiveCategories.find(
+                            (c) => c.id === categoryId
+                          );
+                          if (
+                            active?.loading ||
+                            (active &&
+                              !active.loaded &&
+                              active.items.length === 0)
+                          ) {
+                            return (
+                              <ProductCardSkeletonGrid
+                                count={4}
+                                variant="kiosk"
+                                gridClassName="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                              />
+                            );
+                          }
+                          if (displayedProducts.length === 0) {
+                            return (
+                              <p className="text-sm text-[#64748b]">
+                                {t('noProductsInCategory')}
+                              </p>
+                            );
+                          }
+                          return (
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                              {displayedProducts.map((p) => (
+                                <ProductCard key={p.id} p={p} />
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </section>
+                    )}
                   </>
                 )}
               </main>
@@ -1524,7 +1548,7 @@ export function KioskApp({
                     <p
                       className="mt-1 line-clamp-2 text-[11px] leading-snug opacity-95"
                       title={cart
-                        .map((l) => `${l.quantity}× ${cartLineDisplayName(l)}`)
+                        .map((l) => `${l.quantity}× ${kioskCartLineLabel(l)}`)
                         .join(' · ')}
                     >
                       {cartSummaryLines(cart, 4).join(' · ')}
@@ -1573,12 +1597,6 @@ export function KioskApp({
               <>
                 <ul className="space-y-3">
                   {cart.map((line) => {
-                    const personalizeNames = cartPersonalizeSelectionNames(
-                      line.modifiers
-                    );
-                    const addonNames = cartModifierSelectionNames(
-                      line.modifiers
-                    );
                     const displayImageUrl = resolveCartLineImageUrl(
                       line,
                       productImageById
@@ -1599,36 +1617,14 @@ export function KioskApp({
                           ) : null}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium leading-snug">
-                            {cartLineTitle(
-                              line.productName,
-                              line.variationName
-                            )}
-                          </p>
-                          {personalizeNames.length > 0 ? (
-                            <div className="mt-1 space-y-0.5">
-                              {personalizeNames.map((name, index) => (
-                                <p
-                                  key={`${line.lineId}-personalize-${index}`}
-                                  className="text-xs font-medium text-[#334155]"
-                                >
-                                  {name}
-                                </p>
-                              ))}
-                            </div>
-                          ) : null}
-                          {addonNames.length > 0 ? (
-                            <div className="mt-1 space-y-0.5">
-                              {addonNames.map((name, index) => (
-                                <p
-                                  key={`${line.lineId}-sel-${index}`}
-                                  className="text-xs text-[#64748b]"
-                                >
-                                  - {name}
-                                </p>
-                              ))}
-                            </div>
-                          ) : null}
+                          <ProductLineDetails
+                            productName={line.productName}
+                            variationName={line.variationName}
+                            modifiers={line.modifiers}
+                            titleClassName="font-medium leading-snug"
+                            sectionLabelClassName="text-[10px] font-semibold uppercase tracking-wide text-[#64748b]"
+                            lineClassName="text-xs text-[#64748b]"
+                          />
                           <p className="mt-1 text-xs text-[#64748b]">
                             {formatMoney(lineUnitTotal(line))} each
                           </p>
@@ -1697,7 +1693,9 @@ export function KioskApp({
                       {t('customerDetails')}
                     </p>
                     <div className="space-y-1">
-                      <Label htmlFor="kiosk-qr-customer-name">{t('yourName')}</Label>
+                      <Label htmlFor="kiosk-qr-customer-name">
+                        {t('yourName')}
+                      </Label>
                       <Input
                         id="kiosk-qr-customer-name"
                         value={customerName}
@@ -1805,12 +1803,12 @@ export function KioskApp({
               {fulfillment === 'dine_in'
                 ? requiresMobileQrSignIn
                   ? `Dine in · Table ${
-                      diningTables.find((t) => t.id === selectedTableId)?.name ??
-                      selectedTableId
+                      diningTables.find((t) => t.id === selectedTableId)
+                        ?.name ?? selectedTableId
                     } · ${customerName || 'Guest'} · ${customerEmail || 'No email'}`
                   : `Dine in · Table ${
-                      diningTables.find((t) => t.id === selectedTableId)?.name ??
-                      selectedTableId
+                      diningTables.find((t) => t.id === selectedTableId)
+                        ?.name ?? selectedTableId
                     }`
                 : `Take away · ${customerName || 'Guest'} · ${customerPhone || 'No phone'}`}
             </p>
@@ -1820,47 +1818,26 @@ export function KioskApp({
               </p>
               <ul className="mb-3 max-h-48 space-y-2 overflow-y-auto text-sm">
                 {cart.map((line) => {
-                  const personalizeNames = cartPersonalizeSelectionNames(
-                    line.modifiers
-                  );
-                  const addonNames = cartModifierSelectionNames(line.modifiers);
                   return (
                     <li
                       key={line.lineId}
                       className="border-b border-[#e2e8f0]/80 py-2 last:border-0"
                     >
                       <div className="flex justify-between gap-2">
-                        <p className="min-w-0 font-medium">
-                          {cartLineTitle(line.productName, line.variationName)}
-                        </p>
+                        <div className="min-w-0 flex-1">
+                          <ProductLineDetails
+                            productName={line.productName}
+                            variationName={line.variationName}
+                            modifiers={line.modifiers}
+                            titleClassName="font-medium"
+                            sectionLabelClassName="text-[10px] font-semibold uppercase tracking-wide text-[#64748b]"
+                            lineClassName="text-xs text-[#64748b]"
+                          />
+                        </div>
                         <span className="shrink-0 tabular-nums text-[#64748b]">
                           {formatMoney(lineTotal(line))}
                         </span>
                       </div>
-                      {personalizeNames.length > 0 ? (
-                        <div className="mt-0.5 space-y-0.5">
-                          {personalizeNames.map((name, index) => (
-                            <p
-                              key={`${line.lineId}-personalize-${index}`}
-                              className="text-xs font-medium text-[#334155]"
-                            >
-                              {name}
-                            </p>
-                          ))}
-                        </div>
-                      ) : null}
-                      {addonNames.length > 0 ? (
-                        <div className="mt-0.5 space-y-0.5">
-                          {addonNames.map((name, index) => (
-                            <p
-                              key={`${line.lineId}-sel-${index}`}
-                              className="text-xs text-[#64748b]"
-                            >
-                              - {name}
-                            </p>
-                          ))}
-                        </div>
-                      ) : null}
                       <p className="mt-0.5 text-xs text-[#64748b]">
                         x{line.quantity}
                       </p>
@@ -1973,7 +1950,8 @@ export function KioskApp({
                     ) : (
                       <p className="mt-3 text-xs text-[#64748b]">
                         Pay with cash at the counter. Your order will be created
-                        with payment pending until staff sends it to the kitchen.
+                        with payment pending until staff sends it to the
+                        kitchen.
                       </p>
                     )}
                   </>
@@ -2027,7 +2005,9 @@ export function KioskApp({
                 cardTransactionId={cardPayment.cardTransactionId}
                 cardProcessingOpen={cardPayment.cardProcessingOpen}
                 cardPaymentOutcomeOpen={cardPayment.cardPaymentOutcomeOpen}
-                setCardPaymentOutcomeOpen={cardPayment.setCardPaymentOutcomeOpen}
+                setCardPaymentOutcomeOpen={
+                  cardPayment.setCardPaymentOutcomeOpen
+                }
                 setCardProcessingOpen={cardPayment.setCardProcessingOpen}
                 onBypass={cardPayment.handleCardPaymentBypass}
                 onCancel={cardPayment.handleCardPaymentCancel}

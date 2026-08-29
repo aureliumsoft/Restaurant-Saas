@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { pathSegmentId } from '@/lib/url-id-path';
 
 export async function hasImageByMenuItemIds(
   ids: string[]
@@ -33,11 +34,11 @@ export function customerMenuItemImageUrl(
   if (slug) params.set('slug', slug);
   if (subdomain) params.set('subdomain', subdomain);
   const qs = params.toString();
-  return `/api/customer/menu/items/${encodeURIComponent(itemId)}/image${qs ? `?${qs}` : ''}`;
+  return `/api/customer/menu/items/${encodeURIComponent(pathSegmentId(itemId))}/image${qs ? `?${qs}` : ''}`;
 }
 
 export function restaurantMenuItemImageUrl(itemId: string): string {
-  return `/api/restaurant/menu/items/${encodeURIComponent(itemId)}/image`;
+  return `/api/restaurant/menu/items/${encodeURIComponent(pathSegmentId(itemId))}/image`;
 }
 
 export async function hasImageByVariationIds(
@@ -73,7 +74,7 @@ export function customerMenuVariationImageUrl(
   if (slug) params.set('slug', slug);
   if (subdomain) params.set('subdomain', subdomain);
   const qs = params.toString();
-  return `/api/customer/menu/items/${encodeURIComponent(itemId)}/variations/${encodeURIComponent(variationId)}/image${qs ? `?${qs}` : ''}`;
+  return `/api/customer/menu/items/${encodeURIComponent(pathSegmentId(itemId))}/variations/${encodeURIComponent(pathSegmentId(variationId))}/image${qs ? `?${qs}` : ''}`;
 }
 
 export function mapBrowseListItem<

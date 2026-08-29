@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import { db } from '@/lib/db';
 import { sendDemoRequestReplyEmail } from '@/lib/email/demo-request-reply';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 type RouteContext = {
   params: Promise<{ requestId: string }>;
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
   const auth = await requirePlatformAdmin(req);
   if ('error' in auth) return auth.error;
 
-  const { requestId } = await context.params;
+  const { requestId } = await resolveRouteParams(context.params, ['requestId']);
   if (!requestId?.trim()) {
     return NextResponse.json({ error: 'Request id is required.' }, { status: 400 });
   }

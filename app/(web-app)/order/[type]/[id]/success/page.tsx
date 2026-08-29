@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 
 import { OnlinePaymentSuccess } from '@/components/order/online-payment-success';
 import { orderInfoFromSearchParams } from '@/lib/order-search-params';
@@ -38,14 +39,16 @@ export default async function OnlineSuccessPage({ params, searchParams }: Props)
   const ticketFromQuery = Number.isFinite(parsedTicket) ? parsedTicket : null;
 
   return (
-    <OnlinePaymentSuccess
-      flowOrderId={id}
-      trackingOrderId={trackingOrderId}
-      ticketFromQuery={ticketFromQuery}
-      sessionId={sessionId}
-      token={token}
-      orderType={mode}
-      orderInfo={orderInfo}
-    />
+    <Suspense fallback={null}>
+      <OnlinePaymentSuccess
+        flowOrderId={id}
+        trackingOrderId={trackingOrderId}
+        ticketFromQuery={ticketFromQuery}
+        sessionId={sessionId}
+        token={token}
+        orderType={mode}
+        orderInfo={orderInfo}
+      />
+    </Suspense>
   );
 }

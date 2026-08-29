@@ -24,6 +24,7 @@ import { useCustomerAccountOptional } from '@/components/customer-app/customer-a
 import { cn } from '@/lib/utils';
 import { WEB_CUSTOMER_TAKEAWAY_NAME } from '@/lib/web-customer';
 import { writeOrderContext } from '@/lib/order-context-storage';
+import { encodeUrlIdClient } from '@/lib/encode-url-id-client';
 import {
   getBranchCloseTimeToday,
   isBranchOpenNow,
@@ -198,10 +199,10 @@ export function Sidebar({
     return () => clearInterval(interval);
   }, [menuBanners]);
 
-  const createOrder = () => {
+  const createOrder = async () => {
     if (isStartingOrder) return;
 
-    const orderId =
+    const rawOrderId =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID().replace(/-/g, '')
         : `id${Date.now().toString(16)}`;
@@ -224,15 +225,17 @@ export function Sidebar({
       ...(restaurantName ? { restaurantName } : {}),
     };
 
+    setIsStartingOrder(true);
+    setDeliveryInfoOpen(false);
+
+    const orderId = await encodeUrlIdClient(rawOrderId);
     writeOrderContext(orderId, orderInfo);
 
     const path =
       orderType === 'delivery'
-        ? `/order/delivery/${orderId}`
-        : `/order/pickUp/${orderId}`;
+        ? `/order/delivery/${encodeURIComponent(orderId)}`
+        : `/order/pickUp/${encodeURIComponent(orderId)}`;
 
-    setIsStartingOrder(true);
-    setDeliveryInfoOpen(false);
     window.location.href = path;
   };
 

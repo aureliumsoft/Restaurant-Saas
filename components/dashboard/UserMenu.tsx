@@ -19,11 +19,16 @@ export default function UserMenu({
   className,
   confirmLogout = false,
   iconOnly = false,
+  onLogout,
+  logoutLoading = false,
 }: {
   className?: string;
   confirmLogout?: boolean;
   /** Trigger shows only the user icon (name still appears in the dropdown). */
   iconOnly?: boolean;
+  /** When set, replaces the default sign-out handler (e.g. POS shift-aware logout). */
+  onLogout?: () => void;
+  logoutLoading?: boolean;
 }) {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -74,6 +79,11 @@ export default function UserMenu({
   };
 
   const requestLogout = () => {
+    if (onLogout) {
+      setMenuOpen(false);
+      onLogout();
+      return;
+    }
     if (confirmLogout) {
       setMenuOpen(false);
       setLogoutOpen(true);
@@ -113,11 +123,16 @@ export default function UserMenu({
         <div className="-mx-1 my-1 h-px bg-muted" />
         <button
           type="button"
-          className="relative flex w-full items-center rounded-sm px-2 py-1.5 text-sm text-red-500 outline-none transition-colors hover:bg-accent"
+          className="relative flex w-full items-center rounded-sm px-2 py-1.5 text-sm text-red-500 outline-none transition-colors hover:bg-accent disabled:opacity-60"
           onClick={requestLogout}
+          disabled={loggingOut || logoutLoading}
         >
           <>
-            <LogOut className="mr-2 h-4 w-4" />
+            {loggingOut || logoutLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <LogOut className="mr-2 h-4 w-4" />
+            )}
             <span>Logout</span>
           </>
         </button>

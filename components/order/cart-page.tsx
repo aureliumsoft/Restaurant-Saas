@@ -25,9 +25,8 @@ import {
 import type { OrderInfo } from '@/components/order/order-types';
 import { inferHostSubdomainForMenu } from '@/lib/customer-menu-client';
 import { resolveWebCustomerName } from '@/lib/web-customer';
+import { ProductLineDetails } from '@/components/orders/product-line-details';
 import {
-  cartLineTitle,
-  cartModifierDisplayLines,
   resolveCartLineImageUrl,
 } from '@/lib/cart-line-display';
 import {
@@ -560,7 +559,6 @@ export default function CartPageClient({
           <>
             <section className={cn(panelClass, 'mb-4 divide-y divide-[#ececf0]')}>
               {cart.map((line) => {
-                const modifierLines = cartModifierDisplayLines(line.modifiers);
                 const displayImageUrl = resolveCartLineImageUrl(
                   line,
                   productImageById
@@ -583,28 +581,16 @@ export default function CartPageClient({
                         </div>
                       )}
                       <div className="min-w-0">
-                        <h3 className="text-sm font-bold leading-snug text-primary">
-                          {cartLineTitle(line.productName, line.variationName)}
-                        </h3>
-                        {modifierLines.length > 0 ? (
-                          <div className="mt-1.5 space-y-0.5">
-                            {modifierLines.map((modLine, index) => (
-                              <p
-                                key={`${line.lineId}-mod-${index}`}
-                                className={cn(
-                                  'truncate text-xs text-primary/75',
-                                  modLine.prefix === 'dash' && 'pl-3'
-                                )}
-                              >
-                                {modLine.prefix === 'branch' ? '↳ ' : '- '}
-                                {modLine.name}
-                                {modLine.unitPrice > 0
-                                  ? ` (+${formatMoney(modLine.unitPrice)})`
-                                  : ''}
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
+                        <ProductLineDetails
+                          productName={line.productName}
+                          variationName={line.variationName}
+                          modifiers={line.modifiers}
+                          showPrices
+                          formatMoney={formatMoney}
+                          titleClassName="text-sm font-bold leading-snug text-primary"
+                          sectionLabelClassName="text-[10px] font-semibold uppercase tracking-wide text-primary/60"
+                          lineClassName="truncate text-xs text-primary/75"
+                        />
                         <p className="mt-1.5 text-xs text-[#8e8e9a]">
                           {t('unitPrice')}: {formatMoney(lineUnitTotal(line))}
                         </p>

@@ -17,6 +17,7 @@ import {
 } from '@/lib/sales-order-period';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { salesOrderMethodLabel } from '@/lib/order-fulfillment';
+import { withUrlId } from '@/lib/with-url-id';
 import {
   salesOrderStatusBucket,
   type SalesOrderStatusBucket,
@@ -116,7 +117,7 @@ function mapMenuOrderRow(o: {
   createdAt: Date;
 }): SalesOrderRow {
   const sourceType = o.sourceType;
-  return {
+  return withUrlId({
     id: o.id,
     kind: 'menu_order',
     trackingToken: o.trackingToken ?? o.shortOrderId ?? o.id,
@@ -132,7 +133,7 @@ function mapMenuOrderRow(o: {
       tableLabel: o.tableLabel,
     }),
     createdAt: o.createdAt.toISOString(),
-  };
+  });
 }
 
 function sourceSqlForTab(tab: SalesOrdersTab): Prisma.Sql {
@@ -407,7 +408,7 @@ export async function GET(req: NextRequest) {
 
       orders = unionRows.map((o) => {
         if (o.kind === 'sale_transaction') {
-          return {
+          return withUrlId({
             id: o.id,
             kind: 'sale_transaction' as const,
             trackingToken: o.trackingToken,
@@ -417,7 +418,7 @@ export async function GET(req: NextRequest) {
             status: o.status,
             transactionId: o.id,
             createdAt: o.createdAt.toISOString(),
-          };
+          });
         }
         return mapMenuOrderRow({
           id: o.id,

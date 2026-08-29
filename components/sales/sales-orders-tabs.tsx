@@ -14,6 +14,10 @@ import {
   Eye,
 } from 'lucide-react';
 
+import {
+  restaurantOrderApiPath,
+  transactionApiPath,
+} from '@/lib/dashboard-paths';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -28,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ProductLineDetails } from '@/components/orders/product-line-details';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
@@ -361,12 +366,12 @@ export function SalesOrdersTabs() {
     try {
       if (row.kind === 'menu_order') {
         const res = await axios.get<MenuOrderDetail>(
-          `/api/restaurant/orders/${row.id}`
+          restaurantOrderApiPath(row.id, row.urlId)
         );
         setMenuDetail(res.data);
       } else {
         const res = await axios.get<TransactionData[]>(
-          `/api/transactions/${row.id}`
+          transactionApiPath(row.id, '', row.urlId)
         );
         const data = res.data;
         setTransactionLines(Array.isArray(data) ? data : []);
@@ -733,20 +738,15 @@ export function SalesOrdersTabs() {
                                 {i + 1}
                               </TableCell>
                               <TableCell>
-                                <div className="space-y-0.5">
-                                  <p>{it.menuItem.name}</p>
-                                  {(it.modifiers ?? []).map((m) => (
-                                    <p
-                                      key={m.id}
-                                      className="pl-3 text-xs text-muted-foreground"
-                                    >
-                                      <span className="font-semibold tabular-nums">
-                                        {m.quantity}×
-                                      </span>{' '}
-                                      {m.name}
-                                    </p>
-                                  ))}
-                                </div>
+                                <ProductLineDetails
+                                  productName={it.menuItem.name}
+                                  quantity={it.quantity}
+                                  orderModifiers={it.modifiers ?? []}
+                                  showQuantityOnModifiers
+                                  titleClassName="font-medium"
+                                  sectionLabelClassName="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                                  lineClassName="pl-3 text-xs text-muted-foreground"
+                                />
                               </TableCell>
                               <TableCell className="text-right">
                                 {it.quantity}

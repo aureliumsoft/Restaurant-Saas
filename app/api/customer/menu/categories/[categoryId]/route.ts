@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { loadCustomerMenuCategoryItems } from '@/lib/menu/load-customer-menu-progressive';
 import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query';
 import { parsePaginationParams } from '@/lib/pagination';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 type RouteContext = { params: Promise<{ categoryId: string }> };
 
@@ -13,7 +14,7 @@ const MENU_CACHE_HEADERS = {
 
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
-    const { categoryId } = await context.params;
+    const { categoryId } = await resolveRouteParams(context.params, ['categoryId']);
     const trimmed = categoryId?.trim();
     if (!trimmed) {
       return NextResponse.json({ error: 'Missing category id.' }, { status: 400 });

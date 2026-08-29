@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import { db } from '@/lib/db';
 import { parseSubscriptionDateInput } from '@/lib/subscription-timezone';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const postSchema = z.object({
   amount: z.number().positive(),
@@ -30,7 +31,7 @@ export async function GET(
   const auth = await requirePlatformAdmin(req);
   if ('error' in auth) return auth.error;
 
-  const { restaurantId } = await ctx.params;
+  const { restaurantId } = await resolveRouteParams(ctx.params, ['restaurantId']);
   try {
     const rows = await db.$queryRaw<
       Array<{
@@ -74,7 +75,7 @@ export async function POST(
   const auth = await requirePlatformAdmin(req);
   if ('error' in auth) return auth.error;
 
-  const { restaurantId } = await ctx.params;
+  const { restaurantId } = await resolveRouteParams(ctx.params, ['restaurantId']);
 
   let json: unknown;
   try {

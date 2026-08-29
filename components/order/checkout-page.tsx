@@ -14,10 +14,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 import type { OrderInfo } from '@/components/order/order-types';
-import {
-  cartLineTitle,
-  cartModifierDisplayLines,
-} from '@/lib/cart-line-display';
+import { ProductLineDetails } from '@/components/orders/product-line-details';
 import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { submitCustomerOrder } from '@/lib/offline/submit-order';
@@ -638,36 +635,25 @@ export default function CheckoutPageClient({
               <div className="space-y-4 p-4">
                 <div className="space-y-3">
                   {cart.map((line) => {
-                    const modifierLines = cartModifierDisplayLines(line.modifiers);
                     return (
                       <div key={line.lineId} className="space-y-1">
                         <div className="flex justify-between gap-3 text-sm">
-                          <p className="min-w-0 font-bold text-primary">
-                            {cartLineTitle(line.productName, line.variationName)}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <ProductLineDetails
+                              productName={line.productName}
+                              variationName={line.variationName}
+                              modifiers={line.modifiers}
+                              showPrices
+                              formatMoney={formatMoney}
+                              titleClassName="font-bold text-primary"
+                              sectionLabelClassName="text-[10px] font-semibold uppercase tracking-wide text-primary/60"
+                              lineClassName="text-xs text-primary/75"
+                            />
+                          </div>
                           <p className="shrink-0 font-bold text-primary">
                             {formatMoney(lineTotal(line))}
                           </p>
                         </div>
-                        {modifierLines.length > 0 ? (
-                          <div className="space-y-0.5">
-                            {modifierLines.map((modLine, index) => (
-                              <p
-                                key={`${line.lineId}-mod-${index}`}
-                                className={cn(
-                                  'text-xs text-primary/75',
-                                  modLine.prefix === 'dash' && 'pl-3'
-                                )}
-                              >
-                                {modLine.prefix === 'branch' ? '↳ ' : '- '}
-                                {modLine.name}
-                                {modLine.unitPrice > 0
-                                  ? ` (+${formatMoney(modLine.unitPrice)})`
-                                  : ''}
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
                         <p className="text-xs text-[#8e8e9a]">x{line.quantity}</p>
                       </div>
                     );
@@ -778,7 +764,9 @@ export default function CheckoutPageClient({
                         }}
                         successPath={`/order/${orderType}/${encodeURIComponent(
                           orderId
-                        )}/success?session_id={CHECKOUT_SESSION_ID}`}
+                        )}/success?session_id={CHECKOUT_SESSION_ID}&restaurantSlug=${encodeURIComponent(
+                          orderInfo.restaurantSlug
+                        )}`}
                         cancelPath={orderPathWithQuery(
                           `/order/${orderType}/${encodeURIComponent(orderId)}`,
                           orderInfo

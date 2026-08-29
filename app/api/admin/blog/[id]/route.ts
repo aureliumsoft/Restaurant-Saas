@@ -5,6 +5,7 @@ import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import { blogPostWriteSchema } from '@/lib/blog/blog';
 import { mapBlogWritePayload, resolveSlugForWrite } from '@/lib/blog/blog-service';
 import { db } from '@/lib/db';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const auth = await requirePlatformAdmin(req);
   if ('error' in auth) return auth.error;
 
-  const { id } = await ctx.params;
+  const { id } = await resolveRouteParams(ctx.params, ['id']);
   try {
     const post = await db.blogPost.findUnique({ where: { id } });
     if (!post) {
@@ -29,7 +30,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const auth = await requirePlatformAdmin(req);
   if ('error' in auth) return auth.error;
 
-  const { id } = await ctx.params;
+  const { id } = await resolveRouteParams(ctx.params, ['id']);
 
   let json: unknown;
   try {
@@ -66,7 +67,7 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
   const auth = await requirePlatformAdmin(req);
   if ('error' in auth) return auth.error;
 
-  const { id } = await ctx.params;
+  const { id } = await resolveRouteParams(ctx.params, ['id']);
   try {
     await db.blogPost.delete({ where: { id } });
     return NextResponse.json({ data: { ok: true } });

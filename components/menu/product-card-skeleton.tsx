@@ -36,12 +36,11 @@ export function ProductCardSkeleton({
   }
 
   if (variant === 'kiosk') {
-    // Match live kiosk cards; use opaque slate bones (theme muted blends on light bg).
     const bone = 'bg-[#e2e8f0]';
     return (
       <div
         className={cn(
-          'overflow-hidden rounded-lg border border-[#e2e8f0] bg-white p-3 shadow-sm',
+          'overflow-hidden rounded-lg border border-[#e2e8f0] bg-white p-3 shadow-sm dark:border-[#e2e8f0] dark:bg-white',
           className
         )}
         aria-hidden

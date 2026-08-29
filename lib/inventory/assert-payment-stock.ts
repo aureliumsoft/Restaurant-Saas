@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { branchIdFromOrderPayload } from '@/lib/inventory/branch-stock';
 import {
   assertIngredientsAvailableForOrder,
   isMajorIngredientOutOfStockError,
@@ -63,11 +64,13 @@ export function stockLinesFromUnknownCart(payload: unknown): StockOrderLine[] | 
 
 export async function stockBlockErrorForRestaurant(
   restaurantId: string,
-  lines: StockOrderLine[]
+  lines: StockOrderLine[],
+  branchId?: string | null
 ): Promise<string | null> {
   try {
     await assertIngredientsAvailableForOrder(db, {
       restaurantId,
+      branchId,
       lines,
       requireVariation: true,
     });
@@ -77,13 +80,16 @@ export async function stockBlockErrorForRestaurant(
     if (e instanceof Error && e.message.includes('Select a variation')) {
       return e.message;
     }
+    if (e instanceof Error && e.message.includes('No branch configured')) {
+      return e.message;
+    }
     throw e;
   }
 }
 
 /**
  * Before sending the guest to Stripe / PayPal / wallets: fail with the
- * ingredient name if recipe stock cannot cover this cart.
+ * ingredient name if recipe stock cannot cover this cart at the order branch.
  */
 export async function paymentStockBlockError(
   restaurantSlug: string | undefined,
@@ -100,5 +106,7 @@ export async function paymentStockBlockError(
   });
   if (!restaurant) return 'Restaurant not found';
 
-  return stockBlockErrorForRestaurant(restaurant.id, lines);
+  const branchId = branchIdFromOrderPayload(payload);
+
+  return stockBlockErrorForRestaurant(restaurant.id, lines, branchId);
 }

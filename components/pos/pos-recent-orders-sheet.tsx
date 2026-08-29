@@ -5,6 +5,10 @@ import axios from 'axios';
 import { History, Loader2, Pencil, Printer } from 'lucide-react';
 import { toast } from 'react-toastify';
 
+import {
+  kioskOrderApiPath,
+  posOrderApiPath,
+} from '@/lib/dashboard-paths';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,6 +28,7 @@ import { cn } from '@/lib/utils';
 
 export type PosRecentOrderRow = {
   id: string;
+  urlId?: string;
   shortOrderId: string;
   ticketNumber: number | null;
   total: number;
@@ -38,6 +43,7 @@ export type PosRecentOrderRow = {
 
 export type PosOrderDetail = {
   id: string;
+  urlId?: string;
   shortOrderId: string;
   ticketNumber: number | null;
   total: number;
@@ -62,7 +68,7 @@ export type PosOrderDetail = {
     quantity: number;
     unitPrice: number;
     imageUrl: string | null;
-    modifiers: { name: string; unitPrice: number }[];
+    modifiers: { name: string; unitPrice: number; menuItemId?: string | null }[];
   }>;
 };
 
@@ -207,15 +213,14 @@ export function PosRecentOrdersSheet({
 
   const fetchOrderDetail = async (
     orderId: string,
-    source: 'pos' | 'kiosk'
+    source: 'pos' | 'kiosk',
+    urlId?: string
   ) => {
-    const base =
+    const path =
       source === 'kiosk'
-        ? '/api/restaurant/kiosk-order'
-        : '/api/restaurant/pos-order';
-    const res = await axios.get<{ data: PosOrderDetail }>(
-      `${base}/${encodeURIComponent(orderId)}`
-    );
+        ? kioskOrderApiPath(orderId, '', urlId)
+        : posOrderApiPath(orderId, '', urlId);
+    const res = await axios.get<{ data: PosOrderDetail }>(path);
     return res.data.data;
   };
 
@@ -223,7 +228,7 @@ export function PosRecentOrdersSheet({
     setPrintBusyId(order.id);
     try {
       const source = orderSource(order);
-      const detail = await fetchOrderDetail(order.id, source);
+      const detail = await fetchOrderDetail(order.id, source, order.urlId);
       const subtotal = detail.items.reduce(
         (sum, item) => sum + item.unitPrice * item.quantity,
         0

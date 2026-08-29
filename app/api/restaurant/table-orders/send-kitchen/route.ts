@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
-import { orderItemDisplayName } from '@/lib/orders/order-item-name';
+import { buildKitchenTicketItemRows } from '@/lib/kitchen-ticket-items';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 import { isDineInPayBeforeKitchen } from '@/lib/restaurant-dine-in-payment';
@@ -18,25 +18,17 @@ function buildKitchenRows(
     quantity: number;
     productName?: string | null;
     menuItem: { name: string } | null;
-    modifiers: { name: string; quantity: number }[];
+    modifiers: { name: string; quantity: number; menuItemId?: string | null }[];
   }[]
 ): { productName: string; quantity: number }[] {
-  const rows: { productName: string; quantity: number }[] = [];
-  for (const line of lines) {
-    rows.push({
-      productName: orderItemDisplayName(line),
+  return buildKitchenTicketItemRows(
+    lines.map((line) => ({
       quantity: line.quantity,
-    });
-    for (const mod of line.modifiers) {
-      const modName = String(mod.name || '').trim();
-      if (!modName) continue;
-      rows.push({
-        productName: `+ ${modName}`,
-        quantity: mod.quantity,
-      });
-    }
-  }
-  return rows;
+      productName: line.productName,
+      menuItem: line.menuItem,
+      modifiers: line.modifiers,
+    }))
+  );
 }
 
 /**
@@ -92,7 +84,7 @@ export async function POST(req: NextRequest) {
             quantity: true,
             productName: true,
             menuItem: { select: { name: true } },
-            modifiers: { select: { name: true, quantity: true } },
+            modifiers: { select: { name: true, quantity: true, menuItemId: true } },
           },
         },
         kitchenTickets: {

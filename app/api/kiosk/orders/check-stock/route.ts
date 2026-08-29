@@ -6,6 +6,7 @@ import {
   stockBlockErrorForRestaurant,
   stockLinesFromUnknownCart,
 } from '@/lib/inventory/assert-payment-stock';
+import { branchIdFromOrderPayload } from '@/lib/inventory/branch-stock';
 
 export const runtime = 'nodejs';
 
@@ -41,10 +42,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
   }
 
+  const branchId = branchIdFromOrderPayload(json);
+
   try {
     const stockError = await stockBlockErrorForRestaurant(
       restaurant.id,
-      lines
+      lines,
+      branchId
     );
     if (stockError) {
       return NextResponse.json({ error: stockError }, { status: 400 });

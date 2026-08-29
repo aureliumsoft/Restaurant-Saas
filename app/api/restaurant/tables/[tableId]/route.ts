@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '@/lib/db';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const patchSchema = z.object({
   name: z.string().min(1).max(120).trim().optional(),
@@ -22,7 +23,7 @@ export async function PATCH(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { tableId } = await ctx.params;
+  const { tableId } = await resolveRouteParams(ctx.params, ['tableId']);
 
   const existing = await db.diningTable.findFirst({
     where: { id: tableId, restaurantId: auth.restaurant.id },
@@ -82,7 +83,7 @@ export async function DELETE(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { tableId } = await ctx.params;
+  const { tableId } = await resolveRouteParams(ctx.params, ['tableId']);
 
   const existing = await db.diningTable.findFirst({
     where: { id: tableId, restaurantId: auth.restaurant.id },

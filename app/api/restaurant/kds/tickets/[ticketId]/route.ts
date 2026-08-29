@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const FINAL_TO_ORDER: Record<string, string> = {
   completed: 'completed',
@@ -24,7 +25,7 @@ export async function PATCH(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { ticketId } = await params;
+    const { ticketId } = await resolveRouteParams(params, ['ticketId']);
 
     const body = await req.json().catch(() => ({}));
     const status = typeof body?.status === 'string' ? body.status.trim().toLowerCase() : '';

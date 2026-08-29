@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
+import { resolveRouteId } from '@/lib/resolve-route-id';
 import { responseFromStoredImage } from '@/lib/stored-image-response';
 
 /**
@@ -21,7 +22,7 @@ export async function GET(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { itemId } = await ctx.params;
+  const itemId = resolveRouteId((await ctx.params).itemId);
   if (!itemId) {
     return NextResponse.json({ error: 'Missing item id' }, { status: 400 });
   }

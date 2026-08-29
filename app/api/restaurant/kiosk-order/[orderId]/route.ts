@@ -16,6 +16,8 @@ import {
   resolveServiceChargeAmount,
 } from '@/lib/restaurant-service-charge';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
+import { withUrlId } from '@/lib/with-url-id';
 
 const orderSelect = {
   id: true,
@@ -82,7 +84,7 @@ function mapOrderDetail(order: {
   }>;
 }) {
   const payment = order.payments[0] ?? null;
-  return {
+  return withUrlId({
     id: order.id,
     shortOrderId: order.shortOrderId,
     ticketNumber: order.ticketNumber,
@@ -114,7 +116,7 @@ function mapOrderDetail(order: {
         unitPrice: Number(modifier.unitPrice) || 0,
       })),
     })),
-  };
+  });
 }
 
 export async function GET(
@@ -130,7 +132,7 @@ export async function GET(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { orderId } = await ctx.params;
+    const { orderId } = await resolveRouteParams(ctx.params, ['orderId']);
     const order = await db.order.findFirst({
       where: {
         id: orderId,
@@ -166,7 +168,7 @@ export async function PATCH(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { orderId } = await ctx.params;
+    const { orderId } = await resolveRouteParams(ctx.params, ['orderId']);
     const existing = await db.order.findFirst({
       where: {
         id: orderId,

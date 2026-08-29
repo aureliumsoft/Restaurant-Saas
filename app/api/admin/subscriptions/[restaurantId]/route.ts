@@ -7,6 +7,7 @@ import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import { db } from '@/lib/db';
 import { applyAdminSubscriptionUpdate } from '@/lib/subscription-admin-update';
 import { parseSubscriptionDateInput } from '@/lib/subscription-timezone';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const patchSchema = z.object({
   plan: z.enum(['STARTER', 'GROWTH', 'SCALE']),
@@ -27,7 +28,7 @@ export async function PATCH(
   const auth = await requirePlatformAdmin(req);
   if ('error' in auth) return auth.error;
 
-  const { restaurantId } = await ctx.params;
+  const { restaurantId } = await resolveRouteParams(ctx.params, ['restaurantId']);
 
   let json: unknown;
   try {

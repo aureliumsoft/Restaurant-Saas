@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { usePathname } from 'next/navigation';
-import Link from 'next/link';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -35,16 +34,11 @@ function Bread() {
         <BreadcrumbItem>
           {isLast ? (
             <BreadcrumbPage className="rounded-lg bg-fire-500/10 px-2.5 py-1 text-sm font-semibold text-fire-700 dark:text-fire-300">
-              {formatSegment(segment)}
+              {formatSegment(segment).toLowerCase().slice(0, 15)}
             </BreadcrumbPage>
           ) : (
-            <BreadcrumbLink asChild>
-              <Link
-                href={currentPath}
-                className="rounded-lg px-2 py-1 text-muted-foreground transition-colors hover:bg-white/60 hover:text-foreground dark:hover:bg-white/10"
-              >
-                {formatSegment(segment)}
-              </Link>
+            <BreadcrumbLink>
+              {formatSegment(segment).toLowerCase().slice(0, 15)}
             </BreadcrumbLink>
           )}
         </BreadcrumbItem>

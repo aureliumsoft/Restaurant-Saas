@@ -17,8 +17,9 @@ import {
 import { Loader2 } from 'lucide-react';
 import { kioskBasePath } from '@/lib/kiosk-path';
 import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
+import { publicId } from '@/lib/public-id';
 
-type BranchRow = { id: string; name: string };
+type BranchRow = { id: string; urlId?: string; name: string };
 
 export function CustomerEntryLinks() {
   const [slug, setSlug] = useState<string | null>(null);
@@ -147,7 +148,7 @@ export function CustomerEntryLinks() {
               </p>
             ) : (
               branches.map((branch) => {
-                const path = kioskBasePath(slug, branch.id);
+                const path = kioskBasePath(slug, publicId(branch.id, branch.urlId));
                 const url =
                   publicBase && path ? `${publicBase}${path}` : path;
                 return (

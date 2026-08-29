@@ -8,7 +8,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { ModeToggle } from '@/components/darkmode/darkmode';
 import Navbar from '@/components/dashboard/navbar';
 import { NavbarSheet } from '@/components/dashboard/NavbarSheet';
-import UserMenu from '@/components/dashboard/UserMenu';
+import { ShiftAwareUserMenu } from '@/components/dashboard/shift-aware-user-menu';
 import Bread from '@/components/dashboard/breadcrumb';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -287,7 +287,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
                 }
                 sidebarNav={<Navbar />}
                 sidebarFooter={
-                  <UserMenu className="h-11 w-full justify-start gap-2 rounded-2xl border-0 bg-white/70 px-3 text-foreground shadow-sm hover:bg-white dark:bg-white/10 dark:hover:bg-white/15" />
+                  <ShiftAwareUserMenu className="h-11 w-full justify-start gap-2 rounded-2xl border-0 bg-white/70 px-3 text-foreground shadow-sm hover:bg-white dark:bg-white/10 dark:hover:bg-white/15" />
                 }
                 header={
                   <>
@@ -350,7 +350,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
                           sidebarOpen && 'md:hidden'
                         )}
                       >
-                        <UserMenu className="h-9 rounded-xl border-0 bg-white/70 px-3 shadow-sm hover:bg-white dark:bg-white/10 dark:hover:bg-white/15" />
+                        <ShiftAwareUserMenu className="h-9 rounded-xl border-0 bg-white/70 px-3 shadow-sm hover:bg-white dark:bg-white/10 dark:hover:bg-white/15" />
                       </div>
                     </div>
                   </>

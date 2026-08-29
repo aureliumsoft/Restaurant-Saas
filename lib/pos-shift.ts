@@ -39,6 +39,8 @@ export type PosShiftSummary = {
   orderCount: number;
   lastClosingCashInLocker: number | null;
   lastShiftEndedAt: string | null;
+  /** Expected cash in locker (opening float + cash sales this shift). */
+  cashInLocker: number | null;
 };
 
 const completedPaymentWhere = {
@@ -92,7 +94,7 @@ export async function getOpenPosShift(params: {
   });
 }
 
-export async function getOrOpenPosShift(params: {
+export async function openPosShift(params: {
   restaurantId: string;
   branchId: string | null;
   userId: string;
@@ -100,9 +102,8 @@ export async function getOrOpenPosShift(params: {
   const { restaurantId, branchId, userId } = params;
 
   const existing = await getOpenPosShift({ restaurantId, branchId });
-
   if (existing) {
-    return db.posShift.findUniqueOrThrow({ where: { id: existing.id } });
+    return null;
   }
 
   return db.posShift.create({
@@ -157,6 +158,29 @@ async function loadShiftOrders(shiftId: string): Promise<PosShiftOrderRow[]> {
   }));
 }
 
+async function getShiftCashSalesTotal(shiftId: string): Promise<number> {
+  const orders = await db.order.findMany({
+    where: {
+      posShiftId: shiftId,
+      sourceType: { in: [OrderSourceType.POS, OrderSourceType.KIOSK] },
+      ...completedPaymentWhere,
+    },
+    select: {
+      total: true,
+      payments: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { method: true },
+      },
+    },
+  });
+
+  return orders.reduce((sum, order) => {
+    if (!isCashPayment(order.payments[0]?.method ?? null)) return sum;
+    return sum + (Number(order.total) || 0);
+  }, 0);
+}
+
 export async function buildPosShiftSummary(params: {
   restaurantId: string;
   branchId: string | null;
@@ -174,22 +198,29 @@ export async function buildPosShiftSummary(params: {
       orderCount: 0,
       lastClosingCashInLocker: lastClosedShift?.closingCashInLocker ?? null,
       lastShiftEndedAt: lastClosedShift?.endedAt?.toISOString() ?? null,
+      cashInLocker: lastClosedShift?.closingCashInLocker ?? null,
     };
   }
 
-  const orderCount = await db.order.count({
-    where: {
-      posShiftId: openShift.id,
-      sourceType: { in: [OrderSourceType.POS, OrderSourceType.KIOSK] },
-      ...completedPaymentWhere,
-    },
-  });
+  const [orderCount, cashSalesTotal] = await Promise.all([
+    db.order.count({
+      where: {
+        posShiftId: openShift.id,
+        sourceType: { in: [OrderSourceType.POS, OrderSourceType.KIOSK] },
+        ...completedPaymentWhere,
+      },
+    }),
+    getShiftCashSalesTotal(openShift.id),
+  ]);
+
+  const openingCash = lastClosedShift?.closingCashInLocker ?? 0;
 
   return {
     id: openShift.id,
     orderCount,
     lastClosingCashInLocker: lastClosedShift?.closingCashInLocker ?? null,
     lastShiftEndedAt: lastClosedShift?.endedAt?.toISOString() ?? null,
+    cashInLocker: openingCash + cashSalesTotal,
   };
 }
 

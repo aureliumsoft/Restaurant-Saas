@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from "@/lib/subscription-plan-enforcement";
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const createOfferSchema = z.object({
   offeredItemId: z.string().uuid(),
@@ -28,7 +29,7 @@ export async function POST(
     return subscriptionPlanDeniedResponse("Product recommendations and add-on offers");
   }
 
-  const { itemId } = await ctx.params;
+  const { itemId } = await resolveRouteParams(ctx.params, ['itemId']);
 
   const baseItem = await db.menuItem.findFirst({
     where: { id: itemId, restaurantId: auth.restaurant.id },

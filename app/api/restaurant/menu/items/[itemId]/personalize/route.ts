@@ -6,6 +6,7 @@ import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
 import { syncMenuItemPersonalizeGroups } from '@/lib/menu/sync-personalize-groups';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { syncPersonalizeGroupsSchema } from '@/lib/validation/personalize';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 export async function GET(
   req: NextRequest,
@@ -19,7 +20,7 @@ export async function GET(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { itemId } = await ctx.params;
+  const { itemId } = await resolveRouteParams(ctx.params, ['itemId']);
   const item = await db.menuItem.findFirst({
     where: { id: itemId, restaurantId: auth.restaurant.id },
     select: {
@@ -46,7 +47,7 @@ export async function PUT(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { itemId } = await ctx.params;
+  const { itemId } = await resolveRouteParams(ctx.params, ['itemId']);
   const item = await db.menuItem.findFirst({
     where: { id: itemId, restaurantId: auth.restaurant.id },
     select: { id: true },

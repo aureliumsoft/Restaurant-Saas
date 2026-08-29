@@ -2,18 +2,26 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 
+import { getBranchScopeFromRequest } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
+import {
+  listBranchStockForIngredients,
+  seedBranchStockForIngredient,
+  syncIngredientTotalQuantity,
+} from '@/lib/inventory/branch-stock';
+import { ingredientCreateSchema } from '@/lib/inventory/validation';
 import {
   buildPaginationMeta,
   clampPage,
   parsePaginationParams,
 } from '@/lib/pagination';
-import { ingredientCreateSchema } from '@/lib/inventory/validation';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { publishInventoryStockUpdate } from '@/lib/realtime/publish';
+import { ingredientApiPath } from '@/lib/dashboard-paths';
+import { withUrlIds } from '@/lib/with-url-id';
 
 function lazyImageUrl(id: string): string {
-  return `/api/restaurant/inventory/ingredients/${encodeURIComponent(id)}/image`;
+  return `${ingredientApiPath(id)}/image`;
 }
 
 export async function GET(req: NextRequest) {
@@ -24,6 +32,13 @@ export async function GET(req: NextRequest) {
   if ('error' in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+
+  const branchScope = await getBranchScopeFromRequest(
+    req,
+    auth.user.id,
+    auth.restaurant.id
+  );
+  const branchId = branchScope?.activeBranchId ?? null;
 
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';
   const activeOnly = req.nextUrl.searchParams.get('active') !== '0';
@@ -68,6 +83,13 @@ export async function GET(req: NextRequest) {
     },
   });
 
+  const branchStock = branchId
+    ? await listBranchStockForIngredients(
+        branchId,
+        rows.map((r) => r.id)
+      )
+    : new Map();
+
   const withImage = await db.ingredient.findMany({
     where: {
       id: { in: rows.map((r) => r.id) },
@@ -79,11 +101,19 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json(
     {
-      data: rows.map((r) => ({
-        ...r,
-        hasImage: hasImage.has(r.id),
-        imageUrl: hasImage.has(r.id) ? lazyImageUrl(r.id) : null,
-      })),
+      data: withUrlIds(rows).map((r) => {
+        const stock = branchStock.get(r.id);
+        return {
+          ...r,
+          quantity: branchId ? (stock?.quantity ?? 0) : r.quantity,
+          minQuantity: branchId
+            ? (stock?.minQuantity ?? r.minQuantity)
+            : r.minQuantity,
+          branchId,
+          hasImage: hasImage.has(r.id),
+          imageUrl: hasImage.has(r.id) ? lazyImageUrl(r.id) : null,
+        };
+      }),
       meta: buildPaginationMeta(safePage, pageSize, total),
     },
     { headers: { 'Cache-Control': 'no-store' } }
@@ -99,6 +129,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
+  const branchScope = await getBranchScopeFromRequest(
+    req,
+    auth.user.id,
+    auth.restaurant.id
+  );
+  const activeBranchId = branchScope?.activeBranchId ?? null;
+
   let json: unknown;
   try {
     json = await req.json();
@@ -113,24 +150,35 @@ export async function POST(req: NextRequest) {
 
   const name = parsed.data.name.trim();
   try {
-    const row = await db.ingredient.create({
-      data: {
-        restaurantId: auth.restaurant.id,
-        name,
-        description: parsed.data.description?.trim() || null,
-        quantity: parsed.data.quantity,
-        unit: parsed.data.unit,
-        isMajor: parsed.data.isMajor ?? false,
-        imageUrl: parsed.data.imageUrl?.trim() || null,
-        sku: parsed.data.sku?.trim() || null,
+    const row = await db.$transaction(async (tx) => {
+      const ingredient = await tx.ingredient.create({
+        data: {
+          restaurantId: auth.restaurant.id,
+          name,
+          description: parsed.data.description?.trim() || null,
+          quantity: 0,
+          unit: parsed.data.unit,
+          isMajor: parsed.data.isMajor ?? false,
+          imageUrl: parsed.data.imageUrl?.trim() || null,
+          sku: parsed.data.sku?.trim() || null,
+          minQuantity: parsed.data.minQuantity ?? null,
+        },
+      });
+      await seedBranchStockForIngredient(tx, auth.restaurant.id, ingredient.id, {
+        initialQuantity: parsed.data.quantity,
+        initialBranchId: activeBranchId,
         minQuantity: parsed.data.minQuantity ?? null,
-      },
+      });
+      await syncIngredientTotalQuantity(tx, ingredient.id);
+      return ingredient;
     });
-    publishInventoryStockUpdate(auth.restaurant.id);
+    publishInventoryStockUpdate(auth.restaurant.id, activeBranchId);
     return NextResponse.json(
       {
         data: {
           ...row,
+          quantity: parsed.data.quantity,
+          branchId: activeBranchId,
           hasImage: Boolean(row.imageUrl),
           imageUrl: row.imageUrl ? lazyImageUrl(row.id) : null,
         },

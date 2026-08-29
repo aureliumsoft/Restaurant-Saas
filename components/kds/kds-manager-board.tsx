@@ -22,7 +22,9 @@ import {
   KdsOrderActionDialog,
   type KdsOrderActionKind,
 } from '@/components/kds/kds-order-action-dialog';
+import { ProductLineDetails } from '@/components/orders/product-line-details';
 import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
+import { kdsManagerOrderApiPath } from '@/lib/dashboard-paths';
 import { kdsFetchErrorMessage } from '@/lib/kds-api-errors';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
@@ -30,6 +32,7 @@ import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 
 type PendingOrder = {
   id: string;
+  urlId?: string;
   /** Daily token number (resets per restaurant per day). */
   ticketNumber: number | null;
   /** 6-char public-facing tracking id. */
@@ -51,7 +54,7 @@ type PendingOrder = {
     id: string;
     quantity: number;
     menuItem: { name: string };
-    modifiers: { name: string; quantity: number }[];
+    modifiers: { name: string; quantity: number; menuItemId?: string | null }[];
   }[];
 };
 
@@ -115,6 +118,7 @@ export function KdsManagerBoard() {
   const [pendingAction, setPendingAction] = useState<{
     kind: KdsOrderActionKind;
     orderId: string;
+    orderUrlId?: string;
     label: string;
     minutes?: number;
   } | null>(null);
@@ -221,12 +225,15 @@ export function KdsManagerBoard() {
     }
   }
 
-  async function cancelOrder(orderId: string): Promise<boolean> {
+  async function cancelOrder(
+    orderId: string,
+    orderUrlId?: string
+  ): Promise<boolean> {
     setActiveCancelCount((prev) => prev + 1);
     setActiveCancelOrderId(orderId);
     try {
       const res = await fetch(
-        `/api/restaurant/kds/manager-orders/${encodeURIComponent(orderId)}`,
+        kdsManagerOrderApiPath(orderId, '', orderUrlId),
         {
           method: 'PATCH',
         }
@@ -359,26 +366,15 @@ export function KdsManagerBoard() {
                         );
                         return (
                           <div key={it.id} className="text-xs leading-snug">
-                            <p>
-                              <span className="font-semibold tabular-nums">
-                                {base.quantity}×
-                              </span>{' '}
-                              {base.name}
-                            </p>
-                            {it.modifiers?.map((m, idx) => {
-                              const mod = normalizeLineName(m.name, m.quantity);
-                              return (
-                                <p
-                                  key={`${it.id}-m-${idx}`}
-                                  className="pl-4 text-muted-foreground"
-                                >
-                                  <span className="font-semibold tabular-nums">
-                                    {mod.quantity}×
-                                  </span>{' '}
-                                  {mod.name}
-                                </p>
-                              );
-                            })}
+                            <ProductLineDetails
+                              productName={base.name}
+                              quantity={base.quantity}
+                              orderModifiers={it.modifiers ?? []}
+                              showQuantityOnModifiers
+                              titleClassName="font-medium"
+                              sectionLabelClassName="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                              lineClassName="pl-4 text-muted-foreground"
+                            />
                           </div>
                         );
                       })}
@@ -499,6 +495,7 @@ export function KdsManagerBoard() {
                           setPendingAction({
                             kind: 'proceed',
                             orderId: o.id,
+                            orderUrlId: o.urlId,
                             label: tokenLabel(o),
                             minutes,
                           });
@@ -535,6 +532,7 @@ export function KdsManagerBoard() {
                           setPendingAction({
                             kind: 'cancel',
                             orderId: o.id,
+                            orderUrlId: o.urlId,
                             label: tokenLabel(o),
                           })
                         }
@@ -594,11 +592,11 @@ export function KdsManagerBoard() {
         iconLoading={<Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         onConfirm={async () => {
           if (!pendingAction) return;
-          const { kind, orderId } = pendingAction;
+          const { kind, orderId, orderUrlId } = pendingAction;
           const ok =
             kind === 'proceed'
               ? await proceed(orderId)
-              : await cancelOrder(orderId);
+              : await cancelOrder(orderId, orderUrlId);
           if (ok) setPendingAction(null);
         }}
       />

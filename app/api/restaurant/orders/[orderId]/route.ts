@@ -4,13 +4,14 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = await params;
+    const { orderId } = await resolveRouteParams(params, ['orderId']);
 
     const auth = await getRestaurantIdForRequest(_req, {
       moduleKey: 'sales',
@@ -56,6 +57,7 @@ export async function GET(
                 name: true,
                 quantity: true,
                 unitPrice: true,
+                menuItemId: true,
               },
             },
           },

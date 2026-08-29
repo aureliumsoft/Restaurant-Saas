@@ -7,6 +7,7 @@ import { normalizeDashboardPermissions } from '@/lib/dashboard-permissions';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { RESTAURANT_ROLE_SLUG } from '@/lib/restaurant-roles';
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from '@/lib/subscription-plan-enforcement';
+import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const patchSchema = z.object({
   name: z.string().min(1).max(80).trim().optional(),
@@ -25,7 +26,7 @@ export async function PATCH(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { roleId } = await context.params;
+  const { roleId } = await resolveRouteParams(context.params, ['roleId']);
   if (!roleId) {
     return NextResponse.json({ error: 'Missing role id' }, { status: 400 });
   }
@@ -116,7 +117,7 @@ export async function DELETE(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { roleId } = await context.params;
+  const { roleId } = await resolveRouteParams(context.params, ['roleId']);
   if (!roleId) {
     return NextResponse.json({ error: 'Missing role id' }, { status: 400 });
   }
