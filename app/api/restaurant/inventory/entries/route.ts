@@ -38,9 +38,28 @@ export async function GET(req: NextRequest) {
     maxPageSize: 100,
   });
 
+  const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';
+
   const where = {
     restaurantId: auth.restaurant.id,
     ...(branchId ? { branchId } : {}),
+    ...(q
+      ? {
+          OR: [
+            { reason: { contains: q, mode: 'insensitive' as const } },
+            {
+              ingredient: {
+                name: { contains: q, mode: 'insensitive' as const },
+              },
+            },
+            {
+              menuItem: {
+                name: { contains: q, mode: 'insensitive' as const },
+              },
+            },
+          ],
+        }
+      : {}),
   };
   const total = await db.ingredientStockEntry.count({ where });
   const safePage = clampPage(page, total, pageSize);
@@ -56,7 +75,7 @@ export async function GET(req: NextRequest) {
       source: true,
       branchId: true,
       createdAt: true,
-      ingredient: { select: { id: true, name: true, unit: true } },
+      ingredient: { select: { id: true, name: true, unit: true, unitCost: true } },
       menuItem: { select: { id: true, name: true } },
       variation: { select: { id: true, name: true } },
       createdBy: { select: { id: true, name: true, email: true } },
@@ -181,7 +200,7 @@ export async function POST(req: NextRequest) {
           createdByUserId: auth.user.id,
         },
         include: {
-          ingredient: { select: { id: true, name: true, unit: true } },
+          ingredient: { select: { id: true, name: true, unit: true, unitCost: true } },
           menuItem: { select: { id: true, name: true } },
           variation: { select: { id: true, name: true } },
           branch: { select: { id: true, name: true } },

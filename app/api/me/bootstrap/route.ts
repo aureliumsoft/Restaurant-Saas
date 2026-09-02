@@ -17,6 +17,10 @@ import {
   parseRestaurantRegionalSettings,
   RESTAURANT_REGIONAL_DB_SELECT,
 } from '@/lib/restaurant-regional';
+import {
+  parseRestaurantFulfillmentSettings,
+  RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+} from '@/lib/restaurant-fulfillment-settings';
 import { evaluateSubscriptionAccess } from '@/lib/subscription-access';
 import { getPlanFeatures } from '@/lib/subscription-plan-features';
 import type { StaffBootstrapData } from '@/types/staff-bootstrap';
@@ -49,6 +53,7 @@ async function loadRestaurantBootstrapPayload(restaurantId: string) {
     ...RESTAURANT_BRANDING_DB_SELECT,
     ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
     ...RESTAURANT_REGIONAL_DB_SELECT,
+    ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
     subdomain: true,
   } as const;
 
@@ -61,6 +66,7 @@ async function loadRestaurantBootstrapPayload(restaurantId: string) {
     return {
       ...withServiceChargesPayload(row),
       regional: parseRestaurantRegionalSettings(row),
+      fulfillmentSettings: parseRestaurantFulfillmentSettings(row),
     };
   } catch (error) {
     if (!isPrismaUnknownFieldError(error)) throw error;
@@ -81,6 +87,7 @@ async function loadRestaurantBootstrapPayload(restaurantId: string) {
     return {
       ...withDefaultServiceChargesPayload(row),
       regional: parseRestaurantRegionalSettings(null),
+      fulfillmentSettings: parseRestaurantFulfillmentSettings(null),
     };
   }
 }

@@ -22,6 +22,7 @@ import {
   type OpenTableOrderRow,
 } from '@/hooks/use-open-table-orders';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import eventBus from '@/lib/even';
 import { cn } from '@/lib/utils';
@@ -128,6 +129,7 @@ export function PosTableOrdersSheet({
   onOrdersChanged,
 }: Props) {
   const { formatMoney } = useOwnerRestaurantRegional();
+  const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const { cards, loading, removeTable, confirmInBackground, refresh } =
     useOpenTableOrders(branchId);
 
@@ -877,7 +879,13 @@ export function PosTableOrdersSheet({
                 <label className="text-xs text-muted-foreground">
                   Payment method
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div
+                  className={
+                    fulfillmentSettings.cardPaymentsEnabled
+                      ? 'grid grid-cols-2 gap-2'
+                      : 'grid grid-cols-1 gap-2'
+                  }
+                >
                   <Button
                     type="button"
                     variant={payMethod === 'cash' ? 'default' : 'outline'}
@@ -891,6 +899,7 @@ export function PosTableOrdersSheet({
                     <Banknote className="h-4 w-4" />
                     Cash
                   </Button>
+                  {fulfillmentSettings.cardPaymentsEnabled ? (
                   <Button
                     type="button"
                     variant={payMethod === 'card' ? 'default' : 'outline'}
@@ -905,6 +914,7 @@ export function PosTableOrdersSheet({
                     <CreditCard className="h-4 w-4" />
                     Card
                   </Button>
+                  ) : null}
                 </div>
               </div>
               {payMethod === 'cash' ? (

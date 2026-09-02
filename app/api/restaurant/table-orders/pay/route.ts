@@ -4,6 +4,10 @@ import { z } from 'zod';
 
 import { db } from '@/lib/db';
 import { getOpenPosShift } from '@/lib/pos-shift';
+import {
+  parseRestaurantFulfillmentSettings,
+  RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+} from '@/lib/restaurant-fulfillment-settings';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 
@@ -44,6 +48,29 @@ export async function POST(req: NextRequest) {
     const { diningTableId, paid, method, orderIds } = parsed.data;
     const methodLabel = method?.trim() || 'Cash';
     const requestedIds = orderIds ? [...new Set(orderIds)] : null;
+
+    const fulfillmentRow = await db.restaurant.findUnique({
+      where: { id: auth.restaurantId },
+      select: RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+    });
+    const fulfillmentSettings = parseRestaurantFulfillmentSettings(
+      fulfillmentRow
+    );
+    if (!fulfillmentSettings.dineInEnabled) {
+      return NextResponse.json(
+        { error: 'Dine-in is not enabled for this restaurant' },
+        { status: 403 }
+      );
+    }
+    if (
+      methodLabel.toLowerCase().includes('card') &&
+      !fulfillmentSettings.cardPaymentsEnabled
+    ) {
+      return NextResponse.json(
+        { error: 'Card payments are not enabled for this restaurant' },
+        { status: 403 }
+      );
+    }
 
     const orders = await db.order.findMany({
       where: {

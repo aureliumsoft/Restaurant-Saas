@@ -39,6 +39,7 @@ export const ingredientCreateSchema = z
     imageUrl: z.string().max(2_800_000).optional().nullable().or(z.literal('')),
     sku: z.string().trim().max(80).optional().nullable(),
     minQuantity: z.number().finite().min(0).optional().nullable(),
+    unitCost: z.number().finite().min(0).optional().nullable(),
   })
   .superRefine((val, ctx) => imageCheck(val.imageUrl, ctx, ['imageUrl']));
 
@@ -52,6 +53,7 @@ export const ingredientPatchSchema = z
     imageUrl: z.string().max(2_800_000).optional().nullable().or(z.literal('')),
     sku: z.string().trim().max(80).optional().nullable(),
     minQuantity: z.number().finite().min(0).optional().nullable(),
+    unitCost: z.number().finite().min(0).optional().nullable(),
     isActive: z.boolean().optional(),
   })
   .superRefine((val, ctx) => imageCheck(val.imageUrl, ctx, ['imageUrl']));

@@ -165,6 +165,9 @@ export async function PATCH(
           ...(parsed.data.minQuantity !== undefined && !branchId
             ? { minQuantity: parsed.data.minQuantity }
             : {}),
+          ...(parsed.data.unitCost !== undefined
+            ? { unitCost: parsed.data.unitCost }
+            : {}),
         },
       });
     });

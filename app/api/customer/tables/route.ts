@@ -4,11 +4,12 @@ import { NextResponse } from 'next/server';
 import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
 import { listDiningTables } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
+import { resolveQueryParam } from '@/lib/resolve-route-id';
 
 export async function GET(req: NextRequest) {
   try {
     const slug = req.nextUrl.searchParams.get('slug')?.trim();
-    const branchId = req.nextUrl.searchParams.get('branchId')?.trim() || null;
+    const branchId = resolveQueryParam(req.nextUrl.searchParams, 'branchId');
 
     if (!slug) {
       return NextResponse.json({ error: 'Missing slug' }, { status: 400 });

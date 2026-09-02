@@ -168,6 +168,12 @@ model Restaurant {
   /// Flat system service charge for online checkout (when enabled).
   onlineServiceChargeEnabled Boolean @default(false)
   onlineServiceChargeAmount  Float   @default(0)
+  /// Offer delivery orders (POS, online, sales).
+  deliveryEnabled Boolean @default(true)
+  /// Offer dine-in / table orders (POS, kiosk, tables).
+  dineInEnabled Boolean @default(true)
+  /// Offer in-person card terminal payments (POS, kiosk). Does not affect online checkout.
+  cardPaymentsEnabled Boolean @default(true)
   /// Table / dine-in: collect payment before kitchen, or when the guest leaves.
   dineInPaymentTiming DineInPaymentTiming @default(ON_LEAVE)
   /// ISO 4217 currency for POS, kiosk, storefront, and customer payments.
@@ -1080,6 +1086,7 @@ model Ingredient {
   imageUrl     String?
   sku          String?
   minQuantity  Float?
+  unitCost     Float?
   isActive     Boolean        @default(true)
 
   restaurant Restaurant             @relation(fields: [restaurantId], references: [id], onDelete: Cascade)

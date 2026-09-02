@@ -33,6 +33,10 @@ import {
   type RestaurantServiceChargeRow,
 } from '@/lib/restaurant-service-charge';
 import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
+import {
+  parseRestaurantFulfillmentSettings,
+  RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+} from '@/lib/restaurant-fulfillment-settings';
 
 const restaurantPublicSelect = {
   id: true,
@@ -43,6 +47,7 @@ const restaurantPublicSelect = {
   subdomain: true,
   slug: true,
   ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+  ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
 } as const;
 
 function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
@@ -158,12 +163,16 @@ function restaurantMetaPayload<
   T extends { id: string; slug: string } & RestaurantServiceChargeRow & {
     logoUrl?: string | null;
     mainBannerUrl?: string | null;
+    deliveryEnabled?: boolean;
+    dineInEnabled?: boolean;
+    cardPaymentsEnabled?: boolean;
   },
 >(restaurant: T) {
   return {
     ...restaurant,
     ...publicRestaurantImageUrls(restaurant.slug, restaurant),
     serviceCharges: parseRestaurantServiceCharges(restaurant),
+    fulfillmentSettings: parseRestaurantFulfillmentSettings(restaurant),
   };
 }
 

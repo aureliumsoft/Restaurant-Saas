@@ -11,7 +11,9 @@ import { RestaurantRegionalSettingsCard } from './components/restaurant-regional
 import { RestaurantPaymentProviderCard } from './components/restaurant-payment-provider-card';
 import { RestaurantBillingCard } from './components/restaurant-billing-card';
 import { RestaurantServiceChargesCard } from './components/restaurant-service-charges-card';
+import { RestaurantFulfillmentSettingsCard } from './components/restaurant-fulfillment-settings-card';
 import { RestaurantDineInPaymentCard } from './components/restaurant-dine-in-payment-card';
+import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import { SettingsSectionNav } from './settings-section-nav';
 import {
   parseSettingsSection,
@@ -24,6 +26,7 @@ export function Setting() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { plan } = useStaffPermissions();
+  const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const brandingAllowed = plan?.branding !== false;
   const roleBasedSettingsAllowed = plan?.roleBasedSettings !== false;
 
@@ -86,6 +89,7 @@ export function Setting() {
             <div className="grid min-w-0 gap-6">
               {activeSection === 'basic' ? (
                 <>
+                  <RestaurantFulfillmentSettingsCard />
                   <CustomerEntryLinks />
                   <RestaurantBrandingCard brandingAllowed={brandingAllowed} />
                 </>
@@ -104,10 +108,14 @@ export function Setting() {
 
               {activeSection === 'payments' ? (
                 <>
-                  <RestaurantDineInPaymentCard />
+                  {fulfillmentSettings.dineInEnabled ? (
+                    <RestaurantDineInPaymentCard />
+                  ) : null}
                   <RestaurantServiceChargesCard />
                   <RestaurantRegionalSettingsCard />
-                  <RestaurantPaymentProviderCard />
+                  <RestaurantPaymentProviderCard
+                    cardPaymentsEnabled={fulfillmentSettings.cardPaymentsEnabled}
+                  />
                 </>
               ) : null}
 

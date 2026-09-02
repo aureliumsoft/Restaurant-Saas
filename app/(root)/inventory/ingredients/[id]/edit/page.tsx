@@ -28,6 +28,7 @@ type IngredientDetail = {
   isMajor: boolean;
   sku: string | null;
   minQuantity: number | null;
+  unitCost: number | null;
   isActive: boolean;
   imageData: string | null;
 };
@@ -78,6 +79,7 @@ export default function EditIngredientPage() {
           sku: row.sku ?? '',
           minQuantity:
             row.minQuantity != null ? String(row.minQuantity) : '',
+          unitCost: row.unitCost != null ? String(row.unitCost) : '',
           isActive: row.isActive,
         });
       })

@@ -109,7 +109,8 @@ export function RestaurantBrandingCard({
 
     setSaving(true);
     try {
-      const normalizedThemePrimaryColor = normalizeThemePrimaryColor(themePrimaryColor);
+      const normalizedThemePrimaryColor =
+        normalizeThemePrimaryColor(themePrimaryColor);
       const res = await axios.patch<{ data: RestaurantBrandingDto }>(
         '/api/restaurant',
         {
@@ -135,10 +136,7 @@ export function RestaurantBrandingCard({
         const fe = (flat as { fieldErrors?: Record<string, string[]> })
           .fieldErrors;
         const msg = fe
-          ? Object.values(fe)
-              .flat()
-              .filter(Boolean)
-              .join(' ')
+          ? Object.values(fe).flat().filter(Boolean).join(' ')
           : '';
         toast.error(msg || 'Validation failed.');
       } else {
@@ -236,7 +234,12 @@ export function RestaurantBrandingCard({
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <Label>Menu banners</Label>
-            <Button type="button" variant="outline" size="sm" onClick={addMenuBannerRow}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addMenuBannerRow}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add banner
             </Button>
@@ -269,9 +272,9 @@ export function RestaurantBrandingCard({
             </div>
           ))}
         </div>
-      </CardContent>
-      <CardFooter className="border-t px-6 py-4">
+
         <Button
+          className="w-full"
           type="button"
           disabled={saving || !brandingAllowed}
           onClick={() => void handleSave()}
@@ -288,7 +291,7 @@ export function RestaurantBrandingCard({
             </>
           )}
         </Button>
-      </CardFooter>
+      </CardContent>
     </Card>
   );
 }

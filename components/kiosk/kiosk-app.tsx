@@ -24,7 +24,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type ChangeEvent,
 } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -114,15 +113,26 @@ import {
   type RestaurantServiceCharges,
 } from '@/lib/restaurant-service-charge';
 import {
+  parseRestaurantFulfillmentSettings,
+  type RestaurantFulfillmentSettings,
+} from '@/lib/restaurant-fulfillment-settings';
+import {
   CardPaymentDialogs,
   useCardPaymentFlow,
 } from '../payments/card-payment-flow';
+import { PosOnScreenKeyboard } from '@/components/pos/pos-on-screen-keyboard';
 import { encodeUrlIdClient } from '@/lib/encode-url-id-client';
 import { publicId } from '@/lib/public-id';
 
 /** Fixed light product tiles — kiosk stays light like online storefront (no dark mode). */
 const KIOSK_PRODUCT_CARD =
   'cursor-pointer overflow-hidden rounded-lg border border-[#e2e8f0] bg-white text-[#0f172a] shadow-sm transition hover:shadow-md active:scale-[0.99] dark:border-[#e2e8f0] dark:bg-white dark:text-[#0f172a] dark:shadow-sm';
+
+/** Responsive product grid — matches POS column breakpoints. */
+const KIOSK_PRODUCT_GRID =
+  'grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6';
+
+type KioskKeyboardField = 'name' | 'phone' | 'instructions';
 
 function formatKioskOrderApiError(body: unknown): string {
   if (!body || typeof body !== 'object') {
@@ -392,6 +402,14 @@ export function KioskApp({
   const [pendingFulfillment, setPendingFulfillment] = useState<
     'dine_in' | null
   >(null);
+  const [fulfillmentChangeOpen, setFulfillmentChangeOpen] = useState(false);
+  const [changeDraftFulfillment, setChangeDraftFulfillment] = useState<
+    'dine_in' | 'take_away' | null
+  >(null);
+  const [changeDraftTableId, setChangeDraftTableId] = useState('');
+  const [keyboardField, setKeyboardField] = useState<KioskKeyboardField | null>(
+    null
+  );
   const [placing, setPlacing] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'cash' | 'card'>('cash');
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
@@ -404,6 +422,10 @@ export function KioskApp({
   const requiresMobileQrSignIn = fromTableQr && isMobileScan;
   const qrCustomerReady =
     !requiresMobileQrSignIn || Boolean(customerAccount?.account);
+
+  useEffect(() => {
+    if (step !== 'cart') setKeyboardField(null);
+  }, [step]);
 
   useEffect(() => {
     const saved = loadKioskQrContext(slug, branchId);
@@ -464,6 +486,46 @@ export function KioskApp({
         | undefined,
     };
   }, [restaurantMeta, progressiveCategories, slug]);
+
+  const fulfillmentSettings = useMemo(
+    (): RestaurantFulfillmentSettings =>
+      parseRestaurantFulfillmentSettings(
+        (restaurantMeta?.fulfillmentSettings as
+          | RestaurantFulfillmentSettings
+          | undefined) ?? undefined
+      ),
+    [restaurantMeta?.fulfillmentSettings]
+  );
+
+  useEffect(() => {
+    if (!restaurantMeta || fromTableQr) return;
+    if (!fulfillmentSettings.dineInEnabled && step === 'mode') {
+      setFulfillment('take_away');
+      setStep('menu');
+    }
+  }, [
+    restaurantMeta,
+    fromTableQr,
+    fulfillmentSettings.dineInEnabled,
+    step,
+  ]);
+
+  useEffect(() => {
+    if (!restaurantMeta || !fromTableQr) return;
+    if (!fulfillmentSettings.dineInEnabled) {
+      toast.error('Dine-in is not available at this restaurant.');
+      setFromTableQr(false);
+      setSelectedTableId('');
+      setFulfillment('take_away');
+      setStep('menu');
+    }
+  }, [restaurantMeta, fromTableQr, fulfillmentSettings.dineInEnabled]);
+
+  useEffect(() => {
+    if (!fulfillmentSettings.cardPaymentsEnabled && paymentMode === 'card') {
+      setPaymentMode('cash');
+    }
+  }, [fulfillmentSettings.cardPaymentsEnabled, paymentMode]);
 
   const menuLoading = categoriesLoading && progressiveCategories.length === 0;
 
@@ -567,7 +629,7 @@ export function KioskApp({
       try {
         const tableParams = new URLSearchParams({ slug });
         if (branchId?.trim()) {
-          tableParams.set('branchId', kioskPublicBranchId.trim());
+          tableParams.set('branchId', branchId.trim());
         }
         const res = await fetch(
           `/api/customer/tables?${tableParams.toString()}`,
@@ -1224,17 +1286,19 @@ export function KioskApp({
                         }`
                       : ''}
                     {' · '}
+                    {fulfillmentSettings.dineInEnabled ? (
                     <button
                       type="button"
                       className="text-primary underline-offset-2 hover:underline"
                       onClick={() => {
-                        setFulfillment(null);
-                        setSelectedTableId('');
-                        setStep('mode');
+                        setChangeDraftFulfillment(fulfillment);
+                        setChangeDraftTableId(selectedTableId);
+                        setFulfillmentChangeOpen(true);
                       }}
                     >
                       Change
                     </button>
+                    ) : null}
                   </p>
                 ) : null}
               </div>
@@ -1311,6 +1375,7 @@ export function KioskApp({
               </p>
             </div>
             <div className="grid w-full max-w-md grid-cols-2 gap-4 relative z-20">
+              {fulfillmentSettings.dineInEnabled ? (
               <button
                 type="button"
                 onClick={() => {
@@ -1321,6 +1386,7 @@ export function KioskApp({
                 <UtensilsCrossed className="h-10 w-10" />
                 <span className="font-semibold">{t('dineIn')}</span>
               </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
@@ -1445,7 +1511,7 @@ export function KioskApp({
                   <ProductCardSkeletonGrid
                     count={6}
                     variant="kiosk"
-                    gridClassName="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                    gridClassName={KIOSK_PRODUCT_GRID}
                   />
                 ) : (
                   <>
@@ -1469,14 +1535,14 @@ export function KioskApp({
                             <ProductCardSkeletonGrid
                               count={4}
                               variant="kiosk"
-                              gridClassName="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                              gridClassName={KIOSK_PRODUCT_GRID}
                             />
                           ) : category.items.length === 0 ? (
                             <p className="text-sm text-[#64748b]">
                               {t('noProductsInCategory')}
                             </p>
                           ) : (
-                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className={KIOSK_PRODUCT_GRID}>
                               {category.items.map((p) => (
                                 <ProductCard
                                   key={p.id}
@@ -1509,7 +1575,7 @@ export function KioskApp({
                               <ProductCardSkeletonGrid
                                 count={4}
                                 variant="kiosk"
-                                gridClassName="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                                gridClassName={KIOSK_PRODUCT_GRID}
                               />
                             );
                           }
@@ -1521,7 +1587,7 @@ export function KioskApp({
                             );
                           }
                           return (
-                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className={KIOSK_PRODUCT_GRID}>
                               {displayedProducts.map((p) => (
                                 <ProductCard key={p.id} p={p} />
                               ))}
@@ -1727,10 +1793,16 @@ export function KioskApp({
                         id="kiosk-customer-name"
                         placeholder={t('yourName')}
                         value={customerName}
+                        inputMode="none"
                         onChange={(e) => setCustomerName(e.target.value)}
+                        onPointerDown={() => setKeyboardField('name')}
+                        onFocus={() => setKeyboardField('name')}
                         maxLength={120}
                         autoComplete="name"
-                        className="border-[#e2e8f0] bg-white text-[#0f172a]"
+                        className={cn(
+                          'border-[#e2e8f0] bg-white text-[#0f172a]',
+                          keyboardField === 'name' && 'ring-2 ring-primary/40'
+                        )}
                       />
                     </div>
                     <div className="space-y-2">
@@ -1742,13 +1814,19 @@ export function KioskApp({
                         type="tel"
                         placeholder={`${t('phoneNumber')} (${t('optional')})`}
                         value={customerPhone}
+                        inputMode="none"
                         onChange={(e) => {
                           const value = e.target.value.replace(/\D/g, '');
                           setCustomerPhone(value);
                         }}
+                        onPointerDown={() => setKeyboardField('phone')}
+                        onFocus={() => setKeyboardField('phone')}
                         maxLength={40}
                         autoComplete="tel"
-                        className="border-[#e2e8f0] bg-white text-[#0f172a]"
+                        className={cn(
+                          'border-[#e2e8f0] bg-white text-[#0f172a]',
+                          keyboardField === 'phone' && 'ring-2 ring-primary/40'
+                        )}
                       />
                     </div>
                   </div>
@@ -1756,16 +1834,47 @@ export function KioskApp({
                 <textarea
                   placeholder="Cooking instructions (e.g. make it mild)"
                   value={cookingNote}
-                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-                    setCookingNote(e.target.value)
-                  }
+                  readOnly
+                  inputMode="none"
+                  onPointerDown={() => setKeyboardField('instructions')}
+                  onFocus={() => setKeyboardField('instructions')}
                   rows={3}
                   className={cn(
                     'flex min-h-[88px] w-full rounded-md border border-[#e2e8f0] bg-white px-3 py-2 text-sm text-[#0f172a]',
                     'placeholder:text-[#94a3b8]',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ea580c] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8fafc]'
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ea580c] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8fafc]',
+                    keyboardField === 'instructions' && 'ring-2 ring-primary/40'
                   )}
                 />
+                {step === 'cart' && keyboardField ? (
+                  <PosOnScreenKeyboard
+                    mode={keyboardField === 'phone' ? 'phone' : 'text'}
+                    value={
+                      keyboardField === 'name'
+                        ? customerName
+                        : keyboardField === 'phone'
+                          ? customerPhone
+                          : cookingNote
+                    }
+                    onChange={(next) => {
+                      if (keyboardField === 'name') {
+                        setCustomerName(next);
+                      } else if (keyboardField === 'phone') {
+                        setCustomerPhone(next.replace(/\D/g, ''));
+                      } else {
+                        setCookingNote(next);
+                      }
+                    }}
+                    onClose={() => setKeyboardField(null)}
+                    maxLength={
+                      keyboardField === 'phone'
+                        ? 40
+                        : keyboardField === 'name'
+                          ? 120
+                          : 500
+                    }
+                  />
+                ) : null}
                 <Button
                   type="button"
                   className="w-full bg-primary py-6 text-base font-semibold text-primary-foreground hover:brightness-95"
@@ -1880,7 +1989,14 @@ export function KioskApp({
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div
+                      className={cn(
+                        'grid gap-2',
+                        fulfillmentSettings.cardPaymentsEnabled
+                          ? 'grid-cols-2'
+                          : 'grid-cols-1'
+                      )}
+                    >
                       <Button
                         type="button"
                         variant={paymentMode === 'cash' ? 'default' : 'outline'}
@@ -1890,6 +2006,7 @@ export function KioskApp({
                         <Banknote className="h-4 w-4" />
                         Cash
                       </Button>
+                      {fulfillmentSettings.cardPaymentsEnabled ? (
                       <Button
                         type="button"
                         variant={paymentMode === 'card' ? 'default' : 'outline'}
@@ -1899,8 +2016,10 @@ export function KioskApp({
                         <CreditCard className="h-4 w-4" />
                         Card
                       </Button>
+                      ) : null}
                     </div>
-                    {paymentMode === 'card' ? (
+                    {fulfillmentSettings.cardPaymentsEnabled &&
+                    paymentMode === 'card' ? (
                       <div className="mt-3 space-y-2">
                         <Button
                           type="button"
@@ -2055,6 +2174,127 @@ export function KioskApp({
         )}
 
         <Dialog
+          open={fulfillmentChangeOpen}
+          onOpenChange={(open) => {
+            setFulfillmentChangeOpen(open);
+            if (!open) {
+              setChangeDraftFulfillment(null);
+              setChangeDraftTableId('');
+            }
+          }}
+        >
+          <DialogContent className="border-[#e2e8f0] bg-[#f8fafc] text-[#0f172a] shadow-xl sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-primary">
+                {t('whereEatingToday')}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div
+              className={cn(
+                'grid gap-3',
+                fulfillmentSettings.dineInEnabled ? 'grid-cols-2' : 'grid-cols-1'
+              )}
+            >
+              {fulfillmentSettings.dineInEnabled ? (
+              <button
+                type="button"
+                onClick={() => setChangeDraftFulfillment('dine_in')}
+                className={cn(
+                  'flex flex-col items-center gap-2 rounded-xl border-2 p-5 transition',
+                  changeDraftFulfillment === 'dine_in'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-[#e2e8f0] bg-white hover:bg-[#f8fafc]'
+                )}
+              >
+                <UtensilsCrossed className="h-8 w-8" />
+                <span className="text-sm font-semibold">{t('dineIn')}</span>
+              </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  setChangeDraftFulfillment('take_away');
+                  setChangeDraftTableId('');
+                }}
+                className={cn(
+                  'flex flex-col items-center gap-2 rounded-xl border-2 p-5 transition',
+                  changeDraftFulfillment === 'take_away'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-[#e2e8f0] bg-white hover:bg-[#f8fafc]'
+                )}
+              >
+                <ShoppingBag className="h-8 w-8" />
+                <span className="text-sm font-semibold">{t('takeAway')}</span>
+              </button>
+            </div>
+
+            {changeDraftFulfillment === 'dine_in' ? (
+              <div className="space-y-2">
+                <Label htmlFor="kiosk-change-table">{t('table')}</Label>
+                <select
+                  id="kiosk-change-table"
+                  className="h-10 w-full rounded-md border border-[#e2e8f0] bg-white px-3 text-sm text-[#0f172a] outline-none ring-offset-0 focus:border-primary focus:ring-2 focus:ring-primary/30"
+                  value={changeDraftTableId}
+                  onChange={(e) => setChangeDraftTableId(e.target.value)}
+                  disabled={!diningTablesLoaded}
+                >
+                  <option value="">
+                    {!diningTablesLoaded
+                      ? 'Loading tables…'
+                      : diningTables.length === 0
+                        ? 'No tables available'
+                        : t('selectTable')}
+                  </option>
+                  {diningTables.map((table) => (
+                    <option key={table.id} value={table.id}>
+                      {table.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-[#e2e8f0] bg-white text-[#0f172a] hover:bg-[#f1f5f9]"
+                onClick={() => setFulfillmentChangeOpen(false)}
+              >
+                {t('cancel')}
+              </Button>
+              <Button
+                type="button"
+                className="bg-primary text-primary-foreground hover:brightness-95"
+                onClick={() => {
+                  if (!changeDraftFulfillment) {
+                    toast.warn(t('tapOptionToBrowse'));
+                    return;
+                  }
+                  if (
+                    changeDraftFulfillment === 'dine_in' &&
+                    !changeDraftTableId
+                  ) {
+                    toast.warn(t('chooseTableFirst'));
+                    return;
+                  }
+                  setFulfillment(changeDraftFulfillment);
+                  setSelectedTableId(
+                    changeDraftFulfillment === 'dine_in'
+                      ? changeDraftTableId
+                      : ''
+                  );
+                  setFulfillmentChangeOpen(false);
+                }}
+              >
+                {t('continue')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
           open={pendingFulfillment === 'dine_in'}
           onOpenChange={(open) => {
             if (!open) setPendingFulfillment(null);
@@ -2074,8 +2314,15 @@ export function KioskApp({
                 className="h-10 w-full rounded-md border border-[#e2e8f0] bg-white px-3 text-sm text-[#0f172a] outline-none ring-offset-0 focus:border-primary focus:ring-2 focus:ring-primary/30"
                 value={selectedTableId}
                 onChange={(e) => setSelectedTableId(e.target.value)}
+                disabled={!diningTablesLoaded}
               >
-                <option value="">{t('selectTable')}</option>
+                <option value="">
+                  {!diningTablesLoaded
+                    ? 'Loading tables…'
+                    : diningTables.length === 0
+                      ? 'No tables available'
+                      : t('selectTable')}
+                </option>
                 {diningTables.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}

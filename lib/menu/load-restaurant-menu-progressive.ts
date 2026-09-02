@@ -15,6 +15,10 @@ import {
   withServiceChargesPayload,
 } from '@/lib/restaurant-service-charge';
 import { RESTAURANT_DINE_IN_PAYMENT_DB_SELECT } from '@/lib/restaurant-dine-in-payment';
+import {
+  parseRestaurantFulfillmentSettings,
+  RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+} from '@/lib/restaurant-fulfillment-settings';
 
 async function loadCategoryIdsByItemIds(menuItemIds: string[]) {
   const map = new Map<string, string[]>();
@@ -66,6 +70,7 @@ export async function loadRestaurantMenuCategoriesMeta(restaurantId: string) {
       themePrimaryColor: true,
       ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
       ...RESTAURANT_DINE_IN_PAYMENT_DB_SELECT,
+      ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
     },
   });
   if (!restaurantMeta) return null;
@@ -94,11 +99,14 @@ export async function loadRestaurantMenuCategoriesMeta(restaurantId: string) {
     items: [],
   }));
 
-  return withServiceChargesPayload({
-    ...restaurantMeta,
-    serviceCharges: parseRestaurantServiceCharges(restaurantMeta),
-    menus,
-  });
+  return {
+    ...withServiceChargesPayload({
+      ...restaurantMeta,
+      serviceCharges: parseRestaurantServiceCharges(restaurantMeta),
+      menus,
+    }),
+    fulfillmentSettings: parseRestaurantFulfillmentSettings(restaurantMeta),
+  };
 }
 
 /**
@@ -123,6 +131,7 @@ export async function loadRestaurantPosMenuCatalog(restaurantId: string) {
           themePrimaryColor: true,
           ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
           ...RESTAURANT_DINE_IN_PAYMENT_DB_SELECT,
+          ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
         },
       }),
       db.menuCategory.findMany({
@@ -218,11 +227,14 @@ export async function loadRestaurantPosMenuCatalog(restaurantId: string) {
     };
   });
 
-  return withServiceChargesPayload({
-    ...restaurantMeta,
-    serviceCharges: parseRestaurantServiceCharges(restaurantMeta),
-    menus,
-  });
+  return {
+    ...withServiceChargesPayload({
+      ...restaurantMeta,
+      serviceCharges: parseRestaurantServiceCharges(restaurantMeta),
+      menus,
+    }),
+    fulfillmentSettings: parseRestaurantFulfillmentSettings(restaurantMeta),
+  };
 }
 
 /** POS menu: items for one category (fast browse list). */

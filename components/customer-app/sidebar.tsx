@@ -68,6 +68,7 @@ type SidebarProps = {
   restaurantSlug?: string;
   className?: string;
   variant?: 'storefront' | 'default';
+  deliveryEnabled?: boolean;
 };
 
 export function Sidebar({
@@ -88,6 +89,7 @@ export function Sidebar({
   restaurantSlug,
   className,
   variant = 'default',
+  deliveryEnabled = true,
 }: SidebarProps) {
   const { t } = useTranslation();
   const customerAccount = useCustomerAccountOptional();
@@ -199,8 +201,16 @@ export function Sidebar({
     return () => clearInterval(interval);
   }, [menuBanners]);
 
+  useEffect(() => {
+    if (!deliveryEnabled && mode === 'delivery') {
+      setMode('takeaway');
+      setDeliveryInfoOpen(false);
+    }
+  }, [deliveryEnabled, mode, setMode]);
+
   const createOrder = async () => {
     if (isStartingOrder) return;
+    if (mode === 'delivery' && !deliveryEnabled) return;
 
     const rawOrderId =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -324,7 +334,7 @@ export function Sidebar({
     </>
   );
 
-  const modeToggle = (
+  const modeToggle = deliveryEnabled ? (
     <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f8fafc] p-1">
       <button
         type="button"
@@ -357,7 +367,7 @@ export function Sidebar({
         {t('takeAwayLabel')}
       </button>
     </div>
-  );
+  ) : null;
 
   const branchList = (
     <div className="space-y-2">
@@ -558,7 +568,13 @@ export function Sidebar({
           </div>
         ) : null}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div
+          className={cn(
+            'grid gap-3',
+            deliveryEnabled ? 'grid-cols-2' : 'grid-cols-1'
+          )}
+        >
+          {deliveryEnabled ? (
           <button
             type="button"
             onClick={() => {
@@ -575,6 +591,7 @@ export function Sidebar({
             <IconBike className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" stroke={1.5} />
             <span className="text-sm font-semibold">{t('delivery')}</span>
           </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {

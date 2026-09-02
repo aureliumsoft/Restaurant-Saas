@@ -47,7 +47,11 @@ function walletLabel(state: PaymentProviderState | null): string {
   return ` (${parts.join(' + ')})`;
 }
 
-export function RestaurantPaymentProviderCard() {
+export function RestaurantPaymentProviderCard({
+  cardPaymentsEnabled = true,
+}: {
+  cardPaymentsEnabled?: boolean;
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -189,6 +193,7 @@ export function RestaurantPaymentProviderCard() {
           </Select>
         </div>
 
+        {cardPaymentsEnabled ? (
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="payment-terminal-ip">
             Payment terminal IP
@@ -214,6 +219,7 @@ export function RestaurantPaymentProviderCard() {
             Used for card-terminal integrations and terminal-based payments.
           </p>
         </div>
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
           <Button

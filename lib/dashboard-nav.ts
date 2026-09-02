@@ -26,7 +26,7 @@ export function navItemsForPermissions(permissionNames: string[]): NavItem[] {
 
 export function navGroupsForPermissions(
   permissionNames: string[],
-  options?: { hideRecommendations?: boolean }
+  options?: { hideRecommendations?: boolean; hideTables?: boolean }
 ): DashboardNavGroup[] {
   const allowed = new Set(
     navItemsForPermissions(permissionNames).map((item) => item.moduleKey)
@@ -34,6 +34,9 @@ export function navGroupsForPermissions(
 
   if (options?.hideRecommendations) {
     allowed.delete('recommendations');
+  }
+  if (options?.hideTables) {
+    allowed.delete('tables');
   }
 
   const itemsByKey = new Map(

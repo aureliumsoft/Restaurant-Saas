@@ -91,6 +91,9 @@ export function fakeRestaurantComplete() {
     kioskServiceChargeAmount: 0,
     onlineServiceChargeEnabled: false,
     onlineServiceChargeAmount: 0,
+    deliveryEnabled: true,
+    dineInEnabled: true,
+    cardPaymentsEnabled: true,
     dineInPaymentTiming: DineInPaymentTiming.ON_LEAVE,
     currencyCode: 'EUR',
     countryCode: 'ES',
@@ -985,6 +988,7 @@ export function fakeIngredient() {
     imageUrl: undefined,
     sku: undefined,
     minQuantity: undefined,
+    unitCost: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -1000,6 +1004,7 @@ export function fakeIngredientComplete() {
     imageUrl: undefined,
     sku: undefined,
     minQuantity: undefined,
+    unitCost: undefined,
     isActive: true,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),

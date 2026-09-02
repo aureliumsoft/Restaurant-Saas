@@ -48,6 +48,7 @@ export type IngredientFormState = {
   imageUrl: string;
   sku: string;
   minQuantity: string;
+  unitCost: string;
   isActive: boolean;
 };
 
@@ -60,6 +61,7 @@ export const EMPTY_INGREDIENT_FORM: IngredientFormState = {
   imageUrl: '',
   sku: '',
   minQuantity: '',
+  unitCost: '',
   isActive: true,
 };
 
@@ -73,6 +75,7 @@ function formFingerprint(form: IngredientFormState) {
     imageUrl: form.imageUrl,
     sku: form.sku.trim(),
     minQuantity: form.minQuantity.trim(),
+    unitCost: form.unitCost.trim(),
     isActive: form.isActive,
   });
 }
@@ -117,6 +120,10 @@ export function IngredientForm({
       const min = Number(form.minQuantity);
       if (!Number.isFinite(min) || min < 0) return false;
     }
+    if (form.unitCost.trim()) {
+      const cost = Number(form.unitCost);
+      if (!Number.isFinite(cost) || cost < 0) return false;
+    }
     return true;
   }, [form]);
 
@@ -130,6 +137,7 @@ export function IngredientForm({
       imageUrl: form.imageUrl.trim() || null,
       sku: form.sku.trim() || null,
       minQuantity: form.minQuantity.trim() ? Number(form.minQuantity) : null,
+      unitCost: form.unitCost.trim() ? Number(form.unitCost) : null,
       ...(isEdit ? { isActive: form.isActive } : {}),
     };
     setSaving(mode);
@@ -263,6 +271,23 @@ export function IngredientForm({
             placeholder="Optional"
           />
         </div>
+      </div>
+      <div className="grid gap-2">
+        <Label>Unit cost</Label>
+        <Input
+          value={form.unitCost}
+          onChange={(e) =>
+            setForm((f) => ({
+              ...f,
+              unitCost: filterDecimalInput(e.target.value),
+            }))
+          }
+          inputMode="decimal"
+          placeholder={`Cost per ${formatIngredientUnit(form.unit)}`}
+        />
+        <p className="text-xs text-muted-foreground">
+          Used to calculate inventory value and usage expenses.
+        </p>
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input

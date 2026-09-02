@@ -15,7 +15,11 @@ import { Button } from '@/components/ui/button';
 
 import type { OrderInfo } from '@/components/order/order-types';
 import { ProductLineDetails } from '@/components/orders/product-line-details';
-import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
+import {
+  cartLineTotal,
+  cartLineUnitTotal,
+  normalizeCartModifiers,
+} from '@/lib/cart-normalize';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { submitCustomerOrder } from '@/lib/offline/submit-order';
 import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
@@ -126,7 +130,8 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
           quantity: Number(maybeLine.quantity ?? 1),
           variationId: (maybeLine as CartLine).variationId ?? null,
           variationName: (maybeLine as CartLine).variationName ?? null,
-          variationPriceOverride: (maybeLine as CartLine).variationPriceOverride,
+          variationPriceOverride: (maybeLine as CartLine)
+            .variationPriceOverride,
           modifiers: normalizeCartModifiers((maybeLine as any).modifiers),
           modifiersSignature: String(maybeLine.modifiersSignature ?? ''),
         });
@@ -302,7 +307,9 @@ export default function CheckoutPageClient({
     orderInfo?.restaurantSlug,
     'online'
   );
-  const { formatMoney, regional } = useRestaurantRegional(orderInfo?.restaurantSlug);
+  const { formatMoney, regional } = useRestaurantRegional(
+    orderInfo?.restaurantSlug
+  );
   const grandTotal = total + serviceChargeAmount;
 
   const placeOrder = async () => {
@@ -564,7 +571,9 @@ export default function CheckoutPageClient({
                       </span>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <span className="text-[#8e8e9a]">{t('apartmentDoor')}</span>
+                      <span className="text-[#8e8e9a]">
+                        {t('apartmentDoor')}
+                      </span>
                       <span className="font-semibold">
                         {orderInfo.apartment || 'N/A'}
                       </span>
@@ -579,7 +588,9 @@ export default function CheckoutPageClient({
                 ) : (
                   <>
                     <div className="flex justify-between gap-3">
-                      <span className="text-[#8e8e9a]">{t('pickupLocation')}</span>
+                      <span className="text-[#8e8e9a]">
+                        {t('pickupLocation')}
+                      </span>
                       <span className="break-words text-right font-semibold">
                         {orderInfo?.storeName || 'N/A'}
                       </span>
@@ -654,7 +665,9 @@ export default function CheckoutPageClient({
                             {formatMoney(lineTotal(line))}
                           </p>
                         </div>
-                        <p className="text-xs text-[#8e8e9a]">x{line.quantity}</p>
+                        <p className="text-xs text-[#8e8e9a]">
+                          x{line.quantity}
+                        </p>
                       </div>
                     );
                   })}
@@ -850,8 +863,8 @@ export default function CheckoutPageClient({
                     ) : (
                       <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                         Online payments are not available for this restaurant
-                        yet. The owner must configure PayPal, Stripe, or
-                        JazzCash / Easypaisa wallets in settings.
+                        yet. The owner of that restaurant has not configured
+                        payment methods in settings.
                       </p>
                     )
                   ) : (
@@ -861,7 +874,9 @@ export default function CheckoutPageClient({
                     </p>
                   )}
                 </div>
-                <p className="text-xs text-[#8e8e9a]">{t('confirmOrderHint')}</p>
+                <p className="text-xs text-[#8e8e9a]">
+                  {t('confirmOrderHint')}
+                </p>
               </div>
             </section>
           </div>

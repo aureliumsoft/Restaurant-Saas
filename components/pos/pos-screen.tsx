@@ -74,6 +74,11 @@ import {
   parseDineInPaymentTiming,
   type DineInPaymentTiming,
 } from '@/lib/restaurant-dine-in-payment';
+import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
+import {
+  parseRestaurantFulfillmentSettings,
+  type RestaurantFulfillmentSettings,
+} from '@/lib/restaurant-fulfillment-settings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -768,6 +773,46 @@ export function PosScreen({
   } = useProgressiveRestaurantMenu<
     PosMenuProduct & { categoryIds?: string[] }
   >();
+
+  const { settings: bootstrapFulfillment } = useRestaurantFulfillmentSettings();
+  const [apiFulfillment, setApiFulfillment] =
+    useState<RestaurantFulfillmentSettings | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/restaurant/fulfillment-settings', {
+          cache: 'no-store',
+        });
+        if (!res.ok || cancelled) return;
+        const json = (await res.json()) as {
+          data?: RestaurantFulfillmentSettings;
+        };
+        if (cancelled || !json.data) return;
+        setApiFulfillment(parseRestaurantFulfillmentSettings(json.data));
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const fulfillmentSettings = useMemo((): RestaurantFulfillmentSettings => {
+    if (apiFulfillment) return apiFulfillment;
+    if (menuMeta?.fulfillmentSettings) {
+      return parseRestaurantFulfillmentSettings(
+        menuMeta.fulfillmentSettings as Partial<RestaurantFulfillmentSettings>
+      );
+    }
+    return bootstrapFulfillment;
+  }, [
+    apiFulfillment,
+    menuMeta?.fulfillmentSettings,
+    bootstrapFulfillment,
+  ]);
 
   const categories = useMemo<Category[]>(() => {
     const next: Category[] = [
@@ -2881,11 +2926,33 @@ export function PosScreen({
     id: OrderMode;
     label: string;
     icon: ComponentType<{ className?: string }>;
-  }[] = [
-      { id: 'tables', label: 'Table', icon: TableIcon },
-      { id: 'delivery', label: 'Delivery', icon: Truck },
-      { id: 'takeaway', label: 'Take-away', icon: ShoppingBag },
+  }[] = useMemo(() => {
+    const all = [
+      { id: 'tables' as const, label: 'Table', icon: TableIcon },
+      { id: 'delivery' as const, label: 'Delivery', icon: Truck },
+      { id: 'takeaway' as const, label: 'Take-away', icon: ShoppingBag },
     ];
+    return all.filter((b) => {
+      if (b.id === 'tables') return fulfillmentSettings.dineInEnabled;
+      if (b.id === 'delivery') return fulfillmentSettings.deliveryEnabled;
+      return true;
+    });
+  }, [fulfillmentSettings.deliveryEnabled, fulfillmentSettings.dineInEnabled]);
+
+  useEffect(() => {
+    if (orderMode === 'tables' && !fulfillmentSettings.dineInEnabled) {
+      setOrderMode('takeaway');
+      setTableId('');
+    } else if (orderMode === 'delivery' && !fulfillmentSettings.deliveryEnabled) {
+      setOrderMode('takeaway');
+    }
+  }, [fulfillmentSettings.deliveryEnabled, fulfillmentSettings.dineInEnabled, orderMode]);
+
+  useEffect(() => {
+    if (!fulfillmentSettings.cardPaymentsEnabled && paymentMode === 'card') {
+      setPaymentMode('cash');
+    }
+  }, [fulfillmentSettings.cardPaymentsEnabled, paymentMode]);
 
   const selectedTableName =
     diningTables.find((t) => t.id === tableId)?.name ?? null;
@@ -3141,6 +3208,7 @@ export function PosScreen({
           >
             <History className="h-4 w-4" />
           </Button>
+          {fulfillmentSettings.deliveryEnabled ? (
           <Button
             type="button"
             variant="ghost"
@@ -3156,6 +3224,7 @@ export function PosScreen({
               </span>
             ) : null}
           </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
@@ -3171,6 +3240,7 @@ export function PosScreen({
               </span>
             ) : null}
           </Button>
+          {fulfillmentSettings.dineInEnabled ? (
           <Button
             type="button"
             variant="ghost"
@@ -3186,6 +3256,7 @@ export function PosScreen({
               </span>
             ) : null}
           </Button>
+          ) : null}
           {(pendingKitchenOrders.length > 0) ? (
             <Button
               type="button"
@@ -3509,7 +3580,7 @@ export function PosScreen({
                 ) : null}
               </div>
               <div className="flex items-center gap-1 rounded-xl bg-muted/60 p-1">
-                {/* Table — direct pick; expands when active */}
+                {fulfillmentSettings.dineInEnabled ? (
                 <Select
                   value={orderMode === 'tables' && tableId ? tableId : undefined}
                   onValueChange={selectDiningTable}
@@ -3559,6 +3630,7 @@ export function PosScreen({
                     )}
                   </SelectContent>
                 </Select>
+                ) : null}
 
                 {modeButtons
                   .filter((b) => b.id !== 'tables')
@@ -3920,13 +3992,15 @@ export function PosScreen({
                           variant={paymentMode === 'cash' ? 'default' : 'outline'}
                           className={cn(
                             'h-11 justify-start gap-2 rounded-xl',
-                            paymentMode === 'cash' && POS_ACCENT_BTN
+                            paymentMode === 'cash' && POS_ACCENT_BTN,
+                            !fulfillmentSettings.cardPaymentsEnabled && 'col-span-2'
                           )}
                           onClick={() => handleSelectPaymentMode('cash')}
                         >
                           <Banknote className="h-4 w-4" />
                           Cash
                         </Button>
+                        {fulfillmentSettings.cardPaymentsEnabled ? (
                         <Button
                           type="button"
                           variant={paymentMode === 'card' ? 'default' : 'outline'}
@@ -3939,6 +4013,7 @@ export function PosScreen({
                           <CreditCard className="h-4 w-4" />
                           Card
                         </Button>
+                        ) : null}
                       </div>
                     </div>
 

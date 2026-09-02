@@ -15,6 +15,10 @@ import {
   defaultUiLanguageForCountry,
   localeForRegionalSettings,
 } from "@/lib/restaurant-regional";
+import {
+  parseRestaurantFulfillmentSettings,
+  RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+} from "@/lib/restaurant-fulfillment-settings";
 import { publicGoogleSignInConfig } from "@/lib/customer-auth/google-oauth";
 import { getRestaurantPlanFeatures } from "@/lib/subscription-plan-enforcement";
 import { publicRestaurantImageUrls } from "@/lib/stored-image-response";
@@ -40,6 +44,7 @@ async function findCustomerRestaurant(
     ...RESTAURANT_BRANDING_DB_SELECT,
     ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
     ...RESTAURANT_REGIONAL_DB_SELECT,
+    ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
   } as const;
 
   try {
@@ -59,6 +64,7 @@ async function findCustomerRestaurant(
         locale: localeForRegionalSettings(regional),
         defaultUiLanguage: defaultUiLanguageForCountry(regional.countryCode),
       },
+      fulfillmentSettings: parseRestaurantFulfillmentSettings(restaurant),
       mobileApp: plan.mobileApp,
       googleSignIn: publicGoogleSignInConfig(),
     };
@@ -80,6 +86,7 @@ async function findCustomerRestaurant(
         locale: localeForRegionalSettings(regional),
         defaultUiLanguage: defaultUiLanguageForCountry(regional.countryCode),
       },
+      fulfillmentSettings: parseRestaurantFulfillmentSettings(null),
       mobileApp: plan.mobileApp,
       googleSignIn: publicGoogleSignInConfig(),
     };

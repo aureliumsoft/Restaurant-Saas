@@ -38,6 +38,10 @@ import {
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
   totalsMatch,
 } from '@/lib/restaurant-service-charge';
+import {
+  parseRestaurantFulfillmentSettings,
+  RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+} from '@/lib/restaurant-fulfillment-settings';
 
 const SELECTED_MINUTES_KIOSK = 25;
 
@@ -149,11 +153,33 @@ export async function POST(req: NextRequest) {
   const slug = restaurantSlug.trim();
   const restaurant = await db.restaurant.findUnique({
     where: { slug },
-    select: { id: true, ...RESTAURANT_SERVICE_CHARGE_DB_SELECT },
+    select: {
+      id: true,
+      ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+      ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+    },
   });
 
   if (!restaurant) {
     return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
+  }
+
+  const fulfillmentSettings = parseRestaurantFulfillmentSettings(restaurant);
+  if (fulfillment === 'dine_in' && !fulfillmentSettings.dineInEnabled) {
+    return NextResponse.json(
+      { error: 'Dine-in is not available at this restaurant' },
+      { status: 403 }
+    );
+  }
+  const paymentMethodNorm = paymentMethod?.trim().toLowerCase() ?? '';
+  if (
+    paymentMethodNorm.includes('card') &&
+    !fulfillmentSettings.cardPaymentsEnabled
+  ) {
+    return NextResponse.json(
+      { error: 'Card payments are not enabled for this restaurant' },
+      { status: 403 }
+    );
   }
 
   const customerSession = mobileTableQr

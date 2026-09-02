@@ -1,6 +1,7 @@
 import type { BranchOption } from '@/lib/branch/branch-scope';
 import type { RestaurantRegionalSettings } from '@/lib/restaurant-regional';
 import type { RestaurantServiceCharges } from '@/lib/restaurant-service-charge';
+import type { RestaurantFulfillmentSettings } from '@/lib/restaurant-fulfillment-settings';
 
 export type StaffBootstrapPlan = {
   maxBranches: number | null;
@@ -30,6 +31,7 @@ export type StaffBootstrapRestaurant = {
   themePrimaryColor?: string | null;
   regional?: RestaurantRegionalSettings;
   serviceCharges?: RestaurantServiceCharges;
+  fulfillmentSettings?: RestaurantFulfillmentSettings;
   currencyCode?: string;
   countryCode?: string;
 };

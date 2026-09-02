@@ -21,6 +21,7 @@ export function WebAppStorefront({ slug }: { slug: string }) {
   const [brandLoading, setBrandLoading] = useState(true);
 
   const [mode, setMode] = useState<'delivery' | 'takeaway'>('delivery');
+  const [deliveryEnabled, setDeliveryEnabled] = useState(true);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [apartmentDoorNumber, setApartmentDoorNumber] = useState('');
   const [gateCode, setGateCode] = useState('');
@@ -43,10 +44,16 @@ export function WebAppStorefront({ slug }: { slug: string }) {
               mainBannerUrl?: string | null;
               logoUrl?: string | null;
               themePrimaryColor?: string | null;
+              fulfillmentSettings?: { deliveryEnabled?: boolean };
             }
           | null
           | undefined;
         if (cancelled) return;
+        const deliveryOn = data?.fulfillmentSettings?.deliveryEnabled !== false;
+        setDeliveryEnabled(deliveryOn);
+        if (!deliveryOn) {
+          setMode('takeaway');
+        }
         setBrand({
           name: data?.name?.trim() || slug,
           mainBannerUrl:
@@ -156,6 +163,7 @@ export function WebAppStorefront({ slug }: { slug: string }) {
                     setSelectedStoreId={setSelectedStoreId}
                     restaurantSlug={slug}
                     variant="storefront"
+                    deliveryEnabled={deliveryEnabled}
                   />
                 </div>
               </div>

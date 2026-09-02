@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
       isMajor: true,
       sku: true,
       minQuantity: true,
+      unitCost: true,
       isActive: true,
       createdAt: true,
       updatedAt: true,
@@ -109,6 +110,10 @@ export async function GET(req: NextRequest) {
           minQuantity: branchId
             ? (stock?.minQuantity ?? r.minQuantity)
             : r.minQuantity,
+          unitCost: r.unitCost,
+          stockValue:
+            (branchId ? (stock?.quantity ?? 0) : r.quantity) *
+            (r.unitCost ?? 0),
           branchId,
           hasImage: hasImage.has(r.id),
           imageUrl: hasImage.has(r.id) ? lazyImageUrl(r.id) : null,
@@ -162,6 +167,7 @@ export async function POST(req: NextRequest) {
           imageUrl: parsed.data.imageUrl?.trim() || null,
           sku: parsed.data.sku?.trim() || null,
           minQuantity: parsed.data.minQuantity ?? null,
+          unitCost: parsed.data.unitCost ?? null,
         },
       });
       await seedBranchStockForIngredient(tx, auth.restaurant.id, ingredient.id, {

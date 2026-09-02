@@ -19,6 +19,10 @@ import {
   resolveServiceChargeAmount,
 } from '@/lib/restaurant-service-charge';
 import { isDineInPayBeforeKitchen } from '@/lib/restaurant-dine-in-payment';
+import {
+  parseRestaurantFulfillmentSettings,
+  RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+} from '@/lib/restaurant-fulfillment-settings';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { resolvePosPaymentLedgerAmount } from '@/lib/order-payment';
 import { getOpenPosShift } from '@/lib/pos-shift';
@@ -183,9 +187,13 @@ export async function POST(req: NextRequest) {
       where: { id: restaurantId },
       select: {
         ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+        ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
         dineInPaymentTiming: true,
       },
     });
+    const fulfillmentSettings = parseRestaurantFulfillmentSettings(
+      restaurantCharges
+    );
     const expectedServiceCharge = resolveServiceChargeAmount(
       parseRestaurantServiceCharges(restaurantCharges),
       'pos'
@@ -219,6 +227,28 @@ export async function POST(req: NextRequest) {
       }
       diningTableId = diningTable.id;
       tableLabel = diningTable.name;
+    }
+
+    if (tableIdRaw && !fulfillmentSettings.dineInEnabled) {
+      return NextResponse.json(
+        { error: 'Dine-in orders are not enabled for this restaurant' },
+        { status: 403 }
+      );
+    }
+    if (address && !fulfillmentSettings.deliveryEnabled) {
+      return NextResponse.json(
+        { error: 'Delivery orders are not enabled for this restaurant' },
+        { status: 403 }
+      );
+    }
+    if (
+      (paymentMode === 'card' || paymentMode === 'card_terminal') &&
+      !fulfillmentSettings.cardPaymentsEnabled
+    ) {
+      return NextResponse.json(
+        { error: 'Card payments are not enabled for this restaurant' },
+        { status: 403 }
+      );
     }
 
     // Pay-before-kitchen: table orders must be paid at POS (card terminal may stay

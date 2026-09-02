@@ -14,6 +14,11 @@ type RestaurantMenuMeta = {
   themePrimaryColor?: string | null;
   serviceCharges?: unknown;
   dineInPaymentTiming?: string | null;
+  fulfillmentSettings?: {
+    deliveryEnabled?: boolean;
+    dineInEnabled?: boolean;
+    cardPaymentsEnabled?: boolean;
+  };
 };
 
 type PosMenuCachePayload<TItem> = {
@@ -108,6 +113,11 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
             themePrimaryColor?: string | null;
             serviceCharges?: unknown;
             dineInPaymentTiming?: string | null;
+            fulfillmentSettings?: {
+              deliveryEnabled?: boolean;
+              dineInEnabled?: boolean;
+              cardPaymentsEnabled?: boolean;
+            };
             menus?: Array<{
               id: string;
               name: string;
@@ -136,6 +146,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
           themePrimaryColor: catalogBody.data.themePrimaryColor,
           serviceCharges: catalogBody.data.serviceCharges,
           dineInPaymentTiming: catalogBody.data.dineInPaymentTiming,
+          fulfillmentSettings: catalogBody.data.fulfillmentSettings,
         };
 
         const loadedCategories: ProgressiveMenuCategory<TItem>[] = menus.map(

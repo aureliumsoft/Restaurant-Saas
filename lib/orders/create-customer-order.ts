@@ -26,6 +26,10 @@ import {
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
   totalsMatch,
 } from '@/lib/restaurant-service-charge';
+import {
+  parseRestaurantFulfillmentSettings,
+  RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+} from '@/lib/restaurant-fulfillment-settings';
 import { resolveWebCustomerName } from '@/lib/web-customer';
 import {
   consumeIngredientsForOrder,
@@ -218,11 +222,24 @@ export async function createCustomerOrder(options: {
   const slug = restaurantSlug.trim();
   const restaurant = await db.restaurant.findUnique({
     where: { slug },
-    select: { id: true, ...RESTAURANT_SERVICE_CHARGE_DB_SELECT },
+    select: {
+      id: true,
+      ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+      ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+    },
   });
 
   if (!restaurant) {
     return { ok: false, status: 404, error: 'Restaurant not found' };
+  }
+
+  const fulfillmentSettings = parseRestaurantFulfillmentSettings(restaurant);
+  if (orderType === 'delivery' && !fulfillmentSettings.deliveryEnabled) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'Delivery is not available for this restaurant',
+    };
   }
 
   const idempotencyKey = options.idempotencyKey ?? null;

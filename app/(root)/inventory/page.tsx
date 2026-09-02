@@ -5,7 +5,22 @@ import Link from 'next/link';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
-import { List, Loader2, Package, PackagePlus, Pencil, Plus, RefreshCw, Save, Search, Trash2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  List,
+  Loader2,
+  Package,
+  PackagePlus,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Save,
+  Search,
+  Trash2,
+  TrendingDown,
+  Wallet,
+  X,
+} from 'lucide-react';
 
 import { ingredientEditPath, ingredientApiPath } from '@/lib/dashboard-paths';
 import {
@@ -31,6 +46,7 @@ import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DeleteConfirmation } from '@/components/ui/confirmation-dialogs';
 import {
   Dialog,
@@ -44,6 +60,7 @@ import { extractApiErrorMessage } from '@/lib/extract-api-error';
 import { formatIngredientUnit } from '@/lib/inventory/stock';
 import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
 import { useDashboardPermissions } from '@/hooks/use-dashboard-permissions';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { filterDecimalInput } from '@/lib/validation/fields';
 import { cn } from '@/lib/utils';
@@ -57,6 +74,8 @@ type IngredientRow = {
   isMajor: boolean;
   sku: string | null;
   minQuantity: number | null;
+  unitCost: number | null;
+  stockValue: number;
   isActive: boolean;
   hasImage: boolean;
   imageUrl: string | null;
@@ -68,7 +87,7 @@ type EntryRow = {
   reason: string;
   source: string;
   createdAt: string;
-  ingredient: { id: string; name: string; unit: string };
+  ingredient: { id: string; name: string; unit: string; unitCost: number | null };
   menuItem: { id: string; name: string } | null;
   variation: { id: string; name: string } | null;
   createdBy: { id: string; name: string; email: string | null } | null;
@@ -83,12 +102,66 @@ const INVENTORY_REALTIME_CHANNELS = [
   'realtime:kds.tickets',
 ] as const;
 
+type InventorySummary = {
+  totalInventoryValue: number;
+  lowStockCount: number;
+  activeIngredientCount: number;
+  usageValue30d: number;
+  entryCount30d: number;
+};
+
+function InventoryInsightChip({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  accent = false,
+}: {
+  icon: typeof Package;
+  label: string;
+  value: string;
+  hint: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-3xl p-4 shadow-[0_12px_40px_-16px_rgba(15,23,42,0.18),0_0_0_1px_rgba(240,90,32,0.06)] backdrop-blur-xl',
+        accent
+          ? 'bg-fire-500/10'
+          : 'bg-white/85 dark:bg-zinc-950/75 dark:shadow-[0_16px_48px_-18px_rgba(0,0,0,0.75),0_0_0_1px_rgba(240,90,32,0.14)]'
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          className={cn(
+            'flex h-10 w-10 items-center justify-center rounded-2xl shadow-md',
+            accent
+              ? 'bg-fire-500 text-white shadow-fire-500/30'
+              : 'bg-fire-500 text-white shadow-fire-500/30'
+          )}
+        >
+          <Icon className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="truncate text-xl font-bold tracking-tight tabular-nums">
+            {value}
+          </p>
+          <p className="truncate text-[11px] text-muted-foreground">{hint}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const NO_STORE_HEADERS = {
   'Cache-Control': 'no-cache',
   Pragma: 'no-cache',
 };
 
 export default function InventoryPage() {
+  const { formatMoney } = useOwnerRestaurantRegional();
   const { canEdit, canDelete } = useDashboardPermissions();
   const canEditInv = canEdit('inventory');
   const canDeleteInv = canDelete('inventory');
@@ -128,11 +201,35 @@ export default function InventoryPage() {
   const [entryQty, setEntryQty] = useState('');
   const [entryReason, setEntryReason] = useState('');
   const [savingEntry, setSavingEntry] = useState(false);
+  const [entryDialogOpen, setEntryDialogOpen] = useState(false);
+  const [entrySearch, setEntrySearch] = useState('');
+  const [appliedEntrySearch, setAppliedEntrySearch] = useState('');
 
   const [productSearch, setProductSearch] = useState('');
+  const [summary, setSummary] = useState<InventorySummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const ingredientLoadId = useRef(0);
   const entryLoadId = useRef(0);
   const refreshTimerRef = useRef<number | null>(null);
+
+  const loadSummary = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setSummaryLoading(true);
+    try {
+      const res = await axios.get<{ data: InventorySummary }>(
+        withBranchQuery(
+          '/api/restaurant/inventory/summary',
+          activeBranchId,
+          activeBranchUrlId
+        ),
+        { headers: NO_STORE_HEADERS, params: { _: Date.now() } }
+      );
+      setSummary(res.data.data);
+    } catch {
+      setSummary(null);
+    } finally {
+      if (!opts?.silent) setSummaryLoading(false);
+    }
+  }, [activeBranchId, activeBranchUrlId]);
 
   const loadIngredients = useCallback(
     async (p: number, q: string, opts?: { silent?: boolean }) => {
@@ -176,38 +273,46 @@ export default function InventoryPage() {
     [activeBranchId, activeBranchUrlId]
   );
 
-  const loadEntries = useCallback(async (p: number, opts?: { silent?: boolean }) => {
-    const requestId = ++entryLoadId.current;
-    if (!opts?.silent) setEntriesLoading(true);
-    try {
-      const res = await axios.get<{
-        data: EntryRow[];
-        meta: { total: number; totalPages: number; page: number };
-      }>(
-        withBranchQuery(
-          '/api/restaurant/inventory/entries',
-          activeBranchId,
-          activeBranchUrlId
-        ),
-        {
-          params: { page: p, limit: 20, _: Date.now() },
-          headers: NO_STORE_HEADERS,
+  const loadEntries = useCallback(
+    async (p: number, q: string, opts?: { silent?: boolean }) => {
+      const requestId = ++entryLoadId.current;
+      if (!opts?.silent) setEntriesLoading(true);
+      try {
+        const res = await axios.get<{
+          data: EntryRow[];
+          meta: { total: number; totalPages: number; page: number };
+        }>(
+          withBranchQuery(
+            '/api/restaurant/inventory/entries',
+            activeBranchId,
+            activeBranchUrlId
+          ),
+          {
+            params: {
+              page: p,
+              limit: 20,
+              q: q || undefined,
+              _: Date.now(),
+            },
+            headers: NO_STORE_HEADERS,
+          }
+        );
+        if (requestId !== entryLoadId.current) return;
+        setEntries(res.data.data ?? []);
+        setEntryTotal(res.data.meta?.total ?? 0);
+        setEntryTotalPages(res.data.meta?.totalPages ?? 1);
+        setEntryPage(res.data.meta?.page ?? p);
+      } catch {
+        if (requestId !== entryLoadId.current) return;
+        toast.error('Could not load stock entries.');
+      } finally {
+        if (requestId === entryLoadId.current) {
+          setEntriesLoading(false);
         }
-      );
-      if (requestId !== entryLoadId.current) return;
-      setEntries(res.data.data ?? []);
-      setEntryTotal(res.data.meta?.total ?? 0);
-      setEntryTotalPages(res.data.meta?.totalPages ?? 1);
-      setEntryPage(res.data.meta?.page ?? p);
-    } catch {
-      if (requestId !== entryLoadId.current) return;
-      toast.error('Could not load stock entries.');
-    } finally {
-      if (requestId === entryLoadId.current) {
-        setEntriesLoading(false);
       }
-    }
-  }, [activeBranchId, activeBranchUrlId]);
+    },
+    [activeBranchId, activeBranchUrlId]
+  );
 
   const loadActiveIngredients = useCallback(async () => {
     try {
@@ -246,13 +351,49 @@ export default function InventoryPage() {
     }
   };
 
+  const applyEntrySearch = () => {
+    const q = entrySearch.trim();
+    setEntryPage(1);
+    setAppliedEntrySearch(q);
+    if (entryPage === 1 && appliedEntrySearch === q) {
+      void loadEntries(1, q);
+    }
+  };
+
+  const clearEntrySearch = () => {
+    setEntrySearch('');
+    setEntryPage(1);
+    setAppliedEntrySearch('');
+    if (entryPage === 1 && appliedEntrySearch === '') {
+      void loadEntries(1, '');
+    }
+  };
+
+  const resetEntryForm = () => {
+    setEntryIngredientId('');
+    setEntryProductId('');
+    setEntryQty('');
+    setEntryReason('');
+    setProductSearch('');
+  };
+
+  const openEntryDialog = () => {
+    resetEntryForm();
+    setEntryDialogOpen(true);
+    void loadActiveIngredients();
+  };
+
   useEffect(() => {
     void loadIngredients(page, appliedSearch);
   }, [page, appliedSearch, loadIngredients]);
 
   useEffect(() => {
-    if (tab === 'entries') void loadEntries(entryPage);
-  }, [tab, entryPage, loadEntries]);
+    void loadSummary();
+  }, [loadSummary]);
+
+  useEffect(() => {
+    if (tab === 'entries') void loadEntries(entryPage, appliedEntrySearch);
+  }, [tab, entryPage, appliedEntrySearch, loadEntries]);
 
   useEffect(() => {
     void loadActiveIngredients();
@@ -265,15 +406,18 @@ export default function InventoryPage() {
     refreshTimerRef.current = window.setTimeout(() => {
       void loadIngredients(page, appliedSearch, { silent: true });
       void loadActiveIngredients();
-      void loadEntries(entryPage, { silent: true });
+      void loadEntries(entryPage, appliedEntrySearch, { silent: true });
+      void loadSummary({ silent: true });
     }, 80);
   }, [
     loadIngredients,
     loadActiveIngredients,
     loadEntries,
+    loadSummary,
     page,
     appliedSearch,
     entryPage,
+    appliedEntrySearch,
   ]);
 
   useRealtimeRefresh([...INVENTORY_REALTIME_CHANNELS], refreshInventory, {
@@ -356,12 +500,13 @@ export default function InventoryPage() {
         }
       );
       toast.success('Stock entry saved.');
-      setEntryQty('');
-      setEntryReason('');
+      resetEntryForm();
+      setEntryDialogOpen(false);
+      setEntryPage(1);
       void loadIngredients(page, appliedSearch, { silent: true });
       void loadActiveIngredients();
-      void loadEntries(1, { silent: true });
-      setTab('entries');
+      void loadEntries(1, appliedEntrySearch, { silent: true });
+      void loadSummary({ silent: true });
     } catch (e) {
       toast.error(extractApiErrorMessage(e, 'Could not save stock entry.'));
     } finally {
@@ -428,44 +573,89 @@ export default function InventoryPage() {
       }
       loading={branchLoading}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant={tab === 'ingredients' ? 'default' : 'outline'}
-            onClick={() => setTab('ingredients')}
-          >
-            <Package className="mr-2 h-4 w-4" />
-            <span>Ingredients</span>
-          </Button>
-          <Button
-            type="button"
-            variant={tab === 'entries' ? 'default' : 'outline'}
-            onClick={() => setTab('entries')}
-          >
-            <List className="mr-2 h-4 w-4" />
-            <span>Stock entries</span>
-          </Button>
-          <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          disabled={tab === 'entries' ? entriesLoading : loading}
-          onClick={() => refreshInventory()}
-        >
-          <RefreshCw
-            className={cn(
-              'h-4 w-4',
-              (tab === 'entries' ? entriesLoading : loading) && 'animate-spin'
-            )}
-          />
-        </Button>
-        </div>
-       
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {summaryLoading && !summary ? (
+          <>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-[88px] animate-pulse rounded-3xl bg-muted/50"
+              />
+            ))}
+          </>
+        ) : (
+          <>
+            <InventoryInsightChip
+              icon={Wallet}
+              label="Inventory value"
+              value={formatMoney(summary?.totalInventoryValue ?? 0)}
+              hint={
+                activeBranchName
+                  ? `On hand at ${activeBranchName}`
+                  : 'All branches combined'
+              }
+            />
+            <InventoryInsightChip
+              icon={AlertTriangle}
+              label="Low stock"
+              value={String(summary?.lowStockCount ?? 0)}
+              hint="At or below alert quantity"
+              accent={(summary?.lowStockCount ?? 0) > 0}
+            />
+            <InventoryInsightChip
+              icon={Package}
+              label="Active ingredients"
+              value={String(summary?.activeIngredientCount ?? 0)}
+              hint="In your catalog"
+            />
+            <InventoryInsightChip
+              icon={TrendingDown}
+              label="Usage (30 days)"
+              value={formatMoney(summary?.usageValue30d ?? 0)}
+              hint={`${summary?.entryCount30d ?? 0} stock entr${
+                summary?.entryCount30d === 1 ? 'y' : 'ies'
+              }`}
+            />
+          </>
+        )}
       </div>
 
-      {tab === 'ingredients' ? (
-        <DashboardCard>
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v as 'ingredients' | 'entries')}
+        className="w-full space-y-4"
+      >
+        <div className="flex w-full flex-wrap items-center gap-2">
+          <TabsList className="grid h-11 w-full max-w-none flex-1 grid-cols-2 sm:flex-1">
+            <TabsTrigger value="ingredients" className="gap-2">
+              <Package className="h-4 w-4" />
+              Ingredients
+            </TabsTrigger>
+            <TabsTrigger value="entries" className="gap-2">
+              <List className="h-4 w-4" />
+              Stock entries
+            </TabsTrigger>
+          </TabsList>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-11 w-11 shrink-0"
+            disabled={tab === 'entries' ? entriesLoading : loading}
+            onClick={() => refreshInventory()}
+            title="Refresh"
+          >
+            <RefreshCw
+              className={cn(
+                'h-4 w-4',
+                (tab === 'entries' ? entriesLoading : loading) && 'animate-spin'
+              )}
+            />
+          </Button>
+        </div>
+
+        <TabsContent value="ingredients" className="mt-0 w-full">
+        <DashboardCard className="w-full">
           <DashboardCardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <DashboardCardTitle>Ingredients</DashboardCardTitle>
             {canEditInv ? (
@@ -479,7 +669,7 @@ export default function InventoryPage() {
           </DashboardCardHeader>
           <DashboardCardContent className="space-y-4">
             <form
-              className="relative max-w-md"
+              className="relative w-full max-w-xl"
               onSubmit={(e) => {
                 e.preventDefault();
                 applySearch();
@@ -532,11 +722,13 @@ export default function InventoryPage() {
             ) : (
               <>
                 <DashboardTableWrapper>
-                  <DashboardTable minWidth={880}>
+                  <DashboardTable minWidth={1040}>
                     <DashboardTableHeader>
                       <DashboardTableRow>
                         <DashboardTableHead>Ingredient</DashboardTableHead>
                         <DashboardTableHead>Stock</DashboardTableHead>
+                        <DashboardTableHead>Unit cost</DashboardTableHead>
+                        <DashboardTableHead>Stock value</DashboardTableHead>
                         <DashboardTableHead>Major</DashboardTableHead>
                         <DashboardTableHead className="w-36" />
                       </DashboardTableRow>
@@ -576,6 +768,21 @@ export default function InventoryPage() {
                                 )}
                               >
                                 {row.quantity} {formatIngredientUnit(row.unit)}
+                              </span>
+                            </DashboardTableCell>
+                            <DashboardTableCell>
+                              {row.unitCost != null
+                                ? formatMoney(row.unitCost)
+                                : '—'}
+                              {row.unitCost != null ? (
+                                <p className="text-[11px] text-muted-foreground">
+                                  per {formatIngredientUnit(row.unit)}
+                                </p>
+                              ) : null}
+                            </DashboardTableCell>
+                            <DashboardTableCell>
+                              <span className="font-medium tabular-nums">
+                                {formatMoney(row.stockValue ?? 0)}
                               </span>
                             </DashboardTableCell>
                             <DashboardTableCell>
@@ -634,6 +841,7 @@ export default function InventoryPage() {
                   page={page}
                   onPageChange={setPage}
                   loading={loading}
+                  hideWhenSinglePage={false}
                 />
                 <p className="text-xs text-muted-foreground">
                   {total} ingredient{total === 1 ? '' : 's'}
@@ -642,93 +850,81 @@ export default function InventoryPage() {
             )}
           </DashboardCardContent>
         </DashboardCard>
-      ) : (
-        <div className="space-y-6">
-          {canEditInv ? (
-            <DashboardCard>
-              <DashboardCardHeader>
-                <DashboardCardTitle>New stock entry</DashboardCardTitle>
-              </DashboardCardHeader>
-              <DashboardCardContent className="grid w-full gap-4">
-                <div className="grid gap-2">
-                  <Label>Product (optional)</Label>
-                  <SearchableSelect
-                    value={entryProductId}
-                    onChange={setEntryProductId}
-                    options={productOptions}
-                    placeholder="Select product"
-                    searchPlaceholder="Search product…"
-                    allowClear
-                    onSearchChange={setProductSearch}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>
-                    Ingredient <span className="text-destructive">*</span>
-                  </Label>
-                  <SearchableSelect
-                    value={entryIngredientId}
-                    onChange={setEntryIngredientId}
-                    options={ingredientOptions}
-                    placeholder="Select ingredient"
-                    searchPlaceholder="Search ingredient…"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>
-                    Quantity <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    value={entryQty}
-                    onChange={(e) =>
-                      setEntryQty(filterDecimalInput(e.target.value))
-                    }
-                    inputMode="decimal"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>
-                    Reason <span className="text-destructive">*</span>
-                  </Label>
-                  <Textarea
-                    value={entryReason}
-                    onChange={(e) => setEntryReason(e.target.value)}
-                    placeholder="Why is this stock being used?"
-                    rows={3}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  disabled={savingEntry}
-                  onClick={() => void submitEntry()}
-                >
-                  {savingEntry ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : <Save className="mr-2 h-4 w-4" />}
-                  Save entry (deduct stock)
-                </Button>
-              </DashboardCardContent>
-            </DashboardCard>
-          ) : null}
+        </TabsContent>
 
-          <DashboardCard>
-            <DashboardCardHeader>
-              <DashboardCardTitle>Entry history</DashboardCardTitle>
+        <TabsContent value="entries" className="mt-0 w-full">
+          <DashboardCard className="w-full">
+            <DashboardCardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <DashboardCardTitle>Stock entries</DashboardCardTitle>
+              {canEditInv ? (
+                <Button type="button" onClick={openEntryDialog}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Deduct stock
+                </Button>
+              ) : null}
             </DashboardCardHeader>
-            <DashboardCardContent>
+            <DashboardCardContent className="space-y-4">
+              <form
+                className="relative w-full max-w-xl"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  applyEntrySearch();
+                }}
+              >
+                <Input
+                  type="search"
+                  value={entrySearch}
+                  onChange={(e) => setEntrySearch(e.target.value)}
+                  placeholder="Search entries by ingredient, product, or reason…"
+                  className={cn(
+                    'h-10 bg-background [&::-webkit-search-cancel-button]:hidden',
+                    appliedEntrySearch && entrySearch.trim() === appliedEntrySearch
+                      ? 'pr-12'
+                      : 'pr-24'
+                  )}
+                  autoComplete="off"
+                  aria-label="Search stock entries"
+                />
+                {appliedEntrySearch && entrySearch.trim() === appliedEntrySearch ? (
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="icon"
+                    className="absolute right-0 top-1/2 h-10 w-10 -translate-y-1/2"
+                    aria-label="Clear search"
+                    onClick={clearEntrySearch}
+                  >
+                    <X className="h-4 w-4 text-white" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    variant="default"
+                    className="absolute right-0 top-1/2 h-10 -translate-y-1/2"
+                  >
+                    <Search className="mr-2 h-4 w-4 text-white" />
+                    Search
+                  </Button>
+                )}
+              </form>
               {entriesLoading && entries.length === 0 ? (
                 <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
               ) : entries.length === 0 && !entriesLoading ? (
-                <p className="text-sm text-muted-foreground">No entries yet.</p>
+                <p className="text-sm text-muted-foreground">
+                  {appliedEntrySearch
+                    ? 'No entries match your search.'
+                    : 'No entries yet.'}
+                </p>
               ) : (
                 <>
                   <DashboardTableWrapper>
-                    <DashboardTable minWidth={880}>
+                    <DashboardTable minWidth={960}>
                       <DashboardTableHeader>
                         <DashboardTableRow>
                           <DashboardTableHead>When</DashboardTableHead>
                           <DashboardTableHead>Ingredient</DashboardTableHead>
                           <DashboardTableHead>Qty</DashboardTableHead>
+                          <DashboardTableHead>Value</DashboardTableHead>
                           <DashboardTableHead>Product</DashboardTableHead>
                           <DashboardTableHead>Reason</DashboardTableHead>
                         </DashboardTableRow>
@@ -745,6 +941,13 @@ export default function InventoryPage() {
                             <DashboardTableCell>
                               −{row.quantity}{' '}
                               {formatIngredientUnit(row.ingredient.unit)}
+                            </DashboardTableCell>
+                            <DashboardTableCell>
+                              {row.ingredient.unitCost != null
+                                ? formatMoney(
+                                    row.quantity * row.ingredient.unitCost
+                                  )
+                                : '—'}
                             </DashboardTableCell>
                             <DashboardTableCell>
                               {row.menuItem
@@ -775,15 +978,110 @@ export default function InventoryPage() {
                     loading={entriesLoading}
                     hideWhenSinglePage={false}
                   />
-                  <p className="mt-2 text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {entryTotal} entr{entryTotal === 1 ? 'y' : 'ies'}
                   </p>
                 </>
               )}
             </DashboardCardContent>
           </DashboardCard>
-        </div>
-      )}
+        </TabsContent>
+      </Tabs>
+
+      <Dialog
+        open={entryDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !savingEntry) {
+            setEntryDialogOpen(false);
+            resetEntryForm();
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Deduct stock</DialogTitle>
+            <DialogDescription>
+              Record manual stock usage. Quantity is subtracted from branch
+              inventory.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label>Product (optional)</Label>
+              <SearchableSelect
+                value={entryProductId}
+                onChange={setEntryProductId}
+                options={productOptions}
+                placeholder="Select product"
+                searchPlaceholder="Search product…"
+                allowClear
+                onSearchChange={setProductSearch}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>
+                Ingredient <span className="text-destructive">*</span>
+              </Label>
+              <SearchableSelect
+                value={entryIngredientId}
+                onChange={setEntryIngredientId}
+                options={ingredientOptions}
+                placeholder="Select ingredient"
+                searchPlaceholder="Search ingredient…"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>
+                Quantity <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                value={entryQty}
+                onChange={(e) =>
+                  setEntryQty(filterDecimalInput(e.target.value))
+                }
+                inputMode="decimal"
+                placeholder="Amount to deduct"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>
+                Reason <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                value={entryReason}
+                onChange={(e) => setEntryReason(e.target.value)}
+                placeholder="Why is this stock being used?"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={savingEntry}
+              onClick={() => {
+                setEntryDialogOpen(false);
+                resetEntryForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={savingEntry}
+              onClick={() => void submitEntry()}
+            >
+              {savingEntry ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save entry
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(stockRow)}
