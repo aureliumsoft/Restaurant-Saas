@@ -26,6 +26,7 @@ export type AttrGroupRow = {
   sourceType?: 'CATEGORY' | 'PRODUCT';
   multipleMode?: 'CHECKBOX' | 'QUANTITY' | null;
   freeQuantity?: number | null;
+  categoryDiscountPercent?: number | null;
   required: boolean;
   minItems: number | null;
   maxItems: number | null;

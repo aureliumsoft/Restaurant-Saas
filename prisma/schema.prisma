@@ -857,6 +857,8 @@ model MenuItemAttributeGroup {
   productCategoryIds String[] @default([])
   /// When true, configuration item prices follow the guest's selected base-product variation.
   useVariationPricing Boolean @default(false)
+  /// Percent off every item in a linked category (0–100).
+  categoryDiscountPercent Float?
 
   menuItem         MenuItem     @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
   linkedCategory   MenuCategory? @relation("AttributeLinkedCategory", fields: [linkedCategoryId], references: [id], onDelete: Cascade)

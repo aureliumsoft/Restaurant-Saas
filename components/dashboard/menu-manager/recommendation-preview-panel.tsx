@@ -596,6 +596,7 @@ function PreviewGroupCard({
                   groupSelectedIds: previewIds,
                   optionId: it.id,
                   regional,
+                  categoryDiscountPercent: group.categoryDiscountPercent,
                 }
               );
               return (
@@ -647,6 +648,7 @@ function PreviewGroupCard({
                   groupSelectedIds: previewIds,
                   optionId: it.id,
                   regional,
+                  categoryDiscountPercent: group.categoryDiscountPercent,
                 }
               );
               const atMax =

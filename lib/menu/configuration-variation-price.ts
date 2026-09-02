@@ -1,4 +1,5 @@
 import {
+  applyConfigurationCategoryDiscount,
   effectiveMenuItemUnitPrice,
   productUnitPriceWithVariation,
 } from '@/lib/menu/recommendation-addon-price';
@@ -477,18 +478,35 @@ export function chargeableConfigurationItemUnitPrice(
   );
 }
 
+/** Chargeable addon unit with optional whole-category percent discount. */
+export function configurationChargeableAddonUnit(
+  resolvedListUnit: number,
+  defaultUnitPrice: number | null | undefined,
+  categoryDiscountPercent?: number | null
+): number {
+  return applyConfigurationCategoryDiscount(
+    chargeableConfigurationItemUnitPrice(resolvedListUnit, defaultUnitPrice),
+    categoryDiscountPercent
+  );
+}
+
 /** Guest-facing addon delta/full label for configuration pickers. */
 export function formatConfigurationAddonDisplay(
   resolvedListUnit: number,
   defaultUnitPrice: number | null | undefined,
-  regional?: Partial<RestaurantRegionalSettings>
+  regional?: Partial<RestaurantRegionalSettings>,
+  categoryDiscountPercent?: number | null
 ): string | null {
+  const chargeable = configurationChargeableAddonUnit(
+    resolvedListUnit,
+    defaultUnitPrice,
+    categoryDiscountPercent
+  );
+  if (chargeable <= 0) return null;
   if (defaultUnitPrice != null) {
-    const delta = Math.round((resolvedListUnit - defaultUnitPrice) * 100) / 100;
-    if (delta <= 0) return null;
-    return formatAddonDelta(delta, regional);
+    return formatAddonDelta(chargeable, regional);
   }
-  return formatAddonDelta(resolvedListUnit, regional);
+  return formatAddonDelta(chargeable, regional);
 }
 
 /** Guest-facing addon label for configuration pickers (quantity + free tier). */
@@ -505,6 +523,7 @@ export function configurationAddonPriceLabel(
     regional?: Partial<RestaurantRegionalSettings>;
     /** @deprecated use regional */
     currencySymbol?: string;
+    categoryDiscountPercent?: number | null;
   }
 ): string | null {
   if (options?.multipleMode === 'QUANTITY') {
@@ -528,6 +547,7 @@ export function configurationAddonPriceLabel(
     options?.regional ??
       (options?.currencySymbol
         ? { currencyCode: options.currencySymbol as 'EUR' }
-        : undefined)
+        : undefined),
+    options?.categoryDiscountPercent
   );
 }

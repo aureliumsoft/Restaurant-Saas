@@ -59,4 +59,5 @@ export const attributeGroupSelectFields = {
   defaultLinkedRestaurantVariationId: true,
   includeDefaultLinkedVariationPrice: true,
   useVariationPricing: true,
+  categoryDiscountPercent: true,
 } as const;

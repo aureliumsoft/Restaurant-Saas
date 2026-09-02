@@ -757,6 +757,7 @@ function InlineRecommendationGroups({
                       multipleMode: g.multipleMode,
                       groupSelectedIds: selectedIds,
                       optionId: it.menuItemId,
+                      categoryDiscountPercent: g.categoryDiscountPercent,
                     }
                   );
                   const radioSelected = selectedIds[0] === it.menuItemId;

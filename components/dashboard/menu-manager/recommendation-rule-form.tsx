@@ -75,6 +75,8 @@ export type RecommendationRuleDraft = {
   productMinMax: Record<string, CategoryMinMaxDraft>;
   /** categoryId → price add-ons by product variation */
   categoryVariationPricing: Record<string, boolean>;
+  /** categoryId → percent off all items in the category */
+  categoryDiscountPercent: Record<string, number | null>;
 };
 
 type Props = {
@@ -160,6 +162,9 @@ export function RecommendationRuleForm({
   >({});
   const [categoryVariationPricing, setCategoryVariationPricing] = useState<
     Record<string, boolean>
+  >({});
+  const [categoryDiscountPercent, setCategoryDiscountPercent] = useState<
+    Record<string, number | null>
   >({});
   const [categoryProductsById, setCategoryProductsById] = useState<
     Record<string, MenuItemRow[]>
@@ -292,6 +297,11 @@ export function RecommendationRuleForm({
       return next;
     });
     setCategoryVariationLimits((prev) => {
+      const next = { ...prev };
+      delete next[categoryId];
+      return next;
+    });
+    setCategoryDiscountPercent((prev) => {
       const next = { ...prev };
       delete next[categoryId];
       return next;
@@ -458,6 +468,7 @@ export function RecommendationRuleForm({
       productFreeQuantity,
       productMinMax,
       categoryVariationPricing,
+      categoryDiscountPercent,
     }),
     [
       sourceType,
@@ -477,6 +488,7 @@ export function RecommendationRuleForm({
       productFreeQuantity,
       productMinMax,
       categoryVariationPricing,
+      categoryDiscountPercent,
     ]
   );
 
@@ -500,6 +512,7 @@ export function RecommendationRuleForm({
     setProductFreeQuantity({});
     setProductMinMax({});
     setCategoryVariationPricing({});
+    setCategoryDiscountPercent({});
     setCategoryProductsById({});
     setCategoryProductsLoadingById({});
     lastDraftKeyRef.current = '';
@@ -755,6 +768,53 @@ export function RecommendationRuleForm({
                         {onMenu ? 'On menu' : 'Add-on only'}
                       </Badge>
                     </label>
+                    {checked ? (
+                      <div className="mt-3 space-y-1 border-t border-border pt-3">
+                        <Label
+                          htmlFor={`category-discount-${cat.id}`}
+                          className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                        >
+                          Category discount (%)
+                        </Label>
+                        <p className="text-[11px] text-muted-foreground">
+                          Percent off every item in this category when guests
+                          add it.
+                        </p>
+                        <Input
+                          id={`category-discount-${cat.id}`}
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={1}
+                          className="h-10 bg-background text-sm"
+                          placeholder="No discount"
+                          value={
+                            categoryDiscountPercent[cat.id] != null
+                              ? String(categoryDiscountPercent[cat.id])
+                              : ''
+                          }
+                          onChange={(e) => {
+                            const raw = e.target.value.trim();
+                            if (raw === '') {
+                              setCategoryDiscountPercent((prev) => {
+                                const next = { ...prev };
+                                delete next[cat.id];
+                                return next;
+                              });
+                              return;
+                            }
+                            const val = Math.min(
+                              100,
+                              Math.max(0, Number.parseFloat(raw) || 0)
+                            );
+                            setCategoryDiscountPercent((prev) => ({
+                              ...prev,
+                              [cat.id]: val,
+                            }));
+                          }}
+                        />
+                      </div>
+                    ) : null}
                     {checked && variationTemplatesLoading ? (
                       <div className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />

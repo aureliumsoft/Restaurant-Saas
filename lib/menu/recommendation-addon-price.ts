@@ -213,3 +213,19 @@ export function productUnitPriceWithVariation(
     chargeableVariationUnitPrice(selectedVariationPriceDelta, baseline)
   );
 }
+
+/** Percent off a configuration category addon unit (0–100). */
+export function applyConfigurationCategoryDiscount(
+  unitPrice: number,
+  categoryDiscountPercent: number | null | undefined
+): number {
+  if (
+    categoryDiscountPercent == null ||
+    categoryDiscountPercent <= 0 ||
+    unitPrice <= 0
+  ) {
+    return unitPrice;
+  }
+  const pct = Math.min(100, Math.max(0, categoryDiscountPercent));
+  return Math.round(unitPrice * (1 - pct / 100) * 100) / 100;
+}

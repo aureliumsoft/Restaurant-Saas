@@ -1,5 +1,5 @@
 import {
-  chargeableConfigurationItemUnitPrice,
+  configurationChargeableAddonUnit,
   configurationDefaultListUnitPriceForSelection,
   configurationGroupDisplayTitle,
   configurationItemListUnitPriceForGroup,
@@ -112,9 +112,10 @@ export function buildModifierSelectionsForGroups(
           visibleItems,
           nestedVariation ?? null
         );
-        const unit = chargeableConfigurationItemUnitPrice(
+        const unit = configurationChargeableAddonUnit(
           listUnit,
-          defaultListUnit ?? null
+          defaultListUnit ?? null,
+          g.categoryDiscountPercent
         );
         const chargeable = chargeableByOption
           ? (chargeableByOption.get(optionId) ?? 0)

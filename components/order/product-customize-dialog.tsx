@@ -50,7 +50,7 @@ import {
   totalSelectedUnits,
 } from '@/lib/menu/recommendation-limits';
 import {
-  chargeableConfigurationItemUnitPrice,
+  configurationChargeableAddonUnit,
   configurationDefaultListUnitPriceForSelection,
   configurationGroupDisplayTitle,
   configurationItemListUnitPriceForGroup,
@@ -101,6 +101,7 @@ export type AttributeGroup = {
   sourceType?: 'CATEGORY' | 'PRODUCT';
   multipleMode?: 'CHECKBOX' | 'QUANTITY';
   freeQuantity?: number | null;
+  categoryDiscountPercent?: number | null;
   required: boolean;
   minItems?: number | null;
   maxItems?: number | null;
@@ -214,9 +215,10 @@ function configurationItemPickerPrice(
   const itemQty = groupSelectedIds.filter(
     (id) => id === item.menuItemId
   ).length;
-  const unitCharge = chargeableConfigurationItemUnitPrice(
+  const unitCharge = configurationChargeableAddonUnit(
     listUnit,
-    defaultListUnit
+    defaultListUnit,
+    group.categoryDiscountPercent
   );
   const chargeableQty =
     group.multipleMode === 'QUANTITY'
@@ -236,6 +238,7 @@ function configurationItemPickerPrice(
       groupSelectedIds,
       optionId: item.menuItemId,
       regional,
+      categoryDiscountPercent: group.categoryDiscountPercent,
     }),
   };
 }

@@ -213,6 +213,7 @@ export async function POST(
               data.defaultLinkedRestaurantVariationId != null
                 ? (data.includeDefaultLinkedVariationPrice ?? true)
                 : true,
+            categoryDiscountPercent: data.categoryDiscountPercent ?? null,
             productCategoryIds: [],
             linkedProductId: null,
           }

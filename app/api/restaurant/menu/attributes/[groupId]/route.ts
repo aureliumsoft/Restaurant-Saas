@@ -19,6 +19,7 @@ const patchSchema = z
     sortOrder: z.number().int().min(0).optional(),
     minItems: z.number().int().min(0).nullable().optional(),
     maxItems: z.number().int().min(1).nullable().optional(),
+    categoryDiscountPercent: z.number().min(0).max(100).nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.selectionType === "MULTIPLE") {
@@ -171,6 +172,9 @@ export async function PATCH(
       ...(parsed.data.sortOrder !== undefined ? { sortOrder: parsed.data.sortOrder } : {}),
       ...(parsed.data.minItems !== undefined ? { minItems: parsed.data.minItems } : {}),
       ...(parsed.data.maxItems !== undefined ? { maxItems: parsed.data.maxItems } : {}),
+      ...(parsed.data.categoryDiscountPercent !== undefined
+        ? { categoryDiscountPercent: parsed.data.categoryDiscountPercent }
+        : {}),
       ...(clearMinMax ? { minItems: null, maxItems: null } : {}),
     },
     include: attributeGroupInclude,

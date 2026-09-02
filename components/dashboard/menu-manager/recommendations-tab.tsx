@@ -242,6 +242,7 @@ function buildRecommendationPayloads(
             ? (draft.categoryIncludeDefaultVariationPrice[cat.id] ?? true)
             : true,
         useVariationPricing: draft.categoryVariationPricing[cat.id] ?? false,
+        categoryDiscountPercent: draft.categoryDiscountPercent[cat.id] ?? null,
         sortOrder:
           sortOrderByKey.get(recommendationDraftKey(variant, cat.id)) ?? index,
         ...(draft.selectionType === 'MULTIPLE'

@@ -25,6 +25,7 @@ export const recommendationGroupBodySchema = z
     freeQuantity: z.number().int().min(0).nullable().optional(),
     variationLimits: z.array(variationLimitSchema).optional(),
     useVariationPricing: z.boolean().optional(),
+    categoryDiscountPercent: z.number().min(0).max(100).nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.sourceType === 'CATEGORY' && !data.linkedCategoryId) {
@@ -90,6 +91,17 @@ export const recommendationGroupBodySchema = z
         code: z.ZodIssueCode.custom,
         message: 'linkedCategoryId must not be set for product recommendations',
         path: ['linkedCategoryId'],
+      });
+    }
+    if (
+      data.sourceType === 'PRODUCT' &&
+      data.categoryDiscountPercent != null
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'categoryDiscountPercent applies only to category recommendations',
+        path: ['categoryDiscountPercent'],
       });
     }
 

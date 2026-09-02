@@ -21,6 +21,7 @@ export function buildCustomerAttributeGroup(
     selectionType: 'SINGLE' | 'MULTIPLE';
     multipleMode?: 'CHECKBOX' | 'QUANTITY' | null;
     freeQuantity?: number | null;
+    categoryDiscountPercent?: number | null;
     required: boolean;
     minItems: number | null;
     maxItems: number | null;
@@ -86,6 +87,7 @@ export function buildCustomerAttributeGroup(
     selectionType: group.selectionType,
     multipleMode: group.multipleMode ?? undefined,
     freeQuantity: group.freeQuantity,
+    categoryDiscountPercent: group.categoryDiscountPercent ?? null,
     required: group.required,
     minItems: group.minItems,
     maxItems: group.maxItems,

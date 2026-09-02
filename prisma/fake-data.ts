@@ -764,6 +764,7 @@ export function fakeMenuItemAttributeGroup() {
     freeQuantity: undefined,
     minItems: undefined,
     maxItems: undefined,
+    categoryDiscountPercent: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -787,6 +788,7 @@ export function fakeMenuItemAttributeGroupComplete() {
     includeDefaultLinkedVariationPrice: true,
     productCategoryIds: [],
     useVariationPricing: false,
+    categoryDiscountPercent: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };

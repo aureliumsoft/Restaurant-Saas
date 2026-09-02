@@ -28,7 +28,7 @@ function TablesPageContent() {
         loading={false}
       >
         <div className="rounded-xl border border-dashed border-border bg-muted/20 p-8 text-center">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground"> 
             Enable dine-in in restaurant settings to manage tables and table QR
             codes.
           </p>

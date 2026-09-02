@@ -207,6 +207,7 @@ export function buildDraftPreviewGroups(
           : null,
         variationLimits: useCatVariationLimits ? catVariationLimits : undefined,
         useVariationPricing: draft.categoryVariationPricing[catId] ?? false,
+        categoryDiscountPercent: draft.categoryDiscountPercent[catId] ?? null,
       });
     }
   };
