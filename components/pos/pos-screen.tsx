@@ -259,6 +259,8 @@ type PosMenuProduct = {
       price: number;
       salePrice: number | null;
       variations?: PosMenuProduct['variations'];
+      personalizeGroups?: PosMenuProduct['personalizeGroups'];
+      attributeGroups?: PosMenuProduct['attributeGroups'];
     } | null;
   }[];
   personalizeGroups?: {

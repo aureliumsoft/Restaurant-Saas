@@ -112,27 +112,10 @@ function linkedItemCore(mode: CustomerMenuSelectMode) {
     : customerMenuLinkedItemCoreSelectLegacy;
 }
 
-function buildAttributeGroupsSelect(
-  depth: number,
+/** Shared group field select (no linked category/product trees). */
+function attributeGroupBaseSelect(
   mode: CustomerMenuSelectMode
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): any {
-  if (depth <= 0) {
-    return undefined;
-  }
-
-  const linkedCore = linkedItemCore(mode);
-
-  const nestedItemSelect: Record<string, unknown> = {
-    ...linkedCore,
-    personalizeGroups: personalizeGroupsSelect,
-    ...(depth > 1
-      ? {
-          attributeGroups: buildAttributeGroupsSelect(depth - 1, mode),
-        }
-      : {}),
-  };
-
+): Record<string, unknown> {
   const groupSelect: Record<string, unknown> = {
     id: true,
     name: true,
@@ -160,6 +143,86 @@ function buildAttributeGroupsSelect(
         salePrice: true,
       },
     },
+    variationLimits: {
+      select: {
+        variationId: true,
+        minItems: true,
+        maxItems: true,
+      },
+    },
+  };
+
+  if (mode === 'full') {
+    groupSelect.useVariationPricing = true;
+    groupSelect.includeDefaultLinkedVariationPrice = true;
+  }
+
+  return groupSelect;
+}
+
+/**
+ * Terminal recommendation groups for a linked PRODUCT: option cards + personalize,
+ * but no further nested attributeGroups. Used when parent depth is 1 (POS lite)
+ * so product-type recommendations still open with their own category/product rules.
+ */
+function buildLeafAttributeGroupsSelect(
+  mode: CustomerMenuSelectMode
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  const linkedCore = linkedItemCore(mode);
+  const optionSelect = {
+    ...linkedCore,
+    personalizeGroups: personalizeGroupsSelect,
+  };
+
+  return {
+    orderBy: { sortOrder: 'asc' as const },
+    select: {
+      ...attributeGroupBaseSelect(mode),
+      linkedCategory: {
+        select: {
+          id: true,
+          name: true,
+          items: {
+            orderBy: { name: 'asc' as const },
+            select: optionSelect,
+          },
+        },
+      },
+      linkedProduct: {
+        select: {
+          ...linkedCore,
+          categoryId: true,
+          personalizeGroups: personalizeGroupsSelect,
+        },
+      },
+    },
+  };
+}
+
+function buildAttributeGroupsSelect(
+  depth: number,
+  mode: CustomerMenuSelectMode
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  if (depth <= 0) {
+    return undefined;
+  }
+
+  const linkedCore = linkedItemCore(mode);
+
+  const nestedItemSelect: Record<string, unknown> = {
+    ...linkedCore,
+    personalizeGroups: personalizeGroupsSelect,
+    ...(depth > 1
+      ? {
+          attributeGroups: buildAttributeGroupsSelect(depth - 1, mode),
+        }
+      : {}),
+  };
+
+  const groupSelect: Record<string, unknown> = {
+    ...attributeGroupBaseSelect(mode),
     linkedCategory: {
       select: {
         id: true,
@@ -175,22 +238,19 @@ function buildAttributeGroupsSelect(
         ...linkedCore,
         categoryId: true,
         personalizeGroups: personalizeGroupsSelect,
-        attributeGroups: buildAttributeGroupsSelect(depth - 1, mode),
-      },
-    },
-    variationLimits: {
-      select: {
-        variationId: true,
-        minItems: true,
-        maxItems: true,
+        // PRODUCT recommendations must include the linked product's own rules.
+        // At depth 1 (POS lite), previous code passed depth-1 → undefined, so the
+        // nested sheet only showed personalizeGroups. Load a leaf group tree instead.
+        ...(depth > 1
+          ? {
+              attributeGroups: buildAttributeGroupsSelect(depth - 1, mode),
+            }
+          : {
+              attributeGroups: buildLeafAttributeGroupsSelect(mode),
+            }),
       },
     },
   };
-
-  if (mode === 'full') {
-    groupSelect.useVariationPricing = true;
-    groupSelect.includeDefaultLinkedVariationPrice = true;
-  }
 
   return {
     orderBy: { sortOrder: 'asc' as const },
@@ -210,7 +270,9 @@ export function buildCustomerMenuAttributeGroupsSelectLegacy(depth: number): any
 
 /**
  * POS ?lite=1 recommendations: linked option cards without nested personalize
- * trees (those hydrate when a nested sheet opens).
+ * trees on category items. Linked PRODUCT recommendations still include a leaf
+ * attribute-group tree (see buildLeafAttributeGroupsSelect) so nested sheets
+ * show category/product rules, not only personalize.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildPosLiteAttributeGroupsSelect(): any {

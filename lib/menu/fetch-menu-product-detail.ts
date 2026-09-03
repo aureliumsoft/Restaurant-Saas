@@ -78,7 +78,8 @@ export async function fetchCustomerMenuProductDetail<T>(
 export async function fetchRestaurantMenuProductDetail<T>(
   itemId: string
 ): Promise<T | null> {
-  const key = `lite:${itemId}`;
+  // Bump key when lite select shape changes so stale nests are not reused.
+  const key = `lite:v2:${itemId}`;
   const cached = cacheGet<T>(restaurantDetailCache, key);
   if (cached) return cached;
 
@@ -106,7 +107,7 @@ export async function fetchRestaurantMenuProductDetail<T>(
 /** Warm the POS customize cache (hover / focus) without blocking UI. */
 export function prefetchRestaurantMenuProductDetail(itemId: string): void {
   if (!itemId) return;
-  const key = `lite:${itemId}`;
+  const key = `lite:v2:${itemId}`;
   if (cacheGet(restaurantDetailCache, key)) return;
   if (restaurantInflight.has(key)) return;
   void fetchRestaurantMenuProductDetail(itemId);
