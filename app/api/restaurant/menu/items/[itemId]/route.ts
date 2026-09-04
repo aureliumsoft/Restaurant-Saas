@@ -302,6 +302,66 @@ export async function PATCH(
   try {
     const updated = await db.$transaction(async (tx) => {
       const primaryCategoryId = categoryIds?.[0];
+
+      if (variations !== undefined) {
+        const existingVariations = await tx.menuItemVariation.findMany({
+          where: { menuItemId: itemId },
+          select: { id: true, restaurantVariationId: true },
+        });
+
+        const keptIds = new Set<string>();
+
+        for (const row of variations) {
+          const match = row.restaurantVariationId
+            ? existingVariations.find(
+                (e) =>
+                  e.restaurantVariationId === row.restaurantVariationId &&
+                  !keptIds.has(e.id)
+              )
+            : undefined;
+
+          if (match) {
+            keptIds.add(match.id);
+            await tx.menuItemVariation.update({
+              where: { id: match.id },
+              data: {
+                name: row.name,
+                title: row.title,
+                restaurantVariationId: row.restaurantVariationId,
+                imageUrl: row.imageUrl,
+                swatchHex: row.swatchHex,
+                priceDelta: row.priceDelta,
+                sortOrder: row.sortOrder,
+              },
+            });
+          } else {
+            const created = await tx.menuItemVariation.create({
+              data: {
+                menuItemId: itemId,
+                name: row.name,
+                title: row.title,
+                restaurantVariationId: row.restaurantVariationId,
+                imageUrl: row.imageUrl,
+                swatchHex: row.swatchHex,
+                priceDelta: row.priceDelta,
+                sortOrder: row.sortOrder,
+              },
+              select: { id: true },
+            });
+            keptIds.add(created.id);
+          }
+        }
+
+        const removeIds = existingVariations
+          .filter((e) => !keptIds.has(e.id))
+          .map((e) => e.id);
+        if (removeIds.length > 0) {
+          await tx.menuItemVariation.deleteMany({
+            where: { id: { in: removeIds } },
+          });
+        }
+      }
+
       const item = await tx.menuItem.update({
         where: { id: itemId },
         data: {
@@ -311,14 +371,6 @@ export async function PATCH(
           ...(imageUrl !== undefined ? { imageUrl } : {}),
           ...(parsed.data.price !== undefined ? { price: parsed.data.price } : {}),
           ...(salePrice !== undefined ? { salePrice } : {}),
-          ...(variations !== undefined
-            ? {
-                variations: {
-                  deleteMany: {},
-                  ...(variations.length > 0 ? { create: variations } : {}),
-                },
-              }
-            : {}),
         },
         include: {
           variations: { orderBy: { sortOrder: "asc" } },

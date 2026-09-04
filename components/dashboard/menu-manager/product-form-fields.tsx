@@ -732,6 +732,8 @@ export function buildProductPayload(
       imageUrl: form.imageUrl.trim() || null,
       price,
       salePrice: sale,
+      // Always send variations so removed / cleared rows are deleted in the DB.
+      variations: [],
       ingredients,
     },
   };
