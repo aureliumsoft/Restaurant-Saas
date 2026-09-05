@@ -10,7 +10,7 @@ export default function RecommendationsPage() {
       <ErrorBoundary>
         <MenuPageShell
           title="Configuration"
-          description="Link add-on options to products (e.g. choose a sauce or gratin from another category)."
+          description="Choose a product, then set what guests can pick — extras, one option, preferences, or upsells."
           loading={false}
         >
           <RecommendationsTab />

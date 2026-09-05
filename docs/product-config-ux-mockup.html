@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Easy product setup — UX mockup (full options)</title>
+  <style>
+    :root {
+      --bg: #faf7f2;
+      --paper: #ffffff;
+      --ink: #1a1512;
+      --soft: #5c534c;
+      --line: #e8e0d6;
+      --tea: #0d7a6f;
+      --tea-bg: #e7f5f3;
+      --sand: #f3ebe1;
+      --amber: #8a5a00;
+      --amber-bg: #fff4dd;
+      --font: Georgia, "Times New Roman", serif;
+      --ui: "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--ui);
+      line-height: 1.45;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 32px 18px 80px; }
+
+    .eyebrow {
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--soft);
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    h1 {
+      font-family: var(--font);
+      font-size: clamp(1.7rem, 4vw, 2.2rem);
+      font-weight: 500;
+      margin: 0 0 10px;
+      letter-spacing: -0.02em;
+    }
+    .lead {
+      margin: 0 0 28px;
+      color: var(--soft);
+      font-size: 1.05rem;
+      max-width: 52ch;
+    }
+
+    .story {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .story h2 {
+      font-family: var(--font);
+      font-size: 1.25rem;
+      font-weight: 500;
+      margin: 0 0 8px;
+    }
+    .story p { margin: 0; color: var(--soft); }
+
+    .badge-new {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--amber);
+      background: var(--amber-bg);
+      border: 1px solid #f0d9a0;
+      padding: 2px 7px;
+      border-radius: 999px;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 860px) {
+      .split { grid-template-columns: 1fr; }
+    }
+
+    .editor {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .editor-top {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      background: var(--sand);
+    }
+    .editor-top h2 {
+      margin: 0;
+      font-family: var(--font);
+      font-size: 1.35rem;
+      font-weight: 500;
+    }
+    .editor-top p { margin: 4px 0 0; color: var(--soft); font-size: 0.9rem; }
+
+    .q {
+      padding: 20px;
+      border-bottom: 1px solid var(--line);
+    }
+    .q:last-child { border-bottom: 0; }
+    .q-num {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--tea);
+      margin-bottom: 6px;
+    }
+    .q h3 {
+      margin: 0 0 6px;
+      font-size: 1.05rem;
+      font-weight: 650;
+    }
+    .q .hint { margin: 0 0 14px; color: var(--soft); font-size: 0.9rem; }
+
+    .choices {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .choice {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px;
+      border: 1.5px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+      width: 100%;
+    }
+    .choice:hover { border-color: #b7dcd7; }
+    .choice.on {
+      border-color: var(--tea);
+      background: var(--tea-bg);
+    }
+    .choice .dot {
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      border: 2px solid #c4bbb0;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .choice.on .dot {
+      border-color: var(--tea);
+      box-shadow: inset 0 0 0 4px var(--tea);
+    }
+    .choice strong { display: block; font-size: 0.95rem; margin-bottom: 2px; }
+    .choice span { font-size: 0.85rem; color: var(--soft); }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      border: 1.5px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .chip.on {
+      background: var(--tea);
+      border-color: var(--tea);
+      color: #fff;
+    }
+    .chip.ghost {
+      border-style: dashed;
+      color: var(--soft);
+    }
+
+    .check-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+      width: 100%;
+    }
+    .check-row.on {
+      border-color: var(--tea);
+      background: var(--tea-bg);
+    }
+    .check-box {
+      width: 18px; height: 18px;
+      border: 2px solid #c4bbb0;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .check-row.on .check-box {
+      border-color: var(--tea);
+      background: var(--tea);
+      box-shadow: inset 0 0 0 3px #fff;
+    }
+    .check-row .meta {
+      margin-left: auto;
+      font-size: 0.78rem;
+      color: var(--soft);
+    }
+
+    .product-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+      width: 100%;
+    }
+    .product-card.on {
+      border-color: var(--tea);
+      background: var(--tea-bg);
+    }
+    .thumb {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      background: var(--sand);
+      display: grid;
+      place-items: center;
+      font-size: 0.7rem;
+      color: var(--soft);
+      flex-shrink: 0;
+    }
+    .product-card strong { display: block; font-size: 0.9rem; }
+    .product-card em {
+      font-style: normal;
+      font-size: 0.8rem;
+      color: var(--soft);
+    }
+
+    .mini-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .mini-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--sand);
+      border-radius: 10px;
+      font-size: 0.9rem;
+    }
+    .mini-item .limits {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .mini-item input {
+      width: 52px;
+      padding: 6px 8px;
+      border: 1.5px solid var(--line);
+      border-radius: 8px;
+      font: inherit;
+    }
+
+    .num-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: end;
+    }
+    .num-field label, .text-field label, .select-field label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--soft);
+      margin-bottom: 4px;
+    }
+    .num-field input, .text-field input, .select-field select {
+      width: 88px;
+      padding: 10px 12px;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      font: inherit;
+      font-size: 1rem;
+      background: #fff;
+    }
+    .text-field { flex: 1; min-width: 160px; }
+    .text-field input { width: 100%; }
+    .select-field select { width: 100%; min-width: 160px; }
+
+    .field-grid {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .field-grid.two {
+      grid-template-columns: 1fr 1fr;
+    }
+    @media (max-width: 560px) {
+      .field-grid.two { grid-template-columns: 1fr; }
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 0 0;
+    }
+    .toggle-row span { font-size: 0.92rem; }
+    .toggle-row .sub {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--soft);
+      margin-top: 2px;
+    }
+    .switch {
+      width: 44px; height: 26px;
+      border-radius: 999px;
+      background: #d6cdc2;
+      position: relative;
+      border: 0;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .switch.on { background: var(--tea); }
+    .switch::after {
+      content: "";
+      position: absolute;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      top: 3px; left: 3px;
+      transition: left .15s;
+    }
+    .switch.on::after { left: 21px; }
+
+    .adv-panel {
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px dashed #d4c4a0;
+      border-radius: 12px;
+      background: #fffdf8;
+    }
+    .adv-panel > .adv-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--amber);
+      margin: 0 0 10px;
+    }
+    .adv-panel .hint { margin-bottom: 10px; }
+
+    .size-limits {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .size-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 1fr;
+      gap: 8px;
+      align-items: center;
+      font-size: 0.9rem;
+    }
+    .size-row input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1.5px solid var(--line);
+      border-radius: 8px;
+      font: inherit;
+    }
+
+    .pref-group {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 10px;
+      background: #fff;
+    }
+    .pref-group-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .pref-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-top: 1px solid var(--line);
+    }
+    .pref-option input[type="text"] {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1.5px solid var(--line);
+      border-radius: 8px;
+      font: inherit;
+    }
+    .photo-btn {
+      width: 40px; height: 40px;
+      border: 1.5px dashed var(--line);
+      border-radius: 8px;
+      background: var(--sand);
+      font-size: 0.65rem;
+      color: var(--soft);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .photo-btn.has {
+      border-style: solid;
+      background: var(--tea-bg);
+      color: var(--tea);
+      font-weight: 600;
+    }
+    .linkish {
+      border: 0;
+      background: transparent;
+      color: var(--soft);
+      font: inherit;
+      font-size: 0.82rem;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    .btn {
+      border: 1.5px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 11px 18px;
+      font: inherit;
+      font-size: 0.92rem;
+      cursor: pointer;
+    }
+    .btn.primary {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: #fff;
+    }
+    .btn.tea {
+      background: var(--tea);
+      border-color: var(--tea);
+      color: #fff;
+    }
+
+    .built {
+      padding: 16px 20px 20px;
+      background: #fff;
+    }
+    .built h3 {
+      margin: 0 0 12px;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--soft);
+    }
+    .built-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .built-card strong { display: block; margin-bottom: 2px; }
+    .built-card em {
+      font-style: normal;
+      color: var(--soft);
+      font-size: 0.85rem;
+    }
+    .built-card .tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--tea);
+      background: var(--tea-bg);
+      padding: 4px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .phone {
+      background: #1a1512;
+      border-radius: 28px;
+      padding: 12px;
+      position: sticky;
+      top: 16px;
+    }
+    .phone-screen {
+      background: #fffaf5;
+      border-radius: 20px;
+      overflow: hidden;
+      min-height: 480px;
+    }
+    .phone-bar {
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--soft);
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .phone-body { padding: 16px; }
+    .phone-body h3 {
+      font-family: var(--font);
+      font-size: 1.3rem;
+      margin: 0 0 4px;
+      font-weight: 500;
+    }
+    .phone-body .price { color: var(--soft); margin-bottom: 16px; font-size: 0.9rem; }
+    .guest-block { margin-bottom: 16px; }
+    .guest-block h4 {
+      margin: 0 0 8px;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--soft);
+    }
+    .guest-opt {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+      font-size: 0.9rem;
+      gap: 8px;
+    }
+    .guest-opt .qty {
+      color: var(--soft);
+      font-size: 0.8rem;
+    }
+    .phone-cta {
+      margin: 16px;
+      background: var(--ink);
+      color: #fff;
+      text-align: center;
+      padding: 14px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .empty-guest {
+      color: var(--soft);
+      font-size: 0.9rem;
+      padding: 8px 0;
+    }
+
+    .wizard-nav {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .wiz-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #d6cdc2;
+    }
+    .wiz-dot.on { background: var(--tea); }
+    .wiz-dot.done { background: #7d9e98; }
+
+    .hidden { display: none !important; }
+
+    .note {
+      margin-top: 24px;
+      padding: 16px 18px;
+      border-radius: 12px;
+      background: var(--tea-bg);
+      color: #0f4f48;
+      font-size: 0.92rem;
+    }
+    .note strong { display: block; margin-bottom: 4px; }
+
+    .gap-map {
+      margin-top: 16px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .gap-map h2 {
+      font-family: var(--font);
+      font-size: 1.2rem;
+      font-weight: 500;
+      margin: 0 0 8px;
+    }
+    .gap-map > p {
+      margin: 0 0 14px;
+      color: var(--soft);
+      font-size: 0.92rem;
+    }
+    .gap-map ol {
+      margin: 0;
+      padding-left: 1.2rem;
+      color: var(--ink);
+      font-size: 0.92rem;
+    }
+    .gap-map li { margin-bottom: 6px; }
+    .gap-map li code {
+      font-size: 0.82rem;
+      background: var(--sand);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow">Proposed UX mockup · v3 (all classic options in plain English)</div>
+    <h1>When someone orders this, what can they choose?</h1>
+    <p class="lead">
+      Same guided questions as before — plus every advanced option that today only lives
+      in the classic editor. Amber badges mark options that were missing from the simple UX.
+    </p>
+
+    <div class="story">
+      <h2>Example: Margherita pizza</h2>
+      <p>
+        Walk through the flow. Open “More pricing &amp; limits” when you want to see discounts,
+        free quantity, default items, variation pricing, and per-size caps — still in everyday language.
+      </p>
+    </div>
+
+    <div class="split">
+      <div class="editor">
+        <div class="editor-top">
+          <h2>Margherita</h2>
+          <p>Pizzas · sizes already set (Medium / Large)</p>
+        </div>
+
+        <div style="padding:16px 20px 0">
+          <div class="wizard-nav" id="dots"></div>
+        </div>
+
+        <!-- STEP 0 -->
+        <div class="q step" data-step="0">
+          <div class="q-num">Start here</div>
+          <h3>Besides size, can customers customize this?</h3>
+          <p class="hint">Most pizzas need toppings. Drinks usually don’t.</p>
+          <div class="choices">
+            <button type="button" class="choice on" data-go="1">
+              <span class="dot"></span>
+              <span>
+                <strong>Yes — they pick extras or options</strong>
+                <span>Toppings, sauce, sides, “well done”, etc.</span>
+              </span>
+            </button>
+            <button type="button" class="choice" data-go="done-simple">
+              <span class="dot"></span>
+              <span>
+                <strong>No — size (or price) is enough</strong>
+                <span>Skip to “also suggest with this?”</span>
+              </span>
+            </button>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn tea" data-go="1">Continue</button>
+          </div>
+        </div>
+
+        <!-- STEP 1: kind (expanded) -->
+        <div class="q step hidden" data-step="1">
+          <div class="q-num">What kind</div>
+          <h3>What are they choosing?</h3>
+          <p class="hint">Pick the closest match. You can add more choices after this.</p>
+          <div class="choices" id="kind-choices">
+            <button type="button" class="choice on" data-kind="cat-many">
+              <span class="dot"></span>
+              <span>
+                <strong>Many extras from a category</strong>
+                <span>e.g. whole Toppings category — pick several</span>
+              </span>
+            </button>
+            <button type="button" class="choice" data-kind="cat-one">
+              <span class="dot"></span>
+              <span>
+                <strong>Exactly one from a category</strong>
+                <span>e.g. sauces — must pick one</span>
+              </span>
+            </button>
+            <button type="button" class="choice" data-kind="prod-many">
+              <span class="dot"></span>
+              <span>
+                <strong>Specific products (pick several)</strong>
+                <span class="badge-new">was classic only</span>
+                <span>Hand-pick which menu items appear as add-ons</span>
+              </span>
+            </button>
+            <button type="button" class="choice" data-kind="prod-one">
+              <span class="dot"></span>
+              <span>
+                <strong>One specific product option</strong>
+                <span class="badge-new">was classic only</span>
+                <span>Guests pick from products you link (e.g. one side)</span>
+              </span>
+            </button>
+            <button type="button" class="choice" data-kind="prefs">
+              <span class="dot"></span>
+              <span>
+                <strong>Free notes / preferences</strong>
+                <span>No extra charge — “well done”, “cut in 8”</span>
+              </span>
+            </button>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn" data-go="0">Back</button>
+            <button type="button" class="btn tea" data-go="2">Continue</button>
+          </div>
+        </div>
+
+        <!-- STEP 2: configure -->
+        <div class="q step hidden" data-step="2">
+          <div class="q-num">Configure</div>
+          <h3 id="step2-title">Set this up</h3>
+          <p class="hint" id="step2-hint">Answer only what you need. Advanced pricing stays collapsed.</p>
+
+          <!-- CATEGORY SOURCE -->
+          <div id="panel-category">
+            <p style="margin:0 0 8px; font-size:0.85rem; font-weight:600; color:var(--soft)">
+              Which categories?
+              <span class="badge-new">multi-category</span>
+            </p>
+            <div class="check-list" id="cat-list">
+              <button type="button" class="check-row on" data-cat="Toppings">
+                <span class="check-box"></span>
+                <span>Toppings</span>
+                <span class="meta">Add-on only</span>
+              </button>
+              <button type="button" class="check-row" data-cat="Sauces">
+                <span class="check-box"></span>
+                <span>Sauces</span>
+                <span class="meta">On menu</span>
+              </button>
+              <button type="button" class="check-row" data-cat="Extra cheese">
+                <span class="check-box"></span>
+                <span>Extra cheese</span>
+                <span class="meta">Add-on only</span>
+              </button>
+            </div>
+            <p class="hint" style="margin-top:8px">
+              Guests see every product in the selected categories. Pick one or several.
+            </p>
+          </div>
+
+          <!-- PRODUCT SOURCE -->
+          <div id="panel-products" class="hidden">
+            <p style="margin:0 0 8px; font-size:0.85rem; font-weight:600; color:var(--soft)">
+              Filter by product categories (optional)
+            </p>
+            <div class="chips" id="prod-filter-chips" style="margin-bottom:12px">
+              <button type="button" class="chip on">Sides</button>
+              <button type="button" class="chip on">Drinks</button>
+              <button type="button" class="chip">Desserts</button>
+            </div>
+            <p style="margin:0 0 8px; font-size:0.85rem; font-weight:600; color:var(--soft)">
+              Linked products
+              <span class="badge-new">product rules</span>
+            </p>
+            <div class="check-list" id="prod-list">
+              <button type="button" class="product-card on" data-prod="Garlic bread">
+                <span class="thumb">GB</span>
+                <span><strong>Garlic bread</strong><em>+$3.50</em></span>
+              </button>
+              <button type="button" class="product-card on" data-prod="Cola">
+                <span class="thumb">CO</span>
+                <span><strong>Cola</strong><em>+$2.00</em></span>
+              </button>
+              <button type="button" class="product-card" data-prod="Tiramisu">
+                <span class="thumb">TI</span>
+                <span><strong>Tiramisu</strong><em>+$5.00</em></span>
+              </button>
+              <button type="button" class="product-card" data-prod="Sparkling water">
+                <span class="thumb">SW</span>
+                <span><strong>Sparkling water</strong><em>+$2.50</em></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- PREFS -->
+          <div id="panel-prefs" class="hidden">
+            <div id="pref-groups">
+              <div class="pref-group" data-pref-group="0">
+                <div class="pref-group-head">
+                  <strong>Preference group</strong>
+                  <button type="button" class="linkish" data-remove-pref>Remove group</button>
+                </div>
+                <div class="field-grid two">
+                  <div class="text-field">
+                    <label>Section title</label>
+                    <input type="text" class="pref-title" value="Personalize" />
+                  </div>
+                  <div class="num-field">
+                    <label>Maximum selections <span class="badge-new">was classic</span></label>
+                    <input type="number" class="pref-max" value="2" min="1" max="20" style="width:88px" />
+                  </div>
+                </div>
+                <div class="pref-option">
+                  <button type="button" class="photo-btn has" title="Option photo">Img</button>
+                  <input type="text" value="Well done" />
+                  <button type="button" class="linkish">Remove</button>
+                </div>
+                <div class="pref-option">
+                  <button type="button" class="photo-btn" title="Add photo">Photo</button>
+                  <input type="text" value="Cut in 8" />
+                  <button type="button" class="linkish">Remove</button>
+                </div>
+                <div class="pref-option">
+                  <button type="button" class="photo-btn" title="Add photo">Photo</button>
+                  <input type="text" value="Extra crispy" />
+                  <button type="button" class="linkish">Remove</button>
+                </div>
+                <div class="actions" style="margin-top:10px">
+                  <button type="button" class="btn">+ Add option</button>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn" id="add-pref-group">
+              + Add another preference group
+              <span class="badge-new">multi-group</span>
+            </button>
+          </div>
+
+          <!-- SHARED BASIC CONTROLS (not prefs) -->
+          <div id="panel-basics">
+            <div class="num-row" style="margin-top:16px">
+              <div class="text-field">
+                <label>Show this section as</label>
+                <input type="text" id="group-name" value="Toppings" />
+              </div>
+            </div>
+
+            <div id="pick-style" style="margin-top:14px">
+              <p style="margin:0 0 8px; font-size:0.85rem; font-weight:600; color:var(--soft)">How do they pick?</p>
+              <div class="chips" id="mode-chips">
+                <button type="button" class="chip on" data-mode="CHECKBOX">Checkboxes (1 each)</button>
+                <button type="button" class="chip" data-mode="QUANTITY">Plus / minus quantities</button>
+              </div>
+            </div>
+
+            <div id="simple-limits" class="num-row" style="margin-top:16px">
+              <div class="num-field">
+                <label>At least</label>
+                <input type="number" id="min" value="0" min="0" />
+              </div>
+              <div class="num-field">
+                <label>At most</label>
+                <input type="number" id="max" value="5" min="1" />
+              </div>
+            </div>
+
+            <div class="toggle-row">
+              <span>Must choose before adding to cart?</span>
+              <button type="button" class="switch" id="required" aria-label="Required"></button>
+            </div>
+
+            <!-- PRODUCT-LEVEL MIN/MAX when product-many -->
+            <div id="product-limits" class="hidden" style="margin-top:14px">
+              <p style="margin:0 0 8px; font-size:0.85rem; font-weight:600; color:var(--soft)">
+                Limits per linked product
+                <span class="badge-new">was classic</span>
+              </p>
+              <div class="mini-list" id="product-limit-rows"></div>
+            </div>
+
+            <!-- ADVANCED -->
+            <div class="adv-panel" id="adv-panel">
+              <p class="adv-title">More pricing &amp; limits · was classic only</p>
+              <p class="hint">Leave these off unless you need special pricing. Most pizzas only need the basics above.</p>
+
+              <div id="adv-category-only">
+                <div class="field-grid two">
+                  <div class="num-field" style="min-width:0">
+                    <label>Category discount (%) <span class="badge-new">#4</span></label>
+                    <input type="number" id="discount" value="0" min="0" max="100" style="width:100%" />
+                  </div>
+                  <div class="select-field">
+                    <label>Recommended size <span class="badge-new">#5</span></label>
+                    <select id="rec-variation">
+                      <option value="">None</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Large">Large</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="toggle-row" id="show-rec-price-row">
+                  <span>
+                    Show recommended size price
+                    <span class="sub badge-new" style="display:inline; margin-left:4px">#6</span>
+                    <span class="sub">Off = that size looks free on the guest screen</span>
+                  </span>
+                  <button type="button" class="switch on" id="show-rec-price"></button>
+                </div>
+
+                <div class="select-field" style="margin-top:12px">
+                  <label>Default item (baseline price) <span class="badge-new">#7</span></label>
+                  <select id="default-item">
+                    <option value="">None — charge full price for each pick</option>
+                    <option value="Mushrooms">Mushrooms (only charge extras above this)</option>
+                    <option value="Olives">Olives</option>
+                    <option value="Extra cheese">Extra cheese</option>
+                  </select>
+                </div>
+
+                <div class="toggle-row">
+                  <span>
+                    Price add-ons by pizza size
+                    <span class="sub badge-new" style="display:inline; margin-left:4px">#8</span>
+                    <span class="sub">Small / Medium / Large can have different add-on prices</span>
+                  </span>
+                  <button type="button" class="switch" id="var-pricing"></button>
+                </div>
+              </div>
+
+              <div id="adv-free-qty" class="hidden" style="margin-top:12px">
+                <div class="num-row">
+                  <div class="num-field">
+                    <label>Free quantity <span class="badge-new">#9–12</span></label>
+                    <input type="number" id="free-qty" value="0" min="0" />
+                  </div>
+                </div>
+                <div class="toggle-row">
+                  <span>No free items for this category / product</span>
+                  <button type="button" class="switch" id="no-free"></button>
+                </div>
+              </div>
+
+              <div id="adv-per-size" style="margin-top:12px">
+                <div class="toggle-row">
+                  <span>
+                    Different min / max per pizza size
+                    <span class="sub badge-new" style="display:inline; margin-left:4px">#13</span>
+                    <span class="sub">e.g. Large can allow more toppings than Medium</span>
+                  </span>
+                  <button type="button" class="switch" id="per-size"></button>
+                </div>
+                <div id="per-size-rows" class="size-limits hidden">
+                  <div class="size-row">
+                    <span>Medium</span>
+                    <input type="number" placeholder="Min" value="0" />
+                    <input type="number" placeholder="Max" value="5" />
+                  </div>
+                  <div class="size-row">
+                    <span>Large</span>
+                    <input type="number" placeholder="Min" value="0" />
+                    <input type="number" placeholder="Max" value="8" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="button" class="btn" data-go="1">Back</button>
+            <button type="button" class="btn tea" id="save-choice">Save this choice</button>
+          </div>
+        </div>
+
+        <!-- STEP 3 -->
+        <div class="q step hidden" data-step="3">
+          <div class="q-num">Next</div>
+          <h3>Anything else?</h3>
+          <p class="hint">Stack more choices, or suggest something with the order.</p>
+          <div class="choices">
+            <button type="button" class="choice" data-go="1">
+              <span class="dot"></span>
+              <span>
+                <strong>Add another choice</strong>
+                <span>e.g. sauce, linked sides, or preferences</span>
+              </span>
+            </button>
+            <button type="button" class="choice on" data-go="4">
+              <span class="dot"></span>
+              <span>
+                <strong>Suggest something with this</strong>
+                <span>Soft upsell in the cart</span>
+              </span>
+            </button>
+            <button type="button" class="choice" data-go="done">
+              <span class="dot"></span>
+              <span>
+                <strong>I’m finished</strong>
+                <span>Review and save</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- STEP 4 upsell -->
+        <div class="q step hidden" data-step="4">
+          <div class="q-num">Upsell</div>
+          <h3>What should we suggest with Margherita?</h3>
+          <p class="hint">Optional. Never blocks checkout. (Same as classic “Associated products”.)</p>
+          <div class="chips" id="upsell-chips">
+            <button type="button" class="chip on">Cola</button>
+            <button type="button" class="chip on">Sparkling water</button>
+            <button type="button" class="chip">Garlic bread</button>
+            <button type="button" class="chip">Tiramisu</button>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn" data-go="3">Back</button>
+            <button type="button" class="btn tea" id="save-upsell">Save suggestions</button>
+          </div>
+        </div>
+
+        <!-- DONE -->
+        <div class="q step hidden" data-step="done">
+          <div class="q-num">Done</div>
+          <h3>You’re all set</h3>
+          <p class="hint">Here’s what customers will see, in plain language. You can delete any saved choice.</p>
+          <div class="built" id="summary" style="padding:0"></div>
+          <div class="actions">
+            <button type="button" class="btn" data-go="0">Start over (demo)</button>
+            <button type="button" class="btn primary">Save Margherita</button>
+          </div>
+        </div>
+
+        <div class="built" id="built-so-far">
+          <h3>On this product so far</h3>
+          <div id="built-list"></div>
+        </div>
+      </div>
+
+      <aside>
+        <p class="eyebrow" style="margin-bottom:8px; text-align:center">Customer sees</p>
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="phone-bar">Your restaurant · Order</div>
+            <div class="phone-body">
+              <h3>Margherita</h3>
+              <div class="price">From $12.00</div>
+              <div id="guest-view"></div>
+            </div>
+            <div class="phone-cta">Add to cart</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="note">
+      <strong>How to read this mockup</strong>
+      Amber “was classic only” badges = options that exist in the classic editor today but not in the live guided wizard.
+      This file is a design target — not wired to the app yet. Backend stays the same; we only change how we ask.
+    </div>
+
+    <div class="gap-map">
+      <h2>Checklist — classic → this mockup</h2>
+      <p>Every gap from the classic editor is placed somewhere in the flow above:</p>
+      <ol>
+        <li><strong>Product · single</strong> → step “What are they choosing?” → <em>One specific product option</em></li>
+        <li><strong>Product · multiple</strong> → <em>Specific products (pick several)</em></li>
+        <li><strong>Multi-category in one rule</strong> → category checkboxes (pick several)</li>
+        <li><strong>Category discount %</strong> → More pricing → Category discount</li>
+        <li><strong>Recommended variation</strong> → More pricing → Recommended size</li>
+        <li><strong>Show recommended variation price</strong> → toggle under recommended size</li>
+        <li><strong>Default item</strong> → More pricing → Default item</li>
+        <li><strong>Price by product variation</strong> → “Price add-ons by pizza size”</li>
+        <li><strong>Free quantity</strong> → appears when Plus/minus is selected</li>
+        <li><strong>No free items</strong> → toggle next to free quantity</li>
+        <li><strong>Free quantity (product rules)</strong> → same panel when product kind is selected</li>
+        <li><strong>No free items (product)</strong> → same toggle</li>
+        <li><strong>Per-size min/max</strong> → “Different min / max per pizza size”</li>
+        <li><strong>Per-linked-product min/max</strong> → “Limits per linked product” list</li>
+        <li><strong>Personalize max selections</strong> → Maximum selections field</li>
+        <li><strong>Option photos</strong> → Photo buttons on each preference</li>
+        <li><strong>Multi-group personalize</strong> → “Add another preference group”</li>
+        <li><strong>Edit / remove preference groups</strong> → Remove group + remove option links</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      step: 0,
+      kind: 'cat-many',
+      mode: 'CHECKBOX',
+      rules: [],
+      upsells: [],
+    };
+
+    function $(sel, root = document) { return root.querySelector(sel); }
+    function $all(sel, root = document) { return [...root.querySelectorAll(sel)]; }
+
+    function showStep(step) {
+      state.step = step;
+      if (step === 'done-simple') {
+        $all('.step').forEach((el) => el.classList.add('hidden'));
+        $('[data-step="4"]').classList.remove('hidden');
+        state.step = 4;
+      } else if (step === 'done') {
+        $all('.step').forEach((el) => el.classList.add('hidden'));
+        $('[data-step="done"]').classList.remove('hidden');
+        renderSummary();
+      } else if (step === 0) {
+        state.rules = [];
+        state.upsells = [];
+        $all('.step').forEach((el) => {
+          el.classList.toggle('hidden', el.dataset.step !== '0');
+        });
+        renderBuilt();
+      } else {
+        $all('.step').forEach((el) => {
+          el.classList.toggle('hidden', String(el.dataset.step) !== String(step));
+        });
+      }
+      updateDots();
+      syncStep2UI();
+    }
+
+    function updateDots() {
+      const labels = [0, 1, 2, 3, 4];
+      $('#dots').innerHTML = labels.map((n) => {
+        let cls = 'wiz-dot';
+        if (state.step === 'done') cls += ' done';
+        else if (n === state.step) cls += ' on';
+        else if (typeof state.step === 'number' && n < state.step) cls += ' done';
+        return `<span class="${cls}"></span>`;
+      }).join('');
+    }
+
+    function isCategoryKind() {
+      return state.kind === 'cat-many' || state.kind === 'cat-one';
+    }
+    function isProductKind() {
+      return state.kind === 'prod-many' || state.kind === 'prod-one';
+    }
+    function isManyKind() {
+      return state.kind === 'cat-many' || state.kind === 'prod-many';
+    }
+    function isOneKind() {
+      return state.kind === 'cat-one' || state.kind === 'prod-one';
+    }
+
+    function syncStep2UI() {
+      const title = $('#step2-title');
+      const hint = $('#step2-hint');
+      const panelCat = $('#panel-category');
+      const panelProd = $('#panel-products');
+      const panelPrefs = $('#panel-prefs');
+      const panelBasics = $('#panel-basics');
+      const pickStyle = $('#pick-style');
+      const simpleLimits = $('#simple-limits');
+      const productLimits = $('#product-limits');
+      const advCat = $('#adv-category-only');
+      const advFree = $('#adv-free-qty');
+      const advPerSize = $('#adv-per-size');
+
+      panelCat.classList.add('hidden');
+      panelProd.classList.add('hidden');
+      panelPrefs.classList.add('hidden');
+      panelBasics.classList.add('hidden');
+
+      if (state.kind === 'prefs') {
+        panelPrefs.classList.remove('hidden');
+        title.textContent = 'What preferences can they tap?';
+        hint.textContent = 'Free options. Set a max, add photos, and multiple groups if needed.';
+        return;
+      }
+
+      panelBasics.classList.remove('hidden');
+
+      if (isCategoryKind()) {
+        panelCat.classList.remove('hidden');
+        title.textContent = isOneKind()
+          ? 'Which category is the option from?'
+          : 'Which categories are the extras from?';
+        hint.textContent = 'You can select more than one category in a single choice.';
+        $('#group-name').value = isOneKind() ? 'Sauce' : 'Toppings';
+        advCat.classList.remove('hidden');
+        advPerSize.classList.remove('hidden');
+      } else {
+        panelProd.classList.remove('hidden');
+        title.textContent = isOneKind()
+          ? 'Which product options can they pick (exactly one)?'
+          : 'Which specific products can they add?';
+        hint.textContent = 'Hand-pick menu items instead of a whole category.';
+        $('#group-name').value = isOneKind() ? 'Side' : 'Add-ons';
+        advCat.classList.add('hidden');
+        advPerSize.classList.add('hidden');
+        // product cards: single vs multi selection feel
+        $all('#prod-list .product-card').forEach((el, i) => {
+          if (isOneKind()) {
+            el.classList.toggle('on', i === 0);
+          }
+        });
+      }
+
+      if (isOneKind()) {
+        pickStyle.classList.add('hidden');
+        $('#min').value = 1;
+        $('#max').value = 1;
+        $('#required').classList.add('on');
+        productLimits.classList.add('hidden');
+        simpleLimits.classList.remove('hidden');
+        advFree.classList.add('hidden');
+      } else {
+        pickStyle.classList.remove('hidden');
+        $('#min').value = 0;
+        $('#max').value = 5;
+        $('#required').classList.remove('on');
+        syncModeUI();
+        if (state.kind === 'prod-many') {
+          productLimits.classList.remove('hidden');
+          simpleLimits.classList.add('hidden');
+          renderProductLimitRows();
+        } else {
+          productLimits.classList.add('hidden');
+          simpleLimits.classList.remove('hidden');
+        }
+      }
+    }
+
+    function syncModeUI() {
+      const qty = state.mode === 'QUANTITY';
+      $('#adv-free-qty').classList.toggle('hidden', !qty || isOneKind());
+      $all('#mode-chips .chip').forEach((c) => {
+        c.classList.toggle('on', c.dataset.mode === state.mode);
+      });
+    }
+
+    function renderProductLimitRows() {
+      const selected = $all('#prod-list .product-card.on').map(
+        (el) => el.dataset.prod
+      );
+      const root = $('#product-limit-rows');
+      if (!selected.length) {
+        root.innerHTML = '<p class="hint">Select products above first.</p>';
+        return;
+      }
+      root.innerHTML = selected
+        .map(
+          (name) => `
+        <div class="mini-item">
+          <span>${name}</span>
+          <div class="limits">
+            <label style="font-size:0.75rem;color:var(--soft)">Min <input type="number" value="0" min="0" /></label>
+            <label style="font-size:0.75rem;color:var(--soft)">Max <input type="number" value="3" min="1" /></label>
+          </div>
+        </div>`
+        )
+        .join('');
+    }
+
+    function renderBuilt() {
+      let html = `
+        <div class="built-card">
+          <div><strong>Size</strong><em>Medium · Large (already set on product)</em></div>
+          <span class="tag">Ready</span>
+        </div>`;
+      state.rules.forEach((r) => {
+        html += `
+          <div class="built-card">
+            <div>
+              <strong>${r.title}</strong>
+              <em>${r.detail}</em>
+            </div>
+            <span class="tag">${r.tag}</span>
+          </div>`;
+      });
+      if (state.upsells.length) {
+        html += `
+          <div class="built-card">
+            <div>
+              <strong>Also suggest</strong>
+              <em>${state.upsells.join(', ')}</em>
+            </div>
+            <span class="tag">Upsell</span>
+          </div>`;
+      }
+      $('#built-list').innerHTML = html;
+      renderGuest();
+    }
+
+    function renderGuest() {
+      let html = `
+        <div class="guest-block">
+          <h4>Size</h4>
+          <div class="guest-opt"><span>○ Medium</span><span>$12</span></div>
+          <div class="guest-opt"><span>○ Large</span><span>$15</span></div>
+        </div>`;
+      if (!state.rules.length && !state.upsells.length) {
+        html += `<div class="empty-guest">No extras yet — answer the questions on the left.</div>`;
+      }
+      state.rules.forEach((r) => {
+        html += `<div class="guest-block"><h4>${r.title}</h4>`;
+        r.items.forEach((it) => {
+          const mark = r.pickOne ? '○' : r.qty ? '− 0 +' : '☐';
+          html += `<div class="guest-opt"><span>${r.pickOne || !r.qty ? mark + ' ' : ''}${it.name}${r.qty ? ` <span class="qty">${mark}</span>` : ''}</span><span>${it.price}</span></div>`;
+        });
+        html += `</div>`;
+      });
+      if (state.upsells.length) {
+        html += `<div class="guest-block"><h4>You might also like</h4>`;
+        state.upsells.forEach((u) => {
+          html += `<div class="guest-opt"><span>${u}</span><span></span></div>`;
+        });
+        html += `</div>`;
+      }
+      $('#guest-view').innerHTML = html;
+    }
+
+    function renderSummary() {
+      $('#summary').innerHTML = $('#built-list').innerHTML;
+    }
+
+    function saveChoice() {
+      if (state.kind === 'prefs') {
+        $all('.pref-group').forEach((group) => {
+          const title = group.querySelector('.pref-title')?.value || 'Personalize';
+          const max = group.querySelector('.pref-max')?.value || '2';
+          const items = [...group.querySelectorAll('.pref-option input[type="text"]')].map(
+            (inp) => ({ name: inp.value.trim(), price: 'Free' })
+          ).filter((i) => i.name);
+          state.rules.push({
+            title,
+            detail: `Up to ${max} · ${items.map((i) => i.name).join(', ')} · photos optional · free`,
+            tag: 'Free',
+            pickOne: false,
+            qty: false,
+            items,
+          });
+        });
+        renderBuilt();
+        return;
+      }
+
+      const req = $('#required').classList.contains('on');
+      const extras = [];
+      const discount = Number($('#discount')?.value || 0);
+      const recVar = $('#rec-variation')?.value;
+      const showRec = $('#show-rec-price')?.classList.contains('on');
+      const defItem = $('#default-item')?.value;
+      const varPricing = $('#var-pricing')?.classList.contains('on');
+      const freeQty = Number($('#free-qty')?.value || 0);
+      const noFree = $('#no-free')?.classList.contains('on');
+      const perSize = $('#per-size')?.classList.contains('on');
+
+      if (isCategoryKind() && discount > 0) extras.push(`${discount}% off category`);
+      if (isCategoryKind() && recVar) extras.push(`recommend ${recVar}${showRec ? '' : ' (price hidden)'}`);
+      if (isCategoryKind() && defItem) extras.push(`default: ${defItem}`);
+      if (isCategoryKind() && varPricing) extras.push('priced by pizza size');
+      if (state.mode === 'QUANTITY' && !isOneKind()) {
+        if (noFree) extras.push('no free items');
+        else if (freeQty > 0) extras.push(`${freeQty} free`);
+      }
+      if (isCategoryKind() && perSize) extras.push('limits per size');
+
+      let items = [];
+      let title = $('#group-name').value || 'Options';
+      let detail = '';
+
+      if (isCategoryKind()) {
+        const cats = $all('#cat-list .check-row.on').map((el) => el.dataset.cat);
+        items = [
+          { name: 'Mushrooms', price: '+$1.50' },
+          { name: 'Olives', price: '+$1.00' },
+          { name: 'Extra cheese', price: '+$2.00' },
+        ];
+        if (isOneKind()) {
+          detail = `Pick exactly one from ${cats.join(' + ') || 'category'}`;
+        } else {
+          detail = `From ${cats.join(' + ') || 'category'} · ${state.mode === 'QUANTITY' ? 'qty' : 'checkboxes'} · up to ${$('#max').value}`;
+        }
+      } else {
+        items = $all('#prod-list .product-card.on').map((el) => ({
+          name: el.dataset.prod,
+          price: el.querySelector('em')?.textContent || '',
+        }));
+        if (isOneKind()) {
+          detail = `Pick exactly one · ${items.map((i) => i.name).join(', ')}`;
+        } else {
+          detail = `Specific products · ${state.mode === 'QUANTITY' ? 'qty' : 'checkboxes'} · per-item limits`;
+        }
+      }
+
+      if (extras.length) detail += ' · ' + extras.join(' · ');
+
+      state.rules.push({
+        title,
+        detail,
+        tag: req || isOneKind() ? 'Required' : 'Optional',
+        pickOne: isOneKind(),
+        qty: state.mode === 'QUANTITY' && !isOneKind(),
+        items,
+      });
+      renderBuilt();
+    }
+
+    document.addEventListener('click', (e) => {
+      const go = e.target.closest('[data-go]');
+      if (go) {
+        const target = go.dataset.go;
+        if (target === 'done-simple') showStep('done-simple');
+        else if (target === 'done') showStep('done');
+        else showStep(Number(target));
+      }
+
+      const kindBtn = e.target.closest('[data-kind]');
+      if (kindBtn) {
+        $all('#kind-choices .choice').forEach((c) => c.classList.remove('on'));
+        kindBtn.classList.add('on');
+        state.kind = kindBtn.dataset.kind;
+      }
+
+      const choice = e.target.closest('.choices .choice');
+      if (choice && choice.closest('.choices') && !choice.closest('#kind-choices')) {
+        choice.parentElement.querySelectorAll('.choice').forEach((c) => c.classList.remove('on'));
+        choice.classList.add('on');
+      }
+
+      const checkRow = e.target.closest('.check-row');
+      if (checkRow) checkRow.classList.toggle('on');
+
+      const prodCard = e.target.closest('#prod-list .product-card');
+      if (prodCard) {
+        if (isOneKind()) {
+          $all('#prod-list .product-card').forEach((c) => c.classList.remove('on'));
+          prodCard.classList.add('on');
+        } else {
+          prodCard.classList.toggle('on');
+        }
+        if (state.kind === 'prod-many') renderProductLimitRows();
+      }
+
+      if (e.target.closest('.chip') && !e.target.closest('.chip.ghost')) {
+        const chip = e.target.closest('.chip');
+        if (chip.dataset.mode) {
+          state.mode = chip.dataset.mode;
+          syncModeUI();
+        } else if (!chip.closest('#mode-chips')) {
+          chip.classList.toggle('on');
+        }
+      }
+
+      const sw = e.target.closest('.switch');
+      if (sw) {
+        sw.classList.toggle('on');
+        if (sw.id === 'per-size') {
+          $('#per-size-rows').classList.toggle('hidden', !sw.classList.contains('on'));
+        }
+        if (sw.id === 'no-free' && sw.classList.contains('on')) {
+          $('#free-qty').value = 0;
+        }
+      }
+
+      if (e.target.closest('#add-pref-group')) {
+        const wrap = $('#pref-groups');
+        const clone = wrap.querySelector('.pref-group').cloneNode(true);
+        clone.querySelector('.pref-title').value = 'Another preference';
+        clone.querySelector('.pref-max').value = '1';
+        wrap.appendChild(clone);
+      }
+
+      if (e.target.closest('[data-remove-pref]')) {
+        const groups = $all('.pref-group');
+        if (groups.length > 1) e.target.closest('.pref-group').remove();
+      }
+
+      if (e.target.closest('.photo-btn')) {
+        e.target.closest('.photo-btn').classList.toggle('has');
+        e.target.closest('.photo-btn').textContent =
+          e.target.closest('.photo-btn').classList.contains('has') ? 'Img' : 'Photo';
+      }
+
+      if (e.target.id === 'save-choice' || e.target.closest('#save-choice')) {
+        saveChoice();
+        showStep(3);
+      }
+
+      if (e.target.id === 'save-upsell' || e.target.closest('#save-upsell')) {
+        state.upsells = $all('#upsell-chips .chip.on').map((c) => c.textContent.trim());
+        renderBuilt();
+        showStep('done');
+      }
+    });
+
+    showStep(0);
+    renderBuilt();
+  </script>
+</body>
+</html>

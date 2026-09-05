@@ -25,13 +25,6 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   Popover,
@@ -41,7 +34,6 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   DeleteConfirmation,
-  SaveConfirmation,
 } from '@/components/ui/confirmation-dialogs';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -111,7 +103,7 @@ import {
   type PersonalizeGroupDraft,
 } from './personalize-config-section';
 import type { PersonalizeGroupRow } from './types';
-import { RecommendationConfigSections } from './recommendation-config-sections';
+import { ConfigurationWizard } from './configuration-wizard';
 import { RecommendationPreviewPanel } from './recommendation-preview-panel';
 import type { RecommendationRuleDraft } from './recommendation-rule-form';
 import type { AttrGroupRow, MenuCategoryRow, MenuItemRow } from './types';
@@ -764,8 +756,6 @@ export function RecommendationsTab(_props?: Props) {
   }, []);
 
   const [savingRules, setSavingRules] = useState(false);
-  const [savingAll, setSavingAll] = useState(false);
-  const [saveAllConfirmOpen, setSaveAllConfirmOpen] = useState(false);
   const [personalizeDraft, setPersonalizeDraft] = useState<PersonalizeGroupDraft[]>(
     []
   );
@@ -780,7 +770,6 @@ export function RecommendationsTab(_props?: Props) {
     string[]
   >([]);
   const [savingOffers, setSavingOffers] = useState(false);
-  const [saveOffersConfirmOpen, setSaveOffersConfirmOpen] = useState(false);
 
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
   const [deleteRuleConfirmOpen, setDeleteRuleConfirmOpen] = useState(false);
@@ -1212,13 +1201,17 @@ export function RecommendationsTab(_props?: Props) {
     return null;
   };
 
-  const savePersonalize = async (options?: { resetAfter?: boolean }) => {
+  const savePersonalize = async (options?: {
+    resetAfter?: boolean;
+    groups?: PersonalizeGroupDraft[];
+  }) => {
     if (!selected) {
       toast.error('Select a product first.');
       return false;
     }
 
-    const validationError = validatePersonalizeDraft(personalizeDraft);
+    const draftToSave = options?.groups ?? personalizeDraft;
+    const validationError = validatePersonalizeDraft(draftToSave);
     if (validationError) {
       toast.error(validationError);
       return false;
@@ -1229,7 +1222,7 @@ export function RecommendationsTab(_props?: Props) {
       const res = await axios.put<{ data: PersonalizeGroupRow[] }>(
         `/api/restaurant/menu/items/${selected.id}/personalize`,
         {
-          groups: personalizeDraft.map((group, groupIndex) => ({
+          groups: draftToSave.map((group, groupIndex) => ({
             id: group.id,
             parentName: group.parentName.trim(),
             maxItems: group.maxItems,
@@ -1292,169 +1285,6 @@ export function RecommendationsTab(_props?: Props) {
     }
     return savedPreview;
   }, [selected, personalizeDirty, personalizeDraft]);
-
-  const saveAllConfiguration = async () => {
-    if (!selected) {
-      toast.error('Select a product first.');
-      return;
-    }
-
-    const duplicateError = findDuplicateRecommendationAssignments(
-      selected,
-      draftByVariant
-    );
-    if (duplicateError) {
-      toast.error(duplicateError);
-      return;
-    }
-
-    const draftsToSave: RecommendationRuleDraft[] = [];
-    for (const variant of RECOMMENDATION_FORM_VARIANTS) {
-      const draft = draftByVariant[variant];
-      if (!draft || !draftHasContent(variant, draft)) continue;
-      const validationError = validateRecommendationDraft(
-        draft,
-        localCategories,
-        selected,
-        productLookup
-      );
-      if (validationError) {
-        toast.error(`${RECOMMENDATION_SECTION_LABELS[variant]}: ${validationError}`);
-        return;
-      }
-      draftsToSave.push(draft);
-    }
-
-    const hasOffers = selectedOfferProductIds.length > 0;
-    const hasPersonalize = personalizeDirty;
-    if (draftsToSave.length === 0 && !hasOffers && !hasPersonalize) {
-      toast.error('Nothing to save. Configure at least one section first.');
-      return;
-    }
-
-    if (hasPersonalize) {
-      const personalizeError = validatePersonalizeDraft(personalizeDraft);
-      if (personalizeError) {
-        toast.error(`Personalize items: ${personalizeError}`);
-        return;
-      }
-    }
-
-    setSavingAll(true);
-    try {
-      const sortOrderByKey = buildRecommendationSortPlan(
-        selected.attributeGroups,
-        draftByVariant
-      );
-      const allCreatedGroups: AttrGroupRow[] = [];
-
-      for (const draft of draftsToSave) {
-        const created = await persistRecommendationDraft(draft, {
-          selected,
-          localCategories,
-          allProducts,
-          sortOrderByKey,
-        });
-        allCreatedGroups.push(...created);
-      }
-
-      let createdOffers: NonNullable<MenuItemRow['offersFromThis']> = [];
-      if (hasOffers) {
-        const responses = await Promise.all(
-          selectedOfferProductIds.map((itemId, index) =>
-            axios.post<{
-              data: NonNullable<MenuItemRow['offersFromThis']>[number];
-            }>(`/api/restaurant/menu/items/${selected.id}/offers`, {
-              offeredItemId: itemId,
-              sortOrder: (selected.offersFromThis?.length ?? 0) + index,
-            })
-          )
-        );
-        createdOffers = responses.map((res) => res.data.data);
-      }
-
-      let savedPersonalize: PersonalizeGroupRow[] | undefined;
-      if (hasPersonalize) {
-        setSavingPersonalize(true);
-        try {
-          const personalizeRes = await axios.put<{ data: PersonalizeGroupRow[] }>(
-            `/api/restaurant/menu/items/${selected.id}/personalize`,
-            {
-              groups: personalizeDraft.map((group, groupIndex) => ({
-                id: group.id,
-                parentName: group.parentName.trim(),
-                maxItems: group.maxItems,
-                sortOrder: group.sortOrder ?? groupIndex,
-                options: group.options
-                  .filter((option) => option.name.trim())
-                  .map((option, optionIndex) => ({
-                    id: option.id,
-                    name: option.name.trim(),
-                    imageUrl: option.imageUrl?.trim() || '',
-                    sortOrder: option.sortOrder ?? optionIndex,
-                  })),
-              })),
-            }
-          );
-          savedPersonalize = personalizeRes.data.data;
-        } finally {
-          setSavingPersonalize(false);
-        }
-      }
-
-      updateSelectedItem((item) => ({
-        ...item,
-        attributeGroups: [
-          ...item.attributeGroups,
-          ...allCreatedGroups.filter(
-            (group) =>
-              !item.attributeGroups.some((existing) => existing.id === group.id)
-          ),
-        ],
-        ...(hasOffers
-          ? {
-              offersFromThis: [
-                ...(item.offersFromThis ?? []),
-                ...createdOffers.filter(
-                  (offer) =>
-                    !(item.offersFromThis ?? []).some(
-                      (existing) => existing.id === offer.id
-                    )
-                ),
-              ],
-            }
-          : {}),
-        ...(savedPersonalize != null
-          ? { personalizeGroups: savedPersonalize }
-          : {}),
-      }));
-
-      const parts: string[] = [];
-      if (draftsToSave.length > 0) {
-        parts.push(
-          `${draftsToSave.length} recommendation section${draftsToSave.length === 1 ? '' : 's'}`
-        );
-      }
-      if (hasPersonalize) {
-        parts.push('personalize items');
-      }
-      if (hasOffers) {
-        parts.push('associated products');
-      }
-      toast.success(`Saved ${parts.join(' and ')}`);
-      allowNextNavigation();
-      resetDraftState();
-      if (savedPersonalize != null) {
-        setPersonalizeDraft(personalizeGroupsToDraft(savedPersonalize));
-        setPersonalizeDirty(false);
-      }
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || 'Could not save configuration');
-    } finally {
-      setSavingAll(false);
-    }
-  };
 
   const deleteRule = async () => {
     if (!deletingRuleId) return;
@@ -1590,15 +1420,9 @@ export function RecommendationsTab(_props?: Props) {
   }, [selected]);
 
   return (
-    <Card className="min-w-0 max-w-full">
-      <CardHeader className="space-y-1.5 px-4 sm:px-6">
-        <CardTitle className="text-xl sm:text-2xl">
-          Recommendations & Add-ons
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="min-w-0 max-w-full space-y-6 px-4 pb-6 sm:px-6">
-        {localCategories.length === 0 && !categoriesLoading ? (
-    <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
+    <div className="min-w-0 max-w-full space-y-6">
+      {localCategories.length === 0 && !categoriesLoading ? (
+    <div className="flex flex-col gap-3 rounded-3xl border border-dashed border-border/80 bg-muted/20 p-6 sm:p-8">
       <p className="text-sm text-muted-foreground">
         Add products first — configuration rules are attached to a product.
       </p>
@@ -1608,7 +1432,19 @@ export function RecommendationsTab(_props?: Props) {
     </div>
   ) : (
     <div className="min-w-0 max-w-full space-y-6 sm:space-y-8">
-      <section className="min-w-0 max-w-full space-y-3 overflow-hidden rounded-xl border border-border bg-muted/20 p-3 sm:space-y-4 sm:p-5">
+      <section className="min-w-0 max-w-full space-y-4 overflow-hidden rounded-3xl border border-border/80 bg-card p-4 sm:p-5">
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Step 1
+          </p>
+          <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
+            Choose a product
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Search or filter, then tap a product to configure what guests can
+            choose.
+          </p>
+        </div>
         <div className="flex min-w-0 w-full max-w-full flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
           <div className="relative min-h-10 min-w-0 flex-1">
             <Search
@@ -1619,8 +1455,8 @@ export function RecommendationsTab(_props?: Props) {
               type="search"
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
-              placeholder="Search in selected categories…"
-              className="h-11 min-h-11 bg-background pl-9 text-base sm:h-10 sm:text-sm"
+              placeholder="Search products…"
+              className="h-11 min-h-11 rounded-xl bg-background pl-9 text-base sm:h-10 sm:text-sm"
               autoComplete="off"
               enterKeyHint="search"
               aria-label="Search products in filtered categories"
@@ -1850,30 +1686,30 @@ export function RecommendationsTab(_props?: Props) {
         </div>
       </section>
 
-      <div className="grid min-w-0 max-w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(260px,1fr)] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] xl:gap-10 2xl:grid-cols-[minmax(0,1fr)_minmax(300px,440px)]">
-        <div className="min-w-0 w-full max-w-full space-y-6 lg:mx-auto">
+      <div className="grid min-w-0 max-w-full gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0">
           {selectedDetailLoading && selectedId ? (
             <div
-              className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-muted/15 px-4 py-10"
+              className="flex min-h-[240px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10"
               role="status"
               aria-live="polite"
               aria-busy="true"
             >
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
                 Loading product configuration…
               </p>
-                    </div>
+            </div>
           ) : selected ? (
-            <RecommendationConfigSections
+            <ConfigurationWizard
               selected={selected}
               localCategories={localCategories}
               allProducts={allProducts}
               linkedOptions={linkedOptions}
               savedGroupsByType={savedGroupsByType}
               savingRules={savingRules}
-              savingAll={savingAll}
-              onSaveDraft={(draft) => void saveRecommendationDraft(draft)}
+              savingAll={false}
+              onSaveDraft={(draft) => saveRecommendationDraft(draft)}
               draftChangeHandlers={draftChangeHandlers}
               onDeleteGroup={(groupId) => {
                 setDeletingRuleId(groupId);
@@ -1888,11 +1724,11 @@ export function RecommendationsTab(_props?: Props) {
               }
               currentOffers={currentOffers}
               savingOffers={savingOffers}
-              onSaveOffers={() => setSaveOffersConfirmOpen(true)}
+              onSaveOffers={() => saveOfferedProducts()}
               onDeleteOffer={(offerId) => {
                 setDeletingOfferId(offerId);
-                              setDeleteOfferConfirmOpen(true);
-                            }}
+                setDeleteOfferConfirmOpen(true);
+              }}
               deletingOffer={deletingOffer}
               deletingOfferId={deletingOfferId}
               toggleInArray={toggleInArray}
@@ -1901,26 +1737,27 @@ export function RecommendationsTab(_props?: Props) {
                 setPersonalizeDraft(groups);
                 setPersonalizeDirty(true);
               }}
-              savingPersonalize={savingPersonalize || savingAll}
+              savingPersonalize={savingPersonalize}
               loadingPersonalize={loadingPersonalize}
-              onSavePersonalize={() => void savePersonalize()}
+              onSavePersonalize={(groups) =>
+                savePersonalize(groups ? { groups } : undefined)
+              }
               formResetKeys={formResetKeys}
               draftByVariant={draftByVariant}
             />
           ) : (
-            <div className="rounded-lg border border-dashed border-border bg-muted/15 px-4 py-10 text-center sm:px-6 sm:py-12">
+            <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-12 text-center">
               <p className="text-sm font-medium text-foreground">
-                Select a product
+                Select a product above
               </p>
-              <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-muted-foreground">
-                Tap a card in the horizontal strip to configure
-                recommendations and associated products for that item.
+              <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted-foreground">
+                Then set what customers can choose when they order it.
               </p>
             </div>
           )}
         </div>
 
-        <aside className="min-w-0 rounded-2xl border border-border bg-muted/25 p-1 lg:sticky lg:top-4 lg:flex lg:max-h-[min(100dvh-8rem,calc(100dvh-10rem))] lg:flex-col lg:overflow-hidden">
+        <aside className="min-w-0 self-start rounded-xl border border-border bg-card lg:sticky lg:top-4">
           <RecommendationPreviewPanel
             selected={selected}
             localCategories={previewCategories}
@@ -1934,64 +1771,25 @@ export function RecommendationsTab(_props?: Props) {
             onDeleteGroup={(groupId, isDraft) => {
               if (isDraft) return;
               setDeletingRuleId(groupId);
-                              setDeleteRuleConfirmOpen(true);
-                            }}
+              setDeleteRuleConfirmOpen(true);
+            }}
             deletingRuleId={deletingRuleId}
             deletingRule={deletingRule}
-            savingAll={savingAll}
             loadingPersonalize={loadingPersonalize}
             loadingPreviewProducts={pickerProductsLoading}
             personalizePreviewGroups={personalizePreviewGroups}
             previewPersonalizeByGroup={previewPersonalizeByGroup}
             onPersonalizePreviewChange={(groupId, ids) =>
               setPreviewPersonalizeByGroup((prev) => ({
-                                          ...prev,
+                ...prev,
                 [groupId]: ids,
               }))
-            }
-            saveAllDisabled={
-              savingRules ||
-              savingOffers ||
-              savingPersonalize ||
-              savingAll ||
-              !hasPendingConfiguration
-            }
-            onSaveAll={
-              selected ? () => setSaveAllConfirmOpen(true) : undefined
             }
           />
         </aside>
       </div>
     </div>
-        )}
-
-      </CardContent>
-
-      <SaveConfirmation
-        open={saveAllConfirmOpen}
-        title="Save all configuration"
-        description="Save every configured recommendation section, personalize items, and associated products for this product in one step?"
-        itemName={selected?.name || 'Selected product'}
-        loading={savingAll}
-        onConfirm={() => {
-          setSaveAllConfirmOpen(false);
-          void saveAllConfiguration();
-        }}
-        onCancel={() => setSaveAllConfirmOpen(false)}
-      />
-
-      <SaveConfirmation
-        open={saveOffersConfirmOpen}
-        title="Save offered products"
-        description="Add selected products as offers for this product?"
-        itemName={selected?.name || 'Selected product'}
-        loading={savingOffers}
-        onConfirm={() => {
-          setSaveOffersConfirmOpen(false);
-          void saveOfferedProducts();
-        }}
-        onCancel={() => setSaveOffersConfirmOpen(false)}
-      />
+  )}
 
       <DeleteConfirmation
         open={deleteRuleConfirmOpen}
@@ -2050,6 +1848,6 @@ export function RecommendationsTab(_props?: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </div>
   );
 }

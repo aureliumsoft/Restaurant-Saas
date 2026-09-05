@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Save, Trash2 } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -114,10 +114,7 @@ type Props = {
   onDeleteGroup?: (groupId: string, isDraft: boolean) => void;
   deletingRuleId?: string | null;
   deletingRule?: boolean;
-  savingAll?: boolean;
   loadingPersonalize?: boolean;
-  saveAllDisabled?: boolean;
-  onSaveAll?: () => void;
   loadingPreviewProducts?: boolean;
   personalizePreviewGroups?: Array<{
     id: string;
@@ -140,10 +137,7 @@ export function RecommendationPreviewPanel({
   onDeleteGroup,
   deletingRuleId,
   deletingRule,
-  savingAll,
   loadingPersonalize = false,
-  saveAllDisabled,
-  onSaveAll,
   loadingPreviewProducts = false,
   personalizePreviewGroups = [],
   previewPersonalizeByGroup = {},
@@ -212,21 +206,20 @@ export function RecommendationPreviewPanel({
 
   if (!selected) {
     return (
-      <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/80 p-6 text-center sm:min-h-[280px] sm:p-8">
+      <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 p-6 text-center">
         <p className="text-sm font-medium text-foreground">Customer preview</p>
-        <p className="max-w-[min(100%,260px)] text-xs leading-relaxed text-muted-foreground">
-          Choose a product in the strip above to see how guests view it when
-          ordering online. Changes update here instantly as you configure.
+        <p className="max-w-[240px] text-xs text-muted-foreground">
+          Choose a product above to see how guests view it when ordering.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-xl bg-card shadow-sm">
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3 sm:p-4">
+    <div className="flex flex-col">
+      <div className="space-y-4 p-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="text-xs font-medium text-muted-foreground">
           Customer preview
         </p>
         <Badge variant="secondary" className="text-[10px] font-medium">
@@ -234,46 +227,41 @@ export function RecommendationPreviewPanel({
         </Badge>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-sm">
+      <div className="space-y-3">
         {selected.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={selected.imageUrl}
             alt={selected.name}
-            className="aspect-[4/3] w-full object-cover sm:aspect-video lg:h-56 lg:max-h-[40vh]"
+            className="aspect-[16/10] w-full rounded-lg object-cover"
           />
         ) : (
-          <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted text-sm text-muted-foreground sm:aspect-video lg:h-56">
+          <div className="flex aspect-[16/10] w-full items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
             No photo
           </div>
         )}
-        <div className="space-y-3 border-t border-border p-4">
-          <div>
-            <h3 className="text-xl font-bold uppercase leading-tight tracking-wide text-primary md:text-2xl">
-              {selected.name}
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {selected.categoryName}
+        <div>
+          <h3 className="text-base font-semibold tracking-tight text-foreground">
+            {selected.name}
+          </h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {selected.categoryName}
+          </p>
+          <p className="mt-2 text-sm font-medium tabular-nums text-foreground">
+            {formatMoney(
+              effectiveUnitPrice(selected.price, selected.salePrice)
+            )}
+          </p>
+          {selected.description?.trim() ? (
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {selected.description}
             </p>
-          </div>
-          <div className="rounded-lg border border-border bg-muted/30 p-3">
-            <p className="text-lg font-bold tabular-nums text-primary">
-              {formatMoney(
-                effectiveUnitPrice(selected.price, selected.salePrice)
-              )}
-            </p>
-            {selected.description?.trim() ? (
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {selected.description}
-              </p>
-            ) : null}
-          </div>
+          ) : null}
+        </div>
           {(selected.variations?.length ?? 0) > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Product variation
-              </p>
-              <div className="flex flex-wrap gap-2">
+              <p className="text-xs font-medium text-muted-foreground">Size</p>
+              <div className="flex flex-wrap gap-1.5">
                 {selected.variations!.map((variation) => {
                   const active = previewVariationId === variation.id;
                   const label =
@@ -285,10 +273,10 @@ export function RecommendationPreviewPanel({
                       key={variation.id}
                       type="button"
                       className={cn(
-                        'rounded-full border px-3 py-1.5 text-xs font-medium transition',
+                        'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
                         active
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border bg-background text-foreground hover:border-primary/40'
+                          ? 'border-foreground bg-foreground text-background'
+                          : 'border-border bg-background text-foreground hover:bg-muted'
                       )}
                       onClick={() => setPreviewVariationId(variation.id)}
                     >
@@ -304,16 +292,14 @@ export function RecommendationPreviewPanel({
               ) : null}
             </div>
           ) : null}
-        </div>
       </div>
 
-      <div>
-        <h4 className="text-sm font-semibold text-foreground">
-          Configuration groups
+      <div className="border-t border-border pt-4">
+        <h4 className="text-sm font-medium text-foreground">
+          What guests can choose
         </h4>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Includes saved rules and unsaved selections. Preview only — not sent
-          to a cart.
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Live customer preview — edits are saved on the left.
         </p>
       </div>
 
@@ -429,29 +415,6 @@ export function RecommendationPreviewPanel({
         </div>
       ) : null}
       </div>
-
-      {onSaveAll ? (
-        <div className="shrink-0 border-t border-border bg-card p-3 sm:p-4">
-          <Button
-            type="button"
-            className="w-full"
-            disabled={saveAllDisabled}
-            onClick={onSaveAll}
-          >
-            {savingAll ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving all…
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                Save all configuration
-              </>
-            )}
-          </Button>
-        </div>
-      ) : null}
     </div>
   );
 }
