@@ -12,6 +12,12 @@ export type CsvImportVariation = {
   catalogName: string | null;
 };
 
+export type CsvImportVariationLimit = {
+  variationName: string;
+  minItems: number;
+  maxItems: number;
+};
+
 export type CsvImportRecommendation = {
   name: string;
   sortOrder: number;
@@ -22,6 +28,7 @@ export type CsvImportRecommendation = {
   freeQuantity: number | null;
   minItems: number | null;
   maxItems: number | null;
+  variationLimits: CsvImportVariationLimit[];
   linkedCategoryName: string | null;
   linkedProductName: string | null;
   defaultLinkedMenuItemName: string | null;
@@ -415,6 +422,25 @@ function parseVariationsField(raw: string): CsvImportVariation[] {
   });
 }
 
+function parseVariationLimitsToken(raw: string): CsvImportVariationLimit[] {
+  const inner = raw.trim();
+  if (!inner) return [];
+  return inner
+    .split(',')
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .map((segment) => {
+      const m = segment.match(/^(.*?)[:：]\s*(\d+)\s*[-–—to]+\s*(\d+)\s*$/i);
+      if (!m) return null;
+      const variationName = m[1]!.trim();
+      const minItems = Math.max(0, parseInt(m[2]!, 10) || 0);
+      const maxItems = Math.max(minItems, parseInt(m[3]!, 10) || minItems);
+      if (!variationName) return null;
+      return { variationName, minItems, maxItems };
+    })
+    .filter((row): row is CsvImportVariationLimit => Boolean(row));
+}
+
 function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
   if (!raw.trim()) return [];
   return raw
@@ -431,6 +457,7 @@ function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
       let freeQuantity: number | null = null;
       let minItems: number | null = null;
       let maxItems: number | null = null;
+      let variationLimits: CsvImportVariationLimit[] = [];
       let linkedCategoryName: string | null = null;
       let linkedProductName: string | null = null;
       let defaultLinkedMenuItemName: string | null = null;
@@ -492,18 +519,57 @@ function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
           freeQuantity = toNullableNumber(part.slice('free:'.length));
           continue;
         }
-        if (lower.startsWith('limits:')) {
-          const range = part.slice('limits:'.length).trim();
-          const [a, b] = range.split('-');
-          minItems = toNullableNumber(a ?? '');
-          maxItems = toNullableNumber(b ?? '');
+        if (lower.startsWith('min:')) {
+          minItems = toNullableNumber(part.slice('min:'.length));
           continue;
         }
-        if (parts.indexOf(part) === 0) name = part;
+        if (lower.startsWith('max:')) {
+          maxItems = toNullableNumber(part.slice('max:'.length));
+          continue;
+        }
+        if (lower.startsWith('limits:')) {
+          const range = part.slice('limits:'.length).trim();
+          const m = range.match(/^(\d+)\s*[-–—to]+\s*(\d+)$/i);
+          if (m) {
+            minItems = toNullableNumber(m[1] ?? '');
+            maxItems = toNullableNumber(m[2] ?? '');
+          } else {
+            const [a, b] = range.split('-');
+            minItems = toNullableNumber(a ?? '');
+            maxItems = toNullableNumber(b ?? '');
+          }
+          continue;
+        }
+        const varLimitsMatch = part.match(/^varlimits\((.*)\)$/i);
+        if (varLimitsMatch) {
+          variationLimits = parseVariationLimitsToken(varLimitsMatch[1] ?? '');
+          continue;
+        }
       }
 
       if (selectionType === 'MULTIPLE' && !multipleMode) {
         multipleMode = 'QUANTITY';
+      }
+
+      // Prefer explicit group min/max; otherwise derive from per-variation choose options.
+      if (
+        selectionType === 'MULTIPLE' &&
+        (minItems == null || maxItems == null) &&
+        variationLimits.length > 0
+      ) {
+        const mins = variationLimits.map((l) => l.minItems);
+        const maxs = variationLimits.map((l) => l.maxItems);
+        if (minItems == null) minItems = Math.min(...mins);
+        if (maxItems == null) maxItems = Math.max(...maxs);
+      }
+
+      if (
+        selectionType === 'MULTIPLE' &&
+        minItems != null &&
+        maxItems != null &&
+        maxItems < minItems
+      ) {
+        maxItems = minItems;
       }
 
       return {
@@ -516,6 +582,7 @@ function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
         freeQuantity,
         minItems,
         maxItems,
+        variationLimits,
         linkedCategoryName,
         linkedProductName,
         defaultLinkedMenuItemName,

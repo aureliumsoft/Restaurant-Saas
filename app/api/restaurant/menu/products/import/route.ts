@@ -490,7 +490,12 @@ export async function POST(req: NextRequest) {
             variationsCount += 1;
           }
 
-          // Recommendations
+          // Recommendations (only on newly created products)
+          const productVariations = await tx.menuItemVariation.findMany({
+            where: { menuItemId: productId },
+            select: { id: true, name: true, title: true },
+          });
+
           for (const g of row.recommendations) {
             let linkedCategoryId: string | null = null;
             let linkedProductId: string | null = null;
@@ -532,6 +537,52 @@ export async function POST(req: NextRequest) {
                   : RecommendationMultipleMode.QUANTITY
                 : null;
 
+            const matchedVariationLimits =
+              selectionType === AttributeSelectionType.MULTIPLE
+                ? (g.variationLimits ?? [])
+                    .map((limit) => {
+                      const key = limit.variationName.trim().toLowerCase();
+                      const variation = productVariations.find((v) => {
+                        const title = (v.title || '').trim().toLowerCase();
+                        const name = (v.name || '').trim().toLowerCase();
+                        return title === key || name === key;
+                      });
+                      if (!variation) return null;
+                      return {
+                        variationId: variation.id,
+                        minItems: Math.max(0, limit.minItems),
+                        maxItems: Math.max(
+                          limit.minItems,
+                          Math.max(0, limit.maxItems)
+                        ),
+                      };
+                    })
+                    .filter(
+                      (
+                        row
+                      ): row is {
+                        variationId: string;
+                        minItems: number;
+                        maxItems: number;
+                      } => Boolean(row)
+                    )
+                : [];
+
+            const useVariationLimits = matchedVariationLimits.length > 0;
+            let minItems: number | null;
+            let maxItems: number | null;
+            if (selectionType !== AttributeSelectionType.MULTIPLE) {
+              minItems = 1;
+              maxItems = 1;
+            } else if (useVariationLimits) {
+              // Match runtime behavior: per-variation choose options clear group min/max.
+              minItems = null;
+              maxItems = null;
+            } else {
+              minItems = g.minItems ?? 0;
+              maxItems = Math.max(minItems, g.maxItems ?? Math.max(1, minItems));
+            }
+
             await tx.menuItemAttributeGroup.create({
               data: {
                 menuItemId: productId,
@@ -546,14 +597,8 @@ export async function POST(req: NextRequest) {
                   multipleMode === RecommendationMultipleMode.QUANTITY
                     ? (g.freeQuantity ?? 0)
                     : null,
-                minItems:
-                  selectionType === AttributeSelectionType.MULTIPLE
-                    ? (g.minItems ?? 0)
-                    : 1,
-                maxItems:
-                  selectionType === AttributeSelectionType.MULTIPLE
-                    ? (g.maxItems ?? 1)
-                    : 1,
+                minItems,
+                maxItems,
                 linkedCategoryId:
                   sourceType === RecommendationSourceType.CATEGORY
                     ? linkedCategoryId
@@ -574,6 +619,13 @@ export async function POST(req: NextRequest) {
                   g.includeDefaultLinkedVariationPrice,
                 useVariationPricing: g.useVariationPricing,
                 productCategoryIds: [],
+                ...(useVariationLimits
+                  ? {
+                      variationLimits: {
+                        create: matchedVariationLimits,
+                      },
+                    }
+                  : {}),
               },
             });
             recommendationsCount += 1;
