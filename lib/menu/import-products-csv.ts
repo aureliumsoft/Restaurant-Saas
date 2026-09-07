@@ -28,9 +28,13 @@ export type CsvImportRecommendation = {
   freeQuantity: number | null;
   minItems: number | null;
   maxItems: number | null;
+  /** Percent off linked category items (0–100). */
+  categoryDiscountPercent: number | null;
   variationLimits: CsvImportVariationLimit[];
   linkedCategoryName: string | null;
   linkedProductName: string | null;
+  /** Categories guests can pick from for PRODUCT recommendations. */
+  productCategoryNames: string[];
   defaultLinkedMenuItemName: string | null;
   defaultLinkedRestaurantVariationName: string | null;
   includeDefaultLinkedVariationPrice: boolean;
@@ -457,9 +461,11 @@ function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
       let freeQuantity: number | null = null;
       let minItems: number | null = null;
       let maxItems: number | null = null;
+      let categoryDiscountPercent: number | null = null;
       let variationLimits: CsvImportVariationLimit[] = [];
       let linkedCategoryName: string | null = null;
       let linkedProductName: string | null = null;
+      let productCategoryNames: string[] = [];
       let defaultLinkedMenuItemName: string | null = null;
       let defaultLinkedRestaurantVariationName: string | null = null;
       let includeDefaultLinkedVariationPrice = true;
@@ -491,8 +497,19 @@ function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
           useVariationPricing = true;
           continue;
         }
-        if (upper === 'INCLUDEDEFAULTVARPRICE') {
+        if (
+          upper === 'INCLUDEDEFAULTVARPRICE' ||
+          upper === 'INCLUDEDEFAULTLINKEDVARIATIONPRICE'
+        ) {
           includeDefaultLinkedVariationPrice = true;
+          continue;
+        }
+        if (
+          upper === 'EXCLUDEDEFAULTVARPRICE' ||
+          upper === 'NODEFAULTVARPRICE' ||
+          upper === 'OMITDEFAULTVARPRICE'
+        ) {
+          includeDefaultLinkedVariationPrice = false;
           continue;
         }
         const lower = part.toLowerCase();
@@ -506,6 +523,20 @@ function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
           sourceType = 'PRODUCT';
           continue;
         }
+        if (
+          lower.startsWith('productcategories:') ||
+          lower.startsWith('productcats:')
+        ) {
+          const prefix = lower.startsWith('productcategories:')
+            ? 'productcategories:'
+            : 'productcats:';
+          const rawCats = part.slice(prefix.length).trim();
+          productCategoryNames = rawCats
+            .split(/[;|,]/)
+            .map((n) => n.trim())
+            .filter(Boolean);
+          continue;
+        }
         if (lower.startsWith('default:')) {
           defaultLinkedMenuItemName = part.slice('default:'.length).trim() || null;
           continue;
@@ -517,6 +548,13 @@ function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
         }
         if (lower.startsWith('free:')) {
           freeQuantity = toNullableNumber(part.slice('free:'.length));
+          continue;
+        }
+        if (lower.startsWith('discount:')) {
+          const n = toNullableNumber(part.slice('discount:'.length));
+          if (n != null) {
+            categoryDiscountPercent = Math.min(100, Math.max(0, n));
+          }
           continue;
         }
         if (lower.startsWith('min:')) {
@@ -582,9 +620,11 @@ function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
         freeQuantity,
         minItems,
         maxItems,
+        categoryDiscountPercent,
         variationLimits,
         linkedCategoryName,
         linkedProductName,
+        productCategoryNames,
         defaultLinkedMenuItemName,
         defaultLinkedRestaurantVariationName,
         includeDefaultLinkedVariationPrice,

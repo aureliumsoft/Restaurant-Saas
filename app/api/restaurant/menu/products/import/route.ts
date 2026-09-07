@@ -1,4 +1,4 @@
-import type { NextRequest } from 'next/server';
+﻿import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import {
   AttributeSelectionType,
@@ -22,6 +22,8 @@ import {
 } from '@/lib/subscription-plan-enforcement';
 
 export const runtime = 'nodejs';
+/** Allow long CSV imports on platforms that honor this (e.g. Vercel Pro). */
+export const maxDuration = 900;
 
 export async function POST(req: NextRequest) {
   const auth = await getRestaurantForOwnerRequest(req, {
@@ -88,32 +90,82 @@ export async function POST(req: NextRequest) {
   }
 
   const restaurantId = auth.restaurant.id;
+  const productCount = parsed.products.length;
+  /** Large catalogs (200+) exceed a single 180s interactive transaction. */
+  const BATCH_SIZE = 15;
+  const TX_OPTIONS = {
+    maxWait: 60_000,
+    timeout: 120_000,
+  } as const;
 
   try {
-    const result = await db.$transaction(
-      async (tx) => {
-        const existingProducts = await tx.menuItem.findMany({
-          where: { restaurantId },
-          select: { id: true, name: true },
-        });
-        const existingNameToId = new Map(
-          existingProducts.map((p) => [p.name.trim().toLowerCase(), p.id])
-        );
+    let createdProducts = 0;
+    let updatedProducts = 0;
+    let skippedProducts = 0;
+    let variationsCount = 0;
+    let recommendationsCount = 0;
+    let personalizeGroupsCount = 0;
+    let personalizeOptionsCount = 0;
+    let offersCount = 0;
+    let ingredientsCount = 0;
+    let createdIngredients = 0;
+    const extraWarnings: string[] = [];
 
-        // Categories
-        const categories = await tx.menuCategory.findMany({
-          where: { restaurantId },
-          select: { id: true, name: true, sortOrder: true },
-          orderBy: [{ sortOrder: 'desc' }, { createdAt: 'desc' }],
-        });
-        const categoryIdByName = new Map(
-          categories.map((c) => [c.name.trim().toLowerCase(), c.id])
-        );
-        let nextCatSort =
-          categories.length > 0
-            ? Math.max(...categories.map((c) => c.sortOrder)) + 1
-            : 0;
+    const existingProducts = await db.menuItem.findMany({
+      where: { restaurantId },
+      select: { id: true, name: true },
+    });
+    const nameToId = new Map(
+      existingProducts.map((p) => [p.name.trim().toLowerCase(), p.id])
+    );
+    const createdProductIds: string[] = [];
 
+    const categories = await db.menuCategory.findMany({
+      where: { restaurantId },
+      select: { id: true, name: true, sortOrder: true },
+      orderBy: [{ sortOrder: 'desc' }, { createdAt: 'desc' }],
+    });
+    const categoryIdByName = new Map(
+      categories.map((c) => [c.name.trim().toLowerCase(), c.id])
+    );
+    let nextCatSort =
+      categories.length > 0
+        ? Math.max(...categories.map((c) => c.sortOrder)) + 1
+        : 0;
+
+    const restaurantVariations = await db.restaurantVariation.findMany({
+      where: { restaurantId },
+      select: { id: true, name: true, shortLabel: true, sortOrder: true },
+    });
+    const varByName = new Map(
+      restaurantVariations.map((v) => [v.name.trim().toLowerCase(), v])
+    );
+    for (const v of restaurantVariations) {
+      if (v.shortLabel?.trim()) {
+        varByName.set(v.shortLabel.trim().toLowerCase(), v);
+      }
+    }
+    let nextVarSort =
+      (
+        await db.restaurantVariation.aggregate({
+          where: { restaurantId },
+          _max: { sortOrder: true },
+        })
+      )._max.sortOrder ?? 0;
+
+    const ingredients = await db.ingredient.findMany({
+      where: { restaurantId },
+      select: { id: true, name: true, isActive: true },
+    });
+    const ingredientByName = new Map(
+      ingredients.map((i) => [i.name.trim().toLowerCase(), i])
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const runBatch = async (
+      tx: any,
+      batch: (typeof parsed.products)[number][]
+    ) => {
         const ensureCategory = async (name: string): Promise<string> => {
           const key = name.trim().toLowerCase();
           const hit = categoryIdByName.get(key);
@@ -129,27 +181,6 @@ export async function POST(req: NextRequest) {
           categoryIdByName.set(created.name.trim().toLowerCase(), created.id);
           return created.id;
         };
-
-        // Restaurant-level variation templates
-        const restaurantVariations = await tx.restaurantVariation.findMany({
-          where: { restaurantId },
-          select: { id: true, name: true, shortLabel: true, sortOrder: true },
-        });
-        const varByName = new Map(
-          restaurantVariations.map((v) => [v.name.trim().toLowerCase(), v])
-        );
-        for (const v of restaurantVariations) {
-          if (v.shortLabel?.trim()) {
-            varByName.set(v.shortLabel.trim().toLowerCase(), v);
-          }
-        }
-        let nextVarSort =
-          (
-            await tx.restaurantVariation.aggregate({
-              where: { restaurantId },
-              _max: { sortOrder: true },
-            })
-          )._max.sortOrder ?? 0;
 
         const ensureRestaurantVariation = async (
           label: string
@@ -173,17 +204,6 @@ export async function POST(req: NextRequest) {
           }
           return created.id;
         };
-
-        const ingredients = await tx.ingredient.findMany({
-          where: { restaurantId },
-          select: { id: true, name: true, isActive: true },
-        });
-        const ingredientByName = new Map(
-          ingredients.map((i) => [
-            i.name.trim().toLowerCase(),
-            i,
-          ])
-        );
 
         const ensureIngredient = async (
           name: string
@@ -237,19 +257,6 @@ export async function POST(req: NextRequest) {
             throw e;
           }
         };
-
-        let createdIngredients = 0;
-        const uniqueIngredientNames = new Set<string>();
-        for (const row of parsed.products) {
-          for (const line of row.ingredients) {
-            const n = line.ingredientName.trim();
-            if (n) uniqueIngredientNames.add(n);
-          }
-        }
-        for (const ingredientName of uniqueIngredientNames) {
-          const ensured = await ensureIngredient(ingredientName);
-          if (ensured.created) createdIngredients += 1;
-        }
 
         const matchVariationTemplateId = (
           label: string | null,
@@ -349,7 +356,7 @@ export async function POST(req: NextRequest) {
           await syncMenuItemIngredients(tx, {
             restaurantId,
             menuItemId: productId,
-            variations: vars.map((v) => ({
+            variations: vars.map((v: { id: string; restaurantVariationId: string }) => ({
               id: v.id,
               restaurantVariationId: v.restaurantVariationId,
             })),
@@ -358,22 +365,7 @@ export async function POST(req: NextRequest) {
           ingredientsCount += recipes.length;
         };
 
-        let createdProducts = 0;
-        let updatedProducts = 0;
-        let skippedProducts = 0;
-        let variationsCount = 0;
-        let recommendationsCount = 0;
-        let personalizeGroupsCount = 0;
-        let personalizeOptionsCount = 0;
-        let offersCount = 0;
-        let ingredientsCount = 0;
-        const extraWarnings: string[] = [];
-
-        /** product name (lower) → menuItem id for newly created + existing */
-        const nameToId = new Map(existingNameToId);
-        const createdProductIds: string[] = [];
-
-        for (const row of parsed.products) {
+        for (const row of batch) {
           const nameKey = row.name.trim().toLowerCase();
           const existingId = nameToId.get(nameKey);
 
@@ -396,7 +388,7 @@ export async function POST(req: NextRequest) {
                 select: { categoryId: true },
               });
               const mergedIds = [
-                ...existingLinks.map((l) => l.categoryId),
+                ...existingLinks.map((l: { categoryId: string }) => l.categoryId),
               ];
               for (const id of csvCategoryIds) {
                 if (!mergedIds.includes(id)) mergedIds.push(id);
@@ -459,7 +451,6 @@ export async function POST(req: NextRequest) {
             isNew = true;
           }
 
-          // Attach recipes on create; on update only when the CSV has ingredients
           if (!isNew) {
             if (row.ingredients.length > 0) {
               await attachIngredients(productId, row.name);
@@ -490,7 +481,6 @@ export async function POST(req: NextRequest) {
             variationsCount += 1;
           }
 
-          // Recommendations (only on newly created products)
           const productVariations = await tx.menuItemVariation.findMany({
             where: { menuItemId: productId },
             select: { id: true, name: true, title: true },
@@ -537,12 +527,49 @@ export async function POST(req: NextRequest) {
                   : RecommendationMultipleMode.QUANTITY
                 : null;
 
+            const productCategoryIds: string[] = [];
+            if (sourceType === RecommendationSourceType.PRODUCT) {
+              for (const catName of g.productCategoryNames ?? []) {
+                const trimmed = catName.trim();
+                if (!trimmed) continue;
+                productCategoryIds.push(await ensureCategory(trimmed));
+              }
+              // Older CSVs omit productCategories — fall back to linked product's categories.
+              if (productCategoryIds.length === 0 && linkedProductId) {
+                const linked = await tx.menuItem.findFirst({
+                  where: { id: linkedProductId, restaurantId },
+                  select: {
+                    categoryId: true,
+                    categoryLinks: { select: { categoryId: true } },
+                  },
+                });
+                if (linked) {
+                  const ids = [
+                    linked.categoryId,
+                    ...linked.categoryLinks.map(
+                      (l: { categoryId: string }) => l.categoryId
+                    ),
+                  ].filter(Boolean) as string[];
+                  for (const id of ids) {
+                    if (!productCategoryIds.includes(id)) {
+                      productCategoryIds.push(id);
+                    }
+                  }
+                }
+              }
+              if (productCategoryIds.length === 0 && g.linkedCategoryName) {
+                productCategoryIds.push(
+                  await ensureCategory(g.linkedCategoryName)
+                );
+              }
+            }
+
             const matchedVariationLimits =
               selectionType === AttributeSelectionType.MULTIPLE
                 ? (g.variationLimits ?? [])
                     .map((limit) => {
                       const key = limit.variationName.trim().toLowerCase();
-                      const variation = productVariations.find((v) => {
+                      const variation = productVariations.find((v: { title: string; name: string }) => {
                         const title = (v.title || '').trim().toLowerCase();
                         const name = (v.name || '').trim().toLowerCase();
                         return title === key || name === key;
@@ -559,12 +586,12 @@ export async function POST(req: NextRequest) {
                     })
                     .filter(
                       (
-                        row
-                      ): row is {
+                        limitRow
+                      ): limitRow is {
                         variationId: string;
                         minItems: number;
                         maxItems: number;
-                      } => Boolean(row)
+                      } => Boolean(limitRow)
                     )
                 : [];
 
@@ -575,13 +602,18 @@ export async function POST(req: NextRequest) {
               minItems = 1;
               maxItems = 1;
             } else if (useVariationLimits) {
-              // Match runtime behavior: per-variation choose options clear group min/max.
               minItems = null;
               maxItems = null;
             } else {
               minItems = g.minItems ?? 0;
               maxItems = Math.max(minItems, g.maxItems ?? Math.max(1, minItems));
             }
+
+            const discount =
+              sourceType === RecommendationSourceType.CATEGORY &&
+              g.categoryDiscountPercent != null
+                ? Math.min(100, Math.max(0, g.categoryDiscountPercent))
+                : null;
 
             await tx.menuItemAttributeGroup.create({
               data: {
@@ -599,6 +631,7 @@ export async function POST(req: NextRequest) {
                     : null,
                 minItems,
                 maxItems,
+                categoryDiscountPercent: discount,
                 linkedCategoryId:
                   sourceType === RecommendationSourceType.CATEGORY
                     ? linkedCategoryId
@@ -616,9 +649,15 @@ export async function POST(req: NextRequest) {
                     ? defaultLinkedRestaurantVariationId
                     : null,
                 includeDefaultLinkedVariationPrice:
-                  g.includeDefaultLinkedVariationPrice,
+                  sourceType === RecommendationSourceType.CATEGORY &&
+                  defaultLinkedRestaurantVariationId != null
+                    ? g.includeDefaultLinkedVariationPrice
+                    : true,
                 useVariationPricing: g.useVariationPricing,
-                productCategoryIds: [],
+                productCategoryIds:
+                  sourceType === RecommendationSourceType.PRODUCT
+                    ? productCategoryIds
+                    : [],
                 ...(useVariationLimits
                   ? {
                       variationLimits: {
@@ -656,8 +695,189 @@ export async function POST(req: NextRequest) {
 
           await attachIngredients(productId, row.name);
         }
+    };
 
-        // Offers — only for newly created base products
+    // Pre-create ingredients once so product batches stay under the TX timeout.
+    {
+      const uniqueIngredientNames = new Set<string>();
+      for (const row of parsed.products) {
+        for (const line of row.ingredients) {
+          const n = line.ingredientName.trim();
+          if (n) uniqueIngredientNames.add(n);
+        }
+      }
+      if (uniqueIngredientNames.size > 0) {
+        await db.$transaction(
+          async (tx) => {
+            for (const ingredientName of uniqueIngredientNames) {
+              const trimmed = ingredientName.trim();
+              const key = trimmed.toLowerCase();
+              const hit = ingredientByName.get(key);
+              if (hit) {
+                if (!hit.isActive) {
+                  await tx.ingredient.update({
+                    where: { id: hit.id },
+                    data: { isActive: true },
+                  });
+                  hit.isActive = true;
+                }
+                continue;
+              }
+              try {
+                const created = await tx.ingredient.create({
+                  data: {
+                    restaurantId,
+                    name: trimmed,
+                    quantity: 0,
+                    unit: 'PCS',
+                    isMajor: false,
+                    isActive: true,
+                  },
+                  select: { id: true, name: true, isActive: true },
+                });
+                ingredientByName.set(created.name.trim().toLowerCase(), created);
+                ingredientByName.set(key, created);
+                createdIngredients += 1;
+              } catch (e) {
+                if (
+                  e instanceof Prisma.PrismaClientKnownRequestError &&
+                  e.code === 'P2002'
+                ) {
+                  const existing = await tx.ingredient.findFirst({
+                    where: {
+                      restaurantId,
+                      name: { equals: trimmed, mode: 'insensitive' },
+                    },
+                    select: { id: true, name: true, isActive: true },
+                  });
+                  if (existing) {
+                    ingredientByName.set(
+                      existing.name.trim().toLowerCase(),
+                      existing
+                    );
+                    ingredientByName.set(key, existing);
+                  }
+                } else {
+                  throw e;
+                }
+              }
+            }
+          },
+          TX_OPTIONS
+        );
+      }
+    }
+
+    for (let offset = 0; offset < productCount; offset += BATCH_SIZE) {
+      const batch = parsed.products.slice(offset, offset + BATCH_SIZE);
+      await db.$transaction(async (tx) => {
+        await runBatch(tx, batch);
+      }, TX_OPTIONS);
+    }
+
+    // Resolve recommendation product links after every product exists (same as offers).
+    await db.$transaction(
+      async (tx) => {
+        for (const row of parsed.products) {
+          const baseId = nameToId.get(row.name.trim().toLowerCase());
+          if (!baseId || !createdProductIds.includes(baseId)) continue;
+          if (row.recommendations.length === 0) continue;
+
+          const groups = await tx.menuItemAttributeGroup.findMany({
+            where: { menuItemId: baseId },
+            orderBy: { sortOrder: 'asc' },
+            select: {
+              id: true,
+              sortOrder: true,
+              name: true,
+              sourceType: true,
+              linkedProductId: true,
+              defaultLinkedMenuItemId: true,
+              productCategoryIds: true,
+            },
+          });
+
+          for (let i = 0; i < row.recommendations.length; i++) {
+            const g = row.recommendations[i]!;
+            const group =
+              groups.find(
+                (ag) =>
+                  ag.sortOrder === g.sortOrder ||
+                  ag.name.trim().toLowerCase() === g.name.trim().toLowerCase()
+              ) ?? groups[i];
+            if (!group) continue;
+
+            const patch: {
+              linkedProductId?: string | null;
+              defaultLinkedMenuItemId?: string | null;
+              productCategoryIds?: string[];
+            } = {};
+
+            if (
+              g.sourceType === 'PRODUCT' &&
+              g.linkedProductName &&
+              !group.linkedProductId
+            ) {
+              const linkedId =
+                nameToId.get(g.linkedProductName.trim().toLowerCase()) ?? null;
+              if (linkedId) patch.linkedProductId = linkedId;
+            }
+
+            if (
+              g.sourceType === 'CATEGORY' &&
+              g.defaultLinkedMenuItemName &&
+              !group.defaultLinkedMenuItemId
+            ) {
+              const defaultId =
+                nameToId.get(
+                  g.defaultLinkedMenuItemName.trim().toLowerCase()
+                ) ?? null;
+              if (defaultId) patch.defaultLinkedMenuItemId = defaultId;
+            }
+
+            if (
+              g.sourceType === 'PRODUCT' &&
+              (group.productCategoryIds?.length ?? 0) === 0
+            ) {
+              const linkedId =
+                patch.linkedProductId ??
+                group.linkedProductId ??
+                (g.linkedProductName
+                  ? nameToId.get(g.linkedProductName.trim().toLowerCase())
+                  : null) ??
+                null;
+              if (linkedId) {
+                const linked = await tx.menuItem.findFirst({
+                  where: { id: linkedId, restaurantId },
+                  select: {
+                    categoryId: true,
+                    categoryLinks: { select: { categoryId: true } },
+                  },
+                });
+                if (linked) {
+                  const ids = [
+                    linked.categoryId,
+                    ...linked.categoryLinks.map((l) => l.categoryId),
+                  ].filter(Boolean) as string[];
+                  if (ids.length > 0) patch.productCategoryIds = ids;
+                }
+              }
+            }
+
+            if (Object.keys(patch).length > 0) {
+              await tx.menuItemAttributeGroup.update({
+                where: { id: group.id },
+                data: patch,
+              });
+            }
+          }
+        }
+      },
+      TX_OPTIONS
+    );
+
+    await db.$transaction(
+      async (tx) => {
         for (const row of parsed.products) {
           const baseId = nameToId.get(row.name.trim().toLowerCase());
           if (!baseId || !createdProductIds.includes(baseId)) continue;
@@ -680,27 +900,25 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-
-        return {
-          products: parsed.products.length,
-          createdProducts,
-          updatedProducts,
-          skippedProducts,
-          variations: variationsCount,
-          recommendations: recommendationsCount,
-          offers: offersCount,
-          personalizeGroups: personalizeGroupsCount,
-          personalizeOptions: personalizeOptionsCount,
-          ingredients: ingredientsCount,
-          createdIngredients,
-          warnings: [...parsed.errors, ...extraWarnings].slice(0, 40),
-        };
       },
-      {
-        maxWait: 20_000,
-        timeout: 180_000,
-      }
+      TX_OPTIONS
     );
+
+    const result = {
+      products: productCount,
+      createdProducts,
+      updatedProducts,
+      skippedProducts,
+      variations: variationsCount,
+      recommendations: recommendationsCount,
+      offers: offersCount,
+      personalizeGroups: personalizeGroupsCount,
+      personalizeOptions: personalizeOptionsCount,
+      ingredients: ingredientsCount,
+      createdIngredients,
+      warnings: [...parsed.errors, ...extraWarnings].slice(0, 40),
+      batches: Math.ceil(productCount / BATCH_SIZE),
+    };
 
     if (result.createdIngredients > 0) {
       publishInventoryStockUpdate(auth.restaurant.id);

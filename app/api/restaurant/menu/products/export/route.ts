@@ -108,8 +108,10 @@ const exportSelect = {
       freeQuantity: true,
       minItems: true,
       maxItems: true,
+      categoryDiscountPercent: true,
       includeDefaultLinkedVariationPrice: true,
       useVariationPricing: true,
+      productCategoryIds: true,
       linkedCategory: { select: { name: true } },
       linkedProduct: { select: { name: true } },
       defaultLinkedMenuItem: { select: { name: true } },
@@ -193,7 +195,39 @@ export async function GET(req: NextRequest) {
       select: exportSelect,
     });
 
-    const csv = buildProductsCsv(products as unknown as ProductCsvExportItem[]);
+    const categoryIdSet = new Set<string>();
+    for (const p of products) {
+      for (const g of p.attributeGroups) {
+        for (const id of g.productCategoryIds ?? []) {
+          if (id) categoryIdSet.add(id);
+        }
+      }
+    }
+    const categoryNameById = new Map<string, string>();
+    if (categoryIdSet.size > 0) {
+      const cats = await db.menuCategory.findMany({
+        where: {
+          restaurantId: auth.restaurant.id,
+          id: { in: [...categoryIdSet] },
+        },
+        select: { id: true, name: true },
+      });
+      for (const c of cats) {
+        categoryNameById.set(c.id, c.name);
+      }
+    }
+
+    const exportRows: ProductCsvExportItem[] = products.map((p) => ({
+      ...p,
+      attributeGroups: p.attributeGroups.map((g) => ({
+        ...g,
+        productCategoryNames: (g.productCategoryIds ?? [])
+          .map((id) => categoryNameById.get(id))
+          .filter((n): n is string => Boolean(n && n.trim())),
+      })),
+    }));
+
+    const csv = buildProductsCsv(exportRows);
     const stamp = new Date().toISOString().slice(0, 10);
     const filename = `products-export-${stamp}.csv`;
 

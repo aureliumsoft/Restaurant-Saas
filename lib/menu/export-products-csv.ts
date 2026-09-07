@@ -51,8 +51,11 @@ export type ProductCsvExportItem = {
     freeQuantity: number | null;
     minItems: number | null;
     maxItems: number | null;
+    categoryDiscountPercent: number | null;
     includeDefaultLinkedVariationPrice: boolean;
     useVariationPricing: boolean;
+    /** Resolved category names for PRODUCT recommendations (compare / pick scope). */
+    productCategoryNames: string[];
     linkedCategory: { name: string } | null;
     linkedProduct: { name: string } | null;
     defaultLinkedMenuItem: { name: string } | null;
@@ -133,6 +136,9 @@ function recommendationsValue(p: ProductCsvExportItem): string {
       ];
       if (g.linkedCategory?.name) parts.push(`category:${g.linkedCategory.name}`);
       if (g.linkedProduct?.name) parts.push(`product:${g.linkedProduct.name}`);
+      if (g.productCategoryNames?.length) {
+        parts.push(`productCategories:${g.productCategoryNames.join('; ')}`);
+      }
       if (g.defaultLinkedMenuItem?.name) {
         parts.push(`default:${g.defaultLinkedMenuItem.name}`);
       }
@@ -145,10 +151,20 @@ function recommendationsValue(p: ProductCsvExportItem): string {
         parts.push(`limits:${g.minItems ?? ''}-${g.maxItems ?? ''}`);
       }
       if (g.freeQuantity != null) parts.push(`free:${g.freeQuantity}`);
+      if (g.categoryDiscountPercent != null) {
+        parts.push(`discount:${g.categoryDiscountPercent}`);
+      }
       if (g.multipleMode) parts.push(g.multipleMode);
       if (g.useVariationPricing) parts.push('variationPricing');
-      if (g.includeDefaultLinkedVariationPrice) {
-        parts.push('includeDefaultVarPrice');
+      // Explicit so false (base price only / compare without default var price) round-trips.
+      if (g.defaultLinkedRestaurantVariation?.name || g.defaultLinkedMenuItem?.name) {
+        parts.push(
+          g.includeDefaultLinkedVariationPrice
+            ? 'includeDefaultVarPrice'
+            : 'excludeDefaultVarPrice'
+        );
+      } else if (g.includeDefaultLinkedVariationPrice === false) {
+        parts.push('excludeDefaultVarPrice');
       }
       if (g.variationLimits?.length) {
         const lim = g.variationLimits

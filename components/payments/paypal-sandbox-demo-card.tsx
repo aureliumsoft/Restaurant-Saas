@@ -86,7 +86,7 @@ export function PayPalSandboxDemoCard({
         )}
       </button>
 
-      {open ? (
+      {/* {open ? (
         <div className="space-y-3 border-t border-amber-200/60 px-3 py-3 dark:border-amber-900/40">
           {variant === 'subscription' ? (
             <p className="text-xs text-amber-900/90 dark:text-amber-100/90">
@@ -134,7 +134,7 @@ export function PayPalSandboxDemoCard({
             Copy card number
           </Button>
         </div>
-      ) : null}
+      ) : null} */}
     </div>
   );
 }
