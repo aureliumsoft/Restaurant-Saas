@@ -282,12 +282,12 @@ export function PayPalSubscriptionButtons({
           </div>
         ) : null}
         <div ref={slotRef} className="min-h-[44px]" />
-        {sandboxMode ? (
+        {/* {sandboxMode ? (
           <PayPalSandboxDemoCard
             currency={checkoutCurrency}
             variant="subscription"
           />
-        ) : null}
+        ) : null} */}
         <AcceptedPaymentMethods
           size="sm"
           showPayPal
