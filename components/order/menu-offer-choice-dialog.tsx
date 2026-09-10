@@ -85,7 +85,7 @@ export function MenuOfferChoiceDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-3xl gap-0 overflow-hidden border border-border bg-background p-0 text-foreground sm:rounded-2xl"
+        className="max-w-3xl gap-0 overflow-hidden border border-border bg-background p-0 text-foreground sm:rounded-2xl max-h-[90vh] flex flex-col"
         style={themeStyle}
       >
         <DialogTitle className="sr-only">
@@ -118,7 +118,7 @@ export function MenuOfferChoiceDialog({
         </header>
 
         {step === 'offer' ? (
-          <div className="space-y-6 bg-background px-4 py-6 sm:px-8 sm:py-8">
+          <div className="space-y-6 bg-background px-4 py-6 sm:px-8 sm:py-8 flex-1 min-h-0 overflow-y-auto">
             <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
               <button
                 type="button"
@@ -167,7 +167,7 @@ export function MenuOfferChoiceDialog({
             </div>
           </div>
         ) : (
-          <div className="space-y-4 bg-background px-4 py-6 sm:px-8 sm:py-8">
+          <div className="space-y-4 bg-background px-4 py-6 sm:px-8 sm:py-8 flex-1 min-h-0 overflow-y-auto">
             <p className="text-center text-sm text-muted-foreground">
               {t('menuOfferChooseMenuSubtitle')}
             </p>

@@ -16,8 +16,7 @@ export function productNeedsCustomizeDialog(product: {
   variations?: unknown[] | null;
   personalizeGroups?: Array<{ options?: unknown[] }> | null;
 }): boolean {
-  const hasRequiredAddons =
-    product.attributeGroups?.some((g) => g.required) ?? false;
+  const hasAddons = (product.attributeGroups?.length ?? 0) > 0;
   const hasVariations = (product.variations?.length ?? 0) > 0;
-  return hasRequiredAddons || hasVariations || hasPersonalizeOptions(product);
+  return hasAddons || hasVariations || hasPersonalizeOptions(product);
 }

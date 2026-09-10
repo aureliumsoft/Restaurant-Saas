@@ -20,9 +20,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Missing category id.' }, { status: 400 });
     }
 
-    const resolved = resolveCustomerMenuQuery(req);
+    const resolved = resolveCustomerMenuQuery(req, { requireBranch: true });
     if ('error' in resolved) {
       return NextResponse.json({ error: resolved.error }, { status: 400 });
+    }
+    if (!resolved.branchId) {
+      return NextResponse.json({ error: 'Missing branch id.' }, { status: 400 });
     }
 
     const { page, pageSize } = parsePaginationParams(req.nextUrl.searchParams, {
@@ -32,6 +35,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     const data = await loadCustomerMenuCategoryItems({
       ...resolved,
+      branchId: resolved.branchId,
       categoryId: trimmed,
       page,
       limit: pageSize,

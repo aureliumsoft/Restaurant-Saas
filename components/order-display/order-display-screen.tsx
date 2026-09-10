@@ -411,31 +411,31 @@ export function OrderDisplayScreen() {
             IN_PROGRESS_DISPLAY_LIMIT
           )
         );
-        setFilterDate(next.filterDate ?? '');
-        setFilterTimezone(next.filterTimezone ?? 'UTC');
+      setFilterDate(next.filterDate ?? '');
+      setFilterTimezone(next.filterTimezone ?? 'UTC');
         setError(opts?.notice ?? null);
-        setLastUpdated(new Date());
+      setLastUpdated(new Date());
 
         if (opts?.announce !== false) {
-          const freshTickets: OrderDisplayTicket[] = [];
+      const freshTickets: OrderDisplayTicket[] = [];
           for (const t of next.completed ?? []) {
-            if (!seenCompletedRef.current.has(t.ticketId)) {
-              freshTickets.push(t);
-              seenCompletedRef.current.add(t.ticketId);
-            }
-          }
-          if (freshTickets.length > 0) {
-            const freshIds = new Set(freshTickets.map((t) => t.ticketId));
-            setHighlighted((prev) => new Set([...prev, ...freshIds]));
-            window.setTimeout(() => {
-              setHighlighted((prev) => {
+        if (!seenCompletedRef.current.has(t.ticketId)) {
+          freshTickets.push(t);
+          seenCompletedRef.current.add(t.ticketId);
+        }
+      }
+      if (freshTickets.length > 0) {
+        const freshIds = new Set(freshTickets.map((t) => t.ticketId));
+        setHighlighted((prev) => new Set([...prev, ...freshIds]));
+        window.setTimeout(() => {
+          setHighlighted((prev) => {
                 const copySet = new Set(prev);
                 for (const id of freshIds) copySet.delete(id);
                 return copySet;
-              });
-            }, 4500);
+          });
+        }, 4500);
 
-            if (initializedRef.current && voiceEnabledRef.current) {
+        if (initializedRef.current && voiceEnabledRef.current) {
               void speakCompletedAnnouncements(
                 freshTickets,
                 () => voiceEnabledRef.current,
@@ -665,9 +665,9 @@ export function OrderDisplayScreen() {
       if (!isStale()) setError(copyRef.current.loadError);
     } finally {
       if (!isStale()) {
-        setLoading(false);
-        setRefreshing(false);
-      }
+      setLoading(false);
+      setRefreshing(false);
+    }
     }
   }, [lang]);
 

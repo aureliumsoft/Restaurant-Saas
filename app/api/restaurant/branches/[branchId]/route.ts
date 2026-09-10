@@ -4,13 +4,12 @@ import { z } from 'zod';
 
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
-import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const openingHourSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6),
   isOpen: z.boolean(),
-  openTime: z.string().trim().max(5).optional().default(''),
-  closeTime: z.string().trim().max(5).optional().default(''),
+  openTime: z.string().trim().max(5).optional().default('09:00'),
+  closeTime: z.string().trim().max(5).optional().default('17:00'),
 });
 
 const updateBranchSchema = z.object({
@@ -18,7 +17,6 @@ const updateBranchSchema = z.object({
   address: z.string().trim().max(500).optional().or(z.literal('')),
   phone: z.string().trim().max(60).optional().or(z.literal('')),
   openingHours: z.array(openingHourSchema).optional().default([]),
-  slotDurationMinutes: z.union([z.literal(15), z.literal(30), z.literal(60)]).optional().default(30),
 });
 
 export async function PATCH(
@@ -34,7 +32,7 @@ export async function PATCH(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { branchId } = await resolveRouteParams(ctx.params, ['branchId']);
+    const { branchId } = await ctx.params;
     const json = await req.json().catch(() => null);
     const parsed = updateBranchSchema.safeParse(json);
     if (!parsed.success) {
@@ -51,7 +49,6 @@ export async function PATCH(
         address: parsed.data.address?.trim() || null,
         phone: parsed.data.phone?.trim() || null,
         openingHours: parsed.data.openingHours,
-        slotDurationMinutes: parsed.data.slotDurationMinutes,
       },
     });
 
@@ -67,7 +64,6 @@ export async function PATCH(
         address: true,
         phone: true,
         openingHours: true,
-        slotDurationMinutes: true,
         createdAt: true,
       },
     });
@@ -95,7 +91,7 @@ export async function DELETE(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { branchId } = await resolveRouteParams(ctx.params, ['branchId']);
+    const { branchId } = await ctx.params;
     const totalBranches = await db.branch.count({
       where: { restaurantId: auth.restaurantId },
     });

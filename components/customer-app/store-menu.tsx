@@ -26,7 +26,7 @@ export function StoreMenu({ slug }: { slug: string }) {
 
   const categoryItemsUrl = useCallback(
     (categoryId: string, page: number, limit: number) =>
-      buildCustomerMenuCategoryItemsUrl(categoryId, slug, null, null, {
+      buildCustomerMenuCategoryItemsUrl(categoryId, slug, null, null, null, {
         page,
         limit,
       }),

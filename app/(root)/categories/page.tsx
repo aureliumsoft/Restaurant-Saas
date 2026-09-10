@@ -16,16 +16,19 @@ export default function CategoriesPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [categories, setCategories] = useState<MenuCategoryRow[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+  const [search, setSearch] = useState('');
   const requestIdRef = useRef(0);
   const pageRef = useRef(1);
   const hasMoreRef = useRef(false);
   const prefetchingRef = useRef(false);
+  const searchRef = useRef('');
 
   const loadCategoryPage = useCallback(
     async (
       page: number,
       append: boolean,
-      requestId: number
+      requestId: number,
+      searchValue: string
     ): Promise<boolean> => {
       const res = await axios.get<{
         data: { categories: MenuCategoryRow[]; pagination: PaginationMeta };
@@ -34,6 +37,7 @@ export default function CategoriesPage() {
           mode: 'management',
           page,
           limit: CATEGORIES_PAGE_SIZE,
+          ...(searchValue ? { search: searchValue } : {}),
         },
       });
 
@@ -55,14 +59,19 @@ export default function CategoriesPage() {
   );
 
   const prefetchCategoryChain = useCallback(
-    async (requestId: number) => {
+    async (requestId: number, searchValue: string) => {
       if (prefetchingRef.current || !hasMoreRef.current) return;
       prefetchingRef.current = true;
       setLoadingMore(true);
       try {
         while (hasMoreRef.current && requestId === requestIdRef.current) {
           const nextPage = pageRef.current + 1;
-          const hasMore = await loadCategoryPage(nextPage, true, requestId);
+          const hasMore = await loadCategoryPage(
+            nextPage,
+            true,
+            requestId,
+            searchValue
+          );
           if (!hasMore || requestId !== requestIdRef.current) break;
         }
       } finally {
@@ -75,25 +84,38 @@ export default function CategoriesPage() {
     [loadCategoryPage]
   );
 
-  const load = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    prefetchingRef.current = false;
-    setLoading(true);
-    setLoadingMore(false);
-    try {
-      const hasMore = await loadCategoryPage(1, false, requestId);
-      if (hasMore && requestId === requestIdRef.current) {
-        void prefetchCategoryChain(requestId);
+  const load = useCallback(
+    async (nextSearch?: string) => {
+      const searchValue =
+        nextSearch !== undefined ? nextSearch.trim() : searchRef.current;
+      searchRef.current = searchValue;
+      setSearch(searchValue);
+
+      const requestId = ++requestIdRef.current;
+      prefetchingRef.current = false;
+      setLoading(true);
+      setLoadingMore(false);
+      try {
+        const hasMore = await loadCategoryPage(
+          1,
+          false,
+          requestId,
+          searchValue
+        );
+        if (hasMore && requestId === requestIdRef.current) {
+          void prefetchCategoryChain(requestId, searchValue);
+        }
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+        }
       }
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [loadCategoryPage, prefetchCategoryChain]);
+    },
+    [loadCategoryPage, prefetchCategoryChain]
+  );
 
   useEffect(() => {
-    void load();
+    void load('');
   }, [load]);
 
   return (
@@ -101,7 +123,7 @@ export default function CategoriesPage() {
       <ErrorBoundary>
         <MenuPageShell
           title="Categories"
-          description="Create menu sections (categories). Use Show in front for items customers browse on web, kiosk, and POS. Turn it off for add-on categories used only in Recommendations."
+          description="Manage storefront categories and recommendation-only pools in separate tabs. Drag to reorder storefront categories."
           loading={false}
         >
           <CategoriesTab
@@ -109,6 +131,7 @@ export default function CategoriesPage() {
             onRefresh={load}
             loading={loading}
             loadingMore={loadingMore}
+            search={search}
           />
           {pagination ? (
             <p className="mt-2 px-2 text-xs text-muted-foreground">

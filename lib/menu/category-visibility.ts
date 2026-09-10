@@ -11,10 +11,16 @@ export const CUSTOMER_MENU_CATEGORY_WHERE: Prisma.MenuCategoryWhereInput = {
   OR: [{ itemLinks: { some: {} } }, { items: { some: {} } }],
 };
 
+export function categoryVisibleForBranch(
+  _branchId: string
+): Prisma.MenuCategoryWhereInput {
+  return {};
+}
+
 /** Categories usable as recommendation sources (on-menu and add-on only), non-empty. */
 export const RECOMMENDATION_SOURCE_CATEGORY_WHERE: Prisma.MenuCategoryWhereInput =
   {
-    itemLinks: { some: {} },
+    OR: [{ itemLinks: { some: {} } }, { items: { some: {} } }],
   };
 
 export function categoryHasProducts(

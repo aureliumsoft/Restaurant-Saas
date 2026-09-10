@@ -17,20 +17,26 @@ function getSubdomainFromHost(hostname: string) {
 }
 
 export function resolveCustomerMenuQuery(
-  req: NextRequest
-): { slug?: string; subdomain?: string } | { error: string } {
+  req: NextRequest,
+  options?: { requireBranch?: boolean }
+): { slug?: string; subdomain?: string; branchId?: string } | { error: string } {
   const slug = req.nextUrl.searchParams.get('slug')?.trim();
   const fromQuery = req.nextUrl.searchParams.get('subdomain');
   const host = (req.headers.get('host') || '').split(':')[0];
   const fromHost = getSubdomainFromHost(host);
   const subdomain = fromQuery || fromHost;
+  const branchId = req.nextUrl.searchParams.get('branchId')?.trim();
 
   if (!slug && !subdomain) {
     return { error: 'Missing subdomain or slug.' };
+  }
+  if (options?.requireBranch && !branchId) {
+    return { error: 'Missing branch id.' };
   }
 
   return {
     ...(slug ? { slug } : {}),
     ...(subdomain ? { subdomain } : {}),
+    ...(branchId ? { branchId } : {}),
   };
 }

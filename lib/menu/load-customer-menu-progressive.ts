@@ -9,6 +9,7 @@ import {
 } from '@/lib/menu/customer-menu-attribute-groups-select';
 import {
   CUSTOMER_MENU_CATEGORY_WHERE,
+  categoryVisibleForBranch,
   RECOMMENDATION_SOURCE_CATEGORY_WHERE,
   sanitizeCustomerMenuPayload,
 } from '@/lib/menu/category-visibility';
@@ -180,16 +181,23 @@ function restaurantMetaPayload<
 export async function loadCustomerMenuCategoriesMeta(options: {
   slug?: string | null;
   subdomain?: string | null;
+  branchId: string;
 }) {
   return withMenuSelectMode(async () => {
     const restaurant = await resolveRestaurant(options.slug, options.subdomain);
     if (!restaurant) return null;
+    const branch = await db.branch.findFirst({
+      where: { id: options.branchId, restaurantId: restaurant.id },
+      select: { id: true },
+    });
+    if (!branch) return null;
 
     // Category WHERE already requires products — skip joining every item id.
     const categories = await db.menuCategory.findMany({
       where: {
         restaurantId: restaurant.id,
         ...CUSTOMER_MENU_CATEGORY_WHERE,
+        ...categoryVisibleForBranch(options.branchId),
       },
       orderBy: { sortOrder: 'asc' },
       select: { id: true, name: true, sortOrder: true, imageUrl: true },
@@ -219,12 +227,18 @@ export async function loadCustomerMenuCategoryItems(options: {
   slug?: string | null;
   subdomain?: string | null;
   categoryId: string;
+  branchId: string;
   page?: number;
   limit?: number;
 }) {
   return withMenuSelectMode(async () => {
     const restaurant = await resolveRestaurant(options.slug, options.subdomain);
     if (!restaurant) return null;
+    const branch = await db.branch.findFirst({
+      where: { id: options.branchId, restaurantId: restaurant.id },
+      select: { id: true },
+    });
+    if (!branch) return null;
 
     const page = Math.max(1, options.page ?? 1);
     const limit = Math.min(48, Math.max(1, options.limit ?? 24));
@@ -240,7 +254,10 @@ export async function loadCustomerMenuCategoryItems(options: {
         imageUrl: true,
       },
       itemSelect: menuItemBrowseListSelect,
-      categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
+      categoryWhere: {
+        ...CUSTOMER_MENU_CATEGORY_WHERE,
+        ...categoryVisibleForBranch(options.branchId),
+      },
       pagination: { skip, take: limit },
     });
     if (!category) return null;

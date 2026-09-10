@@ -1,5 +1,6 @@
 import type {
   RecommendationRuleDraft,
+  RecommendationProductOverrideDraft,
   VariationLimitDraft,
 } from '@/components/dashboard/menu-manager/recommendation-rule-form';
 import type { RecommendationFormVariant } from '@/lib/menu/recommendation-preview-groups';
@@ -71,6 +72,8 @@ export function emptyRuleDraft(
     productMinMax: {},
     categoryVariationPricing: {},
     categoryDiscountPercent: {},
+    categoryExtraCostPercent: {},
+    categoryProductOverrides: {},
   };
 }
 
@@ -79,6 +82,7 @@ export type CategoryWizardSettings = {
   minItems: number;
   maxItems: number;
   discountPercent: number | null;
+  extraCostPercent: number | null;
   recommendedVariationId: string;
   includeRecommendedVariationPrice: boolean;
   defaultItemId: string;
@@ -87,6 +91,7 @@ export type CategoryWizardSettings = {
   freeQuantity: number | null | undefined;
   usePerSizeLimits: boolean;
   perSizeLimits: VariationLimitDraft[];
+  productOverrides: Record<string, RecommendationProductOverrideDraft>;
 };
 
 export type ProductWizardSettings = {
@@ -103,6 +108,7 @@ export function defaultCategorySettings(
     minItems,
     maxItems,
     discountPercent: null,
+    extraCostPercent: null,
     recommendedVariationId: '',
     includeRecommendedVariationPrice: true,
     defaultItemId: '',
@@ -110,6 +116,7 @@ export function defaultCategorySettings(
     freeQuantity: undefined,
     usePerSizeLimits: false,
     perSizeLimits: [],
+    productOverrides: {},
   };
 }
 
@@ -156,8 +163,18 @@ export function buildWizardRuleDraft(
       const settings =
         input.categorySettings[catId] ?? defaultCategorySettings();
 
+      if (Object.keys(settings.productOverrides).length > 0) {
+        draft.categoryProductOverrides[catId] = Object.fromEntries(
+          Object.entries(settings.productOverrides).map(
+            ([productId, override]) => [productId, { ...override }]
+          )
+        );
+      }
       if (settings.discountPercent != null) {
         draft.categoryDiscountPercent[catId] = settings.discountPercent;
+      }
+      if (settings.extraCostPercent != null) {
+        draft.categoryExtraCostPercent[catId] = settings.extraCostPercent;
       }
       if (settings.recommendedVariationId) {
         draft.categoryDefaultVariations[catId] =

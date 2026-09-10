@@ -208,6 +208,8 @@ export function buildDraftPreviewGroups(
         variationLimits: useCatVariationLimits ? catVariationLimits : undefined,
         useVariationPricing: draft.categoryVariationPricing[catId] ?? false,
         categoryDiscountPercent: draft.categoryDiscountPercent[catId] ?? null,
+        categoryExtraCostPercent: draft.categoryExtraCostPercent[catId] ?? null,
+        productOverrides: draft.categoryProductOverrides[catId] ?? {},
       });
     }
   };
@@ -412,27 +414,45 @@ export function visibleItemsForPreviewGroup(
   const defaultLinkedRestaurantVariationId =
     group.defaultLinkedRestaurantVariationId ?? null;
 
+  const overrides = group.productOverrides ?? {};
+  const filteredItems = items
+    .filter((it) => !overrides[it.id]?.excluded)
+    .map((it) => {
+      if (overrides[it.id]?.free) {
+        return {
+          ...it,
+          price: 0,
+          salePrice: null,
+          variations: (it.variations ?? []).map((v) => ({
+            ...v,
+            priceDelta: 0,
+          })),
+        };
+      }
+      return it;
+    });
+
   if (group.sourceType === 'PRODUCT') {
-    const item = items[0];
+    const item = filteredItems[0];
     if (!item) return [];
     return isConfigurationItemAvailableForParentVariation(
       previewItemConfigLike(item),
       parentVariation,
       useVariationPricing
     )
-      ? items
+      ? filteredItems
       : [];
   }
 
   if (defaultLinkedRestaurantVariationId && !useVariationPricing) {
     return filterConfigurationItemsForDefaultLinkedVariation(
-      items,
+      filteredItems,
       defaultLinkedRestaurantVariationId
     ) as MenuItemRow[];
   }
 
   return filterConfigurationItemsForParentVariation(
-    items,
+    filteredItems,
     parentVariation,
     useVariationPricing
   ) as MenuItemRow[];

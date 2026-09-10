@@ -109,6 +109,7 @@ const exportSelect = {
       minItems: true,
       maxItems: true,
       categoryDiscountPercent: true,
+      categoryExtraCostPercent: true,
       includeDefaultLinkedVariationPrice: true,
       useVariationPricing: true,
       productCategoryIds: true,
@@ -145,23 +146,6 @@ const exportSelect = {
         select: {
           name: true,
           sortOrder: true,
-        },
-      },
-    },
-  },
-  ingredientRecipes: {
-    orderBy: { sortOrder: 'asc' as const },
-    select: {
-      quantity: true,
-      menuItemVariationId: true,
-      ingredient: { select: { name: true } },
-      variation: {
-        select: {
-          name: true,
-          title: true,
-          restaurantVariation: {
-            select: { name: true, shortLabel: true },
-          },
         },
       },
     },
@@ -219,6 +203,7 @@ export async function GET(req: NextRequest) {
 
     const exportRows: ProductCsvExportItem[] = products.map((p) => ({
       ...p,
+      ingredientRecipes: [],
       attributeGroups: p.attributeGroups.map((g) => ({
         ...g,
         productCategoryNames: (g.productCategoryIds ?? [])

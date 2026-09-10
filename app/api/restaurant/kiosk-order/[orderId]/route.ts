@@ -42,7 +42,12 @@ const orderSelect = {
       productName: true,
       menuItem: { select: { name: true, imageUrl: true } },
       modifiers: {
-        select: { name: true, unitPrice: true },
+        select: {
+          name: true,
+          unitPrice: true,
+          menuItemId: true,
+          groupName: true,
+        },
       },
     },
   },
@@ -74,7 +79,12 @@ function mapOrderDetail(order: {
     price: number;
     productName: string | null;
     menuItem: { name: string; imageUrl: string | null } | null;
-    modifiers: Array<{ name: string; unitPrice: number }>;
+    modifiers: Array<{
+      name: string;
+      unitPrice: number;
+      menuItemId?: string | null;
+      groupName?: string | null;
+    }>;
   }>;
   payments: Array<{
     id: string;
@@ -114,6 +124,8 @@ function mapOrderDetail(order: {
       modifiers: item.modifiers.map((modifier) => ({
         name: modifier.name,
         unitPrice: Number(modifier.unitPrice) || 0,
+        menuItemId: modifier.menuItemId ?? null,
+        groupName: modifier.groupName ?? null,
       })),
     })),
   });

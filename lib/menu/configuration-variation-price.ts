@@ -1,5 +1,6 @@
 import {
   applyConfigurationCategoryDiscount,
+  applyConfigurationCategoryPricing,
   effectiveMenuItemUnitPrice,
   productUnitPriceWithVariation,
 } from '@/lib/menu/recommendation-addon-price';
@@ -248,7 +249,8 @@ export function isConfigurationItemAvailableForParentVariation(
   useVariationPricing: boolean
 ): boolean {
   if (!useVariationPricing) return true;
-  if (!parentVariation) return false;
+  if (!parentVariation) return true;
+  if (!item.variations || item.variations.length === 0) return true;
   return (
     matchItemVariationForParent(parentVariation, item.variations ?? []) !=
     null
@@ -260,14 +262,15 @@ export function filterConfigurationItemsForParentVariation<
   T extends ConfigurationItemLike,
 >(items: T[], parentVariation: ParentVariationContext | null | undefined, useVariationPricing: boolean): T[] {
   if (!useVariationPricing) return items;
-  if (!parentVariation) return [];
-  return items.filter((item) =>
+  if (!parentVariation) return items;
+  const filtered = items.filter((item) =>
     isConfigurationItemAvailableForParentVariation(
       item,
       parentVariation,
       true
     )
   );
+  return filtered.length > 0 ? filtered : items;
 }
 
 /** Whether a configuration section should render (category row / nested group). */
@@ -285,7 +288,7 @@ export function configurationGroupHasItemsForParentVariation(
 ): boolean {
   const useVariationPricing = group.useVariationPricing ?? false;
   if (!useVariationPricing) return group.items.length > 0;
-  if (!parentVariation) return false;
+  if (!parentVariation) return group.items.length > 0;
   return (
     filterConfigurationItemsForParentVariation(
       group.items,
@@ -478,15 +481,17 @@ export function chargeableConfigurationItemUnitPrice(
   );
 }
 
-/** Chargeable addon unit with optional whole-category percent discount. */
+/** Chargeable addon unit with optional whole-category percent discount and markup. */
 export function configurationChargeableAddonUnit(
   resolvedListUnit: number,
   defaultUnitPrice: number | null | undefined,
-  categoryDiscountPercent?: number | null
+  categoryDiscountPercent?: number | null,
+  categoryExtraCostPercent?: number | null
 ): number {
-  return applyConfigurationCategoryDiscount(
+  return applyConfigurationCategoryPricing(
     chargeableConfigurationItemUnitPrice(resolvedListUnit, defaultUnitPrice),
-    categoryDiscountPercent
+    categoryDiscountPercent,
+    categoryExtraCostPercent
   );
 }
 
@@ -495,12 +500,14 @@ export function formatConfigurationAddonDisplay(
   resolvedListUnit: number,
   defaultUnitPrice: number | null | undefined,
   regional?: Partial<RestaurantRegionalSettings>,
-  categoryDiscountPercent?: number | null
+  categoryDiscountPercent?: number | null,
+  categoryExtraCostPercent?: number | null
 ): string | null {
   const chargeable = configurationChargeableAddonUnit(
     resolvedListUnit,
     defaultUnitPrice,
-    categoryDiscountPercent
+    categoryDiscountPercent,
+    categoryExtraCostPercent
   );
   if (chargeable <= 0) return null;
   if (defaultUnitPrice != null) {
@@ -524,6 +531,7 @@ export function configurationAddonPriceLabel(
     /** @deprecated use regional */
     currencySymbol?: string;
     categoryDiscountPercent?: number | null;
+    categoryExtraCostPercent?: number | null;
   }
 ): string | null {
   if (options?.multipleMode === 'QUANTITY') {
@@ -548,6 +556,7 @@ export function configurationAddonPriceLabel(
       (options?.currencySymbol
         ? { currencyCode: options.currencySymbol as 'EUR' }
         : undefined),
-    options?.categoryDiscountPercent
+    options?.categoryDiscountPercent,
+    options?.categoryExtraCostPercent
   );
 }

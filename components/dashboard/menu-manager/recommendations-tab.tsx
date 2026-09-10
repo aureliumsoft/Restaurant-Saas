@@ -235,6 +235,8 @@ function buildRecommendationPayloads(
             : true,
         useVariationPricing: draft.categoryVariationPricing[cat.id] ?? false,
         categoryDiscountPercent: draft.categoryDiscountPercent[cat.id] ?? null,
+        categoryExtraCostPercent: draft.categoryExtraCostPercent[cat.id] ?? null,
+        productOverrides: draft.categoryProductOverrides[cat.id] ?? {},
         sortOrder:
           sortOrderByKey.get(recommendationDraftKey(variant, cat.id)) ?? index,
         ...(draft.selectionType === 'MULTIPLE'
@@ -443,6 +445,8 @@ export function RecommendationsTab(_props?: Props) {
   );
 
   const [selectedId, setSelectedId] = useState<string>('');
+  const [pendingProductId, setPendingProductId] = useState<string | null>(null);
+  const [editorViewMode, setEditorViewMode] = useState<'classic' | 'advanced'>('advanced');
   /** Checked category ids for the product strip + search. Empty = none. */
   const [filterCategoryIds, setFilterCategoryIds] = useState<string[]>([]);
   const [productSearch, setProductSearch] = useState('');
@@ -871,13 +875,26 @@ export function RecommendationsTab(_props?: Props) {
 
   const selectProduct = useCallback(
     (id: string) => {
-      if (id === selectedId) return;
+      if (id === selectedId) {
+        setPendingProductId(id);
+        return;
+      }
       requestLeave(() => {
         resetDraftState();
-        setSelectedId(id);
+        setPendingProductId(id);
       });
     },
     [selectedId, requestLeave, resetDraftState]
+  );
+
+  const chooseEditorView = useCallback(
+    (viewMode: 'classic' | 'advanced') => {
+      if (!pendingProductId) return;
+      setEditorViewMode(viewMode);
+      setSelectedId(pendingProductId);
+      setPendingProductId(null);
+    },
+    [pendingProductId]
   );
 
   useEffect(() => {
@@ -1699,9 +1716,11 @@ export function RecommendationsTab(_props?: Props) {
               <p className="text-sm text-muted-foreground">
                 Loading product configuration…
               </p>
-            </div>
+                    </div>
           ) : selected ? (
             <ConfigurationWizard
+              viewMode={editorViewMode}
+              onViewModeChange={setEditorViewMode}
               selected={selected}
               localCategories={localCategories}
               allProducts={allProducts}
@@ -1744,8 +1763,8 @@ export function RecommendationsTab(_props?: Props) {
               }
               formResetKeys={formResetKeys}
               draftByVariant={draftByVariant}
-            />
-          ) : (
+                                />
+                              ) : (
             <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-12 text-center">
               <p className="text-sm font-medium text-foreground">
                 Select a product above
@@ -1757,7 +1776,7 @@ export function RecommendationsTab(_props?: Props) {
           )}
         </div>
 
-        <aside className="min-w-0 self-start rounded-xl border border-border bg-card lg:sticky lg:top-4">
+        <aside className="min-w-0 self-start rounded-xl border border-border bg-card max-h-[85vh] lg:max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden lg:sticky lg:top-4 shadow-sm">
           <RecommendationPreviewPanel
             selected={selected}
             localCategories={previewCategories}
@@ -1771,8 +1790,8 @@ export function RecommendationsTab(_props?: Props) {
             onDeleteGroup={(groupId, isDraft) => {
               if (isDraft) return;
               setDeletingRuleId(groupId);
-              setDeleteRuleConfirmOpen(true);
-            }}
+                              setDeleteRuleConfirmOpen(true);
+                            }}
             deletingRuleId={deletingRuleId}
             deletingRule={deletingRule}
             loadingPersonalize={loadingPersonalize}
@@ -1781,15 +1800,15 @@ export function RecommendationsTab(_props?: Props) {
             previewPersonalizeByGroup={previewPersonalizeByGroup}
             onPersonalizePreviewChange={(groupId, ids) =>
               setPreviewPersonalizeByGroup((prev) => ({
-                ...prev,
+                                          ...prev,
                 [groupId]: ids,
-              }))
-            }
-          />
+                                        }))
+                                      }
+                                    />
         </aside>
       </div>
     </div>
-  )}
+        )}
 
       <DeleteConfirmation
         open={deleteRuleConfirmOpen}
@@ -1805,6 +1824,52 @@ export function RecommendationsTab(_props?: Props) {
           setDeletingRuleId(null);
         }}
       />
+
+      <AlertDialog
+        open={pendingProductId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingProductId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Choose recommendation view</AlertDialogTitle>
+            <AlertDialogDescription>
+              Select which view you want to use for configuring recommendations on this product:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-auto items-start justify-start whitespace-normal p-4 text-left border-2 hover:border-primary"
+              onClick={() => chooseEditorView('classic')}
+            >
+              <span>
+                <span className="block font-semibold text-base">Classic recommendation view</span>
+                <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                  Show the full classic recommendation view with all configuration sections directly.
+                </span>
+              </span>
+            </Button>
+            <Button
+              type="button"
+              className="h-auto items-start justify-start whitespace-normal p-4 text-left"
+              onClick={() => chooseEditorView('advanced')}
+            >
+              <span>
+                <span className="block font-semibold text-base">New Advanced recommendation view</span>
+                <span className="mt-1 block text-xs font-normal opacity-90">
+                  Open the new main view for recommendation categories with step-by-step guidance.
+                </span>
+              </span>
+            </Button>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <DeleteConfirmation
         open={deleteOfferConfirmOpen}

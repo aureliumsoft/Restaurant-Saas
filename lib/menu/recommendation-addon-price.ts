@@ -214,18 +214,34 @@ export function productUnitPriceWithVariation(
   );
 }
 
-/** Percent off a configuration category addon unit (0–100). */
+/** Apply category markup (+%) and discount (-%) to a configuration category addon unit. */
+export function applyConfigurationCategoryPricing(
+  unitPrice: number,
+  categoryDiscountPercent?: number | null,
+  categoryExtraCostPercent?: number | null
+): number {
+  if (unitPrice <= 0) return unitPrice;
+  let price = unitPrice;
+  if (categoryExtraCostPercent != null && categoryExtraCostPercent > 0) {
+    price = price * (1 + categoryExtraCostPercent / 100);
+  }
+  if (categoryDiscountPercent != null && categoryDiscountPercent > 0) {
+    const pct = Math.min(100, Math.max(0, categoryDiscountPercent));
+    price = price * (1 - pct / 100);
+  }
+  return Math.round(price * 100) / 100;
+}
+
+/** Percent off a configuration category addon unit (0–100), with optional extra cost markup (+%). */
 export function applyConfigurationCategoryDiscount(
   unitPrice: number,
-  categoryDiscountPercent: number | null | undefined
+  categoryDiscountPercent: number | null | undefined,
+  categoryExtraCostPercent?: number | null | undefined
 ): number {
-  if (
-    categoryDiscountPercent == null ||
-    categoryDiscountPercent <= 0 ||
-    unitPrice <= 0
-  ) {
-    return unitPrice;
-  }
-  const pct = Math.min(100, Math.max(0, categoryDiscountPercent));
-  return Math.round(unitPrice * (1 - pct / 100) * 100) / 100;
+  return applyConfigurationCategoryPricing(
+    unitPrice,
+    categoryDiscountPercent,
+    categoryExtraCostPercent
+  );
 }
+

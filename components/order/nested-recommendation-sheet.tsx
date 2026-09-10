@@ -31,6 +31,7 @@ import {
   effectiveOptionVariationId,
   emptyOptionNestedConfig,
   isOptionConfigComplete,
+  nestedCategoryRequirementsMissing,
   optionNeedsManualVariationPicker,
   optionSelectionKey,
   recommendedProductNeedsSheet,
@@ -228,7 +229,8 @@ type InlineGroupsProps = {
   onExpandNestedForGroup?: (groupId: string) => void;
   advanceAfterGroupComplete: (
     groupId: string,
-    nextSelectedByGroup: Record<string, string[]>
+    nextSelectedByGroup: Record<string, string[]>,
+    scopeGroups?: AttributeGroup[]
   ) => void;
   onAppendTimelineKey?: (key: string) => void;
   onRemoveTimelineKey?: (key: string) => void;
@@ -260,7 +262,8 @@ type OptionNestedPanelProps = {
   onExpandNestedForGroup?: (groupId: string) => void;
   advanceAfterGroupComplete: (
     groupId: string,
-    nextSelectedByGroup: Record<string, string[]>
+    nextSelectedByGroup: Record<string, string[]>,
+    scopeGroups?: AttributeGroup[]
   ) => void;
   onAppendTimelineKey?: (key: string) => void;
   onRemoveTimelineKey?: (key: string) => void;
@@ -288,8 +291,7 @@ function OptionNestedPanel({
   onRemoveTimelineKey,
 }: OptionNestedPanelProps) {
   const configurationParentVariation =
-    parentVariationFromItemVariation(item.variations, variationId) ??
-    baseProductVariation;
+    parentVariationFromItemVariation(item.variations, variationId) ?? null;
 
   const nestedGroups = (item.nestedAttributeGroups ?? []).filter((g) =>
     isConfigurationGroupVisibleForFilters(
@@ -457,7 +459,9 @@ function InlineRecommendationGroups({
         selectionTimelineKeys.categoryOption(group.id, optionId)
       );
       if (totalSelectedUnits(next[group.id]!) >= limits.maxItems) {
-        queueMicrotask(() => advanceAfterGroupComplete(group.id, next));
+        queueMicrotask(() =>
+          advanceAfterGroupComplete(group.id, next, rootGroups)
+        );
       }
       return next;
     });
@@ -510,7 +514,7 @@ function InlineRecommendationGroups({
         };
       }
       if (totalSelectedUnits(cur) >= limits.maxItems) {
-        advanceAfterGroupComplete(group.id, prev);
+        advanceAfterGroupComplete(group.id, prev, rootGroups);
         return prev;
       }
       const next = { ...prev, [group.id]: [...cur, optionId] };
@@ -523,7 +527,9 @@ function InlineRecommendationGroups({
         selectionTimelineKeys.categoryOption(group.id, optionId)
       );
       if (totalSelectedUnits(next[group.id]!) >= limits.maxItems) {
-        queueMicrotask(() => advanceAfterGroupComplete(group.id, next));
+        queueMicrotask(() =>
+          advanceAfterGroupComplete(group.id, next, rootGroups)
+        );
       }
       return next;
     });
@@ -534,7 +540,7 @@ function InlineRecommendationGroups({
     onSelectedByGroupChange((prev) => {
       const cur = prev[group.id] ?? [];
       if (totalSelectedUnits(cur) >= limits.maxItems) {
-        advanceAfterGroupComplete(group.id, prev);
+        advanceAfterGroupComplete(group.id, prev, rootGroups);
         return prev;
       }
       const next = { ...prev, [group.id]: [...cur, optionId] };
@@ -551,7 +557,9 @@ function InlineRecommendationGroups({
         );
       }
       if (totalSelectedUnits(next[group.id]!) >= limits.maxItems) {
-        queueMicrotask(() => advanceAfterGroupComplete(group.id, next));
+        queueMicrotask(() =>
+          advanceAfterGroupComplete(group.id, next, rootGroups)
+        );
       }
       return next;
     });
@@ -758,6 +766,7 @@ function InlineRecommendationGroups({
                       groupSelectedIds: selectedIds,
                       optionId: it.menuItemId,
                       categoryDiscountPercent: g.categoryDiscountPercent,
+                      categoryExtraCostPercent: g.categoryExtraCostPercent,
                     }
                   );
                   const radioSelected = selectedIds[0] === it.menuItemId;
@@ -970,14 +979,9 @@ export function NestedRecommendationSheet({
     () =>
       productRecommendationGroups.filter((g) => {
         const item = g.items[0];
-        if (!item) return false;
-        return isConfigurationItemAvailableForParentVariation(
-          item,
-          baseProductVariation,
-          g.useVariationPricing ?? false
-        );
+        return Boolean(item);
       }),
-    [baseProductVariation, productRecommendationGroups]
+    [productRecommendationGroups]
   );
 
   const rootManualVariation = optionNeedsManualVariationPicker(
@@ -991,8 +995,8 @@ export function NestedRecommendationSheet({
       parentVariationFromItemVariation(
         product.variations,
         productVariationId || null
-      ) ?? baseProductVariation,
-    [baseProductVariation, product.variations, productVariationId]
+      ) ?? null,
+    [product.variations, productVariationId]
   );
 
   const isProductGroupConfigured = useCallback(
@@ -1004,10 +1008,10 @@ export function NestedRecommendationSheet({
         return Boolean(preselectedProductVariationByGroup[g.id]);
       }
       return Boolean(
-        resolveCategoryItemVariationId(item, baseProductVariation, g)
+        resolveCategoryItemVariationId(item, configurationParentVariation, g)
       );
     },
-    [baseProductVariation, preselectedProductVariationByGroup, productGroupConfigs]
+    [configurationParentVariation, preselectedProductVariationByGroup, productGroupConfigs]
   );
 
   useEffect(() => {
@@ -1426,16 +1430,20 @@ export function NestedRecommendationSheet({
     });
     if (missingProductRecs) return true;
 
-    const missingOptionConfig = allGroupsFlat.some((g) => {
-      if (g.sourceType === 'PRODUCT') return false;
-      if (
-        !isConfigurationGroupVisibleForFilters(
-          g,
-          configurationParentVariation
-        )
-      ) {
-        return false;
-      }
+    // Only top-level visible category groups — never require nested groups under
+    // unselected options (those live in allGroupsFlat and used to block Select).
+    if (
+      nestedCategoryRequirementsMissing(
+        visibleCategoryGroups,
+        selectedByGroup,
+        configurationParentVariation,
+        productVariationId || null
+      )
+    ) {
+      return true;
+    }
+
+    return visibleCategoryGroups.some((g) => {
       const selectedIds = selectedByGroup[g.id] ?? [];
       const ids =
         g.selectionType === 'SINGLE'
@@ -1453,48 +1461,17 @@ export function NestedRecommendationSheet({
         );
       });
     });
-    if (missingOptionConfig) return true;
-
-    return allGroupsFlat.some((g) => {
-      if (g.sourceType === 'PRODUCT') return false;
-      if (
-        !isConfigurationGroupVisibleForFilters(
-          g,
-          configurationParentVariation
-        )
-      ) {
-        return false;
-      }
-      const count = totalSelectedUnits(selectedByGroup[g.id] ?? []);
-      const limits = getRecommendationLimits(
-        {
-          selectionType: g.selectionType,
-          minItems: g.minItems ?? null,
-          maxItems: g.maxItems ?? null,
-          variationLimits: g.variationLimits,
-        },
-        productVariationId || null
-      );
-      if (g.selectionType === 'SINGLE') {
-        return g.required && count === 0;
-      }
-      const min = limits.minItems ?? (g.required ? 1 : 0);
-      if (g.required && count < min) return true;
-      if (count > 0 && min > 0 && count < min) return true;
-      return false;
-    });
   }, [
-    allGroupsFlat,
     configurationParentVariation,
+    isProductGroupConfigured,
     optionNestedConfigs,
     preselectedProductVariationByGroup,
-    productGroupConfigs,
     productVariationId,
     rootManualVariation,
     selectedByGroup,
     selectedNestedVariationByOption,
+    visibleCategoryGroups,
     visibleProductRecommendationGroups,
-    isProductGroupConfigured,
   ]);
 
   const selectedUnitTotal = useMemo(() => {
@@ -1532,16 +1509,24 @@ export function NestedRecommendationSheet({
   ]);
 
   const advanceAfterGroupComplete = useCallback(
-    (groupId: string, nextSelectedByGroup: Record<string, string[]>) => {
+    (
+      groupId: string,
+      nextSelectedByGroup: Record<string, string[]>,
+      scopeGroups?: AttributeGroup[]
+    ) => {
+      const scope = scopeGroups?.length ? scopeGroups : categoryGroups;
+      const scopeIds = new Set(scope.map((g) => g.id));
       const order = collectVisibleCategoryGroupIds(
-        categoryGroups,
+        scope,
         nextSelectedByGroup,
         configurationParentVariation
       );
       const idx = order.indexOf(groupId);
       for (let i = idx + 1; i < order.length; i++) {
         const nextId = order[i]!;
-        const nextGroup = allGroupsFlat.find((g) => g.id === nextId);
+        // Stay within this panel's groups — don't jump into another option's nest.
+        if (!scopeIds.has(nextId)) continue;
+        const nextGroup = scope.find((g) => g.id === nextId);
         if (!nextGroup || nextGroup.sourceType === 'PRODUCT') continue;
         const limits = getRecommendationLimits(
           {
@@ -1562,12 +1547,7 @@ export function NestedRecommendationSheet({
         }
       }
     },
-    [
-      allGroupsFlat,
-      categoryGroups,
-      configurationParentVariation,
-      productVariationId,
-    ]
+    [categoryGroups, configurationParentVariation, productVariationId]
   );
 
   const handleDone = () => {
@@ -1659,7 +1639,7 @@ export function NestedRecommendationSheet({
               ? preselectedProductVariationByGroup[g.id]
               : resolveCategoryItemVariationId(
                   item,
-                  baseProductVariation,
+                  configurationParentVariation,
                   g
                 ) ?? preselectedProductVariationByGroup[g.id];
             const selectedVariationLabel =

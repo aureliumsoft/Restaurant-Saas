@@ -86,6 +86,158 @@ export function cartLineTitle(
   return variation ? `${base} (${variation})` : base;
 }
 
+/**
+ * Strip "Choose" / "Choose from" / "Choose add-ons (...)" so only the
+ * recommended category or product name remains. Nested labels
+ * (`Parent — Choose from Sauces`) keep the leaf name (Sauces).
+ */
+export function recommendationGroupDisplayLabel(raw: string): string {
+  const source = String(raw ?? '').trim();
+  if (!source) return 'Add-ons';
+
+  const stripPart = (part: string): string => {
+    let s = part.trim();
+    if (!s) return '';
+    const addOns = s.match(/^Choose add-ons\s*\((.+)\)\s*$/i);
+    if (addOns?.[1]) return addOns[1].trim();
+    s = s.replace(/^Choose from\s+/i, '');
+    s = s.replace(/^Choose\s+/i, '');
+    return s.trim();
+  };
+
+  const parts = source.split(/\s+—\s+/).map(stripPart).filter(Boolean);
+  if (parts.length === 0) return source;
+  // Nested: show the recommended category/product leaf, not the parent prefix.
+  return parts[parts.length - 1]!;
+}
+
+export type ModifierDisplayLine = {
+  /** ↳ category/product label, - selected product, plain = personalize (no arrow). */
+  style: 'branch' | 'dash' | 'plain';
+  name: string;
+  unitPrice?: number;
+  quantity?: number;
+};
+
+type ModifierDisplayBlock = {
+  label: string;
+  personalize?: boolean;
+  lines: Array<{
+    name: string;
+    unitPrice?: number;
+    quantity?: number;
+  }>;
+};
+
+function pushBlock(
+  blocks: ModifierDisplayBlock[],
+  label: string,
+  line: { name: string; unitPrice?: number; quantity?: number },
+  personalize = false
+) {
+  const last = blocks[blocks.length - 1];
+  if (last && last.label === label && Boolean(last.personalize) === personalize) {
+    last.lines.push(line);
+    return;
+  }
+  blocks.push({ label, personalize, lines: [line] });
+}
+
+function blocksToDisplayLines(
+  blocks: ModifierDisplayBlock[]
+): ModifierDisplayLine[] {
+  const personalizeBlocks = blocks.filter((b) => b.personalize);
+  const otherBlocks = blocks.filter((b) => !b.personalize);
+  const ordered = [...personalizeBlocks, ...otherBlocks];
+
+  const out: ModifierDisplayLine[] = [];
+  for (const block of ordered) {
+    if (block.lines.length === 0) continue;
+    if (block.personalize) {
+      // Personalize first, plain names — no ↳ / - prefix.
+      for (const line of block.lines) {
+        out.push({
+          style: 'plain',
+          name: line.name,
+          unitPrice: line.unitPrice,
+          quantity: line.quantity,
+        });
+      }
+      continue;
+    }
+    out.push({ style: 'branch', name: block.label });
+    for (const line of block.lines) {
+      out.push({
+        style: 'dash',
+        name: line.name,
+        unitPrice: line.unitPrice,
+        quantity: line.quantity,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Cart/checkout format:
+ * No onions          ← personalize first, no arrow
+ * ↳ Sauces
+ * - Tomato (+€0.20)
+ * ↳ Drink
+ * - Coke
+ */
+export function cartModifierDisplayTree(modifiers: unknown): ModifierDisplayLine[] {
+  const blocks: ModifierDisplayBlock[] = [];
+  for (const group of normalizeCartModifiers(modifiers)) {
+    for (const sel of group.selections) {
+      const line = { name: sel.name, unitPrice: sel.unitPrice };
+      if (isPersonalizeModifierMenuItemId(sel.menuItemId)) {
+        pushBlock(blocks, 'Personalize', line, true);
+      } else {
+        pushBlock(
+          blocks,
+          recommendationGroupDisplayLabel(group.groupName || 'Add-ons'),
+          line,
+          false
+        );
+      }
+    }
+  }
+  return blocksToDisplayLines(blocks);
+}
+
+export function orderModifierDisplayTree(
+  modifiers: Array<{
+    name: string;
+    menuItemId?: string | null;
+    groupName?: string | null;
+    unitPrice?: number;
+    quantity?: number;
+  }>
+): ModifierDisplayLine[] {
+  const blocks: ModifierDisplayBlock[] = [];
+  for (const mod of modifiers) {
+    const name = String(mod.name ?? '').trim();
+    if (!name) continue;
+    const line = {
+      name,
+      unitPrice: mod.unitPrice,
+      quantity: mod.quantity,
+    };
+    if (!mod.menuItemId) {
+      pushBlock(blocks, 'Personalize', line, true);
+    } else {
+      pushBlock(
+        blocks,
+        recommendationGroupDisplayLabel(mod.groupName || 'Add-ons'),
+        line,
+        false
+      );
+    }
+  }
+  return blocksToDisplayLines(blocks);
+}
+
 export type ModifierDisplaySection = {
   kind: 'personalize' | 'recommendation';
   label: string;
@@ -96,13 +248,16 @@ export type ModifierDisplaySection = {
   }>;
 };
 
-/** Grouped personalize vs recommendation sections with labels for cart lines. */
+/** @deprecated Prefer cartModifierDisplayTree. */
 export function cartModifierDisplaySections(
   modifiers: unknown
 ): ModifierDisplaySection[] {
   const normalized = normalizeCartModifiers(modifiers);
   const personalizeLines: ModifierDisplaySection['lines'] = [];
-  const recommendationByGroup = new Map<string, ModifierDisplaySection['lines']>();
+  const recommendationByGroup = new Map<
+    string,
+    ModifierDisplaySection['lines']
+  >();
 
   for (const group of normalized) {
     for (const sel of group.selections) {
@@ -110,7 +265,9 @@ export function cartModifierDisplaySections(
       if (isPersonalizeModifierMenuItemId(sel.menuItemId)) {
         personalizeLines.push(line);
       } else {
-        const label = group.groupName?.trim() || 'Add-ons';
+        const label = recommendationGroupDisplayLabel(
+          group.groupName?.trim() || 'Add-ons'
+        );
         const existing = recommendationByGroup.get(label) ?? [];
         existing.push(line);
         recommendationByGroup.set(label, existing);
@@ -132,17 +289,21 @@ export function cartModifierDisplaySections(
   return sections;
 }
 
-/** Grouped sections from persisted order modifiers (menuItemId null = personalize). */
+/** @deprecated Prefer orderModifierDisplayTree. */
 export function orderModifierDisplaySections(
   modifiers: Array<{
     name: string;
     menuItemId?: string | null;
+    groupName?: string | null;
     unitPrice?: number;
     quantity?: number;
   }>
 ): ModifierDisplaySection[] {
   const personalizeLines: ModifierDisplaySection['lines'] = [];
-  const addonLines: ModifierDisplaySection['lines'] = [];
+  const recommendationByGroup = new Map<
+    string,
+    ModifierDisplaySection['lines']
+  >();
 
   for (const mod of modifiers) {
     const name = String(mod.name ?? '').trim();
@@ -155,7 +316,12 @@ export function orderModifierDisplaySections(
     if (!mod.menuItemId) {
       personalizeLines.push(line);
     } else {
-      addonLines.push(line);
+      const label = recommendationGroupDisplayLabel(
+        mod.groupName?.trim() || 'Add-ons'
+      );
+      const existing = recommendationByGroup.get(label) ?? [];
+      existing.push(line);
+      recommendationByGroup.set(label, existing);
     }
   }
 
@@ -167,12 +333,8 @@ export function orderModifierDisplaySections(
       lines: personalizeLines,
     });
   }
-  if (addonLines.length > 0) {
-    sections.push({
-      kind: 'recommendation',
-      label: 'Add-ons',
-      lines: addonLines,
-    });
+  for (const [label, lines] of recommendationByGroup) {
+    sections.push({ kind: 'recommendation', label, lines });
   }
   return sections;
 }

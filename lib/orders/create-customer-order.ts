@@ -483,13 +483,19 @@ export async function createCustomerOrder(options: {
             },
           });
 
-          const flatMods = line.modifiers.flatMap((g) => g.selections);
+          const flatMods = line.modifiers.flatMap((g) =>
+            g.selections.map((s) => ({
+              selection: s,
+              groupName: g.groupName,
+            }))
+          );
           if (flatMods.length > 0) {
             await tx.orderItemModifier.createMany({
-              data: flatMods.map((s) => ({
+              data: flatMods.map(({ selection: s, groupName }) => ({
                 orderItemId: orderItem.id,
                 menuItemId: normalizePersonalizeModifierMenuItemId(s.menuItemId),
                 name: s.name,
+                groupName: groupName?.trim() || null,
                 unitPrice: s.unitPrice,
                 quantity: 1,
               })),
@@ -516,6 +522,7 @@ export async function createCustomerOrder(options: {
                   name: sel.name,
                   quantity: 1,
                   menuItemId: sel.menuItemId,
+                  groupName: group.groupName,
                 }))
               ),
             }))

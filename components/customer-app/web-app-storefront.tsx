@@ -136,7 +136,7 @@ export function WebAppStorefront({ slug }: { slug: string }) {
 
           <aside
             id="order"
-            className="fixed inset-x-0 top-[72px] z-30 flex h-[calc(100dvh-72px)] max-h-[calc(100dvh-72px)] flex-col bg-[#f4f4f6] p-3 lg:inset-x-auto lg:right-0 lg:w-[var(--order-sidebar-width)]"
+            className="fixed inset-x-0 top-[72px] z-30 flex h-[calc(100dvh-72px)] max-h-[calc(100dvh-72px)] flex-col bg-[#f4f4f6] p-3 lg:inset-x-auto lg:right-0"
             style={
               {
                 ['--order-sidebar-width' as string]: `${ORDER_SIDEBAR_WIDTH_PX}px`,

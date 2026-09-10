@@ -14,6 +14,7 @@ const patchCategorySchema = z
   .object({
     name: z.string().min(1).max(200).optional(),
     showInFront: z.boolean().optional(),
+    hiddenBranchIds: z.array(z.string().uuid()).optional(),
     sortOrder: z.number().int().min(0).optional(),
     imageUrl: z.string().max(2_800_000).optional().nullable().or(z.literal('')),
   })
@@ -119,6 +120,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     showInFront?: boolean;
     sortOrder?: number;
     imageUrl?: string | null;
+    hiddenBranchIds?: string[];
   } = {};
 
   if (parsed.data.name !== undefined) {
@@ -137,21 +139,55 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         : null;
   }
 
+  if (parsed.data.hiddenBranchIds !== undefined) {
+    const branchIds = [...new Set(parsed.data.hiddenBranchIds)];
+    const branchCount = await db.branch.count({
+      where: { id: { in: branchIds }, restaurantId: auth.restaurant.id },
+    });
+    if (branchCount !== branchIds.length) {
+      return NextResponse.json(
+        { error: 'One or more branches do not belong to this restaurant.' },
+        { status: 400 }
+      );
+    }
+    data.hiddenBranchIds = branchIds;
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'No fields to update.' }, { status: 400 });
   }
 
   try {
-    const updated = await db.menuCategory.update({
-      where: { id: trimmed },
-      data,
-      select: {
-        id: true,
-        name: true,
-        imageUrl: true,
-        showInFront: true,
-        sortOrder: true,
-      },
+    const { hiddenBranchIds, ...categoryData } = data;
+    const updated = await db.$transaction(async (tx) => {
+      const category = await tx.menuCategory.update({
+        where: { id: trimmed },
+        data: categoryData,
+        select: {
+          id: true,
+          name: true,
+          imageUrl: true,
+          showInFront: true,
+          sortOrder: true,
+        },
+      });
+
+      if (hiddenBranchIds !== undefined && 'menuCategoryHiddenBranch' in tx) {
+        const branchDelegate = (tx as Record<string, any>).menuCategoryHiddenBranch;
+        await branchDelegate.deleteMany({
+          where: { categoryId: trimmed },
+        });
+        if (hiddenBranchIds.length > 0) {
+          await branchDelegate.createMany({
+            data: hiddenBranchIds.map((branchId: string) => ({
+              categoryId: trimmed,
+              branchId,
+            })),
+          });
+        }
+      }
+
+      return category;
     });
 
     return NextResponse.json({ data: updated }, { status: 200 });

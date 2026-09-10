@@ -1,9 +1,15 @@
 import {
   matchItemVariationForParent,
   matchItemVariationForDefaultLinked,
+  isConfigurationGroupVisibleForFilters,
+  parentVariationFromItemVariation,
   type ParentVariationContext,
 } from '@/lib/menu/configuration-variation-price';
 import { hasPersonalizeOptions } from '@/lib/menu/personalize-options';
+import {
+  getRecommendationLimits,
+  totalSelectedUnits,
+} from '@/lib/menu/recommendation-limits';
 
 export type OptionConfigGroup = {
   useVariationPricing?: boolean;
@@ -185,6 +191,67 @@ export function hasNestedOptionConfigContent(
   return (config.mods?.length ?? 0) > 0;
 }
 
+type NestedRequirementGroup = {
+  id?: string;
+  sourceType?: string | null;
+  selectionType?: 'SINGLE' | 'MULTIPLE' | string;
+  required?: boolean;
+  minItems?: number | null;
+  maxItems?: number | null;
+  variationLimits?: Array<{
+    variationId: string;
+    minItems: number;
+    maxItems: number;
+  }> | null;
+  useVariationPricing?: boolean;
+  defaultLinkedRestaurantVariationId?: string | null;
+};
+
+/**
+ * Whether visible category recommendation groups still need selections.
+ * Only checks groups in `groups` (not deep option trees under unselected items).
+ */
+export function nestedCategoryRequirementsMissing(
+  groups: NestedRequirementGroup[],
+  selectedByGroup: Record<string, string[]>,
+  parentVariation: ParentVariationContext | null | undefined,
+  productVariationId: string | null
+): boolean {
+  for (const g of groups) {
+    if (g.sourceType === 'PRODUCT') continue;
+    if (
+      !isConfigurationGroupVisibleForFilters(
+        g as Parameters<typeof isConfigurationGroupVisibleForFilters>[0],
+        parentVariation ?? null
+      )
+    ) {
+      continue;
+    }
+    const groupId = String(g.id ?? '');
+    if (!groupId) continue;
+    const count = totalSelectedUnits(selectedByGroup[groupId] ?? []);
+    const selectionType =
+      g.selectionType === 'MULTIPLE' ? 'MULTIPLE' : 'SINGLE';
+    const limits = getRecommendationLimits(
+      {
+        selectionType,
+        minItems: g.minItems ?? null,
+        maxItems: g.maxItems ?? null,
+        variationLimits: g.variationLimits ?? undefined,
+      },
+      productVariationId
+    );
+    if (selectionType === 'SINGLE') {
+      if (g.required && count === 0) return true;
+      continue;
+    }
+    const min = limits.minItems ?? (g.required ? 1 : 0);
+    if (g.required && count < min) return true;
+    if (count > 0 && min > 0 && count < min) return true;
+  }
+  return false;
+}
+
 /** Remove all per-option nested/variation state for a category group. */
 export function clearOptionDataForGroup<T extends Record<string, unknown>>(
   groupId: string,
@@ -263,8 +330,59 @@ export function isOptionConfigComplete(
   }
 
   if (!hasNested) return true;
+
+  const nestedGroups = (item.nestedAttributeGroups ?? []) as NestedRequirementGroup[];
+  const optionVariationId =
+    config?.productVariationId ||
+    effectiveOptionVariationId(
+      item,
+      key,
+      selectedNestedVariationByOption,
+      optionNestedConfigs,
+      context
+    ) ||
+    null;
+  const optionParent =
+    parentVariationFromItemVariation(item.variations, optionVariationId) ??
+    context?.parentVariation ??
+    null;
+
+  const visibleNested = nestedGroups.filter(
+    (g) =>
+      g.sourceType !== 'PRODUCT' &&
+      isConfigurationGroupVisibleForFilters(
+        g as Parameters<typeof isConfigurationGroupVisibleForFilters>[0],
+        optionParent
+      )
+  );
+  const hasRequiredNested = visibleNested.some((g) => {
+    if (g.required) return true;
+    if (g.selectionType === 'SINGLE') return false;
+    const limits = getRecommendationLimits(
+      {
+        selectionType: 'MULTIPLE',
+        minItems: g.minItems ?? null,
+        maxItems: g.maxItems ?? null,
+        variationLimits: g.variationLimits ?? undefined,
+      },
+      optionVariationId
+    );
+    return (limits.minItems ?? 0) > 0;
+  });
+
+  if (!hasRequiredNested) {
+    // Nested groups are optional — configuration is complete without opening them.
+    return true;
+  }
+
   if (!config) return false;
-  return hasNestedOptionConfigContent(config);
+
+  return !nestedCategoryRequirementsMissing(
+    visibleNested,
+    config.selectedByGroup ?? {},
+    optionParent,
+    optionVariationId
+  );
 }
 
 export function shouldAutoOpenOptionFlow(

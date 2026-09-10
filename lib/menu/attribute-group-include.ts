@@ -60,4 +60,5 @@ export const attributeGroupSelectFields = {
   includeDefaultLinkedVariationPrice: true,
   useVariationPricing: true,
   categoryDiscountPercent: true,
+  categoryExtraCostPercent: true,
 } as const;

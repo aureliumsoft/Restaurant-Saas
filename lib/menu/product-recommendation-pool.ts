@@ -71,7 +71,7 @@ export function enrichAttributeGroupSource(
       imageUrl: anchor.imageUrl ?? null,
       category: undefined,
       attributeGroups: (anchor.attributeGroups ?? []).map((nested) =>
-        enrichCategoryLinkedItems(nested, allCategories, anchor.id)
+        enrichAttributeGroupFromPool(nested, allCategories, anchor.id)
       ),
     } as AttributeGroupLike['linkedProduct'],
   };
@@ -103,7 +103,7 @@ export function enrichCategoryLinkedItems(
         imageUrl: poolItem.imageUrl ?? null,
         salePrice: poolItem.salePrice ?? null,
         attributeGroups: (poolItem.attributeGroups ?? []).map((nested) =>
-          enrichCategoryLinkedItems(nested, allCategories, baseProductId)
+          enrichAttributeGroupFromPool(nested, allCategories, poolItem.id)
         ),
       })) as NonNullable<AttributeGroupSource['linkedCategory']>['items'],
     },

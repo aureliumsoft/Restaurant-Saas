@@ -3,14 +3,15 @@
 import { cn } from '@/lib/utils';
 import {
   cartLineTitle,
-  cartModifierDisplaySections,
-  orderModifierDisplaySections,
-  type ModifierDisplaySection,
+  cartModifierDisplayTree,
+  orderModifierDisplayTree,
+  type ModifierDisplayLine,
 } from '@/lib/cart-line-display';
 
 type OrderModifierLike = {
   name: string;
   menuItemId?: string | null;
+  groupName?: string | null;
   unitPrice?: number;
   quantity?: number;
 };
@@ -26,11 +27,12 @@ type Props = {
   titleClassName?: string;
   lineClassName?: string;
   showQuantityOnModifiers?: boolean;
+  /** @deprecated Unused — labels render as ↳ lines. */
   sectionLabelClassName?: string;
 };
 
-function renderModifierLines(
-  sections: ModifierDisplaySection[],
+function renderModifierTree(
+  lines: ModifierDisplayLine[],
   opts: {
     showPrices: boolean;
     formatMoney?: (amount: number) => string;
@@ -41,36 +43,51 @@ function renderModifierLines(
   const { showPrices, formatMoney, lineClassName, showQuantityOnModifiers } =
     opts;
 
-  return sections.flatMap((section) =>
-    section.lines.map((line, index) => {
-      const qty =
-        showQuantityOnModifiers && line.quantity != null && line.quantity > 1
-          ? `${line.quantity}× `
-          : '';
-      const prefix = section.kind === 'personalize' ? '↳ ' : '- ';
-      const priceSuffix =
-        showPrices &&
-        formatMoney &&
-        line.unitPrice != null &&
-        line.unitPrice > 0
-          ? ` (+${formatMoney(line.unitPrice)})`
-          : '';
+  return lines.map((line, index) => {
+    if (line.style === 'branch') {
       return (
         <p
-          key={`${section.kind}-${line.name}-${index}`}
-          className={cn(
-            lineClassName,
-            section.kind === 'recommendation' && 'pl-3'
-          )}
+          key={`branch-${line.name}-${index}`}
+          className={cn(lineClassName, 'font-medium text-foreground/80')}
         >
-          {prefix}
+          ↳ {line.name}
+        </p>
+      );
+    }
+
+    const qty =
+      showQuantityOnModifiers && line.quantity != null && line.quantity > 1
+        ? `${line.quantity}× `
+        : '';
+    const priceSuffix =
+      showPrices &&
+      formatMoney &&
+      line.unitPrice != null &&
+      line.unitPrice > 0
+        ? ` (+${formatMoney(line.unitPrice)})`
+        : '';
+
+    if (line.style === 'plain') {
+      return (
+        <p key={`plain-${line.name}-${index}`} className={lineClassName}>
           {qty}
           {line.name}
           {priceSuffix}
         </p>
       );
-    })
-  );
+    }
+
+    return (
+      <p
+        key={`dash-${line.name}-${index}`}
+        className={cn(lineClassName, 'pl-3')}
+      >
+        - {qty}
+        {line.name}
+        {priceSuffix}
+      </p>
+    );
+  });
 }
 
 export function ProductLineDetails({
@@ -88,17 +105,17 @@ export function ProductLineDetails({
   const title = cartLineTitle(productName, variationName);
   const displayTitle =
     quantity != null && quantity > 0 ? `${quantity}× ${title}` : title;
-  const sections =
+  const lines =
     modifiers != null
-      ? cartModifierDisplaySections(modifiers)
-      : orderModifierDisplaySections(orderModifiers ?? []);
+      ? cartModifierDisplayTree(modifiers)
+      : orderModifierDisplayTree(orderModifiers ?? []);
 
   return (
     <div className="space-y-1">
       <p className={titleClassName}>{displayTitle}</p>
-      {sections.length > 0 ? (
+      {lines.length > 0 ? (
         <div className="mt-1 space-y-0.5">
-          {renderModifierLines(sections, {
+          {renderModifierTree(lines, {
             showPrices,
             formatMoney,
             lineClassName,

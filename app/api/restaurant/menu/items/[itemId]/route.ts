@@ -48,21 +48,6 @@ const detailSelect = {
       },
     },
   },
-  ingredientRecipes: {
-    orderBy: { sortOrder: "asc" as const },
-    select: {
-      id: true,
-      quantity: true,
-      menuItemVariationId: true,
-      ingredientId: true,
-      ingredient: {
-        select: { id: true, name: true, unit: true, quantity: true, isMajor: true },
-      },
-      variation: {
-        select: { id: true, restaurantVariationId: true, name: true },
-      },
-    },
-  },
 } as const;
 
 /** POS customize: shallow nests for fast first paint (nested sheets hydrate on demand). */
@@ -71,7 +56,7 @@ const liteDetailSelect = {
   categoryId: true,
   createdAt: true,
   updatedAt: true,
-  attributeGroups: buildCustomerMenuAttributeGroupsSelect(1),
+  attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
   personalizeGroups: personalizeGroupsSelect,
   offersFromThis: {
     orderBy: { sortOrder: 'asc' as const },
@@ -154,6 +139,7 @@ export async function GET(
     {
       data: {
         ...item,
+        ingredientRecipes: [],
         urlId: encodeUrlId(itemId),
         categoryIds:
           categoryIds.length > 0 ? categoryIds : [item.categoryId],
@@ -381,8 +367,8 @@ export async function PATCH(
         await syncMenuItemCategoryLinks(tx, itemId, categoryIds);
       }
 
-      if (parsed.data.ingredients !== undefined) {
-        await syncMenuItemIngredients(tx, {
+      if (parsed.data.ingredients !== undefined && 'menuItemIngredient' in tx) {
+        await syncMenuItemIngredients(tx as any, {
           restaurantId: auth.restaurant.id,
           menuItemId: itemId,
           variations: item.variations.map((v) => ({

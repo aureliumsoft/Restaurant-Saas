@@ -62,8 +62,24 @@ export function mapAttributeGroupItems(
     return [group.linkedProduct];
   }
 
-  const items = group.linkedCategory?.items ?? [];
-  return items.filter((it) => it.id !== baseProductId);
+  const direct = group.linkedCategory?.items ?? [];
+  const links =
+    (
+      group.linkedCategory as
+        | { itemLinks?: Array<{ menuItem?: LinkedItem }> }
+        | undefined
+    )?.itemLinks
+      ?.map((l) => l.menuItem)
+      .filter((it): it is LinkedItem => Boolean(it)) ?? [];
+  const combined: LinkedItem[] = [];
+  const seen = new Set<string>();
+  for (const it of [...direct, ...links]) {
+    if (it && it.id && !seen.has(it.id)) {
+      seen.add(it.id);
+      combined.push(it);
+    }
+  }
+  return combined.filter((it) => it.id !== baseProductId);
 }
 
 export function attributeGroupDisplayName(group: AttributeGroupSource): string | null {

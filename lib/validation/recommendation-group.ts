@@ -6,6 +6,11 @@ export const variationLimitSchema = z.object({
   maxItems: z.number().int().min(1),
 });
 
+export const recommendationProductOverrideSchema = z.object({
+  excluded: z.boolean().default(false),
+  free: z.boolean().default(false),
+});
+
 export const recommendationGroupBodySchema = z
   .object({
     name: z.string().min(1).max(120),
@@ -26,6 +31,11 @@ export const recommendationGroupBodySchema = z
     variationLimits: z.array(variationLimitSchema).optional(),
     useVariationPricing: z.boolean().optional(),
     categoryDiscountPercent: z.number().min(0).max(100).nullable().optional(),
+    categoryExtraCostPercent: z.number().min(0).max(500).nullable().optional(),
+    productOverrides: z
+      .record(z.string().uuid(), recommendationProductOverrideSchema)
+      .optional()
+      .default({}),
   })
   .superRefine((data, ctx) => {
     if (data.sourceType === 'CATEGORY' && !data.linkedCategoryId) {
@@ -102,6 +112,17 @@ export const recommendationGroupBodySchema = z
         message:
           'categoryDiscountPercent applies only to category recommendations',
         path: ['categoryDiscountPercent'],
+      });
+    }
+    if (
+      data.sourceType === 'PRODUCT' &&
+      data.categoryExtraCostPercent != null
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'categoryExtraCostPercent applies only to category recommendations',
+        path: ['categoryExtraCostPercent'],
       });
     }
 

@@ -307,11 +307,11 @@ function loadCart(slug: string, branchId: string): CartLine[] {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter(
-        (row): row is CartLine =>
-          !!row &&
-          typeof row === 'object' &&
-          typeof (row as CartLine).lineId === 'string' &&
-          typeof (row as CartLine).menuItemId === 'string'
+      (row): row is CartLine =>
+        !!row &&
+        typeof row === 'object' &&
+        typeof (row as CartLine).lineId === 'string' &&
+        typeof (row as CartLine).menuItemId === 'string'
       )
       .map((row) => ({
         ...row,
@@ -449,8 +449,8 @@ export function KioskApp({
 
   const categoryItemsUrl = useCallback(
     (id: string, page: number, limit: number) =>
-      buildKioskMenuCategoryItemsUrl(slug, id, { page, limit }),
-    [slug]
+      buildKioskMenuCategoryItemsUrl(slug, id, branchId, { page, limit }),
+    [slug, branchId]
   );
 
   const {
@@ -459,7 +459,7 @@ export function KioskApp({
     categoriesLoading,
     error: menuError,
   } = useProgressiveCustomerMenu<CustomerMenuProduct>({
-    categoriesUrl: buildKioskMenuCategoriesUrl(slug),
+    categoriesUrl: buildKioskMenuCategoriesUrl(slug, branchId),
     categoryItemsUrl,
     enabled: Boolean(slug),
   });
@@ -961,24 +961,24 @@ export function KioskApp({
     paymentMethod: string;
   }) {
     if (!fulfillment) return null;
-    const lines = cart.map((line) => ({
-      menuItemId: line.menuItemId,
-      quantity: line.quantity,
-      unitPrice: lineUnitTotal(line),
+      const lines = cart.map((line) => ({
+        menuItemId: line.menuItemId,
+        quantity: line.quantity,
+        unitPrice: lineUnitTotal(line),
       productName: cartLineTitle(line.productName, line.variationName),
       variationId: line.variationId,
-      modifiers: line.modifiers,
-    }));
+        modifiers: line.modifiers,
+      }));
     return {
-      restaurantSlug: slug,
+        restaurantSlug: slug,
       branchId,
-      fulfillment,
+        fulfillment,
       tableId:
         fulfillment === 'dine_in' ? selectedTableId || undefined : undefined,
-      lines,
-      subtotal: cartSubtotal,
+        lines,
+        subtotal: cartSubtotal,
       total: cartGrandTotal,
-      cookingNote: cookingNote.trim() || undefined,
+        cookingNote: cookingNote.trim() || undefined,
       customerName: requiresMobileQrSignIn
         ? customerAccount?.account?.name?.trim() ||
           customerName.trim() ||
@@ -989,7 +989,7 @@ export function KioskApp({
           customerEmail.trim() ||
           undefined
         : undefined,
-      customerPhone: customerPhone.trim() || undefined,
+        customerPhone: customerPhone.trim() || undefined,
       mobileTableQr: requiresMobileQrSignIn || undefined,
       paymentStatus: payment.paymentStatus,
       paymentMethod: payment.paymentMethod,
@@ -1208,9 +1208,9 @@ export function KioskApp({
           {menuError ?? 'Menu unavailable.'}
         </p>
         {notFound ? (
-          <p className="text-center text-sm text-[#64748b]">
-            Check the URL slug matches your restaurant slug in Settings.
-          </p>
+        <p className="text-center text-sm text-[#64748b]">
+          Check the URL slug matches your restaurant slug in Settings.
+        </p>
         ) : null}
       </div>
     );
@@ -1404,9 +1404,9 @@ export function KioskApp({
 
         {qrCustomerReady && step === 'menu' && (
           <>
-            <div className="mx-auto flex w-full flex-1 gap-0 md:gap-4">
-              <aside className="hidden w-36 shrink-0 border-r border-[#e2e8f0] bg-[#fafafa] py-4 md:block">
-                <ScrollArea className="h-[calc(100vh-8rem)]">
+            <div className="mx-auto flex w-full flex-1 gap-0">
+              <aside className="fixed bottom-28 left-0 top-[73px] z-20 hidden w-36 shrink-0 overflow-hidden border-r border-[#e2e8f0] bg-[#fafafa] py-4 md:block">
+                <ScrollArea className="h-full">
                   <nav className="flex flex-col gap-1 px-2">
                     {menuLoading ? (
                       <>
@@ -1416,54 +1416,54 @@ export function KioskApp({
                       </>
                     ) : (
                       <>
+                    <button
+                      type="button"
+                      onClick={() => setCategoryId('all')}
+                      className={cn(
+                        'rounded-lg px-2 py-2 text-left text-xs font-medium transition',
+                        categoryId === 'all'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-[#f1f5f9]'
+                      )}
+                    >
+                      <Store className="mb-1 h-5 w-5" />
+                      All
+                    </button>
+                        {displayMenu.menus.map((c) => {
+                          const thumb = getCategoryDisplayImageUrl(c);
+                      return (
                         <button
+                          key={c.id}
                           type="button"
-                          onClick={() => setCategoryId('all')}
+                          onClick={() => setCategoryId(c.id)}
                           className={cn(
-                            'rounded-lg px-2 py-2 text-left text-xs font-medium transition',
-                            categoryId === 'all'
+                            'rounded-lg px-2 py-2 text-left text-xs transition',
+                            categoryId === c.id
                               ? 'bg-primary text-primary-foreground'
                               : 'hover:bg-[#f1f5f9]'
                           )}
                         >
-                          <Store className="mb-1 h-5 w-5" />
-                          All
+                          {thumb ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={thumb}
+                              alt=""
+                              className="mb-1 h-10 w-10 rounded-md object-cover"
+                            />
+                          ) : (
+                            <div className="mb-1 h-10 w-10 rounded-md bg-[#e2e8f0]" />
+                          )}
+                          <span className="line-clamp-2">{c.name}</span>
                         </button>
-                        {displayMenu.menus.map((c) => {
-                          const thumb = getCategoryDisplayImageUrl(c);
-                          return (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => setCategoryId(c.id)}
-                              className={cn(
-                                'rounded-lg px-2 py-2 text-left text-xs transition',
-                                categoryId === c.id
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'hover:bg-[#f1f5f9]'
-                              )}
-                            >
-                              {thumb ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={thumb}
-                                  alt=""
-                                  className="mb-1 h-10 w-10 rounded-md object-cover"
-                                />
-                              ) : (
-                                <div className="mb-1 h-10 w-10 rounded-md bg-[#e2e8f0]" />
-                              )}
-                              <span className="line-clamp-2">{c.name}</span>
-                            </button>
-                          );
-                        })}
+                      );
+                    })}
                       </>
                     )}
                   </nav>
                 </ScrollArea>
               </aside>
 
-              <main className="min-w-0 flex-1 px-4 py-4 pb-28">
+              <main className="min-w-0 flex-1 px-4 py-4 pb-28 md:ml-36">
                 <div className="mb-4 flex gap-2 overflow-x-auto pb-2 md:hidden">
                   {menuLoading ? (
                     <>
@@ -1473,24 +1473,24 @@ export function KioskApp({
                     </>
                   ) : (
                     <>
-                      <Button
-                        type="button"
-                        variant={categoryId === 'all' ? 'default' : 'outline'}
-                        onClick={() => setCategoryId('all')}
-                      >
-                        All
-                      </Button>
+                  <Button
+                    type="button"
+                    variant={categoryId === 'all' ? 'default' : 'outline'}
+                    onClick={() => setCategoryId('all')}
+                  >
+                    All
+                  </Button>
                       {displayMenu.menus.map((c) => {
                         const thumb = getCategoryDisplayImageUrl(c);
                         return (
-                          <Button
-                            key={c.id}
-                            type="button"
+                    <Button
+                      key={c.id}
+                      type="button"
                             variant={
                               categoryId === c.id ? 'default' : 'outline'
                             }
-                            onClick={() => setCategoryId(c.id)}
-                          >
+                      onClick={() => setCategoryId(c.id)}
+                    >
                             {thumb ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
@@ -1499,8 +1499,8 @@ export function KioskApp({
                                 className="h-6 w-6 rounded-full object-cover"
                               />
                             ) : null}
-                            {c.name}
-                          </Button>
+                      {c.name}
+                    </Button>
                         );
                       })}
                     </>
@@ -1515,14 +1515,14 @@ export function KioskApp({
                   />
                 ) : (
                   <>
-                    <HorizontalRow
-                      title={t('recommended')}
-                      products={recommended}
-                    />
-                    <HorizontalRow
-                      title={t('offersAndAddons')}
-                      products={offeredPool}
-                    />
+                <HorizontalRow
+                  title={t('recommended')}
+                  products={recommended}
+                />
+                <HorizontalRow
+                  title={t('offersAndAddons')}
+                  products={offeredPool}
+                />
 
                     {categoryId === 'all' ? (
                       progressiveCategories.map((category) => (
@@ -1554,13 +1554,13 @@ export function KioskApp({
                         </section>
                       ))
                     ) : (
-                      <section>
-                        <h2 className="mb-3 text-lg font-bold">
+                <section>
+                  <h2 className="mb-3 text-lg font-bold">
                           {
                             displayMenu.menus.find((c) => c.id === categoryId)
                               ?.name
                           }
-                        </h2>
+                  </h2>
                         {(() => {
                           const active = progressiveCategories.find(
                             (c) => c.id === categoryId
@@ -1581,20 +1581,20 @@ export function KioskApp({
                           }
                           if (displayedProducts.length === 0) {
                             return (
-                              <p className="text-sm text-[#64748b]">
-                                {t('noProductsInCategory')}
-                              </p>
+                    <p className="text-sm text-[#64748b]">
+                      {t('noProductsInCategory')}
+                    </p>
                             );
                           }
                           return (
                             <div className={KIOSK_PRODUCT_GRID}>
-                              {displayedProducts.map((p) => (
-                                <ProductCard key={p.id} p={p} />
-                              ))}
-                            </div>
+                      {displayedProducts.map((p) => (
+                        <ProductCard key={p.id} p={p} />
+                      ))}
+                    </div>
                           );
                         })()}
-                      </section>
+                </section>
                     )}
                   </>
                 )}
@@ -1644,20 +1644,20 @@ export function KioskApp({
             </div>
             {cart.length === 0 ? (
               <>
-                <div className="flex flex-col items-center justify-start gap-2">
+              <div className="flex flex-col items-center justify-start gap-2">
                   <p className="text-[#64748b] w-full text-center">
                     Your cart is empty.
                   </p>
-                  <Button
-                    type="button"
-                    variant="default"
-                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90 p-2"
-                    onClick={() => setStep('menu')}
-                  >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    {t('backToMenu')}
-                  </Button>
-                </div>
+              <Button
+                type="button"
+                variant="default"
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 p-2"
+                onClick={() => setStep('menu')}
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                {t('backToMenu')}
+              </Button>
+              </div>
               </>
             ) : (
               <>
@@ -1668,21 +1668,21 @@ export function KioskApp({
                       productImageById
                     );
                     return (
-                      <li
-                        key={line.lineId}
-                        className="flex gap-3 rounded-xl border border-[#e2e8f0] bg-white p-3 shadow-sm"
-                      >
-                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-[#f1f5f9]">
+                    <li
+                      key={line.lineId}
+                      className="flex gap-3 rounded-xl border border-[#e2e8f0] bg-white p-3 shadow-sm"
+                    >
+                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-[#f1f5f9]">
                           {displayImageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
                               src={displayImageUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                        </div>
-                        <div className="min-w-0 flex-1">
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : null}
+                      </div>
+                      <div className="min-w-0 flex-1">
                           <ProductLineDetails
                             productName={line.productName}
                             variationName={line.variationName}
@@ -1693,41 +1693,41 @@ export function KioskApp({
                           />
                           <p className="mt-1 text-xs text-[#64748b]">
                             {formatMoney(lineUnitTotal(line))} each
-                          </p>
-                          <div className="mt-2 flex items-center gap-2">
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() => adjustLine(line.lineId, -1)}
-                            >
-                              <Minus className="h-3.5 w-3.5" />
-                            </Button>
-                            <span className="w-6 text-center text-sm">
-                              {line.quantity}
-                            </span>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() => adjustLine(line.lineId, 1)}
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="ml-auto h-8 w-8 text-[#dc2626]"
-                              onClick={() => removeLine(line.lineId)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            onClick={() => adjustLine(line.lineId, -1)}
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </Button>
+                          <span className="w-6 text-center text-sm">
+                            {line.quantity}
+                          </span>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            onClick={() => adjustLine(line.lineId, 1)}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="ml-auto h-8 w-8 text-[#dc2626]"
+                            onClick={() => removeLine(line.lineId)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                      </li>
+                      </div>
+                    </li>
                     );
                   })}
                 </ul>
@@ -1893,13 +1893,13 @@ export function KioskApp({
                 </Button>
 
                 <Button
-                  type="button"
-                  className="w-full bg-black text-white"
-                  onClick={() => setStep('menu')}
-                >
+                type="button"
+                className="w-full bg-black text-white"
+                onClick={() => setStep('menu')}
+              >
                   <ArrowLeft className="mr-2 h-4 w-4" />
-                  {t('backToMenu')}
-                </Button>
+                {t('backToMenu')}
+              </Button>
               </>
             )}
           </div>
@@ -1911,14 +1911,14 @@ export function KioskApp({
             <p className="text-sm text-[#64748b]">
               {fulfillment === 'dine_in'
                 ? requiresMobileQrSignIn
-                  ? `Dine in · Table ${
+                ? `Dine in · Table ${
                       diningTables.find((t) => t.id === selectedTableId)
                         ?.name ?? selectedTableId
                     } · ${customerName || 'Guest'} · ${customerEmail || 'No email'}`
                   : `Dine in · Table ${
                       diningTables.find((t) => t.id === selectedTableId)
                         ?.name ?? selectedTableId
-                    }`
+                  }`
                 : `Take away · ${customerName || 'Guest'} · ${customerPhone || 'No phone'}`}
             </p>
             <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-sm text-[#0f172a]">
@@ -1928,8 +1928,8 @@ export function KioskApp({
               <ul className="mb-3 max-h-48 space-y-2 overflow-y-auto text-sm">
                 {cart.map((line) => {
                   return (
-                    <li
-                      key={line.lineId}
+                  <li
+                    key={line.lineId}
                       className="border-b border-[#e2e8f0]/80 py-2 last:border-0"
                     >
                       <div className="flex justify-between gap-2">
@@ -1943,14 +1943,14 @@ export function KioskApp({
                             lineClassName="text-xs text-[#64748b]"
                           />
                         </div>
-                        <span className="shrink-0 tabular-nums text-[#64748b]">
+                    <span className="shrink-0 tabular-nums text-[#64748b]">
                           {formatMoney(lineTotal(line))}
-                        </span>
+                    </span>
                       </div>
                       <p className="mt-0.5 text-xs text-[#64748b]">
                         x{line.quantity}
                       </p>
-                    </li>
+                  </li>
                   );
                 })}
               </ul>
@@ -1966,7 +1966,7 @@ export function KioskApp({
                   </div>
                 ) : null}
                 <div className="flex justify-between font-semibold text-[#0f172a]">
-                  <span>Total due</span>
+                <span>Total due</span>
                   <span>{formatMoney(cartGrandTotal)}</span>
                 </div>
               </div>

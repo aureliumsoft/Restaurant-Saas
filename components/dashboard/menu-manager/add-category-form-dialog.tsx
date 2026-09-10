@@ -29,6 +29,8 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   onMenuRefresh?: () => Promise<void>;
   onCreated?: (category: CreatedCategory) => void;
+  /** Prefill "Show in front" when the dialog opens (defaults to true). */
+  defaultShowInFront?: boolean;
 };
 
 export function AddCategoryFormDialog({
@@ -36,19 +38,20 @@ export function AddCategoryFormDialog({
   onOpenChange,
   onMenuRefresh,
   onCreated,
+  defaultShowInFront = true,
 }: Props) {
   const [name, setName] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [showInFront, setShowInFront] = useState(true);
+  const [showInFront, setShowInFront] = useState(defaultShowInFront);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
       setName('');
       setImageUrl('');
-      setShowInFront(true);
+      setShowInFront(defaultShowInFront);
     }
-  }, [open]);
+  }, [open, defaultShowInFront]);
 
   const save = async () => {
     if (!name.trim() || saving) return;

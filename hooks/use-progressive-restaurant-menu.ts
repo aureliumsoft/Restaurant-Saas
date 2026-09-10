@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
 
 import type { ProgressiveMenuCategory } from '@/hooks/use-progressive-customer-menu';
 import { isBrowserOffline } from '@/lib/offline/db';
@@ -33,6 +34,7 @@ type UseProgressiveRestaurantMenuOptions = {
 export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
   enabled = true,
 }: UseProgressiveRestaurantMenuOptions = {}) {
+  const { activeBranchId } = useBranchContext();
   const [meta, setMeta] = useState<RestaurantMenuMeta | null>(null);
   const [categories, setCategories] = useState<
     ProgressiveMenuCategory<TItem>[]
@@ -53,7 +55,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
   }, []);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !activeBranchId) {
       reset();
       return;
     }
@@ -105,7 +107,10 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
         }
 
         const catalogRes = await fetch(
-          '/api/restaurant/menu/categories?catalog=1',
+          withBranchQuery(
+            '/api/restaurant/menu/categories?catalog=1',
+            activeBranchId
+          ),
           { cache: 'default' }
         );
         const catalogBody = (await catalogRes.json().catch(() => ({}))) as {
@@ -186,7 +191,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
     return () => {
       cancelled = true;
     };
-  }, [enabled, reset]);
+  }, [activeBranchId, enabled, reset]);
 
   return {
     meta,

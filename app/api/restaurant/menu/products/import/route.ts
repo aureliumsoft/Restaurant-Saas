@@ -1,4 +1,4 @@
-﻿import type { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import {
   AttributeSelectionType,
@@ -615,6 +615,12 @@ export async function POST(req: NextRequest) {
                 ? Math.min(100, Math.max(0, g.categoryDiscountPercent))
                 : null;
 
+            const extraCost =
+              sourceType === RecommendationSourceType.CATEGORY &&
+              g.categoryExtraCostPercent != null
+                ? Math.min(500, Math.max(0, g.categoryExtraCostPercent))
+                : null;
+
             await tx.menuItemAttributeGroup.create({
               data: {
                 menuItemId: productId,
@@ -632,6 +638,7 @@ export async function POST(req: NextRequest) {
                 minItems,
                 maxItems,
                 categoryDiscountPercent: discount,
+                categoryExtraCostPercent: extraCost,
                 linkedCategoryId:
                   sourceType === RecommendationSourceType.CATEGORY
                     ? linkedCategoryId
@@ -692,7 +699,6 @@ export async function POST(req: NextRequest) {
               personalizeOptionsCount += 1;
             }
           }
-
           await attachIngredients(productId, row.name);
         }
     };

@@ -34,7 +34,16 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const data = await loadCustomerMenuRestaurant({ slug, subdomain });
+    const branchId = req.nextUrl.searchParams.get('branchId')?.trim();
+    if (!branchId) {
+      return NextResponse.json({ error: 'Missing branch id.' }, { status: 400 });
+    }
+
+    const data = await loadCustomerMenuRestaurant({ slug, subdomain, branchId });
+
+    if (!data) {
+      return NextResponse.json({ data: null }, { status: 404 });
+    }
 
     return NextResponse.json({ data: data ?? null }, { status: 200 });
   } catch (error) {

@@ -102,6 +102,7 @@ export async function GET(req: NextRequest) {
               name: c.name,
               imageUrl: c.imageUrl,
               showInFront: c.showInFront,
+              hiddenBranchIds: [],
               sortOrder: c.sortOrder,
               itemCount: Math.max(c._count.itemLinks, c._count.items),
               items: [],
@@ -115,7 +116,18 @@ export async function GET(req: NextRequest) {
 
     // One-shot POS catalog: meta + all front categories with browse items.
     if (req.nextUrl.searchParams.get('catalog') === '1') {
-      const data = await loadRestaurantPosMenuCatalog(auth.restaurant.id);
+      const branchId = req.nextUrl.searchParams.get('branchId')?.trim();
+      if (!branchId) {
+        return NextResponse.json({ error: 'Missing branch id.' }, { status: 400 });
+      }
+      const branch = await db.branch.findFirst({
+        where: { id: branchId, restaurantId: auth.restaurant.id },
+        select: { id: true },
+      });
+      if (!branch) {
+        return NextResponse.json({ error: 'Invalid branch.' }, { status: 400 });
+      }
+      const data = await loadRestaurantPosMenuCatalog(auth.restaurant.id, branchId);
       if (!data) {
         return NextResponse.json(
           { error: 'Restaurant not found' },

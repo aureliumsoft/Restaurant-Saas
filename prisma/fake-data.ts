@@ -765,6 +765,7 @@ export function fakeMenuItemAttributeGroup() {
     minItems: undefined,
     maxItems: undefined,
     categoryDiscountPercent: undefined,
+    categoryExtraCostPercent: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -786,9 +787,11 @@ export function fakeMenuItemAttributeGroupComplete() {
     defaultLinkedMenuItemId: undefined,
     defaultLinkedRestaurantVariationId: undefined,
     includeDefaultLinkedVariationPrice: true,
+    categoryDiscountPercent: undefined,
+    categoryExtraCostPercent: undefined,
+    productOverrides: {},
     productCategoryIds: [],
     useVariationPricing: false,
-    categoryDiscountPercent: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -947,6 +950,7 @@ export function fakeOrderItemComplete() {
 export function fakeOrderItemModifier() {
   return {
     name: faker.person.fullName(),
+    groupName: undefined,
     unitPrice: faker.number.float(),
     updatedAt: faker.date.anytime(),
   };
@@ -957,6 +961,7 @@ export function fakeOrderItemModifierComplete() {
     orderItemId: faker.string.uuid(),
     menuItemId: undefined,
     name: faker.person.fullName(),
+    groupName: undefined,
     unitPrice: faker.number.float(),
     quantity: 1,
     createdAt: new Date(),

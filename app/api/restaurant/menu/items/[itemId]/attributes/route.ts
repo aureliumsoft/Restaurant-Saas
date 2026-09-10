@@ -214,6 +214,8 @@ export async function POST(
                 ? (data.includeDefaultLinkedVariationPrice ?? true)
                 : true,
             categoryDiscountPercent: data.categoryDiscountPercent ?? null,
+            categoryExtraCostPercent: data.categoryExtraCostPercent ?? null,
+            productOverrides: data.productOverrides ?? {},
             productCategoryIds: [],
             linkedProductId: null,
           }

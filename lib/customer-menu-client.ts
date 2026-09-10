@@ -27,36 +27,48 @@ export function inferHostSubdomainForMenu(): string | null {
 export function buildCustomerMenuRequestUrl(
   restaurantSlug: string | null | undefined,
   storeId: string | null | undefined,
-  hostSubdomain: string | null
+  hostSubdomain: string | null,
+  branchId?: string | null
 ): string | null {
   const slug = restaurantSlug?.trim();
   if (slug) {
-    return `/api/customer/menu?slug=${encodeURIComponent(slug)}`;
+    return `/api/customer/menu?slug=${encodeURIComponent(slug)}${branchQuery(branchId)}`;
   }
   const sub = (hostSubdomain?.trim() || storeId?.trim() || '') || null;
   if (!sub) return null;
-  return `/api/customer/menu?subdomain=${encodeURIComponent(sub)}`;
+  return `/api/customer/menu?subdomain=${encodeURIComponent(sub)}${branchQuery(branchId)}`;
+}
+
+function branchQuery(branchId?: string | null) {
+  return branchId?.trim() ? `&branchId=${encodeURIComponent(branchId.trim())}` : '';
 }
 
 function customerMenuQueryString(
   restaurantSlug: string | null | undefined,
   storeId: string | null | undefined,
-  hostSubdomain: string | null
+  hostSubdomain: string | null,
+  branchId?: string | null
 ): string | null {
   const slug = restaurantSlug?.trim();
-  if (slug) return `slug=${encodeURIComponent(slug)}`;
+  if (slug) return `slug=${encodeURIComponent(slug)}${branchQuery(branchId)}`;
   const sub = (hostSubdomain?.trim() || storeId?.trim() || '') || null;
   if (!sub) return null;
-  return `subdomain=${encodeURIComponent(sub)}`;
+  return `subdomain=${encodeURIComponent(sub)}${branchQuery(branchId)}`;
 }
 
 /** Progressive menu: category metadata only. */
 export function buildCustomerMenuCategoriesUrl(
   restaurantSlug: string | null | undefined,
   storeId: string | null | undefined,
-  hostSubdomain: string | null
+  hostSubdomain: string | null,
+  branchId?: string | null
 ): string | null {
-  const query = customerMenuQueryString(restaurantSlug, storeId, hostSubdomain);
+  const query = customerMenuQueryString(
+    restaurantSlug,
+    storeId,
+    hostSubdomain,
+    branchId
+  );
   if (!query) return null;
   return `/api/customer/menu/categories?${query}`;
 }
@@ -67,9 +79,10 @@ export function buildCustomerMenuCategoryItemsUrl(
   restaurantSlug: string | null | undefined,
   storeId: string | null | undefined,
   hostSubdomain: string | null,
+  branchId: string | null | undefined,
   opts?: { page?: number; limit?: number }
 ): string | null {
-  const query = customerMenuQueryString(restaurantSlug, storeId, hostSubdomain);
+  const query = customerMenuQueryString(restaurantSlug, storeId, hostSubdomain, branchId);
   if (!query) return null;
   const page = opts?.page ?? 1;
   const limit = opts?.limit ?? 24;
@@ -77,18 +90,19 @@ export function buildCustomerMenuCategoryItemsUrl(
 }
 
 /** Kiosk progressive menu helpers (slug-only). */
-export function buildKioskMenuCategoriesUrl(slug: string): string {
-  return `/api/customer/menu/categories?slug=${encodeURIComponent(slug)}`;
+export function buildKioskMenuCategoriesUrl(slug: string, branchId: string): string {
+  return `/api/customer/menu/categories?slug=${encodeURIComponent(slug)}${branchQuery(branchId)}`;
 }
 
 export function buildKioskMenuCategoryItemsUrl(
   slug: string,
   categoryId: string,
+  branchId: string,
   opts?: { page?: number; limit?: number }
 ): string {
   const page = opts?.page ?? 1;
   const limit = opts?.limit ?? 24;
-  return `/api/customer/menu/categories/${encodeURIComponent(categoryId)}?slug=${encodeURIComponent(slug)}&page=${page}&limit=${limit}`;
+  return `/api/customer/menu/categories/${encodeURIComponent(categoryId)}?slug=${encodeURIComponent(slug)}${branchQuery(branchId)}&page=${page}&limit=${limit}`;
 }
 
 export function buildKioskMenuItemDetailUrl(slug: string, itemId: string): string {

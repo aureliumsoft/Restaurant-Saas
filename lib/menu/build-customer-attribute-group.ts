@@ -22,6 +22,8 @@ export function buildCustomerAttributeGroup(
     multipleMode?: 'CHECKBOX' | 'QUANTITY' | null;
     freeQuantity?: number | null;
     categoryDiscountPercent?: number | null;
+    categoryExtraCostPercent?: number | null;
+    productOverrides?: Record<string, { excluded?: boolean; free?: boolean }> | null;
     required: boolean;
     minItems: number | null;
     maxItems: number | null;
@@ -44,10 +46,33 @@ export function buildCustomerAttributeGroup(
   /** Lazy image proxy for recommendation option thumbs (no embedded base64). */
   imageUrlForItem?: AttributeGroupImageUrlBuilder
 ): AttributeGroup {
+  const directItems = group.linkedCategory?.items ?? [];
+  const linkItems =
+    (
+      group.linkedCategory as
+        | { itemLinks?: Array<{ menuItem?: (typeof directItems)[number] }> }
+        | undefined
+    )?.itemLinks
+      ?.map((l) => l.menuItem)
+      .filter(Boolean) ?? [];
+
+  const mergedCategoryItems: typeof directItems = [];
+  const seenIds = new Set<string>();
+  for (const it of [...directItems, ...linkItems]) {
+    if (it && it.id && !seenIds.has(it.id)) {
+      seenIds.add(it.id);
+      mergedCategoryItems.push(it);
+    }
+  }
+
   const rawItems =
     group.sourceType === 'PRODUCT' && group.linkedProduct
       ? [group.linkedProduct]
-      : (group.linkedCategory?.items ?? []);
+      : mergedCategoryItems;
+  const productOverrides = group.productOverrides ?? {};
+  const visibleRawItems = rawItems.filter(
+    (item) => !productOverrides[item.id]?.excluded
+  );
 
   const defaultRestaurantVariationId =
     group.defaultLinkedRestaurantVariationId ??
@@ -58,9 +83,11 @@ export function buildCustomerAttributeGroup(
 
   const defaultItem =
     group.sourceType === 'CATEGORY' && group.defaultLinkedMenuItem
-      ? group.defaultLinkedMenuItem
+      ? productOverrides[group.defaultLinkedMenuItem.id]?.excluded
+        ? null
+        : group.defaultLinkedMenuItem
       : group.sourceType === 'CATEGORY' && group.defaultLinkedMenuItemId
-        ? rawItems.find((r) => r.id === group.defaultLinkedMenuItemId)
+        ? visibleRawItems.find((r) => r.id === group.defaultLinkedMenuItemId)
         : null;
   const defaultUnitPrice =
     defaultItem && !(group.useVariationPricing ?? false)
@@ -73,7 +100,18 @@ export function buildCustomerAttributeGroup(
         : effectiveMenuItemUnitPrice(defaultItem.price, defaultItem.salePrice)
       : null;
 
-  const mappedItems = mapAttributeGroupItems(group, baseProductId);
+  const mappedItems = mapAttributeGroupItems(
+    group.sourceType === 'CATEGORY' && group.linkedCategory
+      ? {
+          ...group,
+          linkedCategory: {
+            ...group.linkedCategory,
+            items: visibleRawItems,
+          },
+        }
+      : group,
+    baseProductId
+  );
   const items =
     defaultRestaurantVariationId && !(group.useVariationPricing ?? false)
       ? filterConfigurationItemsForDefaultLinkedVariation(
@@ -88,6 +126,7 @@ export function buildCustomerAttributeGroup(
     multipleMode: group.multipleMode ?? undefined,
     freeQuantity: group.freeQuantity,
     categoryDiscountPercent: group.categoryDiscountPercent ?? null,
+    categoryExtraCostPercent: group.categoryExtraCostPercent ?? null,
     required: group.required,
     minItems: group.minItems,
     maxItems: group.maxItems,
@@ -112,8 +151,8 @@ export function buildCustomerAttributeGroup(
         name: it.name,
         description: it.description ?? null,
         imageUrl: lazyImage,
-        price: it.price,
-        salePrice: it.salePrice,
+        price: productOverrides[it.id]?.free ? 0 : it.price,
+        salePrice: productOverrides[it.id]?.free ? null : it.salePrice,
         variations: (it.variations ?? []).map((v) => ({
           id: v.id,
           name: v.name,
@@ -121,7 +160,7 @@ export function buildCustomerAttributeGroup(
           // Variation thumbs reuse the product lazy URL (no per-variation blob).
           imageUrl: lazyImage,
           swatchHex: v.swatchHex ?? null,
-          priceDelta: v.priceDelta,
+          priceDelta: productOverrides[it.id]?.free ? 0 : v.priceDelta,
           restaurantVariationId: v.restaurantVariationId ?? null,
         })),
         nestedAttributeGroups:

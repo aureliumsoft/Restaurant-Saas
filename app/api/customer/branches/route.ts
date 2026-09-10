@@ -49,7 +49,6 @@ export async function GET(req: NextRequest) {
             address: true,
             phone: true,
             openingHours: true,
-            slotDurationMinutes: true,
           },
         },
       },

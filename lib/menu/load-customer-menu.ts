@@ -16,6 +16,7 @@ import {
 } from '@/lib/menu/customer-menu-attribute-groups-select';
 import {
   CUSTOMER_MENU_CATEGORY_WHERE,
+  categoryVisibleForBranch,
   RECOMMENDATION_SOURCE_CATEGORY_WHERE,
   sanitizeCustomerMenuPayload,
 } from '@/lib/menu/category-visibility';
@@ -111,18 +112,30 @@ async function enrichRestaurantMenuForCustomer<
   };
 }
 
-async function loadBySlugWithMode(slug: string, mode: CustomerMenuSelectMode) {
+async function loadBySlugWithMode(
+  slug: string,
+  mode: CustomerMenuSelectMode,
+  branchId: string
+) {
   const restaurant = await db.restaurant.findUnique({
     where: { slug },
     select: restaurantPublicSelect,
   });
   if (!restaurant) return null;
+  const branch = await db.branch.findFirst({
+    where: { id: branchId, restaurantId: restaurant.id },
+    select: { id: true },
+  });
+  if (!branch) return null;
 
   const menus = await loadRestaurantMenuCategories({
     restaurantId: restaurant.id,
     categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
     itemSelect: buildCustomerMenuItemSelect(mode),
-    categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
+    categoryWhere: {
+      ...CUSTOMER_MENU_CATEGORY_WHERE,
+      ...categoryVisibleForBranch(branchId),
+    },
   });
 
   return enrichRestaurantMenuForCustomer({ ...restaurant, menus }, mode);
@@ -130,19 +143,28 @@ async function loadBySlugWithMode(slug: string, mode: CustomerMenuSelectMode) {
 
 async function loadBySubdomainWithMode(
   subdomain: string,
-  mode: CustomerMenuSelectMode
+  mode: CustomerMenuSelectMode,
+  branchId: string
 ) {
   const restaurant = await db.restaurant.findUnique({
     where: { subdomain },
     select: restaurantPublicSelect,
   });
   if (!restaurant) return null;
+  const branch = await db.branch.findFirst({
+    where: { id: branchId, restaurantId: restaurant.id },
+    select: { id: true },
+  });
+  if (!branch) return null;
 
   const menus = await loadRestaurantMenuCategories({
     restaurantId: restaurant.id,
     categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
     itemSelect: buildCustomerMenuItemSelect(mode),
-    categoryWhere: CUSTOMER_MENU_CATEGORY_WHERE,
+    categoryWhere: {
+      ...CUSTOMER_MENU_CATEGORY_WHERE,
+      ...categoryVisibleForBranch(branchId),
+    },
   });
 
   return enrichRestaurantMenuForCustomer({ ...restaurant, menus }, mode);
@@ -152,6 +174,7 @@ async function loadBySubdomainWithMode(
 export async function loadCustomerMenuRestaurant(options: {
   slug?: string | null;
   subdomain?: string | null;
+  branchId: string;
 }) {
   const modes: CustomerMenuSelectMode[] = ['full', 'legacy'];
   const slug = options.slug?.trim();
@@ -160,10 +183,10 @@ export async function loadCustomerMenuRestaurant(options: {
   for (const mode of modes) {
     try {
       if (slug) {
-        return await loadBySlugWithMode(slug, mode);
+        return await loadBySlugWithMode(slug, mode, options.branchId);
       }
       if (subdomain) {
-        return await loadBySubdomainWithMode(subdomain, mode);
+        return await loadBySubdomainWithMode(subdomain, mode, options.branchId);
       }
       return null;
     } catch (error) {

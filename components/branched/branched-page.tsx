@@ -10,7 +10,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { TablePagination } from '@/components/ui/table-pagination';
 import { toast } from 'react-toastify';
 import {
   Cross,
@@ -24,13 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { useStaffPermissions } from '@/hooks/use-staff-permissions';
-import {
-  DEFAULT_SLOT_DURATION_MINUTES,
-  SLOT_DURATION_OPTIONS,
-  normalizeSlotDurationMinutes,
-  type BranchOpeningHours,
-  type SlotDurationMinutes,
-} from '@/lib/order-time-slots';
+import type { BranchOpeningHours } from '@/lib/order-time-slots';
 
 type BranchRow = {
   id: string;
@@ -38,7 +31,6 @@ type BranchRow = {
   address: string | null;
   phone: string | null;
   openingHours: BranchOpeningHours | null;
-  slotDurationMinutes?: number | null;
   createdAt: string;
 };
 
@@ -56,8 +48,8 @@ function createDefaultOpeningHours(): BranchOpeningHours {
   return Array.from({ length: 7 }, (_, dayOfWeek) => ({
     dayOfWeek,
     isOpen: false,
-    openTime: '',
-    closeTime: '',
+    openTime: '09:00',
+    closeTime: '17:00',
   }));
 }
 
@@ -72,13 +64,11 @@ function normalizeOpeningHours(
   const merged = new Map<number, BranchOpeningHours[number]>();
   openingHours.forEach((entry) => {
     if (typeof entry?.dayOfWeek === 'number') {
-      const isOpen = entry.isOpen === true;
       merged.set(entry.dayOfWeek, {
         dayOfWeek: entry.dayOfWeek,
-        isOpen,
-        openTime: isOpen && typeof entry.openTime === 'string' ? entry.openTime : '',
-        closeTime:
-          isOpen && typeof entry.closeTime === 'string' ? entry.closeTime : '',
+        isOpen: entry.isOpen === true,
+        openTime: typeof entry.openTime === 'string' ? entry.openTime : '09:00',
+        closeTime: typeof entry.closeTime === 'string' ? entry.closeTime : '17:00',
       });
     }
   });
@@ -90,7 +80,7 @@ function formatOpeningHoursSummary(openingHours: BranchOpeningHours | null | und
   const normalized = normalizeOpeningHours(openingHours);
   const enabledDays = normalized.filter((entry) => entry.isOpen);
   if (enabledDays.length === 0) {
-    return 'Closed all week';
+    return 'No weekly hours set';
   }
 
   const first = enabledDays[0];
@@ -105,13 +95,6 @@ export function BranchedPage() {
   const { plan } = useStaffPermissions();
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    pageSize: 12,
-    total: 0,
-    totalPages: 1,
-  });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -122,8 +105,6 @@ export function BranchedPage() {
   const [openingHours, setOpeningHours] = useState<BranchOpeningHours>(
     createDefaultOpeningHours()
   );
-  const [slotDurationMinutes, setSlotDurationMinutes] =
-    useState<SlotDurationMinutes>(DEFAULT_SLOT_DURATION_MINUTES);
 
   const [confirmAddOpen, setConfirmAddOpen] = useState(false);
   const [confirmEditOpen, setConfirmEditOpen] = useState(false);
@@ -132,19 +113,10 @@ export function BranchedPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await axios.get<{
-        data: BranchRow[];
-        pagination?: {
-          page: number;
-          pageSize: number;
-          total: number;
-          totalPages: number;
-        };
-      }>('/api/restaurant/branches', {
-        params: { page, limit: 12 },
-      });
+      const res = await axios.get<{ data: BranchRow[] }>(
+        '/api/restaurant/branches'
+      );
       setBranches(res.data.data ?? []);
-      if (res.data.pagination) setPagination(res.data.pagination);
     } catch {
       toast.error('Could not load branches');
       setBranches([]);
@@ -155,15 +127,14 @@ export function BranchedPage() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, []);
 
   const activeBranch = branches.find((b) => b.id === activeId) ?? null;
-  const cannotDeleteLastBranch = pagination.total <= 1;
+  const cannotDeleteLastBranch = branches.length <= 1;
   const maxBranches = plan?.maxBranches ?? 1;
   const branchCap =
     maxBranches === null ? Number.POSITIVE_INFINITY : maxBranches;
-  const atBranchLimit = pagination.total >= branchCap;
+  const atBranchLimit = branches.length >= branchCap;
 
   function resetForm() {
     setActiveId(null);
@@ -171,7 +142,6 @@ export function BranchedPage() {
     setAddress('');
     setPhone('');
     setOpeningHours(createDefaultOpeningHours());
-    setSlotDurationMinutes(DEFAULT_SLOT_DURATION_MINUTES);
   }
 
   function updateOpeningHour(dayOfWeek: number, patch: Partial<BranchOpeningHours[number]>) {
@@ -188,9 +158,6 @@ export function BranchedPage() {
     setAddress(branch.address ?? '');
     setPhone(branch.phone ?? '');
     setOpeningHours(normalizeOpeningHours(branch.openingHours));
-    setSlotDurationMinutes(
-      normalizeSlotDurationMinutes(branch.slotDurationMinutes)
-    );
   }
 
   async function createBranch() {
@@ -213,7 +180,6 @@ export function BranchedPage() {
         address: address.trim(),
         phone: phone.trim(),
         openingHours,
-        slotDurationMinutes,
       });
       toast.success('Branch created');
       resetForm();
@@ -245,7 +211,6 @@ export function BranchedPage() {
         address: address.trim(),
         phone: phone.trim(),
         openingHours,
-        slotDurationMinutes,
       });
       toast.success('Branch updated');
       resetForm();
@@ -331,89 +296,55 @@ export function BranchedPage() {
             />
           </div>
           <div className="rounded-lg border p-3 space-y-2">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-medium">Weekly opening hours</p>
                 <p className="text-xs text-muted-foreground">
                   Set the hours that customers can choose for later orders.
                 </p>
               </div>
-              <label className="flex flex-col gap-1 text-sm sm:min-w-[180px]">
-                <span className="font-medium">Slot duration</span>
-                <select
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                  value={slotDurationMinutes}
-                  onChange={(event) =>
-                    setSlotDurationMinutes(
-                      normalizeSlotDurationMinutes(Number(event.target.value))
-                    )
-                  }
-                >
-                  {SLOT_DURATION_OPTIONS.map((minutes) => (
-                    <option key={minutes} value={minutes}>
-                      {minutes} minutes
-                    </option>
-                  ))}
-                </select>
-                <span className="text-xs text-muted-foreground">
-                  Order page time slots use this length.
-                </span>
-              </label>
             </div>
             <div className="space-y-2">
-              {openingHours.map((entry) => {
-                const isClosed = !entry.isOpen;
-                return (
-                  <div
-                    key={entry.dayOfWeek}
-                    className="grid gap-2 sm:grid-cols-[140px_90px_120px_120px] items-center"
-                  >
-                    <span className="text-sm">{weekdayLabels[entry.dayOfWeek]}</span>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={isClosed}
-                        onChange={(event) => {
-                          const closed = event.target.checked;
-                          updateOpeningHour(entry.dayOfWeek, {
-                            isOpen: !closed,
-                            openTime: closed ? '' : entry.openTime || '09:00',
-                            closeTime: closed ? '' : entry.closeTime || '17:00',
-                          });
-                        }}
-                      />
-                      Close
-                    </label>
-                    {isClosed ? (
-                      <>
-                        <Input type="time" value="" disabled placeholder="—" />
-                        <Input type="time" value="" disabled placeholder="—" />
-                      </>
-                    ) : (
-                      <>
-                        <Input
-                          type="time"
-                          value={entry.openTime}
-                          onChange={(event) =>
-                            updateOpeningHour(entry.dayOfWeek, {
-                              openTime: event.target.value,
-                            })
-                          }
-                        />
-                        <Input
-                          type="time"
-                          value={entry.closeTime}
-                          onChange={(event) =>
-                            updateOpeningHour(entry.dayOfWeek, {
-                              closeTime: event.target.value,
-                            })
-                          }
-                        />
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+              {openingHours.map((entry) => (
+                <div
+                  key={entry.dayOfWeek}
+                  className="grid gap-2 sm:grid-cols-[140px_80px_120px_120px] items-center"
+                >
+                  <span className="text-sm">{weekdayLabels[entry.dayOfWeek]}</span>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={entry.isOpen}
+                      onChange={(event) =>
+                        updateOpeningHour(entry.dayOfWeek, {
+                          isOpen: event.target.checked,
+                        })
+                      }
+                    />
+                    Open
+                  </label>
+                  <Input
+                    type="time"
+                    value={entry.openTime}
+                    disabled={!entry.isOpen}
+                    onChange={(event) =>
+                      updateOpeningHour(entry.dayOfWeek, {
+                        openTime: event.target.value,
+                      })
+                    }
+                  />
+                  <Input
+                    type="time"
+                    value={entry.closeTime}
+                    disabled={!entry.isOpen}
+                    onChange={(event) =>
+                      updateOpeningHour(entry.dayOfWeek, {
+                        closeTime: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+              ))}
             </div>
           </div>
 
@@ -501,22 +432,20 @@ export function BranchedPage() {
             </p>
           ) : (
             <div className="space-y-2">
-              {pagination.total <= 1 ? (
+              {branches.length <= 1 ? (
                 <p className="text-xs text-amber-600">
                   You must keep at least one branch.
                 </p>
               ) : null}
               {branches.map((b, index) => {
                 const editing = b.id === activeId;
-                const displayIndex =
-                  (pagination.page - 1) * pagination.pageSize + index + 1;
                 return (
                   <div
                     key={b.id}
                     className={`rounded-lg border p-3 ${editing ? 'border-primary' : ''}`}
                   >
                     <p className="text-sm font-semibold">
-                      {displayIndex}. {b.name}
+                      {index + 1}. {b.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {b.address || 'No address'}
@@ -526,8 +455,6 @@ export function BranchedPage() {
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {formatOpeningHoursSummary(b.openingHours)}
-                      {' · '}
-                      {normalizeSlotDurationMinutes(b.slotDurationMinutes)} min slots
                     </p>
                     <div className="mt-2">
                       <Button
@@ -544,12 +471,6 @@ export function BranchedPage() {
                   </div>
                 );
               })}
-              <TablePagination
-                pagination={pagination}
-                page={page}
-                onPageChange={setPage}
-                loading={loading}
-              />
             </div>
           )}
         </CardContent>

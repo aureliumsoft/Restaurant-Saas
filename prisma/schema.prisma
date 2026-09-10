@@ -853,12 +853,16 @@ model MenuItemAttributeGroup {
   defaultLinkedRestaurantVariationId String?
   /// When false with a default variation, guests see base item price only (variation tier is free).
   includeDefaultLinkedVariationPrice Boolean @default(true)
+  /// Percentage discount applied to products selected from a category recommendation.
+  categoryDiscountPercent Float?
+  /// Extra cost percentage added to products selected from a category recommendation.
+  categoryExtraCostPercent Float?
+  /// Advanced category product overrides keyed by menu item id.
+  productOverrides Json @default("{}")
   /// For PRODUCT source: category ids whose products guests can pick (same + other categories).
   productCategoryIds String[] @default([])
   /// When true, configuration item prices follow the guest's selected base-product variation.
   useVariationPricing Boolean @default(false)
-  /// Percent off every item in a linked category (0–100).
-  categoryDiscountPercent Float?
 
   menuItem         MenuItem     @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
   linkedCategory   MenuCategory? @relation("AttributeLinkedCategory", fields: [linkedCategoryId], references: [id], onDelete: Cascade)
@@ -1050,6 +1054,7 @@ model OrderItemModifier {
   /// Null for personalize-only lines (no linked menu product).
   menuItemId  String?
   name        String
+  groupName   String?
   unitPrice   Float
   quantity    Int     @default(1)
 

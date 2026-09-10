@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import {
   isCategoryEligibleForRecommendations,
+  isMenuCategoryShownInFront,
 } from '@/lib/menu/category-visibility';
 import { menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
 import {
@@ -48,6 +49,7 @@ import { RecommendationConfigSectionShell } from './recommendation-config-sectio
 import { LazyProductImage } from './lazy-product-image';
 import { useRestaurantVariationTemplates } from './product-form-fields';
 import { ConfigurationWizardConfigureStep } from './configuration-wizard-configure-step';
+import { SelectableList, SelectableRow } from './selectable-list';
 import type { AttrGroupRow, MenuCategoryRow, MenuItemRow } from './types';
 
 type ProductWithCategory = MenuItemRow & { categoryName: string };
@@ -56,6 +58,8 @@ type WizardStep = 0 | 1 | 2 | 3 | 4 | 'done';
 type ChoiceKind = WizardChoiceKind;
 
 export type ConfigurationWizardProps = {
+  viewMode?: 'classic' | 'advanced';
+  onViewModeChange?: (mode: 'classic' | 'advanced') => void;
   selected: ProductWithCategory;
   localCategories: MenuCategoryRow[];
   allProducts: ProductWithCategory[];
@@ -146,108 +150,7 @@ function ChoiceCard({
   );
 }
 
-function SelectableRow({
-  active,
-  title,
-  subtitle,
-  imageUrl,
-  onClick,
-  multi = false,
-}: {
-  active: boolean;
-  title: string;
-  subtitle?: string;
-  imageUrl?: string | null;
-  onClick: () => void;
-  multi?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors',
-        active ? 'bg-muted' : 'hover:bg-muted/50'
-      )}
-    >
-      <span
-        className={cn(
-          'flex h-4 w-4 shrink-0 items-center justify-center border',
-          multi ? 'rounded-sm' : 'rounded-full',
-          active
-            ? 'border-foreground bg-foreground'
-            : 'border-muted-foreground/40'
-        )}
-        aria-hidden
-      >
-        {active ? (
-          <span className="h-1.5 w-1.5 rounded-[1px] bg-background" />
-        ) : null}
-      </span>
-      <LazyProductImage
-        src={imageUrl}
-        hasImage={Boolean(imageUrl)}
-        alt=""
-        emptyLabel="—"
-        className="h-10 w-10 shrink-0 rounded-md"
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-foreground">{title}</span>
-        {subtitle ? (
-          <span className="block text-xs text-muted-foreground">{subtitle}</span>
-        ) : null}
-      </span>
-    </button>
-  );
-}
 
-function SelectableList({
-  children,
-  className,
-  search,
-  onSearchChange,
-  searchPlaceholder = 'Search…',
-  emptyMessage,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  search?: string;
-  onSearchChange?: (value: string) => void;
-  searchPlaceholder?: string;
-  emptyMessage?: string;
-}) {
-  const hasSearch = typeof onSearchChange === 'function';
-  const isEmpty = Children.count(children) === 0;
-
-  return (
-    <div className={cn('rounded-xl border border-border bg-background', className)}>
-      {hasSearch ? (
-        <div className="relative border-b border-border">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            type="search"
-            value={search ?? ''}
-            onChange={(e) => onSearchChange?.(e.target.value)}
-            placeholder={searchPlaceholder}
-            className="h-10 rounded-none border-0 bg-transparent pl-9 shadow-none focus-visible:ring-0"
-          />
-        </div>
-      ) : null}
-      <div className="max-h-56 divide-y divide-border overflow-y-auto overscroll-contain">
-        {isEmpty ? (
-          <p className="px-3 py-4 text-sm text-muted-foreground">
-            {emptyMessage ?? 'No matches.'}
-          </p>
-        ) : (
-          children
-        )}
-      </div>
-    </div>
-  );
-}
 
 function WizardProgress({ step }: { step: WizardStep }) {
   const current = step === 'done' ? 4 : typeof step === 'number' ? step : 0;
@@ -476,6 +379,7 @@ function SavedSummaryList({
 
 export function ConfigurationWizard(props: ConfigurationWizardProps) {
   const {
+    viewMode = 'advanced',
     selected,
     localCategories,
     allProducts,
@@ -514,7 +418,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     [variationTemplates]
   );
 
-  const [step, setStep] = useState<WizardStep>(0);
+  const [step, setStep] = useState<WizardStep>(viewMode === 'advanced' ? 2 : 0);
   const [kind, setKind] = useState<ChoiceKind>('cat-many');
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [productCategoryIds, setProductCategoryIds] = useState<string[]>([]);
@@ -533,7 +437,6 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
   const [wizardPrefDraft, setWizardPrefDraft] = useState<PersonalizeGroupDraft[]>(
     []
   );
-  const [showClassic, setShowClassic] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
   const [productFilterSearch, setProductFilterSearch] = useState('');
   const [productSearch, setProductSearch] = useState('');
@@ -677,15 +580,14 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
   };
 
   useEffect(() => {
-    setStep(0);
+    setStep(viewMode === 'advanced' ? 2 : 0);
     setKind('cat-many');
     resetConfigureState();
     setWizardPrefDraft([]);
-    setShowClassic(false);
     setOfferCategorySearch('');
     setOfferProductSearch('');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on product change only
-  }, [selected.id]);
+  }, [selected.id, viewMode]);
 
   const currentDraftInput = useMemo(() => {
     if (kind === 'prefs') return null;
@@ -875,31 +777,67 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
       : 'No sizes on this product';
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="rounded-xl border border-border bg-card">
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3.5 sm:px-5">
-          <LazyProductImage
-            src={selected.imageUrl}
-            hasImage={Boolean(selected.imageUrl)}
-            alt=""
-            emptyLabel="—"
-            className="h-11 w-11 shrink-0 rounded-lg"
-          />
-          <div className="min-w-0 flex-1">
-            <h3 className="truncate text-base font-semibold text-foreground">
-              {selected.name}
-            </h3>
-            <p className="truncate text-sm text-muted-foreground">
-              {selected.categoryName}
-              {sizeHint ? ` · ${sizeHint}` : ''}
-            </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3.5 sm:px-5">
+          <div className="flex items-center gap-3 min-w-0">
+            <LazyProductImage
+              src={selected.imageUrl}
+              hasImage={Boolean(selected.imageUrl)}
+              alt=""
+              emptyLabel="—"
+              className="h-11 w-11 shrink-0 rounded-lg"
+            />
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-base font-semibold text-foreground">
+                {selected.name}
+              </h3>
+              <p className="truncate text-sm text-muted-foreground">
+                {selected.categoryName}
+                {sizeHint ? ` · ${sizeHint}` : ''}
+              </p>
+            </div>
           </div>
+          {props.onViewModeChange ? (
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => props.onViewModeChange?.('classic')}
+                className={cn(
+                  'rounded-md px-2.5 py-1 font-medium transition',
+                  viewMode === 'classic'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Classic View
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onViewModeChange?.('advanced')}
+                className={cn(
+                  'rounded-md px-2.5 py-1 font-medium transition',
+                  viewMode === 'advanced'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Advanced View
+              </button>
+            </div>
+          ) : null}
         </div>
 
-        <div className="space-y-4 px-4 py-4 sm:px-5">
-          <WizardProgress step={step} />
+        {viewMode === 'classic' ? (
+          <div className="p-4 sm:p-5">
+            <ClassicConfigSections {...props} />
+          </div>
+        ) : (
+          <>
+            <div className="space-y-4 px-4 py-4 sm:px-5">
+              <WizardProgress step={step} />
 
-          {step === 0 ? (
+              {step === 0 ? (
             <div className="space-y-4">
               <StepHeader
                 title="Besides size, can customers customize this?"
@@ -1062,8 +1000,8 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                 />
                 <ChoiceCard
                   active
-                  title="Suggest something with this"
-                  description="Soft upsell — “Add a drink?” in the cart"
+                  title="Recommended deals"
+                  description="Suggest deals or bundles with this item (e.g. burger with fries & drink deal)"
                   onClick={() => setStep(4)}
                 />
                 <ChoiceCard
@@ -1079,8 +1017,8 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
           {step === 4 ? (
             <div className="space-y-4">
               <StepHeader
-                title={`What should we suggest with ${selected.name}?`}
-                hint="Optional. Customers can ignore it — it never blocks checkout."
+                title={`What deals or products should we recommend with ${selected.name}?`}
+                hint="Optional. Customers can choose between the product alone or selecting a recommended deal."
               />
 
               <div>
@@ -1114,7 +1052,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               {offerCategoryIds.length > 0 ? (
                 <div>
                   <p className="mb-2 text-xs font-medium text-muted-foreground">
-                    Products to suggest
+                    Recommended deals to offer
                   </p>
                   {offeredProductsFromSelectedCategories.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
@@ -1173,7 +1111,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                       Saving…
                     </>
                   ) : (
-                    'Save suggestions'
+                    'Save recommended deals'
                   )}
                 </Button>
               </WizardActions>
@@ -1220,31 +1158,8 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
             savingPersonalize={savingPersonalize}
           />
         </div>
-      </div>
-
-      <div className="rounded-xl border border-border bg-card">
-        <button
-          type="button"
-          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium sm:px-5"
-          onClick={() => setShowClassic((v) => !v)}
-        >
-          <span>More options (classic editor)</span>
-          <ChevronDown
-            className={cn(
-              'h-4 w-4 text-muted-foreground transition',
-              showClassic && 'rotate-180'
-            )}
-          />
-        </button>
-        {showClassic ? (
-          <div className="space-y-4 border-t border-border px-4 py-4 sm:px-5">
-            <p className="text-xs text-muted-foreground">
-              Same data as the guided flow, laid out as separate sections. Use
-              this if you prefer the classic editor layout.
-            </p>
-            <ClassicConfigSections {...props} />
-          </div>
-        ) : null}
+          </>
+        )}
       </div>
     </div>
   );
@@ -1336,71 +1251,91 @@ function ClassicConfigSections({
 
       <RecommendationConfigSectionShell
         step={6}
-        title="Associated products"
-        description="Optional cross-sell items shown with this product."
+        title="Recommended deals"
+        description="Optional cross-sell deals or items shown with this product."
       >
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {linkedOptions.map((cat) => {
-            const checked = offerCategoryIds.includes(cat.id);
-            return (
-              <label
-                key={`offer-cat-${cat.id}`}
-                className={cn(
-                  'flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-sm',
-                  checked ? 'border-primary bg-primary/10' : 'border-border'
-                )}
-              >
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 truncate text-left"
+        <div>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Categories to offer deals from (scrollable list)
+          </p>
+          <SelectableList
+            emptyMessage="No categories available."
+            maxHeightClass="max-h-48"
+          >
+            {linkedOptions.map((cat) => {
+              const checked = offerCategoryIds.includes(cat.id);
+              return (
+                <SelectableRow
+                  key={`offer-cat-${cat.id}`}
+                  multi
+                  active={checked}
+                  title={cat.name}
+                  imageUrl={cat.imageUrl}
+                  subtitle={
+                    isMenuCategoryShownInFront(cat)
+                      ? 'On customer menu'
+                      : 'Add-on only'
+                  }
                   onClick={() => {
                     setOfferCategoryIds((prev) => toggleInArray(prev, cat.id));
                     setSelectedOfferProductIds([]);
                   }}
-                >
-                  {cat.name}
-                </button>
-              </label>
-            );
-          })}
+                />
+              );
+            })}
+          </SelectableList>
         </div>
 
         {offerCategoryIds.length > 0 &&
         offeredProductsFromSelectedCategories.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {offeredProductsFromSelectedCategories.map((p) => {
-              const checked = selectedOfferProductIds.includes(p.id);
-              return (
-                <label
-                  key={`offer-product-${p.id}`}
-                  className="group relative block cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    className="peer sr-only"
-                    checked={checked}
-                    onChange={() =>
-                      setSelectedOfferProductIds((prev) =>
-                        toggleInArray(prev, p.id)
-                      )
-                    }
-                  />
-                  <div
-                    className={cn(
-                      'rounded-xl border p-3 text-sm',
-                      checked
-                        ? 'border-primary ring-2 ring-primary/25'
-                        : 'border-border'
-                    )}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">
+              Select specific products for the deal (scrollable)
+            </p>
+            <div className="max-h-72 overflow-y-auto overscroll-contain p-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 rounded-xl border border-border bg-muted/10">
+              {offeredProductsFromSelectedCategories.map((p) => {
+                const checked = selectedOfferProductIds.includes(p.id);
+                return (
+                  <label
+                    key={`offer-product-${p.id}`}
+                    className="group relative block cursor-pointer"
                   >
-                    <p className="font-semibold">{p.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {p.categoryName}
-                    </p>
-                  </div>
-                </label>
-              );
-            })}
+                    <input
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={checked}
+                      onChange={() =>
+                        setSelectedOfferProductIds((prev) =>
+                          toggleInArray(prev, p.id)
+                        )
+                      }
+                    />
+                    <div
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl border p-3 text-sm transition',
+                        checked
+                          ? 'border-primary ring-2 ring-primary/25 bg-primary/5'
+                          : 'border-border hover:bg-muted/50'
+                      )}
+                    >
+                      <LazyProductImage
+                        src={p.imageUrl}
+                        hasImage={Boolean(p.imageUrl)}
+                        alt=""
+                        emptyLabel="—"
+                        className="h-11 w-11 shrink-0 rounded-lg"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold truncate">{p.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {p.categoryName}
+                        </p>
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
           </div>
         ) : null}
 
@@ -1418,7 +1353,7 @@ function ClassicConfigSections({
           ) : (
             <>
               <Save className="mr-2 h-4 w-4" />
-              Save associated products
+              Save recommended deals
             </>
           )}
         </Button>

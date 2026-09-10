@@ -3,20 +3,15 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
-import {
-  buildPaginationMeta,
-  parsePaginationParams,
-} from '@/lib/pagination';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { branchCapacityAllows } from '@/lib/subscription-plan-features';
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from '@/lib/subscription-plan-enforcement';
-import { withUrlIds } from '@/lib/with-url-id';
 
 const openingHourSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6),
   isOpen: z.boolean(),
-  openTime: z.string().trim().max(5).optional().default(''),
-  closeTime: z.string().trim().max(5).optional().default(''),
+  openTime: z.string().trim().max(5).optional().default('09:00'),
+  closeTime: z.string().trim().max(5).optional().default('17:00'),
 });
 
 const createBranchSchema = z.object({
@@ -24,7 +19,6 @@ const createBranchSchema = z.object({
   address: z.string().trim().max(500).optional().or(z.literal('')),
   phone: z.string().trim().max(60).optional().or(z.literal('')),
   openingHours: z.array(openingHourSchema).optional().default([]),
-  slotDurationMinutes: z.union([z.literal(15), z.literal(30), z.literal(60)]).optional().default(30),
 });
 
 export async function GET(_req: NextRequest) {
@@ -37,49 +31,19 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const wantsPagination = _req.nextUrl.searchParams.get('page') != null;
-    const branchSelect = {
-      id: true,
-      name: true,
-      address: true,
-      phone: true,
-      openingHours: true,
-      slotDurationMinutes: true,
-      createdAt: true,
-    } as const;
-
-    if (!wantsPagination) {
-      const branches = await db.branch.findMany({
-        where: { restaurantId: auth.restaurantId },
-        orderBy: { createdAt: 'asc' },
-        select: branchSelect,
-      });
-      return NextResponse.json({ data: withUrlIds(branches) }, { status: 200 });
-    }
-
-    const { page, pageSize, skip, take } = parsePaginationParams(
-      _req.nextUrl.searchParams,
-      { defaultPageSize: 12 }
-    );
-    const where = { restaurantId: auth.restaurantId };
-    const [total, branches] = await Promise.all([
-      db.branch.count({ where }),
-      db.branch.findMany({
-        where,
-        orderBy: { createdAt: 'asc' },
-        skip,
-        take,
-        select: branchSelect,
-      }),
-    ]);
-
-    return NextResponse.json(
-      {
-        data: withUrlIds(branches),
-        pagination: buildPaginationMeta(page, pageSize, total),
+    const branches = await db.branch.findMany({
+      where: { restaurantId: auth.restaurantId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        phone: true,
+        createdAt: true,
       },
-      { status: 200 }
-    );
+    });
+
+    return NextResponse.json({ data: branches }, { status: 200 });
   } catch (error) {
     console.error('restaurant branches', error);
     return NextResponse.json(
@@ -122,7 +86,6 @@ export async function POST(req: NextRequest) {
         address: parsed.data.address?.trim() || null,
         phone: parsed.data.phone?.trim() || null,
         openingHours: parsed.data.openingHours,
-        slotDurationMinutes: parsed.data.slotDurationMinutes,
       },
       select: {
         id: true,
@@ -130,7 +93,6 @@ export async function POST(req: NextRequest) {
         address: true,
         phone: true,
         openingHours: true,
-        slotDurationMinutes: true,
         createdAt: true,
       },
     });

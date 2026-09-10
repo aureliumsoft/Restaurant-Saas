@@ -39,6 +39,8 @@ import {
   reservedRecommendationProductIds,
 } from '@/lib/menu/recommendation-reserved-ids';
 import { useRestaurantVariationTemplates } from '@/components/dashboard/menu-manager/product-form-fields';
+import { LazyProductImage } from './lazy-product-image';
+import { SelectableList, SelectableRow } from './selectable-list';
 
 import type { MenuCategoryRow, MenuItemRow } from './types';
 
@@ -46,6 +48,10 @@ export type VariationLimitDraft = {
   variationId: string;
   minItems: number;
   maxItems: number;
+};
+export type RecommendationProductOverrideDraft = {
+  excluded: boolean;
+  free: boolean;
 };
 
 export type RecommendationRuleDraft = {
@@ -77,6 +83,13 @@ export type RecommendationRuleDraft = {
   categoryVariationPricing: Record<string, boolean>;
   /** categoryId → percent off all items in the category */
   categoryDiscountPercent: Record<string, number | null>;
+  /** categoryId → extra cost markup percent added to items in the category */
+  categoryExtraCostPercent: Record<string, number | null>;
+  /** categoryId → productId → Advanced category overrides */
+  categoryProductOverrides: Record<
+    string,
+    Record<string, RecommendationProductOverrideDraft>
+  >;
 };
 
 type Props = {
@@ -166,12 +179,39 @@ export function RecommendationRuleForm({
   const [categoryDiscountPercent, setCategoryDiscountPercent] = useState<
     Record<string, number | null>
   >({});
+  const [categoryExtraCostPercent, setCategoryExtraCostPercent] = useState<
+    Record<string, number | null>
+  >({});
+  const [categoryProductOverrides, setCategoryProductOverrides] = useState<
+    Record<string, Record<string, RecommendationProductOverrideDraft>>
+  >({});
   const [categoryProductsById, setCategoryProductsById] = useState<
     Record<string, MenuItemRow[]>
   >({});
   const [categoryProductsLoadingById, setCategoryProductsLoadingById] = useState<
     Record<string, boolean>
   >({});
+
+  const updateProductOverride = (
+    categoryId: string,
+    productId: string,
+    patch: Partial<RecommendationProductOverrideDraft>
+  ) => {
+    setCategoryProductOverrides((prev) => {
+      const cat = prev[categoryId] ?? {};
+      const current = cat[productId] ?? { excluded: false, free: false };
+      return {
+        ...prev,
+        [categoryId]: {
+          ...cat,
+          [productId]: {
+            ...current,
+            ...patch,
+          },
+        },
+      };
+    });
+  };
 
   const { variationTemplates, loading: variationTemplatesLoading } =
     useRestaurantVariationTemplates();
@@ -214,9 +254,24 @@ export function RecommendationRuleForm({
     [selected, draftByVariant, variant]
   );
 
+  const [categorySearch, setCategorySearch] = useState('');
+  const [productFilterSearch, setProductFilterSearch] = useState('');
+
   const assignableCategories = recommendationCategories.filter(
     (c) => !reservedCategoryIds.has(c.id)
   );
+
+  const filteredAssignableCategories = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    if (!q) return assignableCategories;
+    return assignableCategories.filter((c) => c.name.toLowerCase().includes(q));
+  }, [assignableCategories, categorySearch]);
+
+  const filteredProductPickerCategories = useMemo(() => {
+    const q = productFilterSearch.trim().toLowerCase();
+    if (!q) return productPickerCategories;
+    return productPickerCategories.filter((c) => c.name.toLowerCase().includes(q));
+  }, [productPickerCategories, productFilterSearch]);
 
   const assignableProducts = allProducts.filter(
     (p) => !reservedProductIds.has(p.id)
@@ -302,6 +357,11 @@ export function RecommendationRuleForm({
       return next;
     });
     setCategoryDiscountPercent((prev) => {
+      const next = { ...prev };
+      delete next[categoryId];
+      return next;
+    });
+    setCategoryExtraCostPercent((prev) => {
       const next = { ...prev };
       delete next[categoryId];
       return next;
@@ -469,6 +529,8 @@ export function RecommendationRuleForm({
       productMinMax,
       categoryVariationPricing,
       categoryDiscountPercent,
+      categoryExtraCostPercent,
+      categoryProductOverrides,
     }),
     [
       sourceType,
@@ -489,6 +551,8 @@ export function RecommendationRuleForm({
       productMinMax,
       categoryVariationPricing,
       categoryDiscountPercent,
+      categoryExtraCostPercent,
+      categoryProductOverrides,
     ]
   );
 
@@ -513,8 +577,12 @@ export function RecommendationRuleForm({
     setProductMinMax({});
     setCategoryVariationPricing({});
     setCategoryDiscountPercent({});
+    setCategoryExtraCostPercent({});
+    setCategoryProductOverrides({});
     setCategoryProductsById({});
     setCategoryProductsLoadingById({});
+    setCategorySearch('');
+    setProductFilterSearch('');
     lastDraftKeyRef.current = '';
   }, [resetKey]);
 
@@ -713,286 +781,400 @@ export function RecommendationRuleForm({
             </Button>
           </div>
         ) : (
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              For each category, optionally choose a recommended variation
-              (e.g. Medium) and/or a default item. A recommended variation
-              filters add-ons to that size and applies it automatically at
-              checkout. When a default item is set, guests only see an extra
-              charge (+{currencySymbol}) for options priced above that default.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {assignableCategories.map((cat) => {
-                const checked = ruleCategoryIds.includes(cat.id);
-                const selectionOrder = ruleCategoryIds.indexOf(cat.id);
-                const onMenu = isMenuCategoryShownInFront(cat);
-                const defaultId = categoryDefaults[cat.id];
-                const categoryItems = categoryProductsById[cat.id] ?? cat.items;
-                const categoryItemsLoading =
-                  categoryProductsLoadingById[cat.id] ?? false;
-                const variationPricingEnabled =
-                  categoryVariationPricing[cat.id] ?? false;
-                const defaultVariationId = categoryDefaultVariations[cat.id];
-                const includeDefaultVariationPrice =
-                  categoryIncludeDefaultVariationPrice[cat.id] ?? true;
-                return (
-                  <div
-                    key={cat.id}
-                    className={cn(
-                      'rounded-lg border p-3',
-                      checked ? 'border-primary bg-primary/5' : 'border-border'
-                    )}
-                  >
-                    <label className="flex cursor-pointer items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 shrink-0 accent-primary"
-                        checked={checked}
-                        onChange={() => toggleCategory(cat.id)}
-                      />
-                      {checked ? (
-                        <Badge
-                          variant="secondary"
-                          className="shrink-0 tabular-nums text-[10px]"
-                        >
-                          #{selectionOrder + 1}
-                        </Badge>
-                      ) : null}
-                      <span className="min-w-0 flex-1 truncate font-medium">
-                        {cat.name}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className="shrink-0 text-[10px] font-normal"
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">
+                For each category, optionally choose a recommended variation
+                (e.g. Medium) and/or a default item. A recommended variation
+                filters add-ons to that size and applies it automatically at
+                checkout. When a default item is set, guests only see an extra
+                charge (+{currencySymbol}) for options priced above that default.
+              </p>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                Add-on categories (scrollable list)
+              </p>
+              <SelectableList
+                search={categorySearch}
+                onSearchChange={setCategorySearch}
+                searchPlaceholder="Search categories…"
+                emptyMessage="No categories match your search."
+              >
+                {filteredAssignableCategories.map((cat) => {
+                  const checked = ruleCategoryIds.includes(cat.id);
+                  const selectionOrder = ruleCategoryIds.indexOf(cat.id);
+                  const onMenu = isMenuCategoryShownInFront(cat);
+                  return (
+                    <SelectableRow
+                      key={cat.id}
+                      multi={selectionType === 'MULTIPLE'}
+                      active={checked}
+                      title={cat.name}
+                      imageUrl={cat.imageUrl}
+                      subtitle={
+                        onMenu
+                          ? 'On customer menu'
+                          : 'Add-on only (hidden from browse)'
+                      }
+                      badge={
+                        checked ? (
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant="secondary"
+                              className="shrink-0 tabular-nums text-[10px]"
+                            >
+                              #{selectionOrder + 1}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className="shrink-0 text-[10px] font-normal"
+                            >
+                              {onMenu ? 'On menu' : 'Add-on only'}
+                            </Badge>
+                          </div>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 text-[10px] font-normal"
+                          >
+                            {onMenu ? 'On menu' : 'Add-on only'}
+                          </Badge>
+                        )
+                      }
+                      onClick={() => toggleCategory(cat.id)}
+                    />
+                  );
+                })}
+              </SelectableList>
+            </div>
+
+            {ruleCategoryIds.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-center text-xs text-muted-foreground">
+                Select one or more categories from the scrollable list above to configure options, discounts, and variation settings.
+              </div>
+            ) : (
+              <div className="space-y-3 pt-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Configuring Selected Categories ({ruleCategoryIds.length})
+                </p>
+                <div className="space-y-4">
+                  {ruleCategoryIds.map((catId, index) => {
+                    const cat = assignableCategories.find((c) => c.id === catId);
+                    if (!cat) return null;
+                    const onMenu = isMenuCategoryShownInFront(cat);
+                    const defaultId = categoryDefaults[cat.id];
+                    const categoryItems = categoryProductsById[cat.id] ?? cat.items ?? [];
+                    const categoryItemsLoading = categoryProductsLoadingById[cat.id] ?? false;
+                    const variationPricingEnabled = categoryVariationPricing[cat.id] ?? false;
+                    const defaultVariationId = categoryDefaultVariations[cat.id];
+                    const includeDefaultVariationPrice = categoryIncludeDefaultVariationPrice[cat.id] ?? true;
+
+                    return (
+                      <div
+                        key={cat.id}
+                        className="rounded-xl border border-border bg-card p-4 space-y-3 shadow-sm"
                       >
-                        {onMenu ? 'On menu' : 'Add-on only'}
-                      </Badge>
-                    </label>
-                    {checked ? (
-                      <div className="mt-3 space-y-1 border-t border-border pt-3">
-                        <Label
-                          htmlFor={`category-discount-${cat.id}`}
-                          className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-                        >
-                          Category discount (%)
-                        </Label>
-                        <p className="text-[11px] text-muted-foreground">
-                          Percent off every item in this category when guests
-                          add it.
-                        </p>
-                        <Input
-                          id={`category-discount-${cat.id}`}
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={1}
-                          className="h-10 bg-background text-sm"
-                          placeholder="No discount"
-                          value={
-                            categoryDiscountPercent[cat.id] != null
-                              ? String(categoryDiscountPercent[cat.id])
-                              : ''
-                          }
-                          onChange={(e) => {
-                            const raw = e.target.value.trim();
-                            if (raw === '') {
-                              setCategoryDiscountPercent((prev) => {
-                                const next = { ...prev };
-                                delete next[cat.id];
-                                return next;
-                              });
-                              return;
-                            }
-                            const val = Math.min(
-                              100,
-                              Math.max(0, Number.parseFloat(raw) || 0)
-                            );
-                            setCategoryDiscountPercent((prev) => ({
-                              ...prev,
-                              [cat.id]: val,
-                            }));
-                          }}
-                        />
-                      </div>
-                    ) : null}
-                    {checked && variationTemplatesLoading ? (
-                      <div className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Loading variation options...
-                      </div>
-                    ) : checked && defaultVariationOptions.length > 0 ? (
-                      <div className="mt-3 space-y-2 border-t border-border pt-3">
-                        <Label
-                          htmlFor={`recommended-variation-${cat.id}`}
-                          className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-                        >
-                          Recommended variation (optional)
-                        </Label>
-                        <p className="text-[11px] text-muted-foreground">
-                          Pick a size for this category (e.g. Medium). Only
-                          add-ons with that variation are shown, and it is
-                          applied automatically when the guest selects one.
-                        </p>
-                        <Select
-                          value={defaultVariationId || '__none__'}
-                          onValueChange={(value) => {
-                            if (value === '__none__') {
-                              clearCategoryDefaultVariation(cat.id);
-                            } else {
-                              setCategoryDefaultVariation(cat.id, value);
-                            }
-                          }}
-                        >
-                          <SelectTrigger
-                            id={`recommended-variation-${cat.id}`}
-                            className="h-10 bg-background text-sm"
+                        <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Badge variant="secondary" className="shrink-0 tabular-nums text-[10px]">
+                              #{index + 1}
+                            </Badge>
+                            <LazyProductImage
+                              src={cat.imageUrl}
+                              hasImage={Boolean(cat.imageUrl)}
+                              alt=""
+                              emptyLabel="—"
+                              className="h-7 w-7 shrink-0 rounded-md"
+                            />
+                            <span className="font-semibold text-sm truncate">{cat.name}</span>
+                            <Badge variant="outline" className="text-[10px] shrink-0 font-normal">
+                              {onMenu ? 'On menu' : 'Add-on only'}
+                            </Badge>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                            onClick={() => toggleCategory(cat.id)}
                           >
-                            <SelectValue placeholder="Select variation" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">None</SelectItem>
-                            {defaultVariationOptions.map((option) => (
-                              <SelectItem
-                                key={`${cat.id}-${option.restaurantVariationId}`}
-                                value={option.restaurantVariationId}
+                            Remove
+                          </Button>
+                        </div>
+
+                        {/* Category discount (%) */}
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor={`category-discount-${cat.id}`}
+                              className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                            >
+                              Category discount (%)
+                            </Label>
+                            <p className="text-[11px] text-muted-foreground">
+                              Percent off every item in this category when guests add it.
+                            </p>
+                            <Input
+                              id={`category-discount-${cat.id}`}
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={1}
+                              className="h-10 bg-background text-sm"
+                              placeholder="No discount"
+                              value={
+                                categoryDiscountPercent[cat.id] != null
+                                  ? String(categoryDiscountPercent[cat.id])
+                                  : ''
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value.trim();
+                                if (raw === '') {
+                                  setCategoryDiscountPercent((prev) => {
+                                    const next = { ...prev };
+                                    delete next[cat.id];
+                                    return next;
+                                  });
+                                  return;
+                                }
+                                const val = Math.min(
+                                  100,
+                                  Math.max(0, Number.parseFloat(raw) || 0)
+                                );
+                                setCategoryDiscountPercent((prev) => ({
+                                  ...prev,
+                                  [cat.id]: val,
+                                }));
+                              }}
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor={`category-extra-cost-${cat.id}`}
+                              className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                            >
+                              Category extra cost (%)
+                            </Label>
+                            <p className="text-[11px] text-muted-foreground">
+                              Percentage markup added to items in this category (+).
+                            </p>
+                            <Input
+                              id={`category-extra-cost-${cat.id}`}
+                              type="number"
+                              min={0}
+                              max={500}
+                              step={1}
+                              className="h-10 bg-background text-sm"
+                              placeholder="No extra cost"
+                              value={
+                                categoryExtraCostPercent[cat.id] != null
+                                  ? String(categoryExtraCostPercent[cat.id])
+                                  : ''
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value.trim();
+                                if (raw === '') {
+                                  setCategoryExtraCostPercent((prev) => {
+                                    const next = { ...prev };
+                                    delete next[cat.id];
+                                    return next;
+                                  });
+                                  return;
+                                }
+                                const val = Math.min(
+                                  500,
+                                  Math.max(0, Number.parseFloat(raw) || 0)
+                                );
+                                setCategoryExtraCostPercent((prev) => ({
+                                  ...prev,
+                                  [cat.id]: val,
+                                }));
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Recommended variation */}
+                        {variationTemplatesLoading ? (
+                          <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Loading variation options...
+                          </div>
+                        ) : defaultVariationOptions.length > 0 ? (
+                          <div className="space-y-2 border-t border-border pt-3">
+                            <Label
+                              htmlFor={`recommended-variation-${cat.id}`}
+                              className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                            >
+                              Recommended variation (optional)
+                            </Label>
+                            <p className="text-[11px] text-muted-foreground">
+                              Pick a size for this category (e.g. Medium). Only add-ons with that variation are shown, and it is applied automatically when the guest selects one.
+                            </p>
+                            <Select
+                              value={defaultVariationId || '__none__'}
+                              onValueChange={(value) => {
+                                if (value === '__none__') {
+                                  clearCategoryDefaultVariation(cat.id);
+                                } else {
+                                  setCategoryDefaultVariation(cat.id, value);
+                                }
+                              }}
+                            >
+                              <SelectTrigger
+                                id={`recommended-variation-${cat.id}`}
+                                className="h-10 bg-background text-sm"
                               >
-                                {option.label}
-                              </SelectItem>
+                                <SelectValue placeholder="Select variation" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">None</SelectItem>
+                                {defaultVariationOptions.map((option) => (
+                                  <SelectItem
+                                    key={`${cat.id}-${option.restaurantVariationId}`}
+                                    value={option.restaurantVariationId}
+                                  >
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <label className="mt-2 flex cursor-pointer items-start gap-2">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                                checked={includeDefaultVariationPrice}
+                                onChange={(e) =>
+                                  setCategoryIncludeDefaultVariationPriceEnabled(
+                                    cat.id,
+                                    e.target.checked
+                                  )
+                                }
+                              />
+                              <span className="text-xs">
+                                <span className="font-medium text-foreground">
+                                  Show recommended variation price
+                                </span>
+                                <span className="mt-0.5 block text-muted-foreground">
+                                  When unchecked, guests see base product prices only (the recommended size is free).
+                                </span>
+                              </span>
+                            </label>
+                          </div>
+                        ) : (
+                          <p className="border-t border-border pt-3 text-[11px] text-muted-foreground">
+                            No variation templates yet. Add sizes on the{' '}
+                            <Link href="/variations" className="underline">
+                              Variations
+                            </Link>{' '}
+                            page, then pick a recommended variation for this category.
+                          </p>
+                        )}
+
+                        {/* Default item */}
+                        {categoryItemsLoading ? (
+                          <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Loading category products...
+                          </div>
+                        ) : categoryItems.length > 0 ? (
+                          <div className="max-h-40 space-y-1 overflow-y-auto border-t border-border pt-3">
+                            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                              Default item (optional)
+                            </p>
+                            <label
+                              className={cn(
+                                'mb-1 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs',
+                                !defaultId
+                                  ? 'bg-primary/10 text-foreground'
+                                  : 'hover:bg-muted/50'
+                              )}
+                            >
+                              <input
+                                type="radio"
+                                name={`default-${cat.id}`}
+                                className="h-3.5 w-3.5 accent-primary"
+                                checked={!defaultId}
+                                onChange={() => clearCategoryDefault(cat.id)}
+                              />
+                              <span className="italic text-muted-foreground">
+                                None
+                              </span>
+                            </label>
+                            {categoryItems.map((it) => (
+                              <label
+                                key={it.id}
+                                className={cn(
+                                  'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs',
+                                  defaultId === it.id
+                                    ? 'bg-primary/10 text-foreground'
+                                    : 'hover:bg-muted/50'
+                                )}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`default-${cat.id}`}
+                                  className="h-3.5 w-3.5 accent-primary"
+                                  checked={defaultId === it.id}
+                                  onChange={() =>
+                                    setCategoryDefault(cat.id, it.id)
+                                  }
+                                />
+                                <span className="min-w-0 flex-1 truncate">
+                                  {it.name}
+                                </span>
+                                <span className="shrink-0 tabular-nums text-muted-foreground">
+                                  {formatMoney(
+                                    it.salePrice != null &&
+                                    it.salePrice > 0 &&
+                                    it.salePrice < it.price
+                                      ? it.salePrice
+                                      : it.price
+                                  )}
+                                </span>
+                              </label>
                             ))}
-                          </SelectContent>
-                        </Select>
-                        <label className="mt-2 flex cursor-pointer items-start gap-2">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                            checked={includeDefaultVariationPrice}
-                            onChange={(e) =>
-                              setCategoryIncludeDefaultVariationPriceEnabled(
-                                cat.id,
-                                e.target.checked
-                              )
-                            }
-                          />
-                          <span className="text-xs">
-                            <span className="font-medium text-foreground">
-                              Show recommended variation price
-                            </span>
-                            <span className="mt-0.5 block text-muted-foreground">
-                              When unchecked, guests see base product prices
-                              only (the recommended size is free).
-                            </span>
-                          </span>
-                        </label>
-                      </div>
-                    ) : checked ? (
-                      <p className="mt-3 border-t border-border pt-3 text-[11px] text-muted-foreground">
-                        No variation templates yet. Add sizes on the{' '}
-                        <Link href="/variations" className="underline">
-                          Variations
-                        </Link>{' '}
-                        page, then pick a recommended variation for this
-                        category.
-                      </p>
-                    ) : null}
-                    {checked && categoryItemsLoading ? (
-                      <div className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Loading category products...
-                      </div>
-                    ) : checked && categoryItems.length > 0 ? (
-                      <div className="mt-3 max-h-40 space-y-1 overflow-y-auto border-t border-border pt-3">
-                        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Default item (optional)
-                        </p>
-                        <label
-                          className={cn(
-                            'mb-1 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs',
-                            !defaultId
-                              ? 'bg-primary/10 text-foreground'
-                              : 'hover:bg-muted/50'
-                          )}
-                        >
-                          <input
-                            type="radio"
-                            name={`default-${cat.id}`}
-                            className="h-3.5 w-3.5 accent-primary"
-                            checked={!defaultId}
-                            onChange={() => clearCategoryDefault(cat.id)}
-                          />
-                          <span className="italic text-muted-foreground">
-                            None
-                          </span>
-                        </label>
-                        {categoryItems.map((it) => (
-                          <label
-                            key={it.id}
-                            className={cn(
-                              'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs',
-                              defaultId === it.id
-                                ? 'bg-primary/10 text-foreground'
-                                : 'hover:bg-muted/50'
-                            )}
-                          >
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-xs text-destructive">
+                            Add products to this category first.
+                          </p>
+                        )}
+
+                        {/* Price add-ons by product variation */}
+                        {baseVariations.length > 0 && categoryItems.length > 0 ? (
+                          <label className="flex cursor-pointer items-start gap-2 border-t border-border pt-3">
                             <input
-                              type="radio"
-                              name={`default-${cat.id}`}
-                              className="h-3.5 w-3.5 accent-primary"
-                              checked={defaultId === it.id}
-                              onChange={() =>
-                                setCategoryDefault(cat.id, it.id)
+                              type="checkbox"
+                              className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                              checked={variationPricingEnabled}
+                              disabled={Boolean(defaultVariationId)}
+                              onChange={(e) =>
+                                setCategoryVariationPricingEnabled(
+                                  cat.id,
+                                  e.target.checked
+                                )
                               }
                             />
-                            <span className="min-w-0 flex-1 truncate">
-                              {it.name}
-                            </span>
-                            <span className="shrink-0 tabular-nums text-muted-foreground">
-                              {formatMoney(
-                                it.salePrice != null &&
-                                it.salePrice > 0 &&
-                                it.salePrice < it.price
-                                  ? it.salePrice
-                                  : it.price
-                              )}
+                            <span className="text-xs">
+                              <span className="font-medium text-foreground">
+                                Price add-ons by product variation
+                              </span>
+                              <span className="mt-0.5 block text-muted-foreground">
+                                Use each add-on&apos;s variation rate when the guest picks Small, Medium, or Large on this product.
+                              </span>
                             </span>
                           </label>
-                        ))}
+                        ) : null}
                       </div>
-                    ) : checked ? (
-                      <p className="mt-2 text-xs text-destructive">
-                        Add products to this category first.
-                      </p>
-                    ) : null}
-                    {checked &&
-                    baseVariations.length > 0 &&
-                    categoryItems.length > 0 ? (
-                      <label className="mt-3 flex cursor-pointer items-start gap-2 border-t border-border pt-3">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                          checked={variationPricingEnabled}
-                          disabled={Boolean(defaultVariationId)}
-                          onChange={(e) =>
-                            setCategoryVariationPricingEnabled(
-                              cat.id,
-                              e.target.checked
-                            )
-                          }
-                        />
-                        <span className="text-xs">
-                          <span className="font-medium text-foreground">
-                            Price add-ons by product variation
-                          </span>
-                          <span className="mt-0.5 block text-muted-foreground">
-                            Use each add-on&apos;s variation rate when the guest
-                            picks Small, Medium, or Large on this product.
-                          </span>
-                        </span>
-                      </label>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )
       ) : productPickerCategories.length === 0 ? (
@@ -1006,37 +1188,28 @@ export function RecommendationRuleForm({
             others), then pick one anchor product. Guests can choose from all
             products in those categories except the item they are ordering.
           </p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {productPickerCategories.map((cat) => {
+          <SelectableList
+            search={productFilterSearch}
+            onSearchChange={setProductFilterSearch}
+            searchPlaceholder="Search categories to filter…"
+            emptyMessage="No categories match your search."
+          >
+            {filteredProductPickerCategories.map((cat) => {
               const checked = productCategoryIds.includes(cat.id);
               const onMenu = isMenuCategoryShownInFront(cat);
               return (
-                <label
+                <SelectableRow
                   key={`rec-prod-cat-${cat.id}`}
-                  className={cn(
-                    'flex cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
-                    checked
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border'
-                  )}
-                >
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 truncate text-left"
-                    onClick={() => toggleProductCategory(cat.id)}
-                  >
-                    {cat.name}
-                  </button>
-                  <Badge
-                    variant="outline"
-                    className="shrink-0 text-[10px] font-normal"
-                  >
-                    {onMenu ? 'On menu' : 'Add-on only'}
-                  </Badge>
-                </label>
+                  multi
+                  active={checked}
+                  title={cat.name}
+                  imageUrl={cat.imageUrl}
+                  subtitle={onMenu ? 'On customer menu' : 'Add-on only'}
+                  onClick={() => toggleProductCategory(cat.id)}
+                />
               );
             })}
-          </div>
+          </SelectableList>
 
           {productCategoryIds.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -1385,6 +1558,99 @@ export function RecommendationRuleForm({
                       }));
                     }}
                   />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {sourceType === 'CATEGORY' && selectedCategories.length > 0 ? (
+        <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              Category products: Free and Remove options
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Checked "Remove" products will not show to customers in this recommendation. Checked "Free" products will show with zero price and add zero to cart.
+            </p>
+          </div>
+
+          <div className="max-h-80 space-y-3 overflow-y-auto rounded-lg border border-border bg-background p-2 overscroll-contain">
+            {selectedCategories.map((cat) => {
+              const products = categoryProductsById[cat.id] ?? cat.items ?? [];
+              const loading = categoryProductsLoadingById[cat.id];
+              return (
+                <div key={`overrides-${cat.id}`} className="rounded-md border border-border/70">
+                  <div className="flex items-center justify-between border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold">
+                    <span>{cat.name}</span>
+                    {loading && (
+                      <span className="flex items-center gap-1 text-[11px] font-normal text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Loading products…
+                      </span>
+                    )}
+                  </div>
+                  {products.length === 0 && !loading ? (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">
+                      No products found in this category.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-border">
+                      {products.map((product) => {
+                        const override = categoryProductOverrides[cat.id]?.[product.id] ?? {
+                          excluded: false,
+                          free: false,
+                        };
+                        return (
+                          <li key={product.id} className="flex items-center gap-3 px-3 py-2">
+                            {product.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={product.imageUrl}
+                                alt=""
+                                className="h-9 w-9 shrink-0 rounded-md object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted text-[10px] text-muted-foreground">
+                                {product.name.slice(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                            <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+                              {product.name}
+                            </span>
+                            <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-foreground cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-primary cursor-pointer"
+                                checked={override.free}
+                                disabled={override.excluded}
+                                onChange={(e) =>
+                                  updateProductOverride(cat.id, product.id, {
+                                    free: e.target.checked,
+                                  })
+                                }
+                              />
+                              Free
+                            </label>
+                            <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-foreground cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-destructive cursor-pointer"
+                                checked={override.excluded}
+                                onChange={(e) =>
+                                  updateProductOverride(cat.id, product.id, {
+                                    excluded: e.target.checked,
+                                    ...(e.target.checked ? { free: false } : {}),
+                                  })
+                                }
+                              />
+                              Remove
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
               );
             })}

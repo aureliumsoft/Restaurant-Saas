@@ -30,7 +30,12 @@ type OrderLineForKitchen = {
   quantity: number;
   productName?: string | null;
   menuItem: { name: string } | null;
-  modifiers: { name: string; quantity: number; menuItemId?: string | null }[];
+  modifiers: {
+    name: string;
+    quantity: number;
+    menuItemId?: string | null;
+    groupName?: string | null;
+  }[];
 };
 
 function buildKitchenTicketItemRowsFromOrder(
@@ -155,7 +160,12 @@ export async function GET(req: NextRequest) {
               productName: true,
               menuItem: { select: { name: true } },
               modifiers: {
-                select: { name: true, quantity: true, menuItemId: true },
+                select: {
+                  name: true,
+                  quantity: true,
+                  menuItemId: true,
+                  groupName: true,
+                },
                 orderBy: { id: 'asc' },
               },
             },
@@ -280,7 +290,14 @@ export async function POST(req: NextRequest) {
             quantity: true,
             productName: true,
             menuItem: { select: { name: true } },
-            modifiers: { select: { name: true, quantity: true, menuItemId: true } },
+            modifiers: {
+              select: {
+                name: true,
+                quantity: true,
+                menuItemId: true,
+                groupName: true,
+              },
+            },
           },
         },
       },

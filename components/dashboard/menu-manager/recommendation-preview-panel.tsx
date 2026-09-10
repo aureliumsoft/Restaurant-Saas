@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Check, Loader2, Minus, Plus, Sparkles, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,10 +24,45 @@ import {
 } from '@/lib/menu/recommendation-preview-groups';
 
 import { PersonalizeOptionsSection } from '@/components/order/personalize-options-section';
+import { MenuOfferChoiceDialog } from '@/components/order/menu-offer-choice-dialog';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import type { RestaurantRegionalSettings } from '@/lib/restaurant-regional';
 
 import type { MenuCategoryRow, MenuItemRow } from './types';
+
+function RadioIndicator({ selected }: { selected: boolean }) {
+  return (
+    <span
+      className={cn(
+        'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+        selected
+          ? 'border-primary bg-primary'
+          : 'border-muted-foreground/35 bg-background'
+      )}
+      aria-hidden
+    >
+      {selected ? (
+        <span className="h-2.5 w-2.5 rounded-full bg-primary-foreground" />
+      ) : null}
+    </span>
+  );
+}
+
+function CheckboxIndicator({ selected }: { selected: boolean }) {
+  return (
+    <span
+      className={cn(
+        'flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 transition-colors',
+        selected
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-muted-foreground/35 bg-background'
+      )}
+      aria-hidden
+    >
+      {selected ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : null}
+    </span>
+  );
+}
 
 function effectiveUnitPrice(price: number, salePrice: number | null) {
   return effectiveMenuItemUnitPrice(price, salePrice);
@@ -145,6 +180,21 @@ export function RecommendationPreviewPanel({
 }: Props) {
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const [previewVariationId, setPreviewVariationId] = useState('');
+  const [dealChoiceOpen, setDealChoiceOpen] = useState(false);
+
+  const bundleProducts = useMemo(() => {
+    return offeredItems.map((item) => {
+      const full = allProducts.find((p) => p.id === item.id);
+      return {
+        id: item.id,
+        name: item.name,
+        imageUrl: item.imageUrl,
+        price: full?.price ?? 0,
+        salePrice: full?.salePrice ?? null,
+        variations: full?.variations ?? [],
+      };
+    });
+  }, [offeredItems, allProducts]);
 
   useEffect(() => {
     const first = selected?.variations?.[0]?.id ?? '';
@@ -216,16 +266,17 @@ export function RecommendationPreviewPanel({
   }
 
   return (
-    <div className="flex flex-col">
-      <div className="space-y-4 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-muted-foreground">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden h-full max-h-full">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 bg-card shrink-0">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Customer preview
         </p>
         <Badge variant="secondary" className="text-[10px] font-medium">
           Live
         </Badge>
       </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-4">
 
       <div className="space-y-3">
         {selected.imageUrl ? (
@@ -374,20 +425,40 @@ export function RecommendationPreviewPanel({
       ) : null}
 
       {offeredItems.length > 0 ? (
-        <div className="space-y-2 border-t border-border pt-4">
-          <h4 className="text-sm font-semibold text-foreground">
-            Associated products
-          </h4>
+        <div className="space-y-3 border-t border-border pt-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h4 className="text-sm font-bold uppercase tracking-wide text-foreground">
+                Recommended deals
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                Popup offered to guests selecting this product
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => setDealChoiceOpen(true)}
+            >
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              Test deal popup
+            </Button>
+          </div>
           <ul className="space-y-2">
             {offeredItems.map((item) => (
               <li
                 key={item.id}
+                role="button"
+                tabIndex={0}
                 className={cn(
-                  'flex items-center gap-3 rounded-lg border px-3 py-2 text-sm',
+                  'flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm transition hover:bg-muted/40',
                   item.isDraft
                     ? 'border-dashed border-primary/40 bg-primary/5'
                     : 'border-border bg-background'
                 )}
+                onClick={() => setDealChoiceOpen(true)}
               >
                 {item.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -401,9 +472,14 @@ export function RecommendationPreviewPanel({
                     —
                   </div>
                 )}
-                <span className="min-w-0 flex-1 truncate font-medium">
-                  {item.name}
-                </span>
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">
+                    {item.name}
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Click to test "Select a deal" preview
+                  </span>
+                </div>
                 {item.isDraft ? (
                   <Badge variant="outline" className="shrink-0 text-[10px]">
                     Draft
@@ -415,6 +491,26 @@ export function RecommendationPreviewPanel({
         </div>
       ) : null}
       </div>
+
+      <MenuOfferChoiceDialog
+        open={dealChoiceOpen}
+        onOpenChange={setDealChoiceOpen}
+        product={
+          selected
+            ? {
+                id: selected.id,
+                name: selected.name,
+                imageUrl: selected.imageUrl,
+                price: selected.price,
+                salePrice: selected.salePrice,
+                variations: selected.variations ?? [],
+              }
+            : null
+        }
+        bundleProducts={bundleProducts}
+        onChooseSingle={() => setDealChoiceOpen(false)}
+        onChooseBundle={() => setDealChoiceOpen(false)}
+      />
     </div>
   );
 }
@@ -540,127 +636,182 @@ function PreviewGroupCard({
           <p className="text-sm text-muted-foreground">
             No products available for this group yet.
           </p>
-        ) : group.selectionType === 'SINGLE' ? (
-          <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-            {items.map((it) => {
-              const checked = previewIds[0] === it.id;
-              const listUnit = configurationItemListUnitPriceForGroup(it, {
-                parentVariation,
-                useVariationPricing,
-                defaultLinkedRestaurantVariationId,
-                includeDefaultLinkedVariationPrice,
-              });
-              const priceLabel = configurationAddonPriceLabel(
-                listUnit,
-                defaultUnit,
-                {
-                  freeQuantity: group.freeQuantity,
-                  multipleMode: group.multipleMode,
-                  groupSelectedIds: previewIds,
-                  optionId: it.id,
-                  regional,
-                  categoryDiscountPercent: group.categoryDiscountPercent,
+        ) : (() => {
+          const radioMode = group.selectionType === 'SINGLE' || group.maxItems === 1;
+          const quantityMode = group.selectionType === 'MULTIPLE' && group.multipleMode === 'QUANTITY';
+
+          return (
+            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+              {items.map((it) => {
+                const checked = previewIds.includes(it.id);
+                const radioChecked = previewIds[0] === it.id;
+                const qty = previewIds.filter((id) => id === it.id).length;
+                const totalUnits = previewIds.length;
+                const atMax = group.maxItems != null && totalUnits >= group.maxItems;
+
+                const isFreeOverride = Boolean(
+                  group.productOverrides?.[it.id]?.free
+                );
+
+                const listUnit = configurationItemListUnitPriceForGroup(it, {
+                  parentVariation,
+                  useVariationPricing,
+                  defaultLinkedRestaurantVariationId,
+                  includeDefaultLinkedVariationPrice,
+                });
+                const rawPriceLabel = configurationAddonPriceLabel(
+                  listUnit,
+                  defaultUnit,
+                  {
+                    freeQuantity: group.freeQuantity,
+                    multipleMode: group.multipleMode,
+                    groupSelectedIds: previewIds,
+                    optionId: it.id,
+                    regional,
+                    categoryDiscountPercent: group.categoryDiscountPercent,
+                    categoryExtraCostPercent: group.categoryExtraCostPercent,
+                  }
+                );
+                const priceLabel = isFreeOverride ? 'Free' : rawPriceLabel;
+
+                if (radioMode) {
+                  return (
+                    <div
+                      key={it.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => onPreviewChange([it.id])}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition select-none',
+                        radioChecked
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                          : 'border-border bg-card hover:bg-muted/50'
+                      )}
+                    >
+                      <OptionThumb imageUrl={it.imageUrl} name={it.name} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold uppercase leading-snug">
+                          {it.name}
+                        </p>
+                        {priceLabel ? (
+                          <p className="text-xs text-muted-foreground font-medium">
+                            {priceLabel}
+                          </p>
+                        ) : null}
+                      </div>
+                      <RadioIndicator selected={radioChecked} />
+                    </div>
+                  );
                 }
-              );
-              return (
-                <label
-                  key={it.id}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition',
-                    checked
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                      : 'border-border bg-card hover:bg-muted/50'
-                  )}
-                >
-                  <OptionThumb imageUrl={it.imageUrl} name={it.name} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{it.name}</p>
-                    {priceLabel ? (
-                      <p className="text-xs text-muted-foreground">
-                        {priceLabel}
-                      </p>
-                    ) : null}
-                  </div>
-                  <input
-                    type="radio"
-                    name={`preview-${group.id}`}
-                    className="h-4 w-4 shrink-0 accent-primary"
-                    checked={checked}
-                    onChange={() => onPreviewChange([it.id])}
-                  />
-                </label>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-            {items.map((it) => {
-              const checked = previewIds.includes(it.id);
-              const listUnit = configurationItemListUnitPriceForGroup(it, {
-                parentVariation,
-                useVariationPricing,
-                defaultLinkedRestaurantVariationId,
-                includeDefaultLinkedVariationPrice,
-              });
-              const priceLabel = configurationAddonPriceLabel(
-                listUnit,
-                defaultUnit,
-                {
-                  freeQuantity: group.freeQuantity,
-                  multipleMode: group.multipleMode,
-                  groupSelectedIds: previewIds,
-                  optionId: it.id,
-                  regional,
-                  categoryDiscountPercent: group.categoryDiscountPercent,
+
+                if (quantityMode) {
+                  return (
+                    <div
+                      key={it.id}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg border px-3 py-2.5 transition select-none',
+                        qty > 0
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                          : 'border-border bg-card'
+                      )}
+                    >
+                      <OptionThumb imageUrl={it.imageUrl} name={it.name} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold uppercase leading-snug">
+                          {it.name}
+                        </p>
+                        {priceLabel ? (
+                          <p className="text-xs text-muted-foreground font-medium">
+                            {priceLabel}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {qty > 0 ? (
+                          <>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 rounded-lg border-primary/30"
+                              aria-label={`Decrease ${it.name}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const idx = previewIds.lastIndexOf(it.id);
+                                if (idx >= 0) {
+                                  const next = [...previewIds];
+                                  next.splice(idx, 1);
+                                  onPreviewChange(next);
+                                }
+                              }}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                            <span className="min-w-[1.25rem] text-center text-sm font-bold tabular-nums">
+                              {qty}
+                            </span>
+                          </>
+                        ) : null}
+                        <Button
+                          type="button"
+                          size="icon"
+                          className="h-8 w-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                          aria-label={`Add ${it.name}`}
+                          disabled={qty === 0 && atMax}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!atMax) {
+                              onPreviewChange([...previewIds, it.id]);
+                            }
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
                 }
-              );
-              const atMax =
-                group.maxItems != null &&
-                previewIds.length >= group.maxItems &&
-                !checked;
-              return (
-                <label
-                  key={it.id}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition',
-                    checked
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                      : 'border-border bg-card hover:bg-muted/50',
-                    atMax && 'cursor-not-allowed opacity-50'
-                  )}
-                >
-                  <OptionThumb imageUrl={it.imageUrl} name={it.name} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{it.name}</p>
-                    {priceLabel ? (
-                      <p className="text-xs text-muted-foreground">
-                        {priceLabel}
-                      </p>
-                    ) : null}
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 shrink-0 accent-primary"
-                    checked={checked}
-                    disabled={atMax}
-                    onChange={() => {
+
+                return (
+                  <div
+                    key={it.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
                       if (checked) {
                         onPreviewChange(
                           previewIds.filter((id) => id !== it.id)
                         );
-                      } else if (
-                        group.maxItems == null ||
-                        previewIds.length < group.maxItems
-                      ) {
+                      } else if (!atMax) {
                         onPreviewChange([...previewIds, it.id]);
                       }
                     }}
-                  />
-                </label>
-              );
-            })}
-          </div>
-        )}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition select-none',
+                      checked
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                        : 'border-border bg-card hover:bg-muted/50',
+                      atMax && !checked && 'cursor-not-allowed opacity-50'
+                    )}
+                  >
+                    <OptionThumb imageUrl={it.imageUrl} name={it.name} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold uppercase leading-snug">
+                        {it.name}
+                      </p>
+                      {priceLabel ? (
+                        <p className="text-xs text-muted-foreground font-medium">
+                          {priceLabel}
+                        </p>
+                      ) : null}
+                    </div>
+                    <CheckboxIndicator selected={checked} />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
     </section>
   );

@@ -1,6 +1,7 @@
 export type CustomerMenuQuery = {
   slug?: string | null;
   subdomain?: string | null;
+  branchId?: string | null;
 };
 
 type DetailCacheEntry = {
@@ -45,6 +46,7 @@ export function buildCustomerMenuItemDetailUrl(
   const params = new URLSearchParams();
   if (slug) params.set('slug', slug);
   if (subdomain) params.set('subdomain', subdomain);
+  if (query.branchId?.trim()) params.set('branchId', query.branchId.trim());
   return `/api/customer/menu/items/${encodeURIComponent(itemId)}?${params}`;
 }
 
@@ -129,7 +131,7 @@ export function productNeedsDetailFetch(product: {
     if (g.sourceType === 'CATEGORY') {
       if (!g.linkedCategory?.items?.length) return true;
     }
-    if (g.sourceType === 'PRODUCT' && g.required && !g.linkedProduct?.name) {
+    if (g.sourceType === 'PRODUCT' && !g.linkedProduct?.name) {
       return true;
     }
   }

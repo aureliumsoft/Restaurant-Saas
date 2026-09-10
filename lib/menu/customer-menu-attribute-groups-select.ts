@@ -124,6 +124,8 @@ function attributeGroupBaseSelect(
     multipleMode: true,
     freeQuantity: true,
     categoryDiscountPercent: true,
+    categoryExtraCostPercent: true,
+    productOverrides: true,
     required: true,
     minItems: true,
     maxItems: true,
@@ -187,6 +189,14 @@ function buildLeafAttributeGroupsSelect(
             orderBy: { name: 'asc' as const },
             select: optionSelect,
           },
+          itemLinks: {
+            orderBy: { sortOrder: 'asc' as const },
+            select: {
+              menuItem: {
+                select: optionSelect,
+              },
+            },
+          },
         },
       },
       linkedProduct: {
@@ -218,7 +228,9 @@ function buildAttributeGroupsSelect(
       ? {
           attributeGroups: buildAttributeGroupsSelect(depth - 1, mode),
         }
-      : {}),
+      : {
+          attributeGroups: buildLeafAttributeGroupsSelect(mode),
+        }),
   };
 
   const groupSelect: Record<string, unknown> = {
@@ -230,6 +242,14 @@ function buildAttributeGroupsSelect(
         items: {
           orderBy: { name: 'asc' as const },
           select: nestedItemSelect,
+        },
+        itemLinks: {
+          orderBy: { sortOrder: 'asc' as const },
+          select: {
+            menuItem: {
+              select: nestedItemSelect,
+            },
+          },
         },
       },
     },
@@ -305,6 +325,7 @@ export function buildPosLiteAttributeGroupsSelect(): any {
       multipleMode: true,
       freeQuantity: true,
       categoryDiscountPercent: true,
+      categoryExtraCostPercent: true,
       required: true,
       minItems: true,
       maxItems: true,
@@ -332,6 +353,14 @@ export function buildPosLiteAttributeGroupsSelect(): any {
           items: {
             orderBy: { name: 'asc' as const },
             select: optionCardSelect,
+          },
+          itemLinks: {
+            orderBy: { sortOrder: 'asc' as const },
+            select: {
+              menuItem: {
+                select: optionCardSelect,
+              },
+            },
           },
         },
       },

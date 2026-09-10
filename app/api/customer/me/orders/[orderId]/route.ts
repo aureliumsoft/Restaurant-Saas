@@ -86,6 +86,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
                 unitPrice: true,
                 quantity: true,
                 menuItemId: true,
+                groupName: true,
               },
             },
           },

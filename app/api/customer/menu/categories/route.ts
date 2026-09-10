@@ -10,12 +10,18 @@ const MENU_CACHE_HEADERS = {
 
 export async function GET(req: NextRequest) {
   try {
-    const resolved = resolveCustomerMenuQuery(req);
+    const resolved = resolveCustomerMenuQuery(req, { requireBranch: true });
     if ('error' in resolved) {
       return NextResponse.json({ error: resolved.error }, { status: 400 });
     }
+    if (!resolved.branchId) {
+      return NextResponse.json({ error: 'Missing branch id.' }, { status: 400 });
+    }
 
-    const data = await loadCustomerMenuCategoriesMeta(resolved);
+    const data = await loadCustomerMenuCategoriesMeta({
+      ...resolved,
+      branchId: resolved.branchId,
+    });
 
     return NextResponse.json(
       { data: data ?? null },

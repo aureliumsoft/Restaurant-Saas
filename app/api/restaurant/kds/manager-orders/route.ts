@@ -7,9 +7,7 @@ import {
   orderBranchWhere,
 } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
-import { orderItemDisplayName } from '@/lib/orders/order-item-name';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
-import { withUrlIds } from '@/lib/with-url-id';
 
 export async function GET(_req: NextRequest) {
   try {
@@ -57,9 +55,8 @@ export async function GET(_req: NextRequest) {
           select: {
             id: true,
             quantity: true,
-            productName: true,
             menuItem: { select: { name: true } },
-            modifiers: { select: { name: true, quantity: true, menuItemId: true } },
+            modifiers: { select: { name: true, quantity: true } },
           },
         },
         payments: {
@@ -72,22 +69,16 @@ export async function GET(_req: NextRequest) {
 
     const data = pending.map((order) => {
       const latestPayment = order.payments[0] ?? null;
-      const { payments: _payments, items, ...rest } = order;
+      const { payments: _payments, ...rest } = order;
       return {
         ...rest,
-        items: items.map((it) => ({
-          id: it.id,
-          quantity: it.quantity,
-          menuItem: { name: orderItemDisplayName(it) },
-          modifiers: it.modifiers,
-        })),
         paymentStatus: latestPayment?.status ?? null,
         paymentMethod: latestPayment?.method ?? null,
         paymentAmount: latestPayment?.amount ?? null,
       };
     });
 
-    return NextResponse.json({ data: withUrlIds(data) }, { status: 200 });
+    return NextResponse.json({ data }, { status: 200 });
   } catch (e) {
     console.error('kds manager-orders', e);
     return NextResponse.json(

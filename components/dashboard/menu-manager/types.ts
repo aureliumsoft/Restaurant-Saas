@@ -27,6 +27,7 @@ export type AttrGroupRow = {
   multipleMode?: 'CHECKBOX' | 'QUANTITY' | null;
   freeQuantity?: number | null;
   categoryDiscountPercent?: number | null;
+  categoryExtraCostPercent?: number | null;
   required: boolean;
   minItems: number | null;
   maxItems: number | null;
@@ -56,6 +57,7 @@ export type AttrGroupRow = {
   productCategoryIds?: string[];
   variationLimits?: VariationLimitRow[];
   useVariationPricing?: boolean;
+  productOverrides?: Record<string, { excluded?: boolean; free?: boolean }> | null;
 };
 
 export type RestaurantVariationRow = {
@@ -127,6 +129,7 @@ export type MenuCategoryRow = {
   name: string;
   imageUrl?: string | null;
   showInFront: boolean;
+  hiddenBranchIds?: string[];
   sortOrder: number;
   itemCount?: number;
   items: MenuItemRow[];

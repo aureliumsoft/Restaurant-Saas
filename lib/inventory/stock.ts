@@ -187,6 +187,7 @@ async function computeIngredientPlan(
   >();
   if (menuItemIds.length === 0) return { needed, parts };
 
+  const hasIngredientModel = 'ingredient' in (tx as Record<string, unknown>);
   const items = await tx.menuItem.findMany({
     where: {
       restaurantId: options.restaurantId,
@@ -195,24 +196,33 @@ async function computeIngredientPlan(
     select: {
       id: true,
       variations: { select: { id: true } },
-      ingredientRecipes: {
-        select: {
-          quantity: true,
-          menuItemVariationId: true,
-          ingredientId: true,
-          ingredient: {
-            select: {
-              id: true,
-              name: true,
-              isMajor: true,
-              isActive: true,
+      ...(hasIngredientModel
+        ? {
+            ingredientRecipes: {
+              select: {
+                quantity: true,
+                menuItemVariationId: true,
+                ingredientId: true,
+                ingredient: {
+                  select: {
+                    id: true,
+                    name: true,
+                    isMajor: true,
+                    isActive: true,
+                  },
+                },
+              },
             },
-          },
-        },
-      },
+          }
+        : {}),
     },
   });
-  const itemMap = new Map(items.map((i) => [i.id, i]));
+  const itemMap = new Map(
+    items.map((i: any) => [
+      i.id,
+      { ...i, ingredientRecipes: i.ingredientRecipes ?? [] },
+    ])
+  );
 
   const addNeeded = (
     recipeQty: number,

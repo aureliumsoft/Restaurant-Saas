@@ -50,7 +50,13 @@ const orderSelect = {
       productName: true,
       menuItem: { select: { name: true, imageUrl: true } },
       modifiers: {
-        select: { name: true, unitPrice: true, menuItemId: true, quantity: true },
+        select: {
+          name: true,
+          unitPrice: true,
+          menuItemId: true,
+          quantity: true,
+          groupName: true,
+        },
       },
     },
   },

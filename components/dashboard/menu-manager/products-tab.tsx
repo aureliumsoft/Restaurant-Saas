@@ -41,13 +41,7 @@ import {
   SaveConfirmation,
 } from '@/components/ui/confirmation-dialogs';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import { cn } from '@/lib/utils';
@@ -584,32 +578,28 @@ export function ProductsTab({
                   )}
                 </div>
               </form>
-              <div className="flex w-full items-center gap-2 sm:w-auto sm:min-w-[12rem]">
+              <div className="flex w-full items-center gap-2 sm:w-auto sm:min-w-[14rem]">
                 <ListFilter
                   className="h-4 w-4 shrink-0 text-muted-foreground"
                   aria-hidden
                 />
-                <Select
+                <SearchableSelect
                   value={categoryFilter}
-                  onValueChange={(value) => {
+                  onChange={(value) => {
                     setPage(1);
-                    setCategoryFilter(value);
+                    setCategoryFilter(value || ALL_CATEGORIES);
                   }}
-                >
-                  <SelectTrigger className="h-10 w-full bg-background">
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL_CATEGORIES}>
-                      All categories
-                    </SelectItem>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={[
+                    { value: ALL_CATEGORIES, label: 'All categories' },
+                    ...categories.map((c) => ({
+                      value: c.id,
+                      label: c.name,
+                    })),
+                  ]}
+                  placeholder="Category"
+                  searchPlaceholder="Search categories…"
+                  emptyText="No categories match."
+                />
               </div>
               <div className="flex shrink-0 rounded-md border border-border p-0.5">
                 <Button

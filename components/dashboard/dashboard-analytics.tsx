@@ -721,7 +721,7 @@ export default function DashboardAnalytics() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {daySwitcher}
-          {slug ? (
+        {slug ? (
             <>
               <Button
                 asChild
@@ -729,13 +729,13 @@ export default function DashboardAnalytics() {
               >
                 <a
                   href={restaurantStorefrontPath(slug)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                   Open Website
-                  <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
-                </a>
-              </Button>
+                <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
+              </a>
+            </Button>
               <Button
                 asChild
                 variant="outline"
@@ -747,15 +747,15 @@ export default function DashboardAnalytics() {
                       ? kioskBasePath(slug, activeBranchId, activeBranchUrlId)
                       : `/kiosk/${encodeURIComponent(slug)}`
                   }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                   Open Kiosk
-                  <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
-                </a>
-              </Button>
+                <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
+              </a>
+            </Button>
             </>
-          ) : null}
+        ) : null}
         </div>
       </div>
 
@@ -809,7 +809,7 @@ export default function DashboardAnalytics() {
             />
           </>
         )}
-      </div>
+                  </div>
 
       {/* 1. Revenue first */}
       <Card className={CHART_CARD}>
@@ -833,22 +833,22 @@ export default function DashboardAnalytics() {
               formatTip={(n) => `${currencySymbol}${formatCompact(n)}`}
             />
           )}
-        </CardContent>
-      </Card>
+                </CardContent>
+              </Card>
 
       {/* 2. Orders line + channel mix */}
       <div className="grid min-w-0 gap-4 lg:grid-cols-[1.25fr_0.75fr]">
         <Card className={cn('min-w-0', CHART_CARD)}>
-          <CardHeader>
+                <CardHeader>
             <CardTitle>
               {showAdvanced ? 'Orders by channel' : 'Orders trend'} (
               {chartDaysLabel})
-            </CardTitle>
-            <CardDescription>
+                  </CardTitle>
+                  <CardDescription>
               Ticket volume over time — busy vs slow days.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
             {isLoading || !analytics ? (
               <AnalyticsChartLoader />
             ) : insights.totalOrders <= 0 ? (
@@ -862,17 +862,17 @@ export default function DashboardAnalytics() {
                 />
               </>
             )}
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
 
         <Card className={cn('min-w-0', CHART_CARD)}>
           <CardHeader>
             <CardTitle>Channel mix</CardTitle>
-            <CardDescription>
+                    <CardDescription>
               Where completed revenue comes from.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
             {isLoading || !analytics ? (
               <AnalyticsChartLoader className="h-[260px]" />
             ) : channelMixTotal <= 0 ? (
@@ -899,28 +899,28 @@ export default function DashboardAnalytics() {
                         <Cell key={entry.name} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip
+                        <Tooltip
                       formatter={(value: number) => formatMoney(Number(value))}
-                      contentStyle={{
+                          contentStyle={{
                         borderRadius: '12px',
                         border: 'none',
                         boxShadow: '0 12px 30px rgba(0,0,0,0.12)',
-                        fontSize: '12px',
+                            fontSize: '12px',
                       }}
-                    />
-                    <Legend />
+                        />
+                        <Legend />
                   </PieChart>
-                </ResponsiveContainer>
-              </div>
+                    </ResponsiveContainer>
+                  </div>
             )}
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
       </div>
 
       {/* 3. Top items + peak hours */}
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <Card className={cn('min-w-0', CHART_CARD)}>
-          <CardHeader>
+                  <CardHeader>
             <CardTitle>Top selling items</CardTitle>
             <CardDescription>
               What to promote and never stock out · {chartDaysLabel}.
@@ -945,12 +945,12 @@ export default function DashboardAnalytics() {
             <CardTitle className="flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-fire-500" aria-hidden />
               Peak hours
-            </CardTitle>
-            <CardDescription>
+                    </CardTitle>
+                    <CardDescription>
               When to schedule staff and prep · {chartDaysLabel}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
             {isLoading || !analytics ? (
               <AnalyticsChartLoader className="h-[220px]" />
             ) : hourlyOrders.every((h) => h.orders === 0) ? (
@@ -987,8 +987,8 @@ export default function DashboardAnalytics() {
                   </p>
                   <p className="text-[11px] text-muted-foreground">
                     Open tickets
-                  </p>
-                </div>
+                        </p>
+                      </div>
                 <div className="rounded-2xl bg-muted/40 p-4">
                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                     <UtensilsCrossed className="h-3.5 w-3.5" aria-hidden />
@@ -998,7 +998,7 @@ export default function DashboardAnalytics() {
                     {ops?.openTableTabs ?? 0}
                   </p>
                   <p className="text-[11px] text-muted-foreground">Open tabs</p>
-                </div>
+                      </div>
                 <div className="rounded-2xl bg-muted/40 p-4">
                   <div className="text-xs font-medium text-muted-foreground">
                     Display queue
@@ -1008,32 +1008,32 @@ export default function DashboardAnalytics() {
                   </p>
                   <p className="text-[11px] text-muted-foreground">
                     In progress
-                  </p>
-                </div>
+                        </p>
+                      </div>
                 <div className="rounded-2xl bg-muted/40 p-4">
                   <div className="text-xs font-medium text-muted-foreground">
                     Canceled
-                  </div>
+                    </div>
                   <p className="mt-2 text-2xl font-bold tabular-nums">
                     {ops?.canceledOrders ?? 0}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
                     In period
                   </p>
-                </div>
+                    </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+                  </CardContent>
+                </Card>
 
         <Card className={cn('min-w-0', CHART_CARD)}>
-          <CardHeader>
+                  <CardHeader>
             <CardTitle>Payment mix</CardTitle>
-            <CardDescription>
+                    <CardDescription>
               Cash vs card on completed payments · {chartDaysLabel}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
             {isLoading || !analytics ? (
               <AnalyticsChartLoader className="h-[220px]" />
             ) : paymentTotal <= 0 ? (
@@ -1048,8 +1048,8 @@ export default function DashboardAnalytics() {
                     <PieChart>
                       <Pie
                         data={paymentSlices}
-                        dataKey="value"
-                        nameKey="name"
+                              dataKey="value"
+                              nameKey="name"
                         cx="50%"
                         cy="50%"
                         innerRadius={48}
@@ -1058,13 +1058,13 @@ export default function DashboardAnalytics() {
                         isAnimationActive={false}
                       >
                         {paymentSlices.map((entry) => (
-                          <Cell key={entry.name} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value: number) =>
-                          formatMoney(Number(value))
-                        }
+                                <Cell key={entry.name} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              formatter={(value: number) =>
+                                formatMoney(Number(value))
+                              }
                         contentStyle={{
                           borderRadius: '12px',
                           border: 'none',
@@ -1073,9 +1073,9 @@ export default function DashboardAnalytics() {
                         }}
                       />
                       <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
                 <div className="flex flex-col justify-center gap-3 text-sm">
                   {paymentSlices.map((s) => (
                     <div
@@ -1094,11 +1094,11 @@ export default function DashboardAnalytics() {
                       </span>
                     </div>
                   ))}
-                </div>
               </div>
+        </div>
             )}
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
       </div>
     </div>
   );

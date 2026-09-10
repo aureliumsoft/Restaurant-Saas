@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconShoppingBag,
+  IconShoppingCart,
 } from '@tabler/icons-react';
 
 import { Button } from '@/components/ui/button';
@@ -34,27 +35,21 @@ import {
   ProductCardSkeletonGrid,
 } from '@/components/menu/product-card-skeleton';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
-import { customerMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import {
   fetchCustomerMenuProductDetail,
   productNeedsDetailFetch,
 } from '@/lib/menu/fetch-menu-product-detail';
-import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
-import { ProductLineDetails } from '@/components/orders/product-line-details';
 import {
   cartLineTitle,
+  cartModifierDisplayLines,
 } from '@/lib/cart-line-display';
-import { cartLineTotal, cartLineUnitTotal, normalizeCartModifiers } from '@/lib/cart-normalize';
 import {
-  compactCartImageUrl,
-  onlineCartStorageKey,
-  writeCartToLocalStorage,
-} from '@/lib/cart-storage';
-import { orderPathWithQuery } from '@/lib/order-search-params';
-import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
+  orderInfoHasContext,
+  orderPathWithQuery,
+} from '@/lib/order-search-params';
 import { setUiLanguage } from '@/lib/i18n/client';
 import type { UiLanguage } from '@/lib/i18n/resources';
 import { buildStorefrontThemeVars } from '@/lib/restaurant-theme';
@@ -63,14 +58,14 @@ import {
   ORDER_MENU_HEADER_HEIGHT_PX,
   ORDER_PAGE_MAX_WIDTH_PX,
   ORDER_SIDEBAR_WIDTH_PX,
-  ORDER_TOP_BAR_HEIGHT_PX,
+  ORDER_TOP_OFFSET_PX,
   OrderCartCheckoutButton,
   OrderCartPanel,
   OrderMenuHeader,
 } from '@/components/order/order-menu-header';
 import { cn } from '@/lib/utils';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
-import { useOrderInfo } from '@/hooks/use-order-info';
+import { readOrderContext } from '@/lib/order-context-storage';
 import { ArrowUp, Minus, Pencil, Plus, Search, X } from 'lucide-react';
 import type { BranchOpeningHours } from '@/lib/order-time-slots';
 
@@ -85,7 +80,6 @@ type CustomerMenuProduct = {
   name: string;
   description: string | null;
   imageUrl: string | null;
-  hasImage?: boolean;
   price: number;
   salePrice: number | null;
   categoryId: string;
@@ -230,11 +224,19 @@ function getSignature(
 }
 
 function lineUnitTotal(line: CartLine) {
-  return cartLineUnitTotal(line);
+  const base =
+    line.variationId && line.variationPriceOverride != null
+      ? line.variationPriceOverride
+      : line.baseUnitPrice;
+  const modTotal = line.modifiers.reduce(
+    (sum, m) => sum + m.selections.reduce((s2, sel) => s2 + sel.unitPrice, 0),
+    0
+  );
+  return base + modTotal;
 }
 
 function lineTotal(line: CartLine) {
-  return cartLineTotal(line);
+  return lineUnitTotal(line) * line.quantity;
 }
 
 function parseCartFromStorage(raw: string | null): CartLine[] {
@@ -264,10 +266,9 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
           imageUrl: (maybeLine as any).imageUrl ?? null,
           baseUnitPrice: maybeLine.baseUnitPrice,
           quantity: Number(maybeLine.quantity ?? 1),
-          variationId: (maybeLine as CartLine).variationId ?? null,
-          variationName: (maybeLine as CartLine).variationName ?? null,
-          variationPriceOverride: (maybeLine as CartLine).variationPriceOverride,
-          modifiers: normalizeCartModifiers((maybeLine as any).modifiers),
+          modifiers: Array.isArray((maybeLine as any).modifiers)
+            ? (maybeLine as any).modifiers
+            : [],
           modifiersSignature: String(maybeLine.modifiersSignature ?? ''),
           offeredProductName: (maybeLine as any).offeredProductName ?? null,
         });
@@ -339,13 +340,12 @@ function OfferSlider({
   if (items.length === 0) return null;
 
   const multi = items.length > 1;
-  // Mobile: one full-width card. sm+: two cards when there are 2+, peek for 3+.
   const slideWidthClass =
     items.length === 1
       ? 'w-full'
       : items.length === 2
-        ? 'w-full sm:w-[calc((100%-0.75rem)/2)]'
-        : 'w-full sm:w-[46%]';
+        ? 'w-[calc((100%-0.75rem)/2)]'
+        : 'w-[88%] sm:w-[46%]';
 
   return (
     <section className="mb-8">
@@ -378,7 +378,7 @@ function OfferSlider({
                 <img
                   src={item.image}
                   alt=""
-                  className="h-40 w-full object-cover sm:h-36"
+                  className="h-36 w-full object-cover"
                 />
               </div>
             ))}
@@ -432,47 +432,46 @@ function ProductCard({
       type="button"
       onClick={onAdd}
       aria-label={`Add ${product.name}`}
-      className="flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-xl bg-white text-left shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 active:scale-[0.99] sm:rounded-2xl"
+      className="flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
     >
       <div className="relative">
-        {product.hasImage ?? Boolean(product.imageUrl) ? (
-          <LazyMenuProductImage
+        {product.imageUrl ? (
+          <img
             src={product.imageUrl}
-            hasImage
-            alt={product.name}
-            className="h-32 w-full sm:h-40 md:h-44"
+            alt=""
+            className="h-44 w-full object-cover"
           />
         ) : (
-          <div className="flex h-32 w-full items-center justify-center bg-[#f4f4f6] text-muted-foreground sm:h-40 md:h-44">
-            <IconShoppingBag className="h-8 w-8 sm:h-10 sm:w-10" />
+          <div className="flex h-44 w-full items-center justify-center bg-[#f4f4f6] text-muted-foreground">
+            <IconShoppingBag className="h-10 w-10" />
           </div>
         )}
         <span
-          className="pointer-events-none absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md sm:bottom-3 sm:right-3 sm:h-9 sm:w-9"
+          className="pointer-events-none absolute bottom-3 right-3 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md"
           aria-hidden
         >
-          <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+          <Plus className="h-5 w-5" />
         </span>
       </div>
-      <div className="flex flex-1 flex-col p-2.5 sm:p-4">
-        <h3 className="line-clamp-2 text-sm font-bold text-primary sm:text-base">
+      <div className="flex flex-1 flex-col p-4">
+        <h3 className="line-clamp-2 text-base font-bold text-primary">
           {product.name}
         </h3>
         {product.description ? (
-          <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-[#8e8e9a] sm:mt-1.5 sm:text-xs">
+          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[#8e8e9a]">
             {product.description}
           </p>
         ) : (
-          <span className="mt-1 block flex-1 sm:mt-1.5" />
+          <span className="mt-1.5 block flex-1" />
         )}
-        <div className="mt-2 text-sm font-bold text-primary sm:mt-3 sm:text-base">
+        <div className="mt-3 text-base font-bold text-primary">
           {priceDisplay.prefix ? (
-            <span className="mr-1 text-[10px] font-normal text-[#8e8e9a] sm:text-xs">
+            <span className="mr-1 text-xs font-normal text-[#8e8e9a]">
               {priceDisplay.prefix}
             </span>
           ) : null}
           {hasSale ? (
-            <span className="mr-1.5 text-xs font-normal text-[#8e8e9a] line-through sm:mr-2 sm:text-sm">
+            <span className="mr-2 text-sm font-normal text-[#8e8e9a] line-through">
               {formatMoney(priceDisplay.compareAt!)}
             </span>
           ) : null}
@@ -488,15 +487,25 @@ export default function OrderPageClient({
   orderId,
   orderInfo: initialOrderInfo,
 }: OrderPageProps) {
-  const orderInfo = useOrderInfo(orderId, orderType, initialOrderInfo);
+  const [storedOrderInfo, setStoredOrderInfo] = useState<OrderInfo | undefined>(
+    undefined
+  );
+
+  useEffect(() => {
+    setStoredOrderInfo(readOrderContext(orderId) ?? undefined);
+  }, [orderId]);
+
+  const orderInfo = orderInfoHasContext(initialOrderInfo)
+    ? initialOrderInfo
+    : storedOrderInfo;
   const restaurantSlug =
     orderInfo?.restaurantSlug?.trim() || orderInfo?.storeId?.trim() || '';
   const { formatMoney } = useRestaurantRegional(
     restaurantSlug || undefined
   );
   const storefrontPath = restaurantSlug
-    ? restaurantStorefrontPath(restaurantSlug)
-    : '/';
+    ? `/web-app/${encodeURIComponent(restaurantSlug)}`
+    : '/web-app';
 
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -504,11 +513,6 @@ export default function OrderPageClient({
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [headerInfoHidden, setHeaderInfoHidden] = useState(false);
-  const stickyHeaderHeight = headerInfoHidden
-    ? ORDER_TOP_BAR_HEIGHT_PX
-    : ORDER_MENU_HEADER_HEIGHT_PX;
-  const stickyTopOffset = stickyHeaderHeight + ORDER_CATEGORY_BAR_HEIGHT_PX;
   const [currentOffer, setCurrentOffer] = useState(0);
   const [bannerOffers, setBannerOffers] = useState<OfferItem[]>([]);
   const [mounted, setMounted] = useState(false);
@@ -518,7 +522,6 @@ export default function OrderPageClient({
   );
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [branchHours, setBranchHours] = useState<BranchOpeningHours | null>(null);
-  const [slotDurationMinutes, setSlotDurationMinutes] = useState(30);
   const { t, i18n } = useTranslation();
   const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
 
@@ -526,7 +529,8 @@ export default function OrderPageClient({
   const categoriesUrl = buildCustomerMenuCategoriesUrl(
     orderInfo?.restaurantSlug,
     orderInfo?.storeId,
-    hostSubdomain
+    hostSubdomain,
+    orderInfo?.storeId
   );
   const categoryItemsUrl = useCallback(
     (categoryId: string, page: number, limit: number) =>
@@ -535,6 +539,7 @@ export default function OrderPageClient({
         orderInfo?.restaurantSlug,
         orderInfo?.storeId,
         hostSubdomain,
+        orderInfo?.storeId,
         { page, limit }
       ),
     [orderInfo?.restaurantSlug, orderInfo?.storeId, hostSubdomain]
@@ -573,6 +578,7 @@ export default function OrderPageClient({
 
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [customizeLoading, setCustomizeLoading] = useState(false);
+  const customizeLoadTokenRef = useRef(0);
   const [customizeProduct, setCustomizeProduct] =
     useState<CustomerMenuProduct | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
@@ -585,12 +591,9 @@ export default function OrderPageClient({
 
   const { theme, resolvedTheme } = useTheme();
   const router = useRouter();
-  const [isViewingCart, startViewCartTransition] = useTransition();
   const searchParams = useSearchParams();
   const orderInfoRef = useRef(orderInfo);
   orderInfoRef.current = orderInfo;
-
-  const customizeLoadTokenRef = useRef(0);
 
   const openCustomizeForProduct = (
     p: CustomerMenuProduct,
@@ -601,14 +604,31 @@ export default function OrderPageClient({
     setCustomizeOpen(true);
   };
 
-  const openModifyForLine = (line: CartLine) => {
+  const openModifyForLine = async (line: CartLine) => {
     const product = products.find((p) => p.id === line.menuItemId) ?? null;
     if (!product) {
       toast.error(t('productNotFoundToModify'));
       return;
     }
     setEditingLineId(line.lineId);
-    void proceedWithProduct(product);
+    if (productNeedsDetailFetch(product)) {
+      const token = ++customizeLoadTokenRef.current;
+      openCustomizeForProduct(product, { loading: true });
+      const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
+        product.id,
+        {
+          slug: orderInfo?.restaurantSlug ?? undefined,
+          subdomain: hostSubdomain ?? undefined,
+        }
+      );
+      if (token !== customizeLoadTokenRef.current) return;
+      if (full) {
+        setCustomizeProduct({ ...full, categoryId: product.categoryId });
+        setCustomizeLoading(false);
+        return;
+      }
+    }
+    openCustomizeForProduct(product);
   };
 
   useEffect(() => {
@@ -680,7 +700,7 @@ export default function OrderPageClient({
 
   useEffect(() => {
     if (!mounted) return;
-    writeCartToLocalStorage(onlineCartStorageKey(orderId), cart);
+    localStorage.setItem(`cart-${orderId}`, JSON.stringify(cart));
   }, [cart, mounted, orderId]);
 
   useEffect(() => {
@@ -750,7 +770,6 @@ export default function OrderPageClient({
     const branchId = orderInfo?.storeId?.trim();
     if (!branchId) {
       setBranchHours(null);
-      setSlotDurationMinutes(30);
       return;
     }
 
@@ -761,29 +780,13 @@ export default function OrderPageClient({
           cache: 'no-store',
         });
         if (!res.ok) return;
-        const json = (await res.json().catch(() => ({}))) as {
-          data?: Array<{
-            id?: string;
-            openingHours?: BranchOpeningHours | null;
-            slotDurationMinutes?: number | null;
-          }>;
-        };
+        const json = (await res.json().catch(() => ({}))) as { data?: Array<{ id?: string; openingHours?: BranchOpeningHours | null }> };
         const branch = (json.data ?? []).find((item) => item.id === branchId);
         if (!cancelled) {
           setBranchHours(branch?.openingHours ?? null);
-          setSlotDurationMinutes(
-            branch?.slotDurationMinutes === 15 ||
-              branch?.slotDurationMinutes === 30 ||
-              branch?.slotDurationMinutes === 60
-              ? branch.slotDurationMinutes
-              : 30
-          );
         }
       } catch {
-        if (!cancelled) {
-          setBranchHours(null);
-          setSlotDurationMinutes(30);
-        }
+        if (!cancelled) setBranchHours(null);
       }
     })();
 
@@ -822,7 +825,7 @@ export default function OrderPageClient({
         menuItemId: product.id,
         productName: product.name,
         description: product.description ?? null,
-        imageUrl: compactCartImageUrl(product.imageUrl),
+        imageUrl: product.imageUrl ?? null,
         baseUnitPrice,
         quantity: 1,
         variationId,
@@ -851,27 +854,21 @@ export default function OrderPageClient({
         const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
           p.id,
           {
-            slug: orderInfo?.restaurantSlug,
-            subdomain: hostSubdomain || orderInfo?.storeId,
+            slug: orderInfo?.restaurantSlug ?? undefined,
+            subdomain: hostSubdomain ?? undefined,
           }
         );
         if (token !== customizeLoadTokenRef.current) return;
-        if (!full) {
-          setCustomizeOpen(false);
-          setCustomizeProduct(null);
+        if (full) {
+          setCustomizeProduct({ ...full, categoryId: p.categoryId });
           setCustomizeLoading(false);
-          toast.error(t('productNotFoundToModify'));
           return;
         }
-        setCustomizeProduct({ ...full, categoryId: p.categoryId });
-        setCustomizeLoading(false);
-        return;
       }
-      customizeLoadTokenRef.current += 1;
       openCustomizeForProduct(p);
-      return;
+    } else {
+      addToCart(p, []);
     }
-    addToCart(p, []);
   };
 
   const handleProductSelect = (product: CustomerMenuProduct) => {
@@ -935,6 +932,10 @@ export default function OrderPageClient({
     );
   };
 
+  const onCategoryClick = (id: string) => {
+    setSelectedCategory(id);
+  };
+
   const categoryStripItems = useMemo(
     () => [
       {
@@ -957,156 +958,10 @@ export default function OrderPageClient({
   );
 
   const categoryStripRef = useRef<HTMLDivElement>(null);
-  const ignoreCategorySpyUntilRef = useRef(0);
-  const [scrollActiveCategoryId, setScrollActiveCategoryId] =
-    useState(ALL_CATEGORY_ID);
   const [categoryStripScroll, setCategoryStripScroll] = useState({
     back: false,
     forward: false,
   });
-
-  const showCategorySections =
-    selectedCategory === ALL_CATEGORY_ID && !search.trim() && !menuLoading;
-
-  const activeCategoryPillId = showCategorySections
-    ? scrollActiveCategoryId
-    : selectedCategory;
-
-  const scrollCategoryPillIntoView = useCallback((id: string) => {
-    const strip = categoryStripRef.current;
-    if (!strip) return;
-    const pill = strip.querySelector<HTMLElement>(
-      `[data-order-category-pill="${id}"]`
-    );
-    pill?.scrollIntoView({
-      behavior: 'smooth',
-      inline: 'center',
-      block: 'nearest',
-    });
-  }, []);
-
-  const scrollProductCategoryIntoView = useCallback(
-    (id: string) => {
-      if (id === ALL_CATEGORY_ID) {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        return;
-      }
-      const section = document.querySelector<HTMLElement>(
-        `[data-order-category-section="${id}"]`
-      );
-      if (!section) return;
-      const top =
-        section.getBoundingClientRect().top +
-        window.scrollY -
-        stickyTopOffset -
-        12;
-      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-    },
-    [stickyTopOffset]
-  );
-
-  const onCategoryClick = useCallback(
-    (id: string) => {
-      if (id === ALL_CATEGORY_ID) {
-        setSelectedCategory(ALL_CATEGORY_ID);
-        setScrollActiveCategoryId(ALL_CATEGORY_ID);
-        ignoreCategorySpyUntilRef.current = Date.now() + 700;
-        scrollProductCategoryIntoView(ALL_CATEGORY_ID);
-        scrollCategoryPillIntoView(ALL_CATEGORY_ID);
-        return;
-      }
-
-      // While browsing all sections, jump to that category instead of filtering.
-      if (selectedCategory === ALL_CATEGORY_ID && !search.trim()) {
-        setScrollActiveCategoryId(id);
-        ignoreCategorySpyUntilRef.current = Date.now() + 700;
-        scrollProductCategoryIntoView(id);
-        scrollCategoryPillIntoView(id);
-        return;
-      }
-
-      setSelectedCategory(id);
-      scrollCategoryPillIntoView(id);
-    },
-    [
-      search,
-      selectedCategory,
-      scrollCategoryPillIntoView,
-      scrollProductCategoryIntoView,
-    ]
-  );
-
-  useEffect(() => {
-    if (!showCategorySections) return;
-
-    const sections = Array.from(
-      document.querySelectorAll<HTMLElement>('[data-order-category-section]')
-    );
-    if (sections.length === 0) return;
-
-    const ratios = new Map<string, number>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const id = (entry.target as HTMLElement).dataset.orderCategorySection;
-          if (!id) continue;
-          ratios.set(id, entry.isIntersecting ? entry.intersectionRatio : 0);
-        }
-        if (Date.now() < ignoreCategorySpyUntilRef.current) return;
-
-        let bestId = sections[0]?.dataset.orderCategorySection ?? ALL_CATEGORY_ID;
-        let bestRatio = -1;
-        for (const section of sections) {
-          const id = section.dataset.orderCategorySection;
-          if (!id) continue;
-          const ratio = ratios.get(id) ?? 0;
-          if (ratio > bestRatio) {
-            bestRatio = ratio;
-            bestId = id;
-          }
-        }
-        if (bestRatio <= 0) {
-          // Near top of page → highlight All
-          if (window.scrollY < 80) {
-            setScrollActiveCategoryId((prev) => {
-              if (prev === ALL_CATEGORY_ID) return prev;
-              scrollCategoryPillIntoView(ALL_CATEGORY_ID);
-              return ALL_CATEGORY_ID;
-            });
-          }
-          return;
-        }
-        setScrollActiveCategoryId((prev) => {
-          if (prev === bestId) return prev;
-          scrollCategoryPillIntoView(bestId);
-          return bestId;
-        });
-      },
-      {
-        root: null,
-        threshold: [0.12, 0.28, 0.45, 0.65],
-        rootMargin: `-${stickyTopOffset + 8}px 0px -50% 0px`,
-      }
-    );
-
-    for (const section of sections) observer.observe(section);
-    return () => observer.disconnect();
-  }, [
-    showCategorySections,
-    displayedCategories,
-    scrollCategoryPillIntoView,
-    stickyTopOffset,
-  ]);
-
-  useEffect(() => {
-    if (!showCategorySections) return;
-    setScrollActiveCategoryId((prev) =>
-      prev === ALL_CATEGORY_ID ||
-      categories.some((c) => c.id === prev)
-        ? prev
-        : ALL_CATEGORY_ID
-    );
-  }, [showCategorySections, categories]);
 
   const syncCategoryStripScroll = useCallback(() => {
     const el = categoryStripRef.current;
@@ -1175,35 +1030,14 @@ export default function OrderPageClient({
 
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
-    const imageQuery = {
-      slug: orderInfo?.restaurantSlug,
-      subdomain: hostSubdomain || orderInfo?.storeId,
-    };
     return customizeProduct.attributeGroups.map((g) =>
-      buildCustomerAttributeGroup(g, customizeProduct.id, (id) =>
-        customerMenuItemImageUrl(id, imageQuery)
-      )
+      buildCustomerAttributeGroup(g, customizeProduct.id)
     );
-  }, [
-    customizeProduct,
-    orderInfo?.restaurantSlug,
-    orderInfo?.storeId,
-    hostSubdomain,
-  ]);
+  }, [customizeProduct]);
 
   // Avoid server/client markup mismatches by rendering only after first mount.
   // Important: this must be AFTER all hooks to keep React Hook order stable.
   if (!mounted) return null;
-
-  const productGridClassName =
-    'grid min-w-0 grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4';
-
-  const goToCart = () =>
-    startViewCartTransition(() => {
-      router.push(
-        orderPathWithQuery(`/order/${orderType}/${orderId}/cart`, orderInfo)
-      );
-    });
 
   const cartFooter = (
     <OrderCartCheckoutButton
@@ -1211,9 +1045,11 @@ export default function OrderPageClient({
       total={total}
       formattedTotal={formatMoney(total)}
       label={t('orderSeeMyOrder')}
-      loadingLabel={t('processing')}
-      loading={isViewingCart}
-      onClick={goToCart}
+      onClick={() =>
+        router.push(
+          orderPathWithQuery(`/order/${orderType}/${orderId}/cart`, orderInfo)
+        )
+      }
     />
   );
 
@@ -1234,28 +1070,40 @@ export default function OrderPageClient({
       ) : (
         <div className="divide-y divide-[#ececf0]">
           {cart.map((line) => {
+            const modifierLines = cartModifierDisplayLines(line.modifiers);
             const canModify =
               Boolean(line.variationId) || line.modifiers.length > 0;
 
             return (
               <div key={line.lineId} className="py-4 first:pt-1 last:pb-1">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <ProductLineDetails
-                      productName={line.productName}
-                      variationName={line.variationName}
-                      modifiers={line.modifiers}
-                      showPrices
-                      formatMoney={formatMoney}
-                      titleClassName="text-sm font-bold leading-snug text-primary"
-                      sectionLabelClassName="text-[10px] font-semibold uppercase tracking-wide text-primary/60"
-                      lineClassName="text-xs leading-relaxed text-primary/75"
-                    />
-                  </div>
+                  <p className="min-w-0 flex-1 text-sm font-bold leading-snug text-primary">
+                    {cartLineTitle(line.productName, line.variationName)}
+                  </p>
                   <span className="shrink-0 text-sm font-bold text-primary">
                     {formatMoney(lineTotal(line))}
                   </span>
                 </div>
+
+                {modifierLines.length > 0 ? (
+                  <div className="mt-2 space-y-0.5">
+                    {modifierLines.map((modLine, index) => (
+                      <p
+                        key={`${line.lineId}-mod-${index}`}
+                        className={cn(
+                          'text-xs leading-relaxed text-primary/75',
+                          modLine.prefix === 'dash' && 'pl-3'
+                        )}
+                      >
+                        {modLine.prefix === 'branch' ? '↳ ' : '- '}
+                        {modLine.name}
+                        {modLine.unitPrice > 0
+                          ? ` (+${formatMoney(modLine.unitPrice)})`
+                          : ''}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
 
                 <div className="mt-3 flex items-center gap-2">
                   <div className="flex items-center gap-2">
@@ -1299,10 +1147,10 @@ export default function OrderPageClient({
   );
 
   const renderCategoryBar = () => (
-    <div className="flex h-full min-w-0 flex-1 items-center gap-1.5 sm:gap-2.5">
+    <div className="flex h-full min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
       <button
         type="button"
-        className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d8dce6] bg-white text-primary transition hover:bg-[#fafafa] disabled:opacity-35 sm:inline-flex"
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d8dce6] bg-white text-primary transition hover:bg-[#fafafa] disabled:opacity-35"
         disabled={!categoryStripScroll.back}
         aria-label="Scroll categories back"
         onClick={() => scrollCategoryStrip('back')}
@@ -1314,7 +1162,7 @@ export default function OrderPageClient({
         onScroll={syncCategoryStripScroll}
         className="min-h-0 min-w-0 flex-1 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <div className="flex w-max items-center gap-2 py-1 sm:gap-2.5">
+        <div className="flex w-max items-center gap-2.5 py-1">
           {menuLoading ? (
             <>
               <CategoryPillSkeleton />
@@ -1323,15 +1171,14 @@ export default function OrderPageClient({
             </>
           ) : (
             categoryStripItems.map((category) => {
-            const isActive = activeCategoryPillId === category.id;
+            const isActive = selectedCategory === category.id;
             return (
               <button
                 key={category.id}
                 type="button"
-                data-order-category-pill={category.id}
                 onClick={() => onCategoryClick(category.id)}
                 className={cn(
-                  'inline-flex h-9 max-w-[9.5rem] shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-left text-xs font-semibold transition sm:h-10 sm:max-w-[12.5rem] sm:gap-2 sm:pr-3.5 sm:text-sm',
+                  'inline-flex h-10 max-w-[11.5rem] shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-3.5 text-left text-sm font-semibold transition sm:max-w-[12.5rem]',
                   isActive
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'bg-[#f4f4f6] text-primary hover:bg-[#ebe8f2]/80'
@@ -1340,7 +1187,7 @@ export default function OrderPageClient({
                 {category.imageUrl ? (
                   <span
                     className={cn(
-                      'relative h-7 w-7 shrink-0 overflow-hidden rounded-full ring-1 sm:h-8 sm:w-8',
+                      'relative h-8 w-8 shrink-0 overflow-hidden rounded-full ring-1',
                       isActive
                         ? 'bg-white/15 ring-primary-foreground/25'
                         : 'bg-white ring-white'
@@ -1355,7 +1202,7 @@ export default function OrderPageClient({
                 ) : (
                   <span
                     className={cn(
-                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-1 sm:h-8 sm:w-8',
+                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-1',
                       isActive
                         ? 'bg-white/20 text-primary-foreground ring-primary-foreground/25'
                         : 'bg-white text-primary/50 ring-white'
@@ -1377,7 +1224,7 @@ export default function OrderPageClient({
       </div>
       <button
         type="button"
-        className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d8dce6] bg-white text-primary transition hover:bg-[#fafafa] disabled:opacity-35 sm:inline-flex"
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d8dce6] bg-white text-primary transition hover:bg-[#fafafa] disabled:opacity-35"
         disabled={!categoryStripScroll.forward}
         aria-label="Scroll categories forward"
         onClick={() => scrollCategoryStrip('forward')}
@@ -1387,7 +1234,7 @@ export default function OrderPageClient({
       <button
         type="button"
         className={cn(
-          'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition sm:h-10 sm:w-10',
+          'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition',
           searchOpen
             ? 'border border-primary bg-white text-primary'
             : 'bg-primary text-primary-foreground hover:brightness-95'
@@ -1411,7 +1258,6 @@ export default function OrderPageClient({
       <OrderMenuHeader
         orderId={orderId}
         restaurantName={orderInfo?.restaurantName}
-        restaurantSlug={orderInfo?.restaurantSlug}
         logoUrl={logoUrl}
         themePrimaryColor={themePrimaryColor}
         orderType={orderType}
@@ -1420,14 +1266,12 @@ export default function OrderPageClient({
         deliveryAddress={orderInfo?.address}
         backHref={storefrontPath}
         branchHours={branchHours}
-        slotDurationMinutes={slotDurationMinutes}
-        onInfoRowHiddenChange={setHeaderInfoHidden}
       />
 
       <div
-        className="fixed inset-x-0 z-40 border-b border-[#ececf0] bg-white transition-[top] duration-300 ease-out"
+        className="fixed inset-x-0 z-40 border-b border-[#ececf0] bg-white"
         style={{
-          top: stickyHeaderHeight,
+          top: ORDER_MENU_HEADER_HEIGHT_PX,
           height: ORDER_CATEGORY_BAR_HEIGHT_PX,
         }}
       >
@@ -1438,8 +1282,8 @@ export default function OrderPageClient({
 
       {searchOpen ? (
         <div
-          className="fixed inset-x-0 z-30 flex justify-center transition-[top] duration-300 ease-out"
-          style={{ top: stickyTopOffset }}
+          className="fixed inset-x-0 z-30 flex justify-center"
+          style={{ top: ORDER_TOP_OFFSET_PX }}
         >
           <div
             className="w-full max-w-full border-b border-[#ececf0] bg-white px-4 py-2 sm:max-w-[min(100%,var(--order-page-max-width))] sm:px-6"
@@ -1476,22 +1320,15 @@ export default function OrderPageClient({
       ) : null}
 
       <div
-        className="min-h-screen w-full lg:pr-[var(--order-sidebar-width)]"
+        className="mx-auto flex min-h-screen w-full max-w-full flex-col sm:max-w-[min(100%,var(--order-page-max-width))] lg:flex-row"
         style={{
           paddingTop: searchOpen
-            ? stickyTopOffset + 56
-            : stickyTopOffset,
+            ? ORDER_TOP_OFFSET_PX + 56
+            : ORDER_TOP_OFFSET_PX,
           ['--order-page-max-width' as string]: `${ORDER_PAGE_MAX_WIDTH_PX}px`,
-          ['--order-sidebar-width' as string]: `${ORDER_SIDEBAR_WIDTH_PX}px`,
-          transition: 'padding-top 300ms ease-out',
         }}
       >
-        <main
-          className={cn(
-            'mx-auto min-w-0 w-full max-w-[min(100%,var(--order-page-max-width))] px-3 py-4 sm:px-6 sm:py-5',
-            cartItemCount > 0 && 'pb-24 lg:pb-5'
-          )}
-        >
+        <main className="min-w-0 flex-1 px-4 py-5 sm:px-6">
           {bannerOffers.length > 0 ? (
             <OfferSlider
               items={bannerOffers}
@@ -1512,7 +1349,7 @@ export default function OrderPageClient({
               <ProductCardSkeletonGrid
                 count={6}
                 variant="online"
-                gridClassName={productGridClassName}
+                gridClassName="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3"
               />
             ) : displayedCategories.length > 0 ? (
               displayedCategories.map((category) => {
@@ -1527,24 +1364,14 @@ export default function OrderPageClient({
 
                 if (isCategoryLoading) {
                   return (
-                    <div
-                      key={category.id}
-                      id={category.id}
-                      data-order-category-section={category.id}
-                      className="mb-8 min-w-0 scroll-mt-[calc(var(--order-sticky-top,140px)+12px)] sm:mb-10"
-                      style={
-                        {
-                          ['--order-sticky-top' as string]: `${stickyTopOffset}px`,
-                        } as CSSProperties
-                      }
-                    >
-                      <h3 className="mb-3 text-lg font-bold text-primary sm:mb-4 sm:text-xl">
+                    <div key={category.id} id={category.id} className="mb-10 min-w-0">
+                      <h3 className="mb-4 text-xl font-bold text-primary">
                         {category.name}
                       </h3>
                       <ProductCardSkeletonGrid
-                        count={4}
+                        count={3}
                         variant="online"
-                        gridClassName={productGridClassName}
+                        gridClassName="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3"
                       />
                     </div>
                   );
@@ -1553,9 +1380,8 @@ export default function OrderPageClient({
                 const categoryProducts = category.items;
 
                 if (categoryProducts.length === 0) {
-                  if (showCategorySections) return null;
                   return (
-                    <div key={category.id} className="mb-8 sm:mb-10">
+                    <div key={category.id} className="mb-10">
                       <p className="text-sm text-[#8e8e9a]">
                         {t('noProductsFoundInCategory')}
                       </p>
@@ -1567,24 +1393,18 @@ export default function OrderPageClient({
                   <div
                     key={category.id}
                     id={category.id}
-                    data-order-category-section={category.id}
-                    className="mb-8 min-w-0 scroll-mt-[calc(var(--order-sticky-top,140px)+12px)] sm:mb-10"
-                    style={
-                      {
-                        ['--order-sticky-top' as string]: `${stickyTopOffset}px`,
-                      } as CSSProperties
-                    }
+                    className="mb-10 min-w-0"
                   >
-                    <h3 className="mb-3 text-lg font-bold text-primary sm:mb-4 sm:text-xl">
+                    <h3 className="mb-4 text-xl font-bold text-primary">
                       {category.name}
                     </h3>
-                    <div className={productGridClassName}>
+                    <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       {categoryProducts.map((product) => (
                         <ProductCard
                           key={product.id}
                           product={product}
                           formatMoney={formatMoney}
-                          onAdd={() => void handleProductSelect(product)}
+                          onAdd={() => handleProductSelect(product)}
                         />
                       ))}
                     </div>
@@ -1592,7 +1412,7 @@ export default function OrderPageClient({
                 );
               })
             ) : (
-              <div className="mb-8 sm:mb-10">
+              <div className="mb-10">
                 <p className="text-sm text-[#8e8e9a]">
                   {t('noCategoriesFound')}
                 </p>
@@ -1600,35 +1420,20 @@ export default function OrderPageClient({
             )}
           </section>
         </main>
+
+        <aside
+          className="hidden shrink-0 flex-col bg-[#f4f4f6] p-3 lg:sticky lg:flex lg:self-start"
+          style={{
+            width: ORDER_SIDEBAR_WIDTH_PX,
+            top: ORDER_TOP_OFFSET_PX,
+            height: `calc(100dvh - ${ORDER_TOP_OFFSET_PX}px)`,
+          }}
+        >
+          {cartPanel}
+        </aside>
+
+        <aside className="shrink-0 bg-[#f4f4f6] p-3 lg:hidden">{cartPanel}</aside>
       </div>
-
-      <aside
-        className="fixed right-0 z-30 hidden flex-col bg-[#f4f4f6] p-3 lg:flex"
-        style={{
-          width: ORDER_SIDEBAR_WIDTH_PX,
-          top: stickyTopOffset,
-          height: `calc(100dvh - ${stickyTopOffset}px)`,
-          transition: 'top 300ms ease-out, height 300ms ease-out',
-        }}
-      >
-        {cartPanel}
-      </aside>
-
-      {cartItemCount > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e8eaef] bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.12)] lg:hidden">
-          <div className="mx-auto w-full max-w-lg">
-            <OrderCartCheckoutButton
-              itemCount={cartItemCount}
-              total={total}
-              formattedTotal={formatMoney(total)}
-              label={t('viewCart')}
-              loadingLabel={t('processing')}
-              loading={isViewingCart}
-              onClick={goToCart}
-            />
-          </div>
-        </div>
-      ) : null}
 
         <ProductCustomizeDialog
         open={customizeOpen}
@@ -1636,9 +1441,7 @@ export default function OrderPageClient({
         onOpenChange={(open) => {
           setCustomizeOpen(open);
           if (!open) {
-            customizeLoadTokenRef.current += 1;
             setCustomizeProduct(null);
-            setCustomizeLoading(false);
             setEditingLineId(null);
           }
         }}
@@ -1680,10 +1483,8 @@ export default function OrderPageClient({
             groupName: m.groupName,
             selections: m.selections.map((s: MenuOption) => ({
               menuItemId: s.menuItemId,
-              name: String(s.name ?? 'Option'),
-              unitPrice: Number.isFinite(Number(s.unitPrice))
-                ? Number(s.unitPrice)
-                : 0,
+              name: s.name,
+              unitPrice: s.unitPrice,
             })),
           }));
 
@@ -1736,18 +1537,7 @@ export default function OrderPageClient({
         <Button
           type="button"
           size="icon"
-          className={cn(
-            'fixed z-40 h-11 w-11 rounded-full shadow-lg right-4 sm:right-6',
-            'lg:right-[calc(var(--order-sidebar-width)+1.5rem)]',
-            cartItemCount > 0
-              ? 'bottom-[5.75rem] lg:bottom-6'
-              : 'bottom-6'
-          )}
-          style={
-            {
-              ['--order-sidebar-width' as string]: `${ORDER_SIDEBAR_WIDTH_PX}px`,
-            } as CSSProperties
-          }
+          className="fixed bottom-6 z-40 h-11 w-11 rounded-full shadow-lg right-6 lg:right-[max(1.5rem,calc((100vw-1280px)/2+320px+1rem))]"
           onClick={scrollToTop}
           aria-label="Scroll to top"
         >

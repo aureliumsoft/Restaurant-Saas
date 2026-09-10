@@ -102,6 +102,7 @@ export type AttributeGroup = {
   multipleMode?: 'CHECKBOX' | 'QUANTITY';
   freeQuantity?: number | null;
   categoryDiscountPercent?: number | null;
+  categoryExtraCostPercent?: number | null;
   required: boolean;
   minItems?: number | null;
   maxItems?: number | null;
@@ -218,7 +219,8 @@ function configurationItemPickerPrice(
   const unitCharge = configurationChargeableAddonUnit(
     listUnit,
     defaultListUnit,
-    group.categoryDiscountPercent
+    group.categoryDiscountPercent,
+    group.categoryExtraCostPercent
   );
   const chargeableQty =
     group.multipleMode === 'QUANTITY'
@@ -239,6 +241,7 @@ function configurationItemPickerPrice(
       optionId: item.menuItemId,
       regional,
       categoryDiscountPercent: group.categoryDiscountPercent,
+      categoryExtraCostPercent: group.categoryExtraCostPercent,
     }),
   };
 }
@@ -383,14 +386,9 @@ export function ProductCustomizeDialog({
     () =>
       productRecommendationGroups.filter((g) => {
         const item = g.items[0];
-        if (!item) return false;
-        return isConfigurationItemAvailableForParentVariation(
-          item,
-          baseProductVariationContext.parent,
-          g.useVariationPricing ?? false
-        );
+        return Boolean(item);
       }),
-    [productRecommendationGroups, baseProductVariationContext.parent]
+    [productRecommendationGroups]
   );
 
   useEffect(() => {

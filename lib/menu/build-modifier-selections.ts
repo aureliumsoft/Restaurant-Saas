@@ -115,7 +115,8 @@ export function buildModifierSelectionsForGroups(
         const unit = configurationChargeableAddonUnit(
           listUnit,
           defaultListUnit ?? null,
-          g.categoryDiscountPercent
+          g.categoryDiscountPercent,
+          g.categoryExtraCostPercent
         );
         const chargeable = chargeableByOption
           ? (chargeableByOption.get(optionId) ?? 0)

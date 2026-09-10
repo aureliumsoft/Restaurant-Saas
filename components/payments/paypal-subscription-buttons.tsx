@@ -286,7 +286,7 @@ export function PayPalSubscriptionButtons({
           <PayPalSandboxDemoCard
             currency={checkoutCurrency}
             variant="subscription"
-          />
+          />      
         ) : null} */}
         <AcceptedPaymentMethods
           size="sm"

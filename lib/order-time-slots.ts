@@ -7,35 +7,10 @@ export type BranchOpeningHour = {
 
 export type BranchOpeningHours = BranchOpeningHour[];
 
-export type SlotDurationMinutes = 15 | 30 | 60;
-
-export const SLOT_DURATION_OPTIONS: SlotDurationMinutes[] = [15, 30, 60];
-export const DEFAULT_SLOT_DURATION_MINUTES: SlotDurationMinutes = 30;
-
 export type OrderTimeSlot = {
   label: string;
   startAt: string;
 };
-
-export type GenerateOrderTimeSlotsOptions = {
-  /** Slot length in minutes (15 | 30 | 60). Default 30. */
-  intervalMinutes?: number;
-  /**
-   * How many calendar days ahead to scan.
-   * Default 1 = today only (closed today → no slots).
-   */
-  maxDaysAhead?: number;
-  /** Override "now" (useful for tests). */
-  now?: Date;
-};
-
-export function normalizeSlotDurationMinutes(
-  value: unknown
-): SlotDurationMinutes {
-  const n = typeof value === 'number' ? value : Number(value);
-  if (n === 15 || n === 30 || n === 60) return n;
-  return DEFAULT_SLOT_DURATION_MINUTES;
-}
 
 function formatSlotTime(date: Date): string {
   return date.toLocaleTimeString('en-GB', {
@@ -46,7 +21,7 @@ function formatSlotTime(date: Date): string {
 }
 
 function normalizeTimeValue(value: string | undefined | null): string {
-  if (typeof value !== 'string' || !value.trim()) return '';
+  if (typeof value !== 'string') return '09:00';
   const trimmed = value.trim();
   if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
     const [hours, minutes] = trimmed.split(':').map((part) => Number(part));
@@ -56,177 +31,134 @@ function normalizeTimeValue(value: string | undefined | null): string {
       return `${String(safeHours).padStart(2, '0')}:${String(safeMinutes).padStart(2, '0')}`;
     }
   }
-  return '';
+  return '09:00';
 }
 
-function parseTimeToMinutes(value: string | undefined | null): number | null {
+function parseTimeToMinutes(value: string | undefined | null): number {
   const normalized = normalizeTimeValue(value);
-  if (!normalized) return null;
   const [hours, minutes] = normalized.split(':').map(Number);
   return hours * 60 + minutes;
 }
 
-/** Index hours by weekday once for O(1) lookups. */
-function indexOpeningHours(
-  branchHours: BranchOpeningHours
-): Map<number, BranchOpeningHour> {
-  const byDay = new Map<number, BranchOpeningHour>();
-  for (const entry of branchHours) {
-    if (typeof entry?.dayOfWeek !== 'number') continue;
-    byDay.set(entry.dayOfWeek, {
-      dayOfWeek: entry.dayOfWeek,
-      isOpen: entry.isOpen === true,
-      openTime: normalizeTimeValue(entry.openTime) || '09:00',
-      closeTime: normalizeTimeValue(entry.closeTime) || '17:00',
-    });
-  }
-  return byDay;
+function getBranchOpeningHour(
+  branchHours: BranchOpeningHours | null | undefined,
+  dayIndex: number
+): BranchOpeningHour | null {
+  const hours = Array.isArray(branchHours) ? branchHours : [];
+  const match = hours.find((entry) => entry.dayOfWeek === dayIndex);
+  if (!match) return null;
+  return {
+    dayOfWeek: match.dayOfWeek,
+    isOpen: match.isOpen === true,
+    openTime: normalizeTimeValue(match.openTime),
+    closeTime: normalizeTimeValue(match.closeTime),
+  };
 }
 
-/**
- * True when the branch is open for today's weekday and the clock is still
- * before closing time (including before open — guests can still order for later).
- */
 export function isBranchOpenNow(
   branchHours: BranchOpeningHours | null | undefined,
-  now: Date = new Date()
-): boolean {
-  if (!Array.isArray(branchHours) || branchHours.length === 0) return false;
-  const byDay = indexOpeningHours(branchHours);
-  const today = byDay.get(now.getDay());
-  if (!today?.isOpen) return false;
-
-  const openMinutes = parseTimeToMinutes(today.openTime);
-  const closeMinutes = parseTimeToMinutes(today.closeTime);
-  if (openMinutes == null || closeMinutes == null) return false;
-  if (closeMinutes <= openMinutes) return false;
-
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  return currentMinutes < closeMinutes;
-}
-
-/** Branch marked closed for today's weekday (ignores clock time). */
-export function isBranchClosedToday(
-  branchHours: BranchOpeningHours | null | undefined,
-  now: Date = new Date()
+  now = new Date()
 ): boolean {
   if (!Array.isArray(branchHours) || branchHours.length === 0) return true;
-  const byDay = indexOpeningHours(branchHours);
-  const today = byDay.get(now.getDay());
-  return !today?.isOpen;
+
+  const openingHour = getBranchOpeningHour(branchHours, now.getDay());
+  if (!openingHour?.isOpen) return false;
+
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const openMinutes = parseTimeToMinutes(openingHour.openTime);
+  const closeMinutes = parseTimeToMinutes(openingHour.closeTime);
+
+  if (closeMinutes > openMinutes) {
+    return currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+  }
+
+  return currentMinutes >= openMinutes || currentMinutes < closeMinutes;
 }
 
-/** Today's close time `HH:mm`, or null when closed / not configured. */
 export function getBranchCloseTimeToday(
   branchHours: BranchOpeningHours | null | undefined,
-  now: Date = new Date()
+  now = new Date()
 ): string | null {
   if (!Array.isArray(branchHours) || branchHours.length === 0) return null;
-  const byDay = indexOpeningHours(branchHours);
-  const today = byDay.get(now.getDay());
-  if (!today?.isOpen) return null;
-  const close = normalizeTimeValue(today.closeTime);
-  return close || null;
+
+  const openingHour = getBranchOpeningHour(branchHours, now.getDay());
+  return openingHour?.isOpen ? openingHour.closeTime : null;
 }
 
-/**
- * Next interval boundary strictly after `now` (past slots never included).
- * Example (30m): 13:56 → 14:00; 14:00:00 → 14:30.
- */
-function nextSlotStartMinutes(now: Date, intervalMinutes: number): number {
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const seconds = now.getSeconds();
-  const atExactBoundary =
-    currentMinutes % intervalMinutes === 0 && seconds === 0;
-  if (atExactBoundary) {
-    return currentMinutes + intervalMinutes;
-  }
-  return Math.ceil((currentMinutes + 1) / intervalMinutes) * intervalMinutes;
-}
-
-function pushSlotsForDay(
-  slots: OrderTimeSlot[],
-  day: Date,
-  closeMinutes: number,
-  firstStartMinutes: number,
-  intervalMinutes: number
-): void {
-  const intervalMs = intervalMinutes * 60 * 1000;
-  let startMinutes = firstStartMinutes;
-  while (startMinutes + intervalMinutes <= closeMinutes) {
-    const slotStart = new Date(day);
-    slotStart.setHours(
-      Math.floor(startMinutes / 60),
-      startMinutes % 60,
-      0,
-      0
-    );
-    const slotEnd = new Date(slotStart.getTime() + intervalMs);
-    slots.push({
-      label: `${formatSlotTime(slotStart)} – ${formatSlotTime(slotEnd)}`,
-      startAt: slotStart.toISOString(),
-    });
-    startMinutes += intervalMinutes;
-  }
-}
-
-/**
- * Build pickup/delivery slots from the next future boundary until branch close.
- * Interval comes from branch `slotDurationMinutes` (15 / 30 / 60).
- */
+/** Next N 30-minute pickup/delivery windows from now, respecting branch hours when available. */
 export function generateOrderTimeSlots(
   branchHours: BranchOpeningHours | null | undefined = null,
-  options: GenerateOrderTimeSlotsOptions = {}
+  count = 10,
+  intervalMinutes = 30
 ): OrderTimeSlot[] {
-  const intervalMinutes = normalizeSlotDurationMinutes(
-    options.intervalMinutes ?? DEFAULT_SLOT_DURATION_MINUTES
-  );
-  const maxDaysAhead = options.maxDaysAhead ?? 1;
-  const now = options.now ?? new Date();
+  const now = new Date();
+  const intervalMs = intervalMinutes * 60 * 1000;
 
   if (!Array.isArray(branchHours) || branchHours.length === 0) {
-    return [];
+    const start = new Date(Math.ceil(now.getTime() / intervalMs) * intervalMs);
+    const slots: OrderTimeSlot[] = [];
+    for (let i = 0; i < count; i++) {
+      const slotStart = new Date(start.getTime() + i * intervalMs);
+      const slotEnd = new Date(slotStart.getTime() + intervalMs);
+      slots.push({
+        label: `${formatSlotTime(slotStart)} – ${formatSlotTime(slotEnd)}`,
+        startAt: slotStart.toISOString(),
+      });
+    }
+    return slots;
   }
 
-  const byDay = indexOpeningHours(branchHours);
   const slots: OrderTimeSlot[] = [];
-  const dayCursor = new Date(now);
-  dayCursor.setHours(0, 0, 0, 0);
+  const dateCursor = new Date(now);
+  dateCursor.setHours(0, 0, 0, 0);
+  const maxDaysAhead = 14;
 
-  for (let dayOffset = 0; dayOffset < maxDaysAhead; dayOffset += 1) {
-    const day = new Date(dayCursor);
-    day.setDate(dayCursor.getDate() + dayOffset);
+  for (let dayOffset = 0; dayOffset < maxDaysAhead && slots.length < count; dayOffset += 1) {
+    const candidateDay = new Date(dateCursor);
+    candidateDay.setDate(dateCursor.getDate() + dayOffset);
 
-    const openingHour = byDay.get(day.getDay());
+    const openingHour = getBranchOpeningHour(branchHours, candidateDay.getDay());
     if (!openingHour?.isOpen) continue;
 
     const openMinutes = parseTimeToMinutes(openingHour.openTime);
     const closeMinutes = parseTimeToMinutes(openingHour.closeTime);
-    if (openMinutes == null || closeMinutes == null) continue;
     if (closeMinutes <= openMinutes) continue;
 
-    let firstStart = openMinutes;
+    let startMinutes = openMinutes;
     if (dayOffset === 0) {
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
-      if (currentMinutes < openMinutes) {
-        firstStart = openMinutes;
-      } else {
-        firstStart = Math.max(
-          openMinutes,
-          nextSlotStartMinutes(now, intervalMinutes)
-        );
-      }
-      if (firstStart + intervalMinutes > closeMinutes) {
-        continue;
-      }
+      const nextBoundary = Math.ceil((currentMinutes + 1) / intervalMinutes) * intervalMinutes;
+      startMinutes = Math.max(openMinutes, nextBoundary);
     }
 
-    pushSlotsForDay(slots, day, closeMinutes, firstStart, intervalMinutes);
-
-    if (slots.length > 0) break;
+    const dayStart = new Date(candidateDay);
+    while (startMinutes + intervalMinutes <= closeMinutes && slots.length < count) {
+      const slotStart = new Date(dayStart);
+      slotStart.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+      const slotEnd = new Date(slotStart.getTime() + intervalMs);
+      if (slotStart.getTime() >= now.getTime() - 1000) {
+        slots.push({
+          label: `${formatSlotTime(slotStart)} – ${formatSlotTime(slotEnd)}`,
+          startAt: slotStart.toISOString(),
+        });
+      }
+      startMinutes += intervalMinutes;
+    }
   }
 
-  return slots;
+  if (slots.length === 0) {
+    const fallbackStart = new Date(Math.ceil(now.getTime() / intervalMs) * intervalMs);
+    for (let i = 0; i < count; i++) {
+      const slotStart = new Date(fallbackStart.getTime() + i * intervalMs);
+      const slotEnd = new Date(slotStart.getTime() + intervalMs);
+      slots.push({
+        label: `${formatSlotTime(slotStart)} – ${formatSlotTime(slotEnd)}`,
+        startAt: slotStart.toISOString(),
+      });
+    }
+  }
+
+  return slots.slice(0, count);
 }
 
 export type OrderScheduleMode = 'asap' | 'later';
@@ -247,10 +179,7 @@ export function readOrderSchedule(orderId: string): OrderSchedule | null {
     return {
       mode: parsed.mode,
       slot: typeof parsed.slot === 'string' ? parsed.slot : '',
-      slotDateTime:
-        typeof parsed.slotDateTime === 'string'
-          ? parsed.slotDateTime
-          : undefined,
+      slotDateTime: typeof parsed.slotDateTime === 'string' ? parsed.slotDateTime : undefined,
     };
   } catch {
     return null;

@@ -58,6 +58,7 @@ export async function GET(
                 quantity: true,
                 unitPrice: true,
                 menuItemId: true,
+                groupName: true,
               },
             },
           },

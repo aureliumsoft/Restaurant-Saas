@@ -66,106 +66,8 @@ function SwitchControl({
   );
 }
 
-function SelectableRow({
-  active,
-  title,
-  subtitle,
-  imageUrl,
-  onClick,
-  multi = false,
-}: {
-  active: boolean;
-  title: string;
-  subtitle?: string;
-  imageUrl?: string | null;
-  onClick: () => void;
-  multi?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors',
-        active ? 'bg-muted' : 'hover:bg-muted/50'
-      )}
-    >
-      <span
-        className={cn(
-          'flex h-4 w-4 shrink-0 items-center justify-center border',
-          multi ? 'rounded-sm' : 'rounded-full',
-          active
-            ? 'border-foreground bg-foreground'
-            : 'border-muted-foreground/40'
-        )}
-        aria-hidden
-      >
-        {active ? (
-          <span className="h-1.5 w-1.5 rounded-[1px] bg-background" />
-        ) : null}
-      </span>
-      <LazyProductImage
-        src={imageUrl}
-        hasImage={Boolean(imageUrl)}
-        alt=""
-        emptyLabel="—"
-        className="h-10 w-10 shrink-0 rounded-md"
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-foreground">{title}</span>
-        {subtitle ? (
-          <span className="block text-xs text-muted-foreground">{subtitle}</span>
-        ) : null}
-      </span>
-    </button>
-  );
-}
+import { SelectableRow, SelectableList } from './selectable-list';
 
-function SelectableList({
-  children,
-  search,
-  onSearchChange,
-  searchPlaceholder = 'Search…',
-  emptyMessage,
-}: {
-  children: React.ReactNode;
-  search?: string;
-  onSearchChange?: (value: string) => void;
-  searchPlaceholder?: string;
-  emptyMessage?: string;
-}) {
-  const hasSearch = typeof onSearchChange === 'function';
-  const isEmpty = Children.count(children) === 0;
-
-  return (
-    <div className="rounded-xl border border-border bg-background">
-      {hasSearch ? (
-        <div className="relative border-b border-border">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            type="search"
-            value={search ?? ''}
-            onChange={(e) => onSearchChange?.(e.target.value)}
-            placeholder={searchPlaceholder}
-            className="h-10 rounded-none border-0 bg-transparent pl-9 shadow-none focus-visible:ring-0"
-          />
-        </div>
-      ) : null}
-      <div className="max-h-56 divide-y divide-border overflow-y-auto overscroll-contain">
-        {isEmpty ? (
-          <p className="px-3 py-4 text-sm text-muted-foreground">
-            {emptyMessage ?? 'No matches.'}
-          </p>
-        ) : (
-          children
-        )}
-      </div>
-    </div>
-  );
-}
 
 function patchCategory(
   settings: Record<string, CategoryWizardSettings>,
@@ -310,6 +212,26 @@ export function ConfigurationWizardConfigureStep(
     return map;
   }, [allProducts, selectedCategoryIds]);
 
+  const updateProductOverride = (
+    categoryId: string,
+    productId: string,
+    patch: Partial<{ excluded: boolean; free: boolean }>
+  ) => {
+    setCategorySettings((current) => {
+      const category = current[categoryId] ?? defaultCategorySettings();
+      const existing = category.productOverrides[productId] ?? {
+        excluded: false,
+        free: false,
+      };
+      return patchCategory(current, categoryId, {
+        productOverrides: {
+          ...category.productOverrides,
+          [productId]: { ...existing, ...patch },
+        },
+      });
+    });
+  };
+
   const linkedNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const p of filteredLinkedProducts) map.set(p.id, p.name);
@@ -362,27 +284,71 @@ export function ConfigurationWizardConfigureStep(
       categoryProducts.length > 0 ? (
         <div>
           <p className="mb-2 text-xs font-medium text-muted-foreground">
-            Guests will see these items
+            Category products and pricing overrides
           </p>
-          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
-            {categoryProducts.slice(0, 12).map((p) => (
-              <li key={p.id} className="flex items-center gap-3 px-3 py-2">
-                <LazyProductImage
-                  src={p.imageUrl}
-                  hasImage={Boolean(p.imageUrl)}
-                  alt=""
-                  emptyLabel="—"
-                  className="h-9 w-9 shrink-0 rounded-md"
-                />
-                <span className="truncate text-sm text-foreground">{p.name}</span>
-              </li>
-            ))}
-            {categoryProducts.length > 12 ? (
-              <li className="px-3 py-2 text-sm text-muted-foreground">
-                +{categoryProducts.length - 12} more
-              </li>
-            ) : null}
-          </ul>
+          <div className="max-h-80 space-y-3 overflow-y-auto rounded-xl border border-border p-2 overscroll-contain">
+            {selectedCategoryIds.map((categoryId) => {
+              const category = selectedCategories.find((item) => item.id === categoryId);
+              const products = productsByCategory.get(categoryId) ?? [];
+              if (products.length === 0) return null;
+              return (
+                <section key={categoryId} className="rounded-lg border border-border/70">
+                  <div className="border-b border-border bg-muted/30 px-3 py-2 text-xs font-medium">
+                    {category?.name ?? 'Category'}
+                  </div>
+                  <ul className="divide-y divide-border">
+                    {products.map((product) => {
+                      const override =
+                        categorySettings[categoryId]?.productOverrides[product.id] ?? {
+                          excluded: false,
+                          free: false,
+                        };
+                      return (
+                        <li key={product.id} className="flex items-center gap-3 px-3 py-2">
+                          <LazyProductImage
+                            src={product.imageUrl}
+                            hasImage={Boolean(product.imageUrl)}
+                            alt=""
+                            emptyLabel="—"
+                            className="h-9 w-9 shrink-0 rounded-md"
+                          />
+                          <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                            {product.name}
+                          </span>
+                          <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={override.free}
+                              disabled={override.excluded}
+                              onChange={(event) =>
+                                updateProductOverride(categoryId, product.id, {
+                                  free: event.target.checked,
+                                })
+                              }
+                            />
+                            Free
+                          </label>
+                          <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={override.excluded}
+                              onChange={(event) =>
+                                updateProductOverride(categoryId, product.id, {
+                                  excluded: event.target.checked,
+                                  ...(event.target.checked ? { free: false } : {}),
+                                })
+                              }
+                            />
+                            Remove
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 
@@ -488,56 +454,141 @@ export function ConfigurationWizardConfigureStep(
           </div>
 
           {kind === 'cat-many' && selectedCategoryIds.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">
-                Min / max per category
-              </p>
-              {selectedCategories.map((cat, index) => {
-                const settings =
-                  categorySettings[cat.id] ?? defaultCategorySettings();
-                return (
-                  <div
-                    key={`minmax-${cat.id}`}
-                    className="grid gap-2 rounded-xl border border-border px-3 py-2 sm:grid-cols-[minmax(0,1fr)_5rem_5rem]"
-                  >
-                    <span className="self-center truncate text-sm font-medium">
-                      {selectedCategoryIds.length > 1 ? `#${index + 1} ` : ''}
-                      {cat.name}
-                    </span>
-                    <Input
-                      type="number"
-                      min={0}
-                      aria-label={`${cat.name} minimum`}
-                      value={settings.minItems}
-                      onChange={(e) => {
-                        const val = Math.max(
-                          0,
-                          Number.parseInt(e.target.value, 10) || 0
-                        );
-                        setCategorySettings((prev) =>
-                          patchCategory(prev, cat.id, { minItems: val })
-                        );
-                      }}
-                    />
-                    <Input
-                      type="number"
-                      min={1}
-                      aria-label={`${cat.name} maximum`}
-                      value={settings.maxItems}
-                      onChange={(e) => {
-                        const val = Math.max(
-                          1,
-                          Number.parseInt(e.target.value, 10) || 1
-                        );
-                        setCategorySettings((prev) =>
-                          patchCategory(prev, cat.id, { maxItems: val })
-                        );
-                      }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+            baseVariations.length > 0 ? (
+              <div className="space-y-3">
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-foreground">
+                    Min / max per product variation
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Set how many add-ons customers can choose for each size/variation of this product.
+                  </p>
+                </div>
+                {selectedCategories.map((cat) => {
+                  const settings = categorySettings[cat.id] ?? defaultCategorySettings();
+                  const limits = baseVariations.map((v) => {
+                    return (
+                      settings.perSizeLimits.find((r) => r.variationId === v.id) ?? {
+                        variationId: v.id,
+                        minItems: settings.minItems,
+                        maxItems: settings.maxItems,
+                      }
+                    );
+                  });
+
+                  return (
+                    <div key={`var-limits-${cat.id}`} className="space-y-2 rounded-xl border border-border p-3">
+                      <p className="text-sm font-semibold text-foreground">{cat.name}</p>
+                      <div className="space-y-2">
+                        {limits.map((row) => {
+                          const v = baseVariations.find((x) => x.id === row.variationId);
+                          const label = v ? variationLabel(v) : 'Variation';
+                          return (
+                            <div
+                              key={`${cat.id}-${row.variationId}`}
+                              className="grid gap-2 rounded-lg border border-border bg-background p-2 sm:grid-cols-[minmax(0,1fr)_5rem_5rem]"
+                            >
+                              <span className="self-center text-sm font-medium text-foreground">
+                                {label}
+                              </span>
+                              <Input
+                                type="number"
+                                min={0}
+                                className="h-9"
+                                aria-label={`${cat.name} ${label} minimum`}
+                                value={row.minItems}
+                                onChange={(e) => {
+                                  const val = Math.max(0, Number.parseInt(e.target.value, 10) || 0);
+                                  const updatedLimits = limits.map((r) =>
+                                    r.variationId === row.variationId ? { ...r, minItems: val } : r
+                                  );
+                                  setCategorySettings((prev) =>
+                                    patchCategory(prev, cat.id, {
+                                      usePerSizeLimits: true,
+                                      perSizeLimits: updatedLimits,
+                                    })
+                                  );
+                                }}
+                              />
+                              <Input
+                                type="number"
+                                min={1}
+                                className="h-9"
+                                aria-label={`${cat.name} ${label} maximum`}
+                                value={row.maxItems}
+                                onChange={(e) => {
+                                  const val = Math.max(1, Number.parseInt(e.target.value, 10) || 1);
+                                  const updatedLimits = limits.map((r) =>
+                                    r.variationId === row.variationId ? { ...r, maxItems: val } : r
+                                  );
+                                  setCategorySettings((prev) =>
+                                    patchCategory(prev, cat.id, {
+                                      usePerSizeLimits: true,
+                                      perSizeLimits: updatedLimits,
+                                    })
+                                  );
+                                }}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Min / max per category
+                </p>
+                {selectedCategories.map((cat, index) => {
+                  const settings =
+                    categorySettings[cat.id] ?? defaultCategorySettings();
+                  return (
+                    <div
+                      key={`minmax-${cat.id}`}
+                      className="grid gap-2 rounded-xl border border-border px-3 py-2 sm:grid-cols-[minmax(0,1fr)_5rem_5rem]"
+                    >
+                      <span className="self-center truncate text-sm font-medium">
+                        {selectedCategoryIds.length > 1 ? `#${index + 1} ` : ''}
+                        {cat.name}
+                      </span>
+                      <Input
+                        type="number"
+                        min={0}
+                        aria-label={`${cat.name} minimum`}
+                        value={settings.minItems}
+                        onChange={(e) => {
+                          const val = Math.max(
+                            0,
+                            Number.parseInt(e.target.value, 10) || 0
+                          );
+                          setCategorySettings((prev) =>
+                            patchCategory(prev, cat.id, { minItems: val })
+                          );
+                        }}
+                      />
+                      <Input
+                        type="number"
+                        min={1}
+                        aria-label={`${cat.name} maximum`}
+                        value={settings.maxItems}
+                        onChange={(e) => {
+                          const val = Math.max(
+                            1,
+                            Number.parseInt(e.target.value, 10) || 1
+                          );
+                          setCategorySettings((prev) =>
+                            patchCategory(prev, cat.id, { maxItems: val })
+                          );
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )
           ) : null}
 
           {kind === 'prod-many' && linkedProductIds.length > 0 ? (
@@ -670,8 +721,41 @@ export function ConfigurationWizardConfigureStep(
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label>Recommended size</Label>
-                          <Select
+                          <Label>Category extra cost (%)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={500}
+                            placeholder="No extra cost"
+                            value={
+                              settings.extraCostPercent != null
+                                ? String(settings.extraCostPercent)
+                                : ''
+                            }
+                            onChange={(e) => {
+                              const raw = e.target.value.trim();
+                              setCategorySettings((prev) =>
+                                patchCategory(prev, cat.id, {
+                                  extraCostPercent:
+                                    raw === ''
+                                      ? null
+                                      : Math.min(
+                                          500,
+                                          Math.max(
+                                            0,
+                                            Number.parseFloat(raw) || 0
+                                          )
+                                        ),
+                                })
+                              );
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label>Recommended size</Label>
+                        <Select
                             value={
                               settings.recommendedVariationId || '__none__'
                             }
@@ -704,7 +788,6 @@ export function ConfigurationWizardConfigureStep(
                             </SelectContent>
                           </Select>
                         </div>
-                      </div>
 
                       {settings.recommendedVariationId ? (
                         <div className="flex items-center justify-between gap-3">
@@ -825,139 +908,6 @@ export function ConfigurationWizardConfigureStep(
                             />
                             <span>No free items for this category</span>
                           </label>
-                        </div>
-                      ) : null}
-
-                      {kind === 'cat-many' && baseVariations.length > 0 ? (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm">
-                              Different min / max per product size
-                            </span>
-                            <SwitchControl
-                              on={settings.usePerSizeLimits}
-                              onToggle={() => {
-                                const next = !settings.usePerSizeLimits;
-                                setCategorySettings((prev) =>
-                                  patchCategory(prev, cat.id, {
-                                    usePerSizeLimits: next,
-                                    perSizeLimits: next
-                                      ? seedPerSizeLimits(
-                                          baseVariations,
-                                          settings.minItems,
-                                          settings.maxItems
-                                        )
-                                      : [],
-                                  })
-                                );
-                              }}
-                            />
-                          </div>
-                          {settings.usePerSizeLimits ? (
-                            <ul className="space-y-2">
-                              {baseVariations.map((v) => {
-                                const row = settings.perSizeLimits.find(
-                                  (r) => r.variationId === v.id
-                                ) ?? {
-                                  variationId: v.id,
-                                  minItems: settings.minItems,
-                                  maxItems: settings.maxItems,
-                                };
-                                return (
-                                  <li
-                                    key={v.id}
-                                    className="grid gap-2 rounded-lg border border-border px-2 py-2 sm:grid-cols-[6rem_1fr_1fr]"
-                                  >
-                                    <span className="self-center text-sm font-medium">
-                                      {variationLabel(v)}
-                                    </span>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      value={row.minItems}
-                                      onChange={(e) => {
-                                        const val = Math.max(
-                                          0,
-                                          Number.parseInt(e.target.value, 10) ||
-                                            0
-                                        );
-                                        setCategorySettings((prev) =>
-                                          patchCategory(prev, cat.id, {
-                                            perSizeLimits: baseVariations.map(
-                                              (bv) => {
-                                                const existing =
-                                                  settings.perSizeLimits.find(
-                                                    (r) =>
-                                                      r.variationId === bv.id
-                                                  );
-                                                if (bv.id === v.id) {
-                                                  return {
-                                                    variationId: bv.id,
-                                                    minItems: val,
-                                                    maxItems:
-                                                      existing?.maxItems ??
-                                                      settings.maxItems,
-                                                  };
-                                                }
-                                                return (
-                                                  existing ?? {
-                                                    variationId: bv.id,
-                                                    minItems: settings.minItems,
-                                                    maxItems: settings.maxItems,
-                                                  }
-                                                );
-                                              }
-                                            ),
-                                          })
-                                        );
-                                      }}
-                                    />
-                                    <Input
-                                      type="number"
-                                      min={1}
-                                      value={row.maxItems}
-                                      onChange={(e) => {
-                                        const val = Math.max(
-                                          1,
-                                          Number.parseInt(e.target.value, 10) ||
-                                            1
-                                        );
-                                        setCategorySettings((prev) =>
-                                          patchCategory(prev, cat.id, {
-                                            perSizeLimits: baseVariations.map(
-                                              (bv) => {
-                                                const existing =
-                                                  settings.perSizeLimits.find(
-                                                    (r) =>
-                                                      r.variationId === bv.id
-                                                  );
-                                                if (bv.id === v.id) {
-                                                  return {
-                                                    variationId: bv.id,
-                                                    minItems:
-                                                      existing?.minItems ??
-                                                      settings.minItems,
-                                                    maxItems: val,
-                                                  };
-                                                }
-                                                return (
-                                                  existing ?? {
-                                                    variationId: bv.id,
-                                                    minItems: settings.minItems,
-                                                    maxItems: settings.maxItems,
-                                                  }
-                                                );
-                                              }
-                                            ),
-                                          })
-                                        );
-                                      }}
-                                    />
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          ) : null}
                         </div>
                       ) : null}
                     </div>

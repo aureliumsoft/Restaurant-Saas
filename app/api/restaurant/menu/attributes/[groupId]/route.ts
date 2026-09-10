@@ -20,6 +20,16 @@ const patchSchema = z
     minItems: z.number().int().min(0).nullable().optional(),
     maxItems: z.number().int().min(1).nullable().optional(),
     categoryDiscountPercent: z.number().min(0).max(100).nullable().optional(),
+    categoryExtraCostPercent: z.number().min(0).max(500).nullable().optional(),
+    productOverrides: z
+      .record(
+        z.string().uuid(),
+        z.object({
+          excluded: z.boolean().default(false),
+          free: z.boolean().default(false),
+        })
+      )
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (data.selectionType === "MULTIPLE") {
@@ -174,6 +184,12 @@ export async function PATCH(
       ...(parsed.data.maxItems !== undefined ? { maxItems: parsed.data.maxItems } : {}),
       ...(parsed.data.categoryDiscountPercent !== undefined
         ? { categoryDiscountPercent: parsed.data.categoryDiscountPercent }
+        : {}),
+      ...(parsed.data.categoryExtraCostPercent !== undefined
+        ? { categoryExtraCostPercent: parsed.data.categoryExtraCostPercent }
+        : {}),
+      ...(parsed.data.productOverrides !== undefined
+        ? { productOverrides: parsed.data.productOverrides }
         : {}),
       ...(clearMinMax ? { minItems: null, maxItems: null } : {}),
     },

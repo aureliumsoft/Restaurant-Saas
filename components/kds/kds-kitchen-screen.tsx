@@ -461,25 +461,32 @@ export function KdsKitchenScreen() {
                             it.productName,
                             it.quantity
                           );
-                          if (row.kind === 'personalize') {
+                          if (row.kind === 'branch') {
                             return (
                               <p
                                 key={it.id}
-                                className="pl-4 text-sm leading-snug text-muted-foreground"
+                                className="pt-0.5 text-sm font-medium leading-snug text-muted-foreground"
                               >
                                 ↳ {row.name}
                               </p>
                             );
                           }
-                          if (row.kind === 'addon') {
+                          if (row.kind === 'nested' || row.kind === 'addon') {
                             return (
                               <p
                                 key={it.id}
-                                className="pl-4 text-sm leading-snug text-muted-foreground"
+                                className="pl-3 text-sm leading-snug text-muted-foreground"
                               >
-                                <span className="font-semibold tabular-nums">
-                                  {row.quantity}×
-                                </span>{' '}
+                                - {row.name}
+                              </p>
+                            );
+                          }
+                          if (row.kind === 'personalize') {
+                            return (
+                              <p
+                                key={it.id}
+                                className="text-sm leading-snug text-muted-foreground"
+                              >
                                 {row.name}
                               </p>
                             );

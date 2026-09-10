@@ -30,6 +30,8 @@ export type CsvImportRecommendation = {
   maxItems: number | null;
   /** Percent off linked category items (0–100). */
   categoryDiscountPercent: number | null;
+  /** Extra cost percent added to linked category items (0–500). */
+  categoryExtraCostPercent: number | null;
   variationLimits: CsvImportVariationLimit[];
   linkedCategoryName: string | null;
   linkedProductName: string | null;
@@ -462,6 +464,7 @@ function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
       let minItems: number | null = null;
       let maxItems: number | null = null;
       let categoryDiscountPercent: number | null = null;
+      let categoryExtraCostPercent: number | null = null;
       let variationLimits: CsvImportVariationLimit[] = [];
       let linkedCategoryName: string | null = null;
       let linkedProductName: string | null = null;
@@ -557,6 +560,13 @@ function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
           }
           continue;
         }
+        if (lower.startsWith('extracost:')) {
+          const n = toNullableNumber(part.slice('extracost:'.length));
+          if (n != null) {
+            categoryExtraCostPercent = Math.min(500, Math.max(0, n));
+          }
+          continue;
+        }
         if (lower.startsWith('min:')) {
           minItems = toNullableNumber(part.slice('min:'.length));
           continue;
@@ -621,6 +631,7 @@ function parseRecommendationsField(raw: string): CsvImportRecommendation[] {
         minItems,
         maxItems,
         categoryDiscountPercent,
+        categoryExtraCostPercent,
         variationLimits,
         linkedCategoryName,
         linkedProductName,

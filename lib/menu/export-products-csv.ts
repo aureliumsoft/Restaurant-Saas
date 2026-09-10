@@ -52,6 +52,7 @@ export type ProductCsvExportItem = {
     minItems: number | null;
     maxItems: number | null;
     categoryDiscountPercent: number | null;
+    categoryExtraCostPercent: number | null;
     includeDefaultLinkedVariationPrice: boolean;
     useVariationPricing: boolean;
     /** Resolved category names for PRODUCT recommendations (compare / pick scope). */
@@ -153,6 +154,9 @@ function recommendationsValue(p: ProductCsvExportItem): string {
       if (g.freeQuantity != null) parts.push(`free:${g.freeQuantity}`);
       if (g.categoryDiscountPercent != null) {
         parts.push(`discount:${g.categoryDiscountPercent}`);
+      }
+      if (g.categoryExtraCostPercent != null) {
+        parts.push(`extraCost:${g.categoryExtraCostPercent}`);
       }
       if (g.multipleMode) parts.push(g.multipleMode);
       if (g.useVariationPricing) parts.push('variationPricing');

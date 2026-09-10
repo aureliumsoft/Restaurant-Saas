@@ -20,18 +20,22 @@ export async function createOrderItemsWithModifiers(
       },
     });
 
-    const flatMods = normalizeCartModifiers(line.modifiers).flatMap(
-      (group) => group.selections
+    const flatMods = normalizeCartModifiers(line.modifiers).flatMap((group) =>
+      group.selections.map((selection) => ({
+        selection,
+        groupName: group.groupName,
+      }))
     );
     if (flatMods.length === 0) continue;
 
     await tx.orderItemModifier.createMany({
-      data: flatMods.map((selection) => ({
+      data: flatMods.map(({ selection, groupName }) => ({
         orderItemId: orderItem.id,
         menuItemId: normalizePersonalizeModifierMenuItemId(
           selection.menuItemId
         ),
         name: selection.name,
+        groupName: groupName?.trim() || null,
         unitPrice: selection.unitPrice,
         quantity: 1,
       })),

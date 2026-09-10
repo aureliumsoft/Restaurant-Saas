@@ -60,7 +60,10 @@ function stampBrowseImages<
 }
 
 /** POS menu: restaurant meta + category list (no items). */
-export async function loadRestaurantMenuCategoriesMeta(restaurantId: string) {
+export async function loadRestaurantMenuCategoriesMeta(
+  restaurantId: string,
+  branchId?: string | null
+) {
   const restaurantMeta = await db.restaurant.findUnique({
     where: { id: restaurantId },
     select: {
@@ -113,7 +116,10 @@ export async function loadRestaurantMenuCategoriesMeta(restaurantId: string) {
  * POS one-shot catalog: meta + every front category with browse items.
  * Single parallel DB round-trip; each product row loaded once.
  */
-export async function loadRestaurantPosMenuCatalog(restaurantId: string) {
+export async function loadRestaurantPosMenuCatalog(
+  restaurantId: string,
+  branchId?: string | null
+) {
   const frontCategoryWhere = {
     restaurantId,
     showInFront: true,
@@ -154,10 +160,18 @@ export async function loadRestaurantPosMenuCatalog(restaurantId: string) {
         where: {
           restaurantId,
           OR: [
-            { category: { showInFront: true } },
+            {
+              category: {
+                showInFront: true,
+              },
+            },
             {
               categoryLinks: {
-                some: { category: { showInFront: true } },
+                some: {
+                  category: {
+                    showInFront: true,
+                  },
+                },
               },
             },
           ],
