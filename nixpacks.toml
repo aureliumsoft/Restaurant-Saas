@@ -1,0 +1,7 @@
+[phases.build]
+cmds = [
+  "npx prisma generate",
+  "npx prisma migrate resolve --rolled-back 20260909115831_recomendation_enhanced || true",
+  "node scripts/prisma-migrate-deploy.mjs",
+  "npm run build"
+]
