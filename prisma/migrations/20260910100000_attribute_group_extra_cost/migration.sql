@@ -1,2 +1,3 @@
 -- AlterTable
-ALTER TABLE "MenuItemAttributeGroup" ADD COLUMN "categoryExtraCostPercent" DOUBLE PRECISION;
+ALTER TABLE "MenuItemAttributeGroup" ADD COLUMN IF NOT EXISTS "categoryExtraCostPercent" DOUBLE PRECISION;
+

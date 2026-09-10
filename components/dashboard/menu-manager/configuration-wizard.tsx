@@ -225,9 +225,9 @@ function SavedSummaryList({
   const sizeLabel =
     (selected.variations?.length ?? 0) > 0
       ? selected
-          .variations!.map((v) => v.title || v.name)
-          .filter(Boolean)
-          .join(' · ')
+        .variations!.map((v) => v.title || v.name)
+        .filter(Boolean)
+        .join(' · ')
       : null;
 
   const personalizeLive = personalizeDraft.filter(
@@ -366,9 +366,9 @@ function SavedSummaryList({
       ) : null}
 
       {savedGroups.length === 0 &&
-      personalizeLive.length === 0 &&
-      currentOffers.length === 0 &&
-      !sizeLabel ? (
+        personalizeLive.length === 0 &&
+        currentOffers.length === 0 &&
+        !sizeLabel ? (
         <p className="rounded-xl border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
           Nothing configured yet — answer the questions above.
         </p>
@@ -639,18 +639,18 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
       setWizardPrefDraft(
         personalizeDraft.length > 0
           ? personalizeDraft.map((g) => ({
-              ...g,
-              options: g.options.map((o) => ({ ...o })),
-            }))
+            ...g,
+            options: g.options.map((o) => ({ ...o })),
+          }))
           : [
-              {
-                ...emptyPersonalizeGroup(0),
-                options: [
-                  { name: 'Well done', imageUrl: '', sortOrder: 0 },
-                  { name: 'Cut in 8', imageUrl: '', sortOrder: 1 },
-                ],
-              },
-            ]
+            {
+              ...emptyPersonalizeGroup(0),
+              options: [
+                { name: 'Well done', imageUrl: '', sortOrder: 0 },
+                { name: 'Cut in 8', imageUrl: '', sortOrder: 1 },
+              ],
+            },
+          ]
       );
     }
   };
@@ -770,10 +770,10 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
   const sizeHint =
     baseVariations.length > 0
       ? `Sizes already set (${baseVariations
-          .map((v) => v.title || v.name)
-          .filter(Boolean)
-          .slice(0, 4)
-          .join(' / ')})`
+        .map((v) => v.title || v.name)
+        .filter(Boolean)
+        .slice(0, 4)
+        .join(' / ')})`
       : 'No sizes on this product';
 
   return (
@@ -838,326 +838,326 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               <WizardProgress step={step} />
 
               {step === 0 ? (
-            <div className="space-y-4">
-              <StepHeader
-                title="Besides size, can customers customize this?"
-                hint="Most pizzas need toppings. Drinks usually don’t."
-              />
-              <div className="space-y-2">
-                <ChoiceCard
-                  active
-                  title="Yes — they pick extras or options"
-                  description="Toppings, sauce, sides, “well done”, etc."
-                  onClick={() => setStep(1)}
-                />
-                <ChoiceCard
-                  active={false}
-                  title="No — size (or price) is enough"
-                  description="Skip to optional “suggest with this” upsells"
-                  onClick={() => setStep(4)}
-                />
-              </div>
-              <WizardActions>
-                <Button type="button" onClick={() => setStep(1)}>
-                  Continue
-                </Button>
-              </WizardActions>
-            </div>
-          ) : null}
-
-          {step === 1 ? (
-            <div className="space-y-4">
-              <StepHeader
-                title="What are they choosing?"
-                hint="Pick the closest match. You can add more after this."
-              />
-              <div className="space-y-2">
-                <ChoiceCard
-                  active={kind === 'cat-many'}
-                  title="Many extras from a category"
-                  description="e.g. whole Toppings category — pick several"
-                  onClick={() => applyKindDefaults('cat-many')}
-                />
-                <ChoiceCard
-                  active={kind === 'cat-one'}
-                  title="Exactly one from a category"
-                  description="e.g. sauces — must pick one"
-                  onClick={() => applyKindDefaults('cat-one')}
-                />
-                <ChoiceCard
-                  active={kind === 'prod-many'}
-                  title="Specific products (pick several)"
-                  description="Hand-pick which menu items appear as add-ons"
-                  onClick={() => applyKindDefaults('prod-many')}
-                />
-                <ChoiceCard
-                  active={kind === 'prod-one'}
-                  title="One specific product option"
-                  description="Guests pick from products you link (e.g. one side)"
-                  onClick={() => applyKindDefaults('prod-one')}
-                />
-                <ChoiceCard
-                  active={kind === 'prefs'}
-                  title="Free notes / preferences"
-                  description="No extra charge — “well done”, “cut in 8”"
-                  onClick={() => applyKindDefaults('prefs')}
-                />
-              </div>
-              <WizardActions>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setStep(0)}
-                >
-                  Back
-                </Button>
-                <Button type="button" onClick={() => setStep(2)}>
-                  Continue
-                </Button>
-              </WizardActions>
-            </div>
-          ) : null}
-
-          {step === 2 && kind !== 'prefs' ? (
-            <ConfigurationWizardConfigureStep
-              kind={kind}
-              isSaving={isSaving}
-              savingRules={savingRules}
-              onBack={() => setStep(1)}
-              onSave={() => void saveRuleChoice()}
-              canSave={canSaveRule}
-              filteredEligibleCategories={filteredEligibleCategories}
-              categorySearch={categorySearch}
-              setCategorySearch={setCategorySearch}
-              selectedCategoryIds={selectedCategoryIds}
-              toggleCategoryId={toggleCategoryId}
-              categoryProducts={categoryProducts}
-              allProducts={allProducts}
-              filteredProductPickerCategories={filteredProductPickerCategories}
-              productFilterSearch={productFilterSearch}
-              setProductFilterSearch={setProductFilterSearch}
-              productCategoryIds={productCategoryIds}
-              toggleProductCategoryId={toggleProductCategoryId}
-              filteredLinkedProducts={filteredLinkedProducts}
-              productSearch={productSearch}
-              setProductSearch={setProductSearch}
-              linkedProductIds={linkedProductIds}
-              toggleLinkedProduct={toggleLinkedProduct}
-              multipleMode={multipleMode}
-              setMultipleMode={setMultipleMode}
-              required={required}
-              setRequired={setRequired}
-              categorySettings={categorySettings}
-              setCategorySettings={setCategorySettings}
-              productSettings={productSettings}
-              setProductSettings={setProductSettings}
-              showAdvanced={showAdvanced}
-              setShowAdvanced={setShowAdvanced}
-              defaultVariationOptions={defaultVariationOptions}
-              baseVariations={baseVariations}
-            />
-          ) : null}
-
-          {step === 2 && kind === 'prefs' ? (
-            <div className="space-y-4">
-              <StepHeader
-                title="What preferences can they tap?"
-                hint="Free options — set a max, add photos, and multiple groups if needed."
-              />
-              <PersonalizeConfigSection
-                groups={wizardPrefDraft}
-                onChange={setWizardPrefDraft}
-                saving={savingPersonalize}
-                onSave={() => void savePreferences()}
-              />
-              <WizardActions>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setStep(1)}
-                >
-                  Back
-                </Button>
-              </WizardActions>
-            </div>
-          ) : null}
-
-          {step === 3 ? (
-            <div className="space-y-4">
-              <StepHeader
-                title="Anything else?"
-                hint="Stack more choices, or suggest something with the order."
-              />
-              <div className="space-y-2.5">
-                <ChoiceCard
-                  active={false}
-                  title="Add another choice"
-                  description="e.g. sauce, linked sides, or preferences"
-                  onClick={() => {
-                    resetConfigureState();
-                    setStep(1);
-                  }}
-                />
-                <ChoiceCard
-                  active
-                  title="Recommended deals"
-                  description="Suggest deals or bundles with this item (e.g. burger with fries & drink deal)"
-                  onClick={() => setStep(4)}
-                />
-                <ChoiceCard
-                  active={false}
-                  title="I’m finished"
-                  description="Review what’s configured below"
-                  onClick={() => setStep('done')}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {step === 4 ? (
-            <div className="space-y-4">
-              <StepHeader
-                title={`What deals or products should we recommend with ${selected.name}?`}
-                hint="Optional. Customers can choose between the product alone or selecting a recommended deal."
-              />
-
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  From categories
-                </p>
-                <SelectableList
-                  search={offerCategorySearch}
-                  onSearchChange={setOfferCategorySearch}
-                  searchPlaceholder="Search categories…"
-                  emptyMessage="No categories match your search."
-                >
-                  {filteredOfferCategories.map((cat) => (
-                    <SelectableRow
-                      key={cat.id}
-                      multi
-                      active={offerCategoryIds.includes(cat.id)}
-                      title={cat.name}
-                      imageUrl={cat.imageUrl}
-                      onClick={() => {
-                        setOfferCategoryIds((prev) =>
-                          toggleInArray(prev, cat.id)
-                        );
-                        setSelectedOfferProductIds([]);
-                      }}
+                <div className="space-y-4">
+                  <StepHeader
+                    title="Besides size, can customers customize this?"
+                    hint="Most pizzas need toppings. Drinks usually don’t."
+                  />
+                  <div className="space-y-2">
+                    <ChoiceCard
+                      active
+                      title="Yes — they pick extras or options"
+                      description="Toppings, sauce, sides, “well done”, etc."
+                      onClick={() => setStep(1)}
                     />
-                  ))}
-                </SelectableList>
-              </div>
-
-              {offerCategoryIds.length > 0 ? (
-                <div>
-                  <p className="mb-2 text-xs font-medium text-muted-foreground">
-                    Recommended deals to offer
-                  </p>
-                  {offeredProductsFromSelectedCategories.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No products in these categories (or already offered).
-                    </p>
-                  ) : (
-                    <SelectableList
-                      search={offerProductSearch}
-                      onSearchChange={setOfferProductSearch}
-                      searchPlaceholder="Search products…"
-                      emptyMessage="No products match your search."
-                    >
-                      {filteredOfferProducts.map((p) => (
-                        <SelectableRow
-                          key={p.id}
-                          multi
-                          active={selectedOfferProductIds.includes(p.id)}
-                          title={p.name}
-                          subtitle={p.categoryName}
-                          imageUrl={p.imageUrl}
-                          onClick={() =>
-                            setSelectedOfferProductIds((prev) =>
-                              toggleInArray(prev, p.id)
-                            )
-                          }
-                        />
-                      ))}
-                    </SelectableList>
-                  )}
+                    <ChoiceCard
+                      active={false}
+                      title="No — size (or price) is enough"
+                      description="Skip to optional “suggest with this” upsells"
+                      onClick={() => setStep(4)}
+                    />
+                  </div>
+                  <WizardActions>
+                    <Button type="button" onClick={() => setStep(1)}>
+                      Continue
+                    </Button>
+                  </WizardActions>
                 </div>
               ) : null}
 
-              <WizardActions>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setStep(3)}
-                >
-                  Back
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setStep('done')}
-                >
-                  Skip
-                </Button>
-                <Button
-                  type="button"
-                  disabled={selectedOfferProductIds.length === 0 || isSaving}
-                  onClick={() => void saveUpsells()}
-                >
-                  {savingOffers ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving…
-                    </>
-                  ) : (
-                    'Save recommended deals'
-                  )}
-                </Button>
-              </WizardActions>
-            </div>
-          ) : null}
+              {step === 1 ? (
+                <div className="space-y-4">
+                  <StepHeader
+                    title="What are they choosing?"
+                    hint="Pick the closest match. You can add more after this."
+                  />
+                  <div className="space-y-2">
+                    <ChoiceCard
+                      active={kind === 'cat-many'}
+                      title="Many extras from a category"
+                      description="e.g. whole Toppings category — pick several"
+                      onClick={() => applyKindDefaults('cat-many')}
+                    />
+                    <ChoiceCard
+                      active={kind === 'cat-one'}
+                      title="Exactly one from a category"
+                      description="e.g. sauces — must pick one"
+                      onClick={() => applyKindDefaults('cat-one')}
+                    />
+                    <ChoiceCard
+                      active={kind === 'prod-many'}
+                      title="Specific products (pick several)"
+                      description="Hand-pick which menu items appear as add-ons"
+                      onClick={() => applyKindDefaults('prod-many')}
+                    />
+                    <ChoiceCard
+                      active={kind === 'prod-one'}
+                      title="One specific product option"
+                      description="Guests pick from products you link (e.g. one side)"
+                      onClick={() => applyKindDefaults('prod-one')}
+                    />
+                    <ChoiceCard
+                      active={kind === 'prefs'}
+                      title="Free notes / preferences"
+                      description="No extra charge — “well done”, “cut in 8”"
+                      onClick={() => applyKindDefaults('prefs')}
+                    />
+                  </div>
+                  <WizardActions>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setStep(0)}
+                    >
+                      Back
+                    </Button>
+                    <Button type="button" onClick={() => setStep(2)}>
+                      Continue
+                    </Button>
+                  </WizardActions>
+                </div>
+              ) : null}
 
-          {step === 'done' ? (
-            <div className="space-y-4">
-              <StepHeader
-                title="You’re all set"
-                hint="Review the live preview on the right. Add more anytime."
+              {step === 2 && kind !== 'prefs' ? (
+                <ConfigurationWizardConfigureStep
+                  kind={kind}
+                  isSaving={isSaving}
+                  savingRules={savingRules}
+                  onBack={() => setStep(1)}
+                  onSave={() => void saveRuleChoice()}
+                  canSave={canSaveRule}
+                  filteredEligibleCategories={filteredEligibleCategories}
+                  categorySearch={categorySearch}
+                  setCategorySearch={setCategorySearch}
+                  selectedCategoryIds={selectedCategoryIds}
+                  toggleCategoryId={toggleCategoryId}
+                  categoryProducts={categoryProducts}
+                  allProducts={allProducts}
+                  filteredProductPickerCategories={filteredProductPickerCategories}
+                  productFilterSearch={productFilterSearch}
+                  setProductFilterSearch={setProductFilterSearch}
+                  productCategoryIds={productCategoryIds}
+                  toggleProductCategoryId={toggleProductCategoryId}
+                  filteredLinkedProducts={filteredLinkedProducts}
+                  productSearch={productSearch}
+                  setProductSearch={setProductSearch}
+                  linkedProductIds={linkedProductIds}
+                  toggleLinkedProduct={toggleLinkedProduct}
+                  multipleMode={multipleMode}
+                  setMultipleMode={setMultipleMode}
+                  required={required}
+                  setRequired={setRequired}
+                  categorySettings={categorySettings}
+                  setCategorySettings={setCategorySettings}
+                  productSettings={productSettings}
+                  setProductSettings={setProductSettings}
+                  showAdvanced={showAdvanced}
+                  setShowAdvanced={setShowAdvanced}
+                  defaultVariationOptions={defaultVariationOptions}
+                  baseVariations={baseVariations}
+                />
+              ) : null}
+
+              {step === 2 && kind === 'prefs' ? (
+                <div className="space-y-4">
+                  <StepHeader
+                    title="What preferences can they tap?"
+                    hint="Free options — set a max, add photos, and multiple groups if needed."
+                  />
+                  <PersonalizeConfigSection
+                    groups={wizardPrefDraft}
+                    onChange={setWizardPrefDraft}
+                    saving={savingPersonalize}
+                    onSave={() => void savePreferences()}
+                  />
+                  <WizardActions>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setStep(1)}
+                    >
+                      Back
+                    </Button>
+                  </WizardActions>
+                </div>
+              ) : null}
+
+              {step === 3 ? (
+                <div className="space-y-4">
+                  <StepHeader
+                    title="Anything else?"
+                    hint="Stack more choices, or suggest something with the order."
+                  />
+                  <div className="space-y-2.5">
+                    <ChoiceCard
+                      active={false}
+                      title="Add another choice"
+                      description="e.g. sauce, linked sides, or preferences"
+                      onClick={() => {
+                        resetConfigureState();
+                        setStep(1);
+                      }}
+                    />
+                    <ChoiceCard
+                      active
+                      title="Recommended deals"
+                      description="Suggest deals or bundles with this item (e.g. burger with fries & drink deal)"
+                      onClick={() => setStep(4)}
+                    />
+                    <ChoiceCard
+                      active={false}
+                      title="I’m finished"
+                      description="Review what’s configured below"
+                      onClick={() => setStep('done')}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {step === 4 ? (
+                <div className="space-y-4">
+                  <StepHeader
+                    title={`What deals or products should we recommend with ${selected.name}?`}
+                    hint="Optional. Customers can choose between the product alone or selecting a recommended deal."
+                  />
+
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">
+                      From categories
+                    </p>
+                    <SelectableList
+                      search={offerCategorySearch}
+                      onSearchChange={setOfferCategorySearch}
+                      searchPlaceholder="Search categories…"
+                      emptyMessage="No categories match your search."
+                    >
+                      {filteredOfferCategories.map((cat) => (
+                        <SelectableRow
+                          key={cat.id}
+                          multi
+                          active={offerCategoryIds.includes(cat.id)}
+                          title={cat.name}
+                          imageUrl={cat.imageUrl}
+                          onClick={() => {
+                            setOfferCategoryIds((prev) =>
+                              toggleInArray(prev, cat.id)
+                            );
+                            setSelectedOfferProductIds([]);
+                          }}
+                        />
+                      ))}
+                    </SelectableList>
+                  </div>
+
+                  {offerCategoryIds.length > 0 ? (
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">
+                        Recommended deals to offer
+                      </p>
+                      {offeredProductsFromSelectedCategories.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No products in these categories (or already offered).
+                        </p>
+                      ) : (
+                        <SelectableList
+                          search={offerProductSearch}
+                          onSearchChange={setOfferProductSearch}
+                          searchPlaceholder="Search products…"
+                          emptyMessage="No products match your search."
+                        >
+                          {filteredOfferProducts.map((p) => (
+                            <SelectableRow
+                              key={p.id}
+                              multi
+                              active={selectedOfferProductIds.includes(p.id)}
+                              title={p.name}
+                              subtitle={p.categoryName}
+                              imageUrl={p.imageUrl}
+                              onClick={() =>
+                                setSelectedOfferProductIds((prev) =>
+                                  toggleInArray(prev, p.id)
+                                )
+                              }
+                            />
+                          ))}
+                        </SelectableList>
+                      )}
+                    </div>
+                  ) : null}
+
+                  <WizardActions>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setStep(3)}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setStep('done')}
+                    >
+                      Skip
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={selectedOfferProductIds.length === 0 || isSaving}
+                      onClick={() => void saveUpsells()}
+                    >
+                      {savingOffers ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving…
+                        </>
+                      ) : (
+                        'Save recommended deals'
+                      )}
+                    </Button>
+                  </WizardActions>
+                </div>
+              ) : null}
+
+              {step === 'done' ? (
+                <div className="space-y-4">
+                  <StepHeader
+                    title="You’re all set"
+                    hint="Review the live preview on the right. Add more anytime."
+                  />
+                  <WizardActions>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        resetConfigureState();
+                        setStep(0);
+                      }}
+                    >
+                      Add more
+                    </Button>
+                  </WizardActions>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="border-t border-border px-4 py-4 sm:px-5">
+              <SavedSummaryList
+                selected={selected}
+                savedGroups={allSavedGroups}
+                currentOffers={currentOffers}
+                personalizeDraft={personalizeDraft}
+                onDeleteGroup={onDeleteGroup}
+                onDeleteOffer={onDeleteOffer}
+                onDeletePersonalizeGroup={(index) => {
+                  const next = personalizeDraft.filter((_, i) => i !== index);
+                  onPersonalizeDraftChange(next);
+                  void props.onSavePersonalize(next);
+                }}
+                deletingOffer={deletingOffer}
+                deletingOfferId={deletingOfferId}
+                savingPersonalize={savingPersonalize}
               />
-              <WizardActions>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    resetConfigureState();
-                    setStep(0);
-                  }}
-                >
-                  Add more
-                </Button>
-              </WizardActions>
             </div>
-          ) : null}
-        </div>
-
-        <div className="border-t border-border px-4 py-4 sm:px-5">
-          <SavedSummaryList
-            selected={selected}
-            savedGroups={allSavedGroups}
-            currentOffers={currentOffers}
-            personalizeDraft={personalizeDraft}
-            onDeleteGroup={onDeleteGroup}
-            onDeleteOffer={onDeleteOffer}
-            onDeletePersonalizeGroup={(index) => {
-              const next = personalizeDraft.filter((_, i) => i !== index);
-              onPersonalizeDraftChange(next);
-              void props.onSavePersonalize(next);
-            }}
-            deletingOffer={deletingOffer}
-            deletingOfferId={deletingOfferId}
-            savingPersonalize={savingPersonalize}
-          />
-        </div>
           </>
         )}
       </div>
@@ -1287,7 +1287,7 @@ function ClassicConfigSections({
         </div>
 
         {offerCategoryIds.length > 0 &&
-        offeredProductsFromSelectedCategories.length > 0 ? (
+          offeredProductsFromSelectedCategories.length > 0 ? (
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">
               Select specific products for the deal (scrollable)
