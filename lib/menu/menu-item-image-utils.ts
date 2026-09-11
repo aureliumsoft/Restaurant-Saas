@@ -128,6 +128,9 @@ type LinkedMenuNode = {
     linkedProduct?: LinkedMenuNode | null;
     linkedCategory?: { items?: LinkedMenuNode[] | null } | null;
   }> | null;
+  dealsFromThis?: Array<{
+    dealItem?: LinkedMenuNode | null;
+  }> | null;
   offersFromThis?: Array<{
     offeredItem?: LinkedMenuNode | null;
   }> | null;
@@ -141,6 +144,9 @@ function collectLinkedMenuItemIds(node: LinkedMenuNode | null | undefined, ids: 
     for (const item of group.linkedCategory?.items ?? []) {
       collectLinkedMenuItemIds(item, ids);
     }
+  }
+  for (const deal of node.dealsFromThis ?? []) {
+    collectLinkedMenuItemIds(deal.dealItem, ids);
   }
   for (const offer of node.offersFromThis ?? []) {
     collectLinkedMenuItemIds(offer.offeredItem, ids);
@@ -160,6 +166,9 @@ function collectVariationRefs(
     for (const item of group.linkedCategory?.items ?? []) {
       collectVariationRefs(item, refs);
     }
+  }
+  for (const deal of node.dealsFromThis ?? []) {
+    collectVariationRefs(deal.dealItem, refs);
   }
   for (const offer of node.offersFromThis ?? []) {
     collectVariationRefs(offer.offeredItem, refs);
@@ -191,6 +200,11 @@ function applyLazyImageFlags(
     }
     for (const item of group.linkedCategory?.items ?? []) {
       applyLazyImageFlags(item, itemFlags, variationFlags, query);
+    }
+  }
+  for (const deal of node.dealsFromThis ?? []) {
+    if (deal.dealItem) {
+      applyLazyImageFlags(deal.dealItem, itemFlags, variationFlags, query);
     }
   }
   for (const offer of node.offersFromThis ?? []) {

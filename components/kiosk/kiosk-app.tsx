@@ -242,6 +242,28 @@ type CustomerMenuProduct = {
       salePrice: number | null;
     };
   }[];
+  dealsFromThis?: Array<{
+    id: string;
+    dealItemId: string;
+    dealItem: {
+      id: string;
+      name: string;
+      description?: string | null;
+      imageUrl: string | null;
+      price: number;
+      salePrice: number | null;
+      categoryId: string;
+      variations?: {
+        id: string;
+        name?: string;
+        title?: string;
+        imageUrl?: string | null;
+        swatchHex: string | null;
+        priceDelta: number;
+        sortOrder: number;
+      }[];
+    };
+  }>;
 };
 
 type CustomerMenuCategory = {
@@ -859,8 +881,12 @@ export function KioskApp({
     setDialogOpen(true);
   };
 
-  const resolveCatalogProduct = (ref: { id: string }) =>
-    allProducts.find((p) => p.id === ref.id) ?? null;
+  const resolveCatalogProduct = (ref: { id: string }) => {
+    const found = allProducts.find((p) => p.id === ref.id);
+    if (found) return found;
+    const bundle = menuOfferBundles.find((b) => b.id === ref.id);
+    return bundle ?? null;
+  };
 
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     if (productNeedsCustomizeDialog(p)) {
@@ -891,7 +917,23 @@ export function KioskApp({
   };
 
   const handleProductSelect = (p: CustomerMenuProduct) => {
-    const bundles = findBundleParentProducts(p.id, allProducts);
+    const directDeals = (p.dealsFromThis ?? []).map((d) => {
+      const existing = allProducts.find((x) => x.id === d.dealItem.id);
+      const imageFallback =
+        existing?.imageUrl ??
+        d.dealItem.imageUrl ??
+        (slug
+          ? customerMenuItemImageUrl(d.dealItem.id, { slug })
+          : null);
+      return {
+        ...(existing ?? d.dealItem),
+        imageUrl: imageFallback,
+      } as CustomerMenuProduct;
+    });
+    const bundles =
+      directDeals.length > 0
+        ? directDeals
+        : findBundleParentProducts(p.id, allProducts);
     if (bundles.length > 0) {
       setMenuOfferProduct(p);
       setMenuOfferBundles(bundles);

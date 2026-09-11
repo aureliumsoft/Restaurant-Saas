@@ -54,7 +54,7 @@ import type { AttrGroupRow, MenuCategoryRow, MenuItemRow } from './types';
 
 type ProductWithCategory = MenuItemRow & { categoryName: string };
 
-type WizardStep = 0 | 1 | 2 | 3 | 4 | 'done';
+type WizardStep = 0 | 1 | 2 | 3 | 4 | 5 | 'done';
 type ChoiceKind = WizardChoiceKind;
 
 export type ConfigurationWizardProps = {
@@ -78,6 +78,17 @@ export type ConfigurationWizardProps = {
     (draft: RecommendationRuleDraft) => void
   >;
   onDeleteGroup: (groupId: string) => void;
+  dealCategoryIds: string[];
+  setDealCategoryIds: Dispatch<SetStateAction<string[]>>;
+  selectedDealProductIds: string[];
+  setSelectedDealProductIds: Dispatch<SetStateAction<string[]>>;
+  dealProductsFromSelectedCategories: ProductWithCategory[];
+  currentDeals: NonNullable<MenuItemRow['dealsFromThis']>;
+  savingDeals: boolean;
+  onSaveDeals: () => Promise<boolean> | boolean;
+  onDeleteDeal: (dealId: string) => void;
+  deletingDeal: boolean;
+  deletingDealId: string | null;
   offerCategoryIds: string[];
   setOfferCategoryIds: Dispatch<SetStateAction<string[]>>;
   selectedOfferProductIds: string[];
@@ -153,8 +164,8 @@ function ChoiceCard({
 
 
 function WizardProgress({ step }: { step: WizardStep }) {
-  const current = step === 'done' ? 4 : typeof step === 'number' ? step : 0;
-  const total = 5;
+  const current = step === 'done' ? 5 : typeof step === 'number' ? step : 0;
+  const total = 6;
   const ratio = step === 'done' ? 1 : current / (total - 1);
   const pct = Math.round(ratio * 100);
 
@@ -202,22 +213,30 @@ function WizardActions({ children }: { children: React.ReactNode }) {
 function SavedSummaryList({
   selected,
   savedGroups,
+  currentDeals,
   currentOffers,
   personalizeDraft,
   onDeleteGroup,
+  onDeleteDeal,
   onDeleteOffer,
   onDeletePersonalizeGroup,
+  deletingDeal,
+  deletingDealId,
   deletingOffer,
   deletingOfferId,
   savingPersonalize,
 }: {
   selected: ProductWithCategory;
   savedGroups: AttrGroupRow[];
+  currentDeals: NonNullable<MenuItemRow['dealsFromThis']>;
   currentOffers: NonNullable<MenuItemRow['offersFromThis']>;
   personalizeDraft: PersonalizeGroupDraft[];
   onDeleteGroup: (groupId: string) => void;
+  onDeleteDeal: (dealId: string) => void;
   onDeleteOffer: (offerId: string) => void;
   onDeletePersonalizeGroup?: (index: number) => void;
+  deletingDeal: boolean;
+  deletingDealId: string | null;
   deletingOffer: boolean;
   deletingOfferId: string | null;
   savingPersonalize?: boolean;
@@ -329,12 +348,48 @@ function SavedSummaryList({
         </div>
       ))}
 
+      {currentDeals.length > 0 ? (
+        <div className="rounded-xl border border-border px-3 py-2.5">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-sm font-medium">Recommended deals (Popup)</p>
+            <Badge variant="secondary" className="text-[10px]">
+              Deals
+            </Badge>
+          </div>
+          <ul className="space-y-1">
+            {currentDeals.map((deal) => (
+              <li
+                key={deal.id}
+                className="flex items-center justify-between gap-2 text-sm text-muted-foreground"
+              >
+                <span className="truncate">{deal.dealItem.name}</span>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-destructive"
+                  disabled={deletingDeal && deletingDealId === deal.id}
+                  onClick={() => onDeleteDeal(deal.id)}
+                  aria-label={`Remove ${deal.dealItem.name}`}
+                >
+                  {deletingDeal && deletingDealId === deal.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {currentOffers.length > 0 ? (
         <div className="rounded-xl border border-border px-3 py-2.5">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-sm font-medium">Also suggest</p>
+            <p className="text-sm font-medium">Recommended products (Cart)</p>
             <Badge variant="secondary" className="text-[10px]">
-              Upsell
+              Cart
             </Badge>
           </div>
           <ul className="space-y-1">
@@ -367,6 +422,7 @@ function SavedSummaryList({
 
       {savedGroups.length === 0 &&
         personalizeLive.length === 0 &&
+        currentDeals.length === 0 &&
         currentOffers.length === 0 &&
         !sizeLabel ? (
         <p className="rounded-xl border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
@@ -390,6 +446,17 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     onSaveDraft,
     draftChangeHandlers,
     onDeleteGroup,
+    dealCategoryIds,
+    setDealCategoryIds,
+    selectedDealProductIds,
+    setSelectedDealProductIds,
+    dealProductsFromSelectedCategories,
+    currentDeals,
+    savingDeals,
+    onSaveDeals,
+    onDeleteDeal,
+    deletingDeal,
+    deletingDealId,
     offerCategoryIds,
     setOfferCategoryIds,
     selectedOfferProductIds,
@@ -410,7 +477,11 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
   } = props;
 
   const isSaving =
-    savingRules || savingOffers || savingAll || savingPersonalize;
+    savingRules ||
+    savingDeals ||
+    savingOffers ||
+    savingAll ||
+    savingPersonalize;
 
   const { variationTemplates } = useRestaurantVariationTemplates();
   const defaultVariationOptions = useMemo(
@@ -440,6 +511,8 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
   const [categorySearch, setCategorySearch] = useState('');
   const [productFilterSearch, setProductFilterSearch] = useState('');
   const [productSearch, setProductSearch] = useState('');
+  const [dealCategorySearch, setDealCategorySearch] = useState('');
+  const [dealProductSearch, setDealProductSearch] = useState('');
   const [offerCategorySearch, setOfferCategorySearch] = useState('');
   const [offerProductSearch, setOfferProductSearch] = useState('');
 
@@ -542,6 +615,22 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     );
   }, [productsFromSelectedCategories, productSearch]);
 
+  const filteredDealCategories = useMemo(() => {
+    const q = dealCategorySearch.trim().toLowerCase();
+    if (!q) return linkedOptions;
+    return linkedOptions.filter((cat) => cat.name.toLowerCase().includes(q));
+  }, [linkedOptions, dealCategorySearch]);
+
+  const filteredDealProducts = useMemo(() => {
+    const q = dealProductSearch.trim().toLowerCase();
+    if (!q) return dealProductsFromSelectedCategories;
+    return dealProductsFromSelectedCategories.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.categoryName.toLowerCase().includes(q)
+    );
+  }, [dealProductsFromSelectedCategories, dealProductSearch]);
+
   const filteredOfferCategories = useMemo(() => {
     const q = offerCategorySearch.trim().toLowerCase();
     if (!q) return linkedOptions;
@@ -584,6 +673,8 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     setKind('cat-many');
     resetConfigureState();
     setWizardPrefDraft([]);
+    setDealCategorySearch('');
+    setDealProductSearch('');
     setOfferCategorySearch('');
     setOfferProductSearch('');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on product change only
@@ -627,24 +718,30 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     draftChangeHandlers[wizardKindToVariant(currentDraftInput.kind)]?.(draft);
   }, [step, currentDraftInput, draftChangeHandlers]);
 
-  const applyKindDefaults = (next: ChoiceKind) => {
-    setKind(next);
+  const applyKindDefaults = (nextKind: ChoiceKind) => {
+    setKind(nextKind);
     resetConfigureState();
-    if (isOneKind(next)) {
+    if (nextKind === 'cat-one') {
       setRequired(true);
-    } else if (isManyKind(next)) {
+      setMultipleMode('CHECKBOX');
+    } else if (nextKind === 'cat-many') {
       setRequired(false);
       setMultipleMode('CHECKBOX');
-    } else if (next === 'prefs') {
+    } else if (nextKind === 'prod-one') {
+      setRequired(true);
+      setMultipleMode('CHECKBOX');
+    } else if (nextKind === 'prod-many') {
+      setRequired(false);
+      setMultipleMode('CHECKBOX');
+    } else if (nextKind === 'prefs') {
       setWizardPrefDraft(
         personalizeDraft.length > 0
-          ? personalizeDraft.map((g) => ({
-            ...g,
-            options: g.options.map((o) => ({ ...o })),
-          }))
+          ? personalizeDraft
           : [
             {
-              ...emptyPersonalizeGroup(0),
+              parentName: 'Personalize',
+              maxItems: 2,
+              sortOrder: 0,
               options: [
                 { name: 'Well done', imageUrl: '', sortOrder: 0 },
                 { name: 'Cut in 8', imageUrl: '', sortOrder: 1 },
@@ -751,6 +848,15 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     setStep(3);
   };
 
+  const saveDeals = async () => {
+    if (selectedDealProductIds.length === 0) return;
+    const ok = await onSaveDeals();
+    if (!ok) return;
+    setDealCategorySearch('');
+    setDealProductSearch('');
+    setStep(5);
+  };
+
   const saveUpsells = async () => {
     if (selectedOfferProductIds.length === 0) return;
     const ok = await onSaveOffers();
@@ -760,33 +866,36 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     setStep('done');
   };
 
-  const canSaveRule =
-    kind !== 'prefs' &&
-    ((isCategoryKind(kind) && selectedCategoryIds.length > 0) ||
-      (isProductKind(kind) &&
-        linkedProductIds.length > 0 &&
-        productCategoryIds.length > 0));
+  const canSaveRule = useMemo(() => {
+    if (!currentDraftInput) return false;
+    if (isCategoryKind(currentDraftInput.kind)) {
+      return currentDraftInput.selectedCategoryIds.length > 0;
+    }
+    if (isProductKind(currentDraftInput.kind)) {
+      return (
+        currentDraftInput.linkedProductIds.length > 0 &&
+        currentDraftInput.productCategoryIds.length > 0
+      );
+    }
+    return false;
+  }, [currentDraftInput]);
 
   const sizeHint =
-    baseVariations.length > 0
-      ? `Sizes already set (${baseVariations
-        .map((v) => v.title || v.name)
-        .filter(Boolean)
-        .slice(0, 4)
-        .join(' / ')})`
-      : 'No sizes on this product';
+    (selected.variations?.length ?? 0) > 0
+      ? `${selected.variations!.length} sizes`
+      : null;
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-card">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3.5 sm:px-5">
-          <div className="flex items-center gap-3 min-w-0">
+      <div className="rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
             <LazyProductImage
               src={selected.imageUrl}
               hasImage={Boolean(selected.imageUrl)}
               alt=""
               emptyLabel="—"
-              className="h-11 w-11 shrink-0 rounded-lg"
+              className="h-10 w-10 shrink-0 rounded-lg"
             />
             <div className="min-w-0 flex-1">
               <h3 className="truncate text-base font-semibold text-foreground">
@@ -853,7 +962,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                     <ChoiceCard
                       active={false}
                       title="No — size (or price) is enough"
-                      description="Skip to optional “suggest with this” upsells"
+                      description="Skip to optional deals and cart upsells"
                       onClick={() => setStep(4)}
                     />
                   </div>
@@ -986,7 +1095,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                 <div className="space-y-4">
                   <StepHeader
                     title="Anything else?"
-                    hint="Stack more choices, or suggest something with the order."
+                    hint="Stack more choices, or suggest deals & cart items."
                   />
                   <div className="space-y-2.5">
                     <ChoiceCard
@@ -1000,9 +1109,15 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                     />
                     <ChoiceCard
                       active
-                      title="Recommended deals"
-                      description="Suggest deals or bundles with this item (e.g. burger with fries & drink deal)"
+                      title="Recommended deals (Popup)"
+                      description="Suggest deals/menus when guests select this item (e.g. Tacos Deal popup)"
                       onClick={() => setStep(4)}
+                    />
+                    <ChoiceCard
+                      active={false}
+                      title="Recommended products (Cart)"
+                      description="Suggest add-ons or upsells in the cart when this item is ordered"
+                      onClick={() => setStep(5)}
                     />
                     <ChoiceCard
                       active={false}
@@ -1017,8 +1132,112 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               {step === 4 ? (
                 <div className="space-y-4">
                   <StepHeader
-                    title={`What deals or products should we recommend with ${selected.name}?`}
-                    hint="Optional. Customers can choose between the product alone or selecting a recommended deal."
+                    title={`What recommended deals should appear with ${selected.name}?`}
+                    hint="Optional. When guests tap this item, a popup will ask if they want the product alone or one of these deals."
+                  />
+
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">
+                      From categories
+                    </p>
+                    <SelectableList
+                      search={dealCategorySearch}
+                      onSearchChange={setDealCategorySearch}
+                      searchPlaceholder="Search categories…"
+                      emptyMessage="No categories match your search."
+                    >
+                      {filteredDealCategories.map((cat) => (
+                        <SelectableRow
+                          key={cat.id}
+                          multi
+                          active={dealCategoryIds.includes(cat.id)}
+                          title={cat.name}
+                          imageUrl={cat.imageUrl}
+                          onClick={() => {
+                            setDealCategoryIds((prev) =>
+                              toggleInArray(prev, cat.id)
+                            );
+                            setSelectedDealProductIds([]);
+                          }}
+                        />
+                      ))}
+                    </SelectableList>
+                  </div>
+
+                  {dealCategoryIds.length > 0 ? (
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">
+                        Recommended deals to offer
+                      </p>
+                      {dealProductsFromSelectedCategories.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No products in these categories (or already offered as deals).
+                        </p>
+                      ) : (
+                        <SelectableList
+                          search={dealProductSearch}
+                          onSearchChange={setDealProductSearch}
+                          searchPlaceholder="Search products…"
+                          emptyMessage="No products match your search."
+                        >
+                          {filteredDealProducts.map((p) => (
+                            <SelectableRow
+                              key={p.id}
+                              multi
+                              active={selectedDealProductIds.includes(p.id)}
+                              title={p.name}
+                              subtitle={p.categoryName}
+                              imageUrl={p.imageUrl}
+                              onClick={() =>
+                                setSelectedDealProductIds((prev) =>
+                                  toggleInArray(prev, p.id)
+                                )
+                              }
+                            />
+                          ))}
+                        </SelectableList>
+                      )}
+                    </div>
+                  ) : null}
+
+                  <WizardActions>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setStep(3)}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setStep(5)}
+                    >
+                      Skip
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={selectedDealProductIds.length === 0 || isSaving}
+                      onClick={() => void saveDeals()}
+                    >
+                      {savingDeals ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving…
+                        </>
+                      ) : (
+                        'Save recommended deals'
+                      )}
+                    </Button>
+                  </WizardActions>
+                </div>
+              ) : null}
+
+              {step === 5 ? (
+                <div className="space-y-4">
+                  <StepHeader
+                    title={`What products should we recommend in the cart with ${selected.name}?`}
+                    hint="Optional. Add-on items suggested on the cart page/drawer when this product is in the cart."
                   />
 
                   <div>
@@ -1052,7 +1271,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                   {offerCategoryIds.length > 0 ? (
                     <div>
                       <p className="mb-2 text-xs font-medium text-muted-foreground">
-                        Recommended deals to offer
+                        Products to recommend in cart
                       </p>
                       {offeredProductsFromSelectedCategories.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
@@ -1089,7 +1308,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setStep(3)}
+                      onClick={() => setStep(4)}
                     >
                       Back
                     </Button>
@@ -1111,7 +1330,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                           Saving…
                         </>
                       ) : (
-                        'Save recommended deals'
+                        'Save cart recommendations'
                       )}
                     </Button>
                   </WizardActions>
@@ -1144,15 +1363,19 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               <SavedSummaryList
                 selected={selected}
                 savedGroups={allSavedGroups}
+                currentDeals={currentDeals}
                 currentOffers={currentOffers}
                 personalizeDraft={personalizeDraft}
                 onDeleteGroup={onDeleteGroup}
+                onDeleteDeal={onDeleteDeal}
                 onDeleteOffer={onDeleteOffer}
                 onDeletePersonalizeGroup={(index) => {
                   const next = personalizeDraft.filter((_, i) => i !== index);
                   onPersonalizeDraftChange(next);
                   void props.onSavePersonalize(next);
                 }}
+                deletingDeal={deletingDeal}
+                deletingDealId={deletingDealId}
                 deletingOffer={deletingOffer}
                 deletingOfferId={deletingOfferId}
                 savingPersonalize={savingPersonalize}
@@ -1176,6 +1399,17 @@ function ClassicConfigSections({
   onSaveDraft,
   draftChangeHandlers,
   onDeleteGroup,
+  dealCategoryIds,
+  setDealCategoryIds,
+  selectedDealProductIds,
+  setSelectedDealProductIds,
+  dealProductsFromSelectedCategories,
+  currentDeals,
+  savingDeals,
+  onSaveDeals,
+  onDeleteDeal,
+  deletingDeal,
+  deletingDealId,
   offerCategoryIds,
   setOfferCategoryIds,
   selectedOfferProductIds,
@@ -1197,7 +1431,11 @@ function ClassicConfigSections({
   draftByVariant,
 }: ConfigurationWizardProps) {
   const isSaving =
-    savingRules || savingOffers || savingAll || savingPersonalize;
+    savingRules ||
+    savingDeals ||
+    savingOffers ||
+    savingAll ||
+    savingPersonalize;
 
   const formProps = {
     selected,
@@ -1252,11 +1490,148 @@ function ClassicConfigSections({
       <RecommendationConfigSectionShell
         step={6}
         title="Recommended deals"
-        description="Optional cross-sell deals or items shown with this product."
+        description="Optional deals/menus offered in a popup when guests select this product."
       >
         <div>
           <p className="mb-2 text-xs font-medium text-muted-foreground">
             Categories to offer deals from (scrollable list)
+          </p>
+          <SelectableList
+            emptyMessage="No categories available."
+            maxHeightClass="max-h-48"
+          >
+            {linkedOptions.map((cat) => {
+              const checked = dealCategoryIds.includes(cat.id);
+              return (
+                <SelectableRow
+                  key={`deal-cat-${cat.id}`}
+                  multi
+                  active={checked}
+                  title={cat.name}
+                  imageUrl={cat.imageUrl}
+                  subtitle={
+                    isMenuCategoryShownInFront(cat)
+                      ? 'On customer menu'
+                      : 'Add-on only'
+                  }
+                  onClick={() => {
+                    setDealCategoryIds((prev) => toggleInArray(prev, cat.id));
+                    setSelectedDealProductIds([]);
+                  }}
+                />
+              );
+            })}
+          </SelectableList>
+        </div>
+
+        {dealCategoryIds.length > 0 &&
+          dealProductsFromSelectedCategories.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">
+              Select specific products for the deal (scrollable)
+            </p>
+            <div className="max-h-72 overflow-y-auto overscroll-contain p-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 rounded-xl border border-border bg-muted/10">
+              {dealProductsFromSelectedCategories.map((p) => {
+                const checked = selectedDealProductIds.includes(p.id);
+                return (
+                  <label
+                    key={`deal-product-${p.id}`}
+                    className="group relative block cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={checked}
+                      onChange={() =>
+                        setSelectedDealProductIds((prev) =>
+                          toggleInArray(prev, p.id)
+                        )
+                      }
+                    />
+                    <div
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl border p-3 text-sm transition',
+                        checked
+                          ? 'border-primary ring-2 ring-primary/25 bg-primary/5'
+                          : 'border-border hover:bg-muted/50'
+                      )}
+                    >
+                      <LazyProductImage
+                        src={p.imageUrl}
+                        hasImage={Boolean(p.imageUrl)}
+                        alt=""
+                        emptyLabel="—"
+                        className="h-11 w-11 shrink-0 rounded-lg"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold truncate">{p.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {p.categoryName}
+                        </p>
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        <Button
+          type="button"
+          onClick={() => void onSaveDeals()}
+          disabled={isSaving || selectedDealProductIds.length === 0}
+          className="w-full"
+        >
+          {savingDeals ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save recommended deals
+            </>
+          )}
+        </Button>
+
+        {currentDeals.length > 0 ? (
+          <ul className="space-y-2 border-t border-border pt-4">
+            {currentDeals.map((deal) => (
+              <li
+                key={deal.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm"
+              >
+                <span className="font-medium">{deal.dealItem.name}</span>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="text-destructive"
+                  onClick={() => onDeleteDeal(deal.id)}
+                  disabled={deletingDeal && deletingDealId === deal.id}
+                >
+                  {deletingDeal && deletingDealId === deal.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </RecommendationConfigSectionShell>
+
+      <RecommendationConfigSectionShell
+        step={7}
+        title="Recommended products (Cart)"
+        description="Optional cross-sell add-ons shown in the cart when this item is in the cart."
+      >
+        <div>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Categories to recommend products in cart from (scrollable list)
           </p>
           <SelectableList
             emptyMessage="No categories available."
@@ -1290,7 +1665,7 @@ function ClassicConfigSections({
           offeredProductsFromSelectedCategories.length > 0 ? (
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">
-              Select specific products for the deal (scrollable)
+              Select specific products for cart recommendations (scrollable)
             </p>
             <div className="max-h-72 overflow-y-auto overscroll-contain p-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 rounded-xl border border-border bg-muted/10">
               {offeredProductsFromSelectedCategories.map((p) => {
@@ -1353,7 +1728,7 @@ function ClassicConfigSections({
           ) : (
             <>
               <Save className="mr-2 h-4 w-4" />
-              Save recommended deals
+              Save recommended products
             </>
           )}
         </Button>

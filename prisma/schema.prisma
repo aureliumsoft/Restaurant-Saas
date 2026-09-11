@@ -724,6 +724,8 @@ model MenuItem {
   variations        MenuItemVariation[]
   orderAddonChoices OrderItemModifier[]      @relation("OrderAddonProduct")
 
+  dealsFromThis MenuItemDeal[]  @relation("BaseItemDeals")
+  dealedAs      MenuItemDeal[]  @relation("DealItems")
   offersFromThis MenuItemOffer[] @relation("BaseItemOffers")
   offeredAs      MenuItemOffer[] @relation("OfferedItems")
   linkedInRecommendationGroups MenuItemAttributeGroup[] @relation("RecommendationLinkedProduct")
@@ -828,6 +830,22 @@ model MenuItemOffer {
   updatedAt DateTime @updatedAt
 
   @@index([baseItemId])
+}
+
+model MenuItemDeal {
+  id         String   @id @default(uuid())
+  baseItemId String
+  dealItemId String
+  sortOrder  Int      @default(0)
+
+  baseItem   MenuItem @relation("BaseItemDeals", fields: [baseItemId], references: [id], onDelete: Cascade)
+  dealItem   MenuItem @relation("DealItems", fields: [dealItemId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([baseItemId])
+  @@index([dealItemId])
 }
 
 model MenuItemAttributeGroup {

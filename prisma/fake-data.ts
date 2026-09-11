@@ -757,6 +757,21 @@ export function fakeMenuItemOfferComplete() {
     updatedAt: faker.date.anytime(),
   };
 }
+export function fakeMenuItemDeal() {
+  return {
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeMenuItemDealComplete() {
+  return {
+    id: faker.string.uuid(),
+    baseItemId: faker.string.uuid(),
+    dealItemId: faker.string.uuid(),
+    sortOrder: 0,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
 export function fakeMenuItemAttributeGroup() {
   return {
     name: faker.person.fullName(),

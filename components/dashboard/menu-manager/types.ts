@@ -92,6 +92,18 @@ export type MenuItemRow = {
   }[];
   attributeGroups: AttrGroupRow[];
   personalizeGroups?: PersonalizeGroupRow[];
+  dealsFromThis?: {
+    id: string;
+    sortOrder: number;
+    dealItem: {
+      id: string;
+      name: string;
+      description: string | null;
+      imageUrl: string | null;
+      price: number;
+      salePrice: number | null;
+    };
+  }[];
   offersFromThis?: {
     id: string;
     sortOrder: number;

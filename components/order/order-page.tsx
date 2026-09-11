@@ -40,6 +40,7 @@ import {
   fetchCustomerMenuProductDetail,
   productNeedsDetailFetch,
 } from '@/lib/menu/fetch-menu-product-detail';
+import { customerMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import {
@@ -156,6 +157,28 @@ type CustomerMenuProduct = {
       imageUrl?: string | null;
     }>;
   }[];
+  dealsFromThis?: Array<{
+    id: string;
+    dealItemId: string;
+    dealItem: {
+      id: string;
+      name: string;
+      description?: string | null;
+      imageUrl: string | null;
+      price: number;
+      salePrice: number | null;
+      categoryId: string;
+      variations?: {
+        id: string;
+        name?: string;
+        title?: string;
+        imageUrl?: string | null;
+        swatchHex?: string | null;
+        priceDelta: number;
+        sortOrder?: number;
+      }[];
+    };
+  }>;
 };
 
 type CustomerMenuCategory = {
@@ -843,8 +866,12 @@ export default function OrderPageClient({
     }
   };
 
-  const resolveCatalogProduct = (ref: { id: string }) =>
-    products.find((p) => p.id === ref.id) ?? null;
+  const resolveCatalogProduct = (ref: { id: string }) => {
+    const found = products.find((p) => p.id === ref.id);
+    if (found) return found;
+    const bundle = menuOfferBundles.find((b) => b.id === ref.id);
+    return bundle ?? null;
+  };
 
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     if (productNeedsCustomizeDialog(p)) {
@@ -872,7 +899,26 @@ export default function OrderPageClient({
   };
 
   const handleProductSelect = (product: CustomerMenuProduct) => {
-    const bundles = findBundleParentProducts(product.id, products);
+    const directDeals = (product.dealsFromThis ?? []).map((d) => {
+      const existing = products.find((p) => p.id === d.dealItem.id);
+      const imageFallback =
+        existing?.imageUrl ??
+        d.dealItem.imageUrl ??
+        (orderInfo?.restaurantSlug
+          ? customerMenuItemImageUrl(d.dealItem.id, {
+              slug: orderInfo.restaurantSlug,
+              subdomain: hostSubdomain,
+            })
+          : null);
+      return {
+        ...(existing ?? d.dealItem),
+        imageUrl: imageFallback,
+      } as CustomerMenuProduct;
+    });
+    const bundles =
+      directDeals.length > 0
+        ? directDeals
+        : findBundleParentProducts(product.id, products);
     if (bundles.length > 0) {
       setMenuOfferProduct(product);
       setMenuOfferBundles(bundles);

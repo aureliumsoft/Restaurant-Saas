@@ -285,6 +285,20 @@ type PosMenuProduct = {
       salePrice: number | null;
     };
   }[];
+  dealsFromThis?: Array<{
+    id: string;
+    dealItemId: string;
+    dealItem: {
+      id: string;
+      name: string;
+      description?: string | null;
+      imageUrl: string | null;
+      price: number;
+      salePrice: number | null;
+      categoryId: string;
+      variations?: PosMenuProduct['variations'];
+    };
+  }>;
 };
 
 type CartModifierSelection = {
@@ -1847,8 +1861,12 @@ export function PosScreen({
     setCustomizeOpen(true);
   };
 
-  const resolveCatalogProduct = (ref: { id: string }) =>
-    products.find((p) => p.id === ref.id) ?? null;
+  const resolveCatalogProduct = (ref: { id: string }) => {
+    const found = products.find((p) => p.id === ref.id);
+    if (found) return found;
+    const bundle = menuOfferBundles.find((b) => b.id === ref.id);
+    return bundle ?? null;
+  };
 
   const proceedWithProduct = async (p: PosMenuProduct) => {
     if (productNeedsCustomizeDialog(p)) {
@@ -1894,7 +1912,21 @@ export function PosScreen({
 
   const handleProductSelect = (p: PosMenuProduct) => {
     if (savingOrder || terminalProcessing || sendingToKitchen) return;
-    const bundles = findBundleParentProducts(p.id, products);
+    const directDeals = (p.dealsFromThis ?? []).map((d) => {
+      const existing = products.find((x) => x.id === d.dealItem.id);
+      const imageFallback =
+        existing?.imageUrl ??
+        d.dealItem.imageUrl ??
+        restaurantMenuItemImageUrl(d.dealItem.id);
+      return {
+        ...(existing ?? d.dealItem),
+        imageUrl: imageFallback,
+      } as PosMenuProduct;
+    });
+    const bundles =
+      directDeals.length > 0
+        ? directDeals
+        : findBundleParentProducts(p.id, products);
     if (bundles.length > 0) {
       setMenuOfferProduct(p);
       setMenuOfferBundles(bundles);

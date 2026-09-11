@@ -44,6 +44,24 @@ function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
     categoryId: true,
     attributeGroups: buildGroups(2),
     personalizeGroups: personalizeGroupsSelect,
+    dealsFromThis: {
+      orderBy: { sortOrder: 'asc' as const },
+      select: {
+        id: true,
+        sortOrder: true,
+        dealItem: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            imageUrl: true,
+            price: true,
+            salePrice: true,
+            variations: true,
+          },
+        },
+      },
+    },
     offersFromThis: {
       orderBy: { sortOrder: 'asc' as const },
       select: {

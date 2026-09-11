@@ -145,7 +145,8 @@ type Props = {
   previewGroups: PreviewAttrGroup[];
   previewByGroup: Record<string, string[]>;
   onPreviewChange: (groupId: string, ids: string[]) => void;
-  offeredItems: OfferPreviewItem[];
+  dealsItems?: OfferPreviewItem[];
+  offeredItems?: OfferPreviewItem[];
   onDeleteGroup?: (groupId: string, isDraft: boolean) => void;
   deletingRuleId?: string | null;
   deletingRule?: boolean;
@@ -168,7 +169,8 @@ export function RecommendationPreviewPanel({
   previewGroups,
   previewByGroup,
   onPreviewChange,
-  offeredItems,
+  dealsItems = [],
+  offeredItems = [],
   onDeleteGroup,
   deletingRuleId,
   deletingRule,
@@ -183,7 +185,7 @@ export function RecommendationPreviewPanel({
   const [dealChoiceOpen, setDealChoiceOpen] = useState(false);
 
   const bundleProducts = useMemo(() => {
-    return offeredItems.map((item) => {
+    return dealsItems.map((item) => {
       const full = allProducts.find((p) => p.id === item.id);
       return {
         id: item.id,
@@ -194,7 +196,7 @@ export function RecommendationPreviewPanel({
         variations: full?.variations ?? [],
       };
     });
-  }, [offeredItems, allProducts]);
+  }, [dealsItems, allProducts]);
 
   useEffect(() => {
     const first = selected?.variations?.[0]?.id ?? '';
@@ -424,7 +426,7 @@ export function RecommendationPreviewPanel({
         </div>
       ) : null}
 
-      {offeredItems.length > 0 ? (
+      {dealsItems.length > 0 ? (
         <div className="space-y-3 border-t border-border pt-4">
           <div className="flex items-center justify-between gap-2">
             <div>
@@ -447,7 +449,7 @@ export function RecommendationPreviewPanel({
             </Button>
           </div>
           <ul className="space-y-2">
-            {offeredItems.map((item) => (
+            {dealsItems.map((item) => (
               <li
                 key={item.id}
                 role="button"
@@ -478,6 +480,58 @@ export function RecommendationPreviewPanel({
                   </span>
                   <span className="block text-[11px] text-muted-foreground">
                     Click to test "Select a deal" preview
+                  </span>
+                </div>
+                {item.isDraft ? (
+                  <Badge variant="outline" className="shrink-0 text-[10px]">
+                    Draft
+                  </Badge>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {offeredItems.length > 0 ? (
+        <div className="space-y-3 border-t border-border pt-4">
+          <div>
+            <h4 className="text-sm font-bold uppercase tracking-wide text-foreground">
+              Recommended products (Cart)
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Add-ons shown on the cart drawer / checkout
+            </p>
+          </div>
+          <ul className="space-y-2">
+            {offeredItems.map((item) => (
+              <li
+                key={item.id}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg border px-3 py-2 text-sm',
+                  item.isDraft
+                    ? 'border-dashed border-primary/40 bg-primary/5'
+                    : 'border-border bg-background'
+                )}
+              >
+                {item.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.imageUrl}
+                    alt=""
+                    className="h-10 w-10 shrink-0 rounded-md object-cover"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted text-[10px] text-muted-foreground">
+                    —
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">
+                    {item.name}
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Shown in customer cart upsell
                   </span>
                 </div>
                 {item.isDraft ? (

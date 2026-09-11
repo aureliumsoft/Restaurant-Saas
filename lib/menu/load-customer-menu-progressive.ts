@@ -67,6 +67,23 @@ function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
     categoryId: true,
     attributeGroups: buildGroups(2),
     personalizeGroups: personalizeGroupsSelect,
+    dealsFromThis: {
+      orderBy: { sortOrder: 'asc' as const },
+      select: {
+        id: true,
+        sortOrder: true,
+        dealItem: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            salePrice: true,
+            variations: true,
+          },
+        },
+      },
+    },
     offersFromThis: {
       orderBy: { sortOrder: 'asc' as const },
       select: {
@@ -263,22 +280,46 @@ export async function loadCustomerMenuCategoryItems(options: {
     if (!category) return null;
 
     const itemIds = category.items.map((item) => item.id);
-    const imageFlags = await hasImageByMenuItemIds(itemIds);
+    const dealItemIds = category.items.flatMap((item) =>
+      (item.dealsFromThis ?? [])
+        .map((d: { dealItem?: { id: string } }) => d.dealItem?.id)
+        .filter((id): id is string => Boolean(id))
+    );
+    const allItemIds = Array.from(new Set([...itemIds, ...dealItemIds]));
+    const imageFlags = await hasImageByMenuItemIds(allItemIds);
     const imageQuery = {
       slug: options.slug,
       subdomain: options.subdomain,
     };
 
     const items = await stampBrowseVariationImages(
-      category.items.map((item) =>
-        mapBrowseListItem(
+      category.items.map((item) => {
+        const mapped = mapBrowseListItem(
           item,
           imageFlags.get(item.id) ?? false,
           imageFlags.get(item.id)
             ? customerMenuItemImageUrl(item.id, imageQuery)
             : null
-        )
-      ),
+        );
+        if (mapped.dealsFromThis && mapped.dealsFromThis.length > 0) {
+          mapped.dealsFromThis = mapped.dealsFromThis.map((deal) => {
+            const did = deal.dealItem?.id;
+            if (!did || !deal.dealItem) return deal;
+            const hasDealImg = imageFlags.get(did) ?? false;
+            return {
+              ...deal,
+              dealItem: {
+                ...deal.dealItem,
+                hasImage: hasDealImg,
+                imageUrl: hasDealImg
+                  ? customerMenuItemImageUrl(did, imageQuery)
+                  : null,
+              },
+            };
+          });
+        }
+        return mapped;
+      }),
       imageQuery
     );
 

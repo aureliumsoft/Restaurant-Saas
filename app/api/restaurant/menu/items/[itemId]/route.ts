@@ -31,6 +31,23 @@ const detailSelect = {
   updatedAt: true,
   attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
   personalizeGroups: personalizeGroupsSelect,
+  dealsFromThis: {
+    orderBy: { sortOrder: "asc" as const },
+    select: {
+      id: true,
+      sortOrder: true,
+      dealItem: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          imageUrl: true,
+          price: true,
+          salePrice: true,
+        },
+      },
+    },
+  },
   offersFromThis: {
     orderBy: { sortOrder: "asc" as const },
     select: {
@@ -58,6 +75,22 @@ const liteDetailSelect = {
   updatedAt: true,
   attributeGroups: buildCustomerMenuAttributeGroupsSelect(2),
   personalizeGroups: personalizeGroupsSelect,
+  dealsFromThis: {
+    orderBy: { sortOrder: 'asc' as const },
+    select: {
+      id: true,
+      sortOrder: true,
+      dealItem: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          price: true,
+          salePrice: true,
+        },
+      },
+    },
+  },
   offersFromThis: {
     orderBy: { sortOrder: 'asc' as const },
     select: {
@@ -110,6 +143,18 @@ export async function GET(
           categoryIds: [item.categoryId],
           createdAt: item.createdAt.toISOString(),
           updatedAt: item.updatedAt.toISOString(),
+          dealsFromThis: (item.dealsFromThis ?? []).map((row) => {
+            const did = row.dealItem?.id;
+            if (!did || !row.dealItem) return row;
+            return {
+              ...row,
+              dealItem: {
+                ...row.dealItem,
+                hasImage: true,
+                imageUrl: restaurantMenuItemImageUrl(did),
+              },
+            };
+          }),
           offersFromThis: (item.offersFromThis ?? []).map((row) => {
             const oid = row.offeredItem?.id;
             if (!oid || !row.offeredItem) return row;

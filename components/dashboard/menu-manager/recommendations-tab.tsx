@@ -769,6 +769,14 @@ export function RecommendationsTab(_props?: Props) {
   const [previewPersonalizeByGroup, setPreviewPersonalizeByGroup] = useState<
     Record<string, string[]>
   >({});
+  const [dealCategoryIds, setDealCategoryIds] = useState<string[]>([]);
+  const [selectedDealProductIds, setSelectedDealProductIds] = useState<
+    string[]
+  >([]);
+  const [savingDeals, setSavingDeals] = useState(false);
+  const [deletingDealId, setDeletingDealId] = useState<string | null>(null);
+  const [deleteDealConfirmOpen, setDeleteDealConfirmOpen] = useState(false);
+  const [deletingDeal, setDeletingDeal] = useState(false);
   const [offerCategoryIds, setOfferCategoryIds] = useState<string[]>([]);
   const [selectedOfferProductIds, setSelectedOfferProductIds] = useState<
     string[]
@@ -792,6 +800,7 @@ export function RecommendationsTab(_props?: Props) {
 
   const pickerCategoryIds = useMemo(() => {
     const ids = new Set<string>(offerCategoryIds);
+    for (const id of dealCategoryIds) ids.add(id);
     for (const draft of Object.values(draftByVariant)) {
       if (!draft) continue;
       if (draft.sourceType === 'PRODUCT') {
@@ -806,7 +815,7 @@ export function RecommendationsTab(_props?: Props) {
       for (const id of group.productCategoryIds ?? []) ids.add(id);
     }
     return [...ids];
-  }, [offerCategoryIds, draftByVariant, selected?.attributeGroups]);
+  }, [offerCategoryIds, dealCategoryIds, draftByVariant, selected?.attributeGroups]);
 
   useEffect(() => {
     if (pickerCategoryIds.length === 0) return;
@@ -840,6 +849,8 @@ export function RecommendationsTab(_props?: Props) {
     });
     return (
       hasRuleDrafts ||
+      selectedDealProductIds.length > 0 ||
+      dealCategoryIds.length > 0 ||
       selectedOfferProductIds.length > 0 ||
       offerCategoryIds.length > 0 ||
       personalizeDirty
@@ -847,6 +858,8 @@ export function RecommendationsTab(_props?: Props) {
   }, [
     selectedId,
     draftByVariant,
+    selectedDealProductIds,
+    dealCategoryIds,
     selectedOfferProductIds,
     offerCategoryIds,
     personalizeDirty,
@@ -867,6 +880,8 @@ export function RecommendationsTab(_props?: Props) {
   });
 
   const resetDraftState = useCallback(() => {
+    setDealCategoryIds([]);
+    setSelectedDealProductIds([]);
     setOfferCategoryIds([]);
     setSelectedOfferProductIds([]);
     setDraftByVariant({});
@@ -951,6 +966,28 @@ export function RecommendationsTab(_props?: Props) {
       ),
     [localCategories, selectedCategoryIds]
   );
+
+  const currentDeals = selected?.dealsFromThis ?? [];
+  const dealProductsFromSelectedCategories = useMemo(() => {
+    if (!selected || dealCategoryIds.length === 0) return [];
+    const blockedIds = new Set<string>([
+      selected.id,
+      ...currentDeals.map((d) => d.dealItem.id),
+    ]);
+    const byId = new Map<string, (typeof allProducts)[number]>();
+    for (const p of allProducts) {
+      if (blockedIds.has(p.id)) continue;
+      const productCategoryIds =
+        p.categoryIds && p.categoryIds.length > 0
+          ? p.categoryIds
+          : [p.categoryId];
+      if (!productCategoryIds.some((id) => dealCategoryIds.includes(id))) {
+        continue;
+      }
+      byId.set(p.id, p);
+    }
+    return Array.from(byId.values());
+  }, [allProducts, currentDeals, dealCategoryIds, selected]);
 
   const currentOffers = selected?.offersFromThis ?? [];
   const offeredProductsFromSelectedCategories = useMemo(() => {
@@ -1148,6 +1185,58 @@ export function RecommendationsTab(_props?: Props) {
     }
   };
 
+  const saveDealProducts = async (options?: { resetAfter?: boolean }) => {
+    if (!selected) {
+      toast.error('Select a product first.');
+      return false;
+    }
+    if (selectedDealProductIds.length === 0) {
+      toast.error('Select deal products first.');
+      return false;
+    }
+    setSavingDeals(true);
+    try {
+      const responses = await Promise.all(
+        selectedDealProductIds.map((itemId, index) =>
+          axios.post<{
+            data: NonNullable<MenuItemRow['dealsFromThis']>[number];
+          }>(`/api/restaurant/menu/items/${selected.id}/deals`, {
+            dealItemId: itemId,
+            sortOrder: (selected.dealsFromThis?.length ?? 0) + index,
+          })
+        )
+      );
+      const createdDeals = responses.map((res) => res.data.data);
+      updateSelectedItem((item) => ({
+        ...item,
+        dealsFromThis: [
+          ...(item.dealsFromThis ?? []),
+          ...createdDeals.filter(
+            (deal) =>
+              !(item.dealsFromThis ?? []).some(
+                (existing) => existing.id === deal.id
+              )
+          ),
+        ],
+      }));
+      if (options?.resetAfter !== false) {
+        setDealCategoryIds([]);
+        setSelectedDealProductIds([]);
+        toast.success('Recommended deals added');
+        allowNextNavigation();
+      }
+      return true;
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(
+        err.response?.data?.error || 'Could not add recommended deals'
+      );
+      return false;
+    } finally {
+      setSavingDeals(false);
+    }
+  };
+
   const saveOfferedProducts = async (options?: { resetAfter?: boolean }) => {
     if (!selected) {
       toast.error('Select a product first.');
@@ -1185,8 +1274,8 @@ export function RecommendationsTab(_props?: Props) {
       if (options?.resetAfter !== false) {
         setOfferCategoryIds([]);
         setSelectedOfferProductIds([]);
-      toast.success('Offered products added');
-      allowNextNavigation();
+        toast.success('Offered products added');
+        allowNextNavigation();
       }
       return true;
     } catch (e: unknown) {
@@ -1331,6 +1420,27 @@ export function RecommendationsTab(_props?: Props) {
     }
   };
 
+  const deleteDeal = async () => {
+    if (!deletingDealId) return;
+    setDeletingDeal(true);
+    try {
+      await axios.delete(`/api/restaurant/menu/deals/${deletingDealId}`);
+      updateSelectedItem((item) => ({
+        ...item,
+        dealsFromThis: (item.dealsFromThis ?? []).filter(
+          (d) => d.id !== deletingDealId
+        ),
+      }));
+      toast.success('Removed recommended deal');
+    } catch {
+      toast.error('Could not remove recommended deal');
+    } finally {
+      setDeletingDealId(null);
+      setDeleteDealConfirmOpen(false);
+      setDeletingDeal(false);
+    }
+  };
+
   const deleteOffer = async () => {
     if (!deletingOfferId) return;
     setDeletingOffer(true);
@@ -1373,6 +1483,25 @@ export function RecommendationsTab(_props?: Props) {
     () => buildPreviewCategoriesWithProducts(localCategories, allProducts),
     [localCategories, allProducts]
   );
+
+  const dealsPreviewItems = useMemo(() => {
+    const saved = currentDeals.map((d) => ({
+      id: d.dealItem.id,
+      name: d.dealItem.name,
+      imageUrl: d.dealItem.imageUrl,
+      isDraft: false as const,
+    }));
+    const draft = selectedDealProductIds
+      .map((id) => allProducts.find((p) => p.id === id))
+      .filter((p): p is (typeof allProducts)[number] => Boolean(p))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        imageUrl: p.imageUrl,
+        isDraft: true as const,
+      }));
+    return [...saved, ...draft];
+  }, [allProducts, currentDeals, selectedDealProductIds]);
 
   const offeredPreviewItems = useMemo(() => {
     const saved = currentOffers.map((o) => ({
@@ -1734,6 +1863,22 @@ export function RecommendationsTab(_props?: Props) {
                 setDeletingRuleId(groupId);
                 setDeleteRuleConfirmOpen(true);
               }}
+              dealCategoryIds={dealCategoryIds}
+              setDealCategoryIds={setDealCategoryIds}
+              selectedDealProductIds={selectedDealProductIds}
+              setSelectedDealProductIds={setSelectedDealProductIds}
+              dealProductsFromSelectedCategories={
+                dealProductsFromSelectedCategories
+              }
+              currentDeals={currentDeals}
+              savingDeals={savingDeals}
+              onSaveDeals={() => saveDealProducts()}
+              onDeleteDeal={(dealId) => {
+                setDeletingDealId(dealId);
+                setDeleteDealConfirmOpen(true);
+              }}
+              deletingDeal={deletingDeal}
+              deletingDealId={deletingDealId}
               offerCategoryIds={offerCategoryIds}
               setOfferCategoryIds={setOfferCategoryIds}
               selectedOfferProductIds={selectedOfferProductIds}
@@ -1763,8 +1908,8 @@ export function RecommendationsTab(_props?: Props) {
               }
               formResetKeys={formResetKeys}
               draftByVariant={draftByVariant}
-                                />
-                              ) : (
+            />
+          ) : (
             <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-12 text-center">
               <p className="text-sm font-medium text-foreground">
                 Select a product above
@@ -1786,12 +1931,13 @@ export function RecommendationsTab(_props?: Props) {
             onPreviewChange={(groupId, ids) =>
               setPreviewByGroup((prev) => ({ ...prev, [groupId]: ids }))
             }
+            dealsItems={dealsPreviewItems}
             offeredItems={offeredPreviewItems}
             onDeleteGroup={(groupId, isDraft) => {
               if (isDraft) return;
               setDeletingRuleId(groupId);
-                              setDeleteRuleConfirmOpen(true);
-                            }}
+              setDeleteRuleConfirmOpen(true);
+            }}
             deletingRuleId={deletingRuleId}
             deletingRule={deletingRule}
             loadingPersonalize={loadingPersonalize}
@@ -1800,11 +1946,11 @@ export function RecommendationsTab(_props?: Props) {
             previewPersonalizeByGroup={previewPersonalizeByGroup}
             onPersonalizePreviewChange={(groupId, ids) =>
               setPreviewPersonalizeByGroup((prev) => ({
-                                          ...prev,
+                ...prev,
                 [groupId]: ids,
-                                        }))
-                                      }
-                                    />
+              }))
+            }
+          />
         </aside>
       </div>
     </div>
@@ -1870,6 +2016,21 @@ export function RecommendationsTab(_props?: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DeleteConfirmation
+        open={deleteDealConfirmOpen}
+        title="Remove recommended deal"
+        description="This recommended deal link will be removed."
+        itemName={
+          currentDeals.find((d) => d.id === deletingDealId)?.dealItem.name
+        }
+        loading={deletingDeal}
+        onConfirm={() => void deleteDeal()}
+        onCancel={() => {
+          setDeleteDealConfirmOpen(false);
+          setDeletingDealId(null);
+        }}
+      />
 
       <DeleteConfirmation
         open={deleteOfferConfirmOpen}

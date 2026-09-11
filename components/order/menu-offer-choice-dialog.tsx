@@ -125,7 +125,16 @@ export function MenuOfferChoiceDialog({
                 className="flex min-h-[11rem] flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-card px-4 py-6 text-center shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/30"
                 onClick={() => setStep('bundles')}
               >
-                <ComboIcon />
+                {bundleProducts[0]?.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={bundleProducts[0].imageUrl}
+                    alt=""
+                    className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl object-cover shadow-sm border border-border/50"
+                  />
+                ) : (
+                  <ComboIcon />
+                )}
                 <div className="space-y-1">
                   <p className="text-sm font-bold uppercase leading-snug text-primary sm:text-base">
                     {t('menuOfferYesTitle')}
@@ -141,7 +150,16 @@ export function MenuOfferChoiceDialog({
                 className="flex min-h-[11rem] flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-card px-4 py-6 text-center shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/30"
                 onClick={onChooseSingle}
               >
-                <SingleIcon />
+                {product?.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name ?? ''}
+                    className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl object-cover shadow-sm border border-border/50"
+                  />
+                ) : (
+                  <SingleIcon />
+                )}
                 <div className="space-y-1">
                   <p className="text-sm font-bold uppercase leading-snug text-primary sm:text-base">
                     {t('menuOfferNoTitle')}
