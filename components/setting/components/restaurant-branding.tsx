@@ -18,6 +18,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { normalizeThemePrimaryColor } from '@/lib/restaurant-theme';
+import eventBus from '@/lib/even';
+import { revalidateStaffBootstrap } from '@/hooks/use-staff-bootstrap-swr';
 
 type RestaurantBrandingDto = {
   id: string;
@@ -129,6 +131,9 @@ export function RestaurantBrandingCard({
         setThemePrimaryColor(d.themePrimaryColor ?? '#ea580c');
       }
       toast.success('Branding saved.');
+      eventBus.emit('fetchStoreData');
+      eventBus.emit('realtime:config.branding');
+      void revalidateStaffBootstrap();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: unknown } } };
       const flat = err.response?.data?.error;

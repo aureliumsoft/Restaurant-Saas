@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 
 import { isHttpImageUrl } from '@/lib/image-data-url';
+import { withImageCacheBust } from '@/lib/image-cache-bust';
+import { pathSegmentId } from '@/lib/url-id-path';
 
 function sniffContentType(buffer: Buffer, fallback: string): string {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
@@ -68,7 +70,8 @@ function imageResponse(
     headers: {
       'Content-Type': type,
       'Content-Length': String(buffer.length),
-      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+      // Long cache is OK because callers append ?v=<updatedAt> when the asset changes.
+      'Cache-Control': 'public, max-age=31536000, immutable',
       ...(etag ? { ETag: etag } : {}),
     },
   });
@@ -145,6 +148,7 @@ export function publicRestaurantImageUrls(
     logoUrl?: string | null;
     mainBannerUrl?: string | null;
     menuBannerUrls?: string[] | null;
+    updatedAt?: Date | string | number | null;
   }
 ) {
   const base = (kind: string, extra?: Record<string, string>) => {
@@ -152,7 +156,10 @@ export function publicRestaurantImageUrls(
     if (extra) {
       for (const [key, value] of Object.entries(extra)) params.set(key, value);
     }
-    return `/api/customer/restaurant/media?${params.toString()}`;
+    return withImageCacheBust(
+      `/api/customer/restaurant/media?${params.toString()}`,
+      row.updatedAt
+    );
   };
 
   return {
@@ -168,7 +175,11 @@ export function publicRestaurantImageUrls(
 
 export function customerCategoryImageUrl(
   categoryId: string,
-  query: { slug?: string | null; subdomain?: string | null }
+  query: {
+    slug?: string | null;
+    subdomain?: string | null;
+    updatedAt?: Date | string | number | null;
+  }
 ): string {
   const params = new URLSearchParams();
   const slug = query.slug?.trim();
@@ -176,7 +187,10 @@ export function customerCategoryImageUrl(
   if (slug) params.set('slug', slug);
   if (subdomain) params.set('subdomain', subdomain);
   const qs = params.toString();
-  return `/api/customer/menu/categories/${encodeURIComponent(categoryId)}/image${
-    qs ? `?${qs}` : ''
-  }`;
+  return withImageCacheBust(
+    `/api/customer/menu/categories/${encodeURIComponent(pathSegmentId(categoryId))}/image${
+      qs ? `?${qs}` : ''
+    }`,
+    query.updatedAt
+  );
 }

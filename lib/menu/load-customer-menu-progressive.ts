@@ -22,7 +22,7 @@ import { menuItemBrowseListSelect } from '@/lib/menu/menu-item-list-select';
 import {
   attachCustomerLazyImages,
   customerMenuItemImageUrl,
-  hasImageByMenuItemIds,
+  imageMetaByMenuItemIds,
   mapBrowseListItem,
   stampBrowseVariationImages,
 } from '@/lib/menu/menu-item-image-utils';
@@ -47,6 +47,7 @@ const restaurantPublicSelect = {
   themePrimaryColor: true,
   subdomain: true,
   slug: true,
+  updatedAt: true,
   ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
   ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
 } as const;
@@ -178,7 +179,7 @@ async function loadRecommendationPool(
 }
 
 function restaurantMetaPayload<
-  T extends { id: string; slug: string } & RestaurantServiceChargeRow & {
+  T extends { id: string; slug: string; updatedAt?: Date | string | number | null } & RestaurantServiceChargeRow & {
     logoUrl?: string | null;
     mainBannerUrl?: string | null;
     deliveryEnabled?: boolean;
@@ -217,7 +218,7 @@ export async function loadCustomerMenuCategoriesMeta(options: {
         ...categoryVisibleForBranch(options.branchId),
       },
       orderBy: { sortOrder: 'asc' },
-      select: { id: true, name: true, sortOrder: true, imageUrl: true },
+      select: { id: true, name: true, sortOrder: true, imageUrl: true, updatedAt: true },
     });
 
     const menus = categories.map((c) => ({
@@ -227,6 +228,7 @@ export async function loadCustomerMenuCategoriesMeta(options: {
         ? customerCategoryImageUrl(c.id, {
             slug: options.slug,
             subdomain: options.subdomain,
+            updatedAt: c.updatedAt,
           })
         : null,
       items: [],
@@ -286,7 +288,7 @@ export async function loadCustomerMenuCategoryItems(options: {
         .filter((id): id is string => Boolean(id))
     );
     const allItemIds = Array.from(new Set([...itemIds, ...dealItemIds]));
-    const imageFlags = await hasImageByMenuItemIds(allItemIds);
+    const imageMeta = await imageMetaByMenuItemIds(allItemIds);
     const imageQuery = {
       slug: options.slug,
       subdomain: options.subdomain,
@@ -294,25 +296,34 @@ export async function loadCustomerMenuCategoryItems(options: {
 
     const items = await stampBrowseVariationImages(
       category.items.map((item) => {
+        const meta = imageMeta.get(item.id);
+        const hasImage = meta?.hasImage ?? false;
         const mapped = mapBrowseListItem(
           item,
-          imageFlags.get(item.id) ?? false,
-          imageFlags.get(item.id)
-            ? customerMenuItemImageUrl(item.id, imageQuery)
+          hasImage,
+          hasImage
+            ? customerMenuItemImageUrl(item.id, {
+                ...imageQuery,
+                updatedAt: meta?.updatedAt,
+              })
             : null
         );
         if (mapped.dealsFromThis && mapped.dealsFromThis.length > 0) {
           mapped.dealsFromThis = mapped.dealsFromThis.map((deal) => {
             const did = deal.dealItem?.id;
             if (!did || !deal.dealItem) return deal;
-            const hasDealImg = imageFlags.get(did) ?? false;
+            const dealMeta = imageMeta.get(did);
+            const hasDealImg = dealMeta?.hasImage ?? false;
             return {
               ...deal,
               dealItem: {
                 ...deal.dealItem,
                 hasImage: hasDealImg,
                 imageUrl: hasDealImg
-                  ? customerMenuItemImageUrl(did, imageQuery)
+                  ? customerMenuItemImageUrl(did, {
+                      ...imageQuery,
+                      updatedAt: dealMeta?.updatedAt,
+                    })
                   : null,
               },
             };

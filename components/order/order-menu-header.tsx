@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronLeft,
   Info,
-  Loader2,
   Menu,
   ShoppingBag,
   User,
@@ -461,8 +460,6 @@ type OrderCartCheckoutButtonProps = {
   formattedTotal?: string;
   label: string;
   onClick: () => void;
-  isLoading?: boolean;
-  disabled?: boolean;
 };
 
 export function OrderCartCheckoutButton({
@@ -471,8 +468,6 @@ export function OrderCartCheckoutButton({
   formattedTotal,
   label,
   onClick,
-  isLoading = false,
-  disabled = false,
 }: OrderCartCheckoutButtonProps) {
   const totalLabel =
     formattedTotal ??
@@ -481,42 +476,17 @@ export function OrderCartCheckoutButton({
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled || isLoading}
-      className={cn(
-        'flex h-12 w-full items-center justify-between gap-3 rounded-xl px-4 text-primary font-bold shadow-md transition active:scale-[0.99]',
-        isLoading
-          ? 'opacity-90 cursor-wait'
-          : disabled
-            ? 'opacity-50 cursor-not-allowed'
-            : 'hover:brightness-95'
-      )}
+      className="flex h-12 w-full items-center justify-between gap-3 rounded-xl px-4 text-primary font-bold shadow-md transition hover:brightness-95 active:scale-[0.99]"
       style={{ backgroundColor: ORDER_ACCENT_GOLD }}
-      aria-busy={isLoading}
     >
       <span className="relative flex h-8 w-8 shrink-0 items-center justify-center">
-        {isLoading ? (
-          <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden />
-        ) : (
-          <>
-            <ShoppingBag className="h-6 w-6 fill-white text-white stroke-[1.5]" aria-hidden />
-            <span className="absolute left-1/2 top-[58%] -translate-x-1/2 -translate-y-1/2 text-[11px] font-extrabold leading-none text-primary">
-              {itemCount}
-            </span>
-          </>
-        )}
+        <ShoppingBag className="h-6 w-6 fill-white text-white stroke-[1.5]" aria-hidden />
+        <span className="absolute left-1/2 top-[58%] -translate-x-1/2 -translate-y-1/2 text-[11px] font-extrabold leading-none text-primary">
+          {itemCount}
+        </span>
       </span>
-      <span className="flex-1 text-center text-sm font-bold truncate">
-        {isLoading ? (
-          <span className="inline-flex items-center gap-1.5">
-            <span>{label}</span>
-          </span>
-        ) : (
-          label
-        )}
-      </span>
-      <span className="shrink-0 text-sm font-bold tabular-nums">
-        {totalLabel}
-      </span>
+      <span className="flex-1 text-center text-sm font-bold truncate">{label}</span>
+      <span className="shrink-0 text-sm font-bold tabular-nums">{totalLabel}</span>
     </button>
   );
 }

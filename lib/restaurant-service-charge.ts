@@ -104,6 +104,7 @@ export const RESTAURANT_BRANDING_DB_SELECT = {
   themePrimaryColor: true,
   subdomain: true,
   slug: true,
+  updatedAt: true,
 } as const;
 
 export function withDefaultServiceChargesPayload<

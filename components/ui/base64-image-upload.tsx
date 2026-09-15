@@ -216,7 +216,9 @@ export function Base64ImageUploadField({
           src={value}
           alt={`${label} preview`}
           className={cn(
-            'mt-1 max-h-48 w-full max-w-md rounded-md border border-border object-cover bg-muted'
+            'mt-1 max-h-48 w-full max-w-md rounded-md border border-border object-contain',
+            // Checkerboard so PNG transparency is visible (not mistaken for a fill color).
+            'bg-[length:16px_16px] bg-[linear-gradient(45deg,#d4d4d8_25%,transparent_25%),linear-gradient(-45deg,#d4d4d8_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#d4d4d8_75%),linear-gradient(-45deg,transparent_75%,#d4d4d8_75%)] bg-[position:0_0,0_8px,8px_-8px,-8px_0]'
           )}
           onError={() => {
             setLocalError('Preview failed to load. Try another image.');

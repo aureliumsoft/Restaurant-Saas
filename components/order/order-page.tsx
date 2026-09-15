@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
@@ -610,7 +610,6 @@ export default function OrderPageClient({
   const [currentOffer, setCurrentOffer] = useState(0);
   const [bannerOffers, setBannerOffers] = useState<OfferItem[]>([]);
   const [mounted, setMounted] = useState(false);
-  const [navigatingToCart, startCartTransition] = useTransition();
 
   const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
     null
@@ -1295,29 +1294,9 @@ export default function OrderPageClient({
     );
   }, [customizeProduct]);
 
-  useEffect(() => {
-    if (!mounted || cart.length === 0) return;
-    const cartUrl = orderPathWithQuery(
-      `/order/${orderType}/${orderId}/cart`,
-      orderInfo
-    );
-    router.prefetch(cartUrl);
-  }, [mounted, cart.length, orderType, orderId, orderInfo, router]);
-
   // Avoid server/client markup mismatches by rendering only after first mount.
   // Important: this must be AFTER all hooks to keep React Hook order stable.
   if (!mounted) return null;
-
-  const handleGoToCart = () => {
-    if (navigatingToCart) return;
-    const cartUrl = orderPathWithQuery(
-      `/order/${orderType}/${orderId}/cart`,
-      orderInfo
-    );
-    startCartTransition(() => {
-      router.push(cartUrl);
-    });
-  };
 
   const cartFooter = (
     <OrderCartCheckoutButton
@@ -1325,8 +1304,11 @@ export default function OrderPageClient({
       total={total}
       formattedTotal={formatMoney(total)}
       label={t('orderSeeMyOrder')}
-      isLoading={navigatingToCart}
-      onClick={handleGoToCart}
+      onClick={() =>
+        router.push(
+          orderPathWithQuery(`/order/${orderType}/${orderId}/cart`, orderInfo)
+        )
+      }
     />
   );
 

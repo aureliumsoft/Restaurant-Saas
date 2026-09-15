@@ -121,7 +121,18 @@ export function RestaurantBrandingProvider({ children }: { children: ReactNode }
     // while bootstrap is still in flight.
     if (isStaff) {
       if (staffBootstrap.isLoading && !staffRestaurant) return;
-      if (staffRestaurant) return;
+      // Keep listening for branding saves even when bootstrap already has a restaurant.
+      if (staffRestaurant) {
+        const onRefresh = () => {
+          void staffBootstrap.mutate();
+        };
+        eventBus.on('fetchStoreData', onRefresh);
+        eventBus.on('realtime:config.branding', onRefresh);
+        return () => {
+          eventBus.removeListener('fetchStoreData', onRefresh);
+          eventBus.removeListener('realtime:config.branding', onRefresh);
+        };
+      }
     }
 
     let cancelled = false;
@@ -185,6 +196,7 @@ export function RestaurantBrandingProvider({ children }: { children: ReactNode }
     customerRoute,
     staffRestaurant,
     staffBootstrap.isLoading,
+    staffBootstrap.mutate,
   ]);
 
   useEffect(() => {

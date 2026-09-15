@@ -5,7 +5,7 @@ import {
   menuItemPosCatalogSelect,
 } from '@/lib/menu/menu-item-list-select';
 import {
-  hasImageByMenuItemIds,
+  imageMetaByMenuItemIds,
   mapBrowseListItem,
   restaurantMenuItemImageUrl,
 } from '@/lib/menu/menu-item-image-utils';
@@ -49,14 +49,18 @@ function mapMenuItemWithCategoryIds<
 
 function stampBrowseImages<
   T extends { id: string; imageUrl?: string | null },
->(items: T[], imageFlags: Map<string, boolean>) {
-  return items.map((item) =>
-    mapBrowseListItem(
+>(items: T[], imageMeta: Map<string, { hasImage: boolean; updatedAt: number | null }>) {
+  return items.map((item) => {
+    const meta = imageMeta.get(item.id);
+    const hasImage = meta?.hasImage ?? false;
+    return mapBrowseListItem(
       item,
-      imageFlags.get(item.id) ?? false,
-      imageFlags.get(item.id) ? restaurantMenuItemImageUrl(item.id) : null
-    )
-  );
+      hasImage,
+      hasImage
+        ? restaurantMenuItemImageUrl(item.id, meta?.updatedAt)
+        : null
+    );
+  });
 }
 
 /** POS menu: restaurant meta + category list (no items). */
@@ -183,13 +187,21 @@ export async function loadRestaurantPosMenuCatalog(
           restaurantId,
           AND: [{ imageUrl: { not: null } }, { NOT: { imageUrl: '' } }],
         },
-        select: { id: true },
+        select: { id: true, updatedAt: true },
       }),
     ]);
   if (!restaurantMeta) return null;
 
-  const imageFlags = new Map<string, boolean>();
-  for (const row of itemsWithImage) imageFlags.set(row.id, true);
+  const imageMeta = new Map<
+    string,
+    { hasImage: boolean; updatedAt: number | null }
+  >();
+  for (const row of itemsWithImage) {
+    imageMeta.set(row.id, {
+      hasImage: true,
+      updatedAt: row.updatedAt.getTime(),
+    });
+  }
 
   const byId = new Map(loadedItems.map((item) => [item.id, item]));
   const orderedIdsByCategory = new Map<string, string[]>();
@@ -235,7 +247,7 @@ export async function loadRestaurantPosMenuCatalog(
       name: category.name,
       showInFront: category.showInFront,
       imageUrl: category.imageUrl,
-      items: stampBrowseImages(items, imageFlags).map((item) =>
+      items: stampBrowseImages(items, imageMeta).map((item) =>
         mapMenuItemWithCategoryIds(item, categoryIdsByItem)
       ),
     };
@@ -271,14 +283,14 @@ export async function loadRestaurantMenuCategoryItems(
   if (!category || category.showInFront === false) return null;
 
   const itemIds = category.items.map((item) => item.id);
-  const [imageFlags, categoryIdsByItem] = await Promise.all([
-    hasImageByMenuItemIds(itemIds),
+  const [imageMeta, categoryIdsByItem] = await Promise.all([
+    imageMetaByMenuItemIds(itemIds),
     loadCategoryIdsByItemIds(itemIds),
   ]);
 
   const itemsWithCategoryIds = stampBrowseImages(
     category.items,
-    imageFlags
+    imageMeta
   ).map((item) => mapMenuItemWithCategoryIds(item, categoryIdsByItem));
 
   return {

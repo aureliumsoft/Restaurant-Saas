@@ -13,9 +13,13 @@ import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { publishInventoryStockUpdate } from '@/lib/realtime/publish';
 import { resolveRouteParams } from '@/lib/resolve-route-id';
 import { ingredientApiPath } from '@/lib/dashboard-paths';
+import { withImageCacheBust } from '@/lib/image-cache-bust';
 
-function lazyImageUrl(id: string): string {
-  return `${ingredientApiPath(id)}/image`;
+function lazyImageUrl(
+  id: string,
+  updatedAt?: Date | string | number | null
+): string {
+  return withImageCacheBust(`${ingredientApiPath(id)}/image`, updatedAt);
 }
 
 export async function GET(
@@ -61,7 +65,7 @@ export async function GET(
       minQuantity,
       branchId,
       hasImage: Boolean(row.imageUrl),
-      imageUrl: row.imageUrl ? lazyImageUrl(row.id) : null,
+      imageUrl: row.imageUrl ? lazyImageUrl(row.id, row.updatedAt) : null,
       imageData: row.imageUrl,
     },
   });
@@ -187,7 +191,7 @@ export async function PATCH(
         quantity,
         branchId,
         hasImage: Boolean(row.imageUrl),
-        imageUrl: row.imageUrl ? lazyImageUrl(row.id) : null,
+        imageUrl: row.imageUrl ? lazyImageUrl(row.id, row.updatedAt) : null,
       },
     });
   } catch (e) {

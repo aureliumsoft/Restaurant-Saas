@@ -11,10 +11,14 @@ import {
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { encodeUrlId } from '@/lib/url-id';
 import { menuItemApiPath } from '@/lib/dashboard-paths';
+import { withImageCacheBust } from '@/lib/image-cache-bust';
 
 /** Lazy image URL — browser loads photo after list JSON (does not bloat list payload). */
-function lazyProductImageUrl(itemId: string): string {
-  return `${menuItemApiPath(itemId)}/image`;
+function lazyProductImageUrl(
+  itemId: string,
+  updatedAt?: Date | string | number | null
+): string {
+  return withImageCacheBust(`${menuItemApiPath(itemId)}/image`, updatedAt);
 }
 
 const listItemSelect = {
@@ -229,7 +233,7 @@ export async function GET(req: NextRequest) {
         name: item.name,
         description: truncateDescription(item.description),
         // Browser lazy-loads each photo via this endpoint after list JSON arrives.
-        imageUrl: hasImage ? lazyProductImageUrl(item.id) : null,
+        imageUrl: hasImage ? lazyProductImageUrl(item.id, item.updatedAt) : null,
         hasImage,
         price: item.price,
         salePrice: item.salePrice,

@@ -139,7 +139,7 @@ export async function GET(req: NextRequest) {
         {
           status: 200,
           headers: {
-            'Cache-Control': 'private, max-age=30, stale-while-revalidate=120',
+            'Cache-Control': 'private, no-store',
           },
         }
       );

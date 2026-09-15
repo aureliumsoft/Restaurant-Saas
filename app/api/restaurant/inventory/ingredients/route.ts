@@ -18,10 +18,14 @@ import {
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { publishInventoryStockUpdate } from '@/lib/realtime/publish';
 import { ingredientApiPath } from '@/lib/dashboard-paths';
+import { withImageCacheBust } from '@/lib/image-cache-bust';
 import { withUrlIds } from '@/lib/with-url-id';
 
-function lazyImageUrl(id: string): string {
-  return `${ingredientApiPath(id)}/image`;
+function lazyImageUrl(
+  id: string,
+  updatedAt?: Date | string | number | null
+): string {
+  return withImageCacheBust(`${ingredientApiPath(id)}/image`, updatedAt);
 }
 
 export async function GET(req: NextRequest) {
@@ -96,14 +100,17 @@ export async function GET(req: NextRequest) {
       id: { in: rows.map((r) => r.id) },
       AND: [{ imageUrl: { not: null } }, { NOT: { imageUrl: '' } }],
     },
-    select: { id: true },
+    select: { id: true, updatedAt: true },
   });
-  const hasImage = new Set(withImage.map((r) => r.id));
+  const imageMeta = new Map(
+    withImage.map((r) => [r.id, r.updatedAt] as const)
+  );
 
   return NextResponse.json(
     {
       data: withUrlIds(rows).map((r) => {
         const stock = branchStock.get(r.id);
+        const updatedAt = imageMeta.get(r.id);
         return {
           ...r,
           quantity: branchId ? (stock?.quantity ?? 0) : r.quantity,
@@ -115,8 +122,9 @@ export async function GET(req: NextRequest) {
             (branchId ? (stock?.quantity ?? 0) : r.quantity) *
             (r.unitCost ?? 0),
           branchId,
-          hasImage: hasImage.has(r.id),
-          imageUrl: hasImage.has(r.id) ? lazyImageUrl(r.id) : null,
+          hasImage: updatedAt != null,
+          imageUrl:
+            updatedAt != null ? lazyImageUrl(r.id, updatedAt) : null,
         };
       }),
       meta: buildPaginationMeta(safePage, pageSize, total),
@@ -186,7 +194,9 @@ export async function POST(req: NextRequest) {
           quantity: parsed.data.quantity,
           branchId: activeBranchId,
           hasImage: Boolean(row.imageUrl),
-          imageUrl: row.imageUrl ? lazyImageUrl(row.id) : null,
+          imageUrl: row.imageUrl
+            ? lazyImageUrl(row.id, row.updatedAt)
+            : null,
         },
       },
       { status: 201 }

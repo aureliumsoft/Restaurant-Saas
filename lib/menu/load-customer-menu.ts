@@ -107,6 +107,7 @@ const restaurantPublicSelect = {
   themePrimaryColor: true,
   subdomain: true,
   slug: true,
+  updatedAt: true,
   ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
 } as const;
 

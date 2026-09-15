@@ -1,32 +1,58 @@
 import { db } from '@/lib/db';
+import { withImageCacheBust } from '@/lib/image-cache-bust';
 import { pathSegmentId } from '@/lib/url-id-path';
+
+export type MenuItemImageMeta = {
+  hasImage: boolean;
+  updatedAt: number | null;
+};
 
 export async function hasImageByMenuItemIds(
   ids: string[]
 ): Promise<Map<string, boolean>> {
+  const meta = await imageMetaByMenuItemIds(ids);
   const map = new Map<string, boolean>();
+  for (const id of ids) {
+    map.set(id, meta.get(id)?.hasImage ?? false);
+  }
+  return map;
+}
+
+export async function imageMetaByMenuItemIds(
+  ids: string[]
+): Promise<Map<string, MenuItemImageMeta>> {
+  const map = new Map<string, MenuItemImageMeta>();
   if (ids.length === 0) return map;
 
-  for (const id of ids) map.set(id, false);
+  for (const id of ids) {
+    map.set(id, { hasImage: false, updatedAt: null });
+  }
 
-  // Select only ids — never pull imageUrl blobs just to test presence.
+  // Select only id + updatedAt — never pull imageUrl blobs just to test presence.
   const rows = await db.menuItem.findMany({
     where: {
       id: { in: ids },
       AND: [{ imageUrl: { not: null } }, { NOT: { imageUrl: '' } }],
     },
-    select: { id: true },
+    select: { id: true, updatedAt: true },
   });
 
   for (const row of rows) {
-    map.set(row.id, true);
+    map.set(row.id, {
+      hasImage: true,
+      updatedAt: row.updatedAt.getTime(),
+    });
   }
   return map;
 }
 
 export function customerMenuItemImageUrl(
   itemId: string,
-  query: { slug?: string | null; subdomain?: string | null }
+  query: {
+    slug?: string | null;
+    subdomain?: string | null;
+    updatedAt?: Date | string | number | null;
+  }
 ): string {
   const params = new URLSearchParams();
   const slug = query.slug?.trim();
@@ -34,31 +60,61 @@ export function customerMenuItemImageUrl(
   if (slug) params.set('slug', slug);
   if (subdomain) params.set('subdomain', subdomain);
   const qs = params.toString();
-  return `/api/customer/menu/items/${encodeURIComponent(pathSegmentId(itemId))}/image${qs ? `?${qs}` : ''}`;
+  return withImageCacheBust(
+    `/api/customer/menu/items/${encodeURIComponent(pathSegmentId(itemId))}/image${qs ? `?${qs}` : ''}`,
+    query.updatedAt
+  );
 }
 
-export function restaurantMenuItemImageUrl(itemId: string): string {
-  return `/api/restaurant/menu/items/${encodeURIComponent(pathSegmentId(itemId))}/image`;
+export function restaurantMenuItemImageUrl(
+  itemId: string,
+  updatedAt?: Date | string | number | null
+): string {
+  return withImageCacheBust(
+    `/api/restaurant/menu/items/${encodeURIComponent(pathSegmentId(itemId))}/image`,
+    updatedAt
+  );
 }
+
+export type VariationImageMeta = {
+  hasImage: boolean;
+  updatedAt: number | null;
+};
 
 export async function hasImageByVariationIds(
   ids: string[]
 ): Promise<Map<string, boolean>> {
+  const meta = await imageMetaByVariationIds(ids);
   const map = new Map<string, boolean>();
+  for (const id of ids) {
+    map.set(id, meta.get(id)?.hasImage ?? false);
+  }
+  return map;
+}
+
+export async function imageMetaByVariationIds(
+  ids: string[]
+): Promise<Map<string, VariationImageMeta>> {
+  const map = new Map<string, VariationImageMeta>();
   if (ids.length === 0) return map;
 
-  for (const id of ids) map.set(id, false);
+  for (const id of ids) {
+    map.set(id, { hasImage: false, updatedAt: null });
+  }
 
   const rows = await db.menuItemVariation.findMany({
     where: {
       id: { in: ids },
       AND: [{ imageUrl: { not: null } }, { NOT: { imageUrl: '' } }],
     },
-    select: { id: true },
+    select: { id: true, updatedAt: true },
   });
 
   for (const row of rows) {
-    map.set(row.id, true);
+    map.set(row.id, {
+      hasImage: true,
+      updatedAt: row.updatedAt.getTime(),
+    });
   }
   return map;
 }
@@ -66,7 +122,11 @@ export async function hasImageByVariationIds(
 export function customerMenuVariationImageUrl(
   itemId: string,
   variationId: string,
-  query: { slug?: string | null; subdomain?: string | null }
+  query: {
+    slug?: string | null;
+    subdomain?: string | null;
+    updatedAt?: Date | string | number | null;
+  }
 ): string {
   const params = new URLSearchParams();
   const slug = query.slug?.trim();
@@ -74,7 +134,10 @@ export function customerMenuVariationImageUrl(
   if (slug) params.set('slug', slug);
   if (subdomain) params.set('subdomain', subdomain);
   const qs = params.toString();
-  return `/api/customer/menu/items/${encodeURIComponent(pathSegmentId(itemId))}/variations/${encodeURIComponent(pathSegmentId(variationId))}/image${qs ? `?${qs}` : ''}`;
+  return withImageCacheBust(
+    `/api/customer/menu/items/${encodeURIComponent(pathSegmentId(itemId))}/variations/${encodeURIComponent(pathSegmentId(variationId))}/image${qs ? `?${qs}` : ''}`,
+    query.updatedAt
+  );
 }
 
 export function mapBrowseListItem<
@@ -102,13 +165,17 @@ export async function stampBrowseVariationImages<
   query: { slug?: string | null; subdomain?: string | null }
 ): Promise<T[]> {
   const ids = items.flatMap((item) => (item.variations ?? []).map((v) => v.id));
-  const flags = await hasImageByVariationIds(ids);
+  const meta = await imageMetaByVariationIds(ids);
   for (const item of items) {
     for (const variation of item.variations ?? []) {
-      const hasImage = flags.get(variation.id) ?? false;
+      const row = meta.get(variation.id);
+      const hasImage = row?.hasImage ?? false;
       variation.hasImage = hasImage;
       variation.imageUrl = hasImage
-        ? customerMenuVariationImageUrl(item.id, variation.id, query)
+        ? customerMenuVariationImageUrl(item.id, variation.id, {
+            ...query,
+            updatedAt: row?.updatedAt,
+          })
         : null;
     }
   }
@@ -177,39 +244,49 @@ function collectVariationRefs(
 
 function applyLazyImageFlags(
   node: LinkedMenuNode,
-  itemFlags: Map<string, boolean>,
-  variationFlags: Map<string, boolean>,
+  itemMeta: Map<string, MenuItemImageMeta>,
+  variationMeta: Map<string, VariationImageMeta>,
   query: { slug?: string | null; subdomain?: string | null }
 ) {
   if (node.id) {
-    const hasImage = itemFlags.get(node.id) ?? false;
+    const row = itemMeta.get(node.id);
+    const hasImage = row?.hasImage ?? false;
     node.hasImage = hasImage;
-    node.imageUrl = hasImage ? customerMenuItemImageUrl(node.id, query) : null;
+    node.imageUrl = hasImage
+      ? customerMenuItemImageUrl(node.id, {
+          ...query,
+          updatedAt: row?.updatedAt,
+        })
+      : null;
     for (const variation of node.variations ?? []) {
       if (!variation.id) continue;
-      const hasVariationImage = variationFlags.get(variation.id) ?? false;
+      const variationRow = variationMeta.get(variation.id);
+      const hasVariationImage = variationRow?.hasImage ?? false;
       variation.hasImage = hasVariationImage;
       variation.imageUrl = hasVariationImage
-        ? customerMenuVariationImageUrl(node.id, variation.id, query)
+        ? customerMenuVariationImageUrl(node.id, variation.id, {
+            ...query,
+            updatedAt: variationRow?.updatedAt,
+          })
         : null;
     }
   }
   for (const group of node.attributeGroups ?? []) {
     if (group.linkedProduct) {
-      applyLazyImageFlags(group.linkedProduct, itemFlags, variationFlags, query);
+      applyLazyImageFlags(group.linkedProduct, itemMeta, variationMeta, query);
     }
     for (const item of group.linkedCategory?.items ?? []) {
-      applyLazyImageFlags(item, itemFlags, variationFlags, query);
+      applyLazyImageFlags(item, itemMeta, variationMeta, query);
     }
   }
   for (const deal of node.dealsFromThis ?? []) {
     if (deal.dealItem) {
-      applyLazyImageFlags(deal.dealItem, itemFlags, variationFlags, query);
+      applyLazyImageFlags(deal.dealItem, itemMeta, variationMeta, query);
     }
   }
   for (const offer of node.offersFromThis ?? []) {
     if (offer.offeredItem) {
-      applyLazyImageFlags(offer.offeredItem, itemFlags, variationFlags, query);
+      applyLazyImageFlags(offer.offeredItem, itemMeta, variationMeta, query);
     }
   }
 }
@@ -224,10 +301,10 @@ export async function attachCustomerLazyImages<T>(
   collectLinkedMenuItemIds(node, itemIds);
   const variationRefs: Array<{ itemId: string; variationId: string }> = [];
   collectVariationRefs(node, variationRefs);
-  const [itemFlags, variationFlags] = await Promise.all([
-    hasImageByMenuItemIds([...itemIds]),
-    hasImageByVariationIds(variationRefs.map((ref) => ref.variationId)),
+  const [itemMeta, variationMeta] = await Promise.all([
+    imageMetaByMenuItemIds([...itemIds]),
+    imageMetaByVariationIds(variationRefs.map((ref) => ref.variationId)),
   ]);
-  applyLazyImageFlags(node, itemFlags, variationFlags, query);
+  applyLazyImageFlags(node, itemMeta, variationMeta, query);
   return item;
 }

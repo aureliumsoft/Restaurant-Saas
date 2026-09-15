@@ -1274,8 +1274,8 @@ export function RecommendationsTab(_props?: Props) {
       if (options?.resetAfter !== false) {
         setOfferCategoryIds([]);
         setSelectedOfferProductIds([]);
-      toast.success('Offered products added');
-      allowNextNavigation();
+        toast.success('Offered products added');
+        allowNextNavigation();
       }
       return true;
     } catch (e: unknown) {
@@ -1908,8 +1908,8 @@ export function RecommendationsTab(_props?: Props) {
               }
               formResetKeys={formResetKeys}
               draftByVariant={draftByVariant}
-                              />
-                            ) : (
+            />
+          ) : (
             <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-12 text-center">
               <p className="text-sm font-medium text-foreground">
                 Select a product above
@@ -1936,8 +1936,8 @@ export function RecommendationsTab(_props?: Props) {
             onDeleteGroup={(groupId, isDraft) => {
               if (isDraft) return;
               setDeletingRuleId(groupId);
-                              setDeleteRuleConfirmOpen(true);
-                            }}
+              setDeleteRuleConfirmOpen(true);
+            }}
             deletingRuleId={deletingRuleId}
             deletingRule={deletingRule}
             loadingPersonalize={loadingPersonalize}
@@ -1946,11 +1946,11 @@ export function RecommendationsTab(_props?: Props) {
             previewPersonalizeByGroup={previewPersonalizeByGroup}
             onPersonalizePreviewChange={(groupId, ids) =>
               setPreviewPersonalizeByGroup((prev) => ({
-                                          ...prev,
+                ...prev,
                 [groupId]: ids,
-                                        }))
-                                      }
-                                    />
+              }))
+            }
+          />
         </aside>
       </div>
     </div>

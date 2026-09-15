@@ -52,7 +52,7 @@ export async function GET(
       headers: {
         'Content-Type': contentType,
         'Content-Length': String(buffer.length),
-        'Cache-Control': 'private, max-age=86400, stale-while-revalidate=604800',
+        'Cache-Control': 'private, max-age=31536000, immutable',
         ETag: etag,
       },
     });

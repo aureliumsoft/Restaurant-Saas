@@ -37,9 +37,65 @@ export function estimateDataUrlBytes(value: string): number {
   return Math.max(0, Math.floor((b64.length * 3) / 4) - padding);
 }
 
+type CanvasExportMime = 'image/jpeg' | 'image/png' | 'image/webp';
+
+/** Keep formats that support transparency; JPEG photos stay JPEG. */
+function exportMimeForSource(file: File): CanvasExportMime {
+  const type = (file.type || '').toLowerCase();
+  if (type === 'image/png' || type === 'image/gif') return 'image/png';
+  if (type === 'image/webp') return 'image/webp';
+  // Unknown / HEIC / etc. — prefer PNG so alpha is not flattened to black.
+  if (type && type !== 'image/jpeg' && type !== 'image/jpg') {
+    return 'image/png';
+  }
+  return 'image/jpeg';
+}
+
+function canvasHasAlpha(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number
+): boolean {
+  try {
+    const { data } = ctx.getImageData(
+      0,
+      0,
+      Math.min(width, 64),
+      Math.min(height, 64)
+    );
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i]! < 255) return true;
+    }
+  } catch {
+    // Cross-origin / security — assume no alpha.
+  }
+  return false;
+}
+
+function encodeCanvas(
+  canvas: HTMLCanvasElement,
+  mime: CanvasExportMime,
+  quality: number
+): string {
+  if (mime === 'image/jpeg') {
+    return canvas.toDataURL('image/jpeg', quality);
+  }
+  if (mime === 'image/webp') {
+    try {
+      const webp = canvas.toDataURL('image/webp', quality);
+      if (webp.startsWith('data:image/webp')) return webp;
+    } catch {
+      // fall through to PNG
+    }
+    return canvas.toDataURL('image/png');
+  }
+  return canvas.toDataURL('image/png');
+}
+
 /**
- * Read a File as a data URL, optionally re-encoding as JPEG under a max size
+ * Read a File as a data URL, optionally re-encoding under a max size
  * so large camera photos still preview and save reliably in the DB.
+ * PNG/WebP/GIF keep an alpha-capable format (never flattened to black JPEG).
  */
 export async function fileToOptimizedDataUrl(
   file: File,
@@ -51,6 +107,7 @@ export async function fileToOptimizedDataUrl(
 ): Promise<string> {
   const maxEdge = options?.maxEdge ?? 1600;
   const maxBytes = options?.maxBytes ?? Math.floor(1.5 * 1024 * 1024);
+  const preferredMime = exportMimeForSource(file);
 
   // Small files: keep original encoding when possible
   if (file.size <= 400 * 1024 && file.type.startsWith('image/')) {
@@ -69,26 +126,59 @@ export async function fileToOptimizedDataUrl(
   }
 
   try {
-    let { width, height } = bitmap;
-    const scale = Math.min(1, maxEdge / width, maxEdge / height);
-    width = Math.max(1, Math.round(width * scale));
-    height = Math.max(1, Math.round(height * scale));
+    let scale = Math.min(1, maxEdge / bitmap.width, maxEdge / bitmap.height);
+    let width = Math.max(1, Math.round(bitmap.width * scale));
+    let height = Math.max(1, Math.round(bitmap.height * scale));
 
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) {
       return readFileAsDataUrl(file);
     }
-    ctx.drawImage(bitmap, 0, 0, width, height);
+
+    const draw = (w: number, h: number, mime: CanvasExportMime) => {
+      canvas.width = w;
+      canvas.height = h;
+      ctx.clearRect(0, 0, w, h);
+      // JPEG has no alpha — composite onto white so transparent pixels are not black.
+      if (mime === 'image/jpeg') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+      }
+      ctx.drawImage(bitmap, 0, 0, w, h);
+    };
+
+    draw(width, height, preferredMime);
+
+    // If a "JPEG" source actually has alpha (rare), switch to PNG.
+    let mime: CanvasExportMime = preferredMime;
+    if (mime === 'image/jpeg' && canvasHasAlpha(ctx, width, height)) {
+      mime = 'image/png';
+      draw(width, height, mime);
+    }
 
     let quality = options?.quality ?? 0.85;
-    let dataUrl = canvas.toDataURL('image/jpeg', quality);
-    while (estimateDataUrlBytes(dataUrl) > maxBytes && quality > 0.45) {
-      quality = Math.round((quality - 0.1) * 100) / 100;
-      dataUrl = canvas.toDataURL('image/jpeg', quality);
+    let dataUrl = encodeCanvas(canvas, mime, quality);
+
+    // Shrink / re-compress until under maxBytes without converting PNG → JPEG.
+    let guard = 0;
+    while (estimateDataUrlBytes(dataUrl) > maxBytes && guard < 12) {
+      guard += 1;
+      if (mime === 'image/jpeg' || mime === 'image/webp') {
+        if (quality > 0.45) {
+          quality = Math.round((quality - 0.1) * 100) / 100;
+          dataUrl = encodeCanvas(canvas, mime, quality);
+          continue;
+        }
+      }
+      scale *= 0.85;
+      if (scale < 0.15) break;
+      width = Math.max(1, Math.round(bitmap.width * scale));
+      height = Math.max(1, Math.round(bitmap.height * scale));
+      draw(width, height, mime);
+      dataUrl = encodeCanvas(canvas, mime, quality);
     }
+
     return dataUrl;
   } finally {
     bitmap.close?.();

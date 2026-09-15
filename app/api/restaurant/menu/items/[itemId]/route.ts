@@ -87,6 +87,7 @@ const liteDetailSelect = {
           description: true,
           price: true,
           salePrice: true,
+          updatedAt: true,
         },
       },
     },
@@ -103,6 +104,7 @@ const liteDetailSelect = {
           description: true,
           price: true,
           salePrice: true,
+          updatedAt: true,
         },
       },
     },
@@ -139,7 +141,7 @@ export async function GET(
           ...item,
           urlId: encodeUrlId(itemId),
           hasImage: true,
-          imageUrl: restaurantMenuItemImageUrl(itemId),
+          imageUrl: restaurantMenuItemImageUrl(itemId, item.updatedAt),
           categoryIds: [item.categoryId],
           createdAt: item.createdAt.toISOString(),
           updatedAt: item.updatedAt.toISOString(),
@@ -151,7 +153,10 @@ export async function GET(
               dealItem: {
                 ...row.dealItem,
                 hasImage: true,
-                imageUrl: restaurantMenuItemImageUrl(did),
+                imageUrl: restaurantMenuItemImageUrl(
+                  did,
+                  row.dealItem.updatedAt
+                ),
               },
             };
           }),
@@ -163,7 +168,10 @@ export async function GET(
               offeredItem: {
                 ...row.offeredItem,
                 hasImage: true,
-                imageUrl: restaurantMenuItemImageUrl(oid),
+                imageUrl: restaurantMenuItemImageUrl(
+                  oid,
+                  row.offeredItem.updatedAt
+                ),
               },
             };
           }),

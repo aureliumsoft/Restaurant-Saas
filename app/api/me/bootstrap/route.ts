@@ -24,6 +24,9 @@ import {
 import { evaluateSubscriptionAccess } from '@/lib/subscription-access';
 import { getPlanFeatures } from '@/lib/subscription-plan-features';
 import type { StaffBootstrapData } from '@/types/staff-bootstrap';
+import {
+  publicRestaurantImageUrls,
+} from '@/lib/stored-image-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,8 +66,13 @@ async function loadRestaurantBootstrapPayload(restaurantId: string) {
       select: selectWithCharges,
     });
     if (!row) return null;
+    const media = publicRestaurantImageUrls(row.slug, row);
     return {
       ...withServiceChargesPayload(row),
+      // Prefer versioned proxy URLs so logo/banner updates are not stuck in browser cache.
+      logoUrl: media.logoUrl,
+      mainBannerUrl: media.mainBannerUrl,
+      menuBannerUrls: media.menuBannerUrls,
       regional: parseRestaurantRegionalSettings(row),
       fulfillmentSettings: parseRestaurantFulfillmentSettings(row),
     };
@@ -81,11 +89,16 @@ async function loadRestaurantBootstrapPayload(restaurantId: string) {
         mainBannerUrl: true,
         menuBannerUrls: true,
         themePrimaryColor: true,
+        updatedAt: true,
       },
     });
     if (!row) return null;
+    const media = publicRestaurantImageUrls(row.slug, row);
     return {
       ...withDefaultServiceChargesPayload(row),
+      logoUrl: media.logoUrl,
+      mainBannerUrl: media.mainBannerUrl,
+      menuBannerUrls: media.menuBannerUrls,
       regional: parseRestaurantRegionalSettings(null),
       fulfillmentSettings: parseRestaurantFulfillmentSettings(null),
     };

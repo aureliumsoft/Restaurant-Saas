@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -33,6 +33,11 @@ export function LazyProductImage({
   const [loaded, setLoaded] = useState(false);
   const showImage = Boolean(src) && !failed;
 
+  useEffect(() => {
+    setFailed(false);
+    setLoaded(false);
+  }, [src]);
+
   if (!showImage) {
     return (
       <div
@@ -53,6 +58,7 @@ export function LazyProductImage({
       ) : null}
       {/* eslint-disable-next-line @next/next/no-img-element -- lazy list/proxy thumbs */}
       <img
+        key={src!}
         src={src!}
         alt={alt}
         loading="lazy"

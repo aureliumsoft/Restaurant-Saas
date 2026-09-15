@@ -75,14 +75,9 @@ function buyerCountryForCurrency(currency: string): string | undefined {
   }
 }
 
-function loadSubscriptionSdk(
-  clientId: string,
-  currency: string,
-  mode: 'live' | 'sandbox' = 'sandbox'
-): Promise<void> {
-  const isSandbox = mode === 'sandbox';
-  const buyerCountry = isSandbox ? buyerCountryForCurrency(currency) : undefined;
-  const key = `sub:${clientId}:${currency}:${mode}:${buyerCountry ?? 'none'}`;
+function loadSubscriptionSdk(clientId: string, currency: string): Promise<void> {
+  const buyerCountry = buyerCountryForCurrency(currency);
+  const key = `sub:${clientId}:${currency}:${buyerCountry ?? 'auto'}`;
   const existing = sdkPromises.get(key);
   if (existing) return existing;
 
@@ -107,7 +102,7 @@ function loadSubscriptionSdk(
       intent: 'subscription',
       'enable-funding': 'card',
     });
-    if (isSandbox && buyerCountry) {
+    if (buyerCountry) {
       params.set('buyer-country', buyerCountry);
     }
     script.src = `https://www.paypal.com/sdk/js?${params.toString()}`;
@@ -153,7 +148,7 @@ export function PayPalSubscriptionButtons({
     (async () => {
       try {
         const config = await fetchSubscriptionConfig(plan);
-        await loadSubscriptionSdk(config.clientId, config.currency, config.mode);
+        await loadSubscriptionSdk(config.clientId, config.currency);
         if (cancelled) return;
         setSandboxMode(config.mode === 'sandbox');
         setCheckoutCurrency(config.currency);
