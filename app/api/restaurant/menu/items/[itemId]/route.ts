@@ -125,15 +125,18 @@ export async function GET(
 
   const itemId = resolveRouteId((await ctx.params).itemId);
   const lite = req.nextUrl.searchParams.get("lite") === "1";
-  const item = await db.menuItem.findFirst({
-    where: { id: itemId, restaurantId: auth.restaurant.id },
-    select: lite ? liteDetailSelect : detailSelect,
-  });
-  if (!item) {
-    return NextResponse.json({ error: "Product not found" }, { status: 404 });
-  }
+  const where = { id: itemId, restaurantId: auth.restaurant.id };
 
   if (lite) {
+    // Separate query so TS does not union with detailSelect (updatedAt vs imageUrl).
+    const item = await db.menuItem.findFirst({
+      where,
+      select: liteDetailSelect,
+    });
+    if (!item) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+
     // Skip extra category/image round-trips — POS uses lazy /image URLs and categoryId.
     return NextResponse.json(
       {
@@ -184,6 +187,14 @@ export async function GET(
         },
       }
     );
+  }
+
+  const item = await db.menuItem.findFirst({
+    where,
+    select: detailSelect,
+  });
+  if (!item) {
+    return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
   const categoryIds = await getMenuItemCategoryIds(itemId);
