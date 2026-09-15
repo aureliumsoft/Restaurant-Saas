@@ -27,6 +27,8 @@ import { kdsTicketApiPath } from '@/lib/dashboard-paths';
 import { kdsAxiosErrorMessage } from '@/lib/kds-api-errors';
 import { parseKitchenTicketItemDisplay } from '@/lib/kitchen-ticket-items';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
+import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
 import {
   getOfflineCache,
   OFFLINE_CACHE_KEYS,
@@ -133,6 +135,8 @@ function formatCountdown(sec: number) {
 
 export function KdsKitchenScreen() {
   const { formatMoney } = useOwnerRestaurantRegional();
+  const { settings: fulfillmentSettings, loading: settingsLoading } =
+    useRestaurantFulfillmentSettings();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [recommendedNames, setRecommendedNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -366,6 +370,15 @@ export function KdsKitchenScreen() {
         });
       }
     }
+  }
+
+  if (!settingsLoading && !fulfillmentSettings.kdsEnabled) {
+    return (
+      <FeatureDisabledScreen
+        feature="kds"
+        homeUrl="/dashboard"
+      />
+    );
   }
 
   return (

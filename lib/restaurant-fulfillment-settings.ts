@@ -4,18 +4,30 @@ export type RestaurantFulfillmentSettings = {
   deliveryEnabled: boolean;
   dineInEnabled: boolean;
   cardPaymentsEnabled: boolean;
+  websiteEnabled: boolean;
+  kioskEnabled: boolean;
+  kdsEnabled: boolean;
+  orderDisplayEnabled: boolean;
 };
 
 export const RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT = {
   deliveryEnabled: true,
   dineInEnabled: true,
   cardPaymentsEnabled: true,
+  websiteEnabled: true,
+  kioskEnabled: true,
+  kdsEnabled: true,
+  orderDisplayEnabled: true,
 } as const;
 
 export type RestaurantFulfillmentSettingsRow = {
   deliveryEnabled: boolean;
   dineInEnabled: boolean;
   cardPaymentsEnabled: boolean;
+  websiteEnabled: boolean;
+  kioskEnabled: boolean;
+  kdsEnabled: boolean;
+  orderDisplayEnabled: boolean;
 };
 
 export const DEFAULT_RESTAURANT_FULFILLMENT_SETTINGS: RestaurantFulfillmentSettings =
@@ -23,6 +35,10 @@ export const DEFAULT_RESTAURANT_FULFILLMENT_SETTINGS: RestaurantFulfillmentSetti
     deliveryEnabled: true,
     dineInEnabled: true,
     cardPaymentsEnabled: true,
+    websiteEnabled: true,
+    kioskEnabled: true,
+    kdsEnabled: true,
+    orderDisplayEnabled: true,
   };
 
 export function parseRestaurantFulfillmentSettings(
@@ -32,6 +48,10 @@ export function parseRestaurantFulfillmentSettings(
     deliveryEnabled: row?.deliveryEnabled !== false,
     dineInEnabled: row?.dineInEnabled !== false,
     cardPaymentsEnabled: row?.cardPaymentsEnabled !== false,
+    websiteEnabled: row?.websiteEnabled !== false,
+    kioskEnabled: row?.kioskEnabled !== false,
+    kdsEnabled: row?.kdsEnabled !== false,
+    orderDisplayEnabled: row?.orderDisplayEnabled !== false,
   };
 }
 
@@ -52,6 +72,10 @@ export function isPrismaFulfillmentSettingsFieldError(error: unknown): boolean {
     error.message.includes('deliveryEnabled') ||
     error.message.includes('dineInEnabled') ||
     error.message.includes('cardPaymentsEnabled') ||
+    error.message.includes('websiteEnabled') ||
+    error.message.includes('kioskEnabled') ||
+    error.message.includes('kdsEnabled') ||
+    error.message.includes('orderDisplayEnabled') ||
     error.message.includes('Unknown field') ||
     error.message.includes('Unknown arg')
   );
@@ -64,3 +88,4 @@ export async function loadRestaurantFulfillmentSettings(restaurantId: string) {
   });
   return parseRestaurantFulfillmentSettings(row ?? undefined);
 }
+

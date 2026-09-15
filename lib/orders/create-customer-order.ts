@@ -234,6 +234,13 @@ export async function createCustomerOrder(options: {
   }
 
   const fulfillmentSettings = parseRestaurantFulfillmentSettings(restaurant);
+  if (!fulfillmentSettings.websiteEnabled) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'Online ordering is currently disabled for this restaurant',
+    };
+  }
   if (orderType === 'delivery' && !fulfillmentSettings.deliveryEnabled) {
     return {
       ok: false,

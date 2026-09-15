@@ -19,7 +19,9 @@ import type {
 import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
 import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
+import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
 import {
   getOfflineCache,
   OFFLINE_CACHE_KEYS,
@@ -319,6 +321,8 @@ function formatFilterDateLabel(isoYmd: string, locale: string): string {
 
 export function OrderDisplayScreen() {
   const { regional } = useOwnerRestaurantRegional();
+  const { settings: fulfillmentSettings, loading: settingsLoading } =
+    useRestaurantFulfillmentSettings();
   // Spain → Spanish UI + Euro; otherwise English (+ restaurant currency, e.g. PKR).
   const lang: OrderDisplayLang = regional.countryCode === 'ES' ? 'es' : 'en';
   const copy = COPY[lang];
@@ -704,6 +708,15 @@ export function OrderDisplayScreen() {
 
   const featured = completed[0] ?? null;
   const recentOthers = completed.slice(1, 3);
+
+  if (!settingsLoading && !fulfillmentSettings.orderDisplayEnabled) {
+    return (
+      <FeatureDisabledScreen
+        feature="order-display"
+        homeUrl="/dashboard"
+      />
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-3 overflow-hidden p-3 md:p-4">

@@ -74,6 +74,8 @@ export const customerMenuItemCoreSelect = {
   imageUrl: true,
   price: true,
   salePrice: true,
+  updatedAt: true,
+  createdAt: true,
   variations: variationSelectFull,
 } as const;
 
@@ -84,6 +86,8 @@ export const customerMenuItemCoreSelectLegacy = {
   imageUrl: true,
   price: true,
   salePrice: true,
+  updatedAt: true,
+  createdAt: true,
   variations: variationSelectLegacy,
 } as const;
 
@@ -94,6 +98,8 @@ export const customerMenuLinkedItemCoreSelect = {
   description: true,
   price: true,
   salePrice: true,
+  updatedAt: true,
+  createdAt: true,
   variations: variationSelectLinkedFull,
 } as const;
 
@@ -103,6 +109,8 @@ export const customerMenuLinkedItemCoreSelectLegacy = {
   description: true,
   price: true,
   salePrice: true,
+  updatedAt: true,
+  createdAt: true,
   variations: variationSelectLinkedLegacy,
 } as const;
 
@@ -186,7 +194,7 @@ function buildLeafAttributeGroupsSelect(
           id: true,
           name: true,
           items: {
-            orderBy: { name: 'asc' as const },
+            orderBy: [{ updatedAt: 'desc' as const }, { createdAt: 'desc' as const }],
             select: optionSelect,
           },
           itemLinks: {
@@ -240,7 +248,7 @@ function buildAttributeGroupsSelect(
         id: true,
         name: true,
         items: {
-          orderBy: { name: 'asc' as const },
+          orderBy: [{ updatedAt: 'desc' as const }, { createdAt: 'desc' as const }],
           select: nestedItemSelect,
         },
         itemLinks: {
@@ -302,6 +310,8 @@ export function buildPosLiteAttributeGroupsSelect(): any {
     description: true,
     price: true,
     salePrice: true,
+    updatedAt: true,
+    createdAt: true,
     variations: {
       orderBy: { sortOrder: 'asc' as const },
       select: {
@@ -351,7 +361,7 @@ export function buildPosLiteAttributeGroupsSelect(): any {
           id: true,
           name: true,
           items: {
-            orderBy: { name: 'asc' as const },
+            orderBy: [{ updatedAt: 'desc' as const }, { createdAt: 'desc' as const }],
             select: optionCardSelect,
           },
           itemLinks: {

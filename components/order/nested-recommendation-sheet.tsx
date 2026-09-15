@@ -888,6 +888,7 @@ type Props = {
   initialProductVariationId?: string;
   /** Group context for the product being configured (category option or product rec). */
   parentConfigurationGroup?: {
+    required?: boolean;
     useVariationPricing?: boolean;
     defaultLinkedRestaurantVariationId?: string | null;
     includeDefaultLinkedVariationPrice?: boolean;
@@ -2041,14 +2042,29 @@ export function NestedRecommendationSheet({
       ) : null}
 
       <footer className="shrink-0 border-t border-border px-4 py-4">
-        <Button
-          type="button"
-          className="h-12 w-full rounded-xl font-bold"
-          disabled={requiredMissing}
-          onClick={handleDone}
-        >
-          Select
-        </Button>
+        {(() => {
+          const isSheetOptional =
+            !parentConfigurationGroup?.required && !rootManualVariation;
+          const hasSheetSelection =
+            selectedUnitTotal > 0 ||
+            Boolean(productVariationId && !rootManualVariation) ||
+            Object.values(selectedByGroup).some((arr) => arr.length > 0) ||
+            Object.values(selectedPersonalizeByGroup).some(
+              (arr) => arr.length > 0
+            );
+          const sheetButtonText =
+            isSheetOptional && !hasSheetSelection ? 'No Thanks' : 'Select';
+          return (
+            <Button
+              type="button"
+              className="h-12 w-full rounded-xl font-bold"
+              disabled={requiredMissing}
+              onClick={handleDone}
+            >
+              {sheetButtonText}
+            </Button>
+          );
+        })()}
       </footer>
     </div>
   );

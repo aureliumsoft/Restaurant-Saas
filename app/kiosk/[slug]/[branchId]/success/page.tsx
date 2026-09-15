@@ -26,6 +26,8 @@ export default async function KioskBranchSuccessPage({
   const token = pick(sp, 'token').trim() || null;
   const ticketRaw = pick(sp, 'ticket').trim();
   const ticketFromQuery = ticketRaw ? Number(ticketRaw) : null;
+  const initialMethod = pick(sp, 'method').trim() || null;
+  const initialPayStatus = pick(sp, 'payStatus').trim() || null;
   const mobileRaw = (pick(sp, 'Mobile') || pick(sp, 'mobile')).trim().toLowerCase();
   const isMobile = mobileRaw === 'true' || mobileRaw === '1' || mobileRaw === 'yes';
   return (
@@ -37,6 +39,8 @@ export default async function KioskBranchSuccessPage({
         sessionId={sessionId}
         token={token}
         ticketFromQuery={Number.isFinite(ticketFromQuery) ? ticketFromQuery : null}
+        initialMethod={initialMethod}
+        initialPayStatus={initialPayStatus}
         isMobile={isMobile}
       />
     </div>

@@ -18,10 +18,12 @@ import { Loader2 } from 'lucide-react';
 import { kioskBasePath } from '@/lib/kiosk-path';
 import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
 import { publicId } from '@/lib/public-id';
+import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 
 type BranchRow = { id: string; urlId?: string; name: string };
 
 export function CustomerEntryLinks() {
+  const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const [slug, setSlug] = useState<string | null>(null);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +80,7 @@ export function CustomerEntryLinks() {
         <CardHeader>
           <CardTitle>Website & kiosk</CardTitle>
           <CardDescription>
-            <Loader2 className=" animate-spin text-primary text-center mx-auto" />{' '}
+            <Loader2 className=" animate-spin text-primary mx-auto" />{' '}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -100,96 +102,106 @@ export function CustomerEntryLinks() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Public URLs</CardTitle>
-          <CardDescription>
-            Share or configure these absolute links (your current domain +
-            path). Each kiosk device should use its branch-specific kiosk URL.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">
-              Customer website
-            </p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <code className="block flex-1 break-all rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                {webAppUrl}
-              </code>
-              <Button
-                type="button"
-                variant="outline"
-                className="shrink-0 gap-1"
-                onClick={() => void copyText('Website URL', webAppUrl)}
-              >
-                <IconCopy className="h-4 w-4" aria-hidden />
-                Copy
-              </Button>
-              <Button asChild className="gap-2">
-                <Link
-                  href={webAppPath}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Open website
-                  <IconExternalLink className="h-4 w-4" aria-hidden />
-                </Link>
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-foreground">Kiosk UI</p>
-            {branches.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Add at least one branch to generate kiosk URLs.
-              </p>
-            ) : (
-              branches.map((branch) => {
-                const path = kioskBasePath(slug, publicId(branch.id, branch.urlId));
-                const url =
-                  publicBase && path ? `${publicBase}${path}` : path;
-                return (
-                  <div
-                    key={branch.id}
-                    className="space-y-2 rounded-md border bg-muted/20 p-3"
-                  >
-                    <p className="text-sm font-medium">{branch.name}</p>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <code className="block flex-1 break-all rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                        {url}
-                      </code>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="shrink-0 gap-1"
-                        onClick={() =>
-                          void copyText(`${branch.name} kiosk URL`, url)
-                        }
+    <>
+      {/* only show if website or kiosk is disabled */}
+      <div className="flex flex-col gap-4">
+        {fulfillmentSettings.websiteEnabled || fulfillmentSettings.kioskEnabled ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Public URLs</CardTitle>
+              <CardDescription>
+                Share or configure these absolute links (your current domain +
+                path). Each kiosk device should use its branch-specific kiosk URL.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {fulfillmentSettings.websiteEnabled ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">
+                    Customer website
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <code className="block flex-1 break-all rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                      {webAppUrl}
+                    </code>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="shrink-0 gap-1"
+                      onClick={() => void copyText('Website URL', webAppUrl)}
+                    >
+                      <IconCopy className="h-4 w-4" aria-hidden />
+                      Copy
+                    </Button>
+                    <Button asChild className="gap-2">
+                      <Link
+                        href={webAppPath}
+                        target="_blank"
+                        rel="noopener noreferrer"
                       >
-                        <IconCopy className="h-4 w-4" aria-hidden />
-                        Copy
-                      </Button>
-                      <Button asChild className="gap-2">
-                        <Link
-                          href={path}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Open kiosk
-                          <IconExternalLink className="h-4 w-4" aria-hidden />
-                        </Link>
-                      </Button>
-                    </div>
+                        Open website
+                        <IconExternalLink className="h-4 w-4" aria-hidden />
+                      </Link>
+                    </Button>
                   </div>
-                );
-              })
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+                </div>
+              ) : null}
+
+              {fulfillmentSettings.kioskEnabled ? (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-foreground">Kiosk UI</p>
+                  {branches.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Add at least one branch to generate kiosk URLs.
+                    </p>
+                  ) : (
+                    branches.map((branch) => {
+                      const path = kioskBasePath(slug, publicId(branch.id, branch.urlId));
+                      const url =
+                        publicBase && path ? `${publicBase}${path}` : path;
+                      return (
+                        <div
+                          key={branch.id}
+                          className="space-y-2 rounded-md border bg-muted/20 p-3"
+                        >
+                          <p className="text-sm font-medium">{branch.name}</p>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <code className="block flex-1 break-all rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                              {url}
+                            </code>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="shrink-0 gap-1"
+                              onClick={() =>
+                                void copyText(`${branch.name} kiosk URL`, url)
+                              }
+                            >
+                              <IconCopy className="h-4 w-4" aria-hidden />
+                              Copy
+                            </Button>
+                            <Button asChild className="gap-2">
+                              <Link
+                                href={path}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Open kiosk
+                                <IconExternalLink className="h-4 w-4" aria-hidden />
+                              </Link>
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
+
+      </div>
+    </>
   );
 }

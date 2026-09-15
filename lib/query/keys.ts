@@ -15,5 +15,7 @@ export const queryKeys = {
     ['pos', 'recent-orders', branchId ?? 'all'] as const,
   posCompletedOrders: (branchId?: string | null) =>
     ['pos', 'completed-orders', branchId ?? 'all'] as const,
+  posWorkingOrders: (branchId?: string | null) =>
+    ['pos', 'working-orders', branchId ?? 'all'] as const,
   salesOrders: (params: string) => ['sales', 'orders', params] as const,
 } as const;

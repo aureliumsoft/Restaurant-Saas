@@ -138,45 +138,62 @@ export function buildCustomerAttributeGroup(
     useVariationPricing: group.useVariationPricing ?? false,
     defaultLinkedRestaurantVariationId: defaultRestaurantVariationId,
     includeDefaultLinkedVariationPrice,
-    items: items.map((it) => {
-      const raw = rawItems.find((r) => r.id === it.id);
-      const nestedGroups = raw?.attributeGroups ?? [];
-      const lazyImage =
-        imageUrlForItem?.(it.id) ??
-        (it.imageUrl && !it.imageUrl.startsWith('data:')
-          ? it.imageUrl
-          : null);
-      return {
-        menuItemId: it.id,
-        name: it.name,
-        description: it.description ?? null,
-        imageUrl: lazyImage,
-        price: productOverrides[it.id]?.free ? 0 : it.price,
-        salePrice: productOverrides[it.id]?.free ? null : it.salePrice,
-        variations: (it.variations ?? []).map((v) => ({
-          id: v.id,
-          name: v.name,
-          title: v.title,
-          // Variation thumbs reuse the product lazy URL (no per-variation blob).
+    items: items
+      .map((it) => {
+        const raw = rawItems.find((r) => r.id === it.id);
+        const nestedGroups = raw?.attributeGroups ?? [];
+        const lazyImage =
+          imageUrlForItem?.(it.id) ??
+          (it.imageUrl && !it.imageUrl.startsWith('data:')
+            ? it.imageUrl
+            : null);
+        return {
+          menuItemId: it.id,
+          name: it.name,
+          description: it.description ?? null,
           imageUrl: lazyImage,
-          swatchHex: v.swatchHex ?? null,
-          priceDelta: productOverrides[it.id]?.free ? 0 : v.priceDelta,
-          restaurantVariationId: v.restaurantVariationId ?? null,
-        })),
-        nestedAttributeGroups:
-          nestedGroups.length > 0
-            ? nestedGroups.map((ng) =>
-                buildCustomerAttributeGroup(
-                  ng as Parameters<typeof buildCustomerAttributeGroup>[0],
-                  it.id,
-                  imageUrlForItem
+          price: productOverrides[it.id]?.free ? 0 : it.price,
+          salePrice: productOverrides[it.id]?.free ? null : it.salePrice,
+          updatedAt: it.updatedAt ?? raw?.updatedAt ?? null,
+          createdAt: it.createdAt ?? raw?.createdAt ?? null,
+          variations: (it.variations ?? []).map((v) => ({
+            id: v.id,
+            name: v.name,
+            title: v.title,
+            // Variation thumbs reuse the product lazy URL (no per-variation blob).
+            imageUrl: lazyImage,
+            swatchHex: v.swatchHex ?? null,
+            priceDelta: productOverrides[it.id]?.free ? 0 : v.priceDelta,
+            restaurantVariationId: v.restaurantVariationId ?? null,
+          })),
+          nestedAttributeGroups:
+            nestedGroups.length > 0
+              ? nestedGroups.map((ng) =>
+                  buildCustomerAttributeGroup(
+                    ng as Parameters<typeof buildCustomerAttributeGroup>[0],
+                    it.id,
+                    imageUrlForItem
+                  )
                 )
-              )
-            : undefined,
-        personalizeGroups:
-          (raw as { personalizeGroups?: PersonalizeGroup[] } | undefined)
-            ?.personalizeGroups ?? undefined,
-      };
-    }),
+              : undefined,
+          personalizeGroups:
+            (raw as { personalizeGroups?: PersonalizeGroup[] } | undefined)
+              ?.personalizeGroups ?? undefined,
+        };
+      })
+      .sort((a, b) => {
+        const timeA = a.updatedAt
+          ? new Date(a.updatedAt).getTime()
+          : a.createdAt
+            ? new Date(a.createdAt).getTime()
+            : 0;
+        const timeB = b.updatedAt
+          ? new Date(b.updatedAt).getTime()
+          : b.createdAt
+            ? new Date(b.createdAt).getTime()
+            : 0;
+        if (timeB !== timeA) return timeB - timeA;
+        return a.name.localeCompare(b.name);
+      }),
   };
 }

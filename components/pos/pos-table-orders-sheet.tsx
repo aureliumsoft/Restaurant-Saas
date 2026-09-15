@@ -253,6 +253,24 @@ export function PosTableOrdersSheet({
 
   const handleSendKitchenConfirm = async () => {
     if (!kitchenOrder) return;
+    if (!fulfillmentSettings.kdsEnabled) {
+      setSendingToKitchen(true);
+      try {
+        await axios.post(`/api/restaurant/pos-order/${encodeURIComponent(kitchenOrder.id)}/complete`);
+        toast.success('Order completed.');
+        setKitchenOrder(null);
+        setKitchenCustomMinutes('');
+        markOpenTableOrderKitchenSent(branchId, kitchenOrder.id);
+        confirmInBackground();
+        onOrdersChanged?.();
+      } catch (error) {
+        toast.error(apiErrorMessage(error, 'Could not complete order.'));
+        confirmInBackground();
+      } finally {
+        setSendingToKitchen(false);
+      }
+      return;
+    }
     const minutes = resolvePrepMinutes();
     if (minutes == null) return;
 
@@ -613,11 +631,15 @@ export function PosTableOrdersSheet({
                                       size="icon"
                                       variant="outline"
                                       className="h-8 w-8 rounded-lg"
-                                      title="Send to kitchen"
+                                      title={fulfillmentSettings.kdsEnabled ? "Send to kitchen" : "Complete order"}
                                       disabled={anyBusy || orderBusy}
                                       onClick={() => openKitchenDialog(order)}
                                     >
-                                      <ChefHat className="h-3.5 w-3.5" />
+                                      {fulfillmentSettings.kdsEnabled ? (
+                                        <ChefHat className="h-3.5 w-3.5" />
+                                      ) : (
+                                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                      )}
                                     </Button>
                                   ) : null}
                                   <Button
@@ -835,12 +857,12 @@ export function PosTableOrdersSheet({
               {sendingToKitchen ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending…
+                  {fulfillmentSettings.kdsEnabled ? 'Sending…' : 'Completing…'}
                 </>
               ) : (
                 <>
                   <Check className="mr-2 h-4 w-4" />
-                  Proceed to kitchen
+                  {fulfillmentSettings.kdsEnabled ? 'Proceed to kitchen' : 'Complete order'}
                 </>
               )}
             </Button>

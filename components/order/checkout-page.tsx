@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Loader2, UtensilsCrossed } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import type { OrderInfo } from '@/components/order/order-types';
 import {
@@ -22,6 +21,14 @@ import { CutleryOption } from '@/components/order/cutlery-option';
 import { OrderPreferencesSummary } from '@/components/order/order-preferences-summary';
 import { useRestaurantServiceCharges } from '@/hooks/use-restaurant-service-charges';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useRestaurantBranding } from '@/components/layout/restaurant-branding-provider';
+import { useCustomerAccount } from '@/components/customer-app/customer-account-context';
+import { useOrderInfo } from '@/hooks/use-order-info';
+import { inferHostSubdomainForMenu } from '@/lib/customer-menu-client';
+import {
+  buildCustomerLightSurfaceVars,
+  buildStorefrontThemeVars,
+} from '@/lib/restaurant-theme';
 import {
   clearOnlineOrderPreferences,
   readCutleryPreference,
@@ -163,15 +170,22 @@ function parseCartFromStorage(raw: string | null): CartLine[] {
 export default function CheckoutPageClient({
   orderType,
   orderId,
-  orderInfo,
+  orderInfo: initialOrderInfo,
 }: CheckoutPageProps) {
   const { t } = useTranslation();
+  const orderInfo = useOrderInfo(orderId, orderType, initialOrderInfo);
+  const brand = useRestaurantBranding();
+  const { restaurantSlug: accountRestaurantSlug } = useCustomerAccount();
+
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
   const router = useRouter();
   const [cutlery, setCutlery] = useState(false);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(null);
+  const [resolvedSlug, setResolvedSlug] = useState<string | null>(null);
+
   const [paymentConfig, setPaymentConfig] = useState<{
     provider: 'NONE' | 'PAYPAL' | 'STRIPE';
     ready: boolean;
@@ -179,14 +193,108 @@ export default function CheckoutPageClient({
   } | null>(null);
   const [paymentConfigLoading, setPaymentConfigLoading] = useState(true);
 
+  const effectiveSlug = useMemo(() => {
+    return (
+      orderInfo?.restaurantSlug?.trim() ||
+      resolvedSlug?.trim() ||
+      accountRestaurantSlug?.trim() ||
+      brand?.restaurantSlug?.trim() ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem('lastCustomerRestaurantSlug')?.trim()
+        : null) ||
+      ''
+    );
+  }, [
+    orderInfo?.restaurantSlug,
+    resolvedSlug,
+    accountRestaurantSlug,
+    brand?.restaurantSlug,
+  ]);
+
   useEffect(() => {
-    const slug = orderInfo?.restaurantSlug?.trim();
+    if (effectiveSlug) {
+      try {
+        localStorage.setItem('lastCustomerRestaurantSlug', effectiveSlug);
+      } catch {
+        // ignore
+      }
+    }
+  }, [effectiveSlug]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadThemeAndSlug = async () => {
+      try {
+        const slug =
+          orderInfo?.restaurantSlug?.trim() ||
+          accountRestaurantSlug?.trim() ||
+          brand?.restaurantSlug?.trim() ||
+          (typeof window !== 'undefined'
+            ? localStorage.getItem('lastCustomerRestaurantSlug')?.trim()
+            : null);
+        const store = orderInfo?.storeId?.trim();
+        const subdomain = inferHostSubdomainForMenu();
+        const lookup = slug
+          ? `/api/customer/restaurant?slug=${encodeURIComponent(slug)}`
+          : store || subdomain
+            ? `/api/customer/restaurant?subdomain=${encodeURIComponent(
+                store || subdomain || ''
+              )}`
+            : null;
+        if (!lookup) return;
+        const res = await fetch(lookup);
+        if (!res.ok) return;
+        const json = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        const c =
+          typeof json?.data?.themePrimaryColor === 'string'
+            ? json.data.themePrimaryColor.trim()
+            : '';
+        setThemePrimaryColor(c || null);
+        const fetchedSlug =
+          typeof json?.data?.slug === 'string' ? json.data.slug.trim() : '';
+        if (fetchedSlug) {
+          setResolvedSlug(fetchedSlug);
+          try {
+            localStorage.setItem('lastCustomerRestaurantSlug', fetchedSlug);
+          } catch {
+            // ignore
+          }
+        }
+      } catch {
+        // noop
+      }
+    };
+    void loadThemeAndSlug();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    orderInfo?.restaurantSlug,
+    orderInfo?.storeId,
+    accountRestaurantSlug,
+    brand?.restaurantSlug,
+  ]);
+
+  const pageThemeVars = useMemo(
+    () =>
+      ({
+        ...buildStorefrontThemeVars(themePrimaryColor),
+        ...buildCustomerLightSurfaceVars(themePrimaryColor),
+        colorScheme: 'light',
+      }) as CSSProperties,
+    [themePrimaryColor]
+  );
+
+  useEffect(() => {
+    const slug = effectiveSlug.trim();
     if (!slug) {
       setPaymentConfig(null);
       setPaymentConfigLoading(false);
       return;
     }
     let cancelled = false;
+    setPaymentConfigLoading(true);
     (async () => {
       try {
         const res = await fetch(
@@ -220,7 +328,7 @@ export default function CheckoutPageClient({
     return () => {
       cancelled = true;
     };
-  }, [orderInfo?.restaurantSlug]);
+  }, [effectiveSlug]);
 
   useEffect(() => {
     setCart(parseCartFromStorage(localStorage.getItem(`cart-${orderId}`)));
@@ -244,14 +352,14 @@ export default function CheckoutPageClient({
     [cart]
   );
   const { serviceChargeAmount } = useRestaurantServiceCharges(
-    orderInfo?.restaurantSlug,
+    effectiveSlug || undefined,
     'online'
   );
-  const { formatMoney, regional } = useRestaurantRegional(orderInfo?.restaurantSlug);
+  const { formatMoney, regional } = useRestaurantRegional(effectiveSlug || undefined);
   const grandTotal = total + serviceChargeAmount;
 
   const placeOrder = async () => {
-    const slug = orderInfo?.restaurantSlug?.trim();
+    const slug = effectiveSlug.trim();
     if (!slug) {
       toast.error(
         'Missing store link. Open the menu from your restaurant page, then checkout again.'
@@ -268,7 +376,7 @@ export default function CheckoutPageClient({
         orderType,
         orderInfo: {
           mode: orderType,
-          restaurantName: orderInfo?.restaurantName,
+          restaurantName: orderInfo?.restaurantName || brand?.restaurantName,
           storeId: orderInfo?.storeId,
           storeName: orderInfo?.storeName,
           storeAddress: orderInfo?.storeAddress,
@@ -333,14 +441,14 @@ export default function CheckoutPageClient({
   };
 
   const buildPaidOrderPayload = (paymentMethod: 'PayPal' | 'Stripe') => {
-    const slug = orderInfo?.restaurantSlug?.trim();
+    const slug = effectiveSlug.trim();
     if (!slug) return null;
     return {
       restaurantSlug: slug,
       orderType,
       orderInfo: {
         mode: orderType,
-        restaurantName: orderInfo?.restaurantName,
+        restaurantName: orderInfo?.restaurantName || brand?.restaurantName,
         storeId: orderInfo?.storeId,
         storeName: orderInfo?.storeName,
         storeAddress: orderInfo?.storeAddress,
@@ -376,13 +484,14 @@ export default function CheckoutPageClient({
 
   if (!cartHydrated) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>{t('preparingCheckout')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-muted-foreground">{t('loadingYourCart')}</p>
+      <div
+        className="web-app-customer min-h-screen bg-[#f4f4f6] text-[#0f172a] flex items-center justify-center p-4 antialiased"
+        style={pageThemeVars}
+      >
+        <div className="w-full max-w-md rounded-2xl border border-[#e2e8f0] bg-white p-6 text-[#0f172a] shadow-sm">
+          <h2 className="text-xl font-bold">{t('preparingCheckout')}</h2>
+          <div className="mt-4 space-y-4">
+            <p className="text-[#64748b]">{t('loadingYourCart')}</p>
             <Button
               type="button"
               variant="default"
@@ -399,21 +508,22 @@ export default function CheckoutPageClient({
               <ArrowLeft className="h-4 w-4" aria-hidden />
               {t('backToOrder')}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (cart.length === 0) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>{t('noItemsToCheckout')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">{t('cartEmpty')}</p>
+      <div
+        className="web-app-customer min-h-screen bg-[#f4f4f6] text-[#0f172a] flex items-center justify-center p-4 antialiased"
+        style={pageThemeVars}
+      >
+        <div className="w-full max-w-md rounded-2xl border border-[#e2e8f0] bg-white p-6 text-[#0f172a] shadow-sm">
+          <h2 className="text-xl font-bold">{t('noItemsToCheckout')}</h2>
+          <div className="mt-4">
+            <p className="mb-4 text-[#64748b]">{t('cartEmpty')}</p>
             <Button
               onClick={() =>
                 router.push(
@@ -430,35 +540,35 @@ export default function CheckoutPageClient({
               <ArrowLeft className="h-4 w-4" aria-hidden />
               {t('backToOrder')}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div
-      className="min-h-screen bg-background text-foreground"
+      className="web-app-customer min-h-screen bg-[#f4f4f6] text-[#0f172a] antialiased"
+      style={pageThemeVars}
       aria-busy={submitting}
     >
       <div className="mx-auto max-w-7xl px-4 py-8">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-4">
             <WebAppRestaurantTitle
-              restaurantName={orderInfo?.restaurantName}
+              restaurantName={orderInfo?.restaurantName || brand?.restaurantName}
               subtitle={
-                <>
-                  {orderType === 'delivery' ? 'Delivery' : 'Pick-Up'} order ·{' '}
-                  {orderId}
-                </>
+                <span className="font-medium text-[#64748b]">
+                  {orderType === 'delivery' ? t('delivery') : t('orderPickUpLabel')} order · {orderId}
+                </span>
               }
             />
-            <h2 className="text-2xl font-bold">{t('checkout')}</h2>
+            <h2 className="text-2xl font-bold text-primary">{t('checkout')}</h2>
           </div>
           <Button
             type="button"
-            variant="default"
-            className="shrink-0 gap-2"
+            variant="outline"
+            className="shrink-0 gap-2 border-[#e2e8f0] bg-white text-[#0f172a] hover:bg-slate-50 hover:text-primary"
             onClick={() =>
               router.push(
                 orderPathWithQuery(
@@ -475,171 +585,177 @@ export default function CheckoutPageClient({
 
         <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('orderInformation')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-3 text-sm text-muted-foreground">
+            <section className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white text-[#0f172a] shadow-sm">
+              <div className="border-b border-[#f1f5f9] px-6 py-4">
+                <h3 className="text-base font-bold text-[#0f172a]">{t('orderInformation')}</h3>
+              </div>
+              <div className="p-6">
+                <div className="grid gap-3 text-sm text-[#475569]">
                   {orderInfo?.mode === 'delivery' ? (
                     <>
-                      <div>
-                        <strong>{t('deliveryAddress')}:</strong>{' '}
-                        {orderInfo.address || 'N/A'}
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#64748b]">{t('deliveryAddress')}:</span>
+                        <span className="text-right font-semibold text-[#0f172a]">
+                          {orderInfo.address || 'N/A'}
+                        </span>
                       </div>
-                      <div>
-                        <strong>{t('name')}:</strong>{' '}
-                        {orderInfo.addressName || 'N/A'}
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#64748b]">{t('name')}:</span>
+                        <span className="font-semibold text-[#0f172a]">
+                          {orderInfo.addressName || 'N/A'}
+                        </span>
                       </div>
-                      <div>
-                        <strong>{t('phoneLabel')}:</strong>{' '}
-                        {orderInfo.customerPhone || 'N/A'}
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#64748b]">{t('phoneLabel')}:</span>
+                        <span className="font-semibold text-[#0f172a]">
+                          {orderInfo.customerPhone || 'N/A'}
+                        </span>
                       </div>
-                      <div>
-                        <strong>{t('apartmentDoor')}:</strong>{' '}
-                        {orderInfo.apartment || 'N/A'}
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#64748b]">{t('apartmentDoor')}:</span>
+                        <span className="font-semibold text-[#0f172a]">
+                          {orderInfo.apartment || 'N/A'}
+                        </span>
                       </div>
-                      <div>
-                        <strong>{t('gateCode')}:</strong>{' '}
-                        {orderInfo.gateCode || 'N/A'}
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#64748b]">{t('gateCode')}:</span>
+                        <span className="font-semibold text-[#0f172a]">
+                          {orderInfo.gateCode || 'N/A'}
+                        </span>
                       </div>
                     </>
                   ) : (
                     <>
-                      <div>
-                        <strong>{t('pickupLocation')}:</strong>{' '}
-                        {orderInfo?.storeName || 'N/A'}
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#64748b]">{t('pickupLocation')}:</span>
+                        <span className="text-right font-semibold text-[#0f172a]">
+                          {orderInfo?.storeName || brand?.restaurantName || 'N/A'}
+                        </span>
                       </div>
-                      <div>
-                        <strong>{t('storeAddress')}:</strong>{' '}
-                        {orderInfo?.storeAddress || 'N/A'}
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#64748b]">{t('storeAddress')}:</span>
+                        <span className="text-right font-semibold text-[#0f172a]">
+                          {orderInfo?.storeAddress || 'N/A'}
+                        </span>
                       </div>
-                      <div>
-                        <strong>{t('name')}:</strong>{' '}
-                        {orderInfo?.addressName || 'N/A'}
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#64748b]">{t('name')}:</span>
+                        <span className="font-semibold text-[#0f172a]">
+                          {orderInfo?.addressName || 'N/A'}
+                        </span>
                       </div>
-                      <div>
-                        <strong>{t('phoneLabel')}:</strong>{' '}
-                        {orderInfo?.customerPhone || 'N/A'}
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#64748b]">{t('phoneLabel')}:</span>
+                        <span className="font-semibold text-[#0f172a]">
+                          {orderInfo?.customerPhone || 'N/A'}
+                        </span>
                       </div>
                     </>
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </section>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {t('orderDetailsCard')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+            <section className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white text-[#0f172a] shadow-sm">
+              <div className="border-b border-[#f1f5f9] px-6 py-4">
+                <h3 className="text-base font-bold text-[#0f172a]">{t('orderDetailsCard')}</h3>
+              </div>
+              <div className="p-6">
                 <CutleryOption value={cutlery} onChange={setCutleryChoice} />
                 <div className="mt-4">
-                  <p className="text-sm font-semibold">{t('comment')}</p>
+                  <p className="text-sm font-semibold text-[#0f172a]">{t('comment')}</p>
                   <textarea
                     value={comment}
                     onChange={(e) => setCommentChoice(e.target.value)}
-                    className="mt-2 w-full rounded-lg border border-border bg-background p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="mt-2 w-full rounded-xl border border-[#cbd5e1] bg-white p-3 text-sm text-[#0f172a] placeholder:text-[#94a3b8] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                     placeholder={t('commentPlaceholder')}
                     rows={4}
                   />
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* <Card>
-              <CardHeader>
-                <CardTitle>{t('promotions')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center space-x-2 justify-between rounded-lg border border-border bg-card px-3 py-3">
-                  <input id="promo-code" type="text" className="text-sm p-2 rounded-lg w-full" placeholder={t('addPromoCode')} />
-                  <Button type="button" className="w-full" >{t('apply')}</Button>
-                </div>
-              </CardContent>
-            </Card> */}
+              </div>
+            </section>
           </div>
 
           <div className="space-y-4">
-            <Card className="border-2 border-primary">
-              <CardHeader>
-                <CardTitle>{t('basket')}</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <section className="overflow-hidden rounded-2xl border-2 border-primary bg-white text-[#0f172a] shadow-sm">
+              <div className="border-b border-[#f1f5f9] px-6 py-4">
+                <h3 className="text-base font-bold text-primary">{t('basket')}</h3>
+              </div>
+              <div className="p-6 space-y-4">
                 <div className="space-y-3">
                   {cart.map((line) => {
                     const modifierLines = cartModifierDisplayLines(line.modifiers);
                     return (
-                    <div key={line.lineId} className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <p className="font-medium">
-                          {cartLineTitle(line.productName, line.variationName)}
-                        </p>
-                        <p>{formatMoney(lineTotal(line))}</p>
-                      </div>
-                      {modifierLines.length > 0 ? (
-                        <div className="space-y-0.5">
-                          {modifierLines.map((modLine, index) => (
-                            <p
-                              key={`${line.lineId}-mod-${index}`}
-                              className={`text-xs text-muted-foreground${
-                                modLine.prefix === 'dash' ? ' pl-3' : ''
-                              }`}
-                            >
-                              {modLine.prefix === 'branch' ? '↳ ' : '- '}
-                              {modLine.name}
-                              {modLine.unitPrice > 0
-                                ? ` (+${formatMoney(modLine.unitPrice)})`
-                                : ''}
-                            </p>
-                          ))}
+                      <div key={line.lineId} className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <p className="font-medium text-[#0f172a]">
+                            {cartLineTitle(line.productName, line.variationName)}
+                          </p>
+                          <p className="font-semibold text-[#0f172a]">
+                            {formatMoney(lineTotal(line))}
+                          </p>
                         </div>
-                      ) : null}
-                      <p className="text-xs text-muted-foreground">
-                        x{line.quantity}
-                      </p>
-                    </div>
+                        {modifierLines.length > 0 ? (
+                          <div className="space-y-0.5">
+                            {modifierLines.map((modLine, index) => (
+                              <p
+                                key={`${line.lineId}-mod-${index}`}
+                                className={`text-xs text-[#64748b]${
+                                  modLine.prefix === 'dash' ? ' pl-3' : ''
+                                }`}
+                              >
+                                {modLine.prefix === 'branch' ? '↳ ' : '- '}
+                                {modLine.name}
+                                {modLine.unitPrice > 0
+                                  ? ` (+${formatMoney(modLine.unitPrice)})`
+                                  : ''}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                        <p className="text-xs text-[#64748b]">
+                          x{line.quantity}
+                        </p>
+                      </div>
                     );
                   })}
                 </div>
 
                 <OrderPreferencesSummary
-                  className="mt-3"
+                  className="mt-3 border-[#e2e8f0] bg-[#f8fafc] text-[#0f172a]"
                   cutlery={cutlery}
                   comment={comment}
                 />
 
-                <div className="mt-4 space-y-2 border-t border-border pt-2 text-sm">
-                  <div className="flex justify-between">
+                <div className="mt-4 space-y-2 border-t border-[#e2e8f0] pt-3 text-sm">
+                  <div className="flex justify-between text-[#475569]">
                     <span>{t('subtotal')}</span>
-                    <span>{formatMoney(total)}</span>
+                    <span className="font-medium text-[#0f172a]">{formatMoney(total)}</span>
                   </div>
                   {serviceChargeAmount > 0 ? (
-                    <div className="flex justify-between">
+                    <div className="flex justify-between text-[#475569]">
                       <span>{t('serviceFees')}</span>
-                      <span>{formatMoney(serviceChargeAmount)}</span>
+                      <span className="font-medium text-[#0f172a]">{formatMoney(serviceChargeAmount)}</span>
                     </div>
                   ) : null}
-                  <div className="flex justify-between font-bold">
+                  <div className="flex justify-between border-t border-[#f1f5f9] pt-2 text-base font-bold text-[#0f172a]">
                     <span>{t('total')}</span>
-                    <span>{formatMoney(grandTotal)}</span>
+                    <span className="text-primary">{formatMoney(grandTotal)}</span>
                   </div>
                 </div>
 
                 <div className="mt-4 space-y-2">
-                  {orderInfo?.restaurantSlug ? (
+                  {effectiveSlug ? (
                     paymentConfigLoading ? (
-                      <div className="flex items-center justify-center">
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
                       </div>
                     ) : paymentConfig?.ready &&
                       paymentConfig.provider === 'PAYPAL' ? (
                       <PayPalCheckoutButtons
                         amount={grandTotal}
                         currency={paymentConfig.currencyCode ?? regional.currencyCode}
-                        restaurantSlug={orderInfo.restaurantSlug}
+                        restaurantSlug={effectiveSlug}
                         title={`Online order (${
                           orderType === 'delivery' ? 'Delivery' : 'Pick-up'
                         })`}
@@ -648,13 +764,13 @@ export default function CheckoutPageClient({
                         payload={buildPaidOrderPayload('PayPal')}
                         metadata={{
                           source: 'online',
-                          restaurantSlug: orderInfo.restaurantSlug,
+                          restaurantSlug: effectiveSlug,
                           orderType,
                         }}
                         disabled={submitting}
                         onProcessingChange={setSubmitting}
                         onApproved={async ({ capture }) => {
-                          const slug = orderInfo?.restaurantSlug ?? '';
+                          const slug = effectiveSlug;
                           const ref =
                             capture.shortOrderId ?? capture.orderId ?? '';
                           localStorage.removeItem(`cart-${orderId}`);
@@ -687,7 +803,7 @@ export default function CheckoutPageClient({
                       <StripeCheckoutButton
                         amount={grandTotal}
                         currency={paymentConfig.currencyCode ?? regional.currencyCode}
-                        restaurantSlug={orderInfo.restaurantSlug}
+                        restaurantSlug={effectiveSlug}
                         title={`Online order (${
                           orderType === 'delivery' ? 'Delivery' : 'Pick-up'
                         })`}
@@ -696,13 +812,13 @@ export default function CheckoutPageClient({
                         payload={buildPaidOrderPayload('Stripe')}
                         metadata={{
                           source: 'online',
-                          restaurantSlug: orderInfo.restaurantSlug,
+                          restaurantSlug: effectiveSlug,
                           orderType,
                         }}
                         successPath={`/order/${orderType}/${encodeURIComponent(
                           orderId
                         )}/success?session_id={CHECKOUT_SESSION_ID}&restaurantSlug=${encodeURIComponent(
-                          orderInfo.restaurantSlug
+                          effectiveSlug
                         )}`}
                         cancelPath={orderPathWithQuery(
                           `/order/${orderType}/${encodeURIComponent(orderId)}`,
@@ -726,11 +842,11 @@ export default function CheckoutPageClient({
                     </p>
                   )}
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="mt-2 text-xs text-[#64748b]">
                   {t('confirmOrderHint')}
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           </div>
         </div>
       </div>

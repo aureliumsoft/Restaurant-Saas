@@ -21,8 +21,17 @@ export function useDashboardNavGroups(): DashboardNavGroup[] {
     return navGroupsForPermissions(permissions, {
       hideRecommendations: plan?.recommendations === false,
       hideTables: !fulfillmentSettings.dineInEnabled,
+      hideKds: !fulfillmentSettings.kdsEnabled,
+      hideOrderDisplay: !fulfillmentSettings.orderDisplayEnabled,
     });
-  }, [loading, permissions, plan?.recommendations, fulfillmentSettings.dineInEnabled]);
+  }, [
+    loading,
+    permissions,
+    plan?.recommendations,
+    fulfillmentSettings.dineInEnabled,
+    fulfillmentSettings.kdsEnabled,
+    fulfillmentSettings.orderDisplayEnabled,
+  ]);
 }
 
 export function useDashboardNavItems(): NavItem[] {
@@ -38,6 +47,19 @@ export function useDashboardNavItems(): NavItem[] {
     if (!fulfillmentSettings.dineInEnabled) {
       items = items.filter((i) => i.moduleKey !== 'tables');
     }
+    if (!fulfillmentSettings.kdsEnabled) {
+      items = items.filter((i) => i.moduleKey !== 'kds');
+    }
+    if (!fulfillmentSettings.orderDisplayEnabled) {
+      items = items.filter((i) => i.moduleKey !== 'order-display');
+    }
     return items;
-  }, [loading, permissions, plan?.recommendations, fulfillmentSettings.dineInEnabled]);
+  }, [
+    loading,
+    permissions,
+    plan?.recommendations,
+    fulfillmentSettings.dineInEnabled,
+    fulfillmentSettings.kdsEnabled,
+    fulfillmentSettings.orderDisplayEnabled,
+  ]);
 }

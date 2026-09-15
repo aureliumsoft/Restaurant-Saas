@@ -233,7 +233,10 @@ export function OrderMenuHeader({
         className
       )}
     >
-      <div className="mx-auto w-full max-w-[1280px] px-4 sm:px-6">
+      <div
+        className="mx-auto w-full px-4 sm:px-6"
+        style={{ maxWidth: ORDER_PAGE_MAX_WIDTH_PX }}
+      >
         <div className="flex h-[72px] items-center gap-3">
           <div className="flex min-w-0 flex-1 items-center justify-start">
             <Link
@@ -293,8 +296,11 @@ export function OrderMenuHeader({
 
       <div className="border-t border-white/20 bg-primary">
         <div
-          className="mx-auto flex w-full max-w-[1280px] flex-row items-stretch divide-x divide-white/25 px-4 sm:px-6"
-          style={{ minHeight: ORDER_INFO_ROW_HEIGHT_PX }}
+          className="mx-auto flex w-full flex-row items-stretch divide-x divide-white/25 px-4 sm:px-6"
+          style={{
+            minHeight: ORDER_INFO_ROW_HEIGHT_PX,
+            maxWidth: ORDER_PAGE_MAX_WIDTH_PX,
+          }}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2.5 py-3 sm:gap-3">
             <ShoppingBag
@@ -470,17 +476,17 @@ export function OrderCartCheckoutButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex h-12 w-full items-center gap-2 rounded-xl px-3 text-primary transition hover:brightness-[0.98]"
+      className="flex h-12 w-full items-center justify-between gap-3 rounded-xl px-4 text-primary font-bold shadow-md transition hover:brightness-95 active:scale-[0.99]"
       style={{ backgroundColor: ORDER_ACCENT_GOLD }}
     >
       <span className="relative flex h-8 w-8 shrink-0 items-center justify-center">
-        <ShoppingBag className="h-5 w-5" strokeWidth={2.25} aria-hidden />
-        <span className="absolute left-1/2 top-[58%] -translate-x-1/2 -translate-y-1/2 text-[10px] font-bold leading-none">
+        <ShoppingBag className="h-6 w-6 fill-white text-white stroke-[1.5]" aria-hidden />
+        <span className="absolute left-1/2 top-[58%] -translate-x-1/2 -translate-y-1/2 text-[11px] font-extrabold leading-none text-primary">
           {itemCount}
         </span>
       </span>
-      <span className="flex-1 text-center text-sm font-bold">{label}</span>
-      <span className="shrink-0 text-sm font-bold">{totalLabel}</span>
+      <span className="flex-1 text-center text-sm font-bold truncate">{label}</span>
+      <span className="shrink-0 text-sm font-bold tabular-nums">{totalLabel}</span>
     </button>
   );
 }

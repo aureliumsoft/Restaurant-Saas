@@ -5,6 +5,8 @@ type LinkedItem = {
   imageUrl?: string | null;
   price: number;
   salePrice: number | null;
+  updatedAt?: string | Date | null;
+  createdAt?: string | Date | null;
   attributeGroups?: AttributeGroupSource[] | null;
   personalizeGroups?: Array<{
     id: string;
@@ -37,6 +39,8 @@ export type AttributeGroupSource = {
     name: string;
     price: number;
     salePrice: number | null;
+    updatedAt?: string | Date | null;
+    createdAt?: string | Date | null;
   } | null;
   linkedCategory?: {
     id: string;
@@ -79,7 +83,23 @@ export function mapAttributeGroupItems(
       combined.push(it);
     }
   }
-  return combined.filter((it) => it.id !== baseProductId);
+  const filtered = combined.filter((it) => it.id !== baseProductId);
+
+  // Sort by latest updatedAt first (fallback to createdAt, then name)
+  return filtered.sort((a, b) => {
+    const timeA = a.updatedAt
+      ? new Date(a.updatedAt).getTime()
+      : a.createdAt
+        ? new Date(a.createdAt).getTime()
+        : 0;
+    const timeB = b.updatedAt
+      ? new Date(b.updatedAt).getTime()
+      : b.createdAt
+        ? new Date(b.createdAt).getTime()
+        : 0;
+    if (timeB !== timeA) return timeB - timeA;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 export function attributeGroupDisplayName(group: AttributeGroupSource): string | null {

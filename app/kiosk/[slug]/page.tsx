@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { kioskBasePath } from '@/lib/kiosk-path';
 
+import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
+
 import '../kiosk-light.css';
 
 type Props = {
@@ -17,6 +19,7 @@ export default async function KioskBranchPickerPage({ params }: Props) {
     where: { slug },
     select: {
       name: true,
+      kioskEnabled: true,
       branches: {
         orderBy: { name: 'asc' },
         select: { id: true, name: true, address: true },
@@ -29,6 +32,16 @@ export default async function KioskBranchPickerPage({ params }: Props) {
       <div className="kiosk-light-root flex min-h-screen items-center justify-center bg-[#f8fafc] p-6">
         <p className="text-center text-[#64748b]">Restaurant not found.</p>
       </div>
+    );
+  }
+
+  if (!restaurant.kioskEnabled) {
+    return (
+      <FeatureDisabledScreen
+        feature="kiosk"
+        restaurantName={restaurant.name}
+        homeUrl="/"
+      />
     );
   }
 

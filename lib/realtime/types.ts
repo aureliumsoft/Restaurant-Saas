@@ -6,6 +6,7 @@ export type RestaurantRealtimeEventType =
   | 'kiosk.pending_cash'
   | 'pos.recent_orders'
   | 'pos.completed_orders'
+  | 'pos.working_orders'
   | 'sales.orders'
   | 'dashboard.analytics'
   | 'config.branding'
@@ -32,6 +33,7 @@ export const REALTIME_CLIENT_CHANNELS: Record<
   'kiosk.pending_cash': 'refreshKioskOrders',
   'pos.recent_orders': 'refreshRecentOrders',
   'pos.completed_orders': 'refreshCompletedOrders',
+  'pos.working_orders': 'refreshWorkingOrders',
   'sales.orders': 'refreshSalesOrders',
   'dashboard.analytics': 'realtime:dashboard.analytics',
   'config.branding': 'fetchStoreData',

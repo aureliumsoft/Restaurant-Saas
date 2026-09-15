@@ -23,3 +23,4 @@ This is a full-featured Point of Sale (POS) system built using **Next.js 14**, *
 - **npm** or **yarn**
 - **Supabase** account (for database setup)
 - **Prisma** installed globally
+-

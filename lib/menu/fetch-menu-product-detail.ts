@@ -106,6 +106,19 @@ export async function fetchRestaurantMenuProductDetail<T>(
   return request;
 }
 
+/** Warm the customer menu customize cache (hover / focus / touch) without blocking UI. */
+export function prefetchCustomerMenuProductDetail(
+  itemId: string,
+  query: CustomerMenuQuery
+): void {
+  if (!itemId) return;
+  const url = buildCustomerMenuItemDetailUrl(itemId, query);
+  if (!url) return;
+  if (cacheGet(customerDetailCache, url)) return;
+  if (customerInflight.has(url)) return;
+  void fetchCustomerMenuProductDetail(itemId, query);
+}
+
 /** Warm the POS customize cache (hover / focus) without blocking UI. */
 export function prefetchRestaurantMenuProductDetail(itemId: string): void {
   if (!itemId) return;

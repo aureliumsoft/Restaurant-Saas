@@ -8,6 +8,7 @@ const ORDER_LIFECYCLE_TYPES: RestaurantRealtimeEventType[] = [
   'kiosk.pending_cash',
   'pos.recent_orders',
   'pos.completed_orders',
+  'pos.working_orders',
   'sales.orders',
   'dashboard.analytics',
   'inventory.stock',

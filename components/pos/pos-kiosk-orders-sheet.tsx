@@ -31,6 +31,7 @@ import {
   useKioskPendingCash,
   type KioskPendingOrderRow,
 } from '@/hooks/use-kiosk-pending-cash';
+import { revalidatePosWorkingOrders } from '@/hooks/use-pos-working-orders';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
 import type { PosOrderDetail } from '@/components/pos/pos-recent-orders-sheet';
@@ -73,6 +74,10 @@ export function PosKioskOrdersSheet({
     confirmInBackground();
     window.setTimeout(() => {
       eventBus.emit('refreshRecentOrders');
+      eventBus.emit('refreshWorkingOrders');
+      eventBus.emit('refreshKioskOrders');
+      eventBus.emit('refreshSalesOrders');
+      if (branchId) revalidatePosWorkingOrders(branchId);
       onOrdersChanged?.();
     }, 0);
   };
@@ -203,6 +208,10 @@ export function PosKioskOrdersSheet({
       confirmInBackground();
       window.setTimeout(() => {
         eventBus.emit('refreshRecentOrders');
+        eventBus.emit('refreshWorkingOrders');
+        eventBus.emit('refreshKioskOrders');
+        eventBus.emit('refreshSalesOrders');
+        if (branchId) revalidatePosWorkingOrders(branchId);
         onOrdersChanged?.();
       }, 0);
     } catch (error) {

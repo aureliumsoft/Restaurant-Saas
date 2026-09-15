@@ -489,7 +489,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     [variationTemplates]
   );
 
-  const [step, setStep] = useState<WizardStep>(viewMode === 'advanced' ? 2 : 0);
+  const [step, setStep] = useState<WizardStep>(0);
   const [kind, setKind] = useState<ChoiceKind>('cat-many');
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [productCategoryIds, setProductCategoryIds] = useState<string[]>([]);
@@ -669,7 +669,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
   };
 
   useEffect(() => {
-    setStep(viewMode === 'advanced' ? 2 : 0);
+    setStep(0);
     setKind('cat-many');
     resetConfigureState();
     setWizardPrefDraft([]);

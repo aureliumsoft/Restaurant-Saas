@@ -14,13 +14,21 @@ const patchSchema = z
     deliveryEnabled: z.boolean().optional(),
     dineInEnabled: z.boolean().optional(),
     cardPaymentsEnabled: z.boolean().optional(),
+    websiteEnabled: z.boolean().optional(),
+    kioskEnabled: z.boolean().optional(),
+    kdsEnabled: z.boolean().optional(),
+    orderDisplayEnabled: z.boolean().optional(),
   })
   .strict()
   .refine(
     (data) =>
       data.deliveryEnabled !== undefined ||
       data.dineInEnabled !== undefined ||
-      data.cardPaymentsEnabled !== undefined,
+      data.cardPaymentsEnabled !== undefined ||
+      data.websiteEnabled !== undefined ||
+      data.kioskEnabled !== undefined ||
+      data.kdsEnabled !== undefined ||
+      data.orderDisplayEnabled !== undefined,
     { message: 'At least one setting must be provided.' }
   );
 

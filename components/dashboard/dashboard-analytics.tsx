@@ -19,6 +19,7 @@ import {
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { useStaffRestaurantBranding } from '@/hooks/use-staff-permissions';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
 import { kioskBasePath } from '@/lib/kiosk-path';
 import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
@@ -530,6 +531,7 @@ function InsightChip({
 
 export default function DashboardAnalytics() {
   const { formatMoney, regional } = useOwnerRestaurantRegional();
+  const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
   const { activeBranchId, activeBranchUrlId, loading: branchLoading, isOwnerOrAdmin } =
     useBranchContext();
@@ -723,37 +725,41 @@ export default function DashboardAnalytics() {
           {daySwitcher}
         {slug ? (
             <>
-              <Button
-                asChild
-                className="rounded-2xl bg-fire-500 shadow-md shadow-fire-500/30 hover:bg-fire-600"
-              >
-                <a
-                  href={restaurantStorefrontPath(slug)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                  Open Website
-                <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
-              </a>
-            </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="rounded-2xl bg-white/70 shadow-sm dark:bg-white/10"
-              >
-                <a
-                  href={
-                    activeBranchId
-                      ? kioskBasePath(slug, activeBranchId, activeBranchUrlId)
-                      : `/kiosk/${encodeURIComponent(slug)}`
-                  }
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                  Open Kiosk
-                <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
-              </a>
-            </Button>
+              {fulfillmentSettings.websiteEnabled ? (
+                <Button
+                  asChild
+                  className="rounded-2xl bg-fire-500 shadow-md shadow-fire-500/30 hover:bg-fire-600"
+                >
+                  <a
+                    href={restaurantStorefrontPath(slug)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open Website
+                    <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
+                  </a>
+                </Button>
+              ) : null}
+              {fulfillmentSettings.kioskEnabled ? (
+                <Button
+                  asChild
+                  variant="outline"
+                  className="rounded-2xl bg-white/70 shadow-sm dark:bg-white/10"
+                >
+                  <a
+                    href={
+                      activeBranchId
+                        ? kioskBasePath(slug, activeBranchId, activeBranchUrlId)
+                        : `/kiosk/${encodeURIComponent(slug)}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open Kiosk
+                    <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
+                  </a>
+                </Button>
+              ) : null}
             </>
         ) : null}
         </div>

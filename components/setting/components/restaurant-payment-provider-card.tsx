@@ -135,8 +135,8 @@ export function RestaurantPaymentProviderCard({
   if (loading) {
     return (
       <Card>
-        <CardContent className="flex justify-center py-10">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <CardContent className="flex justify-center items-center py-10">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
         </CardContent>
       </Card>
     );

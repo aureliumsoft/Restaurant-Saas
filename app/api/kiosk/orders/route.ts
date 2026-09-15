@@ -165,6 +165,16 @@ export async function POST(req: NextRequest) {
   }
 
   const fulfillmentSettings = parseRestaurantFulfillmentSettings(restaurant);
+  const isTableDineIn =
+    fulfillment === 'dine_in' &&
+    (Boolean(tableId) || Boolean(mobileTableQr));
+
+  if (!isTableDineIn && !fulfillmentSettings.kioskEnabled) {
+    return NextResponse.json(
+      { error: 'Kiosk ordering is not enabled for this restaurant' },
+      { status: 403 }
+    );
+  }
   if (fulfillment === 'dine_in' && !fulfillmentSettings.dineInEnabled) {
     return NextResponse.json(
       { error: 'Dine-in is not available at this restaurant' },

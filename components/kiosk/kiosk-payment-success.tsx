@@ -16,6 +16,8 @@ type Props = {
   ticketFromQuery: number | null;
   sessionId: string | null;
   token?: string | null;
+  initialMethod?: string | null;
+  initialPayStatus?: string | null;
   isMobile?: boolean;
 };
 
@@ -26,11 +28,16 @@ export function KioskPaymentSuccess({
   ticketFromQuery,
   sessionId,
   token,
+  initialMethod,
+  initialPayStatus,
   isMobile = false,
 }: Props) {
   const router = useRouter();
   const [ticket, setTicket] = useState<number | null>(ticketFromQuery);
-  const [paymentStatus, setPaymentStatus] = useState<string>('pending');
+  const [paymentStatus, setPaymentStatus] = useState<string>(
+    initialPayStatus ?? (sessionId || token ? 'pending' : initialMethod?.toLowerCase().includes('cash') ? 'pending' : 'completed')
+  );
+  const [paymentMethod, setPaymentMethod] = useState<string | null>(initialMethod ?? null);
   const [trackingId, setTrackingId] = useState<string | null>(orderId);
 
   useEffect(() => {
@@ -57,6 +64,7 @@ export function KioskPaymentSuccess({
         };
         if (!cancelled) {
           setPaymentStatus(body.paid ? 'completed' : body.status ?? 'pending');
+          setPaymentMethod('Card');
         }
       } catch {
         if (!cancelled) setPaymentStatus('pending');
@@ -69,7 +77,6 @@ export function KioskPaymentSuccess({
 
   useEffect(() => {
     if (!orderId) return;
-    if (ticket != null) return;
     let cancelled = false;
     (async () => {
       try {
@@ -80,13 +87,20 @@ export function KioskPaymentSuccess({
           data?: {
             shortOrderId?: string;
             ticketNumber?: number | null;
-            payment?: { status?: string } | null;
+            payment?: { status?: string; method?: string } | null;
           };
         };
         if (!cancelled && body.data) {
           setTrackingId(body.data.shortOrderId ?? orderId);
-          setTicket(body.data.ticketNumber ?? null);
-          if (body.data.payment?.status) setPaymentStatus(body.data.payment.status);
+          if (body.data.ticketNumber != null) {
+            setTicket(body.data.ticketNumber);
+          }
+          if (body.data.payment?.status) {
+            setPaymentStatus(body.data.payment.status);
+          }
+          if (body.data.payment?.method) {
+            setPaymentMethod(body.data.payment.method);
+          }
         }
       } catch {
         // ignore
@@ -95,7 +109,7 @@ export function KioskPaymentSuccess({
     return () => {
       cancelled = true;
     };
-  }, [orderId, ticket]);
+  }, [orderId]);
 
   const autoPrintedRef = useRef(false);
 
@@ -117,6 +131,12 @@ export function KioskPaymentSuccess({
     await printKioskReceipt({ slug, branchId, orderId });
   };
 
+  const isCash = (paymentMethod ?? '').toLowerCase().includes('cash');
+  const isPending =
+    paymentStatus.toLowerCase() === 'pending' ||
+    paymentStatus.toLowerCase() === 'pedding';
+  const isCashPending = isCash && isPending;
+
   return (
     <div className="min-h-screen bg-[#f8fafc] px-4 py-10 text-[#0f172a]">
       <div className="mx-auto max-w-xl">
@@ -137,9 +157,28 @@ export function KioskPaymentSuccess({
               <p>
                 <strong>Tracking ID:</strong> {trackingId ?? '—'}
               </p>
-              <p>
-                <strong>Payment:</strong> {paymentStatus}
-              </p>
+              <div className="mt-1 flex items-center gap-2">
+                <strong>Payment:</strong>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    isCashPending
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-emerald-100 text-emerald-800'
+                  }`}
+                >
+                  {isCashPending
+                    ? 'Cash at counter (Pending)'
+                    : 'Paid'}
+                </span>
+              </div>
+              {isCashPending ? (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-semibold">Cash payment required</p>
+                  <p className="mt-0.5 text-amber-700">
+                    Please proceed to the counter to pay. Your order will be prepared as soon as payment is received.
+                  </p>
+                </div>
+              ) : null}
             </div>
             <div className="flex gap-2">
               {isMobile ? null : (

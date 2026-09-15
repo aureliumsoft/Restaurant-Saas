@@ -33,6 +33,7 @@ import {
   ChevronDown,
   PackageCheck,
   WifiOff,
+  Activity,
 } from 'lucide-react';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { publicQueryParam } from '@/lib/public-id';
@@ -56,6 +57,7 @@ import {
   PosRecentOrdersSheet,
   type PosOrderDetail,
 } from '@/components/pos/pos-recent-orders-sheet';
+import { PosWorkingOrdersSheet } from '@/components/pos/pos-working-orders-sheet';
 import { PosKioskOrdersSheet } from '@/components/pos/pos-kiosk-orders-sheet';
 import { PosCompletedOrdersSheet } from '@/components/pos/pos-completed-orders-sheet';
 import { PosTableOrdersSheet } from '@/components/pos/pos-table-orders-sheet';
@@ -122,6 +124,10 @@ import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { useKioskPendingCash, revalidateKioskPendingCash } from '@/hooks/use-kiosk-pending-cash';
 import { useShiftAwareLogout } from '@/hooks/use-shift-aware-logout';
 import { usePosCompletedOrders } from '@/hooks/use-pos-completed-orders';
+import {
+  usePosWorkingOrders,
+  revalidatePosWorkingOrders,
+} from '@/hooks/use-pos-working-orders';
 import {
   useOpenTableOrders,
   revalidateOpenTableOrders,
@@ -600,6 +606,7 @@ export function PosScreen({
   const endShiftLogoutHandledRef = useRef(false);
   const [recentOrdersOpen, setRecentOrdersOpen] = useState(false);
   const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
+  const [workingOrdersOpen, setWorkingOrdersOpen] = useState(false);
   const [kioskOrdersOpen, setKioskOrdersOpen] = useState(false);
   const [tableOrdersOpen, setTableOrdersOpen] = useState(false);
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
@@ -634,6 +641,8 @@ export function PosScreen({
   const { count: kioskPendingCount } = useKioskPendingCash(posBranchId);
   const { count: completedOrdersCount } = usePosCompletedOrders(posBranchId);
   const { tableCount: openTableCount } = useOpenTableOrders(posBranchId);
+  const { count: workingOrdersCount } = usePosWorkingOrders(posBranchId);
+
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [editingOrderUrlId, setEditingOrderUrlId] = useState<string | null>(
     null
@@ -2221,6 +2230,28 @@ export function PosScreen({
 
   async function sendOrderToKitchen() {
     if (!kitchenSendOrder) return;
+    if (!fulfillmentSettings.kdsEnabled) {
+      setSendingToKitchen(true);
+      try {
+        await axios.post(
+          `/api/restaurant/pos-order/${encodeURIComponent(kitchenSendOrder.id)}/complete`
+        );
+        toast.success('Order completed.');
+        resetKitchenSendDialog();
+        void loadPendingKitchenOrders();
+        const branchId = selectedBranchId || activeBranchId || '';
+        if (branchId && kitchenSendOrder) {
+          markOpenTableOrderKitchenSent(branchId, kitchenSendOrder.id);
+          revalidateOpenTableOrders(branchId, 1_200);
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Could not complete order.';
+        toast.error(msg);
+      } finally {
+        setSendingToKitchen(false);
+      }
+      return;
+    }
     const minutes = resolveKitchenPrepMinutes();
     if (minutes === null) {
       toast.warn(
@@ -2277,8 +2308,12 @@ export function PosScreen({
       void loadPendingKitchenOrders();
       eventBus.emit('refreshSalesOrders');
       eventBus.emit('refreshRecentOrders');
+      eventBus.emit('refreshWorkingOrders');
       const branchId = selectedBranchId || activeBranchId || '';
-      if (branchId) void refreshShiftSummary(branchId);
+      if (branchId) {
+        revalidatePosWorkingOrders(branchId);
+        void refreshShiftSummary(branchId);
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Could not cancel order.';
       toast.error(msg);
@@ -2627,8 +2662,12 @@ export function PosScreen({
         setAmountPaid('');
         setCheckoutOpen(false);
         const branchId = selectedBranchId || activeBranchId || '';
-        if (branchId) revalidateKioskPendingCash(branchId);
+        if (branchId) {
+          revalidateKioskPendingCash(branchId);
+          revalidatePosWorkingOrders(branchId);
+        }
         eventBus.emit('refreshKioskOrders');
+        eventBus.emit('refreshWorkingOrders');
         return;
       }
       if (isEditing) {
@@ -2865,9 +2904,11 @@ export function PosScreen({
             }
           : null;
 
-      // Non-table: keep sales/inventory refresh. Table path uses optimistic cache.
+      // Non-table: keep sales/inventory/working refresh. Table path uses optimistic cache.
       if (!isTableOpenCheck) {
-      eventBus.emit('refreshSalesOrders');
+        eventBus.emit('refreshSalesOrders');
+        eventBus.emit('refreshRecentOrders');
+        eventBus.emit('refreshWorkingOrders');
         eventBus.emit('realtime:inventory.stock');
       }
 
@@ -2928,15 +2969,22 @@ export function PosScreen({
         }
         resetAfterPlace();
         if (!isEditing) {
-          openKitchenSendDialog({
-            id: dbOrderId,
-            shortOrderId: trackingId,
-            ticketNumber,
-            items: kitchenItemsForDialog,
-      });
-      void loadPendingKitchenOrders();
+          if (fulfillmentSettings.kdsEnabled) {
+            openKitchenSendDialog({
+              id: dbOrderId,
+              shortOrderId: trackingId,
+              ticketNumber,
+              items: kitchenItemsForDialog,
+            });
+            void loadPendingKitchenOrders();
+          } else {
+            toast.success('Order placed successfully.');
+          }
         }
-        if (branchId) void refreshShiftSummary(branchId);
+        if (branchId) {
+          revalidatePosWorkingOrders(branchId);
+          void refreshShiftSummary(branchId);
+        }
       }
     } catch (e: unknown) {
       const ex = e as { body?: { error?: unknown } };
@@ -3259,21 +3307,23 @@ export function PosScreen({
             ) : null}
           </Button>
           ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
-            title="Kiosk orders"
-            onClick={() => setKioskOrdersOpen(true)}
-          >
-            <Monitor className="h-4 w-4" />
-            {kioskPendingCount > 0 ? (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
-                {kioskPendingCount}
-              </span>
-            ) : null}
-          </Button>
+          {fulfillmentSettings.kioskEnabled ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
+              title="Kiosk orders"
+              onClick={() => setKioskOrdersOpen(true)}
+            >
+              <Monitor className="h-4 w-4" />
+              {kioskPendingCount > 0 ? (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
+                  {kioskPendingCount}
+                </span>
+              ) : null}
+            </Button>
+          ) : null}
           {fulfillmentSettings.dineInEnabled ? (
           <Button
             type="button"
@@ -3291,7 +3341,24 @@ export function PosScreen({
             ) : null}
           </Button>
           ) : null}
-          {(pendingKitchenOrders.length > 0) ? (
+          {!fulfillmentSettings.kdsEnabled ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
+              title="Working orders"
+              onClick={() => setWorkingOrdersOpen(true)}
+            >
+              <Activity className="h-4 w-4 text-fire-600 dark:text-fire-400" />
+              {workingOrdersCount > 0 ? (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
+                  {workingOrdersCount}
+                </span>
+              ) : null}
+            </Button>
+          ) : null}
+          {fulfillmentSettings.kdsEnabled && (pendingKitchenOrders.length > 0) ? (
             <Button
               type="button"
               variant="ghost"
@@ -4970,12 +5037,12 @@ export function PosScreen({
               {sendingToKitchen ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                  <span>Sending...</span>
+                  <span>{fulfillmentSettings.kdsEnabled ? 'Sending...' : 'Completing...'}</span>
                 </>
               ) : (
                 <>
                   <Check className="h-4 w-4 mr-2" />{' '}
-                  <span>Proceed to kitchen</span>
+                  <span>{fulfillmentSettings.kdsEnabled ? 'Proceed to kitchen' : 'Complete order'}</span>
                 </>
               )}
             </Button>
@@ -5085,6 +5152,12 @@ export function PosScreen({
         logoUrl={branding.logoUrl}
       />
 
+      <PosWorkingOrdersSheet
+        open={workingOrdersOpen}
+        onOpenChange={setWorkingOrdersOpen}
+        branchId={posBranchId}
+      />
+
       <PosKioskOrdersSheet
         open={kioskOrdersOpen}
         onOpenChange={setKioskOrdersOpen}
@@ -5095,8 +5168,12 @@ export function PosScreen({
         onEditOrder={(order) => loadOrderForEdit(order, 'kiosk')}
         onOrdersChanged={() => {
           eventBus.emit('refreshRecentOrders');
+          eventBus.emit('refreshWorkingOrders');
+          eventBus.emit('refreshKioskOrders');
           const branchId = selectedBranchId || activeBranchId || '';
           if (branchId) {
+            revalidatePosWorkingOrders(branchId);
+            revalidateKioskPendingCash(branchId);
             void refreshShiftSummary(branchId);
           }
         }}
@@ -5109,7 +5186,13 @@ export function PosScreen({
         onOrdersChanged={() => {
           // Soft sync only — sheet already updated SWR optimistically.
           const branchId = selectedBranchId || activeBranchId || '';
-          if (branchId) revalidateOpenTableOrders(branchId, 1_500);
+          if (branchId) {
+            revalidateOpenTableOrders(branchId, 1_500);
+            revalidatePosWorkingOrders(branchId);
+          }
+          eventBus.emit('refreshWorkingOrders');
+          eventBus.emit('refreshRecentOrders');
+          eventBus.emit('refreshSalesOrders');
         }}
       />
 

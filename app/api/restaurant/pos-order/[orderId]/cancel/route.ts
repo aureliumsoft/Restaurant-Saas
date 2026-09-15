@@ -30,14 +30,13 @@ export async function PATCH(
       where: {
         id: orderId,
         restaurantId: auth.restaurantId,
-        sourceType: OrderSourceType.POS,
       },
       select: {
         id: true,
         status: true,
         branchId: true,
         kitchenTickets: {
-          where: { status: { equals: 'making', mode: 'insensitive' } },
+          where: { status: { in: ['pending', 'making'] } },
           select: { id: true },
           take: 1,
         },
@@ -57,13 +56,6 @@ export async function PATCH(
     ) {
       return NextResponse.json(
         { error: `Order is already ${status}` },
-        { status: 409 }
-      );
-    }
-
-    if (order.kitchenTickets.length > 0) {
-      return NextResponse.json(
-        { error: 'Order is already on the kitchen display and cannot be canceled here.' },
         { status: 409 }
       );
     }

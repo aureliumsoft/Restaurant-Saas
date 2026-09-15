@@ -9,7 +9,6 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconShoppingBag,
-  IconShoppingCart,
 } from '@tabler/icons-react';
 
 import { Button } from '@/components/ui/button';
@@ -38,6 +37,7 @@ import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import {
   fetchCustomerMenuProductDetail,
+  prefetchCustomerMenuProductDetail,
   productNeedsDetailFetch,
 } from '@/lib/menu/fetch-menu-product-detail';
 import { customerMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
@@ -57,8 +57,8 @@ import { buildStorefrontThemeVars } from '@/lib/restaurant-theme';
 import {
   ORDER_CATEGORY_BAR_HEIGHT_PX,
   ORDER_MENU_HEADER_HEIGHT_PX,
-  ORDER_PAGE_MAX_WIDTH_PX,
   ORDER_SIDEBAR_WIDTH_PX,
+  ORDER_PAGE_MAX_WIDTH_PX,
   ORDER_TOP_OFFSET_PX,
   OrderCartCheckoutButton,
   OrderCartPanel,
@@ -200,6 +200,9 @@ type CustomerMenuResponse =
   | CustomerMenuRestaurant;
 
 const ALL_CATEGORY_ID = 'all';
+
+const ORDER_PRODUCT_GRID =
+  'grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4';
 
 function effectiveUnitPrice(price: number, salePrice: number | null) {
   if (salePrice != null && salePrice > 0 && salePrice < price) return salePrice;
@@ -439,69 +442,134 @@ type OfferItem = {
 
 function ProductCard({
   product,
+  cartQty = 0,
   onAdd,
+  onIncrease,
+  onDecrease,
+  onPrefetch,
   formatMoney,
 }: {
   product: CustomerMenuProduct;
+  cartQty?: number;
   onAdd: () => void;
+  onIncrease?: () => void;
+  onDecrease?: () => void;
+  onPrefetch?: () => void;
   formatMoney: (amount: number) => string;
   showCustomizeIndicator?: boolean;
 }) {
   const priceDisplay = getMenuItemDisplayPrice(product);
   const hasSale = priceDisplay.compareAt != null;
+  const isSelected = cartQty > 0;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onAdd}
-      aria-label={`Add ${product.name}`}
-      className="flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (e.target === e.currentTarget) {
+            e.preventDefault();
+            onAdd();
+          }
+        }
+      }}
+      onMouseEnter={onPrefetch}
+      onFocus={onPrefetch}
+      onTouchStart={onPrefetch}
+      aria-label={`${product.name} - ${formatMoney(priceDisplay.amount)}`}
+      className={cn(
+        'group relative flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm transition-all duration-150 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+        isSelected
+          ? 'border-2 border-[#f5a623] shadow-md ring-1 ring-[#f5a623]/20'
+          : 'border border-[#e8eaef] hover:border-primary/25 hover:shadow-md'
+      )}
     >
-      <div className="relative">
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#f4f4f6]">
         {product.imageUrl ? (
           <img
             src={product.imageUrl}
             alt=""
-            className="h-44 w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-44 w-full items-center justify-center bg-[#f4f4f6] text-muted-foreground">
-            <IconShoppingBag className="h-10 w-10" />
+          <div className="flex h-full w-full items-center justify-center bg-[#f4f4f6] text-muted-foreground/60">
+            <IconShoppingBag className="h-8 w-8" />
           </div>
         )}
-        <span
-          className="pointer-events-none absolute bottom-3 right-3 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md"
-          aria-hidden
-        >
-          <Plus className="h-5 w-5" />
-        </span>
+        {hasSale && priceDisplay.compareAt ? (
+          <span className="absolute left-2 top-2 z-10 rounded-md bg-destructive px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-destructive-foreground shadow-sm">
+            −{Math.round(((priceDisplay.compareAt - priceDisplay.amount) / priceDisplay.compareAt) * 100)}%
+          </span>
+        ) : null}
+
+        {isSelected ? (
+          <div
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-lg bg-black/50 px-1.5 py-1 backdrop-blur-sm shadow-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDecrease?.();
+              }}
+              aria-label={`Decrease ${product.name} quantity`}
+              className="flex h-7 w-7 items-center justify-center rounded bg-white text-[#1f1f2e] shadow-sm transition hover:bg-white/90 active:scale-90"
+            >
+              <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </button>
+            <span className="min-w-[1.5rem] text-center text-xs sm:text-sm font-bold text-white tabular-nums">
+              {String(cartQty).padStart(2, '0')}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onIncrease?.();
+              }}
+              aria-label={`Increase ${product.name} quantity`}
+              className="flex h-7 w-7 items-center justify-center rounded bg-primary text-primary-foreground shadow-sm transition hover:brightness-95 active:scale-90"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </button>
+          </div>
+        ) : (
+          <span
+            className="absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md transition-transform duration-150 group-hover:scale-110 group-active:scale-95"
+            aria-hidden
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
+          </span>
+        )}
       </div>
-      <div className="flex flex-1 flex-col p-4">
-        <h3 className="line-clamp-2 text-base font-bold text-primary">
+      <div className="flex flex-1 flex-col p-3 sm:p-3.5">
+        <h3 className="line-clamp-2 text-sm sm:text-[15px] font-bold leading-snug text-primary transition-colors group-hover:text-primary">
           {product.name}
         </h3>
         {product.description ? (
-          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[#8e8e9a]">
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#8e8e9a]">
             {product.description}
           </p>
         ) : (
-          <span className="mt-1.5 block flex-1" />
+          <span className="mt-1 block flex-1" />
         )}
-        <div className="mt-3 text-base font-bold text-primary">
+        <div className="mt-2.5 flex items-baseline gap-1 text-sm sm:text-base font-bold text-primary">
           {priceDisplay.prefix ? (
-            <span className="mr-1 text-xs font-normal text-[#8e8e9a]">
+            <span className="mr-0.5 text-xs font-normal text-[#8e8e9a]">
               {priceDisplay.prefix}
             </span>
           ) : null}
-          {hasSale ? (
-            <span className="mr-2 text-sm font-normal text-[#8e8e9a] line-through">
-              {formatMoney(priceDisplay.compareAt!)}
+          {hasSale && priceDisplay.compareAt ? (
+            <span className="mr-1.5 text-xs sm:text-sm font-normal text-[#8e8e9a] line-through">
+              {formatMoney(priceDisplay.compareAt)}
             </span>
           ) : null}
-          {formatMoney(priceDisplay.amount)}
+          <span>{formatMoney(priceDisplay.amount)}</span>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -531,6 +599,9 @@ export default function OrderPageClient({
     : '/web-app';
 
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [scrollActiveCategoryId, setScrollActiveCategoryId] =
+    useState<string>(ALL_CATEGORY_ID);
+  const ignoreCategorySpyUntilRef = useRef<number>(0);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -966,6 +1037,17 @@ export default function OrderPageClient({
     [cart]
   );
 
+  const cartQuantitiesByProductId = useMemo(() => {
+    const map = new Map<string, { totalQty: number; lines: CartLine[] }>();
+    for (const line of cart) {
+      const existing = map.get(line.menuItemId) ?? { totalQty: 0, lines: [] };
+      existing.totalQty += line.quantity;
+      existing.lines.push(line);
+      map.set(line.menuItemId, existing);
+    }
+    return map;
+  }, [cart]);
+
   const adjustQuantity = (lineId: string, delta: number) => {
     setCart((current) =>
       current
@@ -978,9 +1060,59 @@ export default function OrderPageClient({
     );
   };
 
+  const scrollCategoryPillIntoView = useCallback((id: string) => {
+    const strip = categoryStripRef.current;
+    if (!strip) return;
+    const pill = strip.querySelector<HTMLElement>(
+      `[data-category-pill="${id}"]`
+    );
+    pill?.scrollIntoView({
+      behavior: 'smooth',
+      inline: 'center',
+      block: 'nearest',
+    });
+  }, []);
+
   const onCategoryClick = (id: string) => {
+    if (id === ALL_CATEGORY_ID) {
+      setSelectedCategory(ALL_CATEGORY_ID);
+      setScrollActiveCategoryId(ALL_CATEGORY_ID);
+      ignoreCategorySpyUntilRef.current = Date.now() + 700;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollCategoryPillIntoView(ALL_CATEGORY_ID);
+      return;
+    }
+
+    if (selectedCategory === ALL_CATEGORY_ID && !search.trim()) {
+      setScrollActiveCategoryId(id);
+      ignoreCategorySpyUntilRef.current = Date.now() + 700;
+      const targetSection = document.querySelector<HTMLElement>(
+        `[data-category-section="${id}"]`
+      );
+      if (targetSection) {
+        const topOffset = ORDER_TOP_OFFSET_PX + 12;
+        const elementPosition =
+          targetSection.getBoundingClientRect().top + window.scrollY;
+        const offsetPosition = elementPosition - topOffset;
+        window.scrollTo({
+          top: Math.max(0, offsetPosition),
+          behavior: 'smooth',
+        });
+      }
+      scrollCategoryPillIntoView(id);
+      return;
+    }
+
     setSelectedCategory(id);
+    setScrollActiveCategoryId(id);
+    scrollCategoryPillIntoView(id);
   };
+
+  const isAllCategoryMode =
+    selectedCategory === ALL_CATEGORY_ID && !search.trim();
+  const activeCategoryPillId = isAllCategoryMode
+    ? scrollActiveCategoryId
+    : selectedCategory;
 
   const categoryStripItems = useMemo(
     () => [
@@ -1048,6 +1180,87 @@ export default function OrderPageClient({
   const scrollToTop = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
+
+  useEffect(() => {
+    if (!mounted || selectedCategory !== ALL_CATEGORY_ID || search.trim()) return;
+
+    const sections = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-category-section]')
+    );
+    if (sections.length === 0) return;
+
+    const ratios = new Map<string, number>();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = (entry.target as HTMLElement).dataset.categorySection;
+          if (!id) continue;
+          ratios.set(id, entry.isIntersecting ? entry.intersectionRatio : 0);
+        }
+        if (Date.now() < ignoreCategorySpyUntilRef.current) return;
+
+        if (window.scrollY < 80) {
+          setScrollActiveCategoryId((prev) => {
+            if (prev === ALL_CATEGORY_ID) return prev;
+            scrollCategoryPillIntoView(ALL_CATEGORY_ID);
+            return ALL_CATEGORY_ID;
+          });
+          return;
+        }
+
+        let bestId = sections[0]?.dataset.categorySection ?? ALL_CATEGORY_ID;
+        let bestRatio = -1;
+        for (const section of sections) {
+          const id = section.dataset.categorySection;
+          if (!id) continue;
+          const ratio = ratios.get(id) ?? 0;
+          if (ratio > bestRatio) {
+            bestRatio = ratio;
+            bestId = id;
+          }
+        }
+        if (bestRatio <= 0) return;
+        setScrollActiveCategoryId((prev) => {
+          if (prev === bestId) return prev;
+          scrollCategoryPillIntoView(bestId);
+          return bestId;
+        });
+      },
+      {
+        root: null,
+        threshold: [0.05, 0.2, 0.4, 0.6, 0.8],
+        rootMargin: `-${ORDER_TOP_OFFSET_PX + 20}px 0px -45% 0px`,
+      }
+    );
+
+    for (const section of sections) {
+      observer.observe(section);
+    }
+
+    const handleScroll = () => {
+      if (Date.now() < ignoreCategorySpyUntilRef.current) return;
+      if (window.scrollY < 60) {
+        setScrollActiveCategoryId((prev) => {
+          if (prev === ALL_CATEGORY_ID) return prev;
+          scrollCategoryPillIntoView(ALL_CATEGORY_ID);
+          return ALL_CATEGORY_ID;
+        });
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [
+    mounted,
+    selectedCategory,
+    search,
+    displayedCategories,
+    scrollCategoryPillIntoView,
+  ]);
 
   useEffect(() => {
     if (!restaurantMeta) return;
@@ -1217,11 +1430,12 @@ export default function OrderPageClient({
             </>
           ) : (
             categoryStripItems.map((category) => {
-            const isActive = selectedCategory === category.id;
+            const isActive = activeCategoryPillId === category.id;
             return (
               <button
                 key={category.id}
                 type="button"
+                data-category-pill={category.id}
                 onClick={() => onCategoryClick(category.id)}
                 className={cn(
                   'inline-flex h-10 max-w-[11.5rem] shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-3.5 text-left text-sm font-semibold transition sm:max-w-[12.5rem]',
@@ -1321,60 +1535,64 @@ export default function OrderPageClient({
           height: ORDER_CATEGORY_BAR_HEIGHT_PX,
         }}
       >
-        <div className="mx-auto flex h-full w-full max-w-[1280px] items-center px-4 sm:px-6">
+        <div
+          className="mx-auto flex h-full w-full items-center px-4 sm:px-6"
+          style={{ maxWidth: ORDER_PAGE_MAX_WIDTH_PX }}
+        >
           {renderCategoryBar()}
         </div>
       </div>
 
       {searchOpen ? (
         <div
-          className="fixed inset-x-0 z-30 flex justify-center"
+          className="fixed inset-x-0 z-30 flex justify-center bg-white border-b border-[#ececf0]"
           style={{ top: ORDER_TOP_OFFSET_PX }}
         >
           <div
-            className="w-full max-w-full border-b border-[#ececf0] bg-white px-4 py-2 sm:max-w-[min(100%,var(--order-page-max-width))] sm:px-6"
-            style={
-              {
-                '--order-page-max-width': `${ORDER_PAGE_MAX_WIDTH_PX}px`,
-              } as CSSProperties
-            }
+            className="mx-auto w-full px-4 py-2 sm:px-6"
+            style={{ maxWidth: ORDER_PAGE_MAX_WIDTH_PX }}
           >
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-            <Input
-              ref={searchInputRef}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t('searchProducts')}
-              className="min-w-0 w-full"
-            />
-            <Button
-              className="shrink-0 whitespace-nowrap"
-              onClick={() => {
-                setSearch('');
-                setSearchOpen(false);
-              }}
-              variant="outline"
-              type="button"
-              aria-label={t('clear')}
-            >
-              <X className="h-4 w-4 sm:me-1" />
-              <span className="hidden sm:inline">{t('clear')}</span>
-            </Button>
-          </div>
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+              <Input
+                ref={searchInputRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('searchProducts')}
+                className="min-w-0 w-full"
+              />
+              <Button
+                className="shrink-0 whitespace-nowrap"
+                onClick={() => {
+                  setSearch('');
+                  setSearchOpen(false);
+                }}
+                variant="outline"
+                type="button"
+                aria-label={t('clear')}
+              >
+                <X className="h-4 w-4 sm:me-1" />
+                <span className="hidden sm:inline">{t('clear')}</span>
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}
 
       <div
-        className="mx-auto flex min-h-screen w-full max-w-full flex-col sm:max-w-[min(100%,var(--order-page-max-width))] lg:flex-row"
+        className="mx-auto flex min-h-screen w-full flex-col lg:flex-row"
         style={{
+          maxWidth: ORDER_PAGE_MAX_WIDTH_PX,
           paddingTop: searchOpen
             ? ORDER_TOP_OFFSET_PX + 56
             : ORDER_TOP_OFFSET_PX,
-          ['--order-page-max-width' as string]: `${ORDER_PAGE_MAX_WIDTH_PX}px`,
         }}
       >
-        <main className="min-w-0 flex-1 px-4 py-5 sm:px-6">
+        <main
+          className={cn(
+            'min-w-0 flex-1 px-4 py-5 sm:px-6',
+            cart.length > 0 ? 'pb-28 lg:pb-6' : 'pb-6'
+          )}
+        >
           {bannerOffers.length > 0 ? (
             <OfferSlider
               items={bannerOffers}
@@ -1393,9 +1611,9 @@ export default function OrderPageClient({
           <section className="min-w-0">
             {menuLoading ? (
               <ProductCardSkeletonGrid
-                count={6}
+                count={8}
                 variant="online"
-                gridClassName="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                gridClassName={ORDER_PRODUCT_GRID}
               />
             ) : displayedCategories.length > 0 ? (
               displayedCategories.map((category) => {
@@ -1410,14 +1628,19 @@ export default function OrderPageClient({
 
                 if (isCategoryLoading) {
                   return (
-                    <div key={category.id} id={category.id} className="mb-10 min-w-0">
-                      <h3 className="mb-4 text-xl font-bold text-primary">
+                    <div
+                      key={category.id}
+                      id={category.id}
+                      data-category-section={category.id}
+                      className="mb-10 min-w-0"
+                    >
+                      <h3 className="mb-3 text-lg sm:text-xl font-bold text-primary">
                         {category.name}
                       </h3>
                       <ProductCardSkeletonGrid
-                        count={3}
+                        count={4}
                         variant="online"
-                        gridClassName="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                        gridClassName={ORDER_PRODUCT_GRID}
                       />
                     </div>
                   );
@@ -1427,7 +1650,12 @@ export default function OrderPageClient({
 
                 if (categoryProducts.length === 0) {
                   return (
-                    <div key={category.id} className="mb-10">
+                    <div
+                      key={category.id}
+                      id={category.id}
+                      data-category-section={category.id}
+                      className="mb-10 min-w-0"
+                    >
                       <p className="text-sm text-[#8e8e9a]">
                         {t('noProductsFoundInCategory')}
                       </p>
@@ -1439,20 +1667,51 @@ export default function OrderPageClient({
                   <div
                     key={category.id}
                     id={category.id}
+                    data-category-section={category.id}
                     className="mb-10 min-w-0"
                   >
-                    <h3 className="mb-4 text-xl font-bold text-primary">
+                    <h3 className="mb-3 text-lg sm:text-xl font-bold text-primary">
                       {category.name}
                     </h3>
-                    <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {categoryProducts.map((product) => (
-                        <ProductCard
-                          key={product.id}
-                          product={product}
-                          formatMoney={formatMoney}
-                          onAdd={() => handleProductSelect(product)}
-                        />
-                      ))}
+                    <div className={ORDER_PRODUCT_GRID}>
+                      {categoryProducts.map((product) => {
+                        const cartInfo = cartQuantitiesByProductId.get(product.id);
+                        const cartQty = cartInfo?.totalQty ?? 0;
+                        return (
+                          <ProductCard
+                            key={product.id}
+                            product={product}
+                            cartQty={cartQty}
+                            formatMoney={formatMoney}
+                            onAdd={() => handleProductSelect(product)}
+                            onIncrease={() => {
+                              if (
+                                cartInfo &&
+                                cartInfo.lines.length === 1 &&
+                                !productNeedsCustomizeDialog(product)
+                              ) {
+                                adjustQuantity(cartInfo.lines[0].lineId, 1);
+                              } else {
+                                handleProductSelect(product);
+                              }
+                            }}
+                            onDecrease={() => {
+                              if (cartInfo && cartInfo.lines.length > 0) {
+                                adjustQuantity(
+                                  cartInfo.lines[cartInfo.lines.length - 1].lineId,
+                                  -1
+                                );
+                              }
+                            }}
+                            onPrefetch={() => {
+                              prefetchCustomerMenuProductDetail(product.id, {
+                                slug: orderInfo?.restaurantSlug ?? undefined,
+                                subdomain: hostSubdomain ?? undefined,
+                              });
+                            }}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -1477,9 +1736,16 @@ export default function OrderPageClient({
         >
           {cartPanel}
         </aside>
-
-        <aside className="shrink-0 bg-[#f4f4f6] p-3 lg:hidden">{cartPanel}</aside>
       </div>
+
+      {/* Fixed bottom checkout button for mobile view */}
+      {cart.length > 0 ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#ececf0] bg-white/95 p-3 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.08)] lg:hidden pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="mx-auto w-full max-w-md">
+            {cartFooter}
+          </div>
+        </div>
+      ) : null}
 
         <ProductCustomizeDialog
         open={customizeOpen}
@@ -1583,7 +1849,10 @@ export default function OrderPageClient({
         <Button
           type="button"
           size="icon"
-          className="fixed bottom-6 z-40 h-11 w-11 rounded-full shadow-lg right-6 lg:right-[max(1.5rem,calc((100vw-1280px)/2+320px+1rem))]"
+          className={cn(
+            'fixed z-40 h-11 w-11 rounded-full shadow-lg right-6 lg:right-[calc(320px+1.5rem)]',
+            cart.length > 0 ? 'bottom-20 lg:bottom-6' : 'bottom-6'
+          )}
           onClick={scrollToTop}
           aria-label="Scroll to top"
         >

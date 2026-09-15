@@ -123,6 +123,7 @@ import {
 import { PosOnScreenKeyboard } from '@/components/pos/pos-on-screen-keyboard';
 import { encodeUrlIdClient } from '@/lib/encode-url-id-client';
 import { publicId } from '@/lib/public-id';
+import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
 
 /** Fixed light product tiles — kiosk stays light like online storefront (no dark mode). */
 const KIOSK_PRODUCT_CARD =
@@ -417,10 +418,6 @@ export function KioskApp({
   const [fromTableQr, setFromTableQr] = useState(false);
   const deepLinkAppliedRef = useRef(false);
 
-  useEffect(() => {
-    deepLinkAppliedRef.current = false;
-    setFromTableQr(false);
-  }, [slug, branchId]);
   const [pendingFulfillment, setPendingFulfillment] = useState<
     'dine_in' | null
   >(null);
@@ -450,17 +447,31 @@ export function KioskApp({
   }, [step]);
 
   useEffect(() => {
-    const saved = loadKioskQrContext(slug, branchId);
-    if (!saved) return;
-    setFromTableQr(true);
-    setIsMobileScan(saved.isMobileScan);
-    setSelectedTableId(saved.tableId);
-    setFulfillment('dine_in');
-    setStep('menu');
-    if (saved.isMobileScan) {
-      setPaymentMode('cash');
+    deepLinkAppliedRef.current = false;
+    const { mobile, method, tableId } = parseKioskDeepLinkParams(searchParams);
+    if (method === 'dine_in' || tableId) {
+      setFromTableQr(true);
+      if (mobile !== null) setIsMobileScan(mobile);
+      if (tableId) setSelectedTableId(tableId);
+      setFulfillment('dine_in');
+      setStep('menu');
+      if (mobile !== false) setPaymentMode('cash');
+    } else {
+      const saved = loadKioskQrContext(slug, branchId);
+      if (saved) {
+        setFromTableQr(true);
+        setIsMobileScan(saved.isMobileScan);
+        setSelectedTableId(saved.tableId);
+        setFulfillment('dine_in');
+        setStep('menu');
+        if (saved.isMobileScan) {
+          setPaymentMode('cash');
+        }
+      } else {
+        setFromTableQr(false);
+      }
     }
-  }, [slug, branchId]);
+  }, [slug, branchId, searchParams]);
 
   useEffect(() => {
     const account = customerAccount?.account;
@@ -695,9 +706,13 @@ export function KioskApp({
     if (!hasDeepLinkParams) return;
 
     if (method === 'dine_in' && tableId) {
-      const valid = diningTables.some((t) => t.id === tableId);
-      if (valid) {
-        setSelectedTableId(tableId);
+      const matched = diningTables.find(
+        (t) =>
+          t.id === tableId ||
+          (t as { urlId?: string }).urlId === tableId
+      );
+      if (matched) {
+        setSelectedTableId(matched.id);
         setFulfillment('dine_in');
         setFromTableQr(true);
         setPaymentMode('cash');
@@ -705,7 +720,7 @@ export function KioskApp({
         saveKioskQrContext(slug, branchId, {
           fromTableQr: true,
           isMobileScan: mobile !== false,
-          tableId,
+          tableId: matched.id,
           fulfillment: 'dine_in',
         });
         deepLinkAppliedRef.current = true;
@@ -1071,12 +1086,19 @@ export function KioskApp({
           : 'Order placed'
       );
       const publicOrderId = await encodeUrlIdClient(placedId);
+      const queryParams = new URLSearchParams({
+        orderId: publicOrderId,
+        method: payment.paymentMethod,
+        payStatus: payment.paymentStatus,
+      });
+      if (ticketNumber != null) {
+        queryParams.set('ticket', String(ticketNumber));
+      }
+      if (isMobileScan) {
+        queryParams.set('Mobile', 'true');
+      }
       window.location.assign(
-        `${kioskSuccessPath(slug, kioskPublicBranchId)}?orderId=${encodeURIComponent(publicOrderId)}${
-          ticketNumber != null
-            ? `&ticket=${encodeURIComponent(String(ticketNumber))}`
-            : ''
-        }${isMobileScan ? '&Mobile=true' : ''}`
+        `${kioskSuccessPath(slug, kioskPublicBranchId)}?${queryParams.toString()}`
       );
     } catch (e: unknown) {
       const ex = e as { body?: unknown };
@@ -1109,7 +1131,12 @@ export function KioskApp({
   const startOver = () => {
     setLastOrderId(null);
     setLastTicketNumber(null);
-    setStep('mode');
+    if (fromTableQr) {
+      setStep('menu');
+      setFulfillment('dine_in');
+    } else {
+      setStep('mode');
+    }
   };
 
   const ProductCard = ({ p }: { p: CustomerMenuProduct }) => {
@@ -1256,6 +1283,31 @@ export function KioskApp({
         ) : null}
       </div>
     );
+  }
+
+  if (restaurantMeta) {
+    const restaurantDisplayName = String(
+      menu?.name || restaurantMeta?.name || slug
+    );
+    if (fromTableQr && !fulfillmentSettings.dineInEnabled) {
+      return (
+        <FeatureDisabledScreen
+          feature="kiosk"
+          restaurantName={restaurantDisplayName}
+          customMessage="Table dine-in ordering is currently disabled for this restaurant."
+          homeUrl="/"
+        />
+      );
+    }
+    if (!fromTableQr && !fulfillmentSettings.kioskEnabled) {
+      return (
+        <FeatureDisabledScreen
+          feature="kiosk"
+          restaurantName={restaurantDisplayName}
+          homeUrl="/"
+        />
+      );
+    }
   }
 
   const displayMenu: MenuRestaurant = menu ?? {

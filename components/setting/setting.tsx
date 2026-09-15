@@ -89,8 +89,8 @@ export function Setting() {
             <div className="grid min-w-0 gap-6">
               {activeSection === 'basic' ? (
                 <>
-                  <RestaurantFulfillmentSettingsCard />
                   <CustomerEntryLinks />
+                  <RestaurantFulfillmentSettingsCard />
                   <RestaurantBrandingCard brandingAllowed={brandingAllowed} />
                 </>
               ) : null}
@@ -111,8 +111,8 @@ export function Setting() {
                   {fulfillmentSettings.dineInEnabled ? (
                     <RestaurantDineInPaymentCard />
                   ) : null}
-                  <RestaurantServiceChargesCard />
                   <RestaurantRegionalSettingsCard />
+                  <RestaurantServiceChargesCard />
                   <RestaurantPaymentProviderCard
                     cardPaymentsEnabled={fulfillmentSettings.cardPaymentsEnabled}
                   />

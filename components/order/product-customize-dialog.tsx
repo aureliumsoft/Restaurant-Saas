@@ -124,6 +124,8 @@ export type AttributeGroup = {
   items: (Omit<MenuOption, 'unitPrice'> & {
     price: number;
     salePrice: number | null;
+    updatedAt?: string | Date | null;
+    createdAt?: string | Date | null;
     variations?: {
       id: string;
       name?: string;
@@ -1636,19 +1638,9 @@ export function ProductCustomizeDialog({
 
             <div className="relative flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-4">
-              {isLoading ? (
-                <div
-                  className="flex min-h-[16rem] flex-col items-center justify-center gap-3 py-12 text-muted-foreground"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="text-sm font-medium">Loading options…</p>
-                </div>
-              ) : (
               <div className="space-y-5">
                 {variations.length > 0 ? (
-                  <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                  <section className="rounded-xl border border-border bg-card p-4 shadow-sm transition-all duration-200">
                     <div className="flex items-start justify-between gap-3">
                       <Label className="text-sm font-semibold leading-snug text-foreground">
                         Variation
@@ -1673,6 +1665,7 @@ export function ProductCustomizeDialog({
                   </section>
                 ) : null}
 
+                {/* Product Recommendation Groups */}
                 {visibleProductRecommendationGroups.map((g) => {
                   const item = g.items[0];
                   if (!item) return null;
@@ -1700,7 +1693,7 @@ export function ProductCustomizeDialog({
                   return (
                     <section
                       key={g.id}
-                      className="rounded-xl border border-border bg-card p-4 shadow-sm"
+                      className="rounded-xl border border-border bg-card p-4 shadow-sm animate-in fade-in-50 duration-200"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <Label className="text-sm font-semibold text-foreground">
@@ -1738,127 +1731,164 @@ export function ProductCustomizeDialog({
                   );
                 })}
 
-                {visibleCategoryGroups.length === 0 &&
+                {/* Category Add-on Groups */}
+                {visibleCategoryGroups.map((g) => {
+                  const selectedIds = selectedByGroup[g.id] ?? [];
+                  const limits = limitsForGroup(g);
+                  const count = totalSelectedUnits(selectedIds);
+                  const min = limits.minItems ?? (g.required ? 1 : 0);
+                  const missing =
+                    g.selectionType === 'SINGLE'
+                      ? g.required && count === 0
+                      : (g.required && count < min) ||
+                        (count > 0 && min > 0 && count < min);
+
+                  return (
+                    <section
+                      key={g.id}
+                      ref={(el) => {
+                        groupRefs.current[g.id] = el;
+                      }}
+                      className="rounded-xl border border-border bg-card p-4 shadow-sm animate-in fade-in-50 duration-200"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <Label className="text-sm font-semibold leading-snug text-foreground">
+                            {configurationGroupDisplayTitle(
+                              g.name,
+                              baseProductVariationContext.parent,
+                              g.useVariationPricing ?? false,
+                              baseProductVariationContext.shortLabel
+                            )}
+                          </Label>
+                          {g.linkedCategoryName ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              From {g.linkedCategoryName}
+                            </p>
+                          ) : null}
+                        </div>
+                        {g.required ? (
+                          <span className="shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
+                            Required
+                          </span>
+                        ) : (
+                          <p className="shrink-0 text-xs text-muted-foreground">
+                            {g.selectionType === 'SINGLE'
+                              ? 'Optional'
+                              : multiSelectionHint(
+                                  limits.minItems,
+                                  limits.maxItems
+                                )}
+                          </p>
+                        )}
+                      </div>
+                      {g.selectionType === 'MULTIPLE' ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Selected {count} / {limits.maxItems}
+                          {g.multipleMode === 'QUANTITY' &&
+                          hasQuantityFreeTier(g.freeQuantity)
+                            ? ` · first ${g.freeQuantity} free`
+                            : ''}
+                        </p>
+                      ) : null}
+                      {missing ? (
+                        <p className="mt-1 text-xs text-destructive">
+                          {g.selectionType === 'SINGLE'
+                            ? 'Please select an option'
+                            : `Please select at least ${min} option${min === 1 ? '' : 's'}`}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-3">
+                        {(() => {
+                          const visible = visibleConfigurationItems(
+                            g,
+                            baseProductVariationContext.parent
+                          );
+                          if (visible.length === 0) {
+                            if (isLoading) {
+                              return (
+                                <div className="flex h-12 w-full animate-pulse items-center justify-between rounded-lg border border-input/60 bg-muted/40 px-3">
+                                  <div className="h-4 w-32 rounded bg-muted-foreground/15" />
+                                  <div className="h-4 w-4 rounded bg-muted-foreground/15" />
+                                </div>
+                              );
+                            }
+                            return (
+                              <p className="text-sm text-muted-foreground">
+                                {g.useVariationPricing &&
+                                variations.length > 0 &&
+                                !selectedVariationId
+                                  ? 'Select a product variation to see add-ons for this size.'
+                                  : g.useVariationPricing
+                                    ? 'No add-ons available for this variation.'
+                                    : 'No options available in this category yet.'}
+                              </p>
+                            );
+                          }
+                          const categorySummary =
+                            buildCategoryGroupSelectionSummary(
+                              g,
+                              selectedIds,
+                              selectedNestedVariationByOption,
+                              nestedOptionConfigs,
+                              baseProductVariationContext.parent,
+                              baseProductVariationContext.shortLabel,
+                              regional
+                            );
+                          return (
+                            <button
+                              type="button"
+                              className="flex w-full min-h-12 items-center justify-between gap-2 rounded-lg border border-input bg-muted/40 px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted/60"
+                              onClick={() => openCategoryGroupSelect(g)}
+                            >
+                              <ConfigurationSelectSummary
+                                lines={categorySummary}
+                                placeholder="Select…"
+                              />
+                              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    </section>
+                  );
+                })}
+
+                {/* Progressive Skeletons while loading recommendations/options in parallel */}
+                {isLoading && (
+                  <div className="space-y-4" aria-busy="true">
+                    {[1, 2, 3].map((i) => (
+                      <section
+                        key={`loading-rec-${i}`}
+                        className="rounded-xl border border-border bg-card p-4 shadow-sm animate-pulse space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1.5 flex-1">
+                            <div className="h-4 w-36 rounded bg-muted-foreground/15" />
+                            <div className="h-3 w-20 rounded bg-muted-foreground/10" />
+                          </div>
+                          <div className="h-5 w-14 rounded-md bg-muted-foreground/10" />
+                        </div>
+                        <div className="flex h-12 w-full items-center justify-between rounded-lg border border-input/60 bg-muted/30 px-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="h-7 w-7 rounded-md bg-muted-foreground/15 shrink-0" />
+                            <div className="h-3.5 w-32 rounded bg-muted-foreground/15" />
+                          </div>
+                          <div className="h-4 w-4 rounded bg-muted-foreground/10" />
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                )}
+
+                {!isLoading &&
+                visibleCategoryGroups.length === 0 &&
                 visibleProductRecommendationGroups.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No add-ons available.
                   </p>
-          ) : (
-                  visibleCategoryGroups.map((g) => {
-              const selectedIds = selectedByGroup[g.id] ?? [];
-                    const limits = limitsForGroup(g);
-                    const count = totalSelectedUnits(selectedIds);
-                    const min = limits.minItems ?? (g.required ? 1 : 0);
-                    const missing =
-                      g.selectionType === 'SINGLE'
-                        ? g.required && count === 0
-                        : (g.required && count < min) ||
-                          (count > 0 && min > 0 && count < min);
-
-              return (
-                <section
-                  key={g.id}
-                        ref={(el) => {
-                          groupRefs.current[g.id] = el;
-                        }}
-                        className="rounded-xl border border-border bg-card p-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <Label className="text-sm font-semibold leading-snug text-foreground">
-                              {configurationGroupDisplayTitle(
-                                g.name,
-                                baseProductVariationContext.parent,
-                                g.useVariationPricing ?? false,
-                                baseProductVariationContext.shortLabel
-                              )}
-                      </Label>
-                      {g.linkedCategoryName ? (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          From {g.linkedCategoryName}
-                        </p>
-                      ) : null}
-                    </div>
-                          {g.required ? (
-                            <span className="shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
-                              Required
-                            </span>
-                          ) : (
-                            <p className="shrink-0 text-xs text-muted-foreground">
-                              {g.selectionType === 'SINGLE'
-                                ? 'Optional'
-                                : multiSelectionHint(
-                                    limits.minItems,
-                                    limits.maxItems
-                                  )}
-                      </p>
-                    )}
-                  </div>
-                        {g.selectionType === 'MULTIPLE' ? (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Selected {count} / {limits.maxItems}
-                            {g.multipleMode === 'QUANTITY' &&
-                            hasQuantityFreeTier(g.freeQuantity)
-                              ? ` · first ${g.freeQuantity} free`
-                                  : ''}
-                          </p>
-                        ) : null}
-                        {missing ? (
-                          <p className="mt-1 text-xs text-destructive">
-                            {g.selectionType === 'SINGLE'
-                              ? 'Please select an option'
-                              : `Please select at least ${min} option${min === 1 ? '' : 's'}`}
-                          </p>
-                        ) : null}
-
-                        <div className="mt-3">
-                          {(() => {
-                            const visible = visibleConfigurationItems(
-                              g,
-                              baseProductVariationContext.parent
-                            );
-                            if (visible.length === 0) {
-                              return (
-                      <p className="text-sm text-muted-foreground">
-                                  {g.useVariationPricing &&
-                                  variations.length > 0 &&
-                                  !selectedVariationId
-                                    ? 'Select a product variation to see add-ons for this size.'
-                                    : g.useVariationPricing
-                                      ? 'No add-ons available for this variation.'
-                                      : 'No options available in this category yet.'}
-                                </p>
-                              );
-                            }
-                            const categorySummary =
-                              buildCategoryGroupSelectionSummary(
-                                g,
-                                selectedIds,
-                                selectedNestedVariationByOption,
-                                nestedOptionConfigs,
-                                baseProductVariationContext.parent,
-                                baseProductVariationContext.shortLabel,
-                                regional
-                              );
-                                return (
-                                  <button
-                                    type="button"
-                                className="flex w-full min-h-12 items-center justify-between gap-2 rounded-lg border border-input bg-muted/40 px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted/60"
-                                onClick={() => openCategoryGroupSelect(g)}
-                              >
-                                <ConfigurationSelectSummary
-                                  lines={categorySummary}
-                                  placeholder="Select…"
-                                />
-                                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                  </button>
-                                );
-                              })()}
-                  </div>
-                </section>
-              );
-            })
-          )}
+                ) : null}
 
                 {personalizeGroups.length > 0 ? (
                   <PersonalizeOptionsSection
@@ -1867,8 +1897,7 @@ export function ProductCustomizeDialog({
                     onToggle={togglePersonalizeOption}
                   />
                 ) : null}
-        </div>
-              )}
+              </div>
             </div>
 
             {picker && !isLoading ? (
@@ -1908,99 +1937,224 @@ export function ProductCustomizeDialog({
                     </div>
                   </div>
                   <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-2">
-                    {pickerEntries.map((entry) => (
-                      <button
-                        key={entry.id}
-                        type="button"
-                        className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left ${
-                          entry.selected
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border bg-background'
-                        }`}
-                        onClick={entry.onChoose}
-                      >
-                        <LazyMenuProductImage
-                          src={entry.imageUrl}
-                          alt={entry.name}
-                          emptyLabel=""
-                          className="h-12 w-12 shrink-0 rounded-md"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {entry.name}
-                          </p>
-                          {entry.priceLabel ? (
-                          <p className="text-xs text-muted-foreground">
-                              {entry.priceLabel}
-                          </p>
-                          ) : null}
-                        </div>
-                        {picker.kind === 'group-multi' ? (
+                    {pickerEntries.length === 0 ? (
+                      <div className="space-y-2 py-1" aria-busy="true">
+                        {[1, 2, 3, 4].map((i) => (
                           <div
-                            className="ml-auto flex items-center gap-1"
-                            onClick={(e) => e.stopPropagation()}
+                            key={`picker-skel-${i}`}
+                            className="flex w-full items-center gap-3 rounded-lg border border-border bg-background p-3 animate-pulse"
                           >
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={!entry.quantity}
-                              onClick={entry.onDecrease}
-                            >
-                              -
-          </Button>
-                            <span className="min-w-[2ch] text-center text-xs font-semibold">
-                              {entry.quantity ?? 0}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={entry.onIncrease}
-                            >
-                              +
-          </Button>
+                            <div className="h-12 w-12 shrink-0 rounded-md bg-muted-foreground/15" />
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <div className="h-4 w-3/4 rounded bg-muted-foreground/15" />
+                              <div className="h-3 w-1/3 rounded bg-muted-foreground/10" />
+                            </div>
                           </div>
-                        ) : entry.selected ? (
-                          <Check className="h-4 w-4 text-primary" />
-                        ) : null}
-                      </button>
-                    ))}
+                        ))}
+                      </div>
+                    ) : (
+                      pickerEntries.map((entry) => (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
+                            entry.selected
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border bg-background hover:bg-muted/40'
+                          }`}
+                          onClick={entry.onChoose}
+                        >
+                          <LazyMenuProductImage
+                            src={entry.imageUrl}
+                            alt={entry.name}
+                            emptyLabel=""
+                            className="h-12 w-12 shrink-0 rounded-md"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">
+                              {entry.name}
+                            </p>
+                            {entry.priceLabel ? (
+                              <p className="text-xs text-muted-foreground">
+                                {entry.priceLabel}
+                              </p>
+                            ) : null}
+                          </div>
+                          {picker.kind === 'group-multi' ? (
+                            <div
+                              className="ml-auto flex items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={!entry.quantity}
+                                onClick={entry.onDecrease}
+                              >
+                                -
+                              </Button>
+                              <span className="min-w-[2ch] text-center text-xs font-semibold">
+                                {entry.quantity ?? 0}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={entry.onIncrease}
+                              >
+                                +
+                              </Button>
+                            </div>
+                          ) : entry.selected ? (
+                            <Check className="h-4 w-4 text-primary" />
+                          ) : null}
+                        </button>
+                      ))
+                    )}
                   </div>
-                  {picker.kind === 'group-multi' ? (
-                    <div className="shrink-0 border-t border-border bg-card p-4 pt-3">
-                      <Button
-                        type="button"
-                        className="h-11 w-full rounded-xl font-semibold"
-                        onClick={() => {
-                          const nextPicker = getNextPendingPicker(
-                            selectedVariationId,
-                            selectedByGroup,
-                            selectedNestedVariationByOption,
-                            productRecPickerContext()
-                          );
-                          if (
-                            nextPicker &&
-                            nextPicker.kind === 'group-multi' &&
-                            nextPicker.groupId === picker.groupId
-                          ) {
-                            setPicker(null);
-                            return;
-                          }
-                          applyNextPendingPicker(
-                            selectedVariationId,
-                            selectedByGroup,
-                            selectedNestedVariationByOption,
-                            productRecPickerContext()
-                          );
-                        }}
-                      >
-                        Select
-                      </Button>
-                    </div>
-                  ) : null}
+                  {(() => {
+                    if (
+                      picker.kind === 'group-multi' ||
+                      picker.kind === 'group-single'
+                    ) {
+                      const currentGroupId = picker.groupId;
+                      const group = categoryGroups.find(
+                        (g) => g.id === currentGroupId
+                      );
+                      if (!group) return null;
+                      const limits = limitsForGroup(group);
+                      const min = limits.minItems ?? (group.required ? 1 : 0);
+                      const isOptional = min === 0;
+                      const selectedCount = totalSelectedUnits(
+                        selectedByGroup[group.id] ?? []
+                      );
+                      const hasSelection = selectedCount > 0;
+                      const buttonText =
+                        isOptional && !hasSelection ? 'No Thanks' : 'Select';
+                      const isDisabled = !isOptional && selectedCount < min;
+
+                      return (
+                        <div className="shrink-0 border-t border-border bg-card p-4 pt-3">
+                          <Button
+                            type="button"
+                            variant={
+                              isOptional && !hasSelection
+                                ? 'outline'
+                                : 'default'
+                            }
+                            className="h-11 w-full rounded-xl font-semibold"
+                            disabled={isDisabled}
+                            onClick={() => {
+                              if (isOptional && !hasSelection) {
+                                const nextSelectedByGroup = {
+                                  ...selectedByGroup,
+                                  [currentGroupId]: [],
+                                };
+                                setSelectedByGroup(nextSelectedByGroup);
+                                clearOptionDataForGroup(
+                                  currentGroupId,
+                                  nestedOptionConfigs,
+                                  selectedNestedVariationByOption
+                                );
+                                const nextPicker = getNextPendingPicker(
+                                  selectedVariationId,
+                                  nextSelectedByGroup,
+                                  selectedNestedVariationByOption,
+                                  productRecPickerContext()
+                                );
+                                if (
+                                  nextPicker &&
+                                  'groupId' in nextPicker &&
+                                  nextPicker.groupId === currentGroupId
+                                ) {
+                                  setPicker(null);
+                                  return;
+                                }
+                                applyNextPendingPicker(
+                                  selectedVariationId,
+                                  nextSelectedByGroup,
+                                  selectedNestedVariationByOption,
+                                  productRecPickerContext()
+                                );
+                                return;
+                              }
+
+                              const nextPicker = getNextPendingPicker(
+                                selectedVariationId,
+                                selectedByGroup,
+                                selectedNestedVariationByOption,
+                                productRecPickerContext()
+                              );
+                              if (
+                                nextPicker &&
+                                'groupId' in nextPicker &&
+                                nextPicker.groupId === currentGroupId
+                              ) {
+                                setPicker(null);
+                                return;
+                              }
+                              applyNextPendingPicker(
+                                selectedVariationId,
+                                selectedByGroup,
+                                selectedNestedVariationByOption,
+                                productRecPickerContext()
+                              );
+                            }}
+                          >
+                            {buttonText}
+                          </Button>
+                        </div>
+                      );
+                    }
+
+                    if (picker.kind === 'recommendation-product-variation') {
+                      const currentRecGroupId = picker.groupId;
+                      const group = productRecommendationGroups.find(
+                        (g) => g.id === currentRecGroupId
+                      );
+                      if (!group) return null;
+                      const isOptional = !group.required;
+                      const hasSelectedVar = Boolean(
+                        preselectedRecommendationVariationByGroup[currentRecGroupId]
+                      );
+                      const buttonText =
+                        isOptional && !hasSelectedVar
+                          ? 'No Thanks'
+                          : 'Select';
+                      const isDisabled = !isOptional && !hasSelectedVar;
+
+                      return (
+                        <div className="shrink-0 border-t border-border bg-card p-4 pt-3">
+                          <Button
+                            type="button"
+                            variant={
+                              isOptional && !hasSelectedVar
+                                ? 'outline'
+                                : 'default'
+                            }
+                            className="h-11 w-full rounded-xl font-semibold"
+                            disabled={isDisabled}
+                            onClick={() => {
+                              setPicker(null);
+                              applyNextPendingPicker(
+                                selectedVariationId,
+                                selectedByGroup,
+                                selectedNestedVariationByOption,
+                                productRecPickerContext()
+                              );
+                            }}
+                          >
+                            {buttonText}
+                          </Button>
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })()}
                 </div>
               </aside>
             ) : null}

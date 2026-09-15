@@ -56,17 +56,19 @@ export function ProductCardSkeleton({
   return (
     <div
       className={cn(
-        'flex h-full w-full flex-col overflow-hidden rounded-2xl shadow-sm',
+        'flex h-full w-full flex-col overflow-hidden rounded-2xl border border-[#e8eaef] bg-white shadow-sm',
         className
       )}
       aria-hidden
     >
-      <Skeleton className="h-44 w-full rounded-none" />
-      <div className="flex flex-1 flex-col p-4">
-        <Skeleton className="h-5 w-4/5" />
-        <Skeleton className="mt-2 h-3 w-full" />
-        <Skeleton className="mt-2 h-3 w-2/3" />
-        <Skeleton className="mt-4 h-5 w-1/4" />
+      <Skeleton className="aspect-[4/3] w-full rounded-none" />
+      <div className="flex flex-1 flex-col p-3 sm:p-3.5">
+        <Skeleton className="h-4 w-4/5 rounded" />
+        <Skeleton className="mt-2 h-3 w-full rounded" />
+        <Skeleton className="mt-1 h-3 w-2/3 rounded" />
+        <div className="mt-3 flex items-center justify-between">
+          <Skeleton className="h-4 w-1/3 rounded" />
+        </div>
       </div>
     </div>
   );

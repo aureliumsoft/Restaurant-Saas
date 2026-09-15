@@ -22,8 +22,8 @@ import {
 } from '@/lib/subscription-plan-enforcement';
 
 export const runtime = 'nodejs';
-/** Allow long CSV imports on platforms that honor this (e.g. Vercel Pro). */
-export const maxDuration = 900;
+/** Allow long CSV imports on platforms that honor this (Vercel Hobby max is 300s). */
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   const auth = await getRestaurantForOwnerRequest(req, {

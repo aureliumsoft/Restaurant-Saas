@@ -97,9 +97,9 @@ export async function GET(req: NextRequest) {
 
     const restaurant = await db.restaurant.findUnique({
       where: { id: auth.restaurantId },
-      select: { id: true },
+      select: { id: true, orderDisplayEnabled: true },
     });
-    if (!restaurant) {
+    if (!restaurant || !restaurant.orderDisplayEnabled) {
       const empty: OrderDisplayPayload = {
         data: {
           completed: [],

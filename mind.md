@@ -1,5 +1,4 @@
 # Restaurant SaaS Agent Mind
-
 This file is the working map for agents contributing to this repository. Read it before making changes.
 
 ## Project Identity

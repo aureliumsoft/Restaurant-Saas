@@ -8,6 +8,7 @@ import { Sidebar } from '@/components/customer-app/sidebar';
 import { StorefrontBrandHero } from '@/components/customer-app/storefront/storefront-brand-hero';
 import { ORDER_SIDEBAR_WIDTH_PX } from '@/components/order/order-menu-header';
 import { buildStorefrontThemeVars } from '@/lib/restaurant-theme';
+import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
 
 type RestaurantBrand = {
   name: string;
@@ -19,6 +20,7 @@ type RestaurantBrand = {
 export function WebAppStorefront({ slug }: { slug: string }) {
   const [brand, setBrand] = useState<RestaurantBrand | null>(null);
   const [brandLoading, setBrandLoading] = useState(true);
+  const [websiteEnabled, setWebsiteEnabled] = useState(true);
 
   const [mode, setMode] = useState<'delivery' | 'takeaway'>('delivery');
   const [deliveryEnabled, setDeliveryEnabled] = useState(true);
@@ -44,11 +46,16 @@ export function WebAppStorefront({ slug }: { slug: string }) {
               mainBannerUrl?: string | null;
               logoUrl?: string | null;
               themePrimaryColor?: string | null;
-              fulfillmentSettings?: { deliveryEnabled?: boolean };
+              fulfillmentSettings?: {
+                deliveryEnabled?: boolean;
+                websiteEnabled?: boolean;
+              };
             }
           | null
           | undefined;
         if (cancelled) return;
+        const webOn = data?.fulfillmentSettings?.websiteEnabled !== false;
+        setWebsiteEnabled(webOn);
         const deliveryOn = data?.fulfillmentSettings?.deliveryEnabled !== false;
         setDeliveryEnabled(deliveryOn);
         if (!deliveryOn) {
@@ -96,6 +103,15 @@ export function WebAppStorefront({ slug }: { slug: string }) {
   const bannerUrl = brand?.mainBannerUrl?.trim() ?? '';
   const logoUrl = brand?.logoUrl?.trim() ?? '';
 
+  if (!brandLoading && !websiteEnabled) {
+    return (
+      <FeatureDisabledScreen
+        feature="website"
+        restaurantName={displayName}
+      />
+    );
+  }
+
   return (
     <div
       className="flex min-h-0 flex-1 flex-col bg-[#f4f4f6]"
@@ -136,7 +152,7 @@ export function WebAppStorefront({ slug }: { slug: string }) {
 
           <aside
             id="order"
-            className="fixed inset-x-0 top-[72px] z-30 flex h-[calc(100dvh-72px)] max-h-[calc(100dvh-72px)] flex-col bg-[#f4f4f6] p-3 lg:inset-x-auto lg:right-0"
+            className="fixed inset-x-0 top-[72px] z-30 flex h-[calc(100dvh-72px)] max-h-[calc(100dvh-72px)] flex-col bg-[#f4f4f6] p-3 lg:inset-x-auto lg:right-0 lg:w-[400px]"
             style={
               {
                 ['--order-sidebar-width' as string]: `${ORDER_SIDEBAR_WIDTH_PX}px`,

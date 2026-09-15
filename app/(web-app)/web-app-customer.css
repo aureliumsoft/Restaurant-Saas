@@ -2,7 +2,9 @@
  * Customer `/web-app` — fixed light palette only (no `html.dark` / `dark:` dependency).
  * Shadcn-style tokens for children using `bg-background`, `text-primary`, etc.
  */
-.web-app-customer {
+.web-app-customer,
+.dark .web-app-customer,
+html.dark .web-app-customer {
   --background: oklch(0.9383 0.0042 236.4993);
   --foreground: oklch(0.3211 0 0);
   --card: oklch(1 0 0);
@@ -44,7 +46,23 @@
   --shadow-lg: 0px 1px 3px 0px hsl(0 0% 0% / 0.1), 0px 4px 6px -1px hsl(0 0% 0% / 0.1);
   --shadow-xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.1), 0px 8px 10px -1px hsl(0 0% 0% / 0.1);
   --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.25);
-  color-scheme: light;
+  color-scheme: light !important;
+}
+
+.web-app-customer,
+.web-app-customer * {
+  color-scheme: light !important;
+}
+
+/* Guard against dark: utility leaks inside customer storefront */
+.dark .web-app-customer [class*="dark:bg-zinc-950"],
+html.dark .web-app-customer [class*="dark:bg-zinc-950"] {
+  background-color: #ffffff !important;
+}
+
+.dark .web-app-customer [class*="dark:shadow-"],
+html.dark .web-app-customer [class*="dark:shadow-"] {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1) !important;
 }
 
 @keyframes storefront-float {
@@ -52,6 +70,7 @@
   100% {
     transform: translate(0, 0) scale(1);
   }
+
   50% {
     transform: translate(2.5%, 3.5%) scale(1.06);
   }
