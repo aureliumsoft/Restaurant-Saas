@@ -732,13 +732,13 @@ export default function DashboardAnalytics() {
                 >
                   <a
                     href={restaurantStorefrontPath(slug)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                     Open Website
-                    <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
-                  </a>
-                </Button>
+                <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
+              </a>
+            </Button>
               ) : null}
               {fulfillmentSettings.kioskEnabled ? (
                 <Button
@@ -752,13 +752,13 @@ export default function DashboardAnalytics() {
                         ? kioskBasePath(slug, activeBranchId, activeBranchUrlId)
                         : `/kiosk/${encodeURIComponent(slug)}`
                     }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                     Open Kiosk
-                    <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
-                  </a>
-                </Button>
+                <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
+              </a>
+            </Button>
               ) : null}
             </>
         ) : null}

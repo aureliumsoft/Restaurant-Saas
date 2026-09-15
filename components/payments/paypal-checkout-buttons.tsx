@@ -137,13 +137,16 @@ function buyerCountryForCurrency(currency: string): string | undefined {
 function loadPayPalSdk(
   clientId: string,
   currency: string,
+  mode: 'live' | 'sandbox' = 'sandbox',
   merchantId?: string,
   buyerCountryOverride?: string
 ): Promise<void> {
-  const buyerCountry =
-    buyerCountryOverride?.trim().toUpperCase() ||
-    buyerCountryForCurrency(currency);
-  const key = `${clientId}:${currency}:${merchantId ?? 'platform'}:${buyerCountry ?? 'auto'}`;
+  const isSandbox = mode === 'sandbox';
+  const buyerCountry = isSandbox
+    ? buyerCountryOverride?.trim().toUpperCase() ||
+      buyerCountryForCurrency(currency)
+    : undefined;
+  const key = `${clientId}:${currency}:${mode}:${merchantId ?? 'platform'}:${buyerCountry ?? 'none'}`;
   const existing = sdkPromises.get(key);
   if (existing) return existing;
   const p = new Promise<void>((resolve, reject) => {
@@ -168,7 +171,7 @@ function loadPayPalSdk(
     if (merchantId) {
       params.set('merchant-id', merchantId);
     }
-    if (buyerCountry) {
+    if (isSandbox && buyerCountry) {
       params.set('buyer-country', buyerCountry);
     }
     script.src = `https://www.paypal.com/sdk/js?${params.toString()}`;
@@ -307,6 +310,7 @@ export function PayPalCheckoutButtons({
         await loadPayPalSdk(
           config.clientId,
           wantedCurrency,
+          config.mode,
           config.merchantId,
           config.buyerCountry
         );
