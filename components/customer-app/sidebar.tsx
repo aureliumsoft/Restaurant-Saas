@@ -260,12 +260,12 @@ export function Sidebar({
     if (isStartingOrder) return;
     if (mode === 'delivery' && !deliveryEnabled) return;
 
-    const rawOrderId =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID().replace(/-/g, '')
-        : `id${Date.now().toString(16)}`;
-
     const storeId = storeIdOverride || selectedStoreId;
+    const rawOrderId =
+      storeId ||
+      (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID().replace(/-/g, '')
+        : `id${Date.now().toString(16)}`);
     const selectedStore = activeStores?.find((s) => s.id === storeId);
 
     const orderType = mode === 'delivery' ? 'delivery' : 'pickUp';

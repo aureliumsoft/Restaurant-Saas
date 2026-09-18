@@ -27,6 +27,16 @@ import {
 
 export type { ModifierGroupSelection };
 
+function attachNestedModsToParent(
+  mods: ModifierGroupSelection[],
+  parentSelectionKey: string
+): ModifierGroupSelection[] {
+  return mods.map((mod) => ({
+    ...mod,
+    parentSelectionKey,
+  }));
+}
+
 function resolveNestedOptionConfigMods(
   key: string,
   config: NestedRecommendationResult,
@@ -114,6 +124,7 @@ function buildProductRecModifiersForGroup(
       groupName: childGroupNamePrefix
         ? `${childGroupNamePrefix} — ${child.groupName}`
         : child.groupName,
+      parentSelectionKey: optionSelectionKey(g.id, item.menuItemId),
       selections: child.selections,
     });
   }
@@ -180,13 +191,16 @@ function appendFallbackCategoryOptions(
       const nestedConfig = nestedOptionConfigs[nestedKey];
       if (nestedConfig) {
         mods.push(
-          ...resolveNestedOptionConfigMods(
-            nestedKey,
-            nestedConfig,
-            allGroupsFlat,
-            selectedNestedVariationByOption,
-            parentVariation,
-            parentVariationShortLabel
+          ...attachNestedModsToParent(
+            resolveNestedOptionConfigMods(
+              nestedKey,
+              nestedConfig,
+              allGroupsFlat,
+              selectedNestedVariationByOption,
+              parentVariation,
+              parentVariationShortLabel
+            ),
+            nestedKey
           )
         );
       }
@@ -306,13 +320,16 @@ export function buildConfirmModifierSelections(params: {
       const nestedConfig = nestedOptionConfigs[nestedKey];
       if (nestedConfig) {
         mods.push(
-          ...resolveNestedOptionConfigMods(
-            nestedKey,
-            nestedConfig,
-            allGroupsFlat,
-            selectedNestedVariationByOption,
-            parentVariation,
-            parentVariationShortLabel
+          ...attachNestedModsToParent(
+            resolveNestedOptionConfigMods(
+              nestedKey,
+              nestedConfig,
+              allGroupsFlat,
+              selectedNestedVariationByOption,
+              parentVariation,
+              parentVariationShortLabel
+            ),
+            nestedKey
           )
         );
       }

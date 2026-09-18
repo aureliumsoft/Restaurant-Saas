@@ -17,6 +17,8 @@ import type {
 export type ModifierGroupSelection = {
   attributeGroupId: string;
   groupName: string;
+  /** Links nested extras to the parent wrap/fries selection they belong to. */
+  parentSelectionKey?: string;
   selections: MenuOption[];
 };
 

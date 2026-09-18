@@ -61,6 +61,7 @@ import {
 type CartModifierSelection = {
   attributeGroupId: string;
   groupName: string;
+  parentSelectionKey?: string;
   selections: { menuItemId: string; name: string; unitPrice: number }[];
 };
 

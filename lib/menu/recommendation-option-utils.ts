@@ -143,6 +143,21 @@ export function recommendationOptionNeedsSheet(
   );
 }
 
+/**
+ * Belorder: tapping a wrap (or any customizable add-on) jumps straight into
+ * that product's customizer. Do not wait for a second "Select" confirm.
+ */
+export function categoryOptionJumpsToCustomizer(
+  item: {
+    variations?: unknown[] | null;
+    nestedAttributeGroups?: unknown[] | null;
+    personalizeGroups?: Array<{ options?: unknown[] }> | null;
+  },
+  group?: OptionConfigGroup
+): boolean {
+  return recommendationOptionNeedsSheet(item, group);
+}
+
 /** Resolved variation id (parent-matched or guest-selected). */
 export function effectiveOptionVariationId(
   item: OptionItemLike,
@@ -370,12 +385,16 @@ export function isOptionConfigComplete(
     return (limits.minItems ?? 0) > 0;
   });
 
-  if (!hasRequiredNested) {
-    // Nested groups are optional — configuration is complete without opening them.
-    return true;
+  if (!config) {
+    // Nested extras can all be optional (Family Box wrap sauces), but Belorder
+    // still opens the nested sheet so the guest can add them. Completeness
+    // requires that sheet to have been confirmed at least once.
+    return false;
   }
 
-  if (!config) return false;
+  if (!hasRequiredNested) {
+    return true;
+  }
 
   return !nestedCategoryRequirementsMissing(
     visibleNested,

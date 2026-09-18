@@ -310,6 +310,7 @@ type PosMenuProduct = {
 type CartModifierSelection = {
   attributeGroupId: string;
   groupName: string;
+  parentSelectionKey?: string;
   selections: { menuItemId: string; name: string; unitPrice: number }[];
 };
 
@@ -5117,6 +5118,7 @@ export function PosScreen({
           const mapped: CartModifierSelection[] = mods.map((m) => ({
             attributeGroupId: m.attributeGroupId,
             groupName: m.groupName,
+            parentSelectionKey: m.parentSelectionKey,
             selections: m.selections.map((s: MenuOption) => ({
               menuItemId: s.menuItemId,
               name: s.name,

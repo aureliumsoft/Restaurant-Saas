@@ -141,7 +141,10 @@ export function buildCustomerAttributeGroup(
     items: items
       .map((it) => {
         const raw = rawItems.find((r) => r.id === it.id);
-        const nestedGroups = raw?.attributeGroups ?? [];
+        const nestedGroups =
+          (raw?.attributeGroups?.length ? raw.attributeGroups : null) ??
+          it.attributeGroups ??
+          [];
         const lazyImage =
           imageUrlForItem?.(it.id) ??
           (it.imageUrl && !it.imageUrl.startsWith('data:')

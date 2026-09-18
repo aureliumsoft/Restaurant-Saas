@@ -30,7 +30,123 @@ export type CartModifierDisplayLine = {
   unitPrice: number;
 };
 
-/** Cart sidebar lines with ↳ personalize vs - addon prefixes. */
+type CartTreeChild = {
+  name: string;
+  unitPrice: number;
+};
+
+type CartTreeNode = {
+  key: string;
+  name: string;
+  unitPrice: number;
+  children: CartTreeChild[];
+};
+
+function selectionKey(groupId: string, optionId: string) {
+  return `${groupId}:${optionId}`;
+}
+
+function isSizeLikeChild(parentName: string, childName: string) {
+  const parent = parentName.trim().toLowerCase();
+  const child = childName.trim().toLowerCase();
+  if (!parent || !child || parent === child) return false;
+  return (
+    child.startsWith(`${parent} `) ||
+    child.startsWith(`${parent}(`) ||
+    child.startsWith(`${parent} (`)
+  );
+}
+
+function foldSizeLikeChildren(node: CartTreeNode) {
+  const kept: CartTreeChild[] = [];
+  for (const child of node.children) {
+    if (isSizeLikeChild(node.name, child.name)) {
+      node.name = child.name.trim();
+      node.unitPrice += child.unitPrice;
+      continue;
+    }
+    kept.push(child);
+  }
+  node.children = kept;
+}
+
+/**
+ * Belorder-style composed cart: each wrap/fries line is ↳, extras nest as dashes.
+ * Nested XL/size options fold onto the parent name instead of a sibling row.
+ */
+function buildCartModifierForest(modifiers: unknown): CartTreeNode[] {
+  const nodes: CartTreeNode[] = [];
+  const byKey = new Map<string, CartTreeNode>();
+
+  for (const group of normalizeCartModifiers(modifiers)) {
+    const parentKey = group.parentSelectionKey?.trim() || '';
+    const parentNode = parentKey ? byKey.get(parentKey) : undefined;
+
+    if (parentNode) {
+      for (const sel of group.selections) {
+        if (isPersonalizeModifierMenuItemId(sel.menuItemId)) {
+          parentNode.children.push({
+            name: sel.name,
+            unitPrice: sel.unitPrice,
+          });
+          continue;
+        }
+        parentNode.children.push({
+          name: sel.name,
+          unitPrice: sel.unitPrice,
+        });
+      }
+      continue;
+    }
+
+    for (const sel of group.selections) {
+      const previous = nodes[nodes.length - 1];
+      if (
+        previous &&
+        !isPersonalizeModifierMenuItemId(sel.menuItemId) &&
+        isSizeLikeChild(previous.name, sel.name)
+      ) {
+        previous.name = sel.name.trim();
+        previous.unitPrice += sel.unitPrice;
+        continue;
+      }
+
+      const key = selectionKey(group.attributeGroupId, sel.menuItemId);
+      const node: CartTreeNode = {
+        key,
+        name: sel.name,
+        unitPrice: sel.unitPrice,
+        children: [],
+      };
+      nodes.push(node);
+      if (sel.menuItemId) byKey.set(key, node);
+    }
+  }
+
+  for (const node of nodes) foldSizeLikeChildren(node);
+  return nodes;
+}
+
+function forestToDisplayLines(nodes: CartTreeNode[]): CartModifierDisplayLine[] {
+  const lines: CartModifierDisplayLine[] = [];
+  for (const node of nodes) {
+    lines.push({
+      prefix: 'branch',
+      name: node.name,
+      unitPrice: node.unitPrice,
+    });
+    for (const child of node.children) {
+      lines.push({
+        prefix: 'dash',
+        name: child.name,
+        unitPrice: child.unitPrice,
+      });
+    }
+  }
+  return lines;
+}
+
+/** Cart sidebar lines: ↳ composed item, - nested extra. */
 export function cartModifierDisplayLines(
   modifiers: Array<{
     selections?: {
@@ -40,21 +156,7 @@ export function cartModifierDisplayLines(
     }[];
   }> | unknown
 ): CartModifierDisplayLine[] {
-  const lines: CartModifierDisplayLine[] = [];
-  for (const mod of normalizeCartModifiers(modifiers)) {
-    for (const sel of mod.selections) {
-      lines.push({
-        prefix: sel.menuItemId
-          ? isPersonalizeModifierMenuItemId(sel.menuItemId)
-            ? 'branch'
-            : 'dash'
-          : 'dash',
-        name: sel.name,
-        unitPrice: sel.unitPrice,
-      });
-    }
-  }
-  return lines;
+  return forestToDisplayLines(buildCartModifierForest(modifiers));
 }
 
 /** Personalize selections — shown below the product name. */
@@ -180,30 +282,17 @@ function blocksToDisplayLines(
 
 /**
  * Cart/checkout format:
- * No onions          ← personalize first, no arrow
- * ↳ Sauces
- * - Tomato (+€0.20)
- * ↳ Drink
- * - Coke
+ * ↳ Imperial Wrap XL (+2,00 €)
+ * - Algerian spicy
+ * ↳ Loaded Fries
+ * - Barbecue (+0,30 €)
  */
 export function cartModifierDisplayTree(modifiers: unknown): ModifierDisplayLine[] {
-  const blocks: ModifierDisplayBlock[] = [];
-  for (const group of normalizeCartModifiers(modifiers)) {
-    for (const sel of group.selections) {
-      const line = { name: sel.name, unitPrice: sel.unitPrice };
-      if (isPersonalizeModifierMenuItemId(sel.menuItemId)) {
-        pushBlock(blocks, 'Personalize', line, true);
-      } else {
-        pushBlock(
-          blocks,
-          recommendationGroupDisplayLabel(group.groupName || 'Add-ons'),
-          line,
-          false
-        );
-      }
-    }
-  }
-  return blocksToDisplayLines(blocks);
+  return forestToDisplayLines(buildCartModifierForest(modifiers)).map((line) => ({
+    style: line.prefix,
+    name: line.name,
+    unitPrice: line.unitPrice,
+  }));
 }
 
 export function orderModifierDisplayTree(

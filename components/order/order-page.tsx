@@ -48,7 +48,6 @@ import {
   cartModifierDisplayLines,
 } from '@/lib/cart-line-display';
 import {
-  orderInfoHasContext,
   orderPathWithQuery,
 } from '@/lib/order-search-params';
 import { setUiLanguage } from '@/lib/i18n/client';
@@ -70,8 +69,8 @@ import {
 } from '@/components/order/order-menu-header';
 import { cn } from '@/lib/utils';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useOrderInfo } from '@/hooks/use-order-info';
 import { timezoneForRestaurantCountry } from '@/lib/restaurant-regional';
-import { readOrderContext } from '@/lib/order-context-storage';
 import { ArrowUp, Minus, Pencil, Plus, Search, X } from 'lucide-react';
 import type { BranchOpeningHours } from '@/lib/order-time-slots';
 
@@ -218,6 +217,7 @@ function effectiveUnitPrice(price: number, salePrice: number | null) {
 type CartModifierSelection = {
   attributeGroupId: string;
   groupName: string;
+  parentSelectionKey?: string;
   selections: { menuItemId: string; name: string; unitPrice: number }[];
 };
 
@@ -596,17 +596,7 @@ export default function OrderPageClient({
   orderInfo: initialOrderInfo,
   initialThemePrimaryColor = null,
 }: OrderPageProps) {
-  const [storedOrderInfo, setStoredOrderInfo] = useState<OrderInfo | undefined>(
-    undefined
-  );
-
-  useEffect(() => {
-    setStoredOrderInfo(readOrderContext(orderId) ?? undefined);
-  }, [orderId]);
-
-  const orderInfo = orderInfoHasContext(initialOrderInfo)
-    ? initialOrderInfo
-    : storedOrderInfo;
+  const orderInfo = useOrderInfo(orderId, orderType, initialOrderInfo);
   const restaurantSlug =
     orderInfo?.restaurantSlug?.trim() || orderInfo?.storeId?.trim() || '';
   const { formatMoney, regional } = useRestaurantRegional(
@@ -1352,8 +1342,15 @@ export default function OrderPageClient({
     if (!customizeProduct) return [];
     return customizeProduct.attributeGroups
       .filter((g) => Boolean(g.id) && Boolean(g.selectionType))
-      .map((g) => buildCustomerAttributeGroup(g, customizeProduct.id));
-  }, [customizeProduct]);
+      .map((g) =>
+        buildCustomerAttributeGroup(g, customizeProduct.id, (id) =>
+          customerMenuItemImageUrl(id, {
+            slug: orderInfo?.restaurantSlug,
+            subdomain: hostSubdomain,
+          })
+        )
+      );
+  }, [customizeProduct, hostSubdomain, orderInfo?.restaurantSlug]);
 
   // Avoid server/client markup mismatches by rendering only after first mount.
   // Important: this must be AFTER all hooks to keep React Hook order stable.
@@ -1429,7 +1426,7 @@ export default function OrderPageClient({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center bg-primary text-sm font-bold text-primary-foreground transition hover:brightness-95 disabled:opacity-40"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#e5e7eb] bg-white text-sm font-bold text-[#1f1f2e] transition hover:bg-[#fafafa] disabled:opacity-40"
                       onClick={() => adjustQuantity(line.lineId, -1)}
                       aria-label="Decrease quantity"
                     >
@@ -1440,7 +1437,7 @@ export default function OrderPageClient({
                     </span>
                     <button
                       type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center bg-primary text-sm font-bold text-primary-foreground transition hover:brightness-95"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground transition hover:brightness-95"
                       onClick={() => adjustQuantity(line.lineId, 1)}
                       aria-label="Increase quantity"
                     >
@@ -1857,6 +1854,7 @@ export default function OrderPageClient({
           const cartMods: CartModifierSelection[] = mods.map((m) => ({
             attributeGroupId: m.attributeGroupId,
             groupName: m.groupName,
+            parentSelectionKey: m.parentSelectionKey,
             selections: m.selections.map((s: MenuOption) => ({
               menuItemId: s.menuItemId,
               name: s.name,

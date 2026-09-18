@@ -8,8 +8,10 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
-import { Check, ChevronDown, Loader2, X } from 'lucide-react';
+import { Check, ChevronDown, Minus, Plus, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { ORDER_ACCENT_GOLD } from '@/components/order/order-menu-header';
 import {
   Sheet,
   SheetClose,
@@ -19,6 +21,7 @@ import {
 } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { ConfigurationSelectSummary } from '@/components/order/configuration-select-summary';
+import { recommendationGroupDisplayLabel } from '@/lib/cart-line-display';
 import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
 import {
   NestedRecommendationSheet,
@@ -28,7 +31,7 @@ import {
   buildCategoryGroupSelectionSummary,
   buildProductRecSelectionSummary,
 } from '@/lib/menu/configuration-selection-summary';
-import { modifierSelectionsUnitTotal } from '@/lib/menu/build-modifier-selections';
+import { modifierSelectionsUnitTotal, type ModifierGroupSelection } from '@/lib/menu/build-modifier-selections';
 import { buildConfirmModifierSelections } from '@/lib/menu/build-confirm-modifier-selections';
 import {
   appendSelectionTimeline,
@@ -80,6 +83,7 @@ import {
   optionSelectionKey,
   recommendedProductNeedsSheet,
   recommendationOptionNeedsSheet,
+  categoryOptionJumpsToCustomizer,
   resolveCategoryItemVariationId,
   resolveProductRecommendationVariationId,
   shouldAutoOpenOptionFlow,
@@ -160,6 +164,57 @@ export type SelectedProductVariation = {
 function effectiveUnitPrice(price: number, salePrice: number | null) {
   if (salePrice != null && salePrice > 0 && salePrice < price) return salePrice;
   return price;
+}
+
+function stripLeadingPricePrefix(text: string) {
+  return text
+    .replace(/^\s*(?:€|\$|£)?\s*\d+[.,]\d{2}\s*[€$£]?\s*/u, '')
+    .trim();
+}
+
+function isDesktopCustomizeLayout() {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(min-width: 1024px)').matches;
+}
+
+const GROUP_SELECT_TRIGGER =
+  'flex min-h-[50px] w-full justify-between gap-2 bg-transparent px-[15px] text-left transition-colors hover:bg-[#fafafa]';
+const GROUP_REQUIRED_LABEL = 'shrink-0 text-sm font-normal text-black';
+const PICKER_CONFIRM_BUTTON =
+  'h-11 w-full rounded-xl text-sm font-bold text-primary shadow-sm transition hover:brightness-95 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60';
+
+function GroupSelectChevron({ alignTop }: { alignTop?: boolean }) {
+  return (
+    <ChevronDown
+      className={`h-3.5 w-3.5 shrink-0 ${alignTop ? 'mt-1' : ''}`}
+      style={{ color: ORDER_ACCENT_GOLD }}
+    />
+  );
+}
+
+function AddPlusButton({
+  selected,
+  label,
+  onClick,
+}: {
+  selected?: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition hover:brightness-95 active:scale-90"
+    >
+      {selected ? (
+        <Check className="h-4 w-4" strokeWidth={2.75} />
+      ) : (
+        <Plus className="h-4 w-4" strokeWidth={2.75} />
+      )}
+    </button>
+  );
 }
 
 function visibleConfigurationItems(
@@ -272,27 +327,22 @@ function CustomizeGroupSkeleton({
   required?: boolean;
 }) {
   return (
-    <section
-      className="rounded-xl border border-border bg-muted/40 p-4 shadow-sm"
-      aria-busy="true"
-    >
-      <div className="flex items-start justify-between gap-3">
+    <section className="overflow-hidden rounded-[10px]" aria-busy="true">
+      <div className="flex items-center justify-between gap-3 border-b border-[#f4f4f4] px-[15px] py-3">
         {title?.trim() ? (
-          <Label className="text-sm font-semibold text-foreground">{title}</Label>
+          <Label className="text-sm font-semibold text-primary">{title}</Label>
         ) : (
-          <div className="h-4 w-36 animate-pulse rounded bg-zinc-300 dark:bg-zinc-600" />
+          <div className="h-4 w-36 animate-pulse rounded bg-zinc-200" />
         )}
         {required ? (
-          <span className="shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
-            Required
-          </span>
+          <span className={GROUP_REQUIRED_LABEL}>Required</span>
         ) : (
-          <div className="h-5 w-14 animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-700" />
+          <div className="h-4 w-14 animate-pulse rounded bg-zinc-200" />
         )}
       </div>
-      <div className="mt-3 flex h-12 w-full animate-pulse items-center justify-between rounded-lg border border-border bg-zinc-100 px-3 dark:bg-zinc-800">
-        <div className="h-3.5 w-32 rounded bg-zinc-300 dark:bg-zinc-600" />
-        <div className="h-4 w-4 rounded bg-zinc-300 dark:bg-zinc-600" />
+      <div className="flex h-[50px] w-full items-center justify-between px-[15px]">
+        <div className="h-3 w-24 animate-pulse rounded bg-zinc-200" />
+        <div className="h-3.5 w-3.5 rounded bg-zinc-200" />
       </div>
     </section>
   );
@@ -312,11 +362,7 @@ type Props = {
   isLoading?: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (
-    mods: {
-    attributeGroupId: string;
-    groupName: string;
-    selections: MenuOption[];
-    }[],
+    mods: ModifierGroupSelection[],
     variation?: SelectedProductVariation | null,
     quantity?: number
   ) => void;
@@ -336,6 +382,7 @@ export function ProductCustomizeDialog({
   onOpenChange,
   onConfirm,
 }: Props) {
+  const { t } = useTranslation();
   const { formatMoney, regional } = useRestaurantRegional(undefined);
   const variationPickerBaseline = useMemo(
     () => variationPickerBaselineUnitPrice(productBaseUnitPrice, variations),
@@ -352,6 +399,7 @@ export function ProductCustomizeDialog({
   const [selectedNestedVariationByOption, setSelectedNestedVariationByOption] =
     useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
+  const [attemptedConfirm, setAttemptedConfirm] = useState(false);
   const [picker, setPicker] = useState<
     | null
     | { kind: 'variation' }
@@ -378,6 +426,11 @@ export function ProductCustomizeDialog({
     optionId: string;
   } | null>(null);
   const [selectionTimeline, setSelectionTimeline] = useState<string[]>([]);
+  const [skippedOptionalGroupIds, setSkippedOptionalGroupIds] = useState<
+    Record<string, true>
+  >({});
+  const skippedOptionalGroupIdsRef = useRef(skippedOptionalGroupIds);
+  skippedOptionalGroupIdsRef.current = skippedOptionalGroupIds;
 
   const categoryGroups = useMemo(
     () => attributeGroups.filter((g) => g.sourceType !== 'PRODUCT'),
@@ -647,17 +700,18 @@ export function ProductCustomizeDialog({
 
     for (const g of visibleCategoryGroups) {
       const selectedIds = nextSelectedByGroup[g.id] ?? [];
-      if (selectedIds.length === 0 && g.required) {
+      if (selectedIds.length === 0) {
+        if (g.required) {
+          if (g.selectionType === 'SINGLE') {
+            return { kind: 'group-single', groupId: g.id };
+          }
+          return { kind: 'group-multi', groupId: g.id };
+        }
+        if (skippedOptionalGroupIdsRef.current[g.id]) continue;
         if (g.selectionType === 'SINGLE') {
           return { kind: 'group-single', groupId: g.id };
         }
-        return { kind: 'group-multi', groupId: g.id };
-      }
-      if (selectedIds.length === 0 && g.selectionType === 'MULTIPLE') {
         continue;
-      }
-      if (selectedIds.length === 0) {
-        return { kind: 'group-single', groupId: g.id };
       }
       const optionsToCheck =
         g.selectionType === 'SINGLE' ? selectedIds.slice(0, 1) : selectedIds;
@@ -816,15 +870,23 @@ export function ProductCustomizeDialog({
       setSelectedVariationId('');
       setSelectedNestedVariationByOption({});
       setQuantity(1);
+      setAttemptedConfirm(false);
       setPreselectedRecommendationVariationByGroup({});
       setActiveProductGroupId(null);
       setNestedOptionConfigs({});
       setActiveCategoryOption(null);
       setSelectionTimeline([]);
+      setSkippedOptionalGroupIds({});
+      skippedOptionalGroupIdsRef.current = {};
       const autoNested = autoNestedForGroups({});
       setNestedConfigs(autoNested);
       if (variations.length > 0) {
         setPicker({ kind: 'variation' });
+        return;
+      }
+      // Desktop: show every group like Enjoy Tacos. Mobile: sequential bottom sheets.
+      if (isDesktopCustomizeLayout()) {
+        setPicker(null);
         return;
       }
       applyNextPendingPicker('', init, {}, {
@@ -869,6 +931,7 @@ export function ProductCustomizeDialog({
       return;
     }
     if (isLoading) return;
+    if (isDesktopCustomizeLayout()) return;
     applyNextPendingPicker(
       variationId,
       selectedByGroupRef.current,
@@ -1156,7 +1219,17 @@ export function ProductCustomizeDialog({
   };
 
   const handleConfirm = () => {
-    if (requiredMissing) return;
+    if (isLoading) return;
+    if (requiredMissing) {
+      setAttemptedConfirm(true);
+      applyNextPendingPicker(
+        selectedVariationId,
+        selectedByGroup,
+        selectedNestedVariationByOption,
+        productRecPickerContext()
+      );
+      return;
+    }
 
     const mods = buildConfirmModifierSelections({
       visibleCategoryGroups,
@@ -1234,6 +1307,12 @@ export function ProductCustomizeDialog({
   };
 
   const openCategoryGroupSelect = (group: AttributeGroup) => {
+    if (skippedOptionalGroupIdsRef.current[group.id]) {
+      const nextSkipped = { ...skippedOptionalGroupIdsRef.current };
+      delete nextSkipped[group.id];
+      skippedOptionalGroupIdsRef.current = nextSkipped;
+      setSkippedOptionalGroupIds(nextSkipped);
+    }
     setActiveProductGroupId(null);
     setActiveCategoryOption(null);
     openGroupSelection(group);
@@ -1289,6 +1368,9 @@ export function ProductCustomizeDialog({
   );
 
   const basePriceLabel = formatMoney(productBaseUnitPrice);
+  const displayDescription = productDescription?.trim()
+    ? stripLeadingPricePrefix(productDescription)
+    : '';
 
   const productRecPickerContext = () => ({
     nestedConfigs,
@@ -1308,6 +1390,7 @@ export function ProductCustomizeDialog({
     return {
       group,
       item,
+      optionId: activeCategoryOption.optionId,
       key: optionSelectionKey(
         activeCategoryOption.groupId,
         activeCategoryOption.optionId
@@ -1317,42 +1400,53 @@ export function ProductCustomizeDialog({
 
   const pickerTitle = useMemo(() => {
     if (!picker) return '';
-    if (picker.kind === 'variation') return 'Select variation';
+    if (picker.kind === 'variation') return t('select');
     if (picker.kind === 'recommendation-product-variation') {
       const group = productRecommendationGroups.find(
         (g) => g.id === picker.groupId
       );
       const item = group?.items[0];
-      return item ? `Select ${item.name}` : 'Select variation';
+      return item?.name?.trim() || t('select');
     }
-    if (picker.kind === 'group-single') {
+    if (picker.kind === 'group-single' || picker.kind === 'group-multi') {
       const group = categoryGroups.find((g) => g.id === picker.groupId);
-      const label = group?.name?.trim();
-      return label ? `Select ${label}` : 'Select option';
-    }
-    if (picker.kind === 'group-multi') {
-      const group = categoryGroups.find((g) => g.id === picker.groupId);
-      const label = group?.name?.trim();
-      return label ? `Select ${label}` : 'Select options';
+      return recommendationGroupDisplayLabel(
+        group?.name?.trim() || t('select')
+      );
     }
     const group = categoryGroups.find((g) => g.id === picker.groupId);
     const item = group?.items.find((i) => i.menuItemId === picker.optionId);
-    return item ? `Select ${item.name} variation` : 'Select variation';
-  }, [categoryGroups, picker, productRecommendationGroups]);
+    return item?.name?.trim() || t('select');
+  }, [categoryGroups, picker, productRecommendationGroups, t]);
 
   const pickerSubtitle = useMemo(() => {
     if (picker?.kind === 'recommendation-product-variation') {
-      return 'Choose a variation first';
+      return null;
     }
-    if (!picker || picker.kind !== 'group-multi') return null;
+    if (
+      !picker ||
+      (picker.kind !== 'group-multi' && picker.kind !== 'group-single')
+    ) {
+      return null;
+    }
     const group = categoryGroups.find((g) => g.id === picker.groupId);
     if (!group) return null;
     const limits = limitsForGroup(group);
     const count = totalSelectedUnits(selectedByGroup[group.id] ?? []);
+    const min = limits.minItems ?? (group.required ? 1 : 0);
+    const max = limits.maxItems;
+    const progress =
+      min > 0
+        ? t('customizeSelectedCount', { count, max })
+        : t('customizeMaxCount', { count, max });
+    if (picker.kind === 'group-single') {
+      return group.required
+        ? `${t('customizeRequired')} · ${progress}`
+        : progress;
+    }
     const hint = multiSelectionHint(limits.minItems, limits.maxItems);
-    const progress = ` · Selected ${count} / ${limits.maxItems}`;
-    return `${hint}${progress}`;
-  }, [categoryGroups, limitsForGroup, picker, selectedByGroup]);
+    return `${hint} · ${progress}`;
+  }, [categoryGroups, limitsForGroup, picker, selectedByGroup, t]);
 
   const activeProductGroup = productRecommendationGroups.find(
     (g) => g.id === activeProductGroupId
@@ -1499,7 +1593,6 @@ export function ProductCustomizeDialog({
           const nextNestedVariations = { ...cleared.variations };
           if (resolved) nextNestedVariations[key] = resolved;
           setSelectedNestedVariationByOption(nextNestedVariations);
-          setActiveCategoryOption(null);
           const nextSelectedByGroup = {
             ...selectedByGroup,
             [group.id]: [it.menuItemId],
@@ -1522,28 +1615,9 @@ export function ProductCustomizeDialog({
               selectionTimelineKeys.categoryOption(group.id, it.menuItemId)
             );
           });
-          if (optionNeedsManualVariationPicker(it, group)) {
-            setPicker({
-              kind: 'nested',
-              groupId: group.id,
-              optionId: it.menuItemId,
-            });
-            return;
-          }
-          const optionCtx = {
-            group,
-            parentVariation: baseProductVariationContext.parent,
-          };
-          if (
-            recommendationOptionNeedsSheet(it, group) &&
-            !isOptionConfigComplete(
-              it,
-              key,
-              nextNestedVariations,
-              cleared.configs,
-              optionCtx
-            )
-          ) {
+          // Enjoy Tacos: tapping the wrap opens its customizer immediately.
+          // Do not leave the guest on this list waiting for Seleccionar.
+          if (categoryOptionJumpsToCustomizer(it, group)) {
             setPicker(null);
             setActiveCategoryOption({
               groupId: group.id,
@@ -1551,6 +1625,7 @@ export function ProductCustomizeDialog({
             });
             return;
           }
+          setActiveCategoryOption(null);
           applyNextPendingPicker(
             selectedVariationId,
             nextSelectedByGroup,
@@ -1683,12 +1758,11 @@ export function ProductCustomizeDialog({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="flex h-full w-full max-w-[min(100vw,80rem)] flex-col overflow-hidden border-l bg-background p-0 text-foreground sm:max-w-[min(100vw,80rem)]"
+        className="flex h-full w-full max-w-full flex-col overflow-hidden border-l border-[#ececf0] bg-white p-0 text-foreground sm:max-w-full lg:max-w-[min(100vw,calc(100vh+24.375rem))]"
         style={dialogVars}
       >
         <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
-          {/* Left: hero image (desktop — full height) */}
-          <div className="relative hidden min-h-0 shrink-0 overflow-hidden bg-muted lg:block lg:w-[58%] lg:max-w-none">
+          <div className="relative hidden min-h-0 flex-1 overflow-hidden bg-white lg:block">
             {productImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- arbitrary menu image URLs
               <img
@@ -1697,87 +1771,108 @@ export function ProductCustomizeDialog({
                 className="absolute inset-0 h-full w-full object-cover"
               />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/15 via-muted to-primary/10">
-                <span className="text-sm font-medium text-muted-foreground">
-                  No image
-                </span>
-              </div>
-            )}
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 to-transparent lg:bg-gradient-to-r lg:from-transparent lg:to-black/10" />
-          </div>
-
-          {/* Mobile: prominent image strip */}
-          <div className="relative h-[min(38vh,280px)] w-full shrink-0 overflow-hidden bg-muted lg:hidden">
-            {productImageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={productImageUrl}
-                alt={productName}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center bg-gradient-to-br from-primary/15 to-muted text-sm text-muted-foreground">
+              <div className="absolute inset-0 flex items-center justify-center bg-[#f7f7f9] text-sm text-muted-foreground">
                 No image
               </div>
             )}
           </div>
 
-          {/* Right: details + scroll + footer */}
-          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col lg:w-[42%] lg:max-w-none">
-            <SheetHeader className="shrink-0 space-y-0 border-b border-border px-5 pb-4 pt-5 text-left">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1 pr-2">
-                  <SheetTitle className="text-balance text-xl font-bold uppercase leading-tight tracking-wide text-primary md:text-2xl">
+          <div className="relative h-[min(42vw,15.5rem)] w-full shrink-0 overflow-hidden bg-white lg:hidden">
+            {productImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- arbitrary menu image URLs
+              <img
+                src={productImageUrl}
+                alt={productName}
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center bg-[#f7f7f9] text-sm text-muted-foreground">
+                No image
+              </div>
+            )}
+            <SheetClose asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-3 top-3 h-9 w-9 rounded-full bg-white/95 text-muted-foreground shadow-sm hover:bg-white hover:text-foreground"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </SheetClose>
+          </div>
+
+          <div className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col lg:w-[390px] lg:max-w-[390px] lg:flex-none">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6 pb-6 pt-6">
+              <SheetHeader className="space-y-0 p-0 text-left">
+                <div className="flex items-start justify-between gap-3">
+                  <SheetTitle className="mb-[15px] text-balance text-[30px] font-bold uppercase leading-[40px] text-primary">
                     {productName}
                   </SheetTitle>
-                  <p className="mt-2 text-lg font-bold tabular-nums text-primary md:text-xl">
-                    {basePriceLabel}
-                  </p>
+                  <SheetClose asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="hidden h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground lg:inline-flex"
+                      aria-label="Close"
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </SheetClose>
                 </div>
-                <SheetClose asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label="Close"
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
-                </SheetClose>
-              </div>
-              {productDescription?.trim() ? (
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground md:text-base">
-                  {productDescription}
+                <p className="text-sm font-bold tabular-nums text-primary">
+                  {basePriceLabel}
                 </p>
-              ) : null}
-            </SheetHeader>
+                {displayDescription ? (
+                  <p className="mt-[15px] text-sm leading-[17px] text-primary">
+                    {displayDescription}
+                  </p>
+                ) : null}
+              </SheetHeader>
 
-            <div className="relative flex min-h-0 flex-1 flex-col">
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-4">
-              <div className="space-y-5">
+              <div className="mt-6 space-y-5">
+                {visibleCategoryGroups.length > 0 ||
+                visibleProductRecommendationGroups.length > 0 ||
+                variations.length > 0 ? (
+                  <h2 className="text-[21px] font-bold text-primary">
+                    {t('customizeYourProduct')}
+                  </h2>
+                ) : null}
+
                 {variations.length > 0 ? (
-                  <section className="rounded-xl border border-border bg-card p-4 shadow-sm transition-all duration-200">
-                    <div className="flex items-start justify-between gap-3">
-                      <Label className="text-sm font-semibold leading-snug text-foreground">
+                  <section className="overflow-hidden rounded-[10px] animate-in fade-in-50 duration-200">
+                    <div className="flex items-center justify-between gap-3 border-b border-[#f4f4f4] px-[15px] py-3">
+                      <Label className="text-sm font-semibold leading-snug text-primary">
                         Variation
                       </Label>
-                      <span className="shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
-                        Required
+                      <span className={GROUP_REQUIRED_LABEL}>
+                        {t('customizeRequired')}
                       </span>
                     </div>
                     <button
                       type="button"
-                      className="mt-3 flex h-12 w-full items-center justify-between rounded-lg border border-input bg-muted/40 px-3 text-left text-sm text-foreground transition-colors hover:bg-muted/60"
+                      className={`${GROUP_SELECT_TRIGGER} ${
+                        selectedVariationId
+                          ? 'items-start py-3'
+                          : 'items-center'
+                      }`}
                       onClick={() => setPicker({ kind: 'variation' })}
                     >
-                      <span className="truncate text-muted-foreground">
+                      <span
+                        className={
+                          selectedVariationId
+                            ? 'truncate text-sm font-semibold uppercase text-foreground'
+                            : 'truncate text-xs text-[#757575]'
+                        }
+                      >
                         {selectedVariationId
                           ? variations.find((v) => v.id === selectedVariationId)
-                              ?.name ?? 'Select…'
-                          : 'Select…'}
+                              ?.name ?? t('customizeSelectPlaceholder')
+                          : t('customizeSelectPlaceholder')}
                       </span>
-                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <GroupSelectChevron alignTop={Boolean(selectedVariationId)} />
                     </button>
                   </section>
                 ) : null}
@@ -1822,38 +1917,44 @@ export function ProductCustomizeDialog({
                   return (
                     <section
                       key={`product-rec-${g.id || 'row'}-${index}`}
-                      className="rounded-xl border border-border bg-card p-4 shadow-sm animate-in fade-in-50 duration-200"
+                      className="overflow-hidden rounded-[10px] animate-in fade-in-50 duration-200"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <Label className="text-sm font-semibold text-foreground">
+                      <div className="flex items-center justify-between gap-3 border-b border-[#f4f4f4] px-[15px] py-3">
+                        <Label className="text-sm font-semibold text-primary">
                           {item.name}
                         </Label>
                         {g.required ? (
-                          <span className="shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
-                            Required
+                          <span className={GROUP_REQUIRED_LABEL}>
+                            {t('customizeRequired')}
                           </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">
-                            Optional
+                          <span className="text-sm font-normal text-primary/70">
+                            {t('customizeOptional')}
                           </span>
                         )}
                       </div>
-                      {missing && !isLoading ? (
-                        <p className="mt-2 text-xs text-destructive">
+                      {missing && attemptedConfirm && !isLoading ? (
+                        <p className="px-[15px] pt-2 text-xs text-destructive">
                           Please configure this recommendation
                         </p>
                       ) : null}
                       {needsSheet ? (
                         <button
                           type="button"
-                          className="mt-3 flex w-full min-h-12 items-center justify-between gap-2 rounded-lg border border-input bg-muted/40 px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted/60"
+                          className={`${GROUP_SELECT_TRIGGER} ${
+                            productRecSummary.length > 0
+                              ? 'items-start py-3'
+                              : 'items-center'
+                          }`}
                           onClick={() => openRecommendationGroup(g.id)}
                         >
                           <ConfigurationSelectSummary
                             lines={productRecSummary}
-                            placeholder={`Select ${item.name}`}
+                            placeholder={t('customizeSelectPlaceholder')}
                           />
-                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <GroupSelectChevron
+                            alignTop={productRecSummary.length > 0}
+                          />
                         </button>
                       ) : null}
                     </section>
@@ -1888,32 +1989,29 @@ export function ProductCustomizeDialog({
                       ref={(el) => {
                         groupRefs.current[g.id] = el;
                       }}
-                      className="rounded-xl border border-border bg-card p-4 shadow-sm animate-in fade-in-50 duration-200"
+                      className="overflow-hidden rounded-[10px] animate-in fade-in-50 duration-200"
                     >
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center justify-between gap-3 border-b border-[#f4f4f4] px-[15px] py-3">
                         <div className="min-w-0 flex-1">
-                          <Label className="text-sm font-semibold leading-snug text-foreground">
-                            {configurationGroupDisplayTitle(
-                              g.name,
-                              baseProductVariationContext.parent,
-                              g.useVariationPricing ?? false,
-                              baseProductVariationContext.shortLabel
+                          <Label className="text-sm font-semibold leading-snug text-primary">
+                            {recommendationGroupDisplayLabel(
+                              configurationGroupDisplayTitle(
+                                g.name,
+                                baseProductVariationContext.parent,
+                                g.useVariationPricing ?? false,
+                                baseProductVariationContext.shortLabel
+                              )
                             )}
                           </Label>
-                          {g.linkedCategoryName ? (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              From {g.linkedCategoryName}
-                            </p>
-                          ) : null}
                         </div>
                         {g.required ? (
-                          <span className="shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
-                            Required
+                          <span className={GROUP_REQUIRED_LABEL}>
+                            {t('customizeRequired')}
                           </span>
                         ) : (
-                          <p className="shrink-0 text-xs text-muted-foreground">
+                          <p className="shrink-0 text-sm font-normal text-primary/70">
                             {g.selectionType === 'SINGLE'
-                              ? 'Optional'
+                              ? t('customizeOptional')
                               : multiSelectionHint(
                                   limits.minItems,
                                   limits.maxItems
@@ -1922,23 +2020,26 @@ export function ProductCustomizeDialog({
                         )}
                       </div>
                       {g.selectionType === 'MULTIPLE' ? (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Selected {count} / {limits.maxItems}
+                        <p className="px-[15px] pt-1 text-xs text-muted-foreground">
+                          {t('customizeSelectedCount', {
+                            count,
+                            max: limits.maxItems,
+                          })}
                           {g.multipleMode === 'QUANTITY' &&
                           hasQuantityFreeTier(g.freeQuantity)
                             ? ` · first ${g.freeQuantity} free`
                             : ''}
                         </p>
                       ) : null}
-                      {missing && !isLoading ? (
-                        <p className="mt-1 text-xs text-destructive">
+                      {missing && attemptedConfirm && !isLoading ? (
+                        <p className="px-[15px] pt-1 text-xs text-destructive">
                           {g.selectionType === 'SINGLE'
                             ? 'Please select an option'
                             : `Please select at least ${min} option${min === 1 ? '' : 's'}`}
                         </p>
                       ) : null}
 
-                      <div className="mt-3">
+                      <div>
                         {(() => {
                           const visible = visibleConfigurationItems(
                             g,
@@ -1947,14 +2048,14 @@ export function ProductCustomizeDialog({
                           if (visible.length === 0) {
                             if (isLoading) {
                               return (
-                                <div className="flex h-12 w-full animate-pulse items-center justify-between rounded-lg border border-border bg-zinc-100 px-3 dark:bg-zinc-800">
-                                  <div className="h-3.5 w-32 rounded bg-zinc-300 dark:bg-zinc-600" />
-                                  <div className="h-4 w-4 rounded bg-zinc-300 dark:bg-zinc-600" />
+                                <div className="flex h-[50px] w-full animate-pulse items-center justify-between px-[15px]">
+                                  <div className="h-3 w-24 rounded bg-zinc-200" />
+                                  <div className="h-3.5 w-3.5 rounded bg-zinc-200" />
                                 </div>
                               );
                             }
                             return (
-                              <p className="text-sm text-muted-foreground">
+                              <p className="px-[15px] py-3 text-sm text-muted-foreground">
                                 {g.useVariationPricing &&
                                 variations.length > 0 &&
                                 !selectedVariationId
@@ -1978,14 +2079,20 @@ export function ProductCustomizeDialog({
                           return (
                             <button
                               type="button"
-                              className="flex w-full min-h-12 items-center justify-between gap-2 rounded-lg border border-input bg-muted/40 px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted/60"
+                              className={`${GROUP_SELECT_TRIGGER} ${
+                                categorySummary.length > 0
+                                  ? 'items-start py-3'
+                                  : 'items-center'
+                              }`}
                               onClick={() => openCategoryGroupSelect(g)}
                             >
                               <ConfigurationSelectSummary
                                 lines={categorySummary}
-                                placeholder="Select…"
+                                placeholder={t('customizeSelectPlaceholder')}
                               />
-                              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              <GroupSelectChevron
+                                alignTop={categorySummary.length > 0}
+                              />
                             </button>
                           );
                         })()}
@@ -2022,15 +2129,57 @@ export function ProductCustomizeDialog({
               </div>
             </div>
 
-            {picker ? (
+            <footer className="shrink-0 border-t border-[#f0f0f0] bg-white px-4 py-2.5">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="flex h-6 w-6 items-center justify-center rounded-[3px] bg-white text-base font-semibold text-[#1f1f2e] shadow-sm ring-1 ring-[#ececec] transition hover:bg-[#fafafa] active:scale-90"
+                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                    aria-label="Decrease quantity"
+                  >
+                    −
+                  </button>
+                  <span className="min-w-[1.5rem] text-center text-sm font-bold tabular-nums text-[#1f1f2e]">
+                    {String(quantity).padStart(2, '0')}
+                  </span>
+                  <button
+                    type="button"
+                    className="flex h-6 w-6 items-center justify-center rounded-[3px] text-base font-semibold text-[#333] shadow-sm transition hover:brightness-95 active:scale-90"
+                    style={{ backgroundColor: ORDER_ACCENT_GOLD }}
+                    onClick={() => setQuantity((q) => Math.min(99, q + 1))}
+                    aria-label="Increase quantity"
+                  >
+                    +
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={handleConfirm}
+                  className="flex h-[50px] min-h-[50px] flex-1 items-center justify-between rounded-lg px-[30px] text-sm font-bold text-primary shadow-sm transition hover:brightness-95 active:scale-[0.99] disabled:opacity-60"
+                  style={{ backgroundColor: ORDER_ACCENT_GOLD }}
+                >
+                  <span>{isLoading ? t('loadingMenu') : t('add')}</span>
+                  <span className="tabular-nums">
+                    {formatMoney(selectedUnitTotal * quantity)}
+                  </span>
+                </button>
+              </div>
+            </footer>
+
+            {picker &&
+            !activeCategoryOptionTarget &&
+            !activeProductGroup ? (
               <aside
-                className="absolute inset-0 flex min-h-0 flex-col justify-end bg-black/40 animate-in fade-in-0 duration-200"
+                className="absolute inset-0 flex min-h-0 flex-col justify-end bg-black/40"
+                style={{ zIndex: 80 }}
                 aria-modal="true"
                 role="dialog"
                 aria-labelledby="product-customize-picker-title"
               >
-                <div className="flex max-h-[min(50dvh,26rem)] w-full shrink-0 flex-col overflow-hidden rounded-t-2xl border-t border-border bg-card shadow-2xl animate-in slide-in-from-bottom-6 duration-300 ease-out">
-                  <div className="shrink-0 p-4 pb-0">
+                <div className="flex max-h-[min(62dvh,32rem)] w-full shrink-0 flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]">
+                  <div className="shrink-0 px-4 pb-0 pt-3">
                   <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted" />
                     <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -2058,15 +2207,15 @@ export function ProductCustomizeDialog({
                       </Button>
                     </div>
                   </div>
-                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-2">
+                  <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2">
                     {pickerEntries.length === 0 ? (
                       <div className="space-y-2 py-1" aria-busy="true">
                         {[1, 2, 3, 4].map((i) => (
                           <div
                             key={`picker-skel-${i}`}
-                            className="flex w-full items-center gap-3 rounded-lg border border-border bg-background p-3 animate-pulse"
+                            className="flex w-full items-center gap-3 rounded-lg p-2 animate-pulse"
                           >
-                            <div className="h-12 w-12 shrink-0 rounded-md bg-muted-foreground/15" />
+                            <div className="h-14 w-14 shrink-0 rounded-lg bg-muted-foreground/15" />
                             <div className="min-w-0 flex-1 space-y-2">
                               <div className="h-4 w-3/4 rounded bg-muted-foreground/15" />
                               <div className="h-3 w-1/3 rounded bg-muted-foreground/10" />
@@ -2076,64 +2225,65 @@ export function ProductCustomizeDialog({
                       </div>
                     ) : (
                       pickerEntries.map((entry, index) => (
-                        <button
+                        <div
                           key={`picker-${entry.id || 'row'}-${index}`}
-                          type="button"
-                          className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
-                            entry.selected
-                              ? 'border-primary bg-primary/10'
-                              : 'border-border bg-background hover:bg-muted/40'
-                          }`}
-                          onClick={entry.onChoose}
+                          className="flex w-full items-center gap-3 rounded-xl px-1 py-2"
                         >
                           <LazyMenuProductImage
                             src={entry.imageUrl}
                             alt={entry.name}
                             emptyLabel=""
-                            className="h-12 w-12 shrink-0 rounded-md"
+                            className="h-14 w-14 shrink-0 rounded-lg"
                           />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-foreground">
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 text-left"
+                            onClick={entry.onChoose}
+                          >
+                            <p className="truncate text-sm font-semibold uppercase leading-snug text-foreground">
                               {entry.name}
                             </p>
                             {entry.priceLabel ? (
-                              <p className="text-xs text-muted-foreground">
+                              <p className="mt-0.5 text-xs font-medium text-muted-foreground">
                                 {entry.priceLabel}
                               </p>
                             ) : null}
-                          </div>
+                          </button>
                           {picker.kind === 'group-multi' ? (
-                            <div
-                              className="ml-auto flex items-center gap-1"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Button
+                            <div className="ml-auto flex items-center gap-1.5">
+                              {entry.quantity ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-base font-semibold"
+                                    disabled={!entry.quantity}
+                                    onClick={entry.onDecrease}
+                                    aria-label={`Decrease ${entry.name}`}
+                                  >
+                                    <Minus className="h-4 w-4" />
+                                  </button>
+                                  <span className="min-w-[1.25rem] text-center text-sm font-bold tabular-nums">
+                                    {entry.quantity ?? 0}
+                                  </span>
+                                </>
+                              ) : null}
+                              <button
                                 type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                disabled={!entry.quantity}
-                                onClick={entry.onDecrease}
+                                className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition hover:brightness-95 active:scale-90"
+                                onClick={entry.onIncrease ?? entry.onChoose}
+                                aria-label={`Add ${entry.name}`}
                               >
-                                -
-                              </Button>
-                              <span className="min-w-[2ch] text-center text-xs font-semibold">
-                                {entry.quantity ?? 0}
-                              </span>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={entry.onIncrease}
-                              >
-                                +
-                              </Button>
+                                <Plus className="h-4 w-4" strokeWidth={2.75} />
+                              </button>
                             </div>
-                          ) : entry.selected ? (
-                            <Check className="h-4 w-4 text-primary" />
-                          ) : null}
-                        </button>
+                          ) : (
+                            <AddPlusButton
+                              selected={entry.selected}
+                              label={`${t('select')} ${entry.name}`}
+                              onClick={entry.onChoose}
+                            />
+                          )}
+                        </div>
                       ))
                     )}
                   </div>
@@ -2155,22 +2305,26 @@ export function ProductCustomizeDialog({
                       );
                       const hasSelection = selectedCount > 0;
                       const buttonText =
-                        isOptional && !hasSelection ? 'No Thanks' : 'Select';
+                        isOptional && !hasSelection
+                          ? t('customizeNoThanks')
+                          : t('select');
                       const isDisabled = !isOptional && selectedCount < min;
 
                       return (
-                        <div className="shrink-0 border-t border-border bg-card p-4 pt-3">
-                          <Button
+                        <div className="shrink-0 border-t border-[#ececf0] bg-white p-4 pt-3">
+                          <button
                             type="button"
-                            variant={
-                              isOptional && !hasSelection
-                                ? 'outline'
-                                : 'default'
-                            }
-                            className="h-11 w-full rounded-xl font-semibold"
+                            className={PICKER_CONFIRM_BUTTON}
+                            style={{ backgroundColor: ORDER_ACCENT_GOLD }}
                             disabled={isDisabled}
                             onClick={() => {
                               if (isOptional && !hasSelection) {
+                                const nextSkipped = {
+                                  ...skippedOptionalGroupIdsRef.current,
+                                  [currentGroupId]: true as const,
+                                };
+                                skippedOptionalGroupIdsRef.current = nextSkipped;
+                                setSkippedOptionalGroupIds(nextSkipped);
                                 const nextSelectedByGroup = {
                                   ...selectedByGroup,
                                   [currentGroupId]: [],
@@ -2181,20 +2335,6 @@ export function ProductCustomizeDialog({
                                   nestedOptionConfigs,
                                   selectedNestedVariationByOption
                                 );
-                                const nextPicker = getNextPendingPicker(
-                                  selectedVariationId,
-                                  nextSelectedByGroup,
-                                  selectedNestedVariationByOption,
-                                  productRecPickerContext()
-                                );
-                                if (
-                                  nextPicker &&
-                                  'groupId' in nextPicker &&
-                                  nextPicker.groupId === currentGroupId
-                                ) {
-                                  setPicker(null);
-                                  return;
-                                }
                                 applyNextPendingPicker(
                                   selectedVariationId,
                                   nextSelectedByGroup,
@@ -2210,6 +2350,18 @@ export function ProductCustomizeDialog({
                                 selectedNestedVariationByOption,
                                 productRecPickerContext()
                               );
+                              if (
+                                nextPicker?.kind === 'category-option-sheet' ||
+                                nextPicker?.kind === 'nested'
+                              ) {
+                                applyNextPendingPicker(
+                                  selectedVariationId,
+                                  selectedByGroup,
+                                  selectedNestedVariationByOption,
+                                  productRecPickerContext()
+                                );
+                                return;
+                              }
                               if (
                                 nextPicker &&
                                 'groupId' in nextPicker &&
@@ -2227,7 +2379,7 @@ export function ProductCustomizeDialog({
                             }}
                           >
                             {buttonText}
-                          </Button>
+                          </button>
                         </div>
                       );
                     }
@@ -2244,20 +2396,16 @@ export function ProductCustomizeDialog({
                       );
                       const buttonText =
                         isOptional && !hasSelectedVar
-                          ? 'No Thanks'
-                          : 'Select';
+                          ? t('customizeNoThanks')
+                          : t('select');
                       const isDisabled = !isOptional && !hasSelectedVar;
 
                       return (
-                        <div className="shrink-0 border-t border-border bg-card p-4 pt-3">
-                          <Button
+                        <div className="shrink-0 border-t border-[#ececf0] bg-white p-4 pt-3">
+                          <button
                             type="button"
-                            variant={
-                              isOptional && !hasSelectedVar
-                                ? 'outline'
-                                : 'default'
-                            }
-                            className="h-11 w-full rounded-xl font-semibold"
+                            className={PICKER_CONFIRM_BUTTON}
+                            style={{ backgroundColor: ORDER_ACCENT_GOLD }}
                             disabled={isDisabled}
                             onClick={() => {
                               setPicker(null);
@@ -2270,7 +2418,7 @@ export function ProductCustomizeDialog({
                             }}
                           >
                             {buttonText}
-                          </Button>
+                          </button>
                         </div>
                       );
                     }
@@ -2280,52 +2428,12 @@ export function ProductCustomizeDialog({
                 </div>
               </aside>
             ) : null}
-            </div>
-
-            {/* Sticky footer: qty + Add — stays above picker overlay */}
-            <footer className="relative z-[90] shrink-0 border-t border-border bg-card px-4 py-4 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.12)]">
-              <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
-                <div className="flex items-center gap-0.5 rounded-lg border border-primary/30 bg-primary/5 p-0.5">
-                  <Button
-                    type="button"
-                    variant="default"
-                    className="h-10 w-10 shrink-0 rounded-md p-0 text-base font-bold"
-                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  >
-                    −
-                  </Button>
-                  <span className="min-w-[2.5rem] px-1 text-center text-sm font-bold tabular-nums text-foreground">
-                    {String(quantity).padStart(2, '0')}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="default"
-                    className="h-10 w-10 shrink-0 rounded-md p-0 text-base font-bold"
-                    onClick={() => setQuantity((q) => Math.min(99, q + 1))}
-                  >
-                    +
-                  </Button>
-                </div>
-                <Button
-                  type="button"
-                  disabled={requiredMissing || isLoading}
-                  onClick={handleConfirm}
-                  className="h-12 min-h-[3rem] flex-1 rounded-xl border-0 bg-gradient-to-r from-primary to-[var(--restaurant-primary-dark,var(--primary))] px-5 text-base font-bold text-primary-foreground shadow-md shadow-primary/30 transition-opacity hover:opacity-95 disabled:opacity-50 sm:min-w-[12rem]"
-                >
-                  <span className="flex w-full items-center justify-between gap-4">
-                    <span>{isLoading ? 'Loading…' : 'Add'}</span>
-                    <span className="tabular-nums">
-                      {formatMoney(selectedUnitTotal * quantity)}
-                    </span>
-                  </span>
-                </Button>
-              </div>
-            </footer>
 
             {activeCategoryOptionTarget ? (
               <NestedRecommendationSheet
                 open
-                stackClassName="z-[92]"
+                stackClassName="z-[120]"
+                stackZIndex={120}
                 parentGroupName={activeCategoryOptionTarget.group.name}
                 parentConfigurationGroup={activeCategoryOptionTarget.group}
                 baseProductVariation={baseProductVariationContext.parent}
@@ -2343,7 +2451,20 @@ export function ProductCustomizeDialog({
                     activeCategoryOptionTarget.key
                   ]
                 }
-                onClose={() => setActiveCategoryOption(null)}
+                onClose={() => {
+                  const target = activeCategoryOptionTarget;
+                  setActiveCategoryOption(null);
+                  if (!target) return;
+                  if (nestedOptionConfigs[target.key]) return;
+                  setSelectedByGroup((prev) => {
+                    const current = prev[target.group.id] ?? [];
+                    const nextIds = current.filter(
+                      (id) => id !== target.optionId
+                    );
+                    if (nextIds.length === current.length) return prev;
+                    return { ...prev, [target.group.id]: nextIds };
+                  });
+                }}
                 onDone={(result) => {
                   const { key } = activeCategoryOptionTarget;
                   const nextNestedVariations = {
@@ -2383,6 +2504,8 @@ export function ProductCustomizeDialog({
             {activeProductGroup && activeProductItem ? (
               <NestedRecommendationSheet
                 open={activeProductGroupId === activeProductGroup.id}
+                stackClassName="z-[120]"
+                stackZIndex={120}
                 parentGroupName={activeProductGroup.name}
                 parentConfigurationGroup={activeProductGroup}
                 baseProductVariation={baseProductVariationContext.parent}

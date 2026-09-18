@@ -147,6 +147,7 @@ function formatKioskOrderApiError(body: unknown): string {
 type CartModifierSelection = {
   attributeGroupId: string;
   groupName: string;
+  parentSelectionKey?: string;
   selections: { menuItemId: string; name: string; unitPrice: number }[];
 };
 
@@ -2520,6 +2521,7 @@ export function KioskApp({
             const mapped: CartModifierSelection[] = mods.map((m) => ({
               attributeGroupId: m.attributeGroupId,
               groupName: m.groupName,
+              parentSelectionKey: m.parentSelectionKey,
               selections: m.selections.map((s) => ({
                 menuItemId: s.menuItemId,
                 name: String(s.name ?? 'Option'),

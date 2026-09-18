@@ -2,6 +2,7 @@
 export type CartModifierSelectionNormalized = {
   attributeGroupId: string;
   groupName: string;
+  parentSelectionKey?: string;
   selections: {
     menuItemId: string;
     name: string;
@@ -49,6 +50,7 @@ export function normalizeCartModifiers(
     out.push({
       attributeGroupId: String(row.attributeGroupId ?? ''),
       groupName: String(row.groupName ?? ''),
+      parentSelectionKey: String(row.parentSelectionKey ?? '').trim() || undefined,
       selections,
     });
   }
