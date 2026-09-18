@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -7,6 +8,7 @@ import { estimateDataUrlBytes, isAcceptedImageValue } from "@/lib/image-data-url
 import { ensurePresetRolesAndOwnerEmployee } from "@/lib/restaurant-roles";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 import { normalizeThemePrimaryColor } from "@/lib/restaurant-theme";
+import { RESTAURANT_THEME_CACHE_TAG } from "@/lib/load-restaurant-theme-primary";
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from "@/lib/subscription-plan-enforcement";
 import {
   parseRestaurantRegionalSettings,
@@ -198,6 +200,8 @@ export async function PATCH(req: NextRequest) {
         ownerId: true,
       },
     });
+
+    revalidateTag(RESTAURANT_THEME_CACHE_TAG);
 
     return NextResponse.json({ data: updated }, { status: 200 });
   } catch (error) {

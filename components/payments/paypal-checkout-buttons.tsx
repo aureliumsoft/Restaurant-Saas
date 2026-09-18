@@ -5,7 +5,10 @@ import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 
 import { AcceptedPaymentMethods } from '@/components/payments/accepted-payment-methods';
-import { defaultPayPalCountryForCurrency } from '@/lib/paypal-buyer-countries';
+import {
+  defaultPayPalCountryForCurrency,
+  paypalSdkLocaleForCountry,
+} from '@/lib/paypal-buyer-countries';
 
 declare global {
   interface Window {
@@ -57,6 +60,7 @@ type PayPalSdkConfig = {
   merchantId?: string;
   multiparty?: boolean;
   buyerCountry?: string;
+  locale?: string;
 };
 
 type PaymentPhase = 'idle' | 'capture' | 'complete';
@@ -85,6 +89,7 @@ async function fetchPayPalConfig(restaurantSlug?: string): Promise<PayPalSdkConf
         mode?: string;
         multiparty?: boolean;
         buyerCountry?: string;
+        locale?: string;
         error?: unknown;
       };
       if (!res.ok || !body.clientId) {
@@ -101,6 +106,7 @@ async function fetchPayPalConfig(restaurantSlug?: string): Promise<PayPalSdkConf
         merchantId: body.merchantId,
         multiparty: body.multiparty === true,
         buyerCountry: body.buyerCountry?.trim().toUpperCase(),
+        locale: body.locale?.trim() || undefined,
       };
       configCache.set(cacheKey, config);
       return config;
@@ -116,34 +122,26 @@ async function fetchPayPalConfig(restaurantSlug?: string): Promise<PayPalSdkConf
 
 const sdkPromises = new Map<string, Promise<void>>();
 
-/** Align PayPal card-fields region with checkout currency (sandbox). */
-function buyerCountryForCurrency(currency: string): string | undefined {
-  switch (currency.toUpperCase()) {
-    case 'EUR':
-      return 'DE';
-    case 'GBP':
-      return 'GB';
-    case 'USD':
-      return 'US';
-    case 'AUD':
-      return 'AU';
-    case 'CAD':
-      return 'CA';
-    default:
-      return undefined;
-  }
-}
-
 function loadPayPalSdk(
   clientId: string,
   currency: string,
   merchantId?: string,
-  buyerCountryOverride?: string
+  buyerCountryOverride?: string,
+  mode: 'live' | 'sandbox' = 'sandbox',
+  locale?: string
 ): Promise<void> {
+  // buyer-country is sandbox-only. PayPal rejects the SDK in live with:
+  // "Query parameter buyer-country disallowed in production env"
   const buyerCountry =
-    buyerCountryOverride?.trim().toUpperCase() ||
-    buyerCountryForCurrency(currency);
-  const key = `${clientId}:${currency}:${merchantId ?? 'platform'}:${buyerCountry ?? 'auto'}`;
+    mode === 'sandbox'
+      ? buyerCountryOverride?.trim().toUpperCase() ||
+        defaultPayPalCountryForCurrency(currency)
+      : undefined;
+  const sdkLocale =
+    locale?.trim() ||
+    paypalSdkLocaleForCountry(buyerCountry) ||
+    paypalSdkLocaleForCountry(defaultPayPalCountryForCurrency(currency));
+  const key = `${clientId}:${currency}:${merchantId ?? 'platform'}:${buyerCountry ?? 'auto'}:${mode}:${sdkLocale ?? 'default'}`;
   const existing = sdkPromises.get(key);
   if (existing) return existing;
   const p = new Promise<void>((resolve, reject) => {
@@ -170,6 +168,9 @@ function loadPayPalSdk(
     }
     if (buyerCountry) {
       params.set('buyer-country', buyerCountry);
+    }
+    if (sdkLocale) {
+      params.set('locale', sdkLocale);
     }
     script.src = `https://www.paypal.com/sdk/js?${params.toString()}`;
     script.async = true;
@@ -308,7 +309,9 @@ export function PayPalCheckoutButtons({
           config.clientId,
           wantedCurrency,
           config.merchantId,
-          config.buyerCountry
+          config.buyerCountry,
+          config.mode,
+          config.locale
         );
         if (cancelled) return;
         setResolvedCurrency(wantedCurrency);

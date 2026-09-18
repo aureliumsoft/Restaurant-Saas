@@ -1,6 +1,8 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import OrderPageClient from '@/components/order/order-page';
+import { RestaurantThemeStyle } from '@/components/customer-app/restaurant-theme-style';
+import { loadRestaurantThemePrimary } from '@/lib/load-restaurant-theme-primary';
 import { orderInfoFromSearchParams } from '@/lib/order-search-params';
 
 type OrderSummaryProps = {
@@ -31,10 +33,22 @@ export default async function OrderSummaryPage({ params, searchParams }: OrderSu
   const orderType = mode === 'pickUp' ? 'pickUp' : 'delivery';
 
   const orderInfo = orderInfoFromSearchParams(searchParamsResolved, orderType);
+  const initialThemePrimaryColor = await loadRestaurantThemePrimary(
+    orderInfo.restaurantSlug
+  );
 
   return (
     <Suspense fallback={null}>
-      <OrderPageClient orderType={orderType} orderId={orderId} orderInfo={orderInfo} />
+      <RestaurantThemeStyle
+        color={initialThemePrimaryColor}
+        styleId="restaurant-theme-order"
+      />
+      <OrderPageClient
+        orderType={orderType}
+        orderId={orderId}
+        orderInfo={orderInfo}
+        initialThemePrimaryColor={initialThemePrimaryColor}
+      />
     </Suspense>
   );
 }

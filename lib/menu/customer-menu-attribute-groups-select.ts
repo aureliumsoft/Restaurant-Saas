@@ -296,6 +296,107 @@ export function buildCustomerMenuAttributeGroupsSelectLegacy(depth: number): any
   return buildAttributeGroupsSelect(depth, 'legacy');
 }
 
+const productDetailOptionVariationSelectFull = {
+  orderBy: { sortOrder: 'asc' as const },
+  select: {
+    id: true,
+    name: true,
+    title: true,
+    priceDelta: true,
+    sortOrder: true,
+    restaurantVariationId: true,
+  },
+} as const;
+
+const productDetailOptionVariationSelectLegacy = {
+  orderBy: { sortOrder: 'asc' as const },
+  select: {
+    id: true,
+    name: true,
+    title: true,
+    priceDelta: true,
+    sortOrder: true,
+  },
+} as const;
+
+export function customerProductDetailOptionCardSelect(
+  mode: CustomerMenuSelectMode
+) {
+  return {
+    id: true,
+    name: true,
+    price: true,
+    salePrice: true,
+    variations:
+      mode === 'full'
+        ? productDetailOptionVariationSelectFull
+        : productDetailOptionVariationSelectLegacy,
+  } as const;
+}
+
+/**
+ * Storefront customize sheet metadata only: group rules + linked ids.
+ * Option cards and nested product groups are loaded in follow-up queries.
+ */
+export function customerProductDetailGroupSelect(
+  mode: CustomerMenuSelectMode
+) {
+  const optionCardSelect = customerProductDetailOptionCardSelect(mode);
+  const select: Record<string, unknown> = {
+    id: true,
+    name: true,
+    selectionType: true,
+    sourceType: true,
+    multipleMode: true,
+    freeQuantity: true,
+    categoryDiscountPercent: true,
+    categoryExtraCostPercent: true,
+    productOverrides: true,
+    required: true,
+    minItems: true,
+    maxItems: true,
+    sortOrder: true,
+    productCategoryIds: true,
+    defaultLinkedMenuItemId: true,
+    defaultLinkedRestaurantVariationId: true,
+    linkedCategoryId: true,
+    linkedProductId: true,
+    linkedCategory: {
+      select: { id: true, name: true },
+    },
+    linkedProduct: {
+      select: {
+        ...optionCardSelect,
+        categoryId: true,
+      },
+    },
+    variationLimits: {
+      select: {
+        variationId: true,
+        minItems: true,
+        maxItems: true,
+      },
+    },
+  };
+
+  if (mode === 'full') {
+    select.useVariationPricing = true;
+    select.includeDefaultLinkedVariationPrice = true;
+  }
+
+  return select;
+}
+
+export function buildCustomerProductDetailAttributeGroupsSelect(
+  mode: CustomerMenuSelectMode
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  return {
+    orderBy: { sortOrder: 'asc' as const },
+    select: customerProductDetailGroupSelect(mode),
+  };
+}
+
 /**
  * POS ?lite=1 recommendations: linked option cards without nested personalize
  * trees on category items. Linked PRODUCT recommendations still include a leaf

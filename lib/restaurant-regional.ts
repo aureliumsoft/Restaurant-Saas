@@ -106,6 +106,19 @@ export function defaultUiLanguageForCountry(
   return normalizeRestaurantCountryCode(country) === 'PK' ? 'en' : 'es';
 }
 
+/** Wall-clock timezone used for branch opening hours. */
+export function timezoneForRestaurantCountry(
+  country: string | null | undefined
+): string {
+  switch (normalizeRestaurantCountryCode(country)) {
+    case 'PK':
+      return 'Asia/Karachi';
+    case 'ES':
+    default:
+      return 'Europe/Madrid';
+  }
+}
+
 export type RestaurantRegionalInput = {
   currencyCode?: string | null;
   countryCode?: string | null;

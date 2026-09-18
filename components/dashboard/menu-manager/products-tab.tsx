@@ -474,7 +474,7 @@ export function ProductsTab({
             type="button"
             variant="outline"
             onClick={() => setShowImportWizard(true)}
-            disabled={noCategories}
+            disabled={exporting}
           >
             <Download className="mr-2 h-4 w-4" />
             Import CSV

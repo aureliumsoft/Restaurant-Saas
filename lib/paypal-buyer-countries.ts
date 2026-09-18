@@ -1,4 +1,7 @@
-/** ISO 3166-1 alpha-2 codes supported for PayPal `buyer-country` SDK param. */
+/**
+ * ISO 3166-1 alpha-2 codes supported for PayPal `buyer-country` SDK param.
+ * That query param is sandbox-only; never send it with a live client ID.
+ */
 export const PAYPAL_BUYER_COUNTRIES = [
   { code: 'AU', label: 'Australia' },
   { code: 'AT', label: 'Austria' },
@@ -43,7 +46,7 @@ export const PAYPAL_BUYER_COUNTRIES = [
 
 export function normalizePayPalCountryCode(
   raw: string | null | undefined,
-  fallback = 'DE'
+  fallback = 'ES'
 ): string {
   const code = raw?.trim().toUpperCase();
   if (code && /^[A-Z]{2}$/.test(code)) {
@@ -81,4 +84,39 @@ export function resolvePayPalBuyerCountry(
     return normalized;
   }
   return defaultPayPalCountryForCurrency(currency);
+}
+
+/**
+ * PayPal JS SDK `locale` (underscore). Safe in live and sandbox.
+ * Spanish restaurants should render checkout in es_ES.
+ */
+export function paypalSdkLocaleForCountry(
+  countryCode: string | null | undefined
+): string | undefined {
+  switch (countryCode?.trim().toUpperCase()) {
+    case 'ES':
+      return 'es_ES';
+    case 'DE':
+      return 'de_DE';
+    case 'FR':
+      return 'fr_FR';
+    case 'IT':
+      return 'it_IT';
+    case 'PT':
+      return 'pt_PT';
+    case 'GB':
+      return 'en_GB';
+    case 'US':
+    case 'PK':
+      return 'en_US';
+    default:
+      return undefined;
+  }
+}
+
+/** PayPal Orders API `application_context.locale` (BCP 47 hyphen). */
+export function paypalOrderLocaleForCountry(
+  countryCode: string | null | undefined
+): string | undefined {
+  return paypalSdkLocaleForCountry(countryCode)?.replace('_', '-');
 }

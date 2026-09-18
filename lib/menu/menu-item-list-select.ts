@@ -21,10 +21,13 @@ export const menuItemBrowseListSelect = {
   attributeGroups: {
     orderBy: { sortOrder: 'asc' as const },
     select: {
+      id: true,
+      name: true,
+      selectionType: true,
       sourceType: true,
       required: true,
-      linkedProduct: { select: { id: true } },
-      linkedCategory: { select: { id: true } },
+      linkedProduct: { select: { id: true, name: true } },
+      linkedCategory: { select: { id: true, name: true } },
       linkedCategoryId: true,
       linkedProductId: true,
       productCategoryIds: true,
@@ -62,6 +65,49 @@ export const menuItemBrowseListSelect = {
           },
         },
       },
+    },
+  },
+} as const;
+
+/** Same browse grid without deal joins (stale Prisma clients omit MenuItemDeal). */
+export const menuItemBrowseListSelectLegacy = {
+  id: true,
+  name: true,
+  description: true,
+  price: true,
+  salePrice: true,
+  categoryId: true,
+  variations: {
+    orderBy: { sortOrder: 'asc' as const },
+    select: {
+      id: true,
+      name: true,
+      title: true,
+      swatchHex: true,
+      priceDelta: true,
+      sortOrder: true,
+    },
+  },
+  attributeGroups: {
+    orderBy: { sortOrder: 'asc' as const },
+    select: {
+      id: true,
+      name: true,
+      selectionType: true,
+      sourceType: true,
+      required: true,
+      linkedProduct: { select: { id: true, name: true } },
+      linkedCategory: { select: { id: true, name: true } },
+      linkedCategoryId: true,
+      linkedProductId: true,
+      productCategoryIds: true,
+    },
+  },
+  personalizeGroups: {
+    orderBy: { sortOrder: 'asc' as const },
+    select: {
+      id: true,
+      options: { select: { id: true }, take: 1 },
     },
   },
 } as const;

@@ -235,10 +235,26 @@ export async function loadSingleCategoryWithLinkedItems<
     };
   }
 
-  const loaded = await db.menuItem.findMany({
-    where: { id: { in: pageIds } },
-    select: options.itemSelect,
-  });
+  let loaded: MenuItem[];
+  try {
+    loaded = (await db.menuItem.findMany({
+      where: { id: { in: pageIds } },
+      select: options.itemSelect,
+    })) as MenuItem[];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/Unknown nested field/i.test(message)) throw error;
+    const fallbackSelect = { ...(options.itemSelect as object) } as Record<
+      string,
+      unknown
+    >;
+    delete fallbackSelect.dealsFromThis;
+    delete fallbackSelect.offersFromThis;
+    loaded = (await db.menuItem.findMany({
+      where: { id: { in: pageIds } },
+      select: fallbackSelect,
+    })) as MenuItem[];
+  }
   const byId = new Map(
     loaded.map((row) => [(row as MenuItem & { id: string }).id, row as MenuItem])
   );

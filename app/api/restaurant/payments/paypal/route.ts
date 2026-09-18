@@ -20,7 +20,7 @@ const bodySchema = z.object({
   webhookId: z.string().max(200).optional().nullable(),
   mode: z.enum(['sandbox', 'live']).default('sandbox'),
   currency: z.string().min(3).max(3).default('EUR'),
-  countryCode: z.string().length(2).default('DE'),
+  countryCode: z.string().length(2).default('ES'),
 });
 
 export async function GET() {

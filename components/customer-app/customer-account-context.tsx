@@ -5,10 +5,15 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
+import {
+  readCachedRestaurantThemePrimary,
+  writeCachedRestaurantThemePrimary,
+} from '@/lib/restaurant-theme-persist';
 
 export type CustomerAccountInfo = {
   id: string;
@@ -60,16 +65,31 @@ export function CustomerAccountProvider({ children }: { children: ReactNode }) {
       restaurantSlug?: string | null;
       themePrimaryColor?: string | null;
     }) => {
-      if (opts.restaurantSlug !== undefined) {
-        const slug = opts.restaurantSlug?.trim() || null;
-        setRestaurantSlug(slug);
+      const nextSlug =
+        opts.restaurantSlug !== undefined
+          ? opts.restaurantSlug?.trim() || null
+          : undefined;
+      if (nextSlug !== undefined) {
+        setRestaurantSlug(nextSlug);
       }
       if (opts.themePrimaryColor !== undefined) {
         setThemePrimaryColor(opts.themePrimaryColor ?? null);
+        writeCachedRestaurantThemePrimary(
+          nextSlug !== undefined ? nextSlug : restaurantSlug,
+          opts.themePrimaryColor
+        );
       }
     },
-    []
+    [restaurantSlug]
   );
+
+  useLayoutEffect(() => {
+    if (!restaurantSlug || themePrimaryColor) return;
+    const cached = readCachedRestaurantThemePrimary(restaurantSlug);
+    if (!cached) return;
+    setThemePrimaryColor(cached);
+    writeCachedRestaurantThemePrimary(restaurantSlug, cached);
+  }, [restaurantSlug, themePrimaryColor]);
 
   const refreshSession = useCallback(async () => {
     if (!restaurantSlug) {

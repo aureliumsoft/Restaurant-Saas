@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Check, Copy, Home } from 'lucide-react';
@@ -20,6 +20,10 @@ import {
   buildCustomerLightSurfaceVars,
   buildStorefrontThemeVars,
 } from '@/lib/restaurant-theme';
+import {
+  readCachedRestaurantThemePrimary,
+  writeCachedRestaurantThemePrimary,
+} from '@/lib/restaurant-theme-persist';
 import { cn } from '@/lib/utils';
 
 function formatTokenNumber(ticket: number | null): string {
@@ -35,6 +39,7 @@ type Props = {
   token?: string | null;
   orderType: 'delivery' | 'pickUp';
   orderInfo?: OrderInfo;
+  initialThemePrimaryColor?: string | null;
 };
 
 export function OnlinePaymentSuccess({
@@ -45,6 +50,7 @@ export function OnlinePaymentSuccess({
   token,
   orderType,
   orderInfo: initialOrderInfo,
+  initialThemePrimaryColor = null,
 }: Props) {
   const orderInfo = useOrderInfo(flowOrderId, orderType, initialOrderInfo);
   const router = useRouter();
@@ -58,7 +64,7 @@ export function OnlinePaymentSuccess({
     trackingOrderId
   );
   const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
-    null
+    initialThemePrimaryColor
   );
   const [slugFromVerify, setSlugFromVerify] = useState('');
   const verifyStartedRef = useRef(false);
@@ -115,6 +121,15 @@ export function OnlinePaymentSuccess({
     setResolvedTrackingId(trackingOrderId);
   }, [trackingOrderId]);
 
+  useLayoutEffect(() => {
+    const slug = restaurantSlug || null;
+    const cached =
+      initialThemePrimaryColor || readCachedRestaurantThemePrimary(slug);
+    if (!cached) return;
+    setThemePrimaryColor((prev) => prev || cached);
+    writeCachedRestaurantThemePrimary(slug, cached);
+  }, [initialThemePrimaryColor, restaurantSlug]);
+
   useEffect(() => {
     const slug = restaurantSlug;
     if (!slug) return;
@@ -130,6 +145,7 @@ export function OnlinePaymentSuccess({
             ? json.data.themePrimaryColor.trim()
             : '';
         setThemePrimaryColor(c || null);
+        writeCachedRestaurantThemePrimary(slug, c || null);
       })
       .catch(() => {
         if (!cancelled) setThemePrimaryColor(null);

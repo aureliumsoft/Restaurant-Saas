@@ -1,6 +1,7 @@
 import {
   defaultPayPalCountryForCurrency,
   normalizePayPalCountryCode,
+  paypalOrderLocaleForCountry,
 } from '@/lib/paypal-buyer-countries';
 import { PayPalOrderMetadata } from './paypal-server';
 
@@ -118,6 +119,8 @@ export async function createRestaurantPayPalOrder(
   }
 ) {
   const headers = await authorizeHeaders(config);
+  const currency = (config.currency || params.currency || 'EUR').toUpperCase();
+  const locale = paypalOrderLocaleForCountry(config.countryCode);
   const res = await fetch(`${config.baseUrl}/v2/checkout/orders`, {
     method: 'POST',
     headers,
@@ -129,7 +132,7 @@ export async function createRestaurantPayPalOrder(
           description: params.title.slice(0, 127),
           custom_id: metadataToCustomId(params.metadata ?? {}),
           amount: {
-            currency_code: params.currency.toUpperCase(),
+            currency_code: currency,
             value: params.amount.toFixed(2),
           },
         },
@@ -140,6 +143,7 @@ export async function createRestaurantPayPalOrder(
         user_action: 'PAY_NOW',
         shipping_preference: 'NO_SHIPPING',
         landing_page: 'NO_PREFERENCE',
+        ...(locale ? { locale } : {}),
       },
     }),
     cache: 'no-store',

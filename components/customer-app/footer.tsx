@@ -9,7 +9,7 @@ import { AcceptedPaymentMethods } from '@/components/payments/accepted-payment-m
 import { cn } from '@/lib/utils';
 import '@/lib/i18n/client';
 import { parseStorefrontSlugFromPath } from '@/lib/customer-storefront-paths';
-import { buildThemeCssVars } from '@/lib/restaurant-theme';
+import { writeCachedRestaurantThemePrimary } from '@/lib/restaurant-theme-persist';
 
 const LEGAL_LINKS = [
   { key: 'storefrontFooterTermsOfSale', href: '/refund-policy' },
@@ -65,18 +65,7 @@ export function Footer({
             ? data.logoUrl.trim()
             : null
         );
-
-        if (typeof document !== 'undefined') {
-          const host = document.querySelector(
-            '.web-app-customer'
-          ) as HTMLElement | null;
-          if (host) {
-            const vars = buildThemeCssVars(data?.themePrimaryColor);
-            Object.entries(vars).forEach(([key, value]) =>
-              host.style.setProperty(key, value)
-            );
-          }
-        }
+        writeCachedRestaurantThemePrimary(slug, data?.themePrimaryColor ?? null);
       } catch {
         if (!cancelled) {
           setRestaurantName(null);

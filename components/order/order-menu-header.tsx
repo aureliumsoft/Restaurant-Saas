@@ -76,6 +76,7 @@ type OrderMenuHeaderProps = {
     openTime: string;
     closeTime: string;
   }> | null;
+  branchTimeZone?: string | null;
 };
 
 export function OrderMenuHeader({
@@ -90,6 +91,7 @@ export function OrderMenuHeader({
   backHref,
   className,
   branchHours,
+  branchTimeZone,
 }: OrderMenuHeaderProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
@@ -97,7 +99,10 @@ export function OrderMenuHeader({
   const [methodChangeOpen, setMethodChangeOpen] = useState(false);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
   const [storeInfoOpen, setStoreInfoOpen] = useState(false);
-  const timeSlots = useMemo(() => generateOrderTimeSlots(branchHours), [branchHours]);
+  const timeSlots = useMemo(
+    () => generateOrderTimeSlots(branchHours, 10, 30, branchTimeZone),
+    [branchHours, branchTimeZone]
+  );
   const [schedule, setSchedule] = useState<OrderSchedule>({
     mode: 'asap',
     slot: '',
@@ -403,6 +408,7 @@ export function OrderMenuHeader({
         schedule={schedule}
         onSave={handleSaveSchedule}
         branchHours={branchHours}
+        branchTimeZone={branchTimeZone}
       />
 
       <OrderStoreInfoSheet

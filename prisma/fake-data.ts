@@ -126,7 +126,7 @@ export function fakeRestaurantPayPalCredentialsComplete() {
     webhookId: undefined,
     mode: 'sandbox',
     currency: 'EUR',
-    countryCode: 'DE',
+    countryCode: 'ES',
     isVerified: false,
     lastVerifiedAt: undefined,
     createdAt: new Date(),

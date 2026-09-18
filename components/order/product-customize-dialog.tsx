@@ -264,6 +264,40 @@ function groupSelectionCount(selectedIds: string[]) {
   return selectedIds.length;
 }
 
+function CustomizeGroupSkeleton({
+  title,
+  required,
+}: {
+  title?: string | null;
+  required?: boolean;
+}) {
+  return (
+    <section
+      className="rounded-xl border border-border bg-muted/40 p-4 shadow-sm"
+      aria-busy="true"
+    >
+      <div className="flex items-start justify-between gap-3">
+        {title?.trim() ? (
+          <Label className="text-sm font-semibold text-foreground">{title}</Label>
+        ) : (
+          <div className="h-4 w-36 animate-pulse rounded bg-zinc-300 dark:bg-zinc-600" />
+        )}
+        {required ? (
+          <span className="shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
+            Required
+          </span>
+        ) : (
+          <div className="h-5 w-14 animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-700" />
+        )}
+      </div>
+      <div className="mt-3 flex h-12 w-full animate-pulse items-center justify-between rounded-lg border border-border bg-zinc-100 px-3 dark:bg-zinc-800">
+        <div className="h-3.5 w-32 rounded bg-zinc-300 dark:bg-zinc-600" />
+        <div className="h-4 w-4 rounded bg-zinc-300 dark:bg-zinc-600" />
+      </div>
+    </section>
+  );
+}
+
 type Props = {
   productName: string;
   productImageUrl?: string | null;
@@ -375,13 +409,14 @@ export function ProductCustomizeDialog({
 
   const visibleCategoryGroups = useMemo(
     () =>
-      categoryGroups.filter((g) =>
-        isConfigurationGroupVisibleForFilters(
+      categoryGroups.filter((g) => {
+        if (isLoading && g.items.length === 0) return true;
+        return isConfigurationGroupVisibleForFilters(
           g,
           baseProductVariationContext.parent
-        )
-      ),
-    [categoryGroups, baseProductVariationContext.parent]
+        );
+      }),
+    [categoryGroups, baseProductVariationContext.parent, isLoading]
   );
 
   const visibleProductRecommendationGroups = useMemo(
@@ -485,6 +520,26 @@ export function ProductCustomizeDialog({
   ]);
 
   const groupRefs = useRef<Record<string, HTMLElement | null>>({});
+  const customizeSessionRef = useRef(false);
+  const selectedVariationIdRef = useRef(selectedVariationId);
+  selectedVariationIdRef.current = selectedVariationId;
+  const selectedByGroupRef = useRef(selectedByGroup);
+  selectedByGroupRef.current = selectedByGroup;
+  const selectedNestedVariationByOptionRef = useRef(
+    selectedNestedVariationByOption
+  );
+  selectedNestedVariationByOptionRef.current = selectedNestedVariationByOption;
+  const nestedConfigsRef = useRef(nestedConfigs);
+  nestedConfigsRef.current = nestedConfigs;
+  const preselectedRecommendationVariationByGroupRef = useRef(
+    preselectedRecommendationVariationByGroup
+  );
+  preselectedRecommendationVariationByGroupRef.current =
+    preselectedRecommendationVariationByGroup;
+  const nestedOptionConfigsRef = useRef(nestedOptionConfigs);
+  nestedOptionConfigsRef.current = nestedOptionConfigs;
+  const pickerRef = useRef(picker);
+  pickerRef.current = picker;
 
   const limitsForGroup = useCallback(
     (group: AttributeGroup) =>
@@ -727,31 +782,19 @@ export function ProductCustomizeDialog({
   );
 
   useEffect(() => {
-    if (!open) return;
-    if (isLoading) {
-      setPicker(null);
-      setActiveProductGroupId(null);
-      setActiveCategoryOption(null);
+    if (!open) {
+      customizeSessionRef.current = false;
       return;
     }
-    const init: Record<string, string[]> = {};
-    for (const g of categoryGroups) init[g.id] = [];
-    setSelectedByGroup(init);
-    const personalizeInit: Record<string, string[]> = {};
-    for (const g of personalizeGroups) personalizeInit[g.id] = [];
-    setSelectedPersonalizeByGroup(personalizeInit);
-    setSelectedVariationId('');
-    setSelectedNestedVariationByOption({});
-    setQuantity(1);
-    setNestedConfigs({});
-    setPreselectedRecommendationVariationByGroup({});
-    setActiveProductGroupId(null);
-    setNestedOptionConfigs({});
-    setActiveCategoryOption(null);
-    setSelectionTimeline([]);
-    const autoNested: Record<string, NestedRecommendationResult> = {};
-    for (const g of productRecommendationGroups) {
-      if (!recommendedProductNeedsSheet(g)) {
+
+    const autoNestedForGroups = (
+      existing: Record<string, NestedRecommendationResult>
+    ) => {
+      const autoNested: Record<string, NestedRecommendationResult> = {
+        ...existing,
+      };
+      for (const g of productRecommendationGroups) {
+        if (recommendedProductNeedsSheet(g) || autoNested[g.id]) continue;
         autoNested[g.id] = {
           productVariationId: '',
           selectedByGroup: {},
@@ -759,19 +802,91 @@ export function ProductCustomizeDialog({
           mods: [],
         };
       }
-    }
-    setNestedConfigs(autoNested);
-    applyNextPendingPicker(
-      '',
-      init,
-      {},
-      {
+      return autoNested;
+    };
+
+    if (!customizeSessionRef.current) {
+      customizeSessionRef.current = true;
+      const init: Record<string, string[]> = {};
+      for (const g of categoryGroups) init[g.id] = [];
+      setSelectedByGroup(init);
+      const personalizeInit: Record<string, string[]> = {};
+      for (const g of personalizeGroups) personalizeInit[g.id] = [];
+      setSelectedPersonalizeByGroup(personalizeInit);
+      setSelectedVariationId('');
+      setSelectedNestedVariationByOption({});
+      setQuantity(1);
+      setPreselectedRecommendationVariationByGroup({});
+      setActiveProductGroupId(null);
+      setNestedOptionConfigs({});
+      setActiveCategoryOption(null);
+      setSelectionTimeline([]);
+      const autoNested = autoNestedForGroups({});
+      setNestedConfigs(autoNested);
+      if (variations.length > 0) {
+        setPicker({ kind: 'variation' });
+        return;
+      }
+      applyNextPendingPicker('', init, {}, {
         nestedConfigs: autoNested,
         preselectedByGroup: {},
         optionNestedConfigs: {},
+      });
+      return;
+    }
+
+    setSelectedByGroup((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const g of categoryGroups) {
+        if (g.id in next) continue;
+        next[g.id] = [];
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+    setSelectedPersonalizeByGroup((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const g of personalizeGroups) {
+        if (g.id in next) continue;
+        next[g.id] = [];
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+    const autoNested = autoNestedForGroups(nestedConfigsRef.current);
+    if (Object.keys(autoNested).length !== Object.keys(nestedConfigsRef.current).length) {
+      setNestedConfigs(autoNested);
+    }
+
+    const variationId = selectedVariationIdRef.current;
+    if (pickerRef.current?.kind === 'variation' && !variationId) {
+      return;
+    }
+    if (!variationId && variations.length > 0) {
+      setPicker({ kind: 'variation' });
+      return;
+    }
+    if (isLoading) return;
+    applyNextPendingPicker(
+      variationId,
+      selectedByGroupRef.current,
+      selectedNestedVariationByOptionRef.current,
+      {
+        nestedConfigs: autoNested,
+        preselectedByGroup: preselectedRecommendationVariationByGroupRef.current,
+        optionNestedConfigs: nestedOptionConfigsRef.current,
       }
     );
-  }, [open, isLoading, categoryGroups, productRecommendationGroups, personalizeGroups]);
+  }, [
+    open,
+    isLoading,
+    categoryGroups,
+    productRecommendationGroups,
+    personalizeGroups,
+    variations.length,
+  ]);
 
   const requiredMissing = useMemo(() => {
     if (isLoading) return true;
@@ -1212,11 +1327,13 @@ export function ProductCustomizeDialog({
     }
     if (picker.kind === 'group-single') {
       const group = categoryGroups.find((g) => g.id === picker.groupId);
-      return group ? `Select ${group.name}` : 'Select option';
+      const label = group?.name?.trim();
+      return label ? `Select ${label}` : 'Select option';
     }
     if (picker.kind === 'group-multi') {
       const group = categoryGroups.find((g) => g.id === picker.groupId);
-      return group ? `Select ${group.name}` : 'Select options';
+      const label = group?.name?.trim();
+      return label ? `Select ${label}` : 'Select options';
     }
     const group = categoryGroups.find((g) => g.id === picker.groupId);
     const item = group?.items.find((i) => i.menuItemId === picker.optionId);
@@ -1666,9 +1783,21 @@ export function ProductCustomizeDialog({
                 ) : null}
 
                 {/* Product Recommendation Groups */}
-                {visibleProductRecommendationGroups.map((g) => {
+                {productRecommendationGroups.map((g, index) => {
                   const item = g.items[0];
-                  if (!item) return null;
+                  if (!item) {
+                    if (!isLoading) return null;
+                    return (
+                      <CustomizeGroupSkeleton
+                        key={`product-rec-skel-${g.id || 'row'}-${index}`}
+                        title={g.name}
+                        required={g.required}
+                      />
+                    );
+                  }
+                  if (!visibleProductRecommendationGroups.some((v) => v.id === g.id)) {
+                    return null;
+                  }
                   const configured = Boolean(nestedConfigs[g.id]);
                   const needsSheet = recommendedProductNeedsSheet(g);
                   const missing = needsSheet && !configured && g.required;
@@ -1692,7 +1821,7 @@ export function ProductCustomizeDialog({
                   );
                   return (
                     <section
-                      key={g.id}
+                      key={`product-rec-${g.id || 'row'}-${index}`}
                       className="rounded-xl border border-border bg-card p-4 shadow-sm animate-in fade-in-50 duration-200"
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -1709,7 +1838,7 @@ export function ProductCustomizeDialog({
                           </span>
                         )}
                       </div>
-                      {missing ? (
+                      {missing && !isLoading ? (
                         <p className="mt-2 text-xs text-destructive">
                           Please configure this recommendation
                         </p>
@@ -1732,7 +1861,7 @@ export function ProductCustomizeDialog({
                 })}
 
                 {/* Category Add-on Groups */}
-                {visibleCategoryGroups.map((g) => {
+                {visibleCategoryGroups.map((g, index) => {
                   const selectedIds = selectedByGroup[g.id] ?? [];
                   const limits = limitsForGroup(g);
                   const count = totalSelectedUnits(selectedIds);
@@ -1742,10 +1871,20 @@ export function ProductCustomizeDialog({
                       ? g.required && count === 0
                       : (g.required && count < min) ||
                         (count > 0 && min > 0 && count < min);
+                  const awaitingOptions = isLoading && g.items.length === 0;
+                  if (awaitingOptions) {
+                    return (
+                      <CustomizeGroupSkeleton
+                        key={`category-group-skel-${g.id || 'row'}-${index}`}
+                        title={g.name}
+                        required={g.required}
+                      />
+                    );
+                  }
 
                   return (
                     <section
-                      key={g.id}
+                      key={`category-group-${g.id || 'row'}-${index}`}
                       ref={(el) => {
                         groupRefs.current[g.id] = el;
                       }}
@@ -1791,7 +1930,7 @@ export function ProductCustomizeDialog({
                             : ''}
                         </p>
                       ) : null}
-                      {missing ? (
+                      {missing && !isLoading ? (
                         <p className="mt-1 text-xs text-destructive">
                           {g.selectionType === 'SINGLE'
                             ? 'Please select an option'
@@ -1808,9 +1947,9 @@ export function ProductCustomizeDialog({
                           if (visible.length === 0) {
                             if (isLoading) {
                               return (
-                                <div className="flex h-12 w-full animate-pulse items-center justify-between rounded-lg border border-input/60 bg-muted/40 px-3">
-                                  <div className="h-4 w-32 rounded bg-muted-foreground/15" />
-                                  <div className="h-4 w-4 rounded bg-muted-foreground/15" />
+                                <div className="flex h-12 w-full animate-pulse items-center justify-between rounded-lg border border-border bg-zinc-100 px-3 dark:bg-zinc-800">
+                                  <div className="h-3.5 w-32 rounded bg-zinc-300 dark:bg-zinc-600" />
+                                  <div className="h-4 w-4 rounded bg-zinc-300 dark:bg-zinc-600" />
                                 </div>
                               );
                             }
@@ -1855,32 +1994,15 @@ export function ProductCustomizeDialog({
                   );
                 })}
 
-                {/* Progressive Skeletons while loading recommendations/options in parallel */}
-                {isLoading && (
+                {isLoading &&
+                visibleCategoryGroups.length === 0 &&
+                productRecommendationGroups.length === 0 ? (
                   <div className="space-y-4" aria-busy="true">
-                    {[1, 2, 3].map((i) => (
-                      <section
-                        key={`loading-rec-${i}`}
-                        className="rounded-xl border border-border bg-card p-4 shadow-sm animate-pulse space-y-3"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1.5 flex-1">
-                            <div className="h-4 w-36 rounded bg-muted-foreground/15" />
-                            <div className="h-3 w-20 rounded bg-muted-foreground/10" />
-                          </div>
-                          <div className="h-5 w-14 rounded-md bg-muted-foreground/10" />
-                        </div>
-                        <div className="flex h-12 w-full items-center justify-between rounded-lg border border-input/60 bg-muted/30 px-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="h-7 w-7 rounded-md bg-muted-foreground/15 shrink-0" />
-                            <div className="h-3.5 w-32 rounded bg-muted-foreground/15" />
-                          </div>
-                          <div className="h-4 w-4 rounded bg-muted-foreground/10" />
-                        </div>
-                      </section>
+                    {[1, 2].map((i) => (
+                      <CustomizeGroupSkeleton key={`loading-rec-${i}`} />
                     ))}
                   </div>
-                )}
+                ) : null}
 
                 {!isLoading &&
                 visibleCategoryGroups.length === 0 &&
@@ -1900,7 +2022,7 @@ export function ProductCustomizeDialog({
               </div>
             </div>
 
-            {picker && !isLoading ? (
+            {picker ? (
               <aside
                 className="absolute inset-0 flex min-h-0 flex-col justify-end bg-black/40 animate-in fade-in-0 duration-200"
                 aria-modal="true"
@@ -1953,9 +2075,9 @@ export function ProductCustomizeDialog({
                         ))}
                       </div>
                     ) : (
-                      pickerEntries.map((entry) => (
+                      pickerEntries.map((entry, index) => (
                         <button
-                          key={entry.id}
+                          key={`picker-${entry.id || 'row'}-${index}`}
                           type="button"
                           className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
                             entry.selected

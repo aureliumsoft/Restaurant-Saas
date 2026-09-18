@@ -6,6 +6,10 @@ import { Loader2 } from 'lucide-react';
 
 import { AcceptedPaymentMethods } from '@/components/payments/accepted-payment-methods';
 import { PayPalSandboxDemoCard } from '@/components/payments/paypal-sandbox-demo-card';
+import {
+  defaultPayPalCountryForCurrency,
+  paypalSdkLocaleForCountry,
+} from '@/lib/paypal-buyer-countries';
 
 type SubscriptionConfig = {
   clientId: string;
@@ -58,26 +62,18 @@ async function fetchSubscriptionConfig(plan: string): Promise<SubscriptionConfig
   return config;
 }
 
-function buyerCountryForCurrency(currency: string): string | undefined {
-  switch (currency.toUpperCase()) {
-    case 'EUR':
-      return 'DE';
-    case 'GBP':
-      return 'GB';
-    case 'USD':
-      return 'US';
-    case 'AUD':
-      return 'AU';
-    case 'CAD':
-      return 'CA';
-    default:
-      return undefined;
-  }
-}
-
-function loadSubscriptionSdk(clientId: string, currency: string): Promise<void> {
-  const buyerCountry = buyerCountryForCurrency(currency);
-  const key = `sub:${clientId}:${currency}:${buyerCountry ?? 'auto'}`;
+function loadSubscriptionSdk(
+  clientId: string,
+  currency: string,
+  mode: 'live' | 'sandbox'
+): Promise<void> {
+  // buyer-country is sandbox-only; live SDK load fails if it is present.
+  const buyerCountry =
+    mode === 'sandbox' ? defaultPayPalCountryForCurrency(currency) : undefined;
+  const sdkLocale =
+    paypalSdkLocaleForCountry(buyerCountry) ||
+    paypalSdkLocaleForCountry(defaultPayPalCountryForCurrency(currency));
+  const key = `sub:${clientId}:${currency}:${buyerCountry ?? 'auto'}:${mode}:${sdkLocale ?? 'default'}`;
   const existing = sdkPromises.get(key);
   if (existing) return existing;
 
@@ -104,6 +100,9 @@ function loadSubscriptionSdk(clientId: string, currency: string): Promise<void> 
     });
     if (buyerCountry) {
       params.set('buyer-country', buyerCountry);
+    }
+    if (sdkLocale) {
+      params.set('locale', sdkLocale);
     }
     script.src = `https://www.paypal.com/sdk/js?${params.toString()}`;
     script.async = true;
@@ -148,7 +147,11 @@ export function PayPalSubscriptionButtons({
     (async () => {
       try {
         const config = await fetchSubscriptionConfig(plan);
-        await loadSubscriptionSdk(config.clientId, config.currency);
+        await loadSubscriptionSdk(
+          config.clientId,
+          config.currency,
+          config.mode
+        );
         if (cancelled) return;
         setSandboxMode(config.mode === 'sandbox');
         setCheckoutCurrency(config.currency);

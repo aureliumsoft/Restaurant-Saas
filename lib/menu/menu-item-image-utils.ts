@@ -193,7 +193,10 @@ type LinkedMenuNode = {
   }> | null;
   attributeGroups?: Array<{
     linkedProduct?: LinkedMenuNode | null;
-    linkedCategory?: { items?: LinkedMenuNode[] | null } | null;
+    linkedCategory?: {
+      items?: LinkedMenuNode[] | null;
+      itemLinks?: Array<{ menuItem?: LinkedMenuNode | null }> | null;
+    } | null;
   }> | null;
   dealsFromThis?: Array<{
     dealItem?: LinkedMenuNode | null;
@@ -203,14 +206,24 @@ type LinkedMenuNode = {
   }> | null;
 };
 
+function walkLinkedCategoryItems(
+  group: NonNullable<LinkedMenuNode['attributeGroups']>[number],
+  visit: (item: LinkedMenuNode) => void
+) {
+  for (const item of group.linkedCategory?.items ?? []) {
+    visit(item);
+  }
+  for (const link of group.linkedCategory?.itemLinks ?? []) {
+    if (link.menuItem) visit(link.menuItem);
+  }
+}
+
 function collectLinkedMenuItemIds(node: LinkedMenuNode | null | undefined, ids: Set<string>) {
   if (!node?.id) return;
   ids.add(node.id);
   for (const group of node.attributeGroups ?? []) {
     collectLinkedMenuItemIds(group.linkedProduct, ids);
-    for (const item of group.linkedCategory?.items ?? []) {
-      collectLinkedMenuItemIds(item, ids);
-    }
+    walkLinkedCategoryItems(group, (item) => collectLinkedMenuItemIds(item, ids));
   }
   for (const deal of node.dealsFromThis ?? []) {
     collectLinkedMenuItemIds(deal.dealItem, ids);
@@ -230,9 +243,7 @@ function collectVariationRefs(
   }
   for (const group of node.attributeGroups ?? []) {
     collectVariationRefs(group.linkedProduct, refs);
-    for (const item of group.linkedCategory?.items ?? []) {
-      collectVariationRefs(item, refs);
-    }
+    walkLinkedCategoryItems(group, (item) => collectVariationRefs(item, refs));
   }
   for (const deal of node.dealsFromThis ?? []) {
     collectVariationRefs(deal.dealItem, refs);
@@ -278,6 +289,11 @@ function applyLazyImageFlags(
     for (const item of group.linkedCategory?.items ?? []) {
       applyLazyImageFlags(item, itemMeta, variationMeta, query);
     }
+    for (const link of group.linkedCategory?.itemLinks ?? []) {
+      if (link.menuItem) {
+        applyLazyImageFlags(link.menuItem, itemMeta, variationMeta, query);
+      }
+    }
   }
   for (const deal of node.dealsFromThis ?? []) {
     if (deal.dealItem) {
@@ -306,5 +322,29 @@ export async function attachCustomerLazyImages<T>(
     imageMetaByVariationIds(variationRefs.map((ref) => ref.variationId)),
   ]);
   applyLazyImageFlags(node, itemMeta, variationMeta, query);
+  return item;
+}
+
+/** Same lazy URLs without extra image-presence queries (customize first paint). */
+export function stampCustomerDetailLazyUrls<T>(
+  item: T,
+  query: { slug?: string | null; subdomain?: string | null }
+): T {
+  const visit = (node: LinkedMenuNode | null | undefined) => {
+    if (!node?.id) return;
+    const updatedAt = (node as { updatedAt?: Date | string | number | null }).updatedAt;
+    node.hasImage = true;
+    node.imageUrl = customerMenuItemImageUrl(node.id, { ...query, updatedAt });
+    for (const variation of node.variations ?? []) {
+      variation.imageUrl = node.imageUrl;
+    }
+    for (const group of node.attributeGroups ?? []) {
+      visit(group.linkedProduct);
+      walkLinkedCategoryItems(group, visit);
+    }
+    for (const deal of node.dealsFromThis ?? []) visit(deal.dealItem);
+    for (const offer of node.offersFromThis ?? []) visit(offer.offeredItem);
+  };
+  visit(item as T & LinkedMenuNode);
   return item;
 }

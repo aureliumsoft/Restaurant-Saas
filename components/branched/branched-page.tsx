@@ -23,7 +23,13 @@ import {
   X,
 } from 'lucide-react';
 import { useStaffPermissions } from '@/hooks/use-staff-permissions';
-import type { BranchOpeningHours } from '@/lib/order-time-slots';
+import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { timezoneForRestaurantCountry } from '@/lib/restaurant-regional';
+import {
+  createDefaultOpeningHours,
+  normalizeOpeningHours,
+  type BranchOpeningHours,
+} from '@/lib/order-time-slots';
 
 type BranchRow = {
   id: string;
@@ -44,38 +50,6 @@ const weekdayLabels = [
   'Saturday',
 ];
 
-function createDefaultOpeningHours(): BranchOpeningHours {
-  return Array.from({ length: 7 }, (_, dayOfWeek) => ({
-    dayOfWeek,
-    isOpen: false,
-    openTime: '09:00',
-    closeTime: '17:00',
-  }));
-}
-
-function normalizeOpeningHours(
-  openingHours: BranchOpeningHours | null | undefined
-): BranchOpeningHours {
-  const defaults = createDefaultOpeningHours();
-  if (!Array.isArray(openingHours) || openingHours.length === 0) {
-    return defaults;
-  }
-
-  const merged = new Map<number, BranchOpeningHours[number]>();
-  openingHours.forEach((entry) => {
-    if (typeof entry?.dayOfWeek === 'number') {
-      merged.set(entry.dayOfWeek, {
-        dayOfWeek: entry.dayOfWeek,
-        isOpen: entry.isOpen === true,
-        openTime: typeof entry.openTime === 'string' ? entry.openTime : '09:00',
-        closeTime: typeof entry.closeTime === 'string' ? entry.closeTime : '17:00',
-      });
-    }
-  });
-
-  return defaults.map((entry) => merged.get(entry.dayOfWeek) ?? entry);
-}
-
 function formatOpeningHoursSummary(openingHours: BranchOpeningHours | null | undefined) {
   const normalized = normalizeOpeningHours(openingHours);
   const enabledDays = normalized.filter((entry) => entry.isOpen);
@@ -93,6 +67,13 @@ function formatOpeningHoursSummary(openingHours: BranchOpeningHours | null | und
 
 export function BranchedPage() {
   const { plan } = useStaffPermissions();
+  const { regional } = useOwnerRestaurantRegional();
+  const branchTimeZone = timezoneForRestaurantCountry(regional.countryCode);
+  const restaurantZoneLabel =
+    regional.countryCode === 'PK'
+      ? 'Pakistan (Karachi)'
+      : 'Spain (Madrid)';
+  const [restaurantClock, setRestaurantClock] = useState('');
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -128,6 +109,22 @@ export function BranchedPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    const tick = () => {
+      setRestaurantClock(
+        new Date().toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: branchTimeZone,
+        })
+      );
+    };
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, [branchTimeZone]);
 
   const activeBranch = branches.find((b) => b.id === activeId) ?? null;
   const cannotDeleteLastBranch = branches.length <= 1;
@@ -300,7 +297,8 @@ export function BranchedPage() {
               <div>
                 <p className="text-sm font-medium">Weekly opening hours</p>
                 <p className="text-xs text-muted-foreground">
-                  Set the hours that customers can choose for later orders.
+                  Times follow {restaurantZoneLabel}. Current time there:{' '}
+                  {restaurantClock}.
                 </p>
               </div>
             </div>
@@ -325,6 +323,7 @@ export function BranchedPage() {
                   </label>
                   <Input
                     type="time"
+                    step={60}
                     value={entry.openTime}
                     disabled={!entry.isOpen}
                     onChange={(event) =>
@@ -335,6 +334,7 @@ export function BranchedPage() {
                   />
                   <Input
                     type="time"
+                    step={60}
                     value={entry.closeTime}
                     disabled={!entry.isOpen}
                     onChange={(event) =>

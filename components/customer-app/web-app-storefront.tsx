@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Loader2 } from 'lucide-react';
 
@@ -9,6 +9,10 @@ import { StorefrontBrandHero } from '@/components/customer-app/storefront/storef
 import { ORDER_SIDEBAR_WIDTH_PX } from '@/components/order/order-menu-header';
 import { buildStorefrontThemeVars } from '@/lib/restaurant-theme';
 import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
+import {
+  readCachedRestaurantThemePrimary,
+  writeCachedRestaurantThemePrimary,
+} from '@/lib/restaurant-theme-persist';
 
 type RestaurantBrand = {
   name: string;
@@ -17,8 +21,23 @@ type RestaurantBrand = {
   themePrimaryColor: string | null;
 };
 
-export function WebAppStorefront({ slug }: { slug: string }) {
-  const [brand, setBrand] = useState<RestaurantBrand | null>(null);
+export function WebAppStorefront({
+  slug,
+  initialThemePrimaryColor = null,
+}: {
+  slug: string;
+  initialThemePrimaryColor?: string | null;
+}) {
+  const [brand, setBrand] = useState<RestaurantBrand | null>(() =>
+    initialThemePrimaryColor
+      ? {
+          name: slug,
+          mainBannerUrl: null,
+          logoUrl: null,
+          themePrimaryColor: initialThemePrimaryColor,
+        }
+      : null
+  );
   const [brandLoading, setBrandLoading] = useState(true);
   const [websiteEnabled, setWebsiteEnabled] = useState(true);
 
@@ -30,6 +49,25 @@ export function WebAppStorefront({ slug }: { slug: string }) {
   const [addressName, setAddressName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
+
+  useLayoutEffect(() => {
+    const cached =
+      initialThemePrimaryColor || readCachedRestaurantThemePrimary(slug);
+    if (!cached) return;
+    setBrand((prev) =>
+      prev
+        ? prev.themePrimaryColor
+          ? prev
+          : { ...prev, themePrimaryColor: cached }
+        : {
+            name: slug,
+            mainBannerUrl: null,
+            logoUrl: null,
+            themePrimaryColor: cached,
+          }
+    );
+    writeCachedRestaurantThemePrimary(slug, cached);
+  }, [initialThemePrimaryColor, slug]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +115,12 @@ export function WebAppStorefront({ slug }: { slug: string }) {
               ? data.themePrimaryColor.trim()
               : null,
         });
+        writeCachedRestaurantThemePrimary(
+          slug,
+          typeof data?.themePrimaryColor === 'string'
+            ? data.themePrimaryColor
+            : null
+        );
       } catch {
         if (!cancelled) {
           setBrand({

@@ -1,5 +1,7 @@
 import CartPageClient from '@/components/order/cart-page';
 import { notFound } from 'next/navigation';
+import { RestaurantThemeStyle } from '@/components/customer-app/restaurant-theme-style';
+import { loadRestaurantThemePrimary } from '@/lib/load-restaurant-theme-primary';
 import { orderInfoFromSearchParams } from '@/lib/order-search-params';
 
 type CartPageProps = {
@@ -30,6 +32,22 @@ export default async function CartPage({ params, searchParams }: CartPageProps) 
   const orderType = mode === 'pickUp' ? 'pickUp' : 'delivery';
 
   const orderInfo = orderInfoFromSearchParams(searchParamsResolved, orderType);
+  const initialThemePrimaryColor = await loadRestaurantThemePrimary(
+    orderInfo.restaurantSlug
+  );
 
-  return <CartPageClient orderType={orderType} orderId={orderId} orderInfo={orderInfo} />;
+  return (
+    <>
+      <RestaurantThemeStyle
+        color={initialThemePrimaryColor}
+        styleId="restaurant-theme-order"
+      />
+      <CartPageClient
+        orderType={orderType}
+        orderId={orderId}
+        orderInfo={orderInfo}
+        initialThemePrimaryColor={initialThemePrimaryColor}
+      />
+    </>
+  );
 }

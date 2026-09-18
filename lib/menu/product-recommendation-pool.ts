@@ -29,6 +29,44 @@ export type AttributeGroupLike = AttributeGroupSource & {
   productCategoryIds?: string[] | null;
 };
 
+/** Category→product→category loops used to recurse until the stack overflowed. */
+const MAX_ENRICH_DEPTH = 2;
+
+function groupVisitKey(group: AttributeGroupLike): string | null {
+  if (group.sourceType === 'CATEGORY' && group.linkedCategory?.id) {
+    return `c:${group.linkedCategory.id}`;
+  }
+  if (group.sourceType === 'PRODUCT' && group.linkedProduct?.id) {
+    return `p:${group.linkedProduct.id}`;
+  }
+  return null;
+}
+
+export function collectLinkedCategoryIds(
+  groups: AttributeGroupLike[] | null | undefined,
+  into: Set<string> = new Set()
+): Set<string> {
+  for (const group of groups ?? []) {
+    const catId = group.linkedCategory?.id;
+    if (catId) into.add(catId);
+    for (const item of group.linkedCategory?.items ?? []) {
+      collectLinkedCategoryIds(item.attributeGroups, into);
+    }
+    const links = (
+      group.linkedCategory as
+        | { itemLinks?: Array<{ menuItem?: MenuItemLike }> }
+        | undefined
+    )?.itemLinks;
+    for (const link of links ?? []) {
+      collectLinkedCategoryIds(link.menuItem?.attributeGroups, into);
+    }
+    if (group.linkedProduct?.attributeGroups) {
+      collectLinkedCategoryIds(group.linkedProduct.attributeGroups, into);
+    }
+  }
+  return into;
+}
+
 export function findMenuItemInCategories(
   itemId: string,
   allCategories: CategoryLike[]
@@ -40,11 +78,39 @@ export function findMenuItemInCategories(
   return undefined;
 }
 
+function mapPoolItem(
+  poolItem: MenuItemLike,
+  allCategories: CategoryLike[],
+  depth: number,
+  path: Set<string>
+): MenuItemLike {
+  const nestedGroups = poolItem.attributeGroups ?? [];
+  const expandNested = depth + 1 < MAX_ENRICH_DEPTH;
+  return {
+    ...poolItem,
+    imageUrl: poolItem.imageUrl ?? null,
+    salePrice: poolItem.salePrice ?? null,
+    attributeGroups: expandNested
+      ? nestedGroups.map((nested) =>
+          enrichAttributeGroupFromPool(
+            nested,
+            allCategories,
+            poolItem.id,
+            depth + 1,
+            path
+          )
+        )
+      : nestedGroups,
+  };
+}
+
 /** Attach nested recommendation groups to the anchor product (no category pooling). */
 export function enrichAttributeGroupSource(
   group: AttributeGroupLike,
   allCategories: CategoryLike[],
-  baseProductId: string
+  baseProductId: string,
+  depth = 0,
+  path: Set<string> = new Set()
 ): AttributeGroupLike {
   if (group.sourceType !== 'PRODUCT' || !group.linkedProduct) {
     return group;
@@ -63,6 +129,7 @@ export function enrichAttributeGroupSource(
     return group;
   }
 
+  const expandNested = depth + 1 < MAX_ENRICH_DEPTH;
   return {
     ...group,
     linkedProduct: {
@@ -70,9 +137,17 @@ export function enrichAttributeGroupSource(
       description: anchor.description ?? null,
       imageUrl: anchor.imageUrl ?? null,
       category: undefined,
-      attributeGroups: (anchor.attributeGroups ?? []).map((nested) =>
-        enrichAttributeGroupFromPool(nested, allCategories, anchor.id)
-      ),
+      attributeGroups: expandNested
+        ? (anchor.attributeGroups ?? []).map((nested) =>
+            enrichAttributeGroupFromPool(
+              nested,
+              allCategories,
+              anchor.id,
+              depth + 1,
+              path
+            )
+          )
+        : (anchor.attributeGroups ?? []),
     } as AttributeGroupLike['linkedProduct'],
   };
 }
@@ -81,7 +156,9 @@ export function enrichAttributeGroupSource(
 export function enrichCategoryLinkedItems(
   group: AttributeGroupLike,
   allCategories: CategoryLike[],
-  baseProductId: string
+  baseProductId: string,
+  depth = 0,
+  path: Set<string> = new Set()
 ): AttributeGroupLike {
   if (group.sourceType !== 'CATEGORY' || !group.linkedCategory?.id) {
     return group;
@@ -94,18 +171,21 @@ export function enrichCategoryLinkedItems(
     return group;
   }
 
+  const expandNested = depth + 1 < MAX_ENRICH_DEPTH;
   return {
     ...group,
     linkedCategory: {
       ...group.linkedCategory,
-      items: poolCategory.items.map((poolItem) => ({
-        ...poolItem,
-        imageUrl: poolItem.imageUrl ?? null,
-        salePrice: poolItem.salePrice ?? null,
-        attributeGroups: (poolItem.attributeGroups ?? []).map((nested) =>
-          enrichAttributeGroupFromPool(nested, allCategories, poolItem.id)
-        ),
-      })) as NonNullable<AttributeGroupSource['linkedCategory']>['items'],
+      name: group.linkedCategory.name || poolCategory.name,
+      items: poolCategory.items.map((poolItem) =>
+        expandNested
+          ? mapPoolItem(poolItem, allCategories, depth, path)
+          : {
+              ...poolItem,
+              imageUrl: poolItem.imageUrl ?? null,
+              salePrice: poolItem.salePrice ?? null,
+            }
+      ) as NonNullable<AttributeGroupSource['linkedCategory']>['items'],
     },
   };
 }
@@ -114,24 +194,35 @@ export function enrichCategoryLinkedItems(
 export function enrichAttributeGroupFromPool(
   group: AttributeGroupLike,
   allCategories: CategoryLike[],
-  baseProductId: string
+  baseProductId: string,
+  depth = 0,
+  path: Set<string> = new Set()
 ): AttributeGroupLike {
-  if (group.sourceType === 'PRODUCT') {
-    return enrichAttributeGroupSource(group, allCategories, baseProductId);
-  }
-  return enrichCategoryLinkedItems(group, allCategories, baseProductId);
-}
+  if (depth >= MAX_ENRICH_DEPTH) return group;
 
-function enrichAttributeGroupsOnMenuItem(
-  item: MenuItemLike,
-  allCategories: CategoryLike[]
-): MenuItemLike {
-  return {
-    ...item,
-    attributeGroups: (item.attributeGroups ?? []).map((group) =>
-      enrichAttributeGroupFromPool(group, allCategories, item.id)
-    ),
-  };
+  const key = groupVisitKey(group);
+  if (key && path.has(key)) {
+    return group;
+  }
+
+  const nextPath = key ? new Set(path).add(key) : path;
+
+  if (group.sourceType === 'PRODUCT') {
+    return enrichAttributeGroupSource(
+      group,
+      allCategories,
+      baseProductId,
+      depth,
+      nextPath
+    );
+  }
+  return enrichCategoryLinkedItems(
+    group,
+    allCategories,
+    baseProductId,
+    depth,
+    nextPath
+  );
 }
 
 /** Enrich all attribute groups on menu items in storefront categories. */

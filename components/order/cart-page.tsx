@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, useTransition, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   IconArrowLeft,
@@ -43,6 +43,10 @@ import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaur
 import { CutleryOption } from '@/components/order/cutlery-option';
 import { OrderPreferencesSummary } from '@/components/order/order-preferences-summary';
 import { buildCustomerLightSurfaceVars, buildStorefrontThemeVars } from '@/lib/restaurant-theme';
+import {
+  readCachedRestaurantThemePrimary,
+  writeCachedRestaurantThemePrimary,
+} from '@/lib/restaurant-theme-persist';
 import { cn } from '@/lib/utils';
 import { useRestaurantServiceCharges } from '@/hooks/use-restaurant-service-charges';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
@@ -79,6 +83,7 @@ type CartPageProps = {
   orderType: 'delivery' | 'pickUp';
   orderId: string;
   orderInfo?: OrderInfo;
+  initialThemePrimaryColor?: string | null;
 };
 
 type OfferedProduct = {
@@ -174,6 +179,7 @@ export default function CartPageClient({
   orderType,
   orderId,
   orderInfo: initialOrderInfo,
+  initialThemePrimaryColor = null,
 }: CartPageProps) {
   const orderInfo = useOrderInfo(orderId, orderType, initialOrderInfo);
   const { t } = useTranslation();
@@ -184,7 +190,7 @@ export default function CartPageClient({
   const [cartOffers, setCartOffers] = useState<CartOfferItem[]>([]);
   const [offersOpen, setOffersOpen] = useState(false);
   const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
-    null
+    initialThemePrimaryColor
   );
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -325,6 +331,15 @@ export default function CartPageClient({
     }
   }, [offeredProducts.length]);
 
+  useLayoutEffect(() => {
+    const slug = orderInfo?.restaurantSlug?.trim() || null;
+    const cached =
+      initialThemePrimaryColor || readCachedRestaurantThemePrimary(slug);
+    if (!cached) return;
+    setThemePrimaryColor((prev) => prev || cached);
+    writeCachedRestaurantThemePrimary(slug, cached);
+  }, [initialThemePrimaryColor, orderInfo?.restaurantSlug]);
+
   useEffect(() => {
     const loadTheme = async () => {
       try {
@@ -347,6 +362,7 @@ export default function CartPageClient({
             ? json.data.themePrimaryColor.trim()
             : '';
         setThemePrimaryColor(c || null);
+        writeCachedRestaurantThemePrimary(slug, c || null);
       } catch {
         // noop
       }

@@ -55,6 +55,10 @@ import { setUiLanguage } from '@/lib/i18n/client';
 import type { UiLanguage } from '@/lib/i18n/resources';
 import { buildStorefrontThemeVars } from '@/lib/restaurant-theme';
 import {
+  readCachedRestaurantThemePrimary,
+  writeCachedRestaurantThemePrimary,
+} from '@/lib/restaurant-theme-persist';
+import {
   ORDER_CATEGORY_BAR_HEIGHT_PX,
   ORDER_MENU_HEADER_HEIGHT_PX,
   ORDER_SIDEBAR_WIDTH_PX,
@@ -66,6 +70,7 @@ import {
 } from '@/components/order/order-menu-header';
 import { cn } from '@/lib/utils';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { timezoneForRestaurantCountry } from '@/lib/restaurant-regional';
 import { readOrderContext } from '@/lib/order-context-storage';
 import { ArrowUp, Minus, Pencil, Plus, Search, X } from 'lucide-react';
 import type { BranchOpeningHours } from '@/lib/order-time-slots';
@@ -74,6 +79,7 @@ export type OrderPageProps = {
   orderType: 'delivery' | 'pickUp';
   orderId: string;
   orderInfo?: OrderInfo;
+  initialThemePrimaryColor?: string | null;
 };
 
 type CustomerMenuProduct = {
@@ -342,6 +348,17 @@ function OfferSlider({
   const { t } = useTranslation();
   const trackRef = useRef<HTMLDivElement>(null);
   const [slideStep, setSlideStep] = useState(0);
+  const [perView, setPerView] = useState(1);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const apply = () => setPerView(mq.matches ? 2 : 1);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  const visibleCount = items.length <= 1 ? 1 : perView;
 
   const measureSlides = useCallback(() => {
     const track = trackRef.current;
@@ -361,17 +378,15 @@ function OfferSlider({
     const observer = new ResizeObserver(() => measureSlides());
     observer.observe(track);
     return () => observer.disconnect();
-  }, [items, measureSlides]);
+  }, [items, visibleCount, measureSlides]);
 
   if (items.length === 0) return null;
 
-  const multi = items.length > 1;
-  const slideWidthClass =
-    items.length === 1
-      ? 'w-full'
-      : items.length === 2
-        ? 'w-[calc((100%-0.75rem)/2)]'
-        : 'w-[88%] sm:w-[46%]';
+  const maxIndex = Math.max(0, items.length - visibleCount);
+  const page = Math.min(current, maxIndex);
+  const canCycle = items.length > visibleCount;
+  const slideSize =
+    visibleCount === 1 ? '100%' : 'calc((100% - 0.75rem) / 2)';
 
   return (
     <section className="mb-8">
@@ -383,12 +398,12 @@ function OfferSlider({
           <div
             ref={trackRef}
             className={cn(
-              'flex gap-3 transition-transform duration-300 ease-out will-change-transform',
-              !multi && 'gap-0'
+              'flex w-full gap-3 transition-transform duration-300 ease-out will-change-transform',
+              items.length <= 1 && 'gap-0'
             )}
             style={
-              multi && slideStep > 0
-                ? { transform: `translateX(-${current * slideStep}px)` }
+              canCycle && slideStep > 0
+                ? { transform: `translateX(-${page * slideStep}px)` }
                 : undefined
             }
           >
@@ -396,10 +411,12 @@ function OfferSlider({
               <div
                 key={item.id}
                 data-offer-slide
-                className={cn(
-                  'shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm',
-                  slideWidthClass
-                )}
+                className="shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm"
+                style={{
+                  flex: `0 0 ${slideSize}`,
+                  width: slideSize,
+                  maxWidth: slideSize,
+                }}
               >
                 <img
                   src={item.image}
@@ -410,7 +427,7 @@ function OfferSlider({
             ))}
           </div>
         </div>
-        {multi ? (
+        {canCycle ? (
           <>
             <button
               type="button"
@@ -577,6 +594,7 @@ export default function OrderPageClient({
   orderType,
   orderId,
   orderInfo: initialOrderInfo,
+  initialThemePrimaryColor = null,
 }: OrderPageProps) {
   const [storedOrderInfo, setStoredOrderInfo] = useState<OrderInfo | undefined>(
     undefined
@@ -591,9 +609,10 @@ export default function OrderPageClient({
     : storedOrderInfo;
   const restaurantSlug =
     orderInfo?.restaurantSlug?.trim() || orderInfo?.storeId?.trim() || '';
-  const { formatMoney } = useRestaurantRegional(
+  const { formatMoney, regional } = useRestaurantRegional(
     restaurantSlug || undefined
   );
+  const branchTimeZone = timezoneForRestaurantCountry(regional.countryCode);
   const storefrontPath = restaurantSlug
     ? `/web-app/${encodeURIComponent(restaurantSlug)}`
     : '/web-app';
@@ -612,12 +631,21 @@ export default function OrderPageClient({
   const [mounted, setMounted] = useState(false);
 
   const [themePrimaryColor, setThemePrimaryColor] = useState<string | null>(
-    null
+    initialThemePrimaryColor
   );
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [branchHours, setBranchHours] = useState<BranchOpeningHours | null>(null);
   const { t, i18n } = useTranslation();
   const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
+
+  useLayoutEffect(() => {
+    const slug = orderInfo?.restaurantSlug?.trim() || null;
+    const cached =
+      initialThemePrimaryColor || readCachedRestaurantThemePrimary(slug);
+    if (!cached) return;
+    setThemePrimaryColor((prev) => prev || cached);
+    writeCachedRestaurantThemePrimary(slug, cached);
+  }, [initialThemePrimaryColor, orderInfo?.restaurantSlug]);
 
   const hostSubdomain = inferHostSubdomainForMenu();
   const categoriesUrl = buildCustomerMenuCategoriesUrl(
@@ -730,6 +758,31 @@ export default function OrderPageClient({
   }, []);
 
   useEffect(() => {
+    if (!mounted) return;
+    const query = {
+      slug: orderInfo?.restaurantSlug ?? undefined,
+      subdomain: hostSubdomain ?? undefined,
+    };
+    let warmed = 0;
+    for (const product of products) {
+      if (warmed >= 3) break;
+      if (
+        !productNeedsCustomizeDialog(product) ||
+        !productNeedsDetailFetch(product)
+      ) {
+        continue;
+      }
+      prefetchCustomerMenuProductDetail(product.id, query);
+      warmed += 1;
+    }
+  }, [
+    mounted,
+    products,
+    orderInfo?.restaurantSlug,
+    hostSubdomain,
+  ]);
+
+  useEffect(() => {
     if (searchOpen) {
       searchInputRef.current?.focus();
     }
@@ -798,7 +851,6 @@ export default function OrderPageClient({
   }, [cart, mounted, orderId]);
 
   useEffect(() => {
-    if (!mounted) return;
     const loadBanners = async () => {
       try {
         let restaurantUrl: string | null = null;
@@ -824,16 +876,25 @@ export default function OrderPageClient({
             ? json.data.themePrimaryColor.trim()
             : '';
         setThemePrimaryColor(themeColor || null);
+        writeCachedRestaurantThemePrimary(slug, themeColor || null);
         const logo =
           typeof json?.data?.logoUrl === 'string' && json.data.logoUrl.trim()
             ? json.data.logoUrl.trim()
             : '';
         setLogoUrl(logo || null);
-        const urls = Array.isArray(json?.data?.menuBannerUrls)
+        const menuUrls = Array.isArray(json?.data?.menuBannerUrls)
           ? (json.data.menuBannerUrls as string[]).filter(
               (u) => typeof u === 'string' && u.trim() !== ''
             )
           : [];
+        const mainBanner =
+          typeof json?.data?.mainBannerUrl === 'string'
+            ? json.data.mainBannerUrl.trim()
+            : '';
+        const urls = [...menuUrls];
+        if (mainBanner && !urls.includes(mainBanner)) {
+          urls.push(mainBanner);
+        }
         if (urls.length === 0) return;
 
         const mapped = urls.map((image, idx) => ({
@@ -848,7 +909,6 @@ export default function OrderPageClient({
 
     void loadBanners();
   }, [
-    mounted,
     orderInfo?.restaurantSlug,
     orderInfo?.storeId,
     orderInfo?.restaurantName,
@@ -1264,11 +1324,12 @@ export default function OrderPageClient({
 
   useEffect(() => {
     if (!restaurantMeta) return;
-    setThemePrimaryColor(
-      (restaurantMeta.themePrimaryColor as string | null) ?? null
-    );
+    const color =
+      (restaurantMeta.themePrimaryColor as string | null) ?? null;
+    setThemePrimaryColor(color);
+    writeCachedRestaurantThemePrimary(orderInfo?.restaurantSlug, color);
     setLogoUrl((restaurantMeta.logoUrl as string | null) ?? null);
-  }, [restaurantMeta]);
+  }, [orderInfo?.restaurantSlug, restaurantMeta]);
 
   useEffect(() => {
     if (categories.length === 0) {
@@ -1289,9 +1350,9 @@ export default function OrderPageClient({
 
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
-    return customizeProduct.attributeGroups.map((g) =>
-      buildCustomerAttributeGroup(g, customizeProduct.id)
-    );
+    return customizeProduct.attributeGroups
+      .filter((g) => Boolean(g.id) && Boolean(g.selectionType))
+      .map((g) => buildCustomerAttributeGroup(g, customizeProduct.id));
   }, [customizeProduct]);
 
   // Avoid server/client markup mismatches by rendering only after first mount.
@@ -1526,6 +1587,7 @@ export default function OrderPageClient({
         deliveryAddress={orderInfo?.address}
         backHref={storefrontPath}
         branchHours={branchHours}
+        branchTimeZone={branchTimeZone}
       />
 
       <div
@@ -1755,6 +1817,8 @@ export default function OrderPageClient({
           if (!open) {
             setCustomizeProduct(null);
             setEditingLineId(null);
+            setCustomizeLoading(false);
+            customizeLoadTokenRef.current += 1;
           }
         }}
         productName={customizeProduct?.name ?? 'Product'}

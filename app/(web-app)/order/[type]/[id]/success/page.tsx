@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { OnlinePaymentSuccess } from '@/components/order/online-payment-success';
+import { RestaurantThemeStyle } from '@/components/customer-app/restaurant-theme-style';
+import { loadRestaurantThemePrimary } from '@/lib/load-restaurant-theme-primary';
 import { orderInfoFromSearchParams } from '@/lib/order-search-params';
 
 type Props = {
@@ -37,9 +39,16 @@ export default async function OnlineSuccessPage({ params, searchParams }: Props)
     pick(resolved, 'ticket').trim() || pick(resolved, 'ticketNumber').trim();
   const parsedTicket = ticketRaw ? Number(ticketRaw) : NaN;
   const ticketFromQuery = Number.isFinite(parsedTicket) ? parsedTicket : null;
+  const initialThemePrimaryColor = await loadRestaurantThemePrimary(
+    orderInfo.restaurantSlug || pick(resolved, 'restaurantSlug') || pick(resolved, 'slug')
+  );
 
   return (
     <Suspense fallback={null}>
+      <RestaurantThemeStyle
+        color={initialThemePrimaryColor}
+        styleId="restaurant-theme-order"
+      />
       <OnlinePaymentSuccess
         flowOrderId={id}
         trackingOrderId={trackingOrderId}
@@ -48,6 +57,7 @@ export default async function OnlineSuccessPage({ params, searchParams }: Props)
         token={token}
         orderType={mode}
         orderInfo={orderInfo}
+        initialThemePrimaryColor={initialThemePrimaryColor}
       />
     </Suspense>
   );

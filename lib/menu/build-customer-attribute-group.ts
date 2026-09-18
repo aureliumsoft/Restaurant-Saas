@@ -121,7 +121,7 @@ export function buildCustomerAttributeGroup(
       : mappedItems;
   return {
     id: group.id,
-    name: group.name,
+    name: group.name?.trim() || attributeGroupDisplayName(group) || 'Option',
     selectionType: group.selectionType,
     multipleMode: group.multipleMode ?? undefined,
     freeQuantity: group.freeQuantity,

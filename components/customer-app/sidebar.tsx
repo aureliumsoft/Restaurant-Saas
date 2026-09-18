@@ -25,8 +25,11 @@ import { cn } from '@/lib/utils';
 import { WEB_CUSTOMER_TAKEAWAY_NAME } from '@/lib/web-customer';
 import { writeOrderContext } from '@/lib/order-context-storage';
 import { encodeUrlIdClient } from '@/lib/encode-url-id-client';
+import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { timezoneForRestaurantCountry } from '@/lib/restaurant-regional';
 import {
   getBranchCloseTimeToday,
+  getNextBranchOpenAt,
   isBranchOpenNow,
   type BranchOpeningHours,
 } from '@/lib/order-time-slots';
@@ -39,6 +42,42 @@ function splitAddressLines(address: string): [string, string] {
     .filter(Boolean);
   if (parts.length <= 1) return [address, ''];
   return [parts[0] ?? address, parts.slice(1).join(', ')];
+}
+
+const WEEKDAY_I18N_KEYS = [
+  'weekdaySunday',
+  'weekdayMonday',
+  'weekdayTuesday',
+  'weekdayWednesday',
+  'weekdayThursday',
+  'weekdayFriday',
+  'weekdaySaturday',
+] as const;
+
+function branchHoursStatusLabel(
+  openingHours: BranchOpeningHours | null | undefined,
+  timeZone: string,
+  methodLabel: string,
+  t: (key: string, options?: Record<string, string>) => string
+) {
+  const now = new Date();
+  if (isBranchOpenNow(openingHours, now, timeZone)) {
+    const closeTime = getBranchCloseTimeToday(openingHours, now, timeZone);
+    return t('orderMethodAvailableTill', {
+      method: methodLabel,
+      time: closeTime ?? '',
+    });
+  }
+  const next = getNextBranchOpenAt(openingHours, now, timeZone);
+  if (!next) return t('branchClosed');
+  if (next.dayOffset === 0) return t('branchOpensAt', { time: next.time });
+  if (next.dayOffset === 1) {
+    return t('branchOpensTomorrowAt', { time: next.time });
+  }
+  return t('branchOpensOnDayAt', {
+    day: t(WEEKDAY_I18N_KEYS[next.dayOfWeek] ?? 'weekdaySunday'),
+    time: next.time,
+  });
 }
 
 type Store = {
@@ -92,6 +131,8 @@ export function Sidebar({
   deliveryEnabled = true,
 }: SidebarProps) {
   const { t } = useTranslation();
+  const { regional } = useRestaurantRegional(restaurantSlug);
+  const branchTimeZone = timezoneForRestaurantCountry(regional.countryCode);
   const customerAccount = useCustomerAccountOptional();
   const customerName = customerAccount?.account?.name?.trim() ?? '';
   const [activeStores, setActiveStores] = useState<Store[]>();
@@ -106,8 +147,15 @@ export function Sidebar({
   const selectDeliveryBranch = (storeId: string) => {
     setSelectedStoreId(storeId);
     const store = activeStores?.find((s) => s.id === storeId);
-    if (!isBranchOpenNow(store?.openingHours)) return;
+    if (!isBranchOpenNow(store?.openingHours, new Date(), branchTimeZone)) return;
     setDeliveryInfoOpen(true);
+  };
+
+  const selectTakeawayBranch = (storeId: string) => {
+    setSelectedStoreId(storeId);
+    const store = activeStores?.find((s) => s.id === storeId);
+    if (!isBranchOpenNow(store?.openingHours, new Date(), branchTimeZone) || isStartingOrder) return;
+    void createOrder(storeId);
   };
 
   const canProceedDelivery =
@@ -208,7 +256,7 @@ export function Sidebar({
     }
   }, [deliveryEnabled, mode, setMode]);
 
-  const createOrder = async () => {
+  const createOrder = async (storeIdOverride?: string | null) => {
     if (isStartingOrder) return;
     if (mode === 'delivery' && !deliveryEnabled) return;
 
@@ -217,12 +265,13 @@ export function Sidebar({
         ? crypto.randomUUID().replace(/-/g, '')
         : `id${Date.now().toString(16)}`;
 
-    const selectedStore = activeStores?.find((s) => s.id === selectedStoreId);
+    const storeId = storeIdOverride || selectedStoreId;
+    const selectedStore = activeStores?.find((s) => s.id === storeId);
 
     const orderType = mode === 'delivery' ? 'delivery' : 'pickUp';
     const orderInfo: OrderInfo = {
       mode: orderType,
-      storeId: selectedStoreId || '',
+      storeId: storeId || '',
       storeName: selectedStore?.name || '',
       storeAddress: selectedStore?.address || '',
       address: deliveryAddress.trim(),
@@ -375,9 +424,9 @@ export function Sidebar({
         {t('selectBranch')}
       </p>
       {!selectedStoreId ? (
-        <div className="flex items-center gap-2 rounded-xl border border-[#ececf0] bg-[#f8fafc] px-3 py-2 text-sm text-[#8e8e9a]">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />
-          <span>{t('branchClosed')} · {t('selectBranchToContinue')}</span>
+            <div className="flex items-center gap-2 rounded-xl border border-[#ececf0] bg-[#f8fafc] px-3 py-2 text-sm text-[#8e8e9a]">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-slate-400" />
+          <span>{t('selectBranchToContinue')}</span>
         </div>
       ) : null}
       <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
@@ -388,16 +437,19 @@ export function Sidebar({
           <p className="text-xs text-[#64748b]">{t('noBranchesTakeaway')}</p>
         )}
         {activeStores?.map((store) => {
-          const openNow = isBranchOpenNow(store.openingHours);
-          const closeTime = getBranchCloseTimeToday(store.openingHours);
+          const openNow = isBranchOpenNow(
+            store.openingHours,
+            new Date(),
+            branchTimeZone
+          );
           const methodLabel =
             mode === 'delivery' ? t('delivery') : t('takeAwayLabel');
-          const statusLabel = openNow
-            ? t('orderMethodAvailableTill', {
-                method: methodLabel,
-                time: closeTime ?? '',
-              })
-            : t('branchClosed');
+          const statusLabel = branchHoursStatusLabel(
+            store.openingHours,
+            branchTimeZone,
+            methodLabel,
+            t
+          );
           return (
           <button
             key={store.id}
@@ -484,7 +536,7 @@ export function Sidebar({
         <DialogFooter className="w-full border-t border-[#e2e8f0] pt-4">
           <Button
             className="w-full gap-2 bg-primary text-primary-foreground hover:brightness-95"
-            onClick={createOrder}
+            onClick={() => void createOrder()}
             disabled={!canProceedDelivery || isStartingOrder}
           >
             {isStartingOrder ? (
@@ -501,18 +553,11 @@ export function Sidebar({
 
 
   if (variant === 'storefront') {
-    const handleTakeawayProceed = () => {
-      if (!selectedStoreId || isStartingOrder) return;
-      createOrder();
-    };
-
     return (
       <section
-        className={cn(
-          'flex flex-col gap-5 bg-white px-4 pb-8 pt-4 sm:gap-6 sm:px-5 sm:pb-10 sm:pt-5 lg:px-5 lg:pb-8 lg:pt-5',
-          className
-        )}
+        className={cn('flex h-full min-h-0 flex-col bg-white', className)}
       >
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 pb-4 pt-4 sm:space-y-6 sm:px-5 sm:pt-5 lg:px-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <p className="text-[1.65rem] font-bold leading-tight text-primary">
           {customerName
             ? `${t('storefrontHi')} ${customerName}`
@@ -655,25 +700,26 @@ export function Sidebar({
           ) : null}
           {!branchesLoading && !selectedStoreId && (activeStores?.length ?? 0) > 0 ? (
             <div className="flex items-center gap-2 rounded-2xl border border-[#ececf0] bg-[#f8fafc] px-4 py-3 text-sm text-[#8e8e9a]">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />
-              <span>
-                {t('branchClosed')} · {t('selectBranchToContinue')}
-              </span>
+              <span className="h-2 w-2 shrink-0 rounded-full bg-slate-400" />
+              <span>{t('selectBranchToContinue')}</span>
             </div>
           ) : null}
           {activeStores?.map((store) => {
             const [line1, line2] = splitAddressLines(store.address);
             const selected = selectedStoreId === store.id;
-            const openNow = isBranchOpenNow(store.openingHours);
-            const closeTime = getBranchCloseTimeToday(store.openingHours);
+            const openNow = isBranchOpenNow(
+              store.openingHours,
+              new Date(),
+              branchTimeZone
+            );
             const methodLabel =
               mode === 'delivery' ? t('delivery') : t('takeAwayLabel');
-            const statusLabel = openNow
-              ? t('orderMethodAvailableTill', {
-                  method: methodLabel,
-                  time: closeTime ?? '',
-                })
-              : t('branchClosed');
+            const statusLabel = branchHoursStatusLabel(
+              store.openingHours,
+              branchTimeZone,
+              methodLabel,
+              t
+            );
 
             return (
               <button
@@ -682,13 +728,15 @@ export function Sidebar({
                 onClick={() =>
                   mode === 'delivery'
                     ? selectDeliveryBranch(store.id)
-                    : setSelectedStoreId(store.id)
+                    : selectTakeawayBranch(store.id)
                 }
+                disabled={isStartingOrder}
                 className={cn(
                   'w-full rounded-2xl border bg-white p-4 text-left transition',
                   selected
                     ? 'border-primary shadow-[0_0_0_1px_var(--primary)]'
-                    : 'border-[#ececf0] hover:border-primary/30'
+                    : 'border-[#ececf0] hover:border-primary/30',
+                  isStartingOrder && 'opacity-70'
                 )}
               >
                 <p className="text-base font-bold text-primary">{store.name}</p>
@@ -699,50 +747,30 @@ export function Sidebar({
                   <p className="text-sm leading-relaxed text-[#8e8e9a]">{line2}</p>
                 ) : null}
                 <div className="mt-3 flex items-center gap-2 text-sm text-[#8e8e9a]">
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${
-                      openNow ? 'bg-emerald-500' : 'bg-rose-500'
-                    }`}
-                  />
-                  <span>{statusLabel}</span>
+                  {selected && isStartingOrder && mode === 'takeaway' ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <span className="font-medium text-primary">
+                        {t('processing')}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${
+                          openNow ? 'bg-emerald-500' : 'bg-rose-500'
+                        }`}
+                      />
+                      <span>{statusLabel}</span>
+                    </>
+                  )}
                 </div>
               </button>
             );
           })}
         </div>
 
-        {mode === 'delivery' &&
-        selectedStoreId &&
-        deliveryAddress.trim() &&
-        isBranchOpenNow(
-          activeStores?.find((s) => s.id === selectedStoreId)?.openingHours
-        ) ? (
-          <Button
-            className="h-12 w-full rounded-2xl text-sm font-semibold"
-            onClick={() => setDeliveryInfoOpen(true)}
-          >
-            {t('enterDeliveryDetails')}
-          </Button>
-        ) : null}
-
-        {mode === 'takeaway' &&
-        selectedStoreId &&
-        isBranchOpenNow(
-          activeStores?.find((s) => s.id === selectedStoreId)?.openingHours
-        ) ? (
-          <Button
-            className="h-12 w-full gap-2 rounded-2xl text-sm font-semibold"
-            onClick={handleTakeawayProceed}
-            disabled={isStartingOrder}
-          >
-            {isStartingOrder ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            ) : (
-              <IconShoppingCart className="h-4 w-4" aria-hidden />
-            )}
-            {isStartingOrder ? t('processing') : t('proceedOrder')}
-          </Button>
-        ) : null}
+        </div>
 
         {deliveryDialog}
       </section>

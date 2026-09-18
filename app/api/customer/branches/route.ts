@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
+import { normalizeOpeningHours } from '@/lib/order-time-slots';
 
 function getSubdomainFromHost(hostname: string) {
   if (hostname.endsWith('.localhost')) {
@@ -54,7 +55,15 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ data: restaurant?.branches ?? [] }, { status: 200 });
+    return NextResponse.json(
+      {
+        data: (restaurant?.branches ?? []).map((branch) => ({
+          ...branch,
+          openingHours: normalizeOpeningHours(branch.openingHours),
+        })),
+      },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('customer branches', error);
     return NextResponse.json(

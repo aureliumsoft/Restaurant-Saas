@@ -389,7 +389,9 @@ export async function getRestaurantPayPalRuntimeConfigBySlug(
       clientSecret: decryptSecret(creds.clientSecretEnc),
       mode: creds.mode,
       currency: creds.currency || regional.currencyCode,
-      countryCode: creds.countryCode || regional.countryCode,
+      // Restaurant regional country (ES/PK) is the source of truth so Spanish
+      // stores are not stuck on the old PayPal default of DE.
+      countryCode: regional.countryCode || creds.countryCode,
     }),
   };
 }
@@ -633,22 +635,20 @@ export async function getPublicRestaurantPaymentConfigBySlug(
     const paypalCurrency = toPayPalCurrencyCode(
       creds!.currency || restaurantCurrency
     );
+    const paypalCountry = resolvePayPalBuyerCountry(
+      restaurantCountry || creds!.countryCode,
+      paypalCurrency
+    );
     return {
       provider,
       ready: true,
       currencyCode: paypalCurrency,
-      countryCode: resolvePayPalBuyerCountry(
-        creds!.countryCode || restaurantCountry,
-        paypalCurrency
-      ),
+      countryCode: paypalCountry,
       paypal: {
         clientId: creds!.clientId,
         currency: paypalCurrency,
         mode: normalizePayPalMode(creds!.mode),
-        buyerCountry: resolvePayPalBuyerCountry(
-          creds!.countryCode || restaurantCountry,
-          paypalCurrency
-        ),
+        buyerCountry: paypalCountry,
       },
     };
   }

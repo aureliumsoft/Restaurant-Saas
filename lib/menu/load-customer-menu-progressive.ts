@@ -1,45 +1,47 @@
 import { db } from '@/lib/db';
-import { applyProductRecommendationPools } from '@/lib/menu/apply-product-recommendation-pools';
 import {
-  buildCustomerMenuAttributeGroupsSelect,
-  buildCustomerMenuAttributeGroupsSelectLegacy,
-  customerMenuLinkedItemCoreSelect,
-  customerMenuLinkedItemCoreSelectLegacy,
+  buildCustomerProductDetailAttributeGroupsSelect,
+  customerProductDetailGroupSelect,
+  customerProductDetailOptionCardSelect,
   type CustomerMenuSelectMode,
 } from '@/lib/menu/customer-menu-attribute-groups-select';
 import {
   CUSTOMER_MENU_CATEGORY_WHERE,
+  categoryHasProducts,
   categoryVisibleForBranch,
-  RECOMMENDATION_SOURCE_CATEGORY_WHERE,
-  sanitizeCustomerMenuPayload,
 } from '@/lib/menu/category-visibility';
 import {
   isPrismaSchemaDriftError,
 } from '@/lib/menu/load-customer-menu';
-import { loadSingleCategoryWithLinkedItems, getMenuItemCategoryIds } from '@/lib/menu/menu-item-categories';
-import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
-import { menuItemBrowseListSelect } from '@/lib/menu/menu-item-list-select';
+import { loadSingleCategoryWithLinkedItems } from '@/lib/menu/menu-item-categories';
 import {
-  attachCustomerLazyImages,
+  menuItemBrowseListSelect,
+  menuItemBrowseListSelectLegacy,
+} from '@/lib/menu/menu-item-list-select';
+import {
+  type AttributeGroupSource,
+} from '@/lib/menu/map-attribute-group-items';
+import {
   customerMenuItemImageUrl,
   imageMetaByMenuItemIds,
   mapBrowseListItem,
   stampBrowseVariationImages,
 } from '@/lib/menu/menu-item-image-utils';
 import { customerCategoryImageUrl, publicRestaurantImageUrls } from '@/lib/stored-image-response';
-import { withRecommendationPoolCache } from '@/lib/menu/recommendation-pool-cache';
 import {
   parseRestaurantServiceCharges,
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
   type RestaurantServiceChargeRow,
 } from '@/lib/restaurant-service-charge';
-import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
+import { personalizeGroupsSelectLite } from '@/lib/menu/personalize-groups-select';
 import {
+  isPrismaFulfillmentSettingsFieldError,
   parseRestaurantFulfillmentSettings,
   RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
+  RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT_PRE_CHANNEL,
 } from '@/lib/restaurant-fulfillment-settings';
 
-const restaurantPublicSelect = {
+const restaurantPublicSelectBase = {
   id: true,
   name: true,
   logoUrl: true,
@@ -49,76 +51,44 @@ const restaurantPublicSelect = {
   slug: true,
   updatedAt: true,
   ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+  ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT_PRE_CHANNEL,
+} as const;
+
+const restaurantPublicSelect = {
+  ...restaurantPublicSelectBase,
   ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
 } as const;
 
-function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
-  // Customize detail: no embedded image blobs (hero + options use /image proxies).
-  const itemCore =
-    mode === 'full'
-      ? customerMenuLinkedItemCoreSelect
-      : customerMenuLinkedItemCoreSelectLegacy;
-  const buildGroups =
-    mode === 'full'
-      ? buildCustomerMenuAttributeGroupsSelect
-      : buildCustomerMenuAttributeGroupsSelectLegacy;
-
+function buildCustomerProductDetailItemSelect(mode: CustomerMenuSelectMode) {
   return {
-    ...itemCore,
+    id: true,
+    name: true,
+    description: true,
+    price: true,
+    salePrice: true,
+    updatedAt: true,
     categoryId: true,
-    attributeGroups: buildGroups(2),
-    personalizeGroups: personalizeGroupsSelect,
-    dealsFromThis: {
-      orderBy: { sortOrder: 'asc' as const },
-      select: {
-        id: true,
-        sortOrder: true,
-        dealItem: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            price: true,
-            salePrice: true,
-            variations: true,
-          },
-        },
-      },
-    },
-    offersFromThis: {
-      orderBy: { sortOrder: 'asc' as const },
-      select: {
-        id: true,
-        sortOrder: true,
-        offeredItem: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            price: true,
-            salePrice: true,
-          },
-        },
-      },
-    },
+    variations: customerProductDetailOptionCardSelect(mode).variations,
+    attributeGroups: buildCustomerProductDetailAttributeGroupsSelect(mode),
+    personalizeGroups: personalizeGroupsSelectLite,
   } as const;
 }
 
-function buildRecommendationPoolItemSelect(mode: CustomerMenuSelectMode) {
-  // Pool feeds recommendation option lists — never embed image blobs.
-  const itemCore =
-    mode === 'full'
-      ? customerMenuLinkedItemCoreSelect
-      : customerMenuLinkedItemCoreSelectLegacy;
-  const buildGroups =
-    mode === 'full'
-      ? buildCustomerMenuAttributeGroupsSelect
-      : buildCustomerMenuAttributeGroupsSelectLegacy;
-
-  return {
-    ...itemCore,
-    attributeGroups: buildGroups(2),
-  } as const;
+async function findRestaurantPublic(
+  where: { slug: string } | { subdomain: string }
+) {
+  try {
+    return await db.restaurant.findUnique({
+      where,
+      select: restaurantPublicSelect,
+    });
+  } catch (error) {
+    if (!isPrismaFulfillmentSettingsFieldError(error)) throw error;
+    return db.restaurant.findUnique({
+      where,
+      select: restaurantPublicSelectBase,
+    });
+  }
 }
 
 async function resolveRestaurant(
@@ -126,20 +96,31 @@ async function resolveRestaurant(
   subdomain?: string | null
 ) {
   const s = slug?.trim();
+  if (s) return findRestaurantPublic({ slug: s });
+  const sub = subdomain?.trim();
+  if (sub) return findRestaurantPublic({ subdomain: sub });
+  return null;
+}
+
+async function resolveRestaurantId(
+  slug?: string | null,
+  subdomain?: string | null
+): Promise<string | null> {
+  const s = slug?.trim();
   if (s) {
-    return db.restaurant.findUnique({
+    const row = await db.restaurant.findUnique({
       where: { slug: s },
-      select: restaurantPublicSelect,
+      select: { id: true },
     });
+    return row?.id ?? null;
   }
   const sub = subdomain?.trim();
-  if (sub) {
-    return db.restaurant.findUnique({
-      where: { subdomain: sub },
-      select: restaurantPublicSelect,
-    });
-  }
-  return null;
+  if (!sub) return null;
+  const row = await db.restaurant.findUnique({
+    where: { subdomain: sub },
+    select: { id: true },
+  });
+  return row?.id ?? null;
 }
 
 async function withMenuSelectMode<T>(
@@ -162,20 +143,17 @@ async function withMenuSelectMode<T>(
   throw new Error('Failed to load customer menu');
 }
 
-async function loadRecommendationPool(
-  restaurantId: string,
-  mode: CustomerMenuSelectMode
-) {
-  return withRecommendationPoolCache(
-    `customer:${restaurantId}:${mode}`,
-    () =>
-      loadRestaurantMenuCategories({
-        restaurantId,
-        categorySelect: { id: true, name: true, sortOrder: true },
-        itemSelect: buildRecommendationPoolItemSelect(mode),
-        categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
-      })
-  );
+type BrowseDealLink = {
+  dealItem?: {
+    id: string;
+    imageUrl?: string | null;
+    hasImage?: boolean;
+  };
+};
+
+function dealsFromBrowseItem(item: object): BrowseDealLink[] {
+  const deals = (item as { dealsFromThis?: BrowseDealLink[] }).dealsFromThis;
+  return Array.isArray(deals) ? deals : [];
 }
 
 function restaurantMetaPayload<
@@ -250,7 +228,7 @@ export async function loadCustomerMenuCategoryItems(options: {
   page?: number;
   limit?: number;
 }) {
-  return withMenuSelectMode(async () => {
+  return withMenuSelectMode(async (mode) => {
     const restaurant = await resolveRestaurant(options.slug, options.subdomain);
     if (!restaurant) return null;
     const branch = await db.branch.findFirst({
@@ -272,7 +250,10 @@ export async function loadCustomerMenuCategoryItems(options: {
         sortOrder: true,
         imageUrl: true,
       },
-      itemSelect: menuItemBrowseListSelect,
+      itemSelect:
+        mode === 'full'
+          ? menuItemBrowseListSelect
+          : menuItemBrowseListSelectLegacy,
       categoryWhere: {
         ...CUSTOMER_MENU_CATEGORY_WHERE,
         ...categoryVisibleForBranch(options.branchId),
@@ -283,8 +264,8 @@ export async function loadCustomerMenuCategoryItems(options: {
 
     const itemIds = category.items.map((item) => item.id);
     const dealItemIds = category.items.flatMap((item) =>
-      (item.dealsFromThis ?? [])
-        .map((d: { dealItem?: { id: string } }) => d.dealItem?.id)
+      dealsFromBrowseItem(item)
+        .map((d) => d.dealItem?.id)
         .filter((id): id is string => Boolean(id))
     );
     const allItemIds = Array.from(new Set([...itemIds, ...dealItemIds]));
@@ -308,8 +289,10 @@ export async function loadCustomerMenuCategoryItems(options: {
               })
             : null
         );
-        if (mapped.dealsFromThis && mapped.dealsFromThis.length > 0) {
-          mapped.dealsFromThis = mapped.dealsFromThis.map((deal) => {
+        const deals = dealsFromBrowseItem(mapped);
+        if (deals.length > 0) {
+          (mapped as unknown as { dealsFromThis: BrowseDealLink[] }).dealsFromThis =
+            deals.map((deal) => {
             const did = deal.dealItem?.id;
             if (!did || !deal.dealItem) return deal;
             const dealMeta = imageMeta.get(did);
@@ -345,62 +328,342 @@ export async function loadCustomerMenuCategoryItems(options: {
   });
 }
 
-/** Full product detail for customize dialog (fetched by id). */
-export async function loadCustomerMenuProductDetail(options: {
+const PRODUCT_DETAIL_OPTION_TAKE = 40;
+const PRODUCT_DETAIL_CACHE_TTL_MS = 60_000;
+
+type CachedProductDetail = {
+  expiresAt: number;
+  data: unknown;
+};
+
+const productDetailCache = new Map<string, CachedProductDetail>();
+
+function productDetailCacheKey(options: {
+  slug?: string | null;
+  subdomain?: string | null;
+  itemId: string;
+}) {
+  return `${options.slug?.trim() ?? ''}|${options.subdomain?.trim() ?? ''}|${options.itemId}`;
+}
+
+type DetailGroup = AttributeGroupSource & {
+  name?: string | null;
+  menuItemId?: string;
+  linkedCategoryId?: string | null;
+  linkedProductId?: string | null;
+  linkedProduct?: (AttributeGroupSource['linkedProduct'] & {
+    attributeGroups?: DetailGroup[] | null;
+  }) | null;
+};
+
+function collectLinkedCategoryIdsFromGroups(
+  groups: DetailGroup[] | null | undefined
+): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  const visit = (list: DetailGroup[] | null | undefined) => {
+    for (const group of list ?? []) {
+      const categoryId =
+        group.linkedCategoryId || group.linkedCategory?.id || '';
+      if (categoryId && !seen.has(categoryId)) {
+        seen.add(categoryId);
+        ids.push(categoryId);
+      }
+      visit(group.linkedProduct?.attributeGroups ?? undefined);
+    }
+  };
+  visit(groups);
+  return ids;
+}
+
+function collectLinkedProductIdsFromGroups(
+  groups: DetailGroup[] | null | undefined
+): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  const visit = (list: DetailGroup[] | null | undefined) => {
+    for (const group of list ?? []) {
+      const productId = group.linkedProductId || group.linkedProduct?.id || '';
+      if (productId && !seen.has(productId)) {
+        seen.add(productId);
+        ids.push(productId);
+      }
+      visit(group.linkedProduct?.attributeGroups ?? undefined);
+    }
+  };
+  visit(groups);
+  return ids;
+}
+
+function pushUniqueItem(
+  itemsByCategory: Map<string, Array<Record<string, unknown>>>,
+  seenByCategory: Map<string, Set<string>>,
+  categoryId: string,
+  itemId: string,
+  item: Record<string, unknown>
+) {
+  const seen = seenByCategory.get(categoryId) ?? new Set<string>();
+  if (seen.has(itemId)) return;
+  seen.add(itemId);
+  seenByCategory.set(categoryId, seen);
+  const items = itemsByCategory.get(categoryId) ?? [];
+  if (items.length >= PRODUCT_DETAIL_OPTION_TAKE) return;
+  items.push(item);
+  itemsByCategory.set(categoryId, items);
+}
+
+async function loadOptionCardsByCategoryIds(
+  restaurantId: string,
+  categoryIds: string[],
+  mode: CustomerMenuSelectMode
+) {
+  const itemsByCategory = new Map<string, Array<Record<string, unknown>>>();
+  if (categoryIds.length === 0) return itemsByCategory;
+
+  const optionSelect = customerProductDetailOptionCardSelect(mode);
+  const seenByCategory = new Map<string, Set<string>>();
+
+  const [links, legacyItems] = await Promise.all([
+    db.menuItemCategory.findMany({
+      where: {
+        categoryId: { in: categoryIds },
+        menuItem: { restaurantId },
+      },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        categoryId: true,
+        menuItemId: true,
+        menuItem: { select: optionSelect },
+      },
+    }),
+    db.menuItem.findMany({
+      where: {
+        restaurantId,
+        categoryId: { in: categoryIds },
+      },
+      orderBy: { name: 'asc' },
+      select: {
+        ...optionSelect,
+        categoryId: true,
+      },
+    }),
+  ]);
+
+  for (const link of links) {
+    pushUniqueItem(
+      itemsByCategory,
+      seenByCategory,
+      link.categoryId,
+      link.menuItemId,
+      link.menuItem as Record<string, unknown>
+    );
+  }
+  for (const item of legacyItems) {
+    pushUniqueItem(
+      itemsByCategory,
+      seenByCategory,
+      item.categoryId,
+      item.id,
+      item as Record<string, unknown>
+    );
+  }
+  return itemsByCategory;
+}
+
+async function loadAttributeGroupsByMenuItemIds(
+  menuItemIds: string[],
+  mode: CustomerMenuSelectMode
+) {
+  const groupsByProductId = new Map<string, DetailGroup[]>();
+  if (menuItemIds.length === 0) return groupsByProductId;
+
+  const rows = await db.menuItemAttributeGroup.findMany({
+    where: { menuItemId: { in: menuItemIds } },
+    orderBy: { sortOrder: 'asc' },
+    select: {
+      menuItemId: true,
+      ...customerProductDetailGroupSelect(mode),
+    },
+  });
+
+  for (const row of rows) {
+    const { menuItemId, ...group } = row as DetailGroup & { menuItemId: string };
+    const list = groupsByProductId.get(menuItemId) ?? [];
+    list.push(group);
+    groupsByProductId.set(menuItemId, list);
+  }
+  return groupsByProductId;
+}
+
+function attachNestedProductGroups(
+  groups: DetailGroup[] | null | undefined,
+  groupsByProductId: Map<string, DetailGroup[]>,
+  depth = 0
+): DetailGroup[] {
+  if (depth > 1) return groups ?? [];
+  return (groups ?? []).map((group) => {
+    const productId = group.linkedProduct?.id;
+    if (!productId || !group.linkedProduct) return group;
+    const nested = groupsByProductId.get(productId) ?? [];
+    return {
+      ...group,
+      linkedProduct: {
+        ...group.linkedProduct,
+        attributeGroups: attachNestedProductGroups(
+          nested,
+          groupsByProductId,
+          depth + 1
+        ),
+      },
+    };
+  });
+}
+
+function attachCategoryItemsToGroups(
+  groups: DetailGroup[] | null | undefined,
+  itemsByCategory: Map<string, Array<Record<string, unknown>>>
+): DetailGroup[] {
+  return (groups ?? []).map((group) => {
+    const categoryId = group.linkedCategoryId || group.linkedCategory?.id || '';
+    const items = categoryId ? itemsByCategory.get(categoryId) ?? [] : [];
+    const linkedProduct = group.linkedProduct
+      ? {
+          ...group.linkedProduct,
+          attributeGroups: attachCategoryItemsToGroups(
+            group.linkedProduct.attributeGroups ?? [],
+            itemsByCategory
+          ),
+        }
+      : group.linkedProduct;
+    const linkedCategory = categoryId
+      ? {
+          ...(group.linkedCategory ?? {}),
+          id: group.linkedCategory?.id ?? categoryId,
+          name: group.linkedCategory?.name ?? group.name ?? '',
+          items: items as NonNullable<
+            AttributeGroupSource['linkedCategory']
+          >['items'],
+        }
+      : group.linkedCategory;
+    return {
+      ...group,
+      linkedProduct,
+      linkedCategory,
+    };
+  });
+}
+
+async function loadCustomerMenuProductDetailUncached(options: {
   slug?: string | null;
   subdomain?: string | null;
   itemId: string;
 }) {
   return withMenuSelectMode(async (mode) => {
-    const restaurant = await resolveRestaurant(options.slug, options.subdomain);
-    if (!restaurant) return null;
+    const restaurantId = await resolveRestaurantId(
+      options.slug,
+      options.subdomain
+    );
+    if (!restaurantId) return null;
 
     const item = await db.menuItem.findFirst({
       where: {
         id: options.itemId,
-        restaurantId: restaurant.id,
+        restaurantId,
       },
-      select: buildCustomerMenuItemSelect(mode),
+      select: buildCustomerProductDetailItemSelect(mode),
     });
     if (!item) return null;
 
-    const categoryIds = await getMenuItemCategoryIds(options.itemId);
-    const imageQuery = {
+    const rawGroups = (item as { attributeGroups?: DetailGroup[] })
+      .attributeGroups;
+    const parentProductIds = collectLinkedProductIdsFromGroups(rawGroups);
+    const parentCategoryIds = collectLinkedCategoryIdsFromGroups(rawGroups);
+
+    const [nestedByProduct, parentItemsByCategory] = await Promise.all([
+      loadAttributeGroupsByMenuItemIds(parentProductIds, mode),
+      loadOptionCardsByCategoryIds(restaurantId, parentCategoryIds, mode),
+    ]);
+
+    const deeperProductIds = collectLinkedProductIdsFromGroups(
+      [...nestedByProduct.values()].flat()
+    ).filter((id) => !parentProductIds.includes(id));
+    if (deeperProductIds.length > 0) {
+      const deeper = await loadAttributeGroupsByMenuItemIds(
+        deeperProductIds,
+        mode
+      );
+      for (const [id, groups] of deeper) {
+        nestedByProduct.set(id, groups);
+      }
+    }
+
+    const groupsWithNested = attachNestedProductGroups(
+      rawGroups,
+      nestedByProduct
+    );
+    const allCategoryIds = collectLinkedCategoryIdsFromGroups(groupsWithNested);
+    const extraCategoryIds = allCategoryIds.filter(
+      (id) => !parentCategoryIds.includes(id)
+    );
+    const extraItemsByCategory =
+      extraCategoryIds.length > 0
+        ? await loadOptionCardsByCategoryIds(
+            restaurantId,
+            extraCategoryIds,
+            mode
+          )
+        : new Map<string, Array<Record<string, unknown>>>();
+
+    const itemsByCategory = new Map(parentItemsByCategory);
+    for (const [categoryId, items] of extraItemsByCategory) {
+      itemsByCategory.set(categoryId, items);
+    }
+
+    const hydratedGroups = attachCategoryItemsToGroups(
+      groupsWithNested,
+      itemsByCategory
+    ).filter((group) => {
+      if (group.sourceType === 'PRODUCT') return group.linkedProduct != null;
+      return categoryHasProducts(group.linkedCategory ?? undefined);
+    });
+
+    const imageUrl = customerMenuItemImageUrl(item.id, {
       slug: options.slug,
       subdomain: options.subdomain,
-    };
-    const pool = await loadRecommendationPool(restaurant.id, mode);
-
-    const enriched = applyProductRecommendationPools(
-      {
-        menus: [
-          {
-            id: 'detail',
-            name: '',
-            items: [
-              {
-                ...item,
-                categoryIds,
-              },
-            ],
-          },
-        ],
-      },
-      pool
-    );
-    const sanitized = sanitizeCustomerMenuPayload({
-      ...restaurantMetaPayload(restaurant),
-      menus: enriched.menus ?? [],
+      updatedAt: item.updatedAt,
     });
-    const detail = sanitized?.menus?.[0]?.items?.[0] ?? null;
-    if (!detail) return null;
 
-    const withImages = await attachCustomerLazyImages(detail, imageQuery);
     return {
-      ...withImages,
-      categoryIds:
-        categoryIds.length > 0 ? categoryIds : [detail.categoryId],
+      ...item,
+      hasImage: true,
+      imageUrl,
+      attributeGroups: hydratedGroups,
+      categoryIds: [item.categoryId],
     };
   });
+}
+
+/** Customize sheet: slim group metadata, then one batched option-card query. */
+export async function loadCustomerMenuProductDetail(options: {
+  slug?: string | null;
+  subdomain?: string | null;
+  itemId: string;
+}) {
+  const key = productDetailCacheKey(options);
+  const cached = productDetailCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data as Awaited<
+      ReturnType<typeof loadCustomerMenuProductDetailUncached>
+    >;
+  }
+
+  const data = await loadCustomerMenuProductDetailUncached(options);
+  if (data) {
+    productDetailCache.set(key, {
+      expiresAt: Date.now() + PRODUCT_DETAIL_CACHE_TTL_MS,
+      data,
+    });
+  }
+  return data;
 }
 

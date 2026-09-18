@@ -24,6 +24,7 @@ type OrderTimePickerDialogProps = {
   schedule: OrderSchedule;
   onSave: (schedule: OrderSchedule) => void;
   branchHours?: BranchOpeningHours | null;
+  branchTimeZone?: string | null;
 };
 
 export function OrderTimePickerDialog({
@@ -32,9 +33,13 @@ export function OrderTimePickerDialog({
   schedule,
   onSave,
   branchHours,
+  branchTimeZone,
 }: OrderTimePickerDialogProps) {
   const { t } = useTranslation();
-  const timeSlots = useMemo(() => generateOrderTimeSlots(branchHours), [branchHours]);
+  const timeSlots = useMemo(
+    () => generateOrderTimeSlots(branchHours, 10, 30, branchTimeZone),
+    [branchHours, branchTimeZone]
+  );
   const [draftMode, setDraftMode] = useState<OrderScheduleMode>(schedule.mode);
   const [draftSlot, setDraftSlot] = useState(schedule.slot);
   const [draftSlotDateTime, setDraftSlotDateTime] = useState<string | undefined>(schedule.slotDateTime);

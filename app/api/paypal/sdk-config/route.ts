@@ -5,6 +5,7 @@ import {
   getPayPalPlatformConfig,
   isPayPalConfigured,
 } from '@/lib/paypal-server';
+import { paypalSdkLocaleForCountry } from '@/lib/paypal-buyer-countries';
 import { getRestaurantPayPalRuntimeConfigBySlug } from '@/lib/restaurant-payment-credentials';
 
 export const runtime = 'nodejs';
@@ -34,7 +35,11 @@ export async function GET(req: NextRequest) {
         clientId: row.config.clientId,
         currency: row.config.currency,
         mode: row.config.mode,
-        buyerCountry: row.config.countryCode,
+        locale: paypalSdkLocaleForCountry(row.config.countryCode),
+        // Sandbox-only: PayPal rejects buyer-country on live client IDs.
+        ...(row.config.mode === 'sandbox'
+          ? { buyerCountry: row.config.countryCode }
+          : {}),
         multiparty: false,
       },
       { headers: { 'Cache-Control': 'private, max-age=60' } }

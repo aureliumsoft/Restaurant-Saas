@@ -10,10 +10,15 @@ export type RestaurantFulfillmentSettings = {
   orderDisplayEnabled: boolean;
 };
 
-export const RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT = {
+/** Fields that existed before website/kiosk/kds/order-display flags. */
+export const RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT_PRE_CHANNEL = {
   deliveryEnabled: true,
   dineInEnabled: true,
   cardPaymentsEnabled: true,
+} as const;
+
+export const RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT = {
+  ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT_PRE_CHANNEL,
   websiteEnabled: true,
   kioskEnabled: true,
   kdsEnabled: true,

@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +22,10 @@ import {
   buildCustomerLightSurfaceVars,
   buildThemeCssVars,
 } from '@/lib/restaurant-theme';
+import {
+  readCachedRestaurantThemePrimary,
+  writeCachedRestaurantThemePrimary,
+} from '@/lib/restaurant-theme-persist';
 import type { UiLanguage } from '@/lib/i18n/resources';
 import {
   isCustomerOrderFlowPath,
@@ -88,6 +92,17 @@ export function Header() {
     return parts.length >= 3 ? parts[0] : null;
   }, []);
 
+  useLayoutEffect(() => {
+    const cached = readCachedRestaurantThemePrimary(slugForApi ?? pathSlug);
+    if (!cached) return;
+    setBrand((prev) =>
+      prev.themePrimaryColor
+        ? prev
+        : { ...prev, themePrimaryColor: cached }
+    );
+    writeCachedRestaurantThemePrimary(slugForApi ?? pathSlug, cached);
+  }, [pathSlug, slugForApi]);
+
   useEffect(() => {
     const run = async () => {
       try {
@@ -114,8 +129,17 @@ export function Header() {
               : null,
           themePrimaryColor: r?.themePrimaryColor ?? null,
         });
+        const resolvedSlug =
+          (typeof r?.slug === 'string' && r.slug.trim()) ||
+          slugForApi ||
+          pathSlug ||
+          null;
+        writeCachedRestaurantThemePrimary(
+          resolvedSlug,
+          r?.themePrimaryColor ?? null
+        );
         setRestaurantContext({
-          restaurantSlug: slugForApi ?? undefined,
+          restaurantSlug: resolvedSlug ?? undefined,
           themePrimaryColor: r?.themePrimaryColor ?? null,
         });
         setLogoLoadFailed(false);
@@ -125,15 +149,7 @@ export function Header() {
     };
 
     void run();
-  }, [inferredSubdomain, setRestaurantContext, slugForApi]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const host = document.querySelector('.web-app-customer') as HTMLElement | null;
-    if (!host) return;
-    const vars = buildThemeCssVars(brand.themePrimaryColor);
-    Object.entries(vars).forEach(([key, value]) => host.style.setProperty(key, value));
-  }, [brand.themePrimaryColor]);
+  }, [inferredSubdomain, pathSlug, setRestaurantContext, slugForApi]);
 
   const normalizedLogoUrl =
     typeof brand.logoUrl === 'string' && brand.logoUrl.trim().length > 0

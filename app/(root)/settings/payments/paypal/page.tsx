@@ -55,7 +55,7 @@ export default function PayPalCredentialsPage() {
     webhookId: '',
     mode: 'sandbox',
     currency: 'EUR',
-    countryCode: 'DE',
+    countryCode: 'ES',
     hasClientSecret: false,
     verified: false,
   });
@@ -90,7 +90,7 @@ export default function PayPalCredentialsPage() {
               webhookId: data.webhookId ?? '',
               mode: data.mode === 'live' ? 'live' : 'sandbox',
               currency: data.currency ?? 'EUR',
-              countryCode: data.countryCode ?? 'DE',
+              countryCode: data.countryCode ?? 'ES',
               hasClientSecret: data.hasClientSecret === true,
               verified: data.verified === true,
             }));
@@ -184,7 +184,7 @@ export default function PayPalCredentialsPage() {
         webhookId: '',
         mode: 'sandbox',
         currency: 'EUR',
-        countryCode: 'DE',
+        countryCode: 'ES',
         hasClientSecret: false,
         verified: false,
       });
@@ -330,8 +330,9 @@ export default function PayPalCredentialsPage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Pre-selects the customer&apos;s country in PayPal card and guest
-              checkout.
+              Used in sandbox to pre-select the buyer country. Live checkout
+              uses Spain (es_ES) or the restaurant country automatically so
+              Spanish customers see PayPal in Spanish and pay in euros.
             </p>
           </div>
 

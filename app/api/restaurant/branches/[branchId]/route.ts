@@ -4,19 +4,25 @@ import { z } from 'zod';
 
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { normalizeOpeningHours } from '@/lib/order-time-slots';
+import { Prisma } from '@prisma/client';
 
 const openingHourSchema = z.object({
-  dayOfWeek: z.number().int().min(0).max(6),
+  dayOfWeek: z.coerce.number().int().min(0).max(6),
   isOpen: z.boolean(),
-  openTime: z.string().trim().max(5).optional().default('09:00'),
-  closeTime: z.string().trim().max(5).optional().default('17:00'),
+  openTime: z.string().trim().optional(),
+  closeTime: z.string().trim().optional(),
 });
 
 const updateBranchSchema = z.object({
   name: z.string().trim().min(1).max(120),
   address: z.string().trim().max(500).optional().or(z.literal('')),
   phone: z.string().trim().max(60).optional().or(z.literal('')),
-  openingHours: z.array(openingHourSchema).optional().default([]),
+  openingHours: z
+    .array(openingHourSchema)
+    .optional()
+    .default([])
+    .transform((rows) => normalizeOpeningHours(rows)),
 });
 
 export async function PATCH(
@@ -48,7 +54,7 @@ export async function PATCH(
         name: parsed.data.name.trim(),
         address: parsed.data.address?.trim() || null,
         phone: parsed.data.phone?.trim() || null,
-        openingHours: parsed.data.openingHours,
+        openingHours: parsed.data.openingHours as Prisma.InputJsonValue,
       },
     });
 
@@ -68,7 +74,17 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({ data: branch }, { status: 200 });
+    return NextResponse.json(
+      {
+        data: branch
+          ? {
+              ...branch,
+              openingHours: normalizeOpeningHours(branch.openingHours),
+            }
+          : branch,
+      },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('update restaurant branch', error);
     return NextResponse.json(

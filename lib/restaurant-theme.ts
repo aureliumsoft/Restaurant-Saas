@@ -87,6 +87,18 @@ export function buildThemeCssVars(primaryRaw?: string | null): ThemeCssVars {
   };
 }
 
+export function buildRestaurantThemeOverrideCss(
+  primaryRaw?: string | null
+): string {
+  const vars = buildStorefrontThemeVars(primaryRaw);
+  const decls = Object.entries(vars)
+    .filter(([key]) => key.startsWith('--'))
+    .map(([key, value]) => `${key}:${value}`)
+    .join(';');
+  if (!decls) return '';
+  return `.web-app-customer,.dark .web-app-customer,html.dark .web-app-customer{${decls}}`;
+}
+
 /** Extra CSS variables for generative storefront backgrounds (mesh, glass, surfaces). */
 export function buildStorefrontThemeVars(primaryRaw?: string | null): ThemeCssVars {
   const base = buildThemeCssVars(primaryRaw);

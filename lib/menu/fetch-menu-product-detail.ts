@@ -144,8 +144,12 @@ export function productNeedsDetailFetch(product: {
     if (g.sourceType === 'CATEGORY') {
       if (!g.linkedCategory?.items?.length) return true;
     }
-    if (g.sourceType === 'PRODUCT' && !g.linkedProduct?.name) {
-      return true;
+    if (g.sourceType === 'PRODUCT') {
+      if (!g.linkedProduct?.name) return true;
+      const nested = (
+        g.linkedProduct as { attributeGroups?: unknown[] | null }
+      ).attributeGroups;
+      if (!Array.isArray(nested)) return true;
     }
   }
   return false;

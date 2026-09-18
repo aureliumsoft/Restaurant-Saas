@@ -102,7 +102,15 @@ export async function GET(req: NextRequest) {
 
     if (slug) {
       const data = await findCustomerRestaurant({ slug });
-      return NextResponse.json({ data }, { status: 200 });
+      return NextResponse.json(
+        { data },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "public, max-age=30, stale-while-revalidate=120",
+          },
+        }
+      );
     }
 
     const subdomain = fromQuery || fromHost;
@@ -114,7 +122,15 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await findCustomerRestaurant({ subdomain });
-    return NextResponse.json({ data }, { status: 200 });
+    return NextResponse.json(
+      { data },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "public, max-age=30, stale-while-revalidate=120",
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching customer restaurant:", error);
     return NextResponse.json(

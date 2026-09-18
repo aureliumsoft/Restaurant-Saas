@@ -6,19 +6,25 @@ import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { branchCapacityAllows } from '@/lib/subscription-plan-features';
 import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from '@/lib/subscription-plan-enforcement';
+import { normalizeOpeningHours } from '@/lib/order-time-slots';
+import { Prisma } from '@prisma/client';
 
 const openingHourSchema = z.object({
-  dayOfWeek: z.number().int().min(0).max(6),
+  dayOfWeek: z.coerce.number().int().min(0).max(6),
   isOpen: z.boolean(),
-  openTime: z.string().trim().max(5).optional().default('09:00'),
-  closeTime: z.string().trim().max(5).optional().default('17:00'),
+  openTime: z.string().trim().optional(),
+  closeTime: z.string().trim().optional(),
 });
 
 const createBranchSchema = z.object({
   name: z.string().trim().min(1).max(120),
   address: z.string().trim().max(500).optional().or(z.literal('')),
   phone: z.string().trim().max(60).optional().or(z.literal('')),
-  openingHours: z.array(openingHourSchema).optional().default([]),
+  openingHours: z
+    .array(openingHourSchema)
+    .optional()
+    .default([])
+    .transform((rows) => normalizeOpeningHours(rows)),
 });
 
 export async function GET(_req: NextRequest) {
@@ -39,11 +45,20 @@ export async function GET(_req: NextRequest) {
         name: true,
         address: true,
         phone: true,
+        openingHours: true,
         createdAt: true,
       },
     });
 
-    return NextResponse.json({ data: branches }, { status: 200 });
+    return NextResponse.json(
+      {
+        data: branches.map((branch) => ({
+          ...branch,
+          openingHours: normalizeOpeningHours(branch.openingHours),
+        })),
+      },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('restaurant branches', error);
     return NextResponse.json(
@@ -85,7 +100,7 @@ export async function POST(req: NextRequest) {
         name: parsed.data.name.trim(),
         address: parsed.data.address?.trim() || null,
         phone: parsed.data.phone?.trim() || null,
-        openingHours: parsed.data.openingHours,
+        openingHours: parsed.data.openingHours as Prisma.InputJsonValue,
       },
       select: {
         id: true,

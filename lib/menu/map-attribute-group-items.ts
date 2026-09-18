@@ -102,6 +102,73 @@ export function mapAttributeGroupItems(
   });
 }
 
+function linkedCategoryLinkItems(
+  group: AttributeGroupSource
+): LinkedItem[] {
+  return (
+    (
+      group.linkedCategory as
+        | { itemLinks?: Array<{ menuItem?: LinkedItem }> }
+        | undefined
+    )?.itemLinks
+      ?.map((l) => l.menuItem)
+      .filter((it): it is LinkedItem => Boolean(it)) ?? []
+  );
+}
+
+function mergeLinkedItems(items: LinkedItem[]): LinkedItem[] {
+  const combined: LinkedItem[] = [];
+  const seen = new Set<string>();
+  for (const it of items) {
+    if (it?.id && !seen.has(it.id)) {
+      seen.add(it.id);
+      combined.push({
+        ...it,
+        attributeGroups: it.attributeGroups
+          ? hydrateLinkedCategoryItems(it.attributeGroups)
+          : it.attributeGroups,
+      });
+    }
+  }
+  return combined;
+}
+
+/** Copy MenuItemCategory links onto linkedCategory.items so sanitize/UI see add-on products. */
+export function hydrateLinkedCategoryItems(
+  groups: AttributeGroupSource[] | null | undefined
+): AttributeGroupSource[] {
+  return (groups ?? []).map((group) => {
+    const linkedProduct = group.linkedProduct
+      ? {
+          ...group.linkedProduct,
+          attributeGroups: group.linkedProduct.attributeGroups
+            ? hydrateLinkedCategoryItems(group.linkedProduct.attributeGroups)
+            : group.linkedProduct.attributeGroups,
+        }
+      : group.linkedProduct;
+
+    if (!group.linkedCategory) {
+      return linkedProduct === group.linkedProduct
+        ? group
+        : { ...group, linkedProduct };
+    }
+
+    const items = mergeLinkedItems([
+      ...(group.linkedCategory.items ?? []),
+      ...linkedCategoryLinkItems(group),
+    ]);
+
+    return {
+      ...group,
+      linkedProduct,
+      linkedCategory: {
+        ...group.linkedCategory,
+        items,
+      },
+    };
+  });
+}
+
 export function attributeGroupDisplayName(group: AttributeGroupSource): string | null {
   if (group.sourceType === 'PRODUCT') {
     return (

@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { cookies } from 'next/headers';
+import Script from 'next/script';
 import './globals.css';
 import 'react-toastify/dist/ReactToastify.css';
 const inter = Inter({ subsets: ['latin'] });
 import Providers from './providers';
+import { RESTAURANT_THEME_BOOT_SCRIPT } from '@/lib/restaurant-theme-persist';
 import { PlatformGoogleAnalytics } from '@/components/analytics/platform-google-analytics';
 import {
   PlatformGoogleTagManager,
@@ -57,8 +59,11 @@ export default async function RootLayout({
   const useDirectGa4 = !useGtm && Boolean(gaId);
 
   return (
-    <html lang={initialLanguage} className="dark" style={{ colorScheme: 'dark' }}>
+    <html lang={initialLanguage} suppressHydrationWarning>
       <body className={inter.className}>
+        <Script id="restaurant-theme-boot" strategy="beforeInteractive">
+          {RESTAURANT_THEME_BOOT_SCRIPT}
+        </Script>
         {useGtm ? (
           <PlatformGoogleTagManagerNoscript containerId={gtmId} />
         ) : null}

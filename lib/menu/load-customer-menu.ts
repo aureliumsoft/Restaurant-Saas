@@ -26,7 +26,13 @@ import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
 export function isPrismaSchemaDriftError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = (error as { code?: string }).code;
-  return code === 'P2021' || code === 'P2022';
+  if (code === 'P2021' || code === 'P2022') return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    /Unknown nested field/i.test(message) ||
+    /Unknown field/i.test(message) ||
+    /Unknown arg/i.test(message)
+  );
 }
 
 function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
@@ -44,41 +50,45 @@ function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
     categoryId: true,
     attributeGroups: buildGroups(2),
     personalizeGroups: personalizeGroupsSelect,
-    dealsFromThis: {
-      orderBy: { sortOrder: 'asc' as const },
-      select: {
-        id: true,
-        sortOrder: true,
-        dealItem: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            imageUrl: true,
-            price: true,
-            salePrice: true,
-            variations: true,
+    ...(mode === 'full'
+      ? {
+          dealsFromThis: {
+            orderBy: { sortOrder: 'asc' as const },
+            select: {
+              id: true,
+              sortOrder: true,
+              dealItem: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  imageUrl: true,
+                  price: true,
+                  salePrice: true,
+                  variations: true,
+                },
+              },
+            },
           },
-        },
-      },
-    },
-    offersFromThis: {
-      orderBy: { sortOrder: 'asc' as const },
-      select: {
-        id: true,
-        sortOrder: true,
-        offeredItem: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            imageUrl: true,
-            price: true,
-            salePrice: true,
+          offersFromThis: {
+            orderBy: { sortOrder: 'asc' as const },
+            select: {
+              id: true,
+              sortOrder: true,
+              offeredItem: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  imageUrl: true,
+                  price: true,
+                  salePrice: true,
+                },
+              },
+            },
           },
-        },
-      },
-    },
+        }
+      : {}),
   } as const;
 }
 

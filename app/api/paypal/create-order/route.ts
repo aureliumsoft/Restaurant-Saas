@@ -72,7 +72,6 @@ export async function POST(req: NextRequest) {
   }
 
   const origin = await getRequestOrigin();
-  const currency = (parsed.data.currency ?? 'EUR').toUpperCase();
   const source = parsed.data.source;
   const restaurantSlug = parsed.data.metadata?.restaurantSlug?.trim();
 
@@ -148,6 +147,10 @@ export async function POST(req: NextRequest) {
   });
 
   const metadata: PayPalOrderMetadata = { intentId };
+
+  const currency = restaurantPayPal
+    ? restaurantPayPal.config.currency
+    : (parsed.data.currency ?? 'EUR').toUpperCase();
 
   const orderParams = {
     amount: parsed.data.amount,

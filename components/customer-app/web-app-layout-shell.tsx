@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Suspense, useEffect, useRef } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
@@ -20,13 +20,17 @@ import {
   parseStorefrontSlugFromPath,
 } from '@/lib/customer-storefront-paths';
 import { cn } from '@/lib/utils';
+import {
+  applyRestaurantThemeToDom,
+  readCachedRestaurantThemePrimary,
+} from '@/lib/restaurant-theme-persist';
 
 function CustomerAccountSlugSync({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { setRestaurantContext } = useCustomerAccount();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const querySlug =
       searchParams.get('restaurantSlug')?.trim() ||
       searchParams.get('slug')?.trim() ||
@@ -35,6 +39,14 @@ function CustomerAccountSlugSync({ children }: { children: ReactNode }) {
     const slug = querySlug || pathSlug;
     if (slug) {
       setRestaurantContext({ restaurantSlug: slug });
+      const cached = readCachedRestaurantThemePrimary(slug);
+      if (cached) {
+        setRestaurantContext({
+          restaurantSlug: slug,
+          themePrimaryColor: cached,
+        });
+        applyRestaurantThemeToDom(cached);
+      }
     }
   }, [pathname, searchParams, setRestaurantContext]);
 
