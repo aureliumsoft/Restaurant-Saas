@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 
 import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import {
-  documentationHeadingWriteSchema,
+  documentationHeadingPatchSchema,
+  persistDocBilingualName,
   slugifyDocLabel,
 } from '@/lib/documentation/module';
 import { db } from '@/lib/db';
@@ -23,7 +24,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const parsed = documentationHeadingWriteSchema.partial().safeParse(json);
+  const parsed = documentationHeadingPatchSchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -43,7 +44,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       sortOrder?: number;
       status?: string;
     } = {};
-    if (parsed.data.name !== undefined) data.name = parsed.data.name;
+    if (parsed.data.name !== undefined) {
+      data.name = persistDocBilingualName(parsed.data.name);
+    }
     if (parsed.data.sortOrder !== undefined) data.sortOrder = parsed.data.sortOrder;
     if (parsed.data.status !== undefined) data.status = parsed.data.status;
     if (parsed.data.slug !== undefined) {

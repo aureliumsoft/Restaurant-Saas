@@ -1,4 +1,8 @@
-import React from 'react';
+'use client';
+
+import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
+
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -9,22 +13,23 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import Link from 'next/link';
-const Page = () => {
+
+export default function AnalyticsHubPage() {
+  const { t } = useTranslation();
+
   return (
-    <div className="w-full h-full dark:bg-[#0F0F0F] flex flex-col items-center p-4">
-      <div className="flex flex-col lg:flex-row justify-center items-center w-full h-full gap-4">
-        <Card className="w-full lg:w-1/2 h-full flex flex-col">
+    <div className="flex h-full w-full flex-col items-center p-4 dark:bg-[#0F0F0F]">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-4 lg:flex-row">
+        <Card className="flex h-full w-full flex-col lg:w-1/2">
           <CardHeader>
-            <CardTitle>Product</CardTitle>
+            <CardTitle>{t('dashboard.analyticsPages.hubProductTitle')}</CardTitle>
             <CardDescription>
-              Discover insights and analytics about our diverse product range.
-              Click the button below to explore detailed product analytics.
+              {t('dashboard.analyticsPages.hubProductDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-grow pt-5">
             <div className="p-4">
-              <svg viewBox="0 0 100 50" className="w-full h-auto">
+              <svg viewBox="0 0 100 50" className="h-auto w-full">
                 <line
                   x1="0"
                   y1="45"
@@ -62,23 +67,24 @@ const Page = () => {
           </CardContent>
           <CardFooter>
             <Button variant="outline" className="w-full" asChild>
-              <Link href={'/analytics/product'}>Go</Link>
+              <Link href="/analytics/product">
+                {t('dashboard.analyticsPages.go')}
+              </Link>
             </Button>
           </CardFooter>
         </Card>
 
         <Separator orientation="vertical" className="hidden lg:block" />
-        <Card className="w-full lg:w-1/2 h-full flex flex-col">
+        <Card className="flex h-full w-full flex-col lg:w-1/2">
           <CardHeader>
-            <CardTitle>Income</CardTitle>
+            <CardTitle>{t('dashboard.analyticsPages.hubIncomeTitle')}</CardTitle>
             <CardDescription>
-              Track the income trends over the past quarters. Click the button
-              below to explore detailed income analytics.
+              {t('dashboard.analyticsPages.hubIncomeDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-grow pt-5">
             <div className="p-4">
-              <svg viewBox="0 0 100 50" className="w-full h-auto">
+              <svg viewBox="0 0 100 50" className="h-auto w-full">
                 <line
                   x1="0"
                   y1="45"
@@ -116,13 +122,13 @@ const Page = () => {
           </CardContent>
           <CardFooter>
             <Button variant="outline" className="w-full" asChild>
-              <Link href={'/analytics/income'}>Go</Link>
+              <Link href="/analytics/income">
+                {t('dashboard.analyticsPages.go')}
+              </Link>
             </Button>
           </CardFooter>
         </Card>
       </div>
     </div>
   );
-};
-
-export default Page;
+}

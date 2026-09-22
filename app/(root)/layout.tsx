@@ -28,6 +28,7 @@ import { DashboardAppShell } from '@/components/layout/dashboard-app-shell';
 import { RestaurantRegionalProvider } from '@/components/layout/restaurant-regional-provider';
 import { RestaurantRealtimeProvider } from '@/components/providers/restaurant-realtime-provider';
 import { revalidateStaffBootstrap } from '@/hooks/use-staff-bootstrap-swr';
+import { useTranslation } from 'react-i18next';
 
 const SIDEBAR_STORAGE_KEY = 'dashboard-sidebar-open';
 
@@ -67,6 +68,7 @@ function AccessLoadingScreen({
 }
 
 const RootLayout = ({ children }: RootLayoutProps) => {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const { status: sessionStatus } = useSession();
@@ -103,13 +105,13 @@ const RootLayout = ({ children }: RootLayoutProps) => {
 
   const blockingMessage =
     sessionStatus === 'loading'
-      ? 'Checking session…'
+      ? t('dashboard.shell.checkingSession')
       : accessLoading || !accessReady
-        ? 'Checking access & security…'
+        ? t('dashboard.shell.checkingAccess')
         : !subscriptionAllowed
-          ? 'Redirecting to pricing…'
+          ? t('dashboard.shell.redirectingPricing')
           : !permissionsReady
-            ? 'Loading permissions…'
+            ? t('dashboard.shell.loadingPermissions')
             : null;
 
   // Fade out the access gate once the dashboard is ready to show.
@@ -165,9 +167,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
     }
     if (!redirectedToPricingRef.current) {
       redirectedToPricingRef.current = true;
-      toast.error(
-        'Your trial/plan is expired or not configured. Please choose a pricing plan.'
-      );
+      toast.error(t('dashboard.shell.subscriptionExpiredToast'));
       // Use a full navigation to avoid App Router transition crashes when
       // leaving the dashboard shell after bootstrap denies subscription access.
       if (typeof window !== 'undefined') {
@@ -200,14 +200,16 @@ const RootLayout = ({ children }: RootLayoutProps) => {
   };
 
   if (sessionStatus === 'unauthenticated') {
-    return <AccessLoadingScreen message="Checking session…" />;
+    return (
+      <AccessLoadingScreen message={t('dashboard.shell.checkingSession')} />
+    );
   }
 
   if (accessFailed) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f4f4f5] px-4 text-center dark:bg-zinc-950">
         <p className="text-sm text-muted-foreground">
-          Could not verify dashboard access. Please try again.
+          {t('dashboard.shell.accessFailed')}
         </p>
         <Button
           type="button"
@@ -215,7 +217,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
             void revalidateStaffBootstrap();
           }}
         >
-          Retry
+          {t('dashboard.shell.retry')}
         </Button>
       </div>
     );
@@ -225,14 +227,14 @@ const RootLayout = ({ children }: RootLayoutProps) => {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#f4f4f5] px-4 text-center dark:bg-zinc-950">
         <p className="text-sm text-muted-foreground">
-          No dashboard permissions were returned for this account.
+          {t('dashboard.shell.noPermissions')}
         </p>
         <Button
           type="button"
           variant="outline"
           onClick={() => router.replace('/pricing')}
         >
-          Go to pricing
+          {t('dashboard.shell.goToPricing')}
         </Button>
       </div>
     );
@@ -248,7 +250,9 @@ const RootLayout = ({ children }: RootLayoutProps) => {
         <RestaurantRegionalProvider>
           {showAccessOverlay ? (
             <AccessLoadingScreen
-              message={blockingMessage ?? 'Checking access & security…'}
+              message={
+                blockingMessage ?? t('dashboard.shell.checkingAccess')
+              }
               fading={accessGateFading}
             />
           ) : null}
@@ -280,7 +284,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
                         {restaurantName}
                       </span>
                       <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-fire-600 dark:text-fire-400">
-                        Portal
+                        {t('dashboard.shell.portal')}
                       </span>
                     </div>
                   </Link>
@@ -296,8 +300,8 @@ const RootLayout = ({ children }: RootLayoutProps) => {
                       variant="ghost"
                       size="icon"
                       className="h-9 w-9 shrink-0 rounded-xl bg-white/70 text-muted-foreground shadow-sm hover:bg-white hover:text-foreground dark:bg-white/10 dark:hover:bg-white/15"
-                      aria-label="Toggle navigation"
-                      title="Show or hide the sidebar with navigation links"
+                      aria-label={t('dashboard.shell.toggleNavAria')}
+                      title={t('dashboard.shell.toggleNavTitle')}
                       onClick={toggleNav}
                     >
                       <span className="hidden md:inline-flex" aria-hidden>

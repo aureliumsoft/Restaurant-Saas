@@ -24,8 +24,19 @@ import {
   isConfigurationGroupVisibleForParentVariation,
   parentVariationFromItemVariation,
 } from '@/lib/menu/configuration-variation-price';
+import type { UiLanguage } from '@/lib/i18n/resources';
 
 export type { ModifierGroupSelection };
+
+function attachNestedModsToParent(
+  mods: ModifierGroupSelection[],
+  parentSelectionKey: string
+): ModifierGroupSelection[] {
+  return mods.map((mod) => ({
+    ...mod,
+    parentSelectionKey,
+  }));
+}
 
 function resolveNestedOptionConfigMods(
   key: string,
@@ -33,7 +44,8 @@ function resolveNestedOptionConfigMods(
   allGroupsFlat: AttributeGroup[] | undefined,
   selectedNestedVariationByOption: Record<string, string>,
   parentVariation: ParentVariationContext | null,
-  parentVariationShortLabel: string | null
+  parentVariationShortLabel: string | null,
+  lang: UiLanguage
 ): ModifierGroupSelection[] {
   if (config.mods.length > 0) return config.mods;
   if (!allGroupsFlat?.length) return [];
@@ -67,6 +79,7 @@ function resolveNestedOptionConfigMods(
     selectionTimeline: [],
     productRecChildGroupNamePrefix: false,
     allGroupsFlat,
+    lang,
   });
 }
 
@@ -114,6 +127,7 @@ function buildProductRecModifiersForGroup(
       groupName: childGroupNamePrefix
         ? `${childGroupNamePrefix} — ${child.groupName}`
         : child.groupName,
+      parentSelectionKey: optionSelectionKey(g.id, item.menuItemId),
       selections: child.selections,
     });
   }
@@ -158,7 +172,8 @@ function appendFallbackCategoryOptions(
   nestedOptionConfigs: Record<string, NestedRecommendationResult>,
   parentVariation: ParentVariationContext | null,
   parentVariationShortLabel: string | null,
-  allGroupsFlat?: AttributeGroup[]
+  allGroupsFlat: AttributeGroup[] | undefined,
+  lang: UiLanguage
 ) {
   for (const group of visibleCategoryGroups) {
     const ids = selectedByGroup[group.id] ?? [];
@@ -180,13 +195,17 @@ function appendFallbackCategoryOptions(
       const nestedConfig = nestedOptionConfigs[nestedKey];
       if (nestedConfig) {
         mods.push(
-          ...resolveNestedOptionConfigMods(
-            nestedKey,
-            nestedConfig,
-            allGroupsFlat,
-            selectedNestedVariationByOption,
-            parentVariation,
-            parentVariationShortLabel
+          ...attachNestedModsToParent(
+            resolveNestedOptionConfigMods(
+              nestedKey,
+              nestedConfig,
+              allGroupsFlat,
+              selectedNestedVariationByOption,
+              parentVariation,
+              parentVariationShortLabel,
+              lang
+            ),
+            nestedKey
           )
         );
       }
@@ -229,7 +248,8 @@ function appendFallbackPersonalize(
   mods: ModifierGroupSelection[],
   processedKeys: Set<string>,
   personalizeGroups: PersonalizeGroupLike[],
-  selectedPersonalizeByGroup: Record<string, string[]>
+  selectedPersonalizeByGroup: Record<string, string[]>,
+  lang: UiLanguage
 ) {
   for (const group of personalizeGroups) {
     const ids = selectedPersonalizeByGroup[group.id] ?? [];
@@ -238,9 +258,13 @@ function appendFallbackPersonalize(
       if (processedKeys.has(key)) continue;
       processedKeys.add(key);
       mods.push(
-        ...buildPersonalizeModifierSelections([group], {
-          [group.id]: [optionId],
-        })
+        ...buildPersonalizeModifierSelections(
+          [group],
+          {
+            [group.id]: [optionId],
+          },
+          lang
+        )
       );
     }
   }
@@ -262,6 +286,7 @@ export function buildConfirmModifierSelections(params: {
   /** Prefix nested product-rec child groups with the parent product name. */
   productRecChildGroupNamePrefix?: boolean;
   allGroupsFlat?: AttributeGroup[];
+  lang?: UiLanguage;
 }): ModifierGroupSelection[] {
   const {
     visibleCategoryGroups,
@@ -278,6 +303,7 @@ export function buildConfirmModifierSelections(params: {
     selectionTimeline,
     productRecChildGroupNamePrefix = true,
     allGroupsFlat,
+    lang = 'es',
   } = params;
 
   const mods: ModifierGroupSelection[] = [];
@@ -306,13 +332,17 @@ export function buildConfirmModifierSelections(params: {
       const nestedConfig = nestedOptionConfigs[nestedKey];
       if (nestedConfig) {
         mods.push(
-          ...resolveNestedOptionConfigMods(
-            nestedKey,
-            nestedConfig,
-            allGroupsFlat,
-            selectedNestedVariationByOption,
-            parentVariation,
-            parentVariationShortLabel
+          ...attachNestedModsToParent(
+            resolveNestedOptionConfigMods(
+              nestedKey,
+              nestedConfig,
+              allGroupsFlat,
+              selectedNestedVariationByOption,
+              parentVariation,
+              parentVariationShortLabel,
+              lang
+            ),
+            nestedKey
           )
         );
       }
@@ -346,9 +376,13 @@ export function buildConfirmModifierSelections(params: {
       if (!ids.includes(parsed.optionId)) continue;
       processedKeys.add(timelineKey);
       mods.push(
-        ...buildPersonalizeModifierSelections([group], {
-          [group.id]: [parsed.optionId],
-        })
+        ...buildPersonalizeModifierSelections(
+          [group],
+          {
+            [group.id]: [parsed.optionId],
+          },
+          lang
+        )
       );
     }
   }
@@ -362,7 +396,8 @@ export function buildConfirmModifierSelections(params: {
     nestedOptionConfigs,
     parentVariation,
     parentVariationShortLabel,
-    allGroupsFlat
+    allGroupsFlat,
+    lang
   );
   appendFallbackProductRecs(
     mods,
@@ -377,7 +412,8 @@ export function buildConfirmModifierSelections(params: {
     mods,
     processedKeys,
     personalizeGroups,
-    selectedPersonalizeByGroup
+    selectedPersonalizeByGroup,
+    lang
   );
 
   return mods;

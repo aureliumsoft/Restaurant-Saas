@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -23,6 +24,7 @@ interface TaxrateCardProps {
   storeId: string | null;
 }
 const TaxrateCard: React.FC<TaxrateCardProps> = ({ tax, storeId }) => {
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [editableTaxrate, setEditableTaxrate] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -36,7 +38,7 @@ const TaxrateCard: React.FC<TaxrateCardProps> = ({ tax, storeId }) => {
 
   const handleSaveClick = () => {
     if (taxNumber === tax) {
-      toast.info('No changes to save.');
+      toast.info(t('settings.cards.shopName.noChanges'));
       return;
     }
     setShowConfirmation(true);
@@ -47,12 +49,12 @@ const TaxrateCard: React.FC<TaxrateCardProps> = ({ tax, storeId }) => {
     const isOnline = navigator.onLine;
 
     if (!isOnline) {
-      toast.error('You are offline. Please check your internet connection.');
+      toast.error(t('settings.cards.shopName.offline'));
       return;
     }
 
     if (!storeId) {
-      toast.error('Store ID is required to save the store name.');
+      toast.error(t('settings.cards.shopName.storeIdRequired'));
       return;
     }
 
@@ -84,8 +86,8 @@ const TaxrateCard: React.FC<TaxrateCardProps> = ({ tax, storeId }) => {
     <>
       <Card x-chunk="dashboard-04-chunk-1" className="my-5">
         <CardHeader>
-          <CardTitle>Tax Rate</CardTitle>
-          <CardDescription>Use to set tax for your store.</CardDescription>
+          <CardTitle>{t('settings.cards.tax.title')}</CardTitle>
+          <CardDescription>{t('settings.cards.tax.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form>
@@ -105,18 +107,18 @@ const TaxrateCard: React.FC<TaxrateCardProps> = ({ tax, storeId }) => {
             {isLoading ? (
               <>
                 <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-                Please wait
+                {t('settings.cards.shopName.pleaseWait')}
               </>
             ) : (
-              'Save'
+              t('settings.cards.shopName.save')
             )}
           </Button>
         </CardFooter>
       </Card>
       <SaveConfirmation
         open={showConfirmation}
-        title="Save Tax Rate"
-        description="Are you sure you want to save this tax rate change?"
+        title={t('settings.cards.tax.confirmTitle')}
+        description={t('settings.cards.tax.confirmDescription')}
         itemName={editableTaxrate + '%'}
         loading={isLoading}
         onConfirm={handleConfirmSave}

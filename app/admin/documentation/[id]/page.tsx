@@ -11,8 +11,11 @@ import { AdminDocModuleForm } from '@/components/admin/admin-doc-module-form';
 type ModuleDto = {
   id: string;
   name: string;
+  nameEs: string | null;
   shortDescription: string;
+  shortDescriptionEs: string | null;
   contentHtml: string;
+  contentHtmlEs: string | null;
   status: string;
   sortOrder: number;
   headingId: string | null;
@@ -68,8 +71,11 @@ export default function AdminDocumentationEditPage() {
         headingId: mod.headingId ?? '',
         subHeadingName: mod.subHeading?.name ?? '',
         name: mod.name,
+        nameEs: mod.nameEs ?? '',
         shortDescription: mod.shortDescription,
+        shortDescriptionEs: mod.shortDescriptionEs ?? '',
         contentHtml: mod.contentHtml,
+        contentHtmlEs: mod.contentHtmlEs ?? '',
         status: mod.status,
         sortOrder: mod.sortOrder,
       }}

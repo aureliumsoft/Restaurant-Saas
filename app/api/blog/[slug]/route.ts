@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 
 type Ctx = { params: Promise<{ slug: string }> };
 
+/** Returns raw bilingual fields; clients resolve with UI language. */
 export async function GET(_req: NextRequest, ctx: Ctx) {
   const { slug } = await ctx.params;
   try {
@@ -23,7 +24,17 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     if (!post) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-    return NextResponse.json({ data: post });
+    return NextResponse.json({
+      data: {
+        id: post.id,
+        slug: post.slug,
+        imageUrl: post.imageUrl,
+        publishedAt: post.publishedAt,
+        title: post.title,
+        shortDescription: post.shortDescription,
+        contentHtml: post.contentHtml,
+      },
+    });
   } catch (e) {
     console.error('blog/[slug] GET', e);
     return NextResponse.json({ error: 'Failed to load post' }, { status: 500 });

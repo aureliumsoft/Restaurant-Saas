@@ -13,16 +13,18 @@ import { RestaurantBillingCard } from './components/restaurant-billing-card';
 import { RestaurantServiceChargesCard } from './components/restaurant-service-charges-card';
 import { RestaurantFulfillmentSettingsCard } from './components/restaurant-fulfillment-settings-card';
 import { RestaurantDineInPaymentCard } from './components/restaurant-dine-in-payment-card';
+import { UiLanguagePreferenceCard } from './components/ui-language-preference-card';
 import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import { SettingsSectionNav } from './settings-section-nav';
 import {
   parseSettingsSection,
-  SETTINGS_SECTIONS,
   type SettingsSectionId,
 } from '@/constant/settingsNav';
 import { useStaffPermissions } from '@/hooks/use-staff-permissions';
+import { useTranslation } from 'react-i18next';
 
 export function Setting() {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { plan } = useStaffPermissions();
@@ -40,7 +42,13 @@ export function Setting() {
     return section;
   }, [roleBasedSettingsAllowed, section]);
 
-  const activeMeta = SETTINGS_SECTIONS.find((item) => item.id === activeSection);
+  const sectionCopy = useMemo(() => {
+    const id = activeSection;
+    return {
+      title: t(`settings.sections.${id}.title`),
+      description: t(`settings.sections.${id}.description`),
+    };
+  }, [activeSection, t]);
 
   useEffect(() => {
     if (section === 'access' && !roleBasedSettingsAllowed) {
@@ -65,7 +73,7 @@ export function Setting() {
         <div className="mx-auto grid w-full min-w-0 max-w-6xl items-start gap-2 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
           <aside className="min-w-0 lg:sticky lg:top-6 lg:self-start">
             <p className="mb-3 hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:block">
-              Settings
+              {t('settings.title')}
             </p>
             <SettingsSectionNav
               active={activeSection}
@@ -75,16 +83,14 @@ export function Setting() {
           </aside>
 
           <div className="min-w-0">
-            {activeMeta ? (
-              <header className="mb-6">
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  {activeMeta.title}
-                </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {activeMeta.description}
-                </p>
-              </header>
-            ) : null}
+            <header className="mb-6">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {sectionCopy.title}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {sectionCopy.description}
+              </p>
+            </header>
 
             <div className="grid min-w-0 gap-6">
               {activeSection === 'basic' ? (

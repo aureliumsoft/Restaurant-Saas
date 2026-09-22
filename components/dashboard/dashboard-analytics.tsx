@@ -2,6 +2,7 @@
 
 import axios from 'axios';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import {
@@ -156,13 +157,15 @@ function normalizeSeries(series: SeriesPoint[] | undefined): SeriesPoint[] {
 
 function ChannelLegend({ advanced }: { advanced: boolean }) {
   if (!advanced) return null;
+  const { t } = useTranslation();
+  if (!advanced) return null;
   return (
     <div className="mb-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
       {(
         [
-          ['Online', CHANNEL_COLORS.online],
-          ['POS', CHANNEL_COLORS.pos],
-          ['Kiosk', CHANNEL_COLORS.kiosk],
+          [t('dashboard.analytics.channelOnline'), CHANNEL_COLORS.online],
+          [t('dashboard.analytics.channelPos'), CHANNEL_COLORS.pos],
+          [t('dashboard.analytics.channelKiosk'), CHANNEL_COLORS.kiosk],
         ] as const
       ).map(([label, color]) => (
         <span key={label} className="inline-flex items-center gap-1.5">
@@ -185,6 +188,7 @@ function ChannelLineChart({
   data: SeriesPoint[];
   advanced: boolean;
 }) {
+  const { t } = useTranslation();
   const width = 640;
   const height = 220;
   const padX = 8;
@@ -222,7 +226,7 @@ function ChannelLineChart({
           viewBox={`0 0 ${width} ${height}`}
           className="absolute inset-0 h-full w-full overflow-visible"
           role="img"
-          aria-label="Orders over time"
+          aria-label={t('dashboard.analytics.ordersOverTimeAria')}
         >
           {seriesKeys.map((s) => {
             const points = data.map((p, i) => {
@@ -284,6 +288,7 @@ function CombinedRevenueLineChart({
   formatTip: (n: number) => string;
 }) {
   const width = 960;
+  const { t } = useTranslation();
   const height = 300;
   const padL = 48;
   const padR = 12;
@@ -341,7 +346,7 @@ function CombinedRevenueLineChart({
           preserveAspectRatio="none"
           className="absolute inset-0 h-full w-full"
           role="img"
-          aria-label="Revenue over time"
+          aria-label={t('dashboard.analytics.revenueOverTimeAria')}
         >
           <defs>
             <linearGradient id="revAreaFill" x1="0" y1="0" x2="0" y2="1">
@@ -531,6 +536,7 @@ function InsightChip({
 
 export default function DashboardAnalytics() {
   const { formatMoney, regional } = useOwnerRestaurantRegional();
+  const { t } = useTranslation();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
   const { activeBranchId, activeBranchUrlId, loading: branchLoading, isOwnerOrAdmin } =
@@ -557,12 +563,12 @@ export default function DashboardAnalytics() {
       setAnalytics(dashRes.data);
     } catch {
       setError('Could not load dashboard analytics.');
+      setError(t('dashboard.analytics.loadFailed'));
       setAnalytics(null);
     } finally {
       setAnalyticsLoading(false);
     }
-  }, []);
-
+  }, [t]);
   useEffect(() => {
     if (branchLoading) return;
     void load(queryDays, activeBranchId, activeBranchUrlId);
@@ -629,23 +635,22 @@ export default function DashboardAnalytics() {
     const revenue = analytics?.channelTotals?.revenue;
     return [
       {
-        name: 'Online',
+        name: t('dashboard.analytics.channelOnline'),
         value: Number(revenue?.online) || 0,
         color: CHANNEL_COLORS.online,
       },
       {
-        name: 'POS',
+        name: t('dashboard.analytics.channelPos'),
         value: Number(revenue?.pos) || 0,
         color: CHANNEL_COLORS.pos,
       },
       {
-        name: 'Kiosk',
+        name: t('dashboard.analytics.channelKiosk'),
         value: Number(revenue?.kiosk) || 0,
         color: CHANNEL_COLORS.kiosk,
       },
     ];
-  }, [analytics?.channelTotals]);
-
+  }, [analytics?.channelTotals, t]);
   const channelMixTotal = useMemo(
     () => channelMix.reduce((s, r) => s + r.value, 0),
     [channelMix]
@@ -655,11 +660,23 @@ export default function DashboardAnalytics() {
     const mix = analytics?.paymentMix;
     return [
       { name: 'Cash', value: Number(mix?.cash) || 0, color: PAY_COLORS.cash },
-      { name: 'Card', value: Number(mix?.card) || 0, color: PAY_COLORS.card },
-      { name: 'Other', value: Number(mix?.other) || 0, color: PAY_COLORS.other },
+      {
+        name: t('dashboard.analytics.payCash'),
+        value: Number(mix?.cash) || 0,
+        color: PAY_COLORS.cash,
+      },
+      {
+        name: t('dashboard.analytics.payCard'),
+        value: Number(mix?.card) || 0,
+        color: PAY_COLORS.card,
+      },
+      {
+        name: t('dashboard.analytics.payOther'),
+        value: Number(mix?.other) || 0,
+        color: PAY_COLORS.other,
+      },
     ].filter((s) => s.value > 0);
-  }, [analytics?.paymentMix]);
-
+  }, [analytics?.paymentMix, t]);
   const paymentTotal = useMemo(
     () => paymentSlices.reduce((s, r) => s + r.value, 0),
     [paymentSlices]
@@ -712,13 +729,20 @@ export default function DashboardAnalytics() {
     <div className="w-full space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0 space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {t('dashboard.analytics.title')}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {todayOnly
-              ? 'Today’s sales and floor pulse.'
+              ? t('dashboard.analytics.subtitleToday')
               : analytics?.branchScoped && analytics.activeBranchName
-                ? `${analytics.activeBranchName} · last ${chartDaysLabel}.`
-                : `Sales & operations · last ${chartDaysLabel}.`}
+                ? t('dashboard.analytics.subtitleBranch', {
+                    branch: analytics.activeBranchName,
+                    period: chartDaysLabel,
+                  })
+                : t('dashboard.analytics.subtitleDefault', {
+                    period: chartDaysLabel,
+                  })}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -736,7 +760,7 @@ export default function DashboardAnalytics() {
                     rel="noopener noreferrer"
                   >
                     Open Website
-                    <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
+                    {t('dashboard.analytics.openWebsite')}
                   </a>
                 </Button>
               ) : null}
@@ -756,6 +780,7 @@ export default function DashboardAnalytics() {
                     rel="noopener noreferrer"
                   >
                     Open Kiosk
+                    {t('dashboard.analytics.openKiosk')}
                     <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
                   </a>
                 </Button>
@@ -783,46 +808,55 @@ export default function DashboardAnalytics() {
           <>
             <InsightChip
               icon={Wallet}
-              label="Revenue"
+              label={t('dashboard.analytics.revenue')}
               value={formatMoney(insights.totalRevenue)}
-              hint={`Completed payments · ${chartDaysLabel}`}
+              hint={t('dashboard.analytics.revenueHint', {
+                period: chartDaysLabel,
+              })}
             />
             <InsightChip
               icon={ShoppingBag}
-              label="Orders"
+              label={t('dashboard.analytics.orders')}
               value={insights.totalOrders.toLocaleString()}
-              hint={`Active tickets · ${chartDaysLabel}`}
+              hint={t('dashboard.analytics.ordersHint', {
+                period: chartDaysLabel,
+              })}
             />
             <InsightChip
               icon={Receipt}
-              label="Avg. order"
+              label={t('dashboard.analytics.avgOrder')}
               value={
                 insights.avgOrderValue > 0
                   ? formatMoney(insights.avgOrderValue)
                   : '—'
               }
-              hint="Revenue ÷ orders"
+              hint={t('dashboard.analytics.avgOrderHint')}
             />
             <InsightChip
               icon={ChefHat}
-              label="Kitchen open"
+              label={t('dashboard.analytics.kitchenOpen')}
               value={String(ops?.kdsOpen ?? 0)}
               hint={
                 ops?.peakHourLabel
-                  ? `Peak ${ops.peakHourLabel} · ${ops.peakHourOrders} orders`
-                  : 'Open KDS tickets now'
+                  ? t('dashboard.analytics.kitchenPeakHint', {
+                      label: ops.peakHourLabel,
+                      count: ops.peakHourOrders,
+                    })
+                  : t('dashboard.analytics.kitchenOpenHint')
               }
             />
           </>
         )}
-                  </div>
+      </div>
 
       {/* 1. Revenue first */}
       <Card className={CHART_CARD}>
         <CardHeader>
-          <CardTitle>Revenue report ({chartDaysLabel})</CardTitle>
+          <CardTitle>
+            {t('dashboard.analytics.revenueReport', { period: chartDaysLabel })}
+          </CardTitle>
           <CardDescription>
-            Total completed-payment revenue over time.
+            {t('dashboard.analytics.revenueReportDesc')}
           </CardDescription>
         </CardHeader>
         <CardContent className="w-full min-w-0 pt-0">
@@ -831,7 +865,7 @@ export default function DashboardAnalytics() {
           ) : insights.totalRevenue <= 0 ? (
             <ChartEmpty
               className="h-[320px]"
-              message="No completed payments in this period yet."
+              message={t('dashboard.analytics.noCompletedPayments')}
             />
           ) : (
             <CombinedRevenueLineChart
@@ -839,26 +873,28 @@ export default function DashboardAnalytics() {
               formatTip={(n) => `${currencySymbol}${formatCompact(n)}`}
             />
           )}
-                </CardContent>
-              </Card>
+        </CardContent>
+      </Card>
 
       {/* 2. Orders line + channel mix */}
       <div className="grid min-w-0 gap-4 lg:grid-cols-[1.25fr_0.75fr]">
         <Card className={cn('min-w-0', CHART_CARD)}>
                 <CardHeader>
             <CardTitle>
-              {showAdvanced ? 'Orders by channel' : 'Orders trend'} (
-              {chartDaysLabel})
-                  </CardTitle>
+              {showAdvanced
+                ? t('dashboard.analytics.ordersByChannel')
+                : t('dashboard.analytics.ordersTrend')}{' '}
+              ({chartDaysLabel})
+            </CardTitle>
                   <CardDescription>
-              Ticket volume over time — busy vs slow days.
+              {t('dashboard.analytics.ordersChartDesc')}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
             {isLoading || !analytics ? (
               <AnalyticsChartLoader />
             ) : insights.totalOrders <= 0 ? (
-              <ChartEmpty message="No orders in this period yet." />
+              <ChartEmpty message={t('dashboard.analytics.noOrdersPeriod')} />
             ) : (
               <>
                 <ChannelLegend advanced={showAdvanced} />
@@ -873,9 +909,9 @@ export default function DashboardAnalytics() {
 
         <Card className={cn('min-w-0', CHART_CARD)}>
           <CardHeader>
-            <CardTitle>Channel mix</CardTitle>
+            <CardTitle>{t('dashboard.analytics.channelMix')}</CardTitle>
                     <CardDescription>
-              Where completed revenue comes from.
+              {t('dashboard.analytics.channelMixDesc')}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
@@ -884,7 +920,7 @@ export default function DashboardAnalytics() {
             ) : channelMixTotal <= 0 ? (
               <ChartEmpty
                 className="h-[260px]"
-                message="No completed revenue to split yet."
+                message={t('dashboard.analytics.noChannelRevenue')}
               />
             ) : (
               <div className="h-[260px] w-full min-w-0">
@@ -927,9 +963,11 @@ export default function DashboardAnalytics() {
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <Card className={cn('min-w-0', CHART_CARD)}>
                   <CardHeader>
-            <CardTitle>Top selling items</CardTitle>
+            <CardTitle>{t('dashboard.analytics.topSelling')}</CardTitle>
             <CardDescription>
-              What to promote and never stock out · {chartDaysLabel}.
+              {t('dashboard.analytics.topSellingDesc', {
+                period: chartDaysLabel,
+              })}
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
@@ -938,7 +976,7 @@ export default function DashboardAnalytics() {
             ) : topItems.length === 0 ? (
               <ChartEmpty
                 className="h-[220px]"
-                message="No paid item sales in this period yet."
+                message={t('dashboard.analytics.noPaidItems')}
               />
             ) : (
               <TopItemsList items={topItems} formatMoney={formatMoney} />
@@ -950,19 +988,21 @@ export default function DashboardAnalytics() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-fire-500" aria-hidden />
-              Peak hours
-                    </CardTitle>
-                    <CardDescription>
-              When to schedule staff and prep · {chartDaysLabel}.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
+              {t('dashboard.analytics.peakHours')}
+            </CardTitle>
+            <CardDescription>
+              {t('dashboard.analytics.peakHoursDesc', {
+                period: chartDaysLabel,
+              })}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
             {isLoading || !analytics ? (
               <AnalyticsChartLoader className="h-[220px]" />
             ) : hourlyOrders.every((h) => h.orders === 0) ? (
               <ChartEmpty
                 className="h-[220px]"
-                message="No order timing data yet."
+                message={t('dashboard.analytics.noTimingData')}
               />
             ) : (
               <PeakHoursBars data={hourlyOrders} />
@@ -975,8 +1015,10 @@ export default function DashboardAnalytics() {
       <div className="grid min-w-0 gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <Card className={cn('min-w-0', CHART_CARD)}>
           <CardHeader>
-            <CardTitle>Floor right now</CardTitle>
-            <CardDescription>Live kitchen and dine-in pressure.</CardDescription>
+            <CardTitle>{t('dashboard.analytics.floorNow')}</CardTitle>
+            <CardDescription>
+              {t('dashboard.analytics.floorNowDesc')}
+            </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
             {isLoading || !analytics ? (
@@ -986,66 +1028,70 @@ export default function DashboardAnalytics() {
                 <div className="rounded-2xl bg-fire-500/10 p-4">
                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                     <ChefHat className="h-3.5 w-3.5" aria-hidden />
-                    Kitchen
+                    {t('dashboard.analytics.kitchen')}
                   </div>
                   <p className="mt-2 text-2xl font-bold tabular-nums">
                     {ops?.kdsOpen ?? 0}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    Open tickets
-                        </p>
-                      </div>
+                    {t('dashboard.analytics.openTickets')}
+                  </p>
+                </div>
                 <div className="rounded-2xl bg-muted/40 p-4">
                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                     <UtensilsCrossed className="h-3.5 w-3.5" aria-hidden />
-                    Tables
+                    {t('dashboard.analytics.tables')}
                   </div>
                   <p className="mt-2 text-2xl font-bold tabular-nums">
                     {ops?.openTableTabs ?? 0}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">Open tabs</p>
-                      </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t('dashboard.analytics.openTabs')}
+                  </p>
+                </div>
                 <div className="rounded-2xl bg-muted/40 p-4">
                   <div className="text-xs font-medium text-muted-foreground">
-                    Display queue
+                    {t('dashboard.analytics.displayQueue')}
                   </div>
                   <p className="mt-2 text-2xl font-bold tabular-nums">
                     {ops?.orderDisplayQueue ?? 0}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    In progress
-                        </p>
-                      </div>
+                    {t('dashboard.analytics.inProgress')}
+                  </p>
+                </div>
                 <div className="rounded-2xl bg-muted/40 p-4">
                   <div className="text-xs font-medium text-muted-foreground">
-                    Canceled
-                    </div>
+                    {t('dashboard.analytics.canceled')}
+                  </div>
                   <p className="mt-2 text-2xl font-bold tabular-nums">
                     {ops?.canceledOrders ?? 0}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    In period
+                    {t('dashboard.analytics.inPeriod')}
                   </p>
-                    </div>
+                </div>
               </div>
             )}
-                  </CardContent>
-                </Card>
+          </CardContent>
+        </Card>
 
         <Card className={cn('min-w-0', CHART_CARD)}>
-                  <CardHeader>
-            <CardTitle>Payment mix</CardTitle>
-                    <CardDescription>
-              Cash vs card on completed payments · {chartDaysLabel}.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
+          <CardHeader>
+            <CardTitle>{t('dashboard.analytics.paymentMix')}</CardTitle>
+            <CardDescription>
+              {t('dashboard.analytics.paymentMixDesc', {
+                period: chartDaysLabel,
+              })}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
             {isLoading || !analytics ? (
               <AnalyticsChartLoader className="h-[220px]" />
             ) : paymentTotal <= 0 ? (
               <ChartEmpty
                 className="h-[220px]"
-                message="No completed payments to split yet."
+                message={t('dashboard.analytics.noPaymentSplit')}
               />
             ) : (
               <div className="grid h-[220px] gap-4 sm:grid-cols-[1fr_0.85fr]">

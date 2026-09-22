@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 import {
   DeleteConfirmation,
@@ -40,21 +42,49 @@ type BranchRow = {
   createdAt: string;
 };
 
-const weekdayLabels = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-];
+function weekdayLabelsFor(t: TFunction) {
+  return [
+    t('weekdaySunday'),
+    t('weekdayMonday'),
+    t('weekdayTuesday'),
+    t('weekdayWednesday'),
+    t('weekdayThursday'),
+    t('weekdayFriday'),
+    t('weekdaySaturday'),
+  ];
+}
 
-function formatOpeningHoursSummary(openingHours: BranchOpeningHours | null | undefined) {
+function mapBranchApiError(t: TFunction, msg: string): string {
+  const trimmed = msg.trim();
+  if (trimmed.startsWith('Your plan allows up to')) {
+    return t('dashboard.branches.branchLimitReached');
+  }
+  switch (trimmed) {
+    case 'Failed to create branch.':
+    case 'Failed to create branch':
+      return t('dashboard.branches.createFailed');
+    case 'Failed to update branch.':
+    case 'Failed to update branch':
+      return t('dashboard.branches.updateFailed');
+    case 'Failed to delete branch.':
+    case 'Failed to delete branch':
+      return t('dashboard.branches.deleteFailed');
+    case 'You must keep at least one branch.':
+      return t('dashboard.branches.atLeastOne');
+    default:
+      return msg;
+  }
+}
+
+function formatOpeningHoursSummary(
+  openingHours: BranchOpeningHours | null | undefined,
+  weekdayLabels: string[],
+  t: TFunction
+) {
   const normalized = normalizeOpeningHours(openingHours);
   const enabledDays = normalized.filter((entry) => entry.isOpen);
   if (enabledDays.length === 0) {
-    return 'No weekly hours set';
+    return t('dashboard.branches.noWeeklyHours');
   }
 
   const first = enabledDays[0];
@@ -66,6 +96,8 @@ function formatOpeningHoursSummary(openingHours: BranchOpeningHours | null | und
 }
 
 export function BranchedPage() {
+  const { t } = useTranslation();
+  const weekdayLabels = useMemo(() => weekdayLabelsFor(t), [t]);
   const { plan } = useStaffPermissions();
   const { regional } = useOwnerRestaurantRegional();
   const branchTimeZone = timezoneForRestaurantCountry(regional.countryCode);
@@ -99,7 +131,7 @@ export function BranchedPage() {
       );
       setBranches(res.data.data ?? []);
     } catch {
-      toast.error('Could not load branches');
+      toast.error(t('dashboard.branches.loadFailed'));
       setBranches([]);
     } finally {
       setLoading(false);
@@ -132,6 +164,10 @@ export function BranchedPage() {
   const branchCap =
     maxBranches === null ? Number.POSITIVE_INFINITY : maxBranches;
   const atBranchLimit = branches.length >= branchCap;
+  const branchLimitLabel =
+    maxBranches === null
+      ? t('dashboard.branches.unlimited')
+      : String(maxBranches);
 
   function resetForm() {
     setActiveId(null);
@@ -160,13 +196,11 @@ export function BranchedPage() {
   async function createBranch() {
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.warn('Branch name is required.');
+      toast.warn(t('dashboard.branches.nameRequired'));
       return;
     }
     if (atBranchLimit) {
-      toast.warn(
-        'You have reached the branch limit for your subscription plan.'
-      );
+      toast.warn(t('dashboard.branches.branchLimitReached'));
       setConfirmAddOpen(false);
       return;
     }
@@ -178,15 +212,15 @@ export function BranchedPage() {
         phone: phone.trim(),
         openingHours,
       });
-      toast.success('Branch created');
+      toast.success(t('dashboard.branches.created'));
       resetForm();
       setConfirmAddOpen(false);
       await load();
     } catch (e: unknown) {
       const msg =
         axios.isAxiosError(e) && typeof e.response?.data?.error === 'string'
-          ? e.response.data.error
-          : 'Failed to create branch';
+          ? mapBranchApiError(t, e.response.data.error)
+          : t('dashboard.branches.createFailed');
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -198,7 +232,7 @@ export function BranchedPage() {
     const trimmed = name.trim();
     if (!branchId) return;
     if (!trimmed) {
-      toast.warn('Branch name is required.');
+      toast.warn(t('dashboard.branches.nameRequired'));
       return;
     }
     setSaving(true);
@@ -209,15 +243,15 @@ export function BranchedPage() {
         phone: phone.trim(),
         openingHours,
       });
-      toast.success('Branch updated');
+      toast.success(t('dashboard.branches.updated'));
       resetForm();
       setConfirmEditOpen(false);
       await load();
     } catch (e: unknown) {
       const msg =
         axios.isAxiosError(e) && typeof e.response?.data?.error === 'string'
-          ? e.response.data.error
-          : 'Failed to update branch';
+          ? mapBranchApiError(t, e.response.data.error)
+          : t('dashboard.branches.updateFailed');
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -228,22 +262,22 @@ export function BranchedPage() {
     const branchId = activeId;
     if (!branchId) return;
     if (cannotDeleteLastBranch) {
-      toast.warn('At least one branch is required.');
+      toast.warn(t('dashboard.branches.atLeastOne'));
       setConfirmDeleteOpen(false);
       return;
     }
     setDeletingId(branchId);
     try {
       await axios.delete(`/api/restaurant/branches/${branchId}`);
-      toast.success('Branch deleted');
+      toast.success(t('dashboard.branches.deleted'));
       resetForm();
       setConfirmDeleteOpen(false);
       await load();
     } catch (e: unknown) {
       const msg =
         axios.isAxiosError(e) && typeof e.response?.data?.error === 'string'
-          ? e.response.data.error
-          : 'Failed to delete branch';
+          ? mapBranchApiError(t, e.response.data.error)
+          : t('dashboard.branches.deleteFailed');
       toast.error(msg);
     } finally {
       setDeletingId(null);
@@ -254,40 +288,48 @@ export function BranchedPage() {
   return (
     <>
       <div className="flex flex-col gap-2 mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Branches</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {t('dashboard.branches.title')}
+        </h1>
         <p className="text-sm text-muted-foreground space-y-2">
-          Add, edit, and delete your branches here. You can add up to{' '}
-          {maxBranches === null ? 'unlimited' : maxBranches} branches.
+          {t('dashboard.branches.intro', { limit: branchLimitLabel })}
         </p>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Branch Management</CardTitle>
+          <CardTitle>{t('dashboard.branches.management')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {!loading && atBranchLimit && !activeId ? (
             <p className="rounded-md border border-dashed border-destructive p-3 text-sm text-destructive bg-destructive/10">
-              Your plan allows{' '}
-              {maxBranches === null
-                ? 'unlimited'
-                : `${maxBranches} location${maxBranches === 1 ? '' : 's'}`}
-              . Upgrade to Growth or Scale on Pricing to add more branches.
+              {t('dashboard.branches.planLimitWarning', {
+                limit:
+                  maxBranches === null
+                    ? t('dashboard.branches.unlimited')
+                    : maxBranches === 1
+                      ? t('dashboard.branches.locationOne', {
+                          count: maxBranches,
+                        })
+                      : t('dashboard.branches.locationsMany', {
+                          count: maxBranches,
+                        }),
+              })}
             </p>
           ) : null}
           <div className="grid gap-3 md:grid-cols-3">
             <Input
-              placeholder="Branch name *"
+              placeholder={t('dashboard.branches.branchNamePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
             <Input
-              placeholder="Address"
+              placeholder={t('dashboard.branches.addressPlaceholder')}
               value={address}
               onChange={(e) => setAddress(e.target.value)}
             />
             <Input
               type="tel"
-              placeholder="Phone"
+              placeholder={t('dashboard.branches.phonePlaceholder')}
               value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
             />
@@ -295,10 +337,14 @@ export function BranchedPage() {
           <div className="rounded-lg border p-3 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-medium">Weekly opening hours</p>
+                <p className="text-sm font-medium">
+                  {t('dashboard.branches.weeklyHours')}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  Times follow {restaurantZoneLabel}. Current time there:{' '}
-                  {restaurantClock}.
+                  {t('dashboard.branches.hoursTimezoneHint', {
+                    zone: restaurantZoneLabel,
+                    time: restaurantClock,
+                  })}
                 </p>
               </div>
             </div>
@@ -319,7 +365,7 @@ export function BranchedPage() {
                         })
                       }
                     />
-                    Open
+                    {t('dashboard.branches.open')}
                   </label>
                   <Input
                     type="time"
@@ -359,12 +405,12 @@ export function BranchedPage() {
                   {saving ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                      <span>Updating...</span>
+                      <span>{t('dashboard.branches.updating')}</span>
                     </>
                   ) : (
                     <>
                       <Save className="h-4 w-4 mr-2" />
-                      <span>Update Branch</span>
+                      <span>{t('dashboard.branches.update')}</span>
                     </>
                   )}
                 </Button>
@@ -380,12 +426,12 @@ export function BranchedPage() {
                   {deletingId === activeId ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                      <span>Deleting...</span>
+                      <span>{t('dashboard.branches.deleting')}</span>
                     </>
                   ) : (
                     <>
                       <Trash2 className="h-4 w-4 mr-2" />
-                      <span>Delete Branch</span>
+                      <span>{t('dashboard.branches.delete')}</span>
                     </>
                   )}
                 </Button>
@@ -397,7 +443,7 @@ export function BranchedPage() {
                 >
                   <>
                     <X className="h-4 w-4 mr-2" />
-                    <span>Cancel</span>
+                    <span>{t('dashboard.common.cancel')}</span>
                   </>
                 </Button>
               </>
@@ -410,12 +456,12 @@ export function BranchedPage() {
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                    <span>Adding...</span>
+                    <span>{t('dashboard.branches.adding')}</span>
                   </>
                 ) : (
                   <>
                     <Plus className="h-4 w-4 mr-2" />{' '}
-                    <span>Add New Branch</span>
+                    <span>{t('dashboard.branches.addNew')}</span>
                   </>
                 )}
               </Button>
@@ -428,13 +474,13 @@ export function BranchedPage() {
             </p>
           ) : branches.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No branches found yet. Add your first branch now.
+              {t('dashboard.branches.noBranchesYet')}
             </p>
           ) : (
             <div className="space-y-2">
               {branches.length <= 1 ? (
                 <p className="text-xs text-amber-600">
-                  You must keep at least one branch.
+                  {t('dashboard.branches.keepOneBranch')}
                 </p>
               ) : null}
               {branches.map((b, index) => {
@@ -448,13 +494,17 @@ export function BranchedPage() {
                       {index + 1}. {b.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {b.address || 'No address'}
+                      {b.address || t('dashboard.branches.noAddress')}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {b.phone || 'No phone'}
+                      {b.phone || t('dashboard.branches.noPhone')}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {formatOpeningHoursSummary(b.openingHours)}
+                      {formatOpeningHoursSummary(
+                        b.openingHours,
+                        weekdayLabels,
+                        t
+                      )}
                     </p>
                     <div className="mt-2">
                       <Button
@@ -464,7 +514,7 @@ export function BranchedPage() {
                       >
                         <>
                           <Pencil className="h-4 w-4 mr-2" />
-                          <span>Edit</span>
+                          <span>{t('dashboard.branches.edit')}</span>
                         </>
                       </Button>
                     </div>
@@ -478,27 +528,27 @@ export function BranchedPage() {
 
       <SaveConfirmation
         open={confirmAddOpen}
-        title="Add Branch"
-        description="Create this branch now?"
-        itemName={name.trim() || 'New branch'}
+        title={t('dashboard.branches.confirmAddTitle')}
+        description={t('dashboard.branches.confirmAddDesc')}
+        itemName={name.trim() || t('dashboard.branches.newBranch')}
         loading={saving}
         onConfirm={() => void createBranch()}
         onCancel={() => setConfirmAddOpen(false)}
       />
       <SaveConfirmation
         open={confirmEditOpen}
-        title="Update Branch"
-        description="Save these branch changes?"
-        itemName={(activeBranch?.name ?? name.trim()) || 'Branch'}
+        title={t('dashboard.branches.confirmUpdateTitle')}
+        description={t('dashboard.branches.confirmUpdateDesc')}
+        itemName={(activeBranch?.name ?? name.trim()) || t('dashboard.branches.title')}
         loading={saving}
         onConfirm={() => void updateBranch()}
         onCancel={() => setConfirmEditOpen(false)}
       />
       <DeleteConfirmation
         open={confirmDeleteOpen}
-        title="Delete Branch"
-        description="This branch will be removed permanently."
-        itemName={activeBranch?.name ?? 'Branch'}
+        title={t('dashboard.branches.confirmDeleteTitle')}
+        description={t('dashboard.branches.confirmDeleteDesc')}
+        itemName={activeBranch?.name ?? t('dashboard.branches.title')}
         loading={deletingId === activeId}
         onConfirm={() => void deleteBranch()}
         onCancel={() => setConfirmDeleteOpen(false)}

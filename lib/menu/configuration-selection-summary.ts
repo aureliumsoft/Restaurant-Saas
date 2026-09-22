@@ -2,7 +2,10 @@ import { buildModifierSelectionsForGroups } from '@/lib/menu/build-modifier-sele
 import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
 import { formatAddonDelta } from '@/lib/format-money';
 import type { RestaurantRegionalSettings } from '@/lib/restaurant-regional';
-import { productRecommendationVariationPriceLabel } from '@/lib/menu/recommendation-addon-price';
+import {
+  productRecommendationVariationPriceLabel,
+  productRecommendationVariationUnitPrice,
+} from '@/lib/menu/recommendation-addon-price';
 import {
   optionSelectionKey,
   resolveProductRecommendationVariationId,
@@ -18,6 +21,7 @@ import type { NestedRecommendationResult } from '@/components/order/nested-recom
 export type ConfigurationSummaryLine = {
   name: string;
   priceLabel: string | null;
+  unitPrice: number;
   /** Personalize picks — shown below the line name, not as indented sub-items. */
   personalize: ConfigurationSummaryLine[];
   nested: ConfigurationSummaryLine[];
@@ -37,8 +41,46 @@ function selectionToSummaryLine(
   return {
     name: sel.name,
     priceLabel: formatSelectionPriceLabel(sel.unitPrice, regional),
+    unitPrice: sel.unitPrice,
     personalize: [],
     nested: [],
+  };
+}
+
+function isSizeLikeChild(parentName: string, childName: string) {
+  const parent = parentName.trim().toLowerCase();
+  const child = childName.trim().toLowerCase();
+  if (!parent || !child || parent === child) return false;
+  return (
+    child.startsWith(`${parent} `) ||
+    child.startsWith(`${parent}(`) ||
+    child.startsWith(`${parent} (`) ||
+    (child.startsWith(parent) && /\bxl\b/.test(child))
+  );
+}
+
+/** Fold XL/size extras onto the wrap name so the form matches Belorder. */
+export function foldConfigurationSummaryLine(
+  line: ConfigurationSummaryLine,
+  regional?: Partial<RestaurantRegionalSettings>
+): ConfigurationSummaryLine {
+  let name = line.name;
+  let unitPrice = line.unitPrice ?? 0;
+  const nested: ConfigurationSummaryLine[] = [];
+  for (const child of line.nested) {
+    if (isSizeLikeChild(name, child.name)) {
+      name = child.name.trim();
+      unitPrice += child.unitPrice ?? 0;
+      continue;
+    }
+    nested.push(child);
+  }
+  return {
+    ...line,
+    name,
+    unitPrice,
+    priceLabel: formatSelectionPriceLabel(unitPrice, regional),
+    nested,
   };
 }
 
@@ -92,12 +134,18 @@ export function buildCategoryGroupSelectionSummary(
         nestedConfigMods,
         regional
       );
-      lines.push({
-        name: sel.name,
-        priceLabel: formatSelectionPriceLabel(sel.unitPrice, regional),
-        personalize,
-        nested,
-      });
+      lines.push(
+        foldConfigurationSummaryLine(
+          {
+            name: sel.name,
+            priceLabel: formatSelectionPriceLabel(sel.unitPrice, regional),
+            unitPrice: sel.unitPrice,
+            personalize,
+            nested,
+          },
+          regional
+        )
+      );
     }
   }
   return lines;
@@ -124,10 +172,13 @@ export function buildProductRecSelectionSummary(
   const pv = (item.variations ?? []).find((v) => v.id === pvId);
   const pvName = pv?.name ?? pv?.title;
   const name = pvName ? `${item.name} (${pvName})` : item.name;
+  const unitPrice = pvId
+    ? productRecommendationVariationUnitPrice(item, pvId)
+    : 0;
   const priceLabel =
     pv != null
       ? productRecommendationVariationPriceLabel(item, pv.priceDelta, regional)
-      : null;
+      : formatSelectionPriceLabel(unitPrice, regional);
 
   const { personalize, nested } = splitModsToSummaryLines(
     config?.mods ?? [],
@@ -135,11 +186,15 @@ export function buildProductRecSelectionSummary(
   );
 
   return [
-    {
-      name,
-      priceLabel,
-      personalize,
-      nested,
-    },
+    foldConfigurationSummaryLine(
+      {
+        name,
+        priceLabel,
+        unitPrice,
+        personalize,
+        nested,
+      },
+      regional
+    ),
   ];
 }

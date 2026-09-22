@@ -29,6 +29,8 @@ import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfill
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
+import { LanguageSwitcher } from '@/components/main/language-switcher';
+import { useTranslation } from 'react-i18next';
 
 type PendingOrder = {
   id: string;
@@ -95,6 +97,7 @@ const MIN_CUSTOM_MINUTES = 1;
 const MAX_CUSTOM_MINUTES = 240;
 
 export function KdsManagerBoard() {
+  const { t } = useTranslation();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { settings: fulfillmentSettings, loading: settingsLoading } =
     useRestaurantFulfillmentSettings();
@@ -267,15 +270,15 @@ export function KdsManagerBoard() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">KDS Manager</h1>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold">{t('kds.managerTitle')}</h1>
           <p className="text-sm text-muted-foreground">
-            Choose a preset or enter custom minutes, then proceed the order to
-            making. Live · updates in real time · last sync {lastUpdatedText}
+            {t('kds.managerSubtitle', { time: lastUpdatedText })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          <LanguageSwitcher variant="inline" />
           <Button
             variant="outline"
             size="icon"
@@ -288,7 +291,7 @@ export function KdsManagerBoard() {
           </Button>
           <Button asChild variant="default">
             <Link href="/kds-screen" target="_blank">
-              Open KDS Screen
+              {t('kds.openKdsScreen')}
               <ExternalLink className="ml-2 h-4 w-4" />
             </Link>
           </Button>
@@ -301,7 +304,7 @@ export function KdsManagerBoard() {
       ) : orders.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-sm text-muted-foreground">
-            No pending orders.
+            {t('kds.noPendingOrders')}
           </CardContent>
         </Card>
       ) : (
@@ -315,7 +318,7 @@ export function KdsManagerBoard() {
                     <div className="flex items-center gap-3">
                       <div className="flex items-baseline gap-2">
                         <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                          Token
+                          {t('kds.token')}
                         </span>
                         <span className="font-mono text-2xl font-extrabold leading-none tabular-nums">
                           {tokenLabel(o)}
@@ -324,7 +327,7 @@ export function KdsManagerBoard() {
                       <span className="hidden h-5 w-px bg-border sm:inline-block" />
                       <div className="flex items-baseline gap-2">
                         <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                          Tracking
+                          {t('kds.tracking')}
                         </span>
                         <span className="font-mono text-sm font-semibold uppercase tracking-wider">
                           {trackingLabel(o)}
@@ -334,7 +337,7 @@ export function KdsManagerBoard() {
                     <div className="flex flex-wrap items-center gap-2">
                       {paymentPending ? (
                         <Badge className="bg-amber-500/15 text-amber-800 hover:bg-amber-500/20 dark:text-amber-300">
-                          Payment pending
+                          {t('kds.paymentPending')}
                           {o.paymentMethod ? ` · ${o.paymentMethod}` : ''}
                         </Badge>
                       ) : null}
@@ -346,18 +349,20 @@ export function KdsManagerBoard() {
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
                     <div className="space-y-3">
                       <p className="text-sm font-medium">
-                        {o.customer?.name || 'Walk-in'}
+                        {o.customer?.name || t('kds.walkIn')}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(o.createdAt).toLocaleString()}
                       </p>
                       {o.orderScheduleMode === 'later' && o.orderScheduleAt ? (
                         <p className="text-xs font-medium text-primary">
-                          Scheduled for {new Date(o.orderScheduleAt).toLocaleString()}
+                          {t('kds.scheduledFor', {
+                            time: new Date(o.orderScheduleAt).toLocaleString(),
+                          })}
                         </p>
                       ) : (
                         <p className="text-xs font-medium text-primary">
-                          As soon as possible
+                          {t('kds.asap')}
                         </p>
                       )}
                       <OrderCustomerExtras
@@ -404,7 +409,7 @@ export function KdsManagerBoard() {
                       <div className="flex flex-col justify-between">
                         <div className="space-y-2">
                           <p className="text-xs text-muted-foreground">
-                            Select time:
+                            {t('kds.selectTime')}
                           </p>
                           <div className="grid grid-cols-3 gap-2">
                             {[10, 15, 30].map((m) => (
@@ -438,7 +443,7 @@ export function KdsManagerBoard() {
                             htmlFor={`kds-custom-min-${o.id}`}
                             className="text-xs text-muted-foreground"
                           >
-                            Custom (minutes)
+                            {t('kds.customMinutes')}
                           </label>
                           <Input
                             id={`kds-custom-min-${o.id}`}
@@ -471,15 +476,15 @@ export function KdsManagerBoard() {
 
                       {paymentPending ? (
                         <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-                          Collect payment at POS before sending this order to the
-                          kitchen.
+                          {t('kds.collectPaymentFirst')}
                         </p>
                       ) : null}
 
                       {o.orderScheduleMode === 'later' && o.orderScheduleAt ? (
                         <p className="text-xs text-muted-foreground">
-                          This order will only be sent to the kitchen after{' '}
-                          {new Date(o.orderScheduleAt).toLocaleString()}.
+                          {t('kds.scheduledKitchenNote', {
+                            time: new Date(o.orderScheduleAt).toLocaleString(),
+                          })}
                         </p>
                       ) : null}
 
@@ -523,13 +528,15 @@ export function KdsManagerBoard() {
                             <>
                               <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
                               <span className="text-sm font-medium">
-                                Proceeding...
+                                {t('kds.proceeding')}
                               </span>
                             </>
                           ) : (
                             <>
                               <CheckCircle2 className="mr-2 h-5 w-5" />{' '}
-                              <span className="text-sm font-medium">Proceed</span>
+                              <span className="text-sm font-medium">
+                                {t('kds.proceed')}
+                              </span>
                             </>
                           )}
                         </Button>
@@ -558,14 +565,14 @@ export function KdsManagerBoard() {
                             <>
                               <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
                               <span className="text-sm font-medium">
-                                Canceling...
+                                {t('kds.canceling')}
                               </span>
                             </>
                           ) : (
                             <>
                               <XCircle className="mr-2 h-5 w-5" />{' '}
                               <span className="text-sm font-medium">
-                                Cancel Order
+                                {t('kds.cancelOrder')}
                               </span>
                             </>
                           )}

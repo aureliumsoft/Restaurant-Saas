@@ -19,6 +19,10 @@ import {
   menuItemBrowseListSelectLegacy,
 } from '@/lib/menu/menu-item-list-select';
 import {
+  MENU_ITEM_CATEGORY_LINK_DATE_ORDER,
+  MENU_ITEM_DATE_ORDER,
+} from '@/lib/menu/product-order';
+import {
   type AttributeGroupSource,
 } from '@/lib/menu/map-attribute-group-items';
 import {
@@ -41,7 +45,7 @@ import {
   RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT_PRE_CHANNEL,
 } from '@/lib/restaurant-fulfillment-settings';
 
-const restaurantPublicSelectBase = {
+const restaurantPublicSelectCore = {
   id: true,
   name: true,
   logoUrl: true,
@@ -51,6 +55,10 @@ const restaurantPublicSelectBase = {
   slug: true,
   updatedAt: true,
   ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+} as const;
+
+const restaurantPublicSelectBase = {
+  ...restaurantPublicSelectCore,
   ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT_PRE_CHANNEL,
 } as const;
 
@@ -61,11 +69,11 @@ const restaurantPublicSelect = {
 
 function buildCustomerProductDetailItemSelect(mode: CustomerMenuSelectMode) {
   return {
-    id: true,
-    name: true,
-    description: true,
-    price: true,
-    salePrice: true,
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            salePrice: true,
     updatedAt: true,
     categoryId: true,
     variations: customerProductDetailOptionCardSelect(mode).variations,
@@ -84,10 +92,18 @@ async function findRestaurantPublic(
     });
   } catch (error) {
     if (!isPrismaFulfillmentSettingsFieldError(error)) throw error;
-    return db.restaurant.findUnique({
-      where,
-      select: restaurantPublicSelectBase,
-    });
+    try {
+      return await db.restaurant.findUnique({
+        where,
+        select: restaurantPublicSelectBase,
+      });
+    } catch (baseError) {
+      if (!isPrismaFulfillmentSettingsFieldError(baseError)) throw baseError;
+      return db.restaurant.findUnique({
+        where,
+        select: restaurantPublicSelectCore,
+      });
+    }
   }
 }
 
@@ -117,9 +133,9 @@ async function resolveRestaurantId(
   const sub = subdomain?.trim();
   if (!sub) return null;
   const row = await db.restaurant.findUnique({
-    where: { subdomain: sub },
+      where: { subdomain: sub },
     select: { id: true },
-  });
+    });
   return row?.id ?? null;
 }
 
@@ -429,7 +445,7 @@ async function loadOptionCardsByCategoryIds(
         categoryId: { in: categoryIds },
         menuItem: { restaurantId },
       },
-      orderBy: { sortOrder: 'asc' },
+      orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
       select: {
         categoryId: true,
         menuItemId: true,
@@ -441,7 +457,7 @@ async function loadOptionCardsByCategoryIds(
         restaurantId,
         categoryId: { in: categoryIds },
       },
-      orderBy: { name: 'asc' },
+      orderBy: [...MENU_ITEM_DATE_ORDER],
       select: {
         ...optionSelect,
         categoryId: true,
@@ -516,6 +532,62 @@ function attachNestedProductGroups(
         ),
       },
     };
+  });
+}
+
+function collectCategoryOptionItemIds(
+  groups: DetailGroup[] | null | undefined
+): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  const visit = (list: DetailGroup[] | null | undefined) => {
+    for (const group of list ?? []) {
+      for (const item of group.linkedCategory?.items ?? []) {
+        if (item?.id && !seen.has(item.id)) {
+          seen.add(item.id);
+          ids.push(item.id);
+        }
+      }
+      visit(group.linkedProduct?.attributeGroups ?? undefined);
+    }
+  };
+  visit(groups);
+  return ids;
+}
+
+function attachNestedGroupsToCategoryItems(
+  groups: DetailGroup[] | null | undefined,
+  groupsByItemId: Map<string, DetailGroup[]>,
+  itemsByCategory: Map<string, Array<Record<string, unknown>>>
+): DetailGroup[] {
+  return (groups ?? []).map((group) => {
+    const linkedCategory = group.linkedCategory
+      ? {
+          ...group.linkedCategory,
+          items: (group.linkedCategory.items ?? []).map((item) => {
+            const nested = groupsByItemId.get(item.id) ?? [];
+            if (nested.length === 0) return item;
+            return {
+              ...item,
+              attributeGroups: attachCategoryItemsToGroups(
+                nested,
+                itemsByCategory
+              ),
+            };
+          }),
+        }
+      : group.linkedCategory;
+    const linkedProduct = group.linkedProduct
+      ? {
+          ...group.linkedProduct,
+          attributeGroups: attachNestedGroupsToCategoryItems(
+            group.linkedProduct.attributeGroups ?? [],
+            groupsByItemId,
+            itemsByCategory
+          ),
+        }
+      : group.linkedProduct;
+    return { ...group, linkedCategory, linkedProduct };
   });
 }
 
@@ -619,13 +691,64 @@ async function loadCustomerMenuProductDetailUncached(options: {
       itemsByCategory.set(categoryId, items);
     }
 
-    const hydratedGroups = attachCategoryItemsToGroups(
+    let hydratedGroups = attachCategoryItemsToGroups(
       groupsWithNested,
       itemsByCategory
     ).filter((group) => {
       if (group.sourceType === 'PRODUCT') return group.linkedProduct != null;
       return categoryHasProducts(group.linkedCategory ?? undefined);
     });
+
+    const optionItemIds = collectCategoryOptionItemIds(hydratedGroups);
+    if (optionItemIds.length > 0) {
+      const optionNestedGroups = await loadAttributeGroupsByMenuItemIds(
+        optionItemIds,
+        mode
+      );
+      const nestedGroupList = [...optionNestedGroups.values()].flat();
+      const nestedCategoryIds = collectLinkedCategoryIdsFromGroups(
+        nestedGroupList
+      ).filter((id) => !itemsByCategory.has(id));
+      const nestedProductIds = collectLinkedProductIdsFromGroups(
+        nestedGroupList
+      ).filter((id) => !nestedByProduct.has(id));
+
+      const [nestedItemsByCategory, nestedProductGroups] = await Promise.all([
+        nestedCategoryIds.length > 0
+          ? loadOptionCardsByCategoryIds(
+              restaurantId,
+              nestedCategoryIds,
+              mode
+            )
+          : Promise.resolve(
+              new Map<string, Array<Record<string, unknown>>>()
+            ),
+        nestedProductIds.length > 0
+          ? loadAttributeGroupsByMenuItemIds(nestedProductIds, mode)
+          : Promise.resolve(new Map<string, DetailGroup[]>()),
+      ]);
+
+      for (const [categoryId, items] of nestedItemsByCategory) {
+        itemsByCategory.set(categoryId, items);
+      }
+      for (const [id, groups] of nestedProductGroups) {
+        nestedByProduct.set(id, groups);
+      }
+
+      const optionNestedWithProducts = new Map<string, DetailGroup[]>();
+      for (const [itemId, groups] of optionNestedGroups) {
+        optionNestedWithProducts.set(
+          itemId,
+          attachNestedProductGroups(groups, nestedByProduct)
+        );
+      }
+
+      hydratedGroups = attachNestedGroupsToCategoryItems(
+        hydratedGroups,
+        optionNestedWithProducts,
+        itemsByCategory
+      );
+    }
 
     const imageUrl = customerMenuItemImageUrl(item.id, {
       slug: options.slug,

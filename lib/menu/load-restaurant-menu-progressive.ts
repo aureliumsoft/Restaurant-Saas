@@ -4,6 +4,7 @@ import {
   menuItemBrowseListSelect,
   menuItemPosCatalogSelect,
 } from '@/lib/menu/menu-item-list-select';
+import { MENU_ITEM_CATEGORY_LINK_DATE_ORDER } from '@/lib/menu/product-order';
 import {
   imageMetaByMenuItemIds,
   mapBrowseListItem,
@@ -157,7 +158,7 @@ export async function loadRestaurantPosMenuCatalog(
       }),
       db.menuItemCategory.findMany({
         where: { category: frontCategoryWhere },
-        orderBy: [{ sortOrder: 'asc' }, { menuItem: { name: 'asc' } }],
+        orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
         select: { categoryId: true, menuItemId: true },
       }),
       db.menuItem.findMany({

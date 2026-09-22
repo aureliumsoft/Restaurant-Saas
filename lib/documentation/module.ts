@@ -1,11 +1,33 @@
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
+import {
+  parseBilingualInput,
+  parseStoredBilingualText,
+  serializeBilingualInput,
+  serializeBilingualText,
+} from '@/lib/menu/bilingual-text';
 
 export const DOC_MODULE_STATUSES = ['DRAFT', 'PUBLISHED'] as const;
 
+/** Persist editor `en &&&& es` (or stored JSON) into DB bilingual JSON. */
+export function persistDocBilingualName(raw: string): string {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('{')) {
+    const parts = parseStoredBilingualText(trimmed);
+    if (!parts.en && !parts.es) return '';
+    return serializeBilingualText(parts);
+  }
+  return serializeBilingualInput(trimmed);
+}
+
 export function slugifyDocLabel(raw: string): string {
-  const base = raw
+  const english =
+    parseBilingualInput(raw).en ||
+    parseStoredBilingualText(raw).en ||
+    raw;
+  const base = english
     .trim()
     .toLowerCase()
     .normalize('NFKD')
@@ -16,8 +38,41 @@ export function slugifyDocLabel(raw: string): string {
   return base || `item-${Date.now().toString(36)}`;
 }
 
-export const documentationHeadingWriteSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required').max(200),
+const optionalCmsField = (max: number) =>
+  z.string().trim().max(max).optional().or(z.literal(''));
+
+function assertBilingualName(
+  value: string,
+  ctx: z.RefinementCtx,
+  path: string[]
+) {
+  const parts = parseBilingualInput(value);
+  if (!parts.en) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'English name (before &&&&) is required',
+      path,
+    });
+  }
+  if (parts.en.length > 200) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'English name must be ≤ 200 characters',
+      path,
+    });
+  }
+  if (parts.es.length > 200) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Spanish name must be ≤ 200 characters',
+      path,
+    });
+  }
+}
+
+const documentationHeadingWriteBase = z.object({
+  /** Editor: `English &&&& Spanish` (or stored JSON). */
+  name: z.string().trim().min(1, 'Name is required').max(500),
   slug: z
     .string()
     .trim()
@@ -29,9 +84,20 @@ export const documentationHeadingWriteSchema = z.object({
   status: z.enum(DOC_MODULE_STATUSES).optional(),
 });
 
-export const documentationSubHeadingWriteSchema = z.object({
+export const documentationHeadingWriteSchema =
+  documentationHeadingWriteBase.superRefine((val, ctx) => {
+    assertBilingualName(val.name, ctx, ['name']);
+  });
+
+export const documentationHeadingPatchSchema =
+  documentationHeadingWriteBase.partial().superRefine((val, ctx) => {
+    if (val.name !== undefined) assertBilingualName(val.name, ctx, ['name']);
+  });
+
+const documentationSubHeadingWriteBase = z.object({
   headingId: z.string().trim().min(1, 'Heading is required'),
-  name: z.string().trim().min(1, 'Name is required').max(200),
+  /** Editor: `English &&&& Spanish` (or stored JSON). */
+  name: z.string().trim().min(1, 'Name is required').max(500),
   slug: z
     .string()
     .trim()
@@ -42,26 +108,44 @@ export const documentationSubHeadingWriteSchema = z.object({
   sortOrder: z.number().int().min(0).max(10_000).optional(),
   status: z.enum(DOC_MODULE_STATUSES).optional(),
 });
+
+export const documentationSubHeadingWriteSchema =
+  documentationSubHeadingWriteBase.superRefine((val, ctx) => {
+    assertBilingualName(val.name, ctx, ['name']);
+  });
+
+export const documentationSubHeadingPatchSchema =
+  documentationSubHeadingWriteBase.partial().superRefine((val, ctx) => {
+    if (val.name !== undefined) assertBilingualName(val.name, ctx, ['name']);
+  });
 
 export const documentationModuleWriteSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(200),
+  nameEs: optionalCmsField(200),
   shortDescription: z
     .string()
     .trim()
     .min(1, 'Short description is required')
     .max(1000),
+  shortDescriptionEs: optionalCmsField(1000),
   contentHtml: z.string().trim().min(1, 'Detail is required').max(2_800_000),
+  contentHtmlEs: optionalCmsField(2_800_000),
   sortOrder: z.number().int().min(0).max(10_000).optional(),
   status: z.enum(DOC_MODULE_STATUSES).optional(),
   headingId: z.string().trim().min(1).nullable().optional(),
   subHeadingId: z.string().trim().min(1).nullable().optional(),
   /** Optional free-text sub heading; resolved/created on write when set. */
-  subHeadingName: z.string().trim().max(200).optional(),
+  subHeadingName: z.string().trim().max(500).optional(),
 });
 
 export type DocumentationModuleWriteInput = z.infer<
   typeof documentationModuleWriteSchema
 >;
+
+export function nullIfBlankCms(value: string | undefined): string | null {
+  const trimmed = (value ?? '').trim();
+  return trimmed || null;
+}
 
 export function sanitizeDocHtml(html: string): string {
   return html
@@ -117,11 +201,17 @@ export async function resolveDocumentationLinks(opts: {
         status: 400,
       };
     }
+    const persistedName = persistDocBilingualName(name);
     const slug = slugifyDocLabel(name);
+    const english = parseBilingualInput(name).en || name;
     let sub = await db.documentationSubHeading.findFirst({
       where: {
         headingId,
-        OR: [{ slug }, { name: { equals: name, mode: 'insensitive' } }],
+        OR: [
+          { slug },
+          { name: { equals: persistedName, mode: 'insensitive' } },
+          { name: { equals: english, mode: 'insensitive' } },
+        ],
       },
       select: { id: true },
     });
@@ -130,7 +220,7 @@ export async function resolveDocumentationLinks(opts: {
         sub = await db.documentationSubHeading.create({
           data: {
             headingId,
-            name,
+            name: persistedName,
             slug,
             status: 'PUBLISHED',
           },

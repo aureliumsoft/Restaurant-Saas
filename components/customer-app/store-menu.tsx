@@ -10,6 +10,7 @@ import {
 } from '@/lib/customer-menu-client';
 import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
 import { ProductCardSkeletonGrid } from '@/components/menu/product-card-skeleton';
+import { useBilingualText } from '@/hooks/use-bilingual-text';
 
 type MenuItemLite = {
   id: string;
@@ -23,6 +24,7 @@ type MenuItemLite = {
 
 export function StoreMenu({ slug }: { slug: string }) {
   const { formatMoney } = useRestaurantRegional(slug);
+  const { resolve } = useBilingualText();
 
   const categoryItemsUrl = useCallback(
     (categoryId: string, page: number, limit: number) =>
@@ -47,12 +49,12 @@ export function StoreMenu({ slug }: { slug: string }) {
     () =>
       progressiveCategories.map((c) => ({
         id: c.id,
-        name: c.name,
+        name: resolve(c.name),
         items: c.items,
         loading: c.loading,
         loaded: c.loaded,
       })),
-    [progressiveCategories]
+    [progressiveCategories, resolve]
   );
 
   const menuLoading = categoriesLoading && categories.length === 0;
@@ -95,7 +97,12 @@ export function StoreMenu({ slug }: { slug: string }) {
               />
             ) : cat.items.length === 0 ? null : (
               <ul className="grid gap-4 sm:grid-cols-2">
-                {cat.items.map((item) => (
+                {cat.items.map((item) => {
+                  const displayName = resolve(item.name);
+                  const displayDescription = item.description
+                    ? resolve(item.description)
+                    : null;
+                  return (
                   <li
                     key={item.id}
                     className="group flex gap-4 rounded-2xl border border-[var(--restaurant-glass-border,#e2e8f0)] bg-white/90 p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md"
@@ -103,18 +110,18 @@ export function StoreMenu({ slug }: { slug: string }) {
                     <LazyMenuProductImage
                       src={item.imageUrl ?? null}
                       hasImage={item.hasImage ?? Boolean(item.imageUrl)}
-                      alt={item.name}
+                      alt={displayName}
                       className="h-20 w-20 shrink-0 rounded-xl"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-medium text-[#0f172a] group-hover:text-primary">
-                            {item.name}
+                            {displayName}
                           </p>
-                          {item.description ? (
+                          {displayDescription ? (
                             <p className="mt-1 line-clamp-2 text-sm text-[#64748b]">
-                              {item.description}
+                              {displayDescription}
                             </p>
                           ) : null}
                         </div>
@@ -138,7 +145,8 @@ export function StoreMenu({ slug }: { slug: string }) {
                       </div>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </section>

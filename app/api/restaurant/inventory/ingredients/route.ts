@@ -9,6 +9,7 @@ import {
   seedBranchStockForIngredient,
   syncIngredientTotalQuantity,
 } from '@/lib/inventory/branch-stock';
+import { createInventoryRestockExpense } from '@/lib/expenses/create-expense';
 import { ingredientCreateSchema } from '@/lib/inventory/validation';
 import {
   buildPaginationMeta,
@@ -184,6 +185,18 @@ export async function POST(req: NextRequest) {
         minQuantity: parsed.data.minQuantity ?? null,
       });
       await syncIngredientTotalQuantity(tx, ingredient.id);
+      if (parsed.data.quantity > 0 && activeBranchId) {
+        await createInventoryRestockExpense(tx, {
+          restaurantId: auth.restaurant.id,
+          branchId: activeBranchId,
+          ingredientId: ingredient.id,
+          ingredientName: ingredient.name,
+          deltaQty: parsed.data.quantity,
+          unitCost: parsed.data.unitCost ?? null,
+          expenseAmount: parsed.data.expenseAmount,
+          createdByUserId: auth.user.id,
+        });
+      }
       return ingredient;
     });
     publishInventoryStockUpdate(auth.restaurant.id, activeBranchId);

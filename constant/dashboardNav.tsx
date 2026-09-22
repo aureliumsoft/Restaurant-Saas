@@ -1,34 +1,42 @@
 import type { DashboardModuleKey } from '@/constant/dashboardModules';
+import type { DashboardNavGroupKey } from '@/lib/dashboard-nav-i18n';
 
 export type DashboardNavGroupDef = {
-  label: string;
+  groupKey: DashboardNavGroupKey;
   moduleKeys: DashboardModuleKey[];
 };
 
 /** Sidebar sections for the restaurant dashboard (order preserved). */
 export const DASHBOARD_NAV_GROUPS: DashboardNavGroupDef[] = [
   {
-    label: 'Overview',
+    groupKey: 'overview',
     moduleKeys: ['dashboard'],
   },
   {
-    label: 'Operations',
+    groupKey: 'operations',
     moduleKeys: ['sales', 'pos', 'kds', 'order-display'],
   },
   {
-    label: 'Locations',
+    groupKey: 'locations',
     moduleKeys: ['branched', 'tables'],
   },
   {
-    label: 'Catalog',
-    moduleKeys: ['categories', 'variations', 'product', 'inventory', 'recommendations'],
+    groupKey: 'catalog',
+    moduleKeys: [
+      'categories',
+      'final-view',
+      'variations',
+      'product',
+      'inventory',
+      'recommendations',
+    ],
   },
   {
-    label: 'Finance',
-    moduleKeys: ['records'],
+    groupKey: 'finance',
+    moduleKeys: ['records', 'expenses', 'reports'],
   },
   {
-    label: 'Settings',
+    groupKey: 'settingsGroup',
     moduleKeys: ['settings'],
   },
 ];

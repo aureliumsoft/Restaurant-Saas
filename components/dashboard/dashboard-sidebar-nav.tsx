@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { IconExternalLink } from '@tabler/icons-react';
+import { useTranslation } from 'react-i18next';
 
 import { isDashboardNavItemActive } from '@/lib/dashboard-nav';
+import { dashboardNavGroupLabelKey } from '@/lib/dashboard-nav-i18n';
 import { cn } from '@/lib/utils';
 import type { NavItem } from '@/types/Navbar';
 
@@ -20,14 +22,15 @@ function opensInNewTab(item: NavItem) {
 
 export function DashboardSidebarNav({ onNavigate }: DashboardSidebarNavProps) {
   const pathname = usePathname();
+  const { t } = useTranslation();
   const navGroups = useDashboardNavGroups();
 
   return (
     <nav className="space-y-6 px-1.5">
       {navGroups.map((group) => (
-        <div key={group.label} className="space-y-1.5">
+        <div key={group.groupKey} className="space-y-1.5">
           <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
-            {group.label}
+            {t(dashboardNavGroupLabelKey(group.groupKey))}
           </p>
           <div className="grid gap-0.5">
             {group.items.map((item) => {

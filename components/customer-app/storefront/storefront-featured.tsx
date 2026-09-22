@@ -6,6 +6,7 @@ import { Flame, Loader2, Tag } from 'lucide-react';
 
 import { GlassPanel, SectionHeading } from '@/components/customer-app/storefront/glass-panel';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useBilingualText } from '@/hooks/use-bilingual-text';
 
 type MenuItem = {
   id: string;
@@ -33,6 +34,7 @@ function pickFeatured(items: MenuItem[]): MenuItem[] {
 export function StorefrontFeatured({ slug }: { slug: string }) {
   const { t } = useTranslation();
   const { formatMoney } = useRestaurantRegional(slug);
+  const { resolve } = useBilingualText();
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -54,6 +56,8 @@ export function StorefrontFeatured({ slug }: { slug: string }) {
         const flat: MenuItem[] = menus.flatMap((cat) =>
           (cat.items ?? []).map((item) => ({
             ...item,
+            name: item.name,
+            description: item.description,
             categoryName: cat.name,
           }))
         );
@@ -90,6 +94,11 @@ export function StorefrontFeatured({ slug }: { slug: string }) {
             const onSale =
               item.salePrice != null && item.salePrice < item.price;
             const displayPrice = onSale ? item.salePrice! : item.price;
+            const displayName = resolve(item.name);
+            const displayDescription = item.description
+              ? resolve(item.description)
+              : null;
+            const displayCategory = resolve(item.categoryName);
 
             return (
               <a
@@ -106,7 +115,7 @@ export function StorefrontFeatured({ slug }: { slug: string }) {
                     />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center text-2xl font-bold text-primary/40">
-                      {item.name.charAt(0)}
+                      {displayName.charAt(0)}
                     </span>
                   )}
                   {onSale ? (
@@ -118,14 +127,14 @@ export function StorefrontFeatured({ slug }: { slug: string }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                    {item.categoryName}
+                    {displayCategory}
                   </p>
                   <p className="truncate font-semibold text-[#0f172a] group-hover:text-primary">
-                    {item.name}
+                    {displayName}
                   </p>
-                  {item.description ? (
+                  {displayDescription ? (
                     <p className="mt-0.5 line-clamp-2 text-xs text-[#64748b]">
-                      {item.description}
+                      {displayDescription}
                     </p>
                   ) : null}
                   <div className="mt-2 flex items-baseline gap-2">

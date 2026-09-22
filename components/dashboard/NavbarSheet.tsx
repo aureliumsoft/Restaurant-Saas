@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslation } from 'react-i18next';
+
 import { DashboardSidebarNav } from '@/components/dashboard/dashboard-sidebar-nav';
 import { SheetContent } from '@/components/ui/sheet';
 import { useRestaurantBranding } from '@/components/layout/restaurant-branding-provider';

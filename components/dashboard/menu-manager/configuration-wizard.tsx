@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, Children } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Dispatch, SetStateAction } from 'react';
 import { ChevronDown, Loader2, Save, Search, Trash2 } from 'lucide-react';
 
@@ -8,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import {
   isCategoryEligibleForRecommendations,
   isMenuCategoryShownInFront,
@@ -241,6 +243,7 @@ function SavedSummaryList({
   deletingOfferId: string | null;
   savingPersonalize?: boolean;
 }) {
+  const { t } = useTranslation();
   const sizeLabel =
     (selected.variations?.length ?? 0) > 0
       ? selected
@@ -262,7 +265,9 @@ function SavedSummaryList({
       {sizeLabel ? (
         <div className="flex items-start justify-between gap-3 rounded-xl border border-border px-3 py-2.5">
           <div className="min-w-0">
-            <p className="text-sm font-medium">Size</p>
+            <p className="text-sm font-medium">
+              {t('dashboard.menuManager.wizard.size')}
+            </p>
             <p className="text-xs text-muted-foreground">{sizeLabel}</p>
           </div>
           <Badge variant="secondary" className="shrink-0 text-[10px]">
@@ -277,7 +282,9 @@ function SavedSummaryList({
           className="flex items-start justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
         >
           <div className="min-w-0">
-            <p className="text-sm font-medium">{g.name}</p>
+            <p className="text-sm font-medium">
+              {resolveBilingualText(g.name, 'en')}
+            </p>
             <p className="text-xs text-muted-foreground">
               {g.sourceType === 'PRODUCT'
                 ? (g.linkedProduct?.name ?? 'Product')
@@ -300,7 +307,7 @@ function SavedSummaryList({
               variant="ghost"
               className="h-8 w-8 text-destructive"
               onClick={() => onDeleteGroup(g.id)}
-              aria-label={`Remove ${g.name}`}
+              aria-label={`Remove ${resolveBilingualText(g.name, 'en')}`}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -314,7 +321,9 @@ function SavedSummaryList({
           className="flex items-start justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
         >
           <div className="min-w-0">
-            <p className="text-sm font-medium">{g.parentName}</p>
+            <p className="text-sm font-medium">
+              {resolveBilingualText(g.parentName, 'en')}
+            </p>
             <p className="text-xs text-muted-foreground">
               {g.options
                 .filter((o) => o.name.trim())
@@ -335,7 +344,7 @@ function SavedSummaryList({
                 className="h-8 w-8 text-destructive"
                 disabled={savingPersonalize}
                 onClick={() => onDeletePersonalizeGroup(i)}
-                aria-label={`Remove ${g.parentName}`}
+                aria-label={`Remove ${resolveBilingualText(g.parentName, 'en')}`}
               >
                 {savingPersonalize ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -351,7 +360,9 @@ function SavedSummaryList({
       {currentDeals.length > 0 ? (
         <div className="rounded-xl border border-border px-3 py-2.5">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-sm font-medium">Recommended deals (Popup)</p>
+            <p className="text-sm font-medium">
+              {t('dashboard.menuManager.wizard.recommendedDealsPopup')}
+            </p>
             <Badge variant="secondary" className="text-[10px]">
               Deals
             </Badge>
@@ -387,7 +398,9 @@ function SavedSummaryList({
       {currentOffers.length > 0 ? (
         <div className="rounded-xl border border-border px-3 py-2.5">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-sm font-medium">Recommended products (Cart)</p>
+            <p className="text-sm font-medium">
+              {t('dashboard.menuManager.wizard.recommendedProductsCart')}
+            </p>
             <Badge variant="secondary" className="text-[10px]">
               Cart
             </Badge>
@@ -475,6 +488,8 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     formResetKeys,
     draftByVariant,
   } = props;
+
+  const { t } = useTranslation();
 
   const isSaving =
     savingRules ||
@@ -949,26 +964,30 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               {step === 0 ? (
                 <div className="space-y-4">
                   <StepHeader
-                    title="Besides size, can customers customize this?"
-                    hint="Most pizzas need toppings. Drinks usually don’t."
+                    title={t('dashboard.menuManager.wizard.customizeQuestion')}
+                    hint={t('dashboard.menuManager.wizard.customizeHint')}
                   />
                   <div className="space-y-2">
                     <ChoiceCard
                       active
-                      title="Yes — they pick extras or options"
-                      description="Toppings, sauce, sides, “well done”, etc."
+                      title={t('dashboard.menuManager.wizard.yesCustomize')}
+                      description={t(
+                        'dashboard.menuManager.wizard.yesCustomizeDesc'
+                      )}
                       onClick={() => setStep(1)}
                     />
                     <ChoiceCard
                       active={false}
-                      title="No — size (or price) is enough"
-                      description="Skip to optional deals and cart upsells"
+                      title={t('dashboard.menuManager.wizard.noCustomize')}
+                      description={t(
+                        'dashboard.menuManager.wizard.noCustomizeDesc'
+                      )}
                       onClick={() => setStep(4)}
                     />
                   </div>
                   <WizardActions>
                     <Button type="button" onClick={() => setStep(1)}>
-                      Continue
+                      {t('continue')}
                     </Button>
                   </WizardActions>
                 </div>
@@ -977,38 +996,50 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               {step === 1 ? (
                 <div className="space-y-4">
                   <StepHeader
-                    title="What are they choosing?"
-                    hint="Pick the closest match. You can add more after this."
+                    title={t('dashboard.menuManager.wizard.whatAreTheyChoosing')}
+                    hint={t(
+                      'dashboard.menuManager.wizard.whatAreTheyChoosingHint'
+                    )}
                   />
                   <div className="space-y-2">
                     <ChoiceCard
                       active={kind === 'cat-many'}
-                      title="Many extras from a category"
-                      description="e.g. whole Toppings category — pick several"
+                      title={t('dashboard.menuManager.wizard.manyFromCategory')}
+                      description={t(
+                        'dashboard.menuManager.wizard.manyFromCategoryDesc'
+                      )}
                       onClick={() => applyKindDefaults('cat-many')}
                     />
                     <ChoiceCard
                       active={kind === 'cat-one'}
-                      title="Exactly one from a category"
-                      description="e.g. sauces — must pick one"
+                      title={t('dashboard.menuManager.wizard.oneFromCategory')}
+                      description={t(
+                        'dashboard.menuManager.wizard.oneFromCategoryDesc'
+                      )}
                       onClick={() => applyKindDefaults('cat-one')}
                     />
                     <ChoiceCard
                       active={kind === 'prod-many'}
-                      title="Specific products (pick several)"
-                      description="Hand-pick which menu items appear as add-ons"
+                      title={t('dashboard.menuManager.wizard.manyProducts')}
+                      description={t(
+                        'dashboard.menuManager.wizard.manyProductsDesc'
+                      )}
                       onClick={() => applyKindDefaults('prod-many')}
                     />
                     <ChoiceCard
                       active={kind === 'prod-one'}
-                      title="One specific product option"
-                      description="Guests pick from products you link (e.g. one side)"
+                      title={t('dashboard.menuManager.wizard.oneProduct')}
+                      description={t(
+                        'dashboard.menuManager.wizard.oneProductDesc'
+                      )}
                       onClick={() => applyKindDefaults('prod-one')}
                     />
                     <ChoiceCard
                       active={kind === 'prefs'}
-                      title="Free notes / preferences"
-                      description="No extra charge — “well done”, “cut in 8”"
+                      title={t('dashboard.menuManager.wizard.freePreferences')}
+                      description={t(
+                        'dashboard.menuManager.wizard.freePreferencesDesc'
+                      )}
                       onClick={() => applyKindDefaults('prefs')}
                     />
                   </div>
@@ -1018,10 +1049,10 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                       variant="outline"
                       onClick={() => setStep(0)}
                     >
-                      Back
+                      {t('dashboard.common.back')}
                     </Button>
                     <Button type="button" onClick={() => setStep(2)}>
-                      Continue
+                      {t('continue')}
                     </Button>
                   </WizardActions>
                 </div>
@@ -1070,8 +1101,8 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               {step === 2 && kind === 'prefs' ? (
                 <div className="space-y-4">
                   <StepHeader
-                    title="What preferences can they tap?"
-                    hint="Free options — set a max, add photos, and multiple groups if needed."
+                    title={t('dashboard.menuManager.wizard.preferencesQuestion')}
+                    hint={t('dashboard.menuManager.wizard.preferencesHint')}
                   />
                   <PersonalizeConfigSection
                     groups={wizardPrefDraft}
@@ -1085,7 +1116,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                       variant="outline"
                       onClick={() => setStep(1)}
                     >
-                      Back
+                      {t('dashboard.common.back')}
                     </Button>
                   </WizardActions>
                 </div>
@@ -1094,14 +1125,16 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               {step === 3 ? (
                 <div className="space-y-4">
                   <StepHeader
-                    title="Anything else?"
-                    hint="Stack more choices, or suggest deals & cart items."
+                    title={t('dashboard.menuManager.wizard.anythingElse')}
+                    hint={t('dashboard.menuManager.wizard.anythingElseHint')}
                   />
                   <div className="space-y-2.5">
                     <ChoiceCard
                       active={false}
-                      title="Add another choice"
-                      description="e.g. sauce, linked sides, or preferences"
+                      title={t('dashboard.menuManager.wizard.addAnotherChoice')}
+                      description={t(
+                        'dashboard.menuManager.wizard.addAnotherChoiceDesc'
+                      )}
                       onClick={() => {
                         resetConfigureState();
                         setStep(1);
@@ -1109,20 +1142,30 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                     />
                     <ChoiceCard
                       active
-                      title="Recommended deals (Popup)"
-                      description="Suggest deals/menus when guests select this item (e.g. Tacos Deal popup)"
+                      title={t(
+                        'dashboard.menuManager.wizard.recommendedDealsPopup'
+                      )}
+                      description={t(
+                        'dashboard.menuManager.wizard.recommendedDealsPopupDesc'
+                      )}
                       onClick={() => setStep(4)}
                     />
                     <ChoiceCard
                       active={false}
-                      title="Recommended products (Cart)"
-                      description="Suggest add-ons or upsells in the cart when this item is ordered"
+                      title={t(
+                        'dashboard.menuManager.wizard.recommendedProductsCart'
+                      )}
+                      description={t(
+                        'dashboard.menuManager.wizard.recommendedProductsCartDesc'
+                      )}
                       onClick={() => setStep(5)}
                     />
                     <ChoiceCard
                       active={false}
-                      title="I’m finished"
-                      description="Review what’s configured below"
+                      title={t('dashboard.menuManager.wizard.imFinished')}
+                      description={t(
+                        'dashboard.menuManager.wizard.imFinishedDesc'
+                      )}
                       onClick={() => setStep('done')}
                     />
                   </div>
@@ -1206,7 +1249,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                       variant="outline"
                       onClick={() => setStep(3)}
                     >
-                      Back
+                      {t('dashboard.common.back')}
                     </Button>
                     <Button
                       type="button"
@@ -1223,10 +1266,10 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                       {savingDeals ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving…
+                          {t('onboarding.step2.saving')}
                         </>
                       ) : (
-                        'Save recommended deals'
+                        t('dashboard.menuManager.wizard.saveRecommendedDeals')
                       )}
                     </Button>
                   </WizardActions>
@@ -1310,7 +1353,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                       variant="outline"
                       onClick={() => setStep(4)}
                     >
-                      Back
+                      {t('dashboard.common.back')}
                     </Button>
                     <Button
                       type="button"
@@ -1327,10 +1370,10 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                       {savingOffers ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving…
+                          {t('onboarding.step2.saving')}
                         </>
                       ) : (
-                        'Save cart recommendations'
+                        t('dashboard.menuManager.wizard.saveCartRecommendations')
                       )}
                     </Button>
                   </WizardActions>
@@ -1340,8 +1383,8 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               {step === 'done' ? (
                 <div className="space-y-4">
                   <StepHeader
-                    title="You’re all set"
-                    hint="Review the live preview on the right. Add more anytime."
+                    title={t('dashboard.menuManager.wizard.youreAllSet')}
+                    hint={t('dashboard.menuManager.wizard.youreAllSetHint')}
                   />
                   <WizardActions>
                     <Button
@@ -1430,6 +1473,7 @@ function ClassicConfigSections({
   formResetKeys,
   draftByVariant,
 }: ConfigurationWizardProps) {
+  const { t } = useTranslation();
   const isSaving =
     savingRules ||
     savingDeals ||
@@ -1475,8 +1519,8 @@ function ClassicConfigSections({
 
       <RecommendationConfigSectionShell
         step={5}
-        title="Personalize items"
-        description="Optional guest preferences — no price change."
+        title={t('dashboard.menuManager.wizard.personalizeTitle')}
+        description={t('dashboard.menuManager.wizard.personalizeDesc')}
       >
         <PersonalizeConfigSection
           groups={personalizeDraft}
@@ -1489,8 +1533,8 @@ function ClassicConfigSections({
 
       <RecommendationConfigSectionShell
         step={6}
-        title="Recommended deals"
-        description="Optional deals/menus offered in a popup when guests select this product."
+        title={t('dashboard.menuManager.wizard.recommendedDeals')}
+        description={t('dashboard.menuManager.wizard.recommendedDealsDesc')}
       >
         <div>
           <p className="mb-2 text-xs font-medium text-muted-foreground">
@@ -1511,8 +1555,8 @@ function ClassicConfigSections({
                   imageUrl={cat.imageUrl}
                   subtitle={
                     isMenuCategoryShownInFront(cat)
-                      ? 'On customer menu'
-                      : 'Add-on only'
+                      ? t('dashboard.menuManager.wizard.onCustomerMenu')
+                      : t('dashboard.menuManager.wizard.addonOnly')
                   }
                   onClick={() => {
                     setDealCategoryIds((prev) => toggleInArray(prev, cat.id));
@@ -1586,12 +1630,12 @@ function ClassicConfigSections({
           {savingDeals ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving…
+              {t('onboarding.step2.saving')}
             </>
           ) : (
             <>
               <Save className="mr-2 h-4 w-4" />
-              Save recommended deals
+              {t('dashboard.menuManager.wizard.saveRecommendedDeals')}
             </>
           )}
         </Button>
@@ -1626,8 +1670,8 @@ function ClassicConfigSections({
 
       <RecommendationConfigSectionShell
         step={7}
-        title="Recommended products (Cart)"
-        description="Optional cross-sell add-ons shown in the cart when this item is in the cart."
+        title={t('dashboard.menuManager.wizard.recommendedProductsCart')}
+        description={t('dashboard.menuManager.wizard.recommendedProductsCartDesc')}
       >
         <div>
           <p className="mb-2 text-xs font-medium text-muted-foreground">
@@ -1648,8 +1692,8 @@ function ClassicConfigSections({
                   imageUrl={cat.imageUrl}
                   subtitle={
                     isMenuCategoryShownInFront(cat)
-                      ? 'On customer menu'
-                      : 'Add-on only'
+                      ? t('dashboard.menuManager.wizard.onCustomerMenu')
+                      : t('dashboard.menuManager.wizard.addonOnly')
                   }
                   onClick={() => {
                     setOfferCategoryIds((prev) => toggleInArray(prev, cat.id));
@@ -1786,7 +1830,9 @@ function SavedGroupList({
           className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm"
         >
           <div className="min-w-0">
-            <p className="font-medium">{g.name}</p>
+            <p className="font-medium">
+              {resolveBilingualText(g.name, 'en')}
+            </p>
             <p className="text-xs text-muted-foreground">
               {g.sourceType === 'PRODUCT'
                 ? `Product · ${g.linkedProduct?.name ?? '—'}`

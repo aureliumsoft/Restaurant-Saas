@@ -37,6 +37,101 @@ export function PrivacyPolicyContent() {
   );
 }
 
+export function PoliciesContent() {
+  const { t } = useTranslation();
+
+  return (
+    <SaasStaticPage
+      title={t('marketing.legalPages.policies.title')}
+      subtitle={t('marketing.legalPages.policies.subtitle')}
+    >
+      <h2 id="acceptable-use">
+        {t('marketing.legalPages.policies.sections.acceptableUse.title')}
+      </h2>
+      <p>{t('marketing.legalPages.policies.sections.acceptableUse.body')}</p>
+
+      <h2 id="accounts">{t('marketing.legalPages.policies.sections.accounts.title')}</h2>
+      <p>{t('marketing.legalPages.policies.sections.accounts.body')}</p>
+
+      <h2 id="content">{t('marketing.legalPages.policies.sections.content.title')}</h2>
+      <p>{t('marketing.legalPages.policies.sections.content.body')}</p>
+
+      <h2 id="availability">
+        {t('marketing.legalPages.policies.sections.availability.title')}
+      </h2>
+      <p>{t('marketing.legalPages.policies.sections.availability.body')}</p>
+
+      <h2 id="legal">{t('marketing.legalPages.policies.sections.related.title')}</h2>
+      <ul>
+        <li>
+          <Link href="/privacy" className="text-primary underline">
+            {t('marketing.legalPages.policies.sections.related.privacyPolicy')}
+          </Link>
+        </li>
+        <li>
+          <Link href="/subscription-returns" className="text-primary underline">
+            {t('marketing.legalPages.policies.sections.related.subscriptionReturns')}
+          </Link>
+        </li>
+        <li>
+          <Link href="/pricing" className="text-primary underline">
+            {t('marketing.legalPages.policies.sections.related.pricingPlans')}
+          </Link>
+        </li>
+      </ul>
+    </SaasStaticPage>
+  );
+}
+
+export function SubscriptionReturnsContent() {
+  const { t } = useTranslation();
+
+  return (
+    <SaasStaticPage
+      title={t('marketing.legalPages.subscriptionReturns.title')}
+      subtitle={t('marketing.legalPages.subscriptionReturns.subtitle')}
+    >
+      <h2 id="plans">
+        {t('marketing.legalPages.subscriptionReturns.sections.planChanges.title')}
+      </h2>
+      <p>{t('marketing.legalPages.subscriptionReturns.sections.planChanges.body')}</p>
+
+      <h2 id="cancellation">
+        {t('marketing.legalPages.subscriptionReturns.sections.cancellation.title')}
+      </h2>
+      <p>{t('marketing.legalPages.subscriptionReturns.sections.cancellation.body')}</p>
+
+      <h2 id="refunds">
+        {t('marketing.legalPages.subscriptionReturns.sections.refunds.title')}
+      </h2>
+      <p>{t('marketing.legalPages.subscriptionReturns.sections.refunds.body')}</p>
+
+      <h2 id="billing">
+        {t('marketing.legalPages.subscriptionReturns.sections.billingDisputes.title')}
+      </h2>
+      <p>{t('marketing.legalPages.subscriptionReturns.sections.billingDisputes.body')}</p>
+
+      <h2 id="contact">
+        {t('marketing.legalPages.subscriptionReturns.sections.contact.title')}
+      </h2>
+      <p>
+        {t('marketing.legalPages.subscriptionReturns.sections.contact.bodyPrefix')}{' '}
+        <Link href="/demo-request" className="text-primary underline">
+          {t('marketing.legalPages.subscriptionReturns.sections.contact.demoLink')}
+        </Link>{' '}
+        {t('marketing.legalPages.subscriptionReturns.sections.contact.bodyMiddle')}{' '}
+        <Link href="/pricing" className="text-primary underline">
+          {t('marketing.legalPages.subscriptionReturns.sections.contact.pricingLink')}
+        </Link>
+        .
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {t('marketing.legalPages.subscriptionReturns.sections.contact.disclaimer')}
+      </p>
+    </SaasStaticPage>
+  );
+}
+
 export function RefundPolicyContent() {
   const { t } = useTranslation();
 

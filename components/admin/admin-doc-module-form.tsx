@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
+import { AdminCmsLocaleTabs } from '@/components/admin/admin-cms-locale-tabs';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { adminCardClass } from '@/components/admin/admin-surface';
 import { Button } from '@/components/ui/button';
@@ -47,8 +48,11 @@ export type DocModuleFormValues = {
   /** Optional free text; empty = page under heading only. */
   subHeadingName: string;
   name: string;
+  nameEs: string;
   shortDescription: string;
+  shortDescriptionEs: string;
   contentHtml: string;
+  contentHtmlEs: string;
 };
 
 type HeadingOption = { id: string; name: string; slug: string };
@@ -63,8 +67,11 @@ const empty: DocModuleFormValues = {
   headingId: '',
   subHeadingName: '',
   name: '',
+  nameEs: '',
   shortDescription: '',
+  shortDescriptionEs: '',
   contentHtml: '',
+  contentHtmlEs: '',
 };
 
 function snapshot(v: DocModuleFormValues & { status: string }) {
@@ -72,8 +79,11 @@ function snapshot(v: DocModuleFormValues & { status: string }) {
     headingId: v.headingId,
     subHeadingName: v.subHeadingName.trim(),
     name: v.name.trim(),
+    nameEs: v.nameEs.trim(),
     shortDescription: v.shortDescription.trim(),
+    shortDescriptionEs: v.shortDescriptionEs.trim(),
     contentHtml: v.contentHtml.trim(),
+    contentHtmlEs: v.contentHtmlEs.trim(),
     status: v.status,
   });
 }
@@ -119,6 +129,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
 
   const [headingDialogOpen, setHeadingDialogOpen] = useState(false);
   const [newHeadingName, setNewHeadingName] = useState('');
+  const [newHeadingNameEs, setNewHeadingNameEs] = useState('');
   const [creatingHeading, setCreatingHeading] = useState(false);
 
   const isDirty = useMemo(
@@ -167,8 +178,11 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
       headingId: initial.headingId ?? '',
       subHeadingName: initial.subHeadingName ?? '',
       name: initial.name,
+      nameEs: initial.nameEs ?? '',
       shortDescription: initial.shortDescription,
+      shortDescriptionEs: initial.shortDescriptionEs ?? '',
       contentHtml: initial.contentHtml,
+      contentHtmlEs: initial.contentHtmlEs ?? '',
     });
     setStatus(initial.status === 'DRAFT' ? 'DRAFT' : 'PUBLISHED');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate by field values
@@ -177,8 +191,11 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
     initial?.headingId,
     initial?.subHeadingName,
     initial?.name,
+    initial?.nameEs,
     initial?.shortDescription,
+    initial?.shortDescriptionEs,
     initial?.contentHtml,
+    initial?.contentHtmlEs,
     initial?.status,
   ]);
 
@@ -228,12 +245,16 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
     try {
       const res = await axios.post<{ data: HeadingOption }>(
         '/api/admin/documentation-headings',
-        { name }
+        {
+          name,
+          nameEs: newHeadingNameEs.trim() ? newHeadingNameEs : '',
+        }
       );
       await loadHeadings();
       const created = res.data.data;
       setField('headingId', created.id);
       setNewHeadingName('');
+      setNewHeadingNameEs('');
       setHeadingDialogOpen(false);
       toast.success('Heading created.');
     } catch (e) {
@@ -249,8 +270,13 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
     try {
       const body = {
         name: form.name.trim(),
+        nameEs: form.nameEs.trim() ? form.nameEs : '',
         shortDescription: form.shortDescription.trim(),
+        shortDescriptionEs: form.shortDescriptionEs.trim()
+          ? form.shortDescriptionEs
+          : '',
         contentHtml: form.contentHtml || '<p></p>',
+        contentHtmlEs: form.contentHtmlEs.trim() ? form.contentHtmlEs : '',
         status: nextStatus,
         sortOrder: initial?.sortOrder ?? 0,
         headingId: form.headingId,
@@ -329,6 +355,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
                   variant="outline"
                   onClick={() => {
                     setNewHeadingName('');
+                    setNewHeadingNameEs('');
                     setHeadingDialogOpen(true);
                   }}
                 >
@@ -360,35 +387,76 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
             </>
           )}
 
-          <div className="grid gap-2">
-            <Label htmlFor="doc-name">Title</Label>
-            <Input
-              id="doc-name"
-              value={form.name}
-              onChange={(e) => setField('name', e.target.value)}
-              placeholder="e.g. Getting started with POS"
-              maxLength={200}
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="doc-short">Short description</Label>
-            <Textarea
-              id="doc-short"
-              value={form.shortDescription}
-              onChange={(e) => setField('shortDescription', e.target.value)}
-              placeholder="One or two lines under the title"
-              className="min-h-[88px]"
-              maxLength={1000}
-            />
-          </div>
-
-          <RichTextEditor
-            id="doc-detail"
-            label="Detail"
-            value={form.contentHtml}
-            onChange={(html) => setField('contentHtml', html)}
-            helperText="Full page body shown on the public documentation site."
+          <AdminCmsLocaleTabs
+            labelsNs="admin.docs"
+            english={
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="doc-name">Title</Label>
+                  <Input
+                    id="doc-name"
+                    value={form.name}
+                    onChange={(e) => setField('name', e.target.value)}
+                    placeholder="e.g. Getting started with POS"
+                    maxLength={200}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="doc-short">Short description</Label>
+                  <Textarea
+                    id="doc-short"
+                    value={form.shortDescription}
+                    onChange={(e) =>
+                      setField('shortDescription', e.target.value)
+                    }
+                    placeholder="One or two lines under the title"
+                    className="min-h-[88px]"
+                    maxLength={1000}
+                  />
+                </div>
+                <RichTextEditor
+                  id="doc-detail"
+                  label="Detail"
+                  value={form.contentHtml}
+                  onChange={(html) => setField('contentHtml', html)}
+                  helperText="Full page body shown on the public documentation site."
+                />
+              </>
+            }
+            spanish={
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="doc-name-es">Título</Label>
+                  <Input
+                    id="doc-name-es"
+                    value={form.nameEs}
+                    onChange={(e) => setField('nameEs', e.target.value)}
+                    placeholder="p. ej. Primeros pasos con el TPV"
+                    maxLength={200}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="doc-short-es">Descripción breve</Label>
+                  <Textarea
+                    id="doc-short-es"
+                    value={form.shortDescriptionEs}
+                    onChange={(e) =>
+                      setField('shortDescriptionEs', e.target.value)
+                    }
+                    placeholder="Una o dos líneas bajo el título"
+                    className="min-h-[88px]"
+                    maxLength={1000}
+                  />
+                </div>
+                <RichTextEditor
+                  id="doc-detail-es"
+                  label="Detalle"
+                  value={form.contentHtmlEs}
+                  onChange={(html) => setField('contentHtmlEs', html)}
+                  helperText="Cuerpo de la página en español (opcional)."
+                />
+              </>
+            }
           />
 
           <div className="grid gap-2">
@@ -471,6 +539,14 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
                   void createHeading();
                 }
               }}
+            />
+            <Label htmlFor="new-heading-name-es">Name (Spanish, optional)</Label>
+            <Input
+              id="new-heading-name-es"
+              value={newHeadingNameEs}
+              onChange={(e) => setNewHeadingNameEs(e.target.value)}
+              placeholder="p. ej. Primeros pasos"
+              maxLength={200}
             />
             <p className="text-xs text-muted-foreground">
               Appears as a top-level item in the public docs sidebar.

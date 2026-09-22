@@ -46,6 +46,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { useUiLanguage } from '@/hooks/use-ui-language';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 
 type BlogListItem = {
   id: string;
@@ -67,6 +69,7 @@ type BlogDetail = BlogListItem & {
 };
 
 export default function AdminBlogListPage() {
+  const lang = useUiLanguage();
   const [posts, setPosts] = useState<BlogListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -271,10 +274,18 @@ export default function AdminBlogListPage() {
                     </span>
                   </div>
                   <CardTitle className="line-clamp-2 text-lg leading-snug">
-                    {post.title}
+                    {resolveBilingualText(post.title, lang)}
                   </CardTitle>
                   <CardDescription className="line-clamp-3">
-                    {post.shortDescription.slice(0, 50)}...
+                    {(() => {
+                      const desc = resolveBilingualText(
+                        post.shortDescription,
+                        lang
+                      );
+                      return desc.length > 50
+                        ? `${desc.slice(0, 50)}...`
+                        : desc;
+                    })()}
                   </CardDescription>
                 </CardHeader>
               </button>
@@ -344,7 +355,9 @@ export default function AdminBlogListPage() {
           ) : preview ? (
             <>
               <DialogHeader>
-                <DialogTitle className="sr-only">{preview.title}</DialogTitle>
+                <DialogTitle className="sr-only">
+                  {resolveBilingualText(preview.title, lang)}
+                </DialogTitle>
               </DialogHeader>
               {preview.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -369,17 +382,19 @@ export default function AdminBlogListPage() {
                   </Badge>
                 </div>
                 <h2 className="text-2xl font-semibold tracking-tight">
-                  {preview.title}
+                  {resolveBilingualText(preview.title, lang)}
                 </h2>
                 <p className="text-base text-muted-foreground">
-                  {preview.shortDescription}
+                  {resolveBilingualText(preview.shortDescription, lang)}
                 </p>
                 <div
                   className={cn(
                     'prose prose-sm max-w-none border-t border-border/60 pt-4 dark:prose-invert',
                     '[&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6'
                   )}
-                  dangerouslySetInnerHTML={{ __html: preview.contentHtml }}
+                  dangerouslySetInnerHTML={{
+                    __html: resolveBilingualText(preview.contentHtml, lang),
+                  }}
                 />
                 <p className="border-t border-border/60 pt-4 text-sm text-muted-foreground">
                   Publish date:{' '}

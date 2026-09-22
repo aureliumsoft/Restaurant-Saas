@@ -8,14 +8,17 @@ import { OperationalHeaderRestaurantBrand } from '@/components/layout/operationa
 import { ModeToggle } from '@/components/darkmode/darkmode';
 import UserMenu from '@/components/dashboard/UserMenu';
 import { Button } from '@/components/ui/button';
+import { LanguageSwitcher } from '@/components/main/language-switcher';
+import { useTranslation } from 'react-i18next';
 
 export function KdsLayoutHeader() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   return (
     <header
       className="flex h-14 shrink-0 items-center gap-3 border-b bg-card/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-card/60"
-      aria-label="Kitchen display"
+      aria-label={t('kds.title')}
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <OperationalHeaderRestaurantBrand />

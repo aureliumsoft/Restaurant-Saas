@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { PublicAuthShell } from '@/components/marketing/public-auth-shell';
 import { IconBrandGoogleFilled } from '@tabler/icons-react';
 import { isPlatformAdminSession } from '@/lib/auth/admin';
+import { useTranslation } from 'react-i18next';
 
 function safeCallbackUrl(raw: string | null): string {
   if (!raw || !raw.startsWith('/') || raw.startsWith('//')) {
@@ -64,6 +65,7 @@ function postLoginPath(
 }
 
 function LoginForm() {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrlParam = searchParams.get('callbackUrl');
@@ -97,7 +99,7 @@ function LoginForm() {
         callbackUrl: hasExplicitCallback ? callbackUrl : '/login',
       });
     } catch (e: any) {
-      toast.error(e?.message ?? 'Failed to sign in with Google.');
+      toast.error(e?.message ?? t('auth.login.googleFailed'));
     } finally {
       setLoadingGoogle(false);
     }
@@ -106,11 +108,11 @@ function LoginForm() {
   async function handleCredentials(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) {
-      toast.error('Email is required.');
+      toast.error(t('auth.login.emailRequired'));
       return;
     }
     if (!password) {
-      toast.error('Password is required.');
+      toast.error(t('auth.login.passwordRequired'));
       return;
     }
 
@@ -129,14 +131,14 @@ function LoginForm() {
 
         toast.error(
           err === 'CredentialsSignin'
-            ? 'Invalid email or password.'
+            ? t('auth.login.invalidCredentials')
             : err === 'AccessDenied'
-              ? 'Access denied.'
+              ? t('auth.login.accessDenied')
               : err
-                ? `Login failed: ${err}`
+                ? t('auth.login.failedWithError', { error: String(err) })
                 : statusCode === 401
-                  ? 'Unauthorized (invalid credentials).'
-                  : 'Login failed.'
+                  ? t('auth.login.unauthorized')
+                  : t('auth.login.failed')
         );
         return;
       }
@@ -148,7 +150,7 @@ function LoginForm() {
       );
       router.push(nextPath);
     } catch (e: any) {
-      toast.error(e?.message ?? 'Login failed (server error).');
+      toast.error(e?.message ?? t('auth.login.serverError'));
     } finally {
       setLoading(false);
     }
@@ -156,8 +158,8 @@ function LoginForm() {
 
   return (
     <PublicAuthShell
-      title="Sign in"
-      subtitle="Use your email + password to SignIn."
+      title={t('auth.login.title')}
+      subtitle={t('auth.login.subtitle')}
     >
       <div className="flex flex-col gap-2">
         <Button
@@ -168,12 +170,12 @@ function LoginForm() {
           {loadingGoogle ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-              <span>Loading…</span>
+              <span>{t('auth.loading')}</span>
             </>
           ) : (
             <>
-              <IconBrandGoogleFilled className="mr-1 h-4 w-4" /> Continue with
-              Google
+              <IconBrandGoogleFilled className="mr-1 h-4 w-4" />{' '}
+              {t('auth.login.continueGoogle')}
             </>
           )}
         </Button>
@@ -181,12 +183,14 @@ function LoginForm() {
 
       <div className="flex flex-row gap-2 items-center">
         <div className="my-6 border-t flex-1" />
-        <div className="text-center text-sm text-muted-foreground">OR</div>
+        <div className="text-center text-sm text-muted-foreground">
+          {t('auth.or')}
+        </div>
         <div className="my-6 border-t flex-1" />
       </div>
       <form onSubmit={handleCredentials} className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t('auth.email')}</Label>
           <Input
             id="email"
             name="email"
@@ -199,7 +203,7 @@ function LoginForm() {
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">{t('auth.password')}</Label>
           <div className="relative">
             <Input
               id="password"
@@ -216,7 +220,11 @@ function LoginForm() {
               variant="ghost"
               size="icon"
               className="absolute right-0 top-0 h-9 w-9 text-muted-foreground hover:text-foreground"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={
+                showPassword
+                  ? t('auth.login.hidePassword')
+                  : t('auth.login.showPassword')
+              }
               onClick={() => setShowPassword((v) => !v)}
             >
               {showPassword ? (
@@ -237,22 +245,22 @@ function LoginForm() {
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-              <span>Signing In…</span>
+              <span>{t('auth.login.signingIn')}</span>
             </>
           ) : (
             <>
-              {' '}
-              <LogIn className="h-4 w-4 mr-2" /> <span>Login</span>
+              <LogIn className="h-4 w-4 mr-2" />{' '}
+              <span>{t('auth.login.submit')}</span>
             </>
           )}
         </Button>
 
         <div className="flex items-center justify-between text-sm">
           <Link className="text-primary underline" href="/reset-password">
-            Forgot password?
+            {t('auth.login.forgotPassword')}
           </Link>
           <Link className="text-primary underline" href="/register">
-            Create account
+            {t('auth.login.createAccount')}
           </Link>
         </div>
       </form>

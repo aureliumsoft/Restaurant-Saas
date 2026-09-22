@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 import {
   RefreshCw,
   Loader2,
@@ -261,6 +262,7 @@ function OrdersTable({
 }
 
 export function SalesOrdersTabs() {
+  const { t } = useTranslation();
   const { formatMoney: formatCurrencyAmount } = useOwnerRestaurantRegional();
   const formatMoney = (n: number | null) =>
     n == null || Number.isNaN(n) ? '—' : formatCurrencyAmount(n);
@@ -400,7 +402,11 @@ export function SalesOrdersTabs() {
         ? stats.pos
         : stats.kiosk;
   const activeLabel =
-    activeTab === 'online' ? 'Online' : activeTab === 'pos' ? 'POS' : 'Kiosk';
+    activeTab === 'online'
+      ? t('dashboard.analytics.channelOnline')
+      : activeTab === 'pos'
+        ? t('dashboard.analytics.channelPos')
+        : t('dashboard.analytics.channelKiosk');
   const activeAccent = TAB_ACCENT[activeTab];
 
   return (
@@ -408,7 +414,7 @@ export function SalesOrdersTabs() {
       <div className="grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <OrdersKpiCard
           tabName={activeLabel}
-          label="Total Orders"
+          label={t('dashboard.sales.totalOrders')}
           subtitle={formatMoney(activeStats.totalAmount)}
           value={`${activeStats.totalOrders.toLocaleString()}`}
           sparklineData={kpiSparklineFromValue(activeStats.totalAmount)}
@@ -418,7 +424,7 @@ export function SalesOrdersTabs() {
         />
         <OrdersKpiCard
           tabName={activeLabel}
-          label="Total Revenue"
+          label={t('dashboard.sales.totalRevenue')}
           value={formatMoney(activeStats.revenueAmount)}
           subtitle={`${activeStats.revenueOrders.toLocaleString()} Complete Payments`}
           sparklineData={kpiSparklineFromValue(activeStats.revenueAmount)}
@@ -428,7 +434,7 @@ export function SalesOrdersTabs() {
         />
         <OrdersKpiCard
           tabName={activeLabel}
-          label="Pending Orders"
+          label={t('dashboard.sales.pendingOrders')}
           subtitle={formatMoney(activeStats.pending.amount)}
           value={`${activeStats.pending.count.toLocaleString()}`}
           sparklineData={kpiSparklineFromValue(activeStats.pending.amount)}
@@ -438,7 +444,7 @@ export function SalesOrdersTabs() {
         />
         <OrdersKpiCard
           tabName={activeLabel}
-          label="Cancelled Orders"
+          label={t('dashboard.sales.cancelledOrders')}
           subtitle={formatMoney(activeStats.canceled.amount)}
           value={`${activeStats.canceled.count.toLocaleString()}`}
           sparklineData={kpiSparklineFromValue(activeStats.canceled.amount)}
@@ -460,7 +466,7 @@ export function SalesOrdersTabs() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="rounded-xl bg-background pl-9"
-              placeholder="Search Orders..."
+              placeholder={t('dashboard.sales.searchPlaceholder')}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
             />
@@ -503,13 +509,21 @@ export function SalesOrdersTabs() {
             }}
           >
             <SelectTrigger className="w-full rounded-xl bg-background sm:w-[160px]">
-              <SelectValue placeholder="All Filters" />
+              <SelectValue placeholder={t('dashboard.sales.filterAll')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="canceled">Canceled</SelectItem>
+              <SelectItem value="all">
+                {t('dashboard.reports.filterAllStatuses')}
+              </SelectItem>
+              <SelectItem value="completed">
+                {t('dashboard.reports.statusCompleted')}
+              </SelectItem>
+              <SelectItem value="pending">
+                {t('dashboard.reports.statusPending')}
+              </SelectItem>
+              <SelectItem value="canceled">
+                {t('dashboard.reports.statusCanceled')}
+              </SelectItem>
             </SelectContent>
           </Select>
 

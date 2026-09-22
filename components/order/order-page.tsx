@@ -34,6 +34,9 @@ import {
   ProductCardSkeletonGrid,
 } from '@/components/menu/product-card-skeleton';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
+import { useBilingualText } from '@/hooks/use-bilingual-text';
+import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import {
   fetchCustomerMenuProductDetail,
@@ -48,11 +51,9 @@ import {
   cartModifierDisplayLines,
 } from '@/lib/cart-line-display';
 import {
-  orderInfoHasContext,
   orderPathWithQuery,
 } from '@/lib/order-search-params';
 import { setUiLanguage } from '@/lib/i18n/client';
-import type { UiLanguage } from '@/lib/i18n/resources';
 import { buildStorefrontThemeVars } from '@/lib/restaurant-theme';
 import {
   readCachedRestaurantThemePrimary,
@@ -70,8 +71,8 @@ import {
 } from '@/components/order/order-menu-header';
 import { cn } from '@/lib/utils';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useOrderInfo } from '@/hooks/use-order-info';
 import { timezoneForRestaurantCountry } from '@/lib/restaurant-regional';
-import { readOrderContext } from '@/lib/order-context-storage';
 import { ArrowUp, Minus, Pencil, Plus, Search, X } from 'lucide-react';
 import type { BranchOpeningHours } from '@/lib/order-time-slots';
 
@@ -218,6 +219,7 @@ function effectiveUnitPrice(price: number, salePrice: number | null) {
 type CartModifierSelection = {
   attributeGroupId: string;
   groupName: string;
+  parentSelectionKey?: string;
   selections: { menuItemId: string; name: string; unitPrice: number }[];
 };
 
@@ -475,6 +477,11 @@ function ProductCard({
   formatMoney: (amount: number) => string;
   showCustomizeIndicator?: boolean;
 }) {
+  const { resolve } = useBilingualText();
+  const displayName = resolve(product.name);
+  const displayDescription = product.description
+    ? resolve(product.description)
+    : null;
   const priceDisplay = getMenuItemDisplayPrice(product);
   const hasSale = priceDisplay.compareAt != null;
   const isSelected = cartQty > 0;
@@ -495,7 +502,7 @@ function ProductCard({
       onMouseEnter={onPrefetch}
       onFocus={onPrefetch}
       onTouchStart={onPrefetch}
-      aria-label={`${product.name} - ${formatMoney(priceDisplay.amount)}`}
+      aria-label={`${displayName} - ${formatMoney(priceDisplay.amount)}`}
       className={cn(
         'group relative flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm transition-all duration-150 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
         isSelected
@@ -532,7 +539,7 @@ function ProductCard({
                 e.stopPropagation();
                 onDecrease?.();
               }}
-              aria-label={`Decrease ${product.name} quantity`}
+              aria-label={`Decrease ${displayName} quantity`}
               className="flex h-7 w-7 items-center justify-center rounded bg-white text-[#1f1f2e] shadow-sm transition hover:bg-white/90 active:scale-90"
             >
               <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
@@ -546,7 +553,7 @@ function ProductCard({
                 e.stopPropagation();
                 onIncrease?.();
               }}
-              aria-label={`Increase ${product.name} quantity`}
+              aria-label={`Increase ${displayName} quantity`}
               className="flex h-7 w-7 items-center justify-center rounded bg-primary text-primary-foreground shadow-sm transition hover:brightness-95 active:scale-90"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
@@ -563,11 +570,11 @@ function ProductCard({
       </div>
       <div className="flex flex-1 flex-col p-3 sm:p-3.5">
         <h3 className="line-clamp-2 text-sm sm:text-[15px] font-bold leading-snug text-primary transition-colors group-hover:text-primary">
-          {product.name}
+          {displayName}
         </h3>
-        {product.description ? (
+        {displayDescription ? (
           <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#8e8e9a]">
-            {product.description}
+            {displayDescription}
           </p>
         ) : (
           <span className="mt-1 block flex-1" />
@@ -596,17 +603,7 @@ export default function OrderPageClient({
   orderInfo: initialOrderInfo,
   initialThemePrimaryColor = null,
 }: OrderPageProps) {
-  const [storedOrderInfo, setStoredOrderInfo] = useState<OrderInfo | undefined>(
-    undefined
-  );
-
-  useEffect(() => {
-    setStoredOrderInfo(readOrderContext(orderId) ?? undefined);
-  }, [orderId]);
-
-  const orderInfo = orderInfoHasContext(initialOrderInfo)
-    ? initialOrderInfo
-    : storedOrderInfo;
+  const orderInfo = useOrderInfo(orderId, orderType, initialOrderInfo);
   const restaurantSlug =
     orderInfo?.restaurantSlug?.trim() || orderInfo?.storeId?.trim() || '';
   const { formatMoney, regional } = useRestaurantRegional(
@@ -636,7 +633,7 @@ export default function OrderPageClient({
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [branchHours, setBranchHours] = useState<BranchOpeningHours | null>(null);
   const { t, i18n } = useTranslation();
-  const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
+  const uiLang = normalizeUiLanguage(i18n.resolvedLanguage ?? i18n.language);
 
   useLayoutEffect(() => {
     const slug = orderInfo?.restaurantSlug?.trim() || null;
@@ -681,11 +678,11 @@ export default function OrderPageClient({
     () =>
       progressiveCategories.map((c) => ({
         id: c.id,
-        name: c.name,
+        name: resolveBilingualText(c.name, uiLang),
         imageUrl: c.imageUrl,
         items: c.items,
       })),
-    [progressiveCategories]
+    [progressiveCategories, uiLang]
   );
 
   const products = useMemo(
@@ -977,13 +974,17 @@ export default function OrderPageClient({
             ? crypto.randomUUID()
             : `l${Date.now()}`,
         menuItemId: product.id,
-        productName: product.name,
-        description: product.description ?? null,
+        productName: resolveBilingualText(product.name, uiLang),
+        description: product.description
+          ? resolveBilingualText(product.description, uiLang)
+          : null,
         imageUrl: product.imageUrl ?? null,
         baseUnitPrice,
         quantity: 1,
         variationId,
-        variationName: variation?.name ?? null,
+        variationName: variation?.name
+          ? resolveBilingualText(variation.name, uiLang)
+          : null,
         variationPriceOverride: variation?.priceDelta ?? undefined,
         modifiers,
         modifiersSignature,
@@ -1066,9 +1067,17 @@ export default function OrderPageClient({
         : products.filter((p) => p.categoryId === selectedCategory);
     if (!search) return base;
     const q = search.toLowerCase();
-    return base.filter((p) =>
-      (p.name + ' ' + (p.description ?? '')).toLowerCase().includes(q)
-    );
+    return base.filter((p) => {
+      const haystack = [
+        resolveBilingualText(p.name, 'en'),
+        resolveBilingualText(p.name, 'es'),
+        p.description ? resolveBilingualText(p.description, 'en') : '',
+        p.description ? resolveBilingualText(p.description, 'es') : '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
   }, [products, selectedCategory, search]);
 
   const displayedCategories = useMemo(() => {
@@ -1352,8 +1361,19 @@ export default function OrderPageClient({
     if (!customizeProduct) return [];
     return customizeProduct.attributeGroups
       .filter((g) => Boolean(g.id) && Boolean(g.selectionType))
-      .map((g) => buildCustomerAttributeGroup(g, customizeProduct.id));
-  }, [customizeProduct]);
+      .map((g) =>
+        buildCustomerAttributeGroup(
+          g,
+          customizeProduct.id,
+          (id) =>
+            customerMenuItemImageUrl(id, {
+              slug: orderInfo?.restaurantSlug,
+              subdomain: hostSubdomain,
+            }),
+          uiLang
+        )
+      );
+  }, [customizeProduct, hostSubdomain, orderInfo?.restaurantSlug, uiLang]);
 
   // Avoid server/client markup mismatches by rendering only after first mount.
   // Important: this must be AFTER all hooks to keep React Hook order stable.
@@ -1429,7 +1449,7 @@ export default function OrderPageClient({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center bg-primary text-sm font-bold text-primary-foreground transition hover:brightness-95 disabled:opacity-40"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#e5e7eb] bg-white text-sm font-bold text-[#1f1f2e] transition hover:bg-[#fafafa] disabled:opacity-40"
                       onClick={() => adjustQuantity(line.lineId, -1)}
                       aria-label="Decrease quantity"
                     >
@@ -1440,7 +1460,7 @@ export default function OrderPageClient({
                     </span>
                     <button
                       type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center bg-primary text-sm font-bold text-primary-foreground transition hover:brightness-95"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground transition hover:brightness-95"
                       onClick={() => adjustQuantity(line.lineId, 1)}
                       aria-label="Increase quantity"
                     >
@@ -1821,9 +1841,17 @@ export default function OrderPageClient({
             customizeLoadTokenRef.current += 1;
           }
         }}
-        productName={customizeProduct?.name ?? 'Product'}
+        productName={
+          customizeProduct
+            ? resolveBilingualText(customizeProduct.name, uiLang)
+            : 'Product'
+        }
         productImageUrl={customizeProduct?.imageUrl ?? null}
-        productDescription={customizeProduct?.description ?? null}
+        productDescription={
+          customizeProduct?.description
+            ? resolveBilingualText(customizeProduct.description, uiLang)
+            : null
+        }
         themePrimaryColor={themePrimaryColor}
         productBaseUnitPrice={
           customizeProduct
@@ -1837,7 +1865,10 @@ export default function OrderPageClient({
         personalizeGroups={customizeProduct?.personalizeGroups ?? []}
         variations={(customizeProduct?.variations ?? []).map((v) => ({
           id: v.id,
-          name: v.name ?? v.title ?? 'Variation',
+          name:
+            (v.name && resolveBilingualText(v.name, uiLang)) ||
+            (v.title && resolveBilingualText(v.title, uiLang)) ||
+            'Variation',
           imageUrl: v.imageUrl ?? null,
           swatchHex: v.swatchHex ?? null,
           priceDelta: v.priceDelta,
@@ -1857,6 +1888,7 @@ export default function OrderPageClient({
           const cartMods: CartModifierSelection[] = mods.map((m) => ({
             attributeGroupId: m.attributeGroupId,
             groupName: m.groupName,
+            parentSelectionKey: m.parentSelectionKey,
             selections: m.selections.map((s: MenuOption) => ({
               menuItemId: s.menuItemId,
               name: s.name,

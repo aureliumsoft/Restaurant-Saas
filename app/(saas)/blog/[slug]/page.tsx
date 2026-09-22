@@ -1,16 +1,17 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { format } from 'date-fns';
-import { ArrowLeft } from 'lucide-react';
 
+import { PublicBlogArticle } from '@/components/marketing/public-blog-article';
 import { PublicBlogShell } from '@/components/marketing/public-blog-shell';
 import { buildBlogPostMetadata } from '@/lib/blog/metadata';
 import {
   loadFeaturedBlogPosts,
   loadRecentBlogPosts,
 } from '@/lib/blog/public-queries';
+import { resolveBlogPostCms } from '@/lib/blog/resolve-public-blog';
 import { db } from '@/lib/db';
+import { resources } from '@/lib/i18n/resources';
+import { getServerUiLanguage } from '@/lib/i18n/server-ui-language';
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -18,6 +19,7 @@ export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
+  const lang = await getServerUiLanguage();
   const post = await db.blogPost.findFirst({
     where: { slug, status: 'PUBLISHED' },
     select: {
@@ -30,13 +32,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       slug: true,
     },
   });
-  if (!post) return { title: 'Blog | Foodluk' };
-  return buildBlogPostMetadata(post);
+  if (!post) {
+    return { title: resources[lang].translation.marketingExtras.blog.metaTitle };
+  }
+  const localized = resolveBlogPostCms(post, lang);
+  return buildBlogPostMetadata({
+    ...post,
+    title: localized.title,
+    shortDescription: localized.shortDescription,
+    seoTitle: localized.seoTitle,
+    seoDescription: localized.seoDescription,
+  });
 }
 
 export default async function BlogPostPage({ params }: Props) {
   const { slug } = await params;
-  const [post, featured, recent] = await Promise.all([
+  const [row, featured, recent] = await Promise.all([
     db.blogPost.findFirst({
       where: { slug, status: 'PUBLISHED' },
       select: {
@@ -51,50 +62,19 @@ export default async function BlogPostPage({ params }: Props) {
     loadRecentBlogPosts(8, slug),
   ]);
 
-  if (!post) notFound();
+  if (!row) notFound();
 
   return (
     <div className="flex min-h-[100vh] flex-col bg-gradient-to-b from-zinc-50 via-white to-zinc-50 dark:from-zinc-950 dark:via-black dark:to-zinc-950">
       <div className="mx-auto w-full flex-1 px-4 pb-20 pt-28 sm:px-6">
         <PublicBlogShell featured={featured} recent={recent}>
-          <article>
-            <Link
-              href="/blog"
-              className="mb-8 inline-flex items-center text-sm font-medium text-zinc-600 transition-colors hover:text-fire-500 dark:text-zinc-400 dark:hover:text-fire-400"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              All posts
-            </Link>
-
-            {post.publishedAt ? (
-              <p className="text-sm font-medium uppercase tracking-wide text-fire-500">
-                {format(new Date(post.publishedAt), 'MMMM d, yyyy')}
-              </p>
-            ) : null}
-
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-4xl">
-              {post.title}
-            </h1>
-            <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
-              {post.shortDescription}
-            </p>
-
-            {post.imageUrl ? (
-              <div className="mt-8 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={post.imageUrl}
-                  alt=""
-                  className="w-full object-cover"
-                />
-              </div>
-            ) : null}
-
-            <div
-              className="prose prose-zinc mt-10 max-w-none dark:prose-invert prose-headings:scroll-mt-24 prose-a:text-fire-600 dark:prose-a:text-fire-400 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6"
-              dangerouslySetInnerHTML={{ __html: post.contentHtml }}
-            />
-          </article>
+          <PublicBlogArticle
+            title={row.title}
+            shortDescription={row.shortDescription}
+            contentHtml={row.contentHtml}
+            imageUrl={row.imageUrl}
+            publishedAt={row.publishedAt?.toISOString() ?? null}
+          />
         </PublicBlogShell>
       </div>
     </div>

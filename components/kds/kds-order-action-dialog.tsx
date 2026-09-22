@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, Loader2, X } from 'lucide-react';
 
 import {
@@ -16,33 +17,6 @@ import {
 import { cn } from '@/lib/utils';
 
 export type KdsOrderActionKind = 'proceed' | 'complete' | 'cancel';
-
-const ACTION_COPY: Record<
-  KdsOrderActionKind,
-  { title: string; description: string; confirm: string; loading: string }
-> = {
-  proceed: {
-    title: 'Send to kitchen?',
-    description:
-      'This order will move to the kitchen display with the selected prep time.',
-    confirm: 'Proceed',
-    loading: 'Proceeding...',
-  },
-  complete: {
-    title: 'Mark order complete?',
-    description:
-      'This order will be marked complete and removed from the active kitchen queue.',
-    confirm: 'Complete',
-    loading: 'Completing...',
-  },
-  cancel: {
-    title: 'Cancel order?',
-    description:
-      'This order will be canceled. This action cannot be undone.',
-    confirm: 'Cancel order',
-    loading: 'Canceling...',
-  },
-};
 
 type Props = {
   open: boolean;
@@ -70,8 +44,41 @@ export function KdsOrderActionDialog({
   iconLoading = <Loader2 className="mr-2 h-4 w-4 animate-spin" />,
 }: Props) {
   const confirmClickedRef = useRef(false);
-  const copy = ACTION_COPY[kind];
+  const { t } = useTranslation();
   const isDestructive = kind === 'cancel';
+
+  const title = itemName
+    ? kind === 'proceed'
+      ? t('kds.actionProceedWithToken', { name: itemName })
+      : kind === 'complete'
+        ? t('kds.actionCompleteWithToken', { name: itemName })
+        : t('kds.actionCancelWithToken', { name: itemName })
+    : kind === 'proceed'
+      ? t('kds.actionProceedTitle')
+      : kind === 'complete'
+        ? t('kds.actionCompleteTitle')
+        : t('kds.actionCancelTitle');
+
+  const description =
+    kind === 'proceed'
+      ? t('kds.actionProceedDescription')
+      : kind === 'complete'
+        ? t('kds.actionCompleteDescription')
+        : t('kds.actionCancelDescription');
+
+  const confirmLabel =
+    kind === 'proceed'
+      ? t('kds.proceed')
+      : kind === 'complete'
+        ? t('kds.complete')
+        : t('kds.cancelOrder');
+
+  const loadingLabel =
+    kind === 'proceed'
+      ? t('kds.proceeding')
+      : kind === 'complete'
+        ? t('kds.completing')
+        : t('kds.canceling');
 
   return (
     <AlertDialog
@@ -85,17 +92,9 @@ export function KdsOrderActionDialog({
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>
-            {itemName
-              ? kind === 'proceed'
-                ? `Send order ${itemName} to kitchen?`
-                : kind === 'complete'
-                  ? `Mark order ${itemName} complete?`
-                  : `Cancel order ${itemName}?`
-              : copy.title}
-          </AlertDialogTitle>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>
-            {copy.description}
+            {description}
             {detail ? (
               <>
                 <br />
@@ -109,7 +108,7 @@ export function KdsOrderActionDialog({
         <AlertDialogFooter>
           <AlertDialogCancel type="button" onClick={onCancel} disabled={loading}>
             <X className="mr-2 h-4 w-4" />
-            Stay
+            {t('kds.stay')}
           </AlertDialogCancel>
           <AlertDialogAction
             type="button"
@@ -126,12 +125,12 @@ export function KdsOrderActionDialog({
             {loading ? (
               <>
                 {iconLoading}
-                {copy.loading}
+                {loadingLabel}
               </>
             ) : (
               <>
                 {iconConfirm}
-                {copy.confirm}
+                {confirmLabel}
               </>
             )}
           </AlertDialogAction>

@@ -59,6 +59,8 @@ function isRestaurantStaffRoute(pathname: string): boolean {
     path.startsWith('/recommendations') ||
     path.startsWith('/configurations') ||
     path.startsWith('/records') ||
+    path.startsWith('/expenses') ||
+    path.startsWith('/reports') ||
     path.startsWith('/settings') ||
     path.startsWith('/no-access') ||
     path === '/kds-screen'

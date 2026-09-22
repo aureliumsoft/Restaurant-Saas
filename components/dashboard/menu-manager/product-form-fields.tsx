@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -17,6 +18,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { getMinVariationPrice } from '@/lib/menu-item-pricing';
+import {
+  bilingualInputFromStored,
+  parseBilingualInput,
+  resolveBilingualText,
+  serializeBilingualInput,
+} from '@/lib/menu/bilingual-text';
 import {
   filterDecimalInput,
   filterNameTextInput,
@@ -124,7 +131,8 @@ function templateName(
   id: string | undefined
 ) {
   if (!id) return '';
-  return templates.find((t) => t.id === id)?.name ?? '';
+  const raw = templates.find((t) => t.id === id)?.name ?? '';
+  return raw ? resolveBilingualText(raw, 'en') : '';
 }
 
 function parseVariationRows(
@@ -168,6 +176,7 @@ export function ProductFormFields({
   ingredientRows = [],
   onIngredientRowsChange,
 }: Props) {
+  const { t: tr } = useTranslation();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const internalTemplates = useRestaurantVariationTemplates();
   const variationTemplates =
@@ -248,7 +257,9 @@ export function ProductFormFields({
     <div className="grid gap-6">
       <div className="grid gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <FieldLabel required={showRequired}>Categories</FieldLabel>
+          <FieldLabel required={showRequired}>
+            {tr('dashboard.menuManager.productsBasics.categories')}
+          </FieldLabel>
           <InventoryQuickActions
             variant="inline"
             showVariation={false}
@@ -277,7 +288,9 @@ export function ProductFormFields({
       </div>
 
       <div className="grid gap-2 ">
-        <FieldLabel required={showRequired}>Name</FieldLabel>
+        <FieldLabel required={showRequired}>
+          {tr('dashboard.menuManager.productsBasics.name')}
+        </FieldLabel>
         <Input
           type="text"
           inputMode="text"
@@ -286,25 +299,31 @@ export function ProductFormFields({
           onChange={(e) =>
             onFormChange({ name: filterNameTextInput(e.target.value) })
           }
-          placeholder="Product name"
+          placeholder={`English name ${'&&&&'} Spanish name`}
           required={showRequired}
           aria-required={showRequired || undefined}
         />
+        <p className="text-xs text-muted-foreground">
+          First English, then separator &&&&, then Spanish.
+        </p>
       </div>
 
       <div className="grid gap-2 ">
-        <Label>Description</Label>
+        <Label>{tr('dashboard.menuManager.productsBasics.description')}</Label>
         <textarea
           className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           value={form.description}
           onChange={(e) => onFormChange({ description: e.target.value })}
-          placeholder="Optional description"
+          placeholder={`English description ${'&&&&'} Spanish description`}
         />
+        <p className="text-xs text-muted-foreground">
+          First English, then separator &&&&, then Spanish.
+        </p>
       </div>
 
       <div >
         <Base64ImageUploadField
-          label="Photo"
+          label={tr('dashboard.menuManager.productsBasics.photo')}
           value={form.imageUrl}
           onChange={(v) => onFormChange({ imageUrl: v })}
           helperText="Upload image stores base64 directly in the database."
@@ -330,7 +349,7 @@ export function ProductFormFields({
             />
           </div>
           <div className="grid gap-2">
-            <Label>Sale price (optional)</Label>
+            <Label>{tr('dashboard.menuManager.productsBasics.salePrice')}</Label>
             <Input
               type="number"
               step="0.01"
@@ -419,7 +438,7 @@ export function ProductFormFields({
                       <SelectContent>
                         {selectableTemplates.map((t) => (
                           <SelectItem key={t.id} value={t.id}>
-                            {t.name}
+                            {resolveBilingualText(t.name, 'en')}
                             {t.shortLabel ? ` (${t.shortLabel})` : ''}
                           </SelectItem>
                         ))}
@@ -508,8 +527,8 @@ export function ProductFormFields({
 
 export function productFormStateFromItem(item: MenuItemRow): ProductFormState {
   return {
-    name: item.name,
-    description: item.description ?? '',
+    name: bilingualInputFromStored(item.name),
+    description: bilingualInputFromStored(item.description),
     categoryIds:
       item.categoryIds && item.categoryIds.length > 0
         ? [...item.categoryIds]
@@ -586,6 +605,7 @@ export function isProductFormValid(
   ingredientRows: IngredientRecipeRow[] = []
 ): boolean {
   if (!form.name.trim() || form.categoryIds.length === 0) return false;
+  if (!parseBilingualInput(form.name).en) return false;
   if (!isIngredientRowsValid(ingredientRows)) return false;
 
   if (variationRows.length > 0) {
@@ -664,6 +684,19 @@ export function buildProductPayload(
   if (!form.name.trim() || form.categoryIds.length === 0) {
     return { ok: false, error: 'Name and at least one category are required.' };
   }
+  if (!parseBilingualInput(form.name).en) {
+    return {
+      ok: false,
+      error: 'English name (before &&&&) is required.',
+    };
+  }
+
+  const nameStored = serializeBilingualInput(form.name);
+  const descriptionParts = parseBilingualInput(form.description);
+  const descriptionStored =
+    descriptionParts.en || descriptionParts.es
+      ? serializeBilingualInput(form.description)
+      : null;
 
   const variations = parseVariationRows(variationRows, variationTemplates).map(
     (v) => ({
@@ -698,8 +731,8 @@ export function buildProductPayload(
     return {
       ok: true,
       body: {
-        name: form.name.trim(),
-        description: form.description.trim() || null,
+        name: nameStored,
+        description: descriptionStored,
         categoryIds: form.categoryIds,
         imageUrl: form.imageUrl.trim() || null,
         price: minPrice,
@@ -726,8 +759,8 @@ export function buildProductPayload(
   return {
     ok: true,
     body: {
-      name: form.name.trim(),
-      description: form.description.trim() || null,
+      name: nameStored,
+      description: descriptionStored,
       categoryIds: form.categoryIds,
       imageUrl: form.imageUrl.trim() || null,
       price,

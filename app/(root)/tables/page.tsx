@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import ErrorBoundary from '@/components/toaster/toaster';
 import { MenuPageShell } from '@/components/dashboard/menu-manager/menu-page-shell';
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 
 function TablesPageContent() {
+  const { t } = useTranslation();
   const { settings, loading } = useRestaurantFulfillmentSettings();
 
   if (loading) {
@@ -42,8 +44,8 @@ function TablesPageContent() {
 
   return (
     <MenuPageShell
-      title="Tables"
-      description="Add, edit, or remove dining tables. They appear in the POS table selector for dine-in orders."
+      title={t('dashboard.tables.title')}
+      description={t('dashboard.tables.descriptionEnabled')}
       loading={false}
     >
       <TablesModule />

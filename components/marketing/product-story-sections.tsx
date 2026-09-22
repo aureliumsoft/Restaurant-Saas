@@ -50,7 +50,7 @@ type StationCode = 'WEB' | 'APP' | 'KSK' | 'POS' | 'KDS' | 'DSP';
 
 function useLang() {
   const { i18n } = useTranslation();
-  return storyLangFromI18n(i18n.language);
+  return storyLangFromI18n(i18n.resolvedLanguage ?? i18n.language);
 }
 
 export function ProductStoryFontScope({

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslation } from 'react-i18next';
+
 import { cn } from '@/lib/utils';
 import {
   SETTINGS_SECTIONS,
@@ -17,6 +19,7 @@ export function SettingsSectionNav({
   onSelect,
   accessAllowed = true,
 }: Props) {
+  const { t } = useTranslation();
   const sections = SETTINGS_SECTIONS.filter(
     (section) => section.id !== 'access' || accessAllowed
   );
@@ -24,7 +27,7 @@ export function SettingsSectionNav({
   return (
     <nav
       className="flex max-w-full flex-row gap-1 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] lg:flex-col lg:gap-0.5 lg:overflow-visible lg:pb-0"
-      aria-label="Settings sections"
+      aria-label={t('settings.title')}
     >
       {sections.map((section) => {
         const Icon = section.icon;
@@ -50,10 +53,10 @@ export function SettingsSectionNav({
             />
             <span className="min-w-0">
               <span className="block text-sm font-medium leading-snug">
-                {section.title}
+                {t(`settings.sections.${section.id}.title`)}
               </span>
               <span className="mt-0.5 hidden text-xs leading-snug text-muted-foreground lg:block">
-                {section.description}
+                {t(`settings.sections.${section.id}.description`)}
               </span>
             </span>
           </button>

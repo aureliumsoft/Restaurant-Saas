@@ -41,6 +41,8 @@ import {
 } from '@/lib/offline/local-tickets';
 import { isBrowserOffline } from '@/lib/offline/db';
 import { enqueueOrderOutbox, isOfflineLocalOrderId } from '@/lib/offline/outbox';
+import { LanguageSwitcher } from '@/components/main/language-switcher';
+import { useTranslation } from 'react-i18next';
 
 type Ticket = {
   id: string;
@@ -134,6 +136,7 @@ function formatCountdown(sec: number) {
 }
 
 export function KdsKitchenScreen() {
+  const { t: tr } = useTranslation();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { settings: fulfillmentSettings, loading: settingsLoading } =
     useRestaurantFulfillmentSettings();
@@ -383,23 +386,27 @@ export function KdsKitchenScreen() {
 
   return (
     <div className="min-h-screen bg-background p-4 text-foreground md:p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Kitchen Display</h1>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold">{tr('kds.title')}</h1>
           <p className="text-sm text-muted-foreground">
-            Showing all making orders
+            {tr('kds.subtitleMaking')}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => void load()}
-          disabled={refreshing}
-        >
-          <RefreshCw
-            className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
-          />
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <LanguageSwitcher variant="inline" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => void load()}
+            disabled={refreshing}
+            title={tr('kds.title')}
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
+            />
+          </Button>
+        </div>
       </div>
 
       {recommendedNames.length > 0 ? (
@@ -415,7 +422,7 @@ export function KdsKitchenScreen() {
       ) : sorted.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-sm text-muted-foreground">
-            No active making orders.
+            {tr('kds.noActiveMaking')}
           </CardContent>
         </Card>
       ) : (
@@ -437,7 +444,7 @@ export function KdsKitchenScreen() {
                           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                             <div className="flex items-baseline gap-2">
                               <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                                Token
+                                {tr('kds.token')}
                               </span>
                               <span className="font-mono text-3xl font-extrabold leading-none tabular-nums">
                                 {tokenLabel(t)}
@@ -446,7 +453,7 @@ export function KdsKitchenScreen() {
                             <span className="hidden h-5 w-px bg-border sm:inline-block" />
                             <div className="flex items-baseline gap-2">
                               <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                                Tracking
+                                {tr('kds.tracking')}
                               </span>
                               <span className="font-mono text-sm font-semibold uppercase tracking-wider">
                                 {trackingLabel(t)}
@@ -454,7 +461,7 @@ export function KdsKitchenScreen() {
                             </div>
                           </div>
                           <p className="text-sm font-medium">
-                            {t.customerName || 'Walk-in'}
+                            {t.customerName || tr('kds.walkIn')}
                           </p>
                         </div>
                         <Badge variant={overdue ? 'destructive' : 'secondary'}>
@@ -525,7 +532,7 @@ export function KdsKitchenScreen() {
                         <Clock3 className="w-12 h-12 text-muted-foreground" />
                         <div className="flex flex-col justify-between">
                           <p className="text-xs text-muted-foreground">
-                            Selected time
+                            {tr('kds.selectedTime')}
                           </p>
                           <p
                             className={`text-2xl font-bold tabular-nums ${overdue ? 'text-red-500' : ''}`}
@@ -533,7 +540,9 @@ export function KdsKitchenScreen() {
                             {formatCountdown(left)}
                           </p>
                           <p className="text-[11px] text-muted-foreground">
-                            Target: {t.selectedMinutes}m
+                            {tr('kds.targetMinutes', {
+                              minutes: t.selectedMinutes,
+                            })}
                           </p>
                         </div>
                       </div>
@@ -564,14 +573,14 @@ export function KdsKitchenScreen() {
                             <>
                               <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
                               <span className="text-sm font-medium">
-                                Completing...
+                                {tr('kds.completing')}
                               </span>
                             </>
                           ) : (
                             <>
                               <CheckCircle2 className="mr-2 h-5 w-5" />{' '}
                               <span className="text-sm font-medium">
-                                Complete
+                                {tr('kds.complete')}
                               </span>
                             </>
                           )}
@@ -602,14 +611,14 @@ export function KdsKitchenScreen() {
                             <>
                               <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
                               <span className="text-sm font-medium">
-                                Canceling...
+                                {tr('kds.canceling')}
                               </span>
                             </>
                           ) : (
                             <>
                               <XCircle className="mr-2 h-5 w-5" />{' '}
                               <span className="text-sm font-medium">
-                                Cancel Order
+                                {tr('kds.cancelOrder')}
                               </span>
                             </>
                           )}

@@ -1,3 +1,8 @@
+import {
+  bilingualInputFromStored,
+  resolveBilingualText,
+} from '@/lib/menu/bilingual-text';
+
 /** Escape a cell for RFC-style CSV (quotes + double quotes). */
 function csvEscape(value: string | number | boolean | null | undefined): string {
   if (value == null) return '';
@@ -102,16 +107,25 @@ function categoryNames(p: ProductCsvExportItem): string {
   const names = [
     p.category?.name,
     ...p.categoryLinks.map((l) => l.category?.name),
-  ].filter((n): n is string => Boolean(n && n.trim()));
+  ]
+    .filter((n): n is string => Boolean(n && n.trim()))
+    .map((n) => bilingualInputFromStored(n));
   return [...new Set(names)].join('; ');
 }
 
 function variationsValue(p: ProductCsvExportItem): string {
   return (p.variations ?? [])
     .map((v) => {
-      const label = (v.title || v.name || '').trim();
-      const catalog = v.restaurantVariation
-        ? ` [${v.restaurantVariation.shortLabel || v.restaurantVariation.name}]`
+      const label = bilingualInputFromStored(v.title || v.name || '');
+      const catalogRaw =
+        v.restaurantVariation?.shortLabel ||
+        v.restaurantVariation?.name ||
+        '';
+      const catalog = catalogRaw
+        ? ` [${
+            v.restaurantVariation?.shortLabel?.trim() ||
+            bilingualInputFromStored(v.restaurantVariation?.name ?? '')
+          }]`
         : '';
       const delta =
         v.priceDelta === 0
@@ -130,22 +144,41 @@ function recommendationsValue(p: ProductCsvExportItem): string {
   return (p.attributeGroups ?? [])
     .map((g) => {
       const parts = [
-        g.name,
+        bilingualInputFromStored(g.name),
         g.selectionType,
         g.required ? 'required' : 'optional',
         g.sourceType,
       ];
-      if (g.linkedCategory?.name) parts.push(`category:${g.linkedCategory.name}`);
-      if (g.linkedProduct?.name) parts.push(`product:${g.linkedProduct.name}`);
+      if (g.linkedCategory?.name) {
+        parts.push(
+          `category:${bilingualInputFromStored(g.linkedCategory.name)}`
+        );
+      }
+      if (g.linkedProduct?.name) {
+        parts.push(
+          `product:${resolveBilingualText(g.linkedProduct.name, 'en')}`
+        );
+      }
       if (g.productCategoryNames?.length) {
-        parts.push(`productCategories:${g.productCategoryNames.join('; ')}`);
+        parts.push(
+          `productCategories:${g.productCategoryNames
+            .map((n) => bilingualInputFromStored(n))
+            .join('; ')}`
+        );
       }
       if (g.defaultLinkedMenuItem?.name) {
-        parts.push(`default:${g.defaultLinkedMenuItem.name}`);
+        parts.push(
+          `default:${resolveBilingualText(g.defaultLinkedMenuItem.name, 'en')}`
+        );
       }
       if (g.defaultLinkedRestaurantVariation?.name) {
         parts.push(
-          `defaultVar:${g.defaultLinkedRestaurantVariation.shortLabel || g.defaultLinkedRestaurantVariation.name}`
+          `defaultVar:${
+            g.defaultLinkedRestaurantVariation.shortLabel ||
+            bilingualInputFromStored(
+              g.defaultLinkedRestaurantVariation.name
+            )
+          }`
         );
       }
       if (g.minItems != null || g.maxItems != null) {
@@ -187,7 +220,11 @@ function recommendationsValue(p: ProductCsvExportItem): string {
 
 function offersValue(p: ProductCsvExportItem): string {
   return (p.offersFromThis ?? [])
-    .map((o) => o.offeredItem?.name)
+    .map((o) =>
+      o.offeredItem?.name
+        ? resolveBilingualText(o.offeredItem.name, 'en')
+        : null
+    )
     .filter((n): n is string => Boolean(n))
     .join('; ');
 }
@@ -195,8 +232,10 @@ function offersValue(p: ProductCsvExportItem): string {
 function personalizeValue(p: ProductCsvExportItem): string {
   return (p.personalizeGroups ?? [])
     .map((g) => {
-      const opts = (g.options ?? []).map((o) => o.name).join(', ');
-      return `${g.parentName} (max ${g.maxItems}): ${opts}`;
+      const opts = (g.options ?? [])
+        .map((o) => bilingualInputFromStored(o.name))
+        .join(', ');
+      return `${bilingualInputFromStored(g.parentName)} (max ${g.maxItems}): ${opts}`;
     })
     .join(' || ');
 }
@@ -268,8 +307,8 @@ export function buildProductsCsv(products: ProductCsvExportItem[]): string {
   ];
 
   const rows = products.map((p) => [
-    p.name ?? '',
-    p.description ?? '',
+    bilingualInputFromStored(p.name ?? ''),
+    p.description ? bilingualInputFromStored(p.description) : '',
     p.price ?? 0,
     p.salePrice ?? '',
     categoryNames(p),

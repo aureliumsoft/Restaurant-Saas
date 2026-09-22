@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { CreditCard, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
@@ -36,6 +37,7 @@ function maskMerchantId(id: string | null): string {
 }
 
 export function RestaurantPayPalCard() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -117,11 +119,10 @@ export function RestaurantPayPalCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <CreditCard className="h-5 w-5" aria-hidden />
-          Online payments (PayPal)
+          {t('settings.cards.paypal.title')}
         </CardTitle>
         <CardDescription>
-          Connect your PayPal Business account so customers pay you directly for
-          online orders. Your platform subscription is billed separately.
+          {t('settings.cards.paypal.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">

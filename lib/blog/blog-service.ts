@@ -1,9 +1,11 @@
 import { db } from '@/lib/db';
 import {
-  sanitizeBlogHtml,
+  persistBlogBilingualField,
+  persistBlogBilingualHtml,
   slugifyBlogTitle,
   type BlogPostWriteInput,
 } from '@/lib/blog/blog';
+import { parseBilingualInput } from '@/lib/menu/bilingual-text';
 
 export async function ensureUniqueBlogSlug(
   base: string,
@@ -31,21 +33,26 @@ export function mapBlogWritePayload(
 ) {
   const image = (input.imageUrl ?? '').trim();
   const seoImage = (input.seoImageUrl ?? '').trim();
-  const seoTitle = (input.seoTitle ?? '').trim();
-  const seoDescription = (input.seoDescription ?? '').trim();
+  const seoTitleRaw = (input.seoTitle ?? '').trim();
+  const seoDescriptionRaw = (input.seoDescription ?? '').trim();
   const publishedAt =
     input.status === 'PUBLISHED'
       ? previousPublishedAt ?? new Date()
       : null;
 
   return {
-    title: input.title.trim(),
+    title: persistBlogBilingualField(input.title),
     slug,
     imageUrl: image || null,
-    shortDescription: input.shortDescription.trim(),
-    contentHtml: sanitizeBlogHtml(input.contentHtml.trim()),
-    seoTitle: seoTitle || null,
-    seoDescription: seoDescription || null,
+    shortDescription: persistBlogBilingualField(input.shortDescription),
+    contentHtml: persistBlogBilingualHtml(
+      input.contentHtml,
+      input.contentHtmlEs
+    ),
+    seoTitle: seoTitleRaw ? persistBlogBilingualField(seoTitleRaw) : null,
+    seoDescription: seoDescriptionRaw
+      ? persistBlogBilingualField(seoDescriptionRaw)
+      : null,
     seoImageUrl: seoImage || null,
     featured: Boolean(input.featured),
     status: input.status,
@@ -57,6 +64,12 @@ export async function resolveSlugForWrite(
   input: BlogPostWriteInput,
   excludeId?: string
 ): Promise<string> {
-  const base = (input.slug ?? '').trim() || slugifyBlogTitle(input.title);
-  return ensureUniqueBlogSlug(slugifyBlogTitle(base) || slugifyBlogTitle(input.title), excludeId);
+  const englishTitle =
+    parseBilingualInput(input.title).en || input.title.trim();
+  const base =
+    (input.slug ?? '').trim() || slugifyBlogTitle(englishTitle);
+  return ensureUniqueBlogSlug(
+    slugifyBlogTitle(base) || slugifyBlogTitle(englishTitle),
+    excludeId
+  );
 }

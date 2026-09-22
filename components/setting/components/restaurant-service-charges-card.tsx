@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Loader2, Percent, Save } from 'lucide-react';
@@ -121,6 +122,7 @@ function ChannelToggle({
 }
 
 export function RestaurantServiceChargesCard() {
+  const { t } = useTranslation();
   const { regional } = useOwnerRestaurantRegional();
   const chargeAmountLabel = `Charge amount (${getRestaurantCurrencySymbol(regional.currencyCode)})`;
   const [loading, setLoading] = useState(true);
@@ -181,11 +183,10 @@ export function RestaurantServiceChargesCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Percent className="h-5 w-5" aria-hidden />
-          System service charges
+          {t('settings.cards.serviceCharges.title')}
         </CardTitle>
         <CardDescription>
-          Set a flat service charge per sales channel. When enabled, the amount
-          is added to the customer total at checkout and on bills.
+          {t('settings.cards.serviceCharges.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-3">
@@ -209,7 +210,7 @@ export function RestaurantServiceChargesCard() {
           ) : (
             <Save className="mr-2 h-4 w-4" />
           )}
-          Save service charges
+          {t('dashboard.common.save')}
         </Button>
       </CardFooter>
     </Card>

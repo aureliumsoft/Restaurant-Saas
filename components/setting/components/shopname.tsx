@@ -1,5 +1,6 @@
 'use client';
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -23,6 +24,7 @@ interface ShopnameCardProps {
 }
 
 const ShopnameCard: React.FC<ShopnameCardProps> = ({ storeName, storeId }) => {
+  const { t } = useTranslation();
   const [editableStoreName, setEditableStoreName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -37,7 +39,7 @@ const ShopnameCard: React.FC<ShopnameCardProps> = ({ storeName, storeId }) => {
 
   const handleSaveClick = () => {
     if (editableStoreName === storeName) {
-      toast.info('No changes to save.');
+      toast.info(t('settings.cards.shopName.noChanges'));
       return;
     }
     setShowConfirmation(true);
@@ -48,12 +50,12 @@ const ShopnameCard: React.FC<ShopnameCardProps> = ({ storeName, storeId }) => {
     const isOnline = navigator.onLine;
 
     if (!isOnline) {
-      toast.error('You are offline. Please check your internet connection.');
+      toast.error(t('settings.cards.shopName.offline'));
       return;
     }
 
     if (!storeId) {
-      toast.error('Store ID is required to save the store name.');
+      toast.error(t('settings.cards.shopName.storeIdRequired'));
       return;
     }
 
@@ -66,7 +68,7 @@ const ShopnameCard: React.FC<ShopnameCardProps> = ({ storeName, storeId }) => {
 
       await axios.patch(`/api/shopdata/${storeId}`, validatedData);
 
-      toast.success('Store name updated successfully.');
+      toast.success(t('settings.cards.shopName.updated'));
       setShowConfirmation(false);
       eventBus.emit('fetchStoreData');
     } catch (error) {
@@ -75,7 +77,7 @@ const ShopnameCard: React.FC<ShopnameCardProps> = ({ storeName, storeId }) => {
         const fieldErrors = error.errors.map((err) => err.message);
         toast.error(`${fieldErrors.join(', ')}`);
       } else {
-        toast.error('Failed to update store name.');
+        toast.error(t('settings.cards.shopName.updateFailed'));
       }
     } finally {
       setIsLoading(false);
@@ -85,8 +87,10 @@ const ShopnameCard: React.FC<ShopnameCardProps> = ({ storeName, storeId }) => {
   return (
     <Card className="my-5">
       <CardHeader>
-        <CardTitle>Store Name</CardTitle>
-        <CardDescription>Used to identify your store.</CardDescription>
+        <CardTitle>{t('settings.cards.shopName.title')}</CardTitle>
+        <CardDescription>
+          {t('settings.cards.shopName.description')}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form>
@@ -102,17 +106,17 @@ const ShopnameCard: React.FC<ShopnameCardProps> = ({ storeName, storeId }) => {
           {isLoading ? (
             <>
               <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
-              Please wait
+              {t('settings.cards.shopName.pleaseWait')}
             </>
           ) : (
-            'Save'
+            t('settings.cards.shopName.save')
           )}
         </Button>
       </CardFooter>
       <SaveConfirmation
         open={showConfirmation}
-        title="Save Store Name"
-        description="Are you sure you want to save these changes to your store name?"
+        title={t('settings.cards.shopName.confirmTitle')}
+        description={t('settings.cards.shopName.confirmDescription')}
         itemName={editableStoreName}
         loading={isLoading}
         onConfirm={handleConfirmSave}

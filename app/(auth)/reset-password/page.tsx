@@ -4,6 +4,7 @@ import React, { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "react-toastify";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { PublicAuthShell } from "@/components/marketing/public-auth-shell";
 
 function ResetPasswordPage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
   const tokenFromUrl = searchParams.get("token");
@@ -37,15 +39,17 @@ function ResetPasswordPage() {
       if (!res.ok) {
         toast.error(
           res.status === 404
-            ? "User not exist for this email."
-            : data?.error ?? "Failed to request reset."
+            ? t("auth.reset.userNotFound")
+            : data?.error ?? t("auth.reset.requestFailed")
         );
         return;
       }
 
-      toast.success("Reset link sent. Check your email.");
-    } catch (err: any) {
-      toast.error(err?.message ?? "Failed to request reset.");
+      toast.success(t("auth.reset.linkSent"));
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : t("auth.reset.requestFailed")
+      );
     } finally {
       setLoading(false);
     }
@@ -54,11 +58,11 @@ function ResetPasswordPage() {
   async function confirmReset(e: React.FormEvent) {
     e.preventDefault();
     if (!token) {
-      toast.error("Missing reset token.");
+      toast.error(t("auth.reset.missingToken"));
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match.");
+      toast.error(t("auth.reset.passwordsMismatch"));
       return;
     }
 
@@ -72,14 +76,16 @@ function ResetPasswordPage() {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data?.error ?? "Failed to reset password.");
+        toast.error(data?.error ?? t("auth.reset.confirmFailed"));
         return;
       }
 
-      toast.success("Password reset successful. Please sign in.");
+      toast.success(t("auth.reset.success"));
       router.push("/login");
-    } catch (err: any) {
-      toast.error(err?.message ?? "Failed to reset password.");
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : t("auth.reset.confirmFailed")
+      );
     } finally {
       setLoading(false);
     }
@@ -87,87 +93,89 @@ function ResetPasswordPage() {
 
   return (
     <PublicAuthShell
-      title="Reset password"
-      subtitle="Enter your email to receive a reset link."
+      title={t("auth.reset.title")}
+      subtitle={t("auth.reset.subtitleRequest")}
     >
+      {!isConfirmMode ? (
+        <form onSubmit={requestReset} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="email">{t("auth.email")}</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+            />
+          </div>
 
-        {!isConfirmMode ? (
-          <form onSubmit={requestReset} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                required
-              />
-            </div>
+          <Button disabled={loading} type="submit">
+            {loading ? t("auth.reset.sending") : t("auth.reset.sendLink")}
+          </Button>
 
-            <Button disabled={loading} type="submit">
-              {loading ? "Sending..." : "Send reset link"}
-            </Button>
+          <div className="text-center text-sm">
+            <Link className="text-primary underline" href="/login">
+              {t("auth.reset.backToLogin")}
+            </Link>
+          </div>
+        </form>
+      ) : (
+        <form onSubmit={confirmReset} className="flex flex-col gap-4">
+          <div className="rounded-md border bg-muted/30 p-3 text-xs">
+            <div className="mb-1 font-medium">{t("auth.reset.tokenFromUrl")}</div>
+            <div className="break-all font-mono">{token}</div>
+          </div>
 
-            <div className="text-center text-sm">
-              <Link className="text-primary underline" href="/login">
-                Back to login
-              </Link>
-            </div>
-          </form>
-        ) : (
-          <form onSubmit={confirmReset} className="flex flex-col gap-4">
-            <div className="rounded-md border bg-muted/30 p-3 text-xs">
-              <div className="mb-1 font-medium">Token from URL</div>
-              <div className="break-all font-mono">{token}</div>
-            </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="newPassword">{t("auth.reset.newPassword")}</Label>
+            <Input
+              id="newPassword"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
+          </div>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="newPassword">New password</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                autoComplete="new-password"
-                required
-              />
-            </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="confirmPassword">
+              {t("auth.reset.confirmPassword")}
+            </Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
+          </div>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="confirmPassword">Confirm password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                autoComplete="new-password"
-                required
-              />
-            </div>
+          <Button disabled={loading} type="submit">
+            {loading ? t("auth.reset.resetting") : t("auth.reset.submit")}
+          </Button>
 
-            <Button disabled={loading} type="submit">
-              {loading ? "Resetting..." : "Reset password"}
-            </Button>
-
-            <div className="text-center text-sm">
-              <Link className="text-primary underline" href="/login">
-                Back to login
-              </Link>
-            </div>
-          </form>
-        )}
+          <div className="text-center text-sm">
+            <Link className="text-primary underline" href="/login">
+              {t("auth.reset.backToLogin")}
+            </Link>
+          </div>
+        </form>
+      )}
     </PublicAuthShell>
   );
 }
 
 export default function ResetPasswordPageWithSuspense() {
+  const { t } = useTranslation();
   return (
     <Suspense
       fallback={
         <main className="flex min-h-screen items-center justify-center bg-white px-4 py-10 dark:bg-black">
           <div className="text-center text-sm text-muted-foreground">
-            Loading…
+            {t("auth.loading")}
           </div>
         </main>
       }

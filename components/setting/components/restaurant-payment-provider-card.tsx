@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { CreditCard, Loader2 } from 'lucide-react';
@@ -52,6 +53,7 @@ export function RestaurantPaymentProviderCard({
 }: {
   cardPaymentsEnabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -149,11 +151,10 @@ export function RestaurantPaymentProviderCard({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <CreditCard className="h-5 w-5" aria-hidden />
-          Customer payment method
+          {t('settings.cards.paymentProvider.title')}
         </CardTitle>
         <CardDescription>
-          Choose PayPal or Stripe alone, or Wallets to offer JazzCash and/or
-          Easypaisa together at checkout.
+          {t('settings.cards.paymentProvider.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
 import axios from 'axios';
 import { format } from 'date-fns';
@@ -21,6 +22,7 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { menuItemApiPath, productEditPath } from '@/lib/dashboard-paths';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import {
   DashboardCard,
   DashboardCardContent,
@@ -160,6 +162,7 @@ export function ProductsTab({
   categoriesLoading = false,
   hasCategoriesHint,
 }: Props) {
+  const { t } = useTranslation();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { canEdit, canDelete } = useDashboardPermissions();
   const canEditProducts = canEdit('product');
@@ -421,7 +424,7 @@ export function ProductsTab({
         <Button type="button" size="icon" variant="outline" asChild>
           <Link
             href={productEditPath(item.urlId ?? item.id)}
-            aria-label={`Edit ${item.name}`}
+            aria-label={`Edit ${resolveBilingualText(item.name, 'en')}`}
           >
             <Pencil className="h-4 w-4" />
           </Link>
@@ -468,7 +471,7 @@ export function ProductsTab({
   return (
     <DashboardCard>
       <DashboardCardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <DashboardCardTitle>Products</DashboardCardTitle>
+        <DashboardCardTitle>{t('dashboard.product.title')}</DashboardCardTitle>
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
@@ -684,11 +687,14 @@ export function ProductsTab({
                                   </DashboardTableCell>
                                   <DashboardTableCell>
                                     <div className="font-medium">
-                                      {item.name}
+                                      {resolveBilingualText(item.name, 'en')}
                                     </div>
                                     {item.description ? (
                                       <div className="line-clamp-2 text-wrap text-xs font-light text-muted-foreground">
-                                        {item.description}
+                                        {resolveBilingualText(
+                                          item.description,
+                                          'en'
+                                        )}
                                       </div>
                                     ) : null}
                                     {variationCount > 0 ? (
@@ -782,7 +788,7 @@ export function ProductsTab({
                               <div className="space-y-2 p-3">
                                 <div>
                                   <p className="line-clamp-2 font-medium leading-snug">
-                                    {item.name}
+                                    {resolveBilingualText(item.name, 'en')}
                                   </p>
                                   <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
                                     {categoryNames.length > 1

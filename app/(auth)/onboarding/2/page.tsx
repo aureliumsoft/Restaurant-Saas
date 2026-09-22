@@ -5,6 +5,7 @@ import { ArrowRight, Loader2, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "react-toastify";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Base64ImageUploadField } from "@/components/ui/base64-image-upload";
@@ -13,6 +14,7 @@ import { getOnboardingRestaurantId } from "@/lib/onboarding/storage";
 import { OnboardingSteps } from "../OnboardingSteps";
 
 export default function OnboardingStep2Page() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { status } = useSession();
 
@@ -29,12 +31,12 @@ export default function OnboardingStep2Page() {
     }
     const id = getOnboardingRestaurantId();
     if (!id) {
-      toast.error("Complete step 1 first.");
+      toast.error(t("onboarding.common.completeStep1First"));
       router.replace("/onboarding/1");
       return;
     }
     setRestaurantId(id);
-  }, [status, router]);
+  }, [status, router, t]);
 
   function addMenuBannerRow() {
     setMenuBanners((prev) => [...prev, ""]);
@@ -69,15 +71,19 @@ export default function OnboardingStep2Page() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data?.error ?? "Could not save branding.");
+        toast.error(data?.error ?? t("onboarding.step2.saveFailed"));
         return;
       }
       if (goNext) {
-        toast.success("Saved.");
+        toast.success(t("onboarding.step2.saved"));
         router.push("/onboarding/3");
       }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Request failed.");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t("onboarding.common.requestFailed")
+      );
     } finally {
       setLoading(false);
     }
@@ -93,7 +99,7 @@ export default function OnboardingStep2Page() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canContinue) {
-      toast.error("Logo, main banner, and at least one menu banner are required.");
+      toast.error(t("onboarding.step2.requiredFields"));
       return;
     }
     await save(true);
@@ -110,40 +116,40 @@ export default function OnboardingStep2Page() {
   return (
     <div className="rounded-lg border bg-background p-6 shadow-sm">
       <OnboardingSteps active={2} />
-      <h1 className="mb-1 text-xl font-semibold">Branding</h1>
+      <h1 className="mb-1 text-xl font-semibold">{t("onboarding.step2.title")}</h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        Upload your logo, main banner, and at least one menu banner to continue.
+        {t("onboarding.step2.description")}
       </p>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <Base64ImageUploadField
-          label="Logo"
+          label={t("onboarding.step2.logoLabel")}
           value={logoUrl}
           onChange={setLogoUrl}
-          helperText="Required. Upload an image or paste a URL."
+          helperText={t("onboarding.step2.logoHelper")}
         />
         <Base64ImageUploadField
-          label="Main banner"
+          label={t("onboarding.step2.mainBannerLabel")}
           value={mainBannerUrl}
           onChange={setMainBannerUrl}
-          helperText="Required."
+          helperText={t("onboarding.step2.mainBannerHelper")}
         />
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label>Menu banner</Label>
+            <Label>{t("onboarding.step2.menuBannerLabel")}</Label>
             <Button
               type="button"
               variant="outline"
               onClick={addMenuBannerRow}
             >
               <Plus className="h-4 w-4 mr-2" />
-              <span>Add Banner</span>
+              <span>{t("onboarding.step2.addBanner")}</span>
             </Button>
           </div>
           {menuBanners.map((url, i) => (
             <div key={i} className="flex gap-2 items-end">
               <Base64ImageUploadField
-                label={`Menu banner ${i + 1}`}
+                label={t("onboarding.step2.menuBannerItemLabel", { n: i + 1 })}
                 value={url}
                 onChange={(v) => setMenuBanner(i, v)}
               />
@@ -154,7 +160,7 @@ export default function OnboardingStep2Page() {
                   size="icon"
                   className="text-destructive hover:bg-destructive/10"
                   onClick={() => removeMenuBanner(i)}
-                  aria-label="Remove"
+                  aria-label={t("onboarding.step2.removeAria")}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -167,11 +173,11 @@ export default function OnboardingStep2Page() {
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                <span>Saving...</span>
+                <span>{t("onboarding.step2.saving")}</span>
               </>
             ) : (
               <>
-                <span>Continue</span>
+                <span>{t("onboarding.step2.continue")}</span>
                 <ArrowRight className="h-4 w-4 ml-2" />
               </>
             )}

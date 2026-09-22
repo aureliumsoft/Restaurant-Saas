@@ -6,22 +6,9 @@ export function orderContextStorageKey(orderId: string): string {
   return `${STORAGE_PREFIX}${orderId.trim()}`;
 }
 
-export function writeOrderContext(orderId: string, info: OrderInfo): void {
-  if (typeof window === 'undefined') return;
+function readStoredOrderContext(storage: Storage, orderId: string): OrderInfo | null {
   try {
-    sessionStorage.setItem(
-      orderContextStorageKey(orderId),
-      JSON.stringify(info)
-    );
-  } catch {
-    // ignore quota / private mode
-  }
-}
-
-export function readOrderContext(orderId: string): OrderInfo | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = sessionStorage.getItem(orderContextStorageKey(orderId));
+    const raw = storage.getItem(orderContextStorageKey(orderId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as OrderInfo;
     return parsed && typeof parsed === 'object' ? parsed : null;
@@ -30,10 +17,38 @@ export function readOrderContext(orderId: string): OrderInfo | null {
   }
 }
 
+export function writeOrderContext(orderId: string, info: OrderInfo): void {
+  if (typeof window === 'undefined') return;
+  const payload = JSON.stringify(info);
+  try {
+    sessionStorage.setItem(orderContextStorageKey(orderId), payload);
+  } catch {
+    // ignore quota / private mode
+  }
+  try {
+    localStorage.setItem(orderContextStorageKey(orderId), payload);
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+export function readOrderContext(orderId: string): OrderInfo | null {
+  if (typeof window === 'undefined') return null;
+  return (
+    readStoredOrderContext(sessionStorage, orderId) ??
+    readStoredOrderContext(localStorage, orderId)
+  );
+}
+
 export function clearOrderContext(orderId: string): void {
   if (typeof window === 'undefined') return;
   try {
     sessionStorage.removeItem(orderContextStorageKey(orderId));
+  } catch {
+    // ignore
+  }
+  try {
+    localStorage.removeItem(orderContextStorageKey(orderId));
   } catch {
     // ignore
   }

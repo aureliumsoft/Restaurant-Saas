@@ -1,8 +1,13 @@
+'use client';
+
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { FileText } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import type { PublicBlogSidebarCard } from '@/lib/blog/public-queries';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -11,20 +16,23 @@ type Props = {
 };
 
 export function BlogRecentSidebar({ posts, className }: Props) {
+  const { t } = useTranslation();
+  const lang = useUiLanguage();
+
   return (
     <aside className={cn('space-y-4', className)}>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-fire-500">
-          Latest
+          {t('marketingExtras.blog.recentEyebrow')}
         </p>
         <h2 className="mt-1 text-base font-semibold text-zinc-900 dark:text-white">
-          Recent blogs
+          {t('marketingExtras.blog.recentTitle')}
         </h2>
       </div>
 
       {posts.length === 0 ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          No recent posts yet.
+          {t('marketingExtras.blog.recentEmpty')}
         </p>
       ) : (
         <ul className="space-y-3">
@@ -55,10 +63,10 @@ export function BlogRecentSidebar({ posts, className }: Props) {
                     </p>
                   ) : null}
                   <h3 className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-zinc-900 group-hover:text-fire-600 dark:text-white dark:group-hover:text-fire-400">
-                    {post.title}
+                    {resolveBilingualText(post.title, lang)}
                   </h3>
                   <p className="mt-1 line-clamp-2 text-xs text-zinc-600 dark:text-zinc-400">
-                    {post.shortDescription}
+                    {resolveBilingualText(post.shortDescription, lang)}
                   </p>
                 </div>
               </Link>

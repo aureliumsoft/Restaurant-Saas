@@ -16,6 +16,7 @@ import {
   type MenuItemPriceSource,
 } from '@/lib/menu-item-pricing';
 import type { BundleLookupProduct } from '@/lib/menu/find-bundle-parent-products';
+import { useBilingualText } from '@/hooks/use-bilingual-text';
 
 type OfferProduct = BundleLookupProduct & Pick<MenuItemPriceSource, 'variations'>;
 
@@ -56,6 +57,7 @@ export function MenuOfferChoiceDialog({
   onChooseBundle,
 }: Props) {
   const { t } = useTranslation();
+  const { resolve } = useBilingualText();
   const [step, setStep] = useState<'offer' | 'bundles'>('offer');
 
   useEffect(() => {
@@ -154,7 +156,7 @@ export function MenuOfferChoiceDialog({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={product.imageUrl}
-                    alt={product.name ?? ''}
+                    alt={product ? resolve(product.name) : ''}
                     className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl object-cover shadow-sm border border-border/50"
                   />
                 ) : (
@@ -211,7 +213,7 @@ export function MenuOfferChoiceDialog({
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-sm font-bold uppercase leading-snug text-foreground">
-                      {bundle.name}
+                      {resolve(bundle.name)}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {formatMenuItemPrice(bundle)}

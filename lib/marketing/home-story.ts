@@ -1,3 +1,5 @@
+import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
+
 export type StoryLang = 'en' | 'es';
 
 export const HOME_STORY = {
@@ -166,5 +168,6 @@ export const HOME_STORY = {
 export type HomeStoryCopy = (typeof HOME_STORY)[StoryLang];
 
 export function storyLangFromI18n(language: string | undefined): StoryLang {
-  return language?.toLowerCase().startsWith('es') ? 'es' : 'en';
+  const lang = normalizeUiLanguage(language);
+  return lang === 'es' ? 'es' : 'en';
 }

@@ -9,20 +9,23 @@ import {
 import FullscreenButton from '@/components/fullscreen/fullscreen';
 import { SalesOrdersTabs } from '@/components/sales/sales-orders-tabs';
 import { useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { PlusIcon } from 'lucide-react';
 
 export function Orders() {
+  const { t } = useTranslation();
   const tableRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-4 overflow-hidden">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Sale Records</h2>
+          <h2 className="text-lg font-semibold tracking-tight">
+            {t('dashboard.sales.pageTitle')}
+          </h2>
           <p className="text-sm text-muted-foreground">
-            Online, POS, and kiosk orders with fulfillment method, totals, and
-            per-order details.
+            {t('dashboard.sales.pageDescription')}
           </p>
         </div>
       </div>
@@ -32,7 +35,7 @@ export function Orders() {
       >
         <div className="relative shrink-0">
           <CardHeader>
-            <CardTitle>Orders</CardTitle>
+            <CardTitle>{t('dashboard.sales.ordersCardTitle')}</CardTitle>
            
             <FullscreenButton targetRef={tableRef} />
           </CardHeader>

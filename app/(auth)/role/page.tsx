@@ -9,12 +9,14 @@ import { Button } from "@/components/ui/button";
 import { PublicAuthShell } from "@/components/marketing/public-auth-shell";
 import { isPlatformAdminSession } from "@/lib/auth/admin";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type Role = "OWNER" | "WORKER";
 
 const ALLOWED: Role[] = ["OWNER", "WORKER"];
 
 function RolePage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
@@ -43,18 +45,18 @@ function RolePage() {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data?.error ?? "Failed to update role.");
+        toast.error(data?.error ?? t("auth.role.updateFailed"));
         return;
       }
 
-      toast.success("Signup successful.");
+      toast.success(t("auth.role.signupSuccess"));
       if (role === "OWNER") {
         router.replace("/onboarding/1");
       } else {
         router.replace("/dashboard");
       }
     } catch (err: any) {
-      toast.error(err?.message ?? "Failed to update role.");
+      toast.error(err?.message ?? t("auth.role.updateFailed"));
     } finally {
       setLoading(false);
     }
@@ -96,37 +98,42 @@ function RolePage() {
   }
 
   return (
-    <PublicAuthShell title="Your role" subtitle="Select a role to finish signup.">
-
+    <PublicAuthShell
+      title={t("auth.role.title")}
+      subtitle={t("auth.role.subtitle")}
+    >
         {roleNeedsUpdate ? (
           <div className="flex flex-col gap-3">
             <Button disabled={loading} onClick={() => updateRole("OWNER")}>
-              Continue as Owner
+              {t("auth.role.continueOwner")}
             </Button>
             <Button disabled={loading} onClick={() => updateRole("WORKER")}>
-              Continue as Worker
+              {t("auth.role.continueWorker")}
             </Button>
           </div>
         ) : (
           <div className="text-center text-sm text-muted-foreground">
-            Redirecting...
+            {t("auth.role.redirecting")}
           </div>
         )}
     </PublicAuthShell>
   );
 }
 
+function RolePageSuspenseFallback() {
+  const { t } = useTranslation();
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-white px-4 py-10 dark:bg-black">
+      <div className="text-center text-sm text-muted-foreground">
+        {t("auth.role.loading")}
+      </div>
+    </main>
+  );
+}
+
 export default function RolePageWithSuspense() {
   return (
-    <Suspense
-      fallback={
-        <main className="flex min-h-screen items-center justify-center bg-white px-4 py-10 dark:bg-black">
-          <div className="text-center text-sm text-muted-foreground">
-            Loading…
-          </div>
-        </main>
-      }
-    >
+    <Suspense fallback={<RolePageSuspenseFallback />}>
       <RolePage />
     </Suspense>
   );

@@ -4,7 +4,7 @@ import { z } from 'zod';
 const SAFE_TEXT = /^[^\x00-\x1F<>]+$/u;
 
 /** Names, titles — letters, numbers, common punctuation (no-only-whitespace). */
-const NAME_TEXT = /^[\p{L}\p{N}\s\-'.,&()/+#]+$/u;
+const NAME_TEXT = /^[\p{L}\p{N}\s\-'.,&()/+#=]+$/u;
 
 export const zRequiredText = (max = 200, label = 'Field') =>
   z
@@ -58,7 +58,7 @@ export const zUuid = () => z.string().uuid('Invalid id');
 
 /** Strip non-text characters for live input (names, labels). */
 export function filterNameTextInput(value: string): string {
-  return value.replace(/[^\p{L}\p{N}\s\-'.,&()/+#]/gu, '');
+  return value.replace(/[^\p{L}\p{N}\s\-'.,&()/+#=]/gu, '');
 }
 
 /** Digits and single decimal for price fields. */

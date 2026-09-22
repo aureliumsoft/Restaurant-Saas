@@ -15,7 +15,7 @@ const personalizeImageUrl = z
 const personalizeOptionSchema = z
   .object({
     id: z.string().uuid().optional(),
-    name: z.string().trim().min(1).max(120),
+    name: z.string().trim().min(1).max(200),
     imageUrl: personalizeImageUrl,
     sortOrder: z.number().int().min(0).optional(),
   })
@@ -45,7 +45,7 @@ export const syncPersonalizeGroupsSchema = z.object({
     .array(
       z.object({
         id: z.string().uuid().optional(),
-        parentName: z.string().trim().min(1).max(120),
+        parentName: z.string().trim().min(1).max(200),
         maxItems: z.number().int().min(1).max(20),
         sortOrder: z.number().int().min(0).optional(),
         options: z.array(personalizeOptionSchema).min(1).max(50),

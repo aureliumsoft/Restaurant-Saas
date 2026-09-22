@@ -14,6 +14,9 @@ import {
   type LucideIcon,
   GalleryVerticalEnd,
   Boxes,
+  FileBarChart,
+  Wallet,
+  ListOrdered,
 } from 'lucide-react';
 import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
 import { NavItem } from '@/types/Navbar';
@@ -29,12 +32,15 @@ export const MODULE_ICONS: Record<
   'order-display': Tv,
   branched: Store,
   categories: FolderTree,
+  'final-view': ListOrdered,
   product: Package,
   inventory: Boxes,
   variations: GalleryVerticalEnd,
   tables: LayoutGrid,
   recommendations: SlidersHorizontal,
   records: Archive,
+  expenses: Wallet,
+  reports: FileBarChart,
   settings: Settings,
 };
 

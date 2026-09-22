@@ -13,6 +13,9 @@ import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
+import {
+  resolveBilingualText,
+} from '@/lib/menu/bilingual-text';
 import { cn } from '@/lib/utils';
 
 export type CategoryPickerItem = {
@@ -43,9 +46,15 @@ export function CategoryPickerStrip({
   const filteredCategories = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return categories;
-    return categories.filter((category) =>
-      category.name.toLowerCase().includes(q)
-    );
+    return categories.filter((category) => {
+      const haystack = [
+        resolveBilingualText(category.name, 'en'),
+        resolveBilingualText(category.name, 'es'),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
   }, [categories, search]);
 
   const visibleIdsKey = filteredCategories.map((c) => c.id).join(',');
@@ -181,7 +190,7 @@ export function CategoryPickerStrip({
                       </div>
                       <div className="space-y-0.5 p-2.5">
                         <p className="line-clamp-2 text-sm font-semibold leading-snug">
-                          {category.name}
+                          {resolveBilingualText(category.name, 'en')}
                         </p>
                         {category.showInFront === false ? (
                           <p className="truncate text-[11px] text-muted-foreground">

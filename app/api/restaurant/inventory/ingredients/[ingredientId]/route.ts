@@ -8,6 +8,7 @@ import {
   listBranchStockForIngredients,
   setBranchIngredientQuantity,
 } from '@/lib/inventory/branch-stock';
+import { createInventoryRestockExpense } from '@/lib/expenses/create-expense';
 import { ingredientPatchSchema } from '@/lib/inventory/validation';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { publishInventoryStockUpdate } from '@/lib/realtime/publish';
@@ -93,7 +94,7 @@ export async function PATCH(
   const { ingredientId } = await resolveRouteParams(ctx.params, ['ingredientId']);
   const existing = await db.ingredient.findFirst({
     where: { id: ingredientId, restaurantId: auth.restaurant.id },
-    select: { id: true },
+    select: { id: true, name: true, unitCost: true },
   });
   if (!existing) {
     return NextResponse.json({ error: 'Ingredient not found' }, { status: 404 });
@@ -124,12 +125,34 @@ export async function PATCH(
   try {
     const row = await db.$transaction(async (tx) => {
       if (parsed.data.quantity !== undefined && branchId) {
+        const stockMap = await listBranchStockForIngredients(branchId, [
+          ingredientId,
+        ]);
+        const previousQty = stockMap.get(ingredientId)?.quantity ?? 0;
+        const nextQty = parsed.data.quantity;
         await setBranchIngredientQuantity(
           tx,
           branchId,
           ingredientId,
-          parsed.data.quantity
+          nextQty
         );
+        const delta = nextQty - previousQty;
+        if (delta > 0) {
+          const nextUnitCost =
+            parsed.data.unitCost !== undefined
+              ? parsed.data.unitCost
+              : existing.unitCost;
+          await createInventoryRestockExpense(tx, {
+            restaurantId: auth.restaurant.id,
+            branchId,
+            ingredientId,
+            ingredientName: existing.name,
+            deltaQty: delta,
+            unitCost: nextUnitCost,
+            expenseAmount: parsed.data.expenseAmount,
+            createdByUserId: auth.user.id,
+          });
+        }
       }
       if (parsed.data.minQuantity !== undefined && branchId) {
         await tx.branchIngredientStock.upsert({

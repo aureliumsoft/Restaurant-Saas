@@ -3,6 +3,7 @@
 import { Check } from 'lucide-react';
 
 import { Label } from '@/components/ui/label';
+import { useBilingualText } from '@/hooks/use-bilingual-text';
 import { cn } from '@/lib/utils';
 
 export type PersonalizeGroup = {
@@ -27,6 +28,8 @@ export function PersonalizeOptionsSection({
   selectedByGroup,
   onToggle,
 }: Props) {
+  const { resolve } = useBilingualText();
+
   if (groups.length === 0) return null;
 
   return (
@@ -41,7 +44,7 @@ export function PersonalizeOptionsSection({
           >
             <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-3">
               <Label className="text-sm font-semibold text-foreground">
-                {group.parentName}
+                {resolve(group.parentName)}
               </Label>
               <span className="text-xs font-medium text-muted-foreground">
                 {count}/{group.maxItems} max.
@@ -79,7 +82,7 @@ export function PersonalizeOptionsSection({
                         )}
                       </span>
                       <span className="min-w-0 flex-1 text-sm font-semibold uppercase tracking-wide text-foreground">
-                        {option.name}
+                        {resolve(option.name)}
                       </span>
                       <span
                         className={cn(

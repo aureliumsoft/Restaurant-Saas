@@ -4,26 +4,31 @@ import {
   PublicBlogList,
   type PublicBlogCard,
 } from '@/components/marketing/public-blog-list';
+import { PublicBlogIndexHeader } from '@/components/marketing/public-blog-chrome';
 import { PublicBlogShell } from '@/components/marketing/public-blog-shell';
 import {
   loadFeaturedBlogPosts,
   loadRecentBlogPosts,
 } from '@/lib/blog/public-queries';
 import { db } from '@/lib/db';
-
-export const metadata: Metadata = {
-  title: 'Blog | Foodluk',
-  description:
-    'News, product updates, and restaurant industry tips from Foodluk.',
-  openGraph: {
-    title: 'Blog | Foodluk',
-    description:
-      'News, product updates, and restaurant industry tips from Foodluk.',
-    type: 'website',
-  },
-};
+import { getServerUiLanguage } from '@/lib/i18n/server-ui-language';
+import { resources } from '@/lib/i18n/resources';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const lang = await getServerUiLanguage();
+  const copy = resources[lang].translation.marketingExtras.blog;
+  return {
+    title: copy.metaTitle,
+    description: copy.metaDescription,
+    openGraph: {
+      title: copy.metaTitle,
+      description: copy.metaDescription,
+      type: 'website',
+    },
+  };
+}
 
 async function loadFirstPage() {
   const limit = 9;
@@ -41,10 +46,17 @@ async function loadFirstPage() {
     },
   });
   const hasMore = rows.length > limit;
-  const posts = (hasMore ? rows.slice(0, limit) : rows).map((p) => ({
-    ...p,
-    publishedAt: p.publishedAt?.toISOString() ?? null,
-  })) satisfies PublicBlogCard[];
+  const posts = (hasMore ? rows.slice(0, limit) : rows).map(
+    (p) =>
+      ({
+        id: p.id,
+        slug: p.slug,
+        imageUrl: p.imageUrl,
+        title: p.title,
+        shortDescription: p.shortDescription,
+        publishedAt: p.publishedAt?.toISOString() ?? null,
+      }) satisfies PublicBlogCard
+  );
   const nextCursor = hasMore ? posts[posts.length - 1]?.id ?? null : null;
   return { posts, nextCursor, hasMore };
 }
@@ -59,17 +71,7 @@ export default async function BlogPage() {
   return (
     <div className="flex min-h-[100vh] flex-col bg-gradient-to-b from-zinc-50 via-white to-zinc-50 dark:from-zinc-950 dark:via-black dark:to-zinc-950">
       <div className="mx-auto flex w-full flex-1 flex-col px-4 pb-20 pt-28 sm:px-6">
-        <header className="mb-10 max-w-2xl">
-          <p className="text-sm font-semibold uppercase tracking-wider text-fire-500">
-            Blog
-          </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-4xl">
-            Ideas for modern restaurants
-          </h1>
-          <p className="mt-3 text-base text-zinc-600 dark:text-zinc-400">
-            Product updates, growth tips, and stories from the Foodluk platform.
-          </p>
-        </header>
+        <PublicBlogIndexHeader />
 
         <PublicBlogShell featured={featured} recent={recent}>
           <PublicBlogList

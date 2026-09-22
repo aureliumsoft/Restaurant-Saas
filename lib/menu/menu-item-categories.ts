@@ -1,6 +1,10 @@
 import type { Prisma } from '@prisma/client';
 
 import { db } from '@/lib/db';
+import {
+  MENU_ITEM_CATEGORY_LINK_DATE_ORDER,
+  MENU_ITEM_DATE_ORDER,
+} from '@/lib/menu/product-order';
 
 type DbClient = Prisma.TransactionClient | typeof db;
 
@@ -62,7 +66,7 @@ export async function loadCategoriesWithLinkedItems<
   categorySelect: TCategorySelect;
   itemSelect: TItemSelect;
   categoryWhere?: Prisma.MenuCategoryWhereInput;
-  itemOrderBy?: Prisma.MenuItemOrderByWithRelationInput;
+  itemOrderBy?: Prisma.Enumerable<Prisma.MenuItemOrderByWithRelationInput>;
 }): Promise<
   Array<
     Prisma.MenuCategoryGetPayload<{ select: TCategorySelect }> & {
@@ -89,7 +93,7 @@ export async function loadCategoriesWithLinkedItems<
 
   const links = await db.menuItemCategory.findMany({
     where: { category: { restaurantId: options.restaurantId } },
-    orderBy: [{ sortOrder: 'asc' }, { menuItem: { name: 'asc' } }],
+    orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
     select: {
       categoryId: true,
       menuItemId: true,
@@ -118,7 +122,7 @@ export async function loadCategoriesWithLinkedItems<
         restaurantId: options.restaurantId,
         categoryId: { in: categoryIds },
       },
-      orderBy: options.itemOrderBy ?? { name: 'asc' },
+      orderBy: options.itemOrderBy ?? [...MENU_ITEM_DATE_ORDER],
       select: {
         ...(options.itemSelect as object),
         categoryId: true,
@@ -135,6 +139,31 @@ export async function loadCategoriesWithLinkedItems<
         list.push(item);
       }
       itemIdsByCategory.set(categoryId, seen);
+      itemsByCategory.set(categoryId, list);
+    }
+  }
+
+  // Re-order each category's items by product dates after merging links + legacy.
+  const allItemIds = [
+    ...new Set(
+      [...itemsByCategory.values()].flatMap((list) =>
+        list.map((item) => (item as MenuItem & { id: string }).id)
+      )
+    ),
+  ];
+  if (allItemIds.length > 0) {
+    const dated = await db.menuItem.findMany({
+      where: { id: { in: allItemIds } },
+      orderBy: options.itemOrderBy ?? [...MENU_ITEM_DATE_ORDER],
+      select: { id: true },
+    });
+    const rank = new Map(dated.map((row, index) => [row.id, index]));
+    for (const [categoryId, list] of itemsByCategory) {
+      list.sort(
+        (a, b) =>
+          (rank.get((a as MenuItem & { id: string }).id) ?? 0) -
+          (rank.get((b as MenuItem & { id: string }).id) ?? 0)
+      );
       itemsByCategory.set(categoryId, list);
     }
   }
@@ -157,7 +186,7 @@ export async function loadSingleCategoryWithLinkedItems<
   categorySelect: TCategorySelect;
   itemSelect: TItemSelect;
   categoryWhere?: Prisma.MenuCategoryWhereInput;
-  itemOrderBy?: Prisma.MenuItemOrderByWithRelationInput;
+  itemOrderBy?: Prisma.Enumerable<Prisma.MenuItemOrderByWithRelationInput>;
   /** When set, only this page of items is loaded (full id list is still resolved). */
   pagination?: { skip: number; take: number };
 }): Promise<
@@ -186,7 +215,7 @@ export async function loadSingleCategoryWithLinkedItems<
       categoryId: options.categoryId,
       category: { restaurantId: options.restaurantId },
     },
-    orderBy: [{ sortOrder: 'asc' }, { menuItem: { name: 'asc' } }],
+    orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
     select: { menuItemId: true },
   });
 
@@ -203,13 +232,24 @@ export async function loadSingleCategoryWithLinkedItems<
       restaurantId: options.restaurantId,
       categoryId: options.categoryId,
     },
-    orderBy: options.itemOrderBy ?? { name: 'asc' },
+    orderBy: options.itemOrderBy ?? [...MENU_ITEM_DATE_ORDER],
     select: { id: true },
   });
   for (const row of legacyItems) {
     if (seen.has(row.id)) continue;
     seen.add(row.id);
     orderedIds.push(row.id);
+  }
+
+  // Re-order combined link + legacy IDs by product dates (newest first).
+  if (orderedIds.length > 1) {
+    const dated = await db.menuItem.findMany({
+      where: { id: { in: orderedIds } },
+      orderBy: options.itemOrderBy ?? [...MENU_ITEM_DATE_ORDER],
+      select: { id: true },
+    });
+    orderedIds.length = 0;
+    for (const row of dated) orderedIds.push(row.id);
   }
 
   const itemTotal = orderedIds.length;

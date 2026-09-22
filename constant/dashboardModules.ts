@@ -12,11 +12,14 @@ export const DASHBOARD_MODULES = [
   { moduleKey: 'branched', title: 'Branched', path: '/branched' },
   { moduleKey: 'tables', title: 'Tables', path: '/tables' },
   { moduleKey: 'categories', title: 'Categories', path: '/categories' },
+  { moduleKey: 'final-view', title: 'Final View', path: '/final-view' },
   { moduleKey: 'variations', title: 'Variations', path: '/variations' },
   { moduleKey: 'product', title: 'Products', path: '/product' },
   { moduleKey: 'inventory', title: 'Inventory', path: '/inventory' },
   { moduleKey: 'recommendations', title: 'Configurations', path: '/configurations' },
   { moduleKey: 'records', title: 'Transactions', path: '/records' },
+  { moduleKey: 'expenses', title: 'Expenses', path: '/expenses' },
+  { moduleKey: 'reports', title: 'Reports', path: '/reports' },
   { moduleKey: 'settings', title: 'Settings', path: '/settings' },
 ] as const;
 

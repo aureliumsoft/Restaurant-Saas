@@ -1,4 +1,4 @@
-import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, IngredientUnit, IngredientStockEntrySource, OrderSourceType, PosShiftStatus, CustomerPaymentProvider, DineInPaymentTiming } from '@prisma/client';
+import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, IngredientUnit, IngredientStockEntrySource, OrderSourceType, PosShiftStatus, CustomerPaymentProvider, DineInPaymentTiming, ExpenseType } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import Decimal from 'decimal.js';
 
@@ -551,8 +551,11 @@ export function fakeDocumentationSubHeadingComplete() {
 export function fakeDocumentationModule() {
   return {
     name: faker.person.fullName(),
+    nameEs: undefined,
     shortDescription: faker.lorem.words(5),
+    shortDescriptionEs: undefined,
     contentHtml: faker.lorem.words(5),
+    contentHtmlEs: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -560,8 +563,11 @@ export function fakeDocumentationModuleComplete() {
   return {
     id: faker.string.uuid(),
     name: faker.person.fullName(),
+    nameEs: undefined,
     shortDescription: faker.lorem.words(5),
+    shortDescriptionEs: undefined,
     contentHtml: faker.lorem.words(5),
+    contentHtmlEs: undefined,
     sortOrder: 0,
     status: 'PUBLISHED',
     headingId: undefined,
@@ -1210,5 +1216,32 @@ export function fakeKitchenTicketItemComplete() {
     kitchenTicketId: faker.string.uuid(),
     productName: faker.lorem.words(5),
     quantity: faker.number.int(),
+  };
+}
+export function fakeExpense() {
+  return {
+    type: faker.helpers.arrayElement([ExpenseType.INVENTORY, ExpenseType.MANUAL] as const),
+    title: faker.lorem.words(5),
+    amount: faker.number.float(),
+    notes: undefined,
+    quantity: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeExpenseComplete() {
+  return {
+    id: faker.string.uuid(),
+    restaurantId: faker.string.uuid(),
+    branchId: undefined,
+    type: faker.helpers.arrayElement([ExpenseType.INVENTORY, ExpenseType.MANUAL] as const),
+    title: faker.lorem.words(5),
+    amount: faker.number.float(),
+    notes: undefined,
+    occurredAt: new Date(),
+    ingredientId: undefined,
+    quantity: undefined,
+    createdByUserId: undefined,
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
   };
 }

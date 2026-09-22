@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Loader2, Save } from 'lucide-react';
@@ -41,6 +42,7 @@ import {
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 
 export function RestaurantRegionalSettingsCard() {
+  const { t } = useTranslation();
   const regionalContext = useOptionalRestaurantRegionalContext();
   const { data, isLoading: bootstrapLoading } = useStaffBootstrapSWR();
   const bootstrap = selectStaffBootstrap(data);
@@ -69,7 +71,7 @@ export function RestaurantRegionalSettingsCard() {
 
   async function handleSave() {
     if (!navigator.onLine) {
-      toast.error('You are offline. Please check your internet connection.');
+      toast.error(t('settings.cards.shopName.offline'));
       return;
     }
     setSaving(true);
@@ -126,10 +128,9 @@ export function RestaurantRegionalSettingsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Currency &amp; country</CardTitle>
+        <CardTitle>{t('settings.cards.regional.title')}</CardTitle>
         <CardDescription>
-          Sets how prices appear in POS, kiosk, online ordering, and receipts.
-          PayPal and Stripe use this currency for customer payments.
+          {t('settings.cards.regional.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -184,7 +185,7 @@ export function RestaurantRegionalSettingsCard() {
           ) : (
             <Save className="mr-2 h-4 w-4" />
           )}
-          Save
+          {t('dashboard.common.save')}
         </Button>
       </CardFooter>
     </Card>

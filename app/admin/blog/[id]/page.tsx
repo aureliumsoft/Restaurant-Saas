@@ -6,7 +6,10 @@ import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-import { AdminBlogPostForm } from '@/components/admin/admin-blog-post-form';
+import {
+  AdminBlogPostForm,
+  blogFormFromStored,
+} from '@/components/admin/admin-blog-post-form';
 
 type PostDto = {
   id: string;
@@ -63,17 +66,7 @@ export default function AdminBlogEditPage() {
     <AdminBlogPostForm
       mode="edit"
       postId={post.id}
-      initial={{
-        title: post.title,
-        imageUrl: post.imageUrl ?? '',
-        shortDescription: post.shortDescription,
-        contentHtml: post.contentHtml,
-        seoTitle: post.seoTitle ?? '',
-        seoDescription: post.seoDescription ?? '',
-        seoImageUrl: post.seoImageUrl ?? '',
-        featured: Boolean(post.featured),
-        status: post.status,
-      }}
+      initial={blogFormFromStored(post)}
     />
   );
 }

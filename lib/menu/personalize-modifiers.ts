@@ -1,3 +1,6 @@
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import type { UiLanguage } from '@/lib/i18n/resources';
+
 export type PersonalizeGroupLike = {
   id: string;
   parentName: string;
@@ -11,7 +14,8 @@ export type PersonalizeGroupLike = {
 
 export function buildPersonalizeModifierSelections(
   groups: PersonalizeGroupLike[],
-  selectedByGroup: Record<string, string[]>
+  selectedByGroup: Record<string, string[]>,
+  lang: UiLanguage = 'es'
 ): {
   attributeGroupId: string;
   groupName: string;
@@ -43,7 +47,7 @@ export function buildPersonalizeModifierSelections(
       .filter((o): o is NonNullable<typeof o> => Boolean(o))
       .map((o) => ({
         menuItemId: `personalize:${o.id}`,
-        name: o.name,
+        name: resolveBilingualText(o.name, lang),
         description: null,
         imageUrl: o.imageUrl ?? null,
         unitPrice: 0,
@@ -51,7 +55,7 @@ export function buildPersonalizeModifierSelections(
     if (selections.length === 0) continue;
     mods.push({
       attributeGroupId: group.id,
-      groupName: group.parentName,
+      groupName: resolveBilingualText(group.parentName, lang),
       selections,
     });
   }

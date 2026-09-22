@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 import {
   ChevronLeft,
   ChevronRight,
@@ -26,6 +27,12 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  serializeBilingualChooseAddonsTitle,
+  serializeBilingualChooseTitle,
+  serializeBilingualInput,
+  serializeBilingualText,
+} from '@/lib/menu/bilingual-text';
 import {
   Popover,
   PopoverContent,
@@ -220,8 +227,8 @@ function buildRecommendationPayloads(
       payloads.push({
         name:
           draft.selectionType === 'SINGLE'
-            ? `Choose ${cat.name}`
-            : `Choose from ${cat.name}`,
+            ? serializeBilingualChooseTitle(cat.name, 'choose')
+            : serializeBilingualChooseTitle(cat.name, 'chooseFrom'),
         sourceType: 'CATEGORY',
         selectionType: draft.selectionType,
         required: draft.required,
@@ -268,11 +275,17 @@ function buildRecommendationPayloads(
       payloads.push({
         name: product
           ? catNames.length > 1
-            ? `Choose add-ons (${catNames.join(', ')})`
+            ? serializeBilingualChooseAddonsTitle(catNames)
             : draft.selectionType === 'SINGLE'
-              ? `Choose ${product.name}`
-              : `Choose from ${catNames[0] ?? product.categoryName}`
-          : 'Recommended products',
+              ? serializeBilingualChooseTitle(product.name, 'choose')
+              : serializeBilingualChooseTitle(
+                  catNames[0] ?? product.categoryName,
+                  'chooseFrom'
+                )
+          : serializeBilingualText({
+              en: 'Recommended products',
+              es: 'Recommended products',
+            }),
         sourceType: 'PRODUCT',
         selectionType: draft.selectionType,
         required: draft.required,
@@ -339,6 +352,7 @@ type ProductWithCategory = MenuItemRow & {
 };
 
 export function RecommendationsTab(_props?: Props) {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -1330,14 +1344,14 @@ export function RecommendationsTab(_props?: Props) {
         {
           groups: draftToSave.map((group, groupIndex) => ({
             id: group.id,
-            parentName: group.parentName.trim(),
+            parentName: serializeBilingualInput(group.parentName),
             maxItems: group.maxItems,
             sortOrder: group.sortOrder ?? groupIndex,
             options: group.options
               .filter((option) => option.name.trim())
               .map((option, optionIndex) => ({
                 id: option.id,
-                name: option.name.trim(),
+                name: serializeBilingualInput(option.name),
                 imageUrl: option.imageUrl?.trim() || '',
                 sortOrder: option.sortOrder ?? optionIndex,
               })),
@@ -1601,11 +1615,15 @@ export function RecommendationsTab(_props?: Props) {
               type="search"
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
-              placeholder="Search products…"
+              placeholder={t(
+                'dashboard.menuManager.recommendations.searchProductsPlaceholder'
+              )}
               className="h-11 min-h-11 rounded-xl bg-background pl-9 text-base sm:h-10 sm:text-sm"
               autoComplete="off"
               enterKeyHint="search"
-              aria-label="Search products in filtered categories"
+              aria-label={t(
+                'dashboard.menuManager.recommendations.searchProductsAria'
+              )}
             />
           </div>
           <Popover
@@ -1742,7 +1760,9 @@ export function RecommendationsTab(_props?: Props) {
                   size="icon"
                   className="h-9 w-9 shrink-0 rounded-full border-border bg-background shadow-sm"
                   disabled={!productStripScroll.back}
-                  aria-label="Scroll products back"
+                  aria-label={t(
+                    'dashboard.menuManager.recommendations.scrollProductsBackAria'
+                  )}
                   onClick={() => scrollProductStrip('back')}
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -1775,7 +1795,9 @@ export function RecommendationsTab(_props?: Props) {
                                 src={p.imageUrl}
                               hasImage={p.hasImage ?? Boolean(p.imageUrl)}
                               className="absolute inset-0 h-full w-full"
-                              emptyLabel="No photo"
+                              emptyLabel={t(
+                                'dashboard.menuManager.recommendations.noPhoto'
+                              )}
                               />
                             <span
                               className={cn(
@@ -1813,7 +1835,9 @@ export function RecommendationsTab(_props?: Props) {
                   size="icon"
                   className="h-9 w-9 shrink-0 rounded-full border-border bg-background shadow-sm"
                   disabled={!productStripScroll.forward}
-                  aria-label="Scroll products forward"
+                  aria-label={t(
+                    'dashboard.menuManager.recommendations.scrollProductsForwardAria'
+                  )}
                   onClick={() => scrollProductStrip('forward')}
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -1958,8 +1982,10 @@ export function RecommendationsTab(_props?: Props) {
 
       <DeleteConfirmation
         open={deleteRuleConfirmOpen}
-        title="Remove rule"
-        description="This add-on rule will be removed from this product."
+        title={t('dashboard.menuManager.recommendations.removeRuleTitle')}
+        description={t(
+          'dashboard.menuManager.recommendations.removeRuleDescription'
+        )}
         itemName={
           selected?.attributeGroups.find((g) => g.id === deletingRuleId)?.name
         }
@@ -2019,8 +2045,10 @@ export function RecommendationsTab(_props?: Props) {
 
       <DeleteConfirmation
         open={deleteDealConfirmOpen}
-        title="Remove recommended deal"
-        description="This recommended deal link will be removed."
+        title={t('dashboard.menuManager.recommendations.removeDealTitle')}
+        description={t(
+          'dashboard.menuManager.recommendations.removeDealDescription'
+        )}
         itemName={
           currentDeals.find((d) => d.id === deletingDealId)?.dealItem.name
         }
@@ -2034,8 +2062,10 @@ export function RecommendationsTab(_props?: Props) {
 
       <DeleteConfirmation
         open={deleteOfferConfirmOpen}
-        title="Remove offered product"
-        description="This offered product link will be removed."
+        title={t('dashboard.menuManager.recommendations.removeOfferTitle')}
+        description={t(
+          'dashboard.menuManager.recommendations.removeOfferDescription'
+        )}
         itemName={
           currentOffers.find((o) => o.id === deletingOfferId)?.offeredItem.name
         }

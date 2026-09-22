@@ -1,7 +1,10 @@
+import { resolveBlogPostCms } from '@/lib/blog/resolve-public-blog';
 import { db } from '@/lib/db';
+import type { UiLanguage } from '@/lib/i18n/resources';
 
 export type PublicBlogSidebarCard = {
   id: string;
+  /** Raw bilingual JSON / &&&& — resolve in the client for live language switch. */
   title: string;
   slug: string;
   imageUrl: string | null;
@@ -41,7 +44,8 @@ function mapCard(p: {
 }
 
 export async function loadFeaturedBlogPosts(
-  limit = 6
+  limit = 6,
+  _lang?: UiLanguage
 ): Promise<PublicBlogSidebarCard[]> {
   const rows = await db.blogPost.findMany({
     where: { status: 'PUBLISHED', featured: true },
@@ -54,7 +58,8 @@ export async function loadFeaturedBlogPosts(
 
 export async function loadRecentBlogPosts(
   limit = 6,
-  excludeSlug?: string
+  excludeSlug?: string,
+  _lang?: UiLanguage
 ): Promise<PublicBlogSidebarCard[]> {
   const rows = await db.blogPost.findMany({
     where: {
@@ -66,4 +71,23 @@ export async function loadRecentBlogPosts(
     select: cardSelect,
   });
   return rows.map(mapCard);
+}
+
+/** Resolve bilingual card fields for a fixed language (metadata / SSR). */
+export function localizeBlogSidebarCard(
+  card: PublicBlogSidebarCard,
+  lang: UiLanguage
+): PublicBlogSidebarCard {
+  const localized = resolveBlogPostCms(
+    {
+      title: card.title,
+      shortDescription: card.shortDescription,
+    },
+    lang
+  );
+  return {
+    ...card,
+    title: localized.title,
+    shortDescription: localized.shortDescription,
+  };
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 import {
   GripVertical,
   Eye,
@@ -18,6 +19,12 @@ import {
 import { AddCategoryFormDialog } from '@/components/dashboard/menu-manager/add-category-form-dialog';
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import {
+  bilingualInputFromStored,
+  parseBilingualInput,
+  resolveBilingualText,
+  serializeBilingualInput,
+} from '@/lib/menu/bilingual-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -89,6 +96,7 @@ export function CategoriesTab({
   loadingMore = false,
   search: appliedSearch = '',
 }: Props) {
+  const { t } = useTranslation();
   const { activeBranchId, branches, loading: branchesLoading } = useBranchContext();
   const [activeTab, setActiveTab] = useState<CategoryTab>('storefront');
   const [createOpen, setCreateOpen] = useState(false);
@@ -137,7 +145,7 @@ export function CategoriesTab({
       await axios.patch(`/api/restaurant/menu/categories/${id}`, {
         imageUrl: next.trim() || null,
       });
-      toast.success('Image saved');
+      toast.success(t('dashboard.menuManager.wizard.saved'));
       await onRefresh(appliedSearch);
     } catch {
       toast.error('Could not update image');
@@ -146,9 +154,13 @@ export function CategoriesTab({
 
   const rename = async (id: string, next: string) => {
     if (!next.trim()) return;
+    if (!parseBilingualInput(next).en) {
+      toast.error('English name (before &&&&) is required.');
+      return;
+    }
     try {
       await axios.patch(`/api/restaurant/menu/categories/${id}`, {
-        name: next.trim(),
+        name: serializeBilingualInput(next),
       });
       toast.success('Saved');
       await onRefresh(appliedSearch);
@@ -334,15 +346,16 @@ export function CategoriesTab({
         <CardHeader className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle className="text-lg">Menu categories</CardTitle>
+              <CardTitle className="text-lg">
+                {t('dashboard.categories.cardTitle')}
+              </CardTitle>
               <CardDescription>
-                Storefront categories appear on web, kiosk, and POS.
-                Recommendations categories are add-on pools only.
+                {t('dashboard.categories.cardDescription')}
               </CardDescription>
             </div>
             <Button type="button" onClick={() => setCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" aria-hidden />
-              New category
+              {t('dashboard.categories.newCategory')}
             </Button>
           </div>
 
@@ -352,9 +365,9 @@ export function CategoriesTab({
                 type="search"
                 value={searchDraft}
                 onChange={(e) => setSearchDraft(e.target.value)}
-                placeholder="Search categories by name…"
+                placeholder={t('dashboard.categories.searchPlaceholder')}
                 className="h-10 bg-background pr-10 [&::-webkit-search-cancel-button]:hidden"
-                aria-label="Search categories"
+                aria-label={t('dashboard.categories.searchAria')}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') applySearch();
                 }}
@@ -365,7 +378,7 @@ export function CategoriesTab({
                   variant="ghost"
                   size="icon"
                   className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
-                  aria-label="Clear search"
+                  aria-label={t('dashboard.categories.clearSearchAria')}
                   onClick={clearSearch}
                 >
                   <X className="h-4 w-4" />
@@ -374,7 +387,7 @@ export function CategoriesTab({
             </div>
             <Button type="button" variant="secondary" onClick={applySearch}>
               <Search className="mr-2 h-4 w-4" />
-              Search
+              {t('dashboard.common.search')}
             </Button>
           </div>
         </CardHeader>
@@ -387,13 +400,13 @@ export function CategoriesTab({
           >
             <TabsList className="grid h-11 w-full grid-cols-2">
               <TabsTrigger value="storefront" className="w-full">
-                Storefront
+                {t('dashboard.categories.tabStorefront')}
                 <span className="ml-2 text-xs text-muted-foreground">
                   ({storefrontCategories.length})
                 </span>
               </TabsTrigger>
               <TabsTrigger value="recommendations" className="w-full">
-                Recommendations
+                {t('dashboard.categories.tabRecommendations')}
                 <span className="ml-2 text-xs text-muted-foreground">
                   ({recommendationCategories.length})
                 </span>
@@ -402,26 +415,25 @@ export function CategoriesTab({
 
             <TabsContent value="storefront" className="mt-4 space-y-3">
               <p className="text-xs text-muted-foreground">
-                Drag rows to change the order guests see on storefront.
+                {t('dashboard.categories.storefrontDragHint')}
               </p>
               {renderList(storefrontCategories, {
                 draggable: true,
                 emptyMessage: appliedSearch
-                  ? 'No storefront categories match your search.'
-                  : 'No storefront categories yet. Create one with “Show in front” enabled.',
+                  ? t('dashboard.categories.emptyStorefrontSearch')
+                  : t('dashboard.categories.emptyStorefront'),
               })}
             </TabsContent>
 
             <TabsContent value="recommendations" className="mt-4 space-y-3">
               <p className="text-xs text-muted-foreground">
-                Add-on / recommendation pools — not shown on the storefront
-                browse.
+                {t('dashboard.categories.recommendationsHint')}
               </p>
               {renderList(recommendationCategories, {
                 draggable: false,
                 emptyMessage: appliedSearch
-                  ? 'No recommendation categories match your search.'
-                  : 'No recommendation-only categories yet. Hide a category from the storefront to use it here.',
+                  ? t('dashboard.categories.emptyRecommendationsSearch')
+                  : t('dashboard.categories.emptyRecommendations'),
               })}
             </TabsContent>
           </Tabs>
@@ -439,7 +451,10 @@ export function CategoriesTab({
         open={confirmDeleteOpen}
         title="Delete category"
         description="This category will be removed. Products in this category may need reassignment."
-        itemName={categories.find((c) => c.id === deletingId)?.name}
+        itemName={resolveBilingualText(
+          categories.find((c) => c.id === deletingId)?.name,
+          'en'
+        )}
         loading={deleting}
         onConfirm={() => {
           setDeleting(true);
@@ -490,17 +505,19 @@ function CategoryCard({
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
 }) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState(category.name);
+  const [val, setVal] = useState(() => bilingualInputFromStored(category.name));
   const [imageVal, setImageVal] = useState(category.imageUrl ?? '');
   const [saving, setSaving] = useState(false);
   const [savingImage, setSavingImage] = useState(false);
   const [hiddenBranchIds, setHiddenBranchIds] = useState<string[]>(
     category.hiddenBranchIds ?? []
   );
+  const displayName = resolveBilingualText(category.name, 'en');
 
   useEffect(() => {
-    setVal(category.name);
+    setVal(bilingualInputFromStored(category.name));
     setImageVal(category.imageUrl ?? '');
     setHiddenBranchIds(category.hiddenBranchIds ?? []);
     setEditing(false);
@@ -518,7 +535,7 @@ function CategoryCard({
   const canDrag = draggable && !editing && !reordering;
 
   const cancelEdit = () => {
-    setVal(category.name);
+    setVal(bilingualInputFromStored(category.name));
     setImageVal(category.imageUrl ?? '');
     setEditing(false);
   };
@@ -529,7 +546,8 @@ function CategoryCard({
 
     const nextImage = imageVal.trim();
     const currentImage = (category.imageUrl ?? '').trim();
-    const nameChanged = nextName !== category.name;
+    const nameChanged =
+      nextName !== bilingualInputFromStored(category.name);
     const imageChanged = nextImage !== currentImage;
     const hiddenBranchIdsChanged =
       activeBranchId !== null &&
@@ -606,7 +624,7 @@ function CategoryCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold">{category.name}</h3>
+          <h3 className="truncate font-semibold">{displayName}</h3>
           <p className="text-sm text-muted-foreground">
             {productCount} {productCount === 1 ? 'product' : 'products'}
           </p>
@@ -617,7 +635,9 @@ function CategoryCard({
             <Badge variant="outline">Empty</Badge>
           ) : (
             <Badge variant={visible ? 'default' : 'secondary'}>
-              {visible ? 'Storefront' : 'Recommendations'}
+              {visible
+                ? t('dashboard.categories.tabStorefront')
+                : t('dashboard.categories.tabRecommendations')}
             </Badge>
           )}
         </div>
@@ -627,7 +647,7 @@ function CategoryCard({
             size="icon"
             variant="ghost"
             onClick={() => setEditing(true)}
-            aria-label="Edit category"
+            aria-label={t('dashboard.menuManager.category.editAria')}
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -637,7 +657,7 @@ function CategoryCard({
             variant="ghost"
             className="text-destructive"
             onClick={() => onDelete(category.id)}
-            aria-label="Delete category"
+            aria-label={t('dashboard.menuManager.category.deleteAria')}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -677,12 +697,12 @@ function CategoryCard({
           {branchVisible ? (
             <>
               <EyeOff className="mr-2 h-4 w-4" />
-              No Visible            
+              {t('dashboard.menuManager.category.notVisible')}
             </>
           ) : (
             <>
               <Eye className="mr-2 h-4 w-4" />
-              Visible
+              {t('dashboard.menuManager.category.visible')}
             </>
           )}
         </Button>
@@ -691,7 +711,7 @@ function CategoryCard({
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit Category</DialogTitle>
+            <DialogTitle>{t('dashboard.menuManager.category.edit')}</DialogTitle>
             <DialogDescription>
               Update the category information.
             </DialogDescription>
@@ -699,22 +719,26 @@ function CategoryCard({
 
           <div className="space-y-5">
             <div className="space-y-2">
-              <Label>Name</Label>
+              <Label>{t('dashboard.common.name')}</Label>
               <Input
                 value={val}
+                placeholder={`English name ${'&&&&'} Spanish name`}
                 onChange={(e) => setVal(e.target.value)}
                 disabled={saving}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') void saveEdits();
                 }}
               />
+              <p className="text-xs text-muted-foreground">
+                First English, then separator &&&&, then Spanish.
+              </p>
             </div>
 
             <Base64ImageUploadField
-              label="Category image"
+              label={t('dashboard.menuManager.category.categoryImage')}
               value={imageVal}
               onChange={setImageVal}
-              helperText="Shown on website, kiosk and POS."
+              helperText={t('dashboard.menuManager.category.categoryImageHelper')}
             />
 
             <div className="space-y-2 rounded-md border p-3">
@@ -764,7 +788,7 @@ function CategoryCard({
                 onClick={cancelEdit}
                 disabled={saving || savingImage}
               >
-                Cancel
+                {t('dashboard.common.cancel')}
               </Button>
               <Button
                 disabled={saving || savingImage || !val.trim()}
@@ -773,7 +797,7 @@ function CategoryCard({
                 {(saving || savingImage) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Save Changes
+                {t('dashboard.menuManager.saveChanges')}
               </Button>
             </div>
           </div>

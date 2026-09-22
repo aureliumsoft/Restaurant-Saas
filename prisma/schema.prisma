@@ -116,6 +116,7 @@ model User {
   posShiftsOpened      PosShift[]            @relation("PosShiftOpenedBy")
   posShiftsClosed      PosShift[]            @relation("PosShiftClosedBy")
   ingredientStockEntries IngredientStockEntry[]
+  expenses             Expense[]
 }
 
 model Role {
@@ -220,6 +221,7 @@ model Restaurant {
   posShifts              PosShift[]
   ingredients            Ingredient[]
   ingredientStockEntries IngredientStockEntry[]
+  expenses               Expense[]
 }
 
 enum CustomerPaymentProvider {
@@ -373,6 +375,7 @@ model Branch {
   posShifts    PosShift[]
   ingredientStocks BranchIngredientStock[]
   ingredientStockEntries IngredientStockEntry[]
+  expenses         Expense[]
 
   @@index([restaurantId])
 }
@@ -523,14 +526,17 @@ model NewsletterCampaign {
 /// Platform marketing blog posts (admin-managed; public at /blog).
 model BlogPost {
   id               String    @id @default(cuid())
+  /// Bilingual: JSON `{en,es}` or legacy `English &&&& Spanish` (same as menu products).
   title            String
   slug             String    @unique
   imageUrl         String?
+  /// Bilingual: JSON `{en,es}` or legacy `English &&&& Spanish`.
   shortDescription String
+  /// Bilingual HTML body: JSON `{en,es}` (same resolve path as products).
   contentHtml      String
-  /// Google search / social snippet title (falls back to title).
+  /// Google search / social snippet title (falls back to title). Bilingual JSON / &&&&.
   seoTitle         String?
-  /// Google search / social snippet description (falls back to shortDescription).
+  /// Google search / social snippet description (falls back to shortDescription). Bilingual JSON / &&&&.
   seoDescription   String?
   /// Google / OG image URL (falls back to imageUrl).
   seoImageUrl      String?
@@ -566,6 +572,7 @@ model PlatformFaq {
 /// Sidebar section (e.g. Getting Started, Core Tasks).
 model DocumentationHeading {
   id        String   @id @default(cuid())
+  /// Bilingual: JSON `{en,es}` or legacy `English &&&& Spanish` (same as menu products).
   name      String
   slug      String   @unique
   sortOrder Int      @default(0)
@@ -584,6 +591,7 @@ model DocumentationHeading {
 model DocumentationSubHeading {
   id        String   @id @default(cuid())
   headingId String
+  /// Bilingual: JSON `{en,es}` or legacy `English &&&& Spanish` (same as menu products).
   name      String
   slug      String
   sortOrder Int      @default(0)
@@ -602,10 +610,13 @@ model DocumentationSubHeading {
 
 /// Platform documentation pages (admin-managed; /documentation tree).
 model DocumentationModule {
-  id               String   @id @default(cuid())
-  name             String
-  shortDescription String
-  contentHtml      String
+  id                 String   @id @default(cuid())
+  name               String
+  nameEs             String?
+  shortDescription   String
+  shortDescriptionEs String?
+  contentHtml        String
+  contentHtmlEs      String?
   /// Lower numbers appear first.
   sortOrder        Int      @default(0)
   /// DRAFT | PUBLISHED
@@ -1126,6 +1137,7 @@ model Ingredient {
   recipes    MenuItemIngredient[]
   entries    IngredientStockEntry[]
   branchStocks BranchIngredientStock[]
+  expenses   Expense[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1296,4 +1308,38 @@ model KitchenTicketItem {
   kitchenTicket KitchenTicket @relation(fields: [kitchenTicketId], references: [id], onDelete: Cascade)
 
   @@index([kitchenTicketId])
+}
+
+enum ExpenseType {
+  INVENTORY
+  MANUAL
+}
+
+/// Restaurant expense ledger (manual entries + inventory restock costs).
+model Expense {
+  id              String      @id @default(uuid())
+  restaurantId    String
+  branchId        String?
+  type            ExpenseType
+  title           String
+  amount          Float
+  notes           String?
+  occurredAt      DateTime    @default(now())
+  ingredientId    String?
+  /// Restock delta for INVENTORY expenses.
+  quantity        Float?
+  createdByUserId String?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branch     Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  ingredient Ingredient? @relation(fields: [ingredientId], references: [id], onDelete: SetNull)
+  createdBy  User?      @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId, occurredAt])
+  @@index([branchId, occurredAt])
+  @@index([type, occurredAt])
+  @@index([ingredientId])
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { CreditCard, Loader2, RefreshCw } from 'lucide-react';
@@ -91,6 +92,7 @@ function AutoRenewToggle({
 }
 
 export function RestaurantBillingCard() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savingAutoRenew, setSavingAutoRenew] = useState(false);
@@ -178,11 +180,10 @@ export function RestaurantBillingCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <CreditCard className="h-5 w-5" aria-hidden />
-          Subscription &amp; billing
+          {t('settings.cards.billing.title')}
         </CardTitle>
         <CardDescription>
-          Your Foodluk plan and billing period. Customer order payments are
-          configured separately below.
+          {t('settings.cards.billing.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">

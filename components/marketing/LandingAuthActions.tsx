@@ -8,6 +8,7 @@ import { LayoutDashboard, Loader2, LogOut, Shield, User, User2, UserPlus } from 
 import { Button } from '@/components/ui/button';
 import { isPlatformAdminSession } from '@/lib/auth/admin';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 export type LandingAuthActionsProps = {
   loggedOutLabel?: string;
@@ -19,12 +20,15 @@ export type LandingAuthActionsProps = {
 };
 
 export default function LandingAuthActions({
-  loggedOutLabel = 'Get Started',
+  loggedOutLabel,
   loggedOutClassName,
   loadingClassName,
   menuClassName,
 }: LandingAuthActionsProps = {}) {
+  const { t } = useTranslation();
   const { data: session, status } = useSession();
+  const resolvedLoggedOutLabel =
+    loggedOutLabel ?? t('marketingExtras.landingAuth.getStarted');
   const [open, setOpen] = useState(false);
   const showAdmin = isPlatformAdminSession(session?.user);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -52,7 +56,7 @@ export default function LandingAuthActions({
     return (
       <Button  asChild className={loggedOutClassName}>
         <Link href="/register">
-            <span>{loggedOutLabel}</span>
+            <span>{resolvedLoggedOutLabel}</span>
         </Link>
       </Button>
     );
@@ -64,7 +68,7 @@ export default function LandingAuthActions({
         variant="default"
         className={cn('h-9 w-9 p-0')}
         onClick={() => setOpen((v) => !v)}
-        aria-label="Open user menu"
+        aria-label={t('marketingExtras.landingAuth.openMenuAria')}
       >
         <User2 className="h-4 w-4" />
       </Button>
@@ -83,7 +87,7 @@ export default function LandingAuthActions({
               onClick={() => setOpen(false)}
             >
               <Shield className="mr-2 h-4 w-4" />
-              Foodluk admin
+              {t('marketingExtras.landingAuth.admin')}
             </Link>
           ) : (
             <Link
@@ -92,7 +96,7 @@ export default function LandingAuthActions({
               onClick={() => setOpen(false)}
             >
               <LayoutDashboard className="mr-2 h-4 w-4" />
-              Dashboard
+              {t('marketingExtras.landingAuth.dashboard')}
             </Link>
           )}
           <button
@@ -102,7 +106,7 @@ export default function LandingAuthActions({
           >
             <>
               <LogOut className="mr-2 h-4 w-4" />
-              <span>Logout</span>
+              <span>{t('marketingExtras.landingAuth.logout')}</span>
             </>
           </button>
         </div>

@@ -7,17 +7,18 @@ import {
   CheckCircle2,
   Home,
   Loader2,
-  LogIn,
   PlusCircle,
   SendHorizonal,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export default function DemoRequestPage() {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [restaurant, setRestaurant] = useState('');
@@ -39,8 +40,8 @@ export default function DemoRequestPage() {
         axios.isAxiosError(error) && error.response?.data?.error
           ? typeof error.response.data.error === 'string'
             ? error.response.data.error
-            : 'Could not submit demo request.'
-          : 'Could not submit demo request.';
+            : t('marketingExtras.demo.submitFailed')
+          : t('marketingExtras.demo.submitFailed');
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -65,10 +66,11 @@ export default function DemoRequestPage() {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="h-9 w-9" strokeWidth={2.5} />
             </div>
-            <h1 className="mt-5 text-3xl font-bold md:text-4xl">Request sent</h1>
+            <h1 className="mt-5 text-3xl font-bold md:text-4xl">
+              {t('marketingExtras.demo.successTitle')}
+            </h1>
             <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-              Your demo request was submitted successfully. Check your email to
-              stay updated about your request.
+              {t('marketingExtras.demo.successBody')}
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Button
@@ -78,7 +80,7 @@ export default function DemoRequestPage() {
                 onClick={startNewRequest}
               >
                 <PlusCircle className="mr-2 h-4 w-4" />
-                New request
+                {t('marketingExtras.demo.newRequest')}
               </Button>
               <Button
                 asChild
@@ -86,22 +88,23 @@ export default function DemoRequestPage() {
               >
                 <Link href="/">
                   <Home className="mr-2 h-4 w-4" />
-                  Back to homepage
+                  {t('marketingExtras.demo.backHome')}
                 </Link>
               </Button>
             </div>
           </div>
         ) : (
           <>
-            <h1 className="text-3xl font-bold md:text-4xl">Request a Demo</h1>
+            <h1 className="text-3xl font-bold md:text-4xl">
+              {t('marketingExtras.demo.title')}
+            </h1>
             <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-              See how Foodluk SaaS can fit your operation in a guided product
-              walkthrough.
+              {t('marketingExtras.demo.subtitle')}
             </p>
 
             <form className="mt-8 space-y-4" onSubmit={onSubmit}>
               <div className="space-y-2">
-                <Label htmlFor="name">Your name</Label>
+                <Label htmlFor="name">{t('marketingExtras.demo.yourName')}</Label>
                 <Input
                   id="name"
                   value={name}
@@ -110,7 +113,9 @@ export default function DemoRequestPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Business email</Label>
+                <Label htmlFor="email">
+                  {t('marketingExtras.demo.businessEmail')}
+                </Label>
                 <Input
                   id="email"
                   type="email"
@@ -120,7 +125,9 @@ export default function DemoRequestPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="restaurant">Restaurant / brand name</Label>
+                <Label htmlFor="restaurant">
+                  {t('marketingExtras.demo.restaurantName')}
+                </Label>
                 <Input
                   id="restaurant"
                   value={restaurant}
@@ -137,11 +144,11 @@ export default function DemoRequestPage() {
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    <span>Submitting...</span>
+                    <span>{t('marketingExtras.demo.submitting')}</span>
                   </>
                 ) : (
                   <>
-                    <span>Submit Demo Request</span>
+                    <span>{t('marketingExtras.demo.submit')}</span>
                     <SendHorizonal className="ml-1 h-4 w-4" />
                   </>
                 )}

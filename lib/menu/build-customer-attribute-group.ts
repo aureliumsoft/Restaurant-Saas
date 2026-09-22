@@ -7,7 +7,9 @@ import {
   configurationItemListUnitPriceForDefaultLinked,
   filterConfigurationItemsForDefaultLinkedVariation,
 } from '@/lib/menu/configuration-variation-price';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
+import type { UiLanguage } from '@/lib/i18n/resources';
 
 import type { AttributeGroup } from '@/components/order/product-customize-dialog';
 import type { PersonalizeGroup } from '@/components/order/personalize-options-section';
@@ -44,7 +46,8 @@ export function buildCustomerAttributeGroup(
   },
   baseProductId: string,
   /** Lazy image proxy for recommendation option thumbs (no embedded base64). */
-  imageUrlForItem?: AttributeGroupImageUrlBuilder
+  imageUrlForItem?: AttributeGroupImageUrlBuilder,
+  lang: UiLanguage = 'es'
 ): AttributeGroup {
   const directItems = group.linkedCategory?.items ?? [];
   const linkItems =
@@ -119,9 +122,14 @@ export function buildCustomerAttributeGroup(
           defaultRestaurantVariationId
         )
       : mappedItems;
+  const resolvedGroupTitle = group.name?.trim()
+    ? resolveBilingualText(group.name, lang)
+    : null;
+  const fallbackTitle = attributeGroupDisplayName(group, lang);
+
   return {
     id: group.id,
-    name: group.name?.trim() || attributeGroupDisplayName(group) || 'Option',
+    name: resolvedGroupTitle || fallbackTitle || 'Option',
     selectionType: group.selectionType,
     multipleMode: group.multipleMode ?? undefined,
     freeQuantity: group.freeQuantity,
@@ -131,7 +139,7 @@ export function buildCustomerAttributeGroup(
     minItems: group.minItems,
     maxItems: group.maxItems,
     variationLimits: group.variationLimits,
-    linkedCategoryName: attributeGroupDisplayName(group),
+    linkedCategoryName: fallbackTitle,
     sourceType: group.sourceType ?? 'CATEGORY',
     defaultMenuItemId: defaultItem?.id ?? group.defaultLinkedMenuItemId ?? null,
     defaultUnitPrice,
@@ -141,7 +149,10 @@ export function buildCustomerAttributeGroup(
     items: items
       .map((it) => {
         const raw = rawItems.find((r) => r.id === it.id);
-        const nestedGroups = raw?.attributeGroups ?? [];
+        const nestedGroups =
+          (raw?.attributeGroups?.length ? raw.attributeGroups : null) ??
+          it.attributeGroups ??
+          [];
         const lazyImage =
           imageUrlForItem?.(it.id) ??
           (it.imageUrl && !it.imageUrl.startsWith('data:')
@@ -149,8 +160,10 @@ export function buildCustomerAttributeGroup(
             : null);
         return {
           menuItemId: it.id,
-          name: it.name,
-          description: it.description ?? null,
+          name: resolveBilingualText(it.name, lang),
+          description: it.description
+            ? resolveBilingualText(it.description, lang)
+            : null,
           imageUrl: lazyImage,
           price: productOverrides[it.id]?.free ? 0 : it.price,
           salePrice: productOverrides[it.id]?.free ? null : it.salePrice,
@@ -158,8 +171,8 @@ export function buildCustomerAttributeGroup(
           createdAt: it.createdAt ?? raw?.createdAt ?? null,
           variations: (it.variations ?? []).map((v) => ({
             id: v.id,
-            name: v.name,
-            title: v.title,
+            name: v.name ? resolveBilingualText(v.name, lang) : undefined,
+            title: v.title ? resolveBilingualText(v.title, lang) : undefined,
             // Variation thumbs reuse the product lazy URL (no per-variation blob).
             imageUrl: lazyImage,
             swatchHex: v.swatchHex ?? null,
@@ -172,7 +185,8 @@ export function buildCustomerAttributeGroup(
                   buildCustomerAttributeGroup(
                     ng as Parameters<typeof buildCustomerAttributeGroup>[0],
                     it.id,
-                    imageUrlForItem
+                    imageUrlForItem,
+                    lang
                   )
                 )
               : undefined,

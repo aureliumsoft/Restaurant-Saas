@@ -1,4 +1,8 @@
-import React from 'react';
+'use client';
+
+import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
+
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -9,23 +13,25 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import Link from 'next/link';
-const Page = () => {
+
+export default function AnalyticsProductHubPage() {
+  const { t } = useTranslation();
+
   return (
-    <div className="w-full h-full dark:bg-[#0F0F0F] flex flex-col items-center p-4">
-      <div className="flex flex-col lg:flex-row justify-center items-center w-full h-full gap-4">
-        <Card className="w-full lg:w-1/2 h-full flex flex-col">
+    <div className="flex h-full w-full flex-col items-center p-4 dark:bg-[#0F0F0F]">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-4 lg:flex-row">
+        <Card className="flex h-full w-full flex-col lg:w-1/2">
           <CardHeader>
-            <CardTitle>Total Products Sale</CardTitle>
+            <CardTitle>
+              {t('dashboard.analyticsPages.productTotalSalesTitle')}
+            </CardTitle>
             <CardDescription>
-              Explore insights and analytics about our total product sales.
-              Click the button below to view detailed product analytics.
+              {t('dashboard.analyticsPages.productTotalSalesDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-grow pt-5">
             <div className="p-4">
-              <svg viewBox="0 0 100 50" className="w-full h-auto">
-                {/* X and Y axes */}
+              <svg viewBox="0 0 100 50" className="h-auto w-full">
                 <line
                   x1="0"
                   y1="45"
@@ -42,14 +48,12 @@ const Page = () => {
                   stroke="black"
                   strokeWidth="0.5"
                 />
-                {/* Data line */}
                 <polyline
                   fill="none"
                   stroke="blue"
                   strokeWidth="0.5"
                   points="5,45 15,30 25,25 35,20 45,15 55,10 65,5 75,8 85,12 95,10"
                 />
-                {/* Data points */}
                 {[
                   { cx: 5, cy: 45 },
                   { cx: 15, cy: 30 },
@@ -75,23 +79,25 @@ const Page = () => {
           </CardContent>
           <CardFooter>
             <Button variant="outline" className="w-full" asChild>
-              <Link href={'/analytics/product/sales'}>Go</Link>
+              <Link href="/analytics/product/sales">
+                {t('dashboard.analyticsPages.go')}
+              </Link>
             </Button>
           </CardFooter>
         </Card>
         <Separator orientation="vertical" className="hidden lg:block" />
-        <Card className="w-full lg:w-1/2 h-full flex flex-col">
+        <Card className="flex h-full w-full flex-col lg:w-1/2">
           <CardHeader>
-            <CardTitle>Favorites Product</CardTitle>
+            <CardTitle>
+              {t('dashboard.analyticsPages.productFavoritesTitle')}
+            </CardTitle>
             <CardDescription>
-              Explore the popularity of our favorite products. Click the button
-              below to view detailed analytics.
+              {t('dashboard.analyticsPages.productFavoritesDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-grow pt-5">
             <div className="p-4">
-              <svg viewBox="0 0 100 50" className="w-full h-auto">
-                {/* X and Y axes */}
+              <svg viewBox="0 0 100 50" className="h-auto w-full">
                 <line
                   x1="0"
                   y1="45"
@@ -108,14 +114,13 @@ const Page = () => {
                   stroke="black"
                   strokeWidth="0.5"
                 />
-                {/* Data bars */}
                 {[
-                  { x: 10, y: 40, height: 5, color: 'blue' },
-                  { x: 25, y: 35, height: 10, color: 'blue' },
-                  { x: 40, y: 30, height: 15, color: 'blue' },
-                  { x: 55, y: 25, height: 20, color: 'blue' },
-                  { x: 70, y: 20, height: 25, color: 'blue' },
-                  { x: 85, y: 15, height: 30, color: 'blue' },
+                  { x: 10, y: 40, height: 5 },
+                  { x: 25, y: 35, height: 10 },
+                  { x: 40, y: 30, height: 15 },
+                  { x: 55, y: 25, height: 20 },
+                  { x: 70, y: 20, height: 25 },
+                  { x: 85, y: 15, height: 30 },
                 ].map((bar, index) => (
                   <rect
                     key={index}
@@ -123,7 +128,7 @@ const Page = () => {
                     y={50 - bar.y}
                     width="10"
                     height={bar.height}
-                    fill={bar.color}
+                    fill="blue"
                   />
                 ))}
               </svg>
@@ -131,13 +136,13 @@ const Page = () => {
           </CardContent>
           <CardFooter>
             <Button variant="outline" className="w-full" asChild>
-              <Link href={'/analytics/product/favorites'}>Go</Link>
+              <Link href="/analytics/product/favorites">
+                {t('dashboard.analyticsPages.go')}
+              </Link>
             </Button>
           </CardFooter>
         </Card>
       </div>
     </div>
   );
-};
-
-export default Page;
+}

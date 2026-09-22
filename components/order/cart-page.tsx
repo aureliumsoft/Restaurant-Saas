@@ -14,6 +14,7 @@ import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
+import { useBilingualText } from '@/hooks/use-bilingual-text';
 import {
   Dialog,
   DialogContent,
@@ -61,6 +62,7 @@ import {
 type CartModifierSelection = {
   attributeGroupId: string;
   groupName: string;
+  parentSelectionKey?: string;
   selections: { menuItemId: string; name: string; unitPrice: number }[];
 };
 
@@ -183,6 +185,7 @@ export default function CartPageClient({
 }: CartPageProps) {
   const orderInfo = useOrderInfo(orderId, orderType, initialOrderInfo);
   const { t } = useTranslation();
+  const { resolve } = useBilingualText();
   const [cart, setCart] = useState<CartLine[]>([]);
   const [productImages, setProductImages] = useState<
     Record<string, string | null>
@@ -316,14 +319,14 @@ export default function CartPageClient({
           : item.price;
       out.push({
         id: item.id,
-        name: item.name,
-        description: item.description,
+        name: resolve(item.name),
+        description: item.description ? resolve(item.description) : null,
         imageUrl: item.imageUrl,
         unitPrice,
       });
     }
     return out;
-  }, [cart, cartOffers]);
+  }, [cart, cartOffers, resolve]);
 
   useEffect(() => {
     if (offeredProducts.length > 0) {

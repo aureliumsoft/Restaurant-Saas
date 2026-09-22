@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query';
+import {
+  MENU_ITEM_CATEGORY_LINK_DATE_ORDER,
+  MENU_ITEM_DATE_ORDER,
+} from '@/lib/menu/product-order';
 import { resolveRouteIdsList } from '@/lib/resolve-route-id';
 
 const MENU_CACHE_HEADERS = {
@@ -103,7 +107,7 @@ export async function GET(req: NextRequest) {
             linkedCategory: {
               select: {
                 itemLinks: {
-                  orderBy: { sortOrder: 'asc' },
+                  orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
                   take: 12,
                   select: {
                     menuItem: {
@@ -118,7 +122,7 @@ export async function GET(req: NextRequest) {
                   },
                 },
                 items: {
-                  orderBy: { name: 'asc' },
+                  orderBy: [...MENU_ITEM_DATE_ORDER],
                   take: 12,
                   select: {
                     id: true,

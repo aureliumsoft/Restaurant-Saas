@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,7 +67,15 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
-function kindBadge(kind: TransactionHistoryKind) {
+function kindBadge(
+  kind: TransactionHistoryKind,
+  t?: (key: string) => string
+) {
+  if (t) {
+    if (kind === 'ORDER') return t('dashboard.records.kindOrder');
+    if (kind === 'SUBSCRIPTION') return t('dashboard.records.kindSubscription');
+    return t('dashboard.records.kindRegister');
+  }
   if (kind === 'ORDER') return 'Order';
   if (kind === 'SUBSCRIPTION') return 'Subscription';
   return 'Register';
@@ -88,6 +97,7 @@ function formatPaymentMethod(method: string | null | undefined) {
 }
 
 export function Records() {
+  const { t } = useTranslation();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const formatRowMoney = (value: number | null, currency?: string | null) => {
     if (value == null || Number.isNaN(value)) return '—';
@@ -246,22 +256,24 @@ export function Records() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Tracking #</TableHead>
-                      {/* <TableHead>Transaction ID</TableHead> */}
-                      {/* <TableHead className="hidden md:table-cell">
-                        Order / Subscription
-                      </TableHead> */}
+                      <TableHead>{t('dashboard.records.colType')}</TableHead>
+                      <TableHead>{t('dashboard.records.colTracking')}</TableHead>
                       <TableHead className="hidden lg:table-cell">
-                        Source
+                        {t('dashboard.records.colSource')}
                       </TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="hidden md:table-cell">Payment</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>{t('dashboard.records.colStatus')}</TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        {t('dashboard.records.colPayment')}
+                      </TableHead>
+                      <TableHead className="text-right">
+                        {t('dashboard.records.colAmount')}
+                      </TableHead>
                       <TableHead className="hidden lg:table-cell">
-                        When
+                        {t('dashboard.records.colWhen')}
                       </TableHead>
-                      <TableHead className="text-right">Action</TableHead>
+                      <TableHead className="text-right">
+                        {t('dashboard.records.colAction')}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -289,7 +301,7 @@ export function Records() {
                           colSpan={10}
                           className="text-center text-muted-foreground"
                         >
-                          No records found.
+                          {t('dashboard.records.noRecords')}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -297,19 +309,8 @@ export function Records() {
                         <TableRow key={row.key}>
                           <TableCell>
                             <Badge variant="secondary">
-                              {kindBadge(row.kind)}
+                              {kindBadge(row.kind, t)}
                             </Badge>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground">
-                            {trackingNumberLabel(row)}
-                          </TableCell>
-                          {/* <TableCell className="font-mono text-xs">
-                        {row.transactionId}
-                      </TableCell> */}
-                          {/* <TableCell className="hidden font-mono text-xs md:table-cell">
-                            {row.referenceId ?? '—'}
-                          </TableCell> */}
-                          <TableCell className="hidden lg:table-cell">
                             {row.source}
                           </TableCell>
                           <TableCell>{row.status}</TableCell>
@@ -331,7 +332,8 @@ export function Records() {
                                 setDetailOpen(true);
                               }}
                             >
-                              <Eye className="h-4 w-4 mr-2" /> View
+                              <Eye className="h-4 w-4 mr-2" />{' '}
+                              {t('dashboard.records.view')}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -366,67 +368,78 @@ export function Records() {
       >
         <SheetContent>
           <SheetHeader>
-            <SheetTitle>Transaction details</SheetTitle>
-            {/* <SheetDescription className="font-mono text-xs">
-              {active?.transactionId}
-            </SheetDescription> */}
+            <SheetTitle>{t('dashboard.records.transactionDetails')}</SheetTitle>
           </SheetHeader>
           {active ? (
             <div className="mt-4 space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-xs text-muted-foreground">Type</p>
-                  <p>{kindBadge(active.kind)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('dashboard.records.detailType')}
+                  </p>
+                  <p>{kindBadge(active.kind, t)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Status</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('dashboard.records.detailStatus')}
+                  </p>
                   <p>{active.status}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Amount</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('dashboard.records.detailAmount')}
+                  </p>
                   <p className="tabular-nums">
                     {formatRowMoney(active.amount, active.currency)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Method</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('dashboard.records.detailMethod')}
+                  </p>
                   <p>{active.method ?? '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Tracking #</p>
-                  <p className="font-mono text-xs">{trackingNumberLabel(active)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('dashboard.records.detailTracking')}
+                  </p>
+                  <p className="font-mono text-xs">
+                    {trackingNumberLabel(active)}
+                  </p>
                 </div>
                 {active.kind === 'ORDER' && active.ticketNumber != null ? (
                   <div>
-                    <p className="text-xs text-muted-foreground">Order #</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('dashboard.records.detailOrderNumber')}
+                    </p>
                     <p>#{active.ticketNumber}</p>
                   </div>
                 ) : null}
                 <div>
-                  <p className="text-xs text-muted-foreground">Source</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('dashboard.records.detailSource')}
+                  </p>
                   <p>{active.source}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Date</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('dashboard.records.detailDate')}
+                  </p>
                   <p>{new Date(active.createdAt).toLocaleString()}</p>
                 </div>
               </div>
-              {/* <div className="rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">
-                  Order / Subscription reference
-                </p>
-                <p className="font-mono text-xs">{active.referenceId ?? '—'}</p>
-              </div> */}
               {active.customerName ? (
                 <div className="rounded-md border p-3">
-                  <p className="text-xs text-muted-foreground">Customer</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('dashboard.records.detailCustomer')}
+                  </p>
                   <p>{active.customerName}</p>
                 </div>
               ) : null}
               {active.note ? (
                 <div className="rounded-md border p-3">
                   <p className="text-xs text-muted-foreground">
-                    Notes / Address snapshot
+                    {t('dashboard.records.detailNotes')}
                   </p>
                   <p className="whitespace-pre-wrap text-xs">{active.note}</p>
                 </div>

@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import {
   documentationSubHeadingWriteSchema,
+  persistDocBilingualName,
   slugifyDocLabel,
 } from '@/lib/documentation/module';
 import { db } from '@/lib/db';
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
     const item = await db.documentationSubHeading.create({
       data: {
         headingId: parsed.data.headingId,
-        name: parsed.data.name,
+        name: persistDocBilingualName(parsed.data.name),
         slug,
         sortOrder,
         status: parsed.data.status ?? 'PUBLISHED',

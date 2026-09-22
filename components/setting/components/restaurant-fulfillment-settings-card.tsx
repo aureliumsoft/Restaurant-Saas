@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import {
@@ -123,6 +124,7 @@ function ChannelToggleCard({
   saving: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className={cn(
@@ -153,7 +155,7 @@ function ChannelToggleCard({
                     variant="outline"
                     className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] px-1.5 py-0 font-medium"
                   >
-                    Active
+                    {t('settings.cards.fulfillment.active')}
                   </Badge>
                 ) : (
                   <Badge
@@ -203,6 +205,7 @@ function ChannelToggleCard({
 }
 
 export function RestaurantFulfillmentSettingsCard() {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<RestaurantFulfillmentSettings>(
     DEFAULT_RESTAURANT_FULFILLMENT_SETTINGS
   );
@@ -259,7 +262,7 @@ export function RestaurantFulfillmentSettingsCard() {
           <div className="space-y-1">
             <CardTitle className="flex items-center gap-2">
               <ShoppingBag className="h-5 w-5 text-primary" />
-              <span>Order channels</span>
+              <span>{t('settings.cards.fulfillment.title')}</span>
               {!loading ? (
                 <Badge variant="secondary" className="ml-1 text-[11px] font-medium">
                   {activeCount} of {CHANNELS.length} active
@@ -269,7 +272,7 @@ export function RestaurantFulfillmentSettingsCard() {
               ) : null}
             </CardTitle>
             <CardDescription>
-              Turn channels and modules on or off across your restaurant. Disabled channels are hidden across menus, sidebars, and direct page access is blocked.
+              {t('settings.cards.fulfillment.description')}
             </CardDescription>
           </div>
           <Button

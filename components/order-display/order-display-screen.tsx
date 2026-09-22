@@ -36,6 +36,11 @@ import {
 } from '@/lib/offline/local-tickets';
 import { isBrowserOffline } from '@/lib/offline/db';
 import { listOrderOutbox } from '@/lib/offline/outbox';
+import { LanguageSwitcher } from '@/components/main/language-switcher';
+import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
+import type { UiLanguage } from '@/lib/i18n/resources';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 const VOICE_STORAGE_KEY = 'order-display:voice-enabled';
 const COMPLETED_ANNOUNCEMENT_REPEATS = 3;
@@ -100,73 +105,6 @@ async function pruneOrphanLocalTickets(): Promise<void> {
   }
 }
 
-type OrderDisplayLang = 'es' | 'en';
-
-const COPY = {
-  es: {
-    title: 'Estado del pedido',
-    subtitlePrefix: 'Pedidos POS y kiosco de hoy',
-    liveSync: 'En vivo · se actualiza en tiempo real · última sync',
-    voiceOn: 'Voz activada',
-    voiceOff: 'Voz desactivada',
-    muteTitle: 'Silenciar anuncios',
-    unmuteTitle: 'Activar anuncios',
-    refresh: 'Actualizar',
-    readyNow: 'Listo ahora',
-    readyNowSubtitle: 'Por favor, acérquese al mostrador',
-    readyBadge: 'Listo ahora',
-    recentlyCompleted: 'Completados recientemente',
-    recentlyCompletedSubtitle: 'Siguiente recogida',
-    inPreparation: 'En preparación',
-    inPreparationSubtitle: 'Preparando su pedido',
-    token: 'Token',
-    tracking: 'Seguimiento',
-    walkIn: 'Cliente sin reserva',
-    noReadyYet: 'Aún no hay pedidos listos',
-    noReadyYetSubtitle: 'Los pedidos completados aparecerán aquí.',
-    noOlderReady: 'No hay pedidos listos anteriores',
-    noOlderReadySubtitle: 'Los pedidos completados más antiguos aparecerán aquí.',
-    upNext: 'A continuación…',
-    noPreparing: 'No hay pedidos en preparación',
-    noPreparingSubtitle: 'Los pedidos en curso aparecerán aquí.',
-    signInError: 'Inicie sesión como personal del restaurante para ver esta pantalla.',
-    loadError: 'No se pudieron cargar los pedidos. Reintentando…',
-    announce: (token: string, name: string) =>
-      `Pedido número ${token} completado. ${name}, por favor, acérquese al mostrador para recoger su pedido.`,
-  },
-  en: {
-    title: 'Order Status',
-    subtitlePrefix: "Today's POS & kiosk orders",
-    liveSync: 'Live · updates in real time · last sync',
-    voiceOn: 'Voice on',
-    voiceOff: 'Voice off',
-    muteTitle: 'Mute order announcements',
-    unmuteTitle: 'Enable order announcements',
-    refresh: 'Refresh',
-    readyNow: 'Ready Now',
-    readyNowSubtitle: 'Please come to the counter',
-    readyBadge: 'Ready now',
-    recentlyCompleted: 'Recently Completed',
-    recentlyCompletedSubtitle: 'Picked up next',
-    inPreparation: 'In Preparation',
-    inPreparationSubtitle: 'Working on your order',
-    token: 'Token',
-    tracking: 'Tracking',
-    walkIn: 'Walk-in customer',
-    noReadyYet: 'No orders ready yet',
-    noReadyYetSubtitle: 'Completed orders will appear here.',
-    noOlderReady: 'No older ready orders',
-    noOlderReadySubtitle: 'Older completed orders will queue here.',
-    upNext: 'Up next…',
-    noPreparing: 'No orders being prepared',
-    noPreparingSubtitle: 'Orders being worked on will appear here.',
-    signInError: 'Please sign in as restaurant staff to view this screen.',
-    loadError: 'Could not load orders. Retrying…',
-    announce: (token: string, name: string) =>
-      `Order number ${token} is ready. ${name}, please come to the counter to collect your order.`,
-  },
-} as const;
-
 const FEMALE_VOICE_HINT =
   /female|mujer|woman|helena|monica|paulina|lucia|laura|sabina|elena|sofia|isabel|maria|español.*femenin/i;
 const MALE_VOICE_HINT =
@@ -177,7 +115,7 @@ let cachedVoiceLang: string | null = null;
 
 function pickVoiceForLang(
   synth: SpeechSynthesis,
-  lang: OrderDisplayLang
+  lang: UiLanguage
 ): SpeechSynthesisVoice | null {
   const voices = synth.getVoices();
   if (lang === 'es') {
@@ -202,7 +140,7 @@ function pickVoiceForLang(
 
 function getVoiceForLang(
   synth: SpeechSynthesis,
-  lang: OrderDisplayLang
+  lang: UiLanguage
 ): SpeechSynthesisVoice | null {
   if (cachedVoice !== undefined && cachedVoiceLang === lang) {
     return cachedVoice;
@@ -219,9 +157,9 @@ function resetVoiceCache() {
 
 function buildAnnouncement(
   ticket: OrderDisplayTicket,
-  copy: (typeof COPY)[OrderDisplayLang]
+  tr: TFunction
 ): string {
-  const name = ticket.customerName?.trim() || copy.walkIn;
+  const name = ticket.customerName?.trim() || tr('orderDisplay.walkIn');
   let tokenSpoken: string;
   if (typeof ticket.ticketNumber === 'number' && ticket.ticketNumber > 0) {
     tokenSpoken = String(ticket.ticketNumber);
@@ -231,13 +169,13 @@ function buildAnnouncement(
     ).toUpperCase();
     tokenSpoken = id.split('').join(' ');
   }
-  return copy.announce(tokenSpoken, name);
+  return tr('orderDisplay.announce', { token: tokenSpoken, name });
 }
 
 function speakUtterance(
   synth: SpeechSynthesis,
   text: string,
-  lang: OrderDisplayLang
+  lang: UiLanguage
 ): Promise<void> {
   return new Promise((resolve) => {
     const utter = new SpeechSynthesisUtterance(text);
@@ -261,8 +199,8 @@ function speakUtterance(
 async function speakCompletedAnnouncements(
   tickets: OrderDisplayTicket[],
   isEnabled: () => boolean,
-  lang: OrderDisplayLang,
-  copy: (typeof COPY)[OrderDisplayLang]
+  lang: UiLanguage,
+  tr: TFunction
 ): Promise<void> {
   if (typeof window === 'undefined' || tickets.length === 0) return;
   const synth = window.speechSynthesis;
@@ -273,7 +211,7 @@ async function speakCompletedAnnouncements(
       synth.cancel();
       return;
     }
-    const text = buildAnnouncement(ticket, copy);
+    const text = buildAnnouncement(ticket, tr);
     for (let repeat = 0; repeat < COMPLETED_ANNOUNCEMENT_REPEATS; repeat++) {
       if (!isEnabled()) {
         synth.cancel();
@@ -320,18 +258,17 @@ function formatFilterDateLabel(isoYmd: string, locale: string): string {
 }
 
 export function OrderDisplayScreen() {
+  const { t: tr, i18n } = useTranslation();
   const { regional } = useOwnerRestaurantRegional();
   const { settings: fulfillmentSettings, loading: settingsLoading } =
     useRestaurantFulfillmentSettings();
-  // Spain → Spanish UI + Euro; otherwise English (+ restaurant currency, e.g. PKR).
-  const lang: OrderDisplayLang = regional.countryCode === 'ES' ? 'es' : 'en';
-  const copy = COPY[lang];
+  const lang = normalizeUiLanguage(i18n.resolvedLanguage ?? i18n.language);
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
   const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
   const langRef = useRef(lang);
-  const copyRef = useRef(copy);
+  const tRef = useRef(tr);
   langRef.current = lang;
-  copyRef.current = copy;
+  tRef.current = tr;
 
   const [completed, setCompleted] = useState<OrderDisplayTicket[]>([]);
   const [inProgress, setInProgress] = useState<OrderDisplayTicket[]>([]);
@@ -444,7 +381,7 @@ export function OrderDisplayScreen() {
                 freshTickets,
                 () => voiceEnabledRef.current,
                 langRef.current,
-                copyRef.current
+                tRef.current
               );
             }
           }
@@ -567,7 +504,7 @@ export function OrderDisplayScreen() {
       // Prefer a real network attempt even if navigator.onLine is wrong.
       if (isBrowserOffline()) {
         await showOfflineFallback(
-          lang === 'es'
+          langRef.current === 'es'
             ? 'Modo sin conexión — mostrando pedidos locales / en caché.'
             : 'Offline mode — showing local / cached orders.'
         );
@@ -589,18 +526,18 @@ export function OrderDisplayScreen() {
         if (!res.ok) {
           // Auth / server errors: show message, try cache only for 5xx.
           if (res.status === 401 || res.status === 403) {
-            setError(copyRef.current.signInError);
+            setError(tRef.current('orderDisplay.signInError'));
             return;
           }
           if (res.status >= 500) {
             await showOfflineFallback(
-              lang === 'es'
+              langRef.current === 'es'
                 ? 'Error del servidor — mostrando pedidos en caché.'
                 : 'Server error — showing cached orders.'
             );
             return;
           }
-          setError(copyRef.current.loadError);
+          setError(tRef.current('orderDisplay.loadError'));
           return;
         }
 
@@ -621,7 +558,7 @@ export function OrderDisplayScreen() {
             : null;
 
         if (!remote) {
-          setError(copyRef.current.loadError);
+          setError(tRef.current('orderDisplay.loadError'));
           return;
         }
 
@@ -657,23 +594,23 @@ export function OrderDisplayScreen() {
 
         if (cached || hasLocal) {
           await showOfflineFallback(
-            lang === 'es'
+            langRef.current === 'es'
               ? 'Sin conexión al servidor — mostrando pedidos locales / en caché.'
               : 'Server unreachable — showing local / cached orders.'
           );
           return;
         }
-        if (!isStale()) setError(copyRef.current.loadError);
+        if (!isStale()) setError(tRef.current('orderDisplay.loadError'));
       }
     } catch {
-      if (!isStale()) setError(copyRef.current.loadError);
+      if (!isStale()) setError(tRef.current('orderDisplay.loadError'));
     } finally {
       if (!isStale()) {
       setLoading(false);
       setRefreshing(false);
     }
     }
-  }, [lang]);
+  }, []);
 
   useEffect(() => {
     const onOfflineChange = () => void load();
@@ -723,10 +660,10 @@ export function OrderDisplayScreen() {
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-            {copy.title}
+            {tr('orderDisplay.title')}
           </h1>
           <p className="text-xs text-muted-foreground md:text-sm">
-            {copy.subtitlePrefix}
+            {tr('orderDisplay.subtitlePrefix')}
             {filterDate ? (
               <>
                 {' '}
@@ -742,22 +679,29 @@ export function OrderDisplayScreen() {
             {' · '}
             {regional.currencyCode} ({currencySymbol})
             {' · '}
-            {copy.liveSync} {lastUpdatedText}
+            {tr('orderDisplay.liveSync')} {lastUpdatedText}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <LanguageSwitcher variant="inline" />
           <Button
             type="button"
             variant={voiceEnabled ? 'default' : 'outline'}
             onClick={toggleVoice}
-            title={voiceEnabled ? copy.muteTitle : copy.unmuteTitle}
+            title={
+              voiceEnabled
+                ? tr('orderDisplay.muteTitle')
+                : tr('orderDisplay.unmuteTitle')
+            }
           >
             {voiceEnabled ? (
               <Volume2 className="mr-2 h-4 w-4" />
             ) : (
               <VolumeX className="mr-2 h-4 w-4" />
             )}
-            {voiceEnabled ? copy.voiceOn : copy.voiceOff}
+            {voiceEnabled
+              ? tr('orderDisplay.voiceOn')
+              : tr('orderDisplay.voiceOff')}
           </Button>
           <Button
             type="button"
@@ -765,6 +709,7 @@ export function OrderDisplayScreen() {
             size="icon"
             onClick={() => void load()}
             disabled={refreshing}
+            title={tr('orderDisplay.refresh')}
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           </Button>
@@ -782,8 +727,8 @@ export function OrderDisplayScreen() {
       <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-2">
         <section className="flex min-h-0 flex-col gap-2 overflow-hidden">
           <SectionTitle
-            title={copy.readyNow}
-            subtitle={copy.readyNowSubtitle}
+            title={tr('orderDisplay.readyNow')}
+            subtitle={tr('orderDisplay.readyNowSubtitle')}
             accent="emerald"
           />
           <div className="min-h-0 flex-1">
@@ -795,14 +740,14 @@ export function OrderDisplayScreen() {
                 icon={
                   <CheckCircle2 className="h-12 w-12 text-emerald-500/60" />
                 }
-                title={copy.noReadyYet}
-                subtitle={copy.noReadyYetSubtitle}
+                title={tr('orderDisplay.noReadyYet')}
+                subtitle={tr('orderDisplay.noReadyYetSubtitle')}
               />
             ) : (
               <FeaturedReadyCard
                 ticket={featured}
                 pulsing={highlighted.has(featured.ticketId)}
-                copy={copy}
+                tr={tr}
               />
             )}
           </div>
@@ -811,8 +756,8 @@ export function OrderDisplayScreen() {
         <section className="flex min-h-0 flex-col gap-3 overflow-y-auto">
           <div className="flex shrink-0 flex-col gap-2">
             <SectionTitle
-              title={copy.recentlyCompleted}
-              subtitle={copy.recentlyCompletedSubtitle}
+              title={tr('orderDisplay.recentlyCompleted')}
+              subtitle={tr('orderDisplay.recentlyCompletedSubtitle')}
               accent="emerald"
             />
             {loading ? (
@@ -823,8 +768,8 @@ export function OrderDisplayScreen() {
             ) : recentOthers.length === 0 ? (
               <EmptyState
                 icon={<CheckCircle2 className="h-8 w-8 text-emerald-500/50" />}
-                title={copy.noOlderReady}
-                subtitle={copy.noOlderReadySubtitle}
+                title={tr('orderDisplay.noOlderReady')}
+                subtitle={tr('orderDisplay.noOlderReadySubtitle')}
               />
             ) : (
               <div className="grid grid-cols-2 gap-3">
@@ -833,12 +778,12 @@ export function OrderDisplayScreen() {
                     key={t.ticketId}
                     ticket={t}
                     pulsing={highlighted.has(t.ticketId)}
-                    copy={copy}
+                    tr={tr}
                   />
                 ))}
                 {recentOthers.length === 1 ? (
                   <div className="flex items-center justify-center rounded-lg border border-dashed border-emerald-500/20 bg-emerald-500/[0.03] px-4 py-6 text-xs text-muted-foreground">
-                    {copy.upNext}
+                    {tr('orderDisplay.upNext')}
                   </div>
                 ) : null}
               </div>
@@ -847,8 +792,8 @@ export function OrderDisplayScreen() {
 
           <div className="flex shrink-0 flex-col gap-2">
             <SectionTitle
-              title={copy.inPreparation}
-              subtitle={copy.inPreparationSubtitle}
+              title={tr('orderDisplay.preparing')}
+              subtitle={tr('orderDisplay.preparingSubtitle')}
               accent="amber"
             />
             {loading ? (
@@ -862,13 +807,13 @@ export function OrderDisplayScreen() {
             ) : inProgress.length === 0 ? (
               <EmptyState
                 icon={<Utensils className="h-8 w-8 text-amber-500/50" />}
-                title={copy.noPreparing}
-                subtitle={copy.noPreparingSubtitle}
+                title={tr('orderDisplay.noPreparing')}
+                subtitle={tr('orderDisplay.noPreparingSubtitle')}
               />
             ) : (
               <div className="grid grid-cols-2 grid-rows-4 gap-2 sm:gap-3">
                 {inProgress.slice(0, IN_PROGRESS_DISPLAY_LIMIT).map((t) => (
-                  <InProgressCard key={t.ticketId} ticket={t} copy={copy} />
+                  <InProgressCard key={t.ticketId} ticket={t} tr={tr} />
                 ))}
               </div>
             )}
@@ -906,16 +851,14 @@ function SectionTitle({
   );
 }
 
-type ScreenCopy = (typeof COPY)[OrderDisplayLang];
-
 function FeaturedReadyCard({
   ticket,
   pulsing,
-  copy,
+  tr,
 }: {
   ticket: OrderDisplayTicket;
   pulsing: boolean;
-  copy: ScreenCopy;
+  tr: TFunction;
 }) {
   return (
     <Card
@@ -927,7 +870,7 @@ function FeaturedReadyCard({
         className="absolute right-4 top-3 rounded-full bg-emerald-500 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white shadow-md shadow-emerald-500/40"
         aria-hidden="true"
       >
-        {copy.readyBadge}
+        {tr('orderDisplay.readyBadge')}
       </span>
       <CardContent className="flex flex-1 flex-col items-center justify-center gap-6 p-6 text-center md:p-10">
         <div className="flex h-32 w-32 flex-none items-center justify-center rounded-full bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 md:h-44 md:w-44">
@@ -938,19 +881,19 @@ function FeaturedReadyCard({
         </div>
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700 dark:text-emerald-400">
-            {copy.token}
+            {tr('orderDisplay.token')}
           </p>
           <p className="font-mono text-7xl font-black leading-none tracking-tight text-emerald-700 dark:text-emerald-200 md:text-[9rem]">
             {tokenLabel(ticket)}
           </p>
           <p className="mt-5 text-2xl font-bold md:text-3xl">
-            {ticket.customerName?.trim() || copy.walkIn}
+            {ticket.customerName?.trim() || tr('orderDisplay.walkIn')}
           </p>
           <p className="text-base text-muted-foreground md:text-lg">
             {maskPhone(ticket.customerPhone)}
           </p>
           <p className="mt-3 font-mono text-sm uppercase tracking-widest text-muted-foreground">
-            {copy.tracking} · {trackingId(ticket)}
+            {tr('orderDisplay.tracking')} · {trackingId(ticket)}
           </p>
         </div>
       </CardContent>
@@ -961,11 +904,11 @@ function FeaturedReadyCard({
 function RecentReadyCard({
   ticket,
   pulsing,
-  copy,
+  tr,
 }: {
   ticket: OrderDisplayTicket;
   pulsing: boolean;
-  copy: ScreenCopy;
+  tr: TFunction;
 }) {
   return (
     <Card
@@ -979,13 +922,13 @@ function RecentReadyCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
-            {copy.token}
+            {tr('orderDisplay.token')}
           </p>
           <p className="font-mono text-3xl font-extrabold leading-none tracking-tight text-emerald-700 dark:text-emerald-300">
             {tokenLabel(ticket)}
           </p>
           <p className="mt-0.5 truncate text-sm font-semibold">
-            {ticket.customerName?.trim() || copy.walkIn}
+            {ticket.customerName?.trim() || tr('orderDisplay.walkIn')}
           </p>
           <p className="truncate text-xs text-muted-foreground">
             {maskPhone(ticket.customerPhone)} · {trackingId(ticket)}
@@ -998,10 +941,10 @@ function RecentReadyCard({
 
 function InProgressCard({
   ticket,
-  copy,
+  tr,
 }: {
   ticket: OrderDisplayTicket;
-  copy: ScreenCopy;
+  tr: TFunction;
 }) {
   return (
     <Card className="relative overflow-hidden border-amber-500/30 bg-amber-500/[0.05] shadow-sm">
@@ -1011,13 +954,13 @@ function InProgressCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400">
-            {copy.token}
+            {tr('orderDisplay.token')}
           </p>
           <p className="font-mono text-3xl font-extrabold leading-none tracking-tight text-amber-700 dark:text-amber-300">
             {tokenLabel(ticket)}
           </p>
           <p className="mt-0.5 truncate text-sm font-semibold">
-            {ticket.customerName?.trim() || copy.walkIn}
+            {ticket.customerName?.trim() || tr('orderDisplay.walkIn')}
           </p>
           <p className="truncate text-xs text-muted-foreground">
             {maskPhone(ticket.customerPhone)} · {trackingId(ticket)}

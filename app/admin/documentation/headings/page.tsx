@@ -50,6 +50,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import {
+  bilingualInputFromStored,
+  parseBilingualInput,
+} from '@/lib/menu/bilingual-text';
 
 type SubHeadingRow = {
   id: string;
@@ -263,8 +267,8 @@ export default function AdminDocumentationHeadingsPage() {
 
   async function createHeading() {
     const name = newName.trim();
-    if (!name) {
-      toast.error('Name is required.');
+    if (!parseBilingualInput(name).en) {
+      toast.error('English name (before &&&&) is required.');
       return;
     }
     setCreating(true);
@@ -287,8 +291,8 @@ export default function AdminDocumentationHeadingsPage() {
       toast.error('Select a heading.');
       return;
     }
-    if (!name) {
-      toast.error('Name is required.');
+    if (!parseBilingualInput(name).en) {
+      toast.error('English name (before &&&&) is required.');
       return;
     }
     setCreating(true);
@@ -311,21 +315,25 @@ export default function AdminDocumentationHeadingsPage() {
 
   function openEditHeading(item: HeadingRow) {
     setEditTarget({ kind: 'heading', item });
-    setEditName(item.name);
+    setEditName(bilingualInputFromStored(item.name));
     setEditSlug(item.slug);
   }
 
   function openEditSub(item: SubHeadingRow, headingName: string) {
-    setEditTarget({ kind: 'sub', item, headingName });
-    setEditName(item.name);
+    setEditTarget({
+      kind: 'sub',
+      item,
+      headingName: bilingualInputFromStored(headingName),
+    });
+    setEditName(bilingualInputFromStored(item.name));
     setEditSlug(item.slug);
   }
 
   async function saveEdit() {
     if (!editTarget) return;
     const name = editName.trim();
-    if (!name) {
-      toast.error('Name is required.');
+    if (!parseBilingualInput(name).en) {
+      toast.error('English name (before &&&&) is required.');
       return;
     }
     setSavingEdit(true);
@@ -552,7 +560,7 @@ export default function AdminDocumentationHeadingsPage() {
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <CardTitle className="text-base">
-                          {heading.name}
+                          {bilingualInputFromStored(heading.name)}
                         </CardTitle>
                         <Badge
                           variant={
@@ -632,7 +640,7 @@ export default function AdminDocumentationHeadingsPage() {
                         setDeleteTarget({
                           kind: 'heading',
                           id: heading.id,
-                          name: heading.name,
+                          name: bilingualInputFromStored(heading.name),
                         })
                       }
                     >
@@ -725,7 +733,9 @@ export default function AdminDocumentationHeadingsPage() {
                           </div>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-medium">{sub.name}</p>
+                              <p className="text-sm font-medium">
+                                {bilingualInputFromStored(sub.name)}
+                              </p>
                               <Badge
                                 variant={
                                   sub.status === 'PUBLISHED'
@@ -789,7 +799,7 @@ export default function AdminDocumentationHeadingsPage() {
                               setDeleteTarget({
                                 kind: 'sub',
                                 id: sub.id,
-                                name: sub.name,
+                                name: bilingualInputFromStored(sub.name),
                               })
                             }
                           >
@@ -823,8 +833,8 @@ export default function AdminDocumentationHeadingsPage() {
               id="new-heading-name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. Getting Started"
-              maxLength={200}
+              placeholder={`English name ${'&&&&'} Spanish name`}
+              maxLength={500}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -832,6 +842,9 @@ export default function AdminDocumentationHeadingsPage() {
                 }
               }}
             />
+            <p className="text-xs text-muted-foreground">
+              First English, then separator &&&&, then Spanish.
+            </p>
           </div>
           <DialogFooter>
             <Button
@@ -866,7 +879,9 @@ export default function AdminDocumentationHeadingsPage() {
             <div className="grid gap-2">
               <Label>Under heading</Label>
               <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
-                {items.find((h) => h.id === createSubHeadingId)?.name ?? '—'}
+                {bilingualInputFromStored(
+                  items.find((h) => h.id === createSubHeadingId)?.name ?? ''
+                ) || '—'}
               </p>
             </div>
             <div className="grid gap-2">
@@ -875,8 +890,8 @@ export default function AdminDocumentationHeadingsPage() {
                 id="new-sub-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="e.g. Install app"
-                maxLength={200}
+                placeholder={`English name ${'&&&&'} Spanish name`}
+                maxLength={500}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -884,6 +899,9 @@ export default function AdminDocumentationHeadingsPage() {
                   }
                 }}
               />
+              <p className="text-xs text-muted-foreground">
+                First English, then separator &&&&, then Spanish.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -936,8 +954,12 @@ export default function AdminDocumentationHeadingsPage() {
                 id="edit-name"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                maxLength={200}
+                placeholder={`English name ${'&&&&'} Spanish name`}
+                maxLength={500}
               />
+              <p className="text-xs text-muted-foreground">
+                First English, then separator &&&&, then Spanish.
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-slug">Slug</Label>

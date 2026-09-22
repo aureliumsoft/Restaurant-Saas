@@ -1,10 +1,11 @@
 import { NAVBAR_ITEMS } from '@/constant/navbarMenu';
 import { DASHBOARD_NAV_GROUPS } from '@/constant/dashboardNav';
+import type { DashboardNavGroupKey } from '@/lib/dashboard-nav-i18n';
 import type { NavItem } from '@/types/Navbar';
 import { canAccessDashboardModule } from '@/lib/restaurant-roles';
 
 export type DashboardNavGroup = {
-  label: string;
+  groupKey: DashboardNavGroupKey;
   items: NavItem[];
 };
 
@@ -58,7 +59,7 @@ export function navGroupsForPermissions(
   );
 
   return DASHBOARD_NAV_GROUPS.map((group) => ({
-    label: group.label,
+    groupKey: group.groupKey,
     items: group.moduleKeys
       .filter((key) => allowed.has(key))
       .map((key) => itemsByKey.get(key))

@@ -13,7 +13,7 @@ export const recommendationProductOverrideSchema = z.object({
 
 export const recommendationGroupBodySchema = z
   .object({
-    name: z.string().min(1).max(120),
+    name: z.string().min(1).max(400),
     sourceType: z.enum(['CATEGORY', 'PRODUCT']).default('CATEGORY'),
     selectionType: z.enum(['SINGLE', 'MULTIPLE']),
     multipleMode: z.enum(['CHECKBOX', 'QUANTITY']).optional(),

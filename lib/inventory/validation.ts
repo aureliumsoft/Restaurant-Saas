@@ -40,6 +40,8 @@ export const ingredientCreateSchema = z
     sku: z.string().trim().max(80).optional().nullable(),
     minQuantity: z.number().finite().min(0).optional().nullable(),
     unitCost: z.number().finite().min(0).optional().nullable(),
+    /** Cost of this restock when quantity increases (defaults to delta × unitCost). */
+    expenseAmount: z.number().finite().min(0).optional().nullable(),
   })
   .superRefine((val, ctx) => imageCheck(val.imageUrl, ctx, ['imageUrl']));
 
@@ -55,6 +57,8 @@ export const ingredientPatchSchema = z
     minQuantity: z.number().finite().min(0).optional().nullable(),
     unitCost: z.number().finite().min(0).optional().nullable(),
     isActive: z.boolean().optional(),
+    /** Cost of this restock when quantity increases (defaults to delta × unitCost). */
+    expenseAmount: z.number().finite().min(0).optional().nullable(),
   })
   .superRefine((val, ctx) => imageCheck(val.imageUrl, ctx, ['imageUrl']));
 

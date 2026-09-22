@@ -18,6 +18,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiErrorMessage } from '@/lib/api-error-message';
+import {
+  parseBilingualInput,
+  serializeBilingualInput,
+} from '@/lib/menu/bilingual-text';
 
 type CreatedCategory = {
   id: string;
@@ -55,12 +59,17 @@ export function AddCategoryFormDialog({
 
   const save = async () => {
     if (!name.trim() || saving) return;
+    if (!parseBilingualInput(name).en) {
+      toast.error('English name (before &&&&) is required.');
+      return;
+    }
     setSaving(true);
     try {
+      const storedName = serializeBilingualInput(name);
       const res = await axios.post<{ data: CreatedCategory }>(
         '/api/restaurant/menu/categories',
         {
-          name: name.trim(),
+          name: storedName,
           showInFront,
           ...(imageUrl.trim() ? { imageUrl: imageUrl.trim() } : {}),
         }
@@ -92,7 +101,7 @@ export function AddCategoryFormDialog({
             <Label htmlFor="dialog-category-name">Name</Label>
             <Input
               id="dialog-category-name"
-              placeholder="e.g. Burgers"
+              placeholder={`English name ${'&&&&'} Spanish name`}
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={saving}
@@ -101,6 +110,9 @@ export function AddCategoryFormDialog({
                 if (e.key === 'Enter' && name.trim()) void save();
               }}
             />
+            <p className="text-xs text-muted-foreground">
+              First English, then separator &&&&, then Spanish.
+            </p>
           </div>
           <Base64ImageUploadField
             label="Category image"

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Loader2, Plus, Save, Trash2 } from 'lucide-react';
@@ -37,6 +38,7 @@ type RestaurantBrandingCardProps = {
 export function RestaurantBrandingCard({
   brandingAllowed = true,
 }: RestaurantBrandingCardProps) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [hasRestaurant, setHasRestaurant] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -182,15 +184,13 @@ export function RestaurantBrandingCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Logo & banners</CardTitle>
+        <CardTitle>{t('settings.cards.branding.title')}</CardTitle>
         <CardDescription>
-          Used on the customer website and kiosk. Leave a field empty to clear
-          it.
+          {t('settings.cards.branding.description')}
         </CardDescription>
         {!brandingAllowed ? (
           <p className="text-sm text-muted-foreground">
-            Custom logo, banners, and theme colors are available on Growth and
-            Scale.
+            {t('settings.cards.branding.planHint')}
           </p>
         ) : null}
       </CardHeader>
@@ -198,10 +198,10 @@ export function RestaurantBrandingCard({
         className={`space-y-4 ${!brandingAllowed ? 'pointer-events-none opacity-60' : ''}`}
       >
         <Base64ImageUploadField
-          label="Logo"
+          label={t('settings.cards.branding.logoLabel')}
           value={logoUrl}
           onChange={setLogoUrl}
-          helperText="Upload an image or paste a URL."
+          helperText={t('settings.cards.branding.logoHelper')}
         />
         <div className="space-y-2">
           <Label htmlFor="restaurant-theme-primary-color">

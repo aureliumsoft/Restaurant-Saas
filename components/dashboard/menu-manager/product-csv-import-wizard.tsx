@@ -251,7 +251,8 @@ export function ProductCsvImportWizard({
             <DialogTitle>Import products</DialogTitle>
             <DialogDescription>
               WordPress-style CSV import — choose a file, map columns, preview,
-              then import into the product catalog.
+              then import into the product catalog. For bilingual name/description,
+              use English &&&& Spanish (same as the product form).
             </DialogDescription>
           </DialogHeader>
 

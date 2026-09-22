@@ -7,6 +7,8 @@ export const menuItemBrowseListSelect = {
   price: true,
   salePrice: true,
   categoryId: true,
+  updatedAt: true,
+  createdAt: true,
   variations: {
     orderBy: { sortOrder: 'asc' as const },
     select: {
@@ -77,6 +79,8 @@ export const menuItemBrowseListSelectLegacy = {
   price: true,
   salePrice: true,
   categoryId: true,
+  updatedAt: true,
+  createdAt: true,
   variations: {
     orderBy: { sortOrder: 'asc' as const },
     select: {
@@ -123,6 +127,8 @@ export const menuItemPosCatalogSelect = {
   price: true,
   salePrice: true,
   categoryId: true,
+  updatedAt: true,
+  createdAt: true,
   variations: {
     orderBy: { sortOrder: 'asc' as const },
     select: {

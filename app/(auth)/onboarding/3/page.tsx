@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "react-toastify";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import { ArrowRight, Loader2, Trash2 } from "lucide-react";
 type BranchRow = { name: string; address: string; phone: string };
 
 export default function OnboardingStep3Page() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { status } = useSession();
 
@@ -34,16 +36,12 @@ export default function OnboardingStep3Page() {
     }
     const id = getOnboardingRestaurantId();
     if (!id) {
-      toast.error("Complete step 1 first.");
+      toast.error(t("onboarding.common.completeStep1First"));
       router.replace("/onboarding/1");
       return;
     }
     setRestaurantId(id);
-  }, [status, router]);
-
-  function addRow() {
-    setRows((r) => [...r, { name: "", address: "", phone: "" }]);
-  }
+  }, [status, router, t]);
 
   function updateRow(i: number, field: keyof BranchRow, v: string) {
     setRows((prev) => {
@@ -71,8 +69,11 @@ export default function OnboardingStep3Page() {
             }))
             .filter((r) => r.name.length > 0);
 
-      if (!skipBranches && rows.some((r) => r.name.trim() === "" && (r.address || r.phone))) {
-        toast.error("Name is required for each branch row you fill in.");
+      if (
+        !skipBranches &&
+        rows.some((r) => r.name.trim() === "" && (r.address || r.phone))
+      ) {
+        toast.error(t("onboarding.step3.branchNameRequired"));
         setLoading(false);
         return;
       }
@@ -84,18 +85,22 @@ export default function OnboardingStep3Page() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data?.error ?? "Could not save branches.");
+        toast.error(data?.error ?? t("onboarding.step3.saveFailed"));
         return;
       }
       clearOnboardingRestaurantId();
       toast.success(
         skipBranches || branches.length === 0
-          ? "You’re all set!"
-          : "Branches saved."
+          ? t("onboarding.step3.allSet")
+          : t("onboarding.step3.branchesSaved")
       );
       router.push("/dashboard");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Request failed.");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t("onboarding.common.requestFailed")
+      );
     } finally {
       setLoading(false);
     }
@@ -121,9 +126,9 @@ export default function OnboardingStep3Page() {
   return (
     <div className="rounded-lg border bg-background p-6 shadow-sm">
       <OnboardingSteps active={3} />
-      <h1 className="mb-1 text-xl font-semibold">Branches (optional)</h1>
+      <h1 className="mb-1 text-xl font-semibold">{t("onboarding.step3.title")}</h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        Add one or more locations. You can skip and add them later.
+        {t("onboarding.step3.description")}
       </p>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -141,42 +146,40 @@ export default function OnboardingStep3Page() {
                 >
                   <>
                     <Trash2 className="h-4 w-4 mr-2" />
-                    <span>Remove</span>
+                    <span>{t("onboarding.step3.remove")}</span>
                   </>
                 </Button>
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`name-${i}`}>Name</Label>
+              <Label htmlFor={`name-${i}`}>{t("onboarding.step3.nameLabel")}</Label>
               <Input
                 id={`name-${i}`}
                 value={row.name}
                 onChange={(e) => updateRow(i, "name", e.target.value)}
-                placeholder="Downtown location"
+                placeholder={t("onboarding.step3.namePlaceholder")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`addr-${i}`}>Address (optional)</Label>
+              <Label htmlFor={`addr-${i}`}>{t("onboarding.step3.addressLabel")}</Label>
               <Input
                 id={`addr-${i}`}
                 value={row.address}
                 onChange={(e) => updateRow(i, "address", e.target.value)}
-                placeholder="123 Main St"
+                placeholder={t("onboarding.step3.addressPlaceholder")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`phone-${i}`}>Phone (optional)</Label>
+              <Label htmlFor={`phone-${i}`}>{t("onboarding.step3.phoneLabel")}</Label>
               <Input
                 id={`phone-${i}`}
                 value={row.phone}
                 onChange={(e) => updateRow(i, "phone", e.target.value)}
-                placeholder="+1 …"
+                placeholder={t("onboarding.step3.phonePlaceholder")}
               />
             </div>
           </div>
         ))}
-
-      
 
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
           <Button
@@ -185,15 +188,20 @@ export default function OnboardingStep3Page() {
             onClick={skip}
             disabled={loading}
           >
-            Skip — finish without branches
+            {t("onboarding.step3.skipFinish")}
           </Button>
           <Button type="submit" disabled={loading}>
-            {loading ? <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" /> <span>Finishing...</span>
-            </> : <>
-            <span>Finish</span>
-            <ArrowRight className="h-4 w-4 ml-2" />
-            </>}
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
+                <span>{t("onboarding.step3.finishing")}</span>
+              </>
+            ) : (
+              <>
+                <span>{t("onboarding.step3.finish")}</span>
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </>
+            )}
           </Button>
         </div>
       </form>

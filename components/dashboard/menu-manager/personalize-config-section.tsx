@@ -1,11 +1,13 @@
 'use client';
 
 import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { bilingualInputFromStored } from '@/lib/menu/bilingual-text';
 
 import type { PersonalizeGroupRow } from './types';
 
@@ -27,12 +29,12 @@ export function personalizeGroupsToDraft(
 ): PersonalizeGroupDraft[] {
   return (groups ?? []).map((g, gi) => ({
     id: g.id,
-    parentName: g.parentName,
+    parentName: bilingualInputFromStored(g.parentName),
     maxItems: g.maxItems,
     sortOrder: g.sortOrder ?? gi,
     options: g.options.map((o, oi) => ({
       id: o.id,
-      name: o.name,
+      name: bilingualInputFromStored(o.name),
       imageUrl: o.imageUrl ?? '',
       sortOrder: o.sortOrder ?? oi,
     })),
@@ -92,6 +94,7 @@ export function PersonalizeConfigSection({
   loading = false,
   onSave,
 }: Props) {
+  const { t } = useTranslation();
   const updateGroup = (
     index: number,
     patch: Partial<PersonalizeGroupDraft>
@@ -202,8 +205,11 @@ export function PersonalizeConfigSection({
                   onChange={(e) =>
                     updateGroup(groupIndex, { parentName: e.target.value })
                   }
-                  placeholder="e.g. Personalize"
+                  placeholder={`English title ${'&&&&'} Spanish title`}
                 />
+                <p className="text-xs text-muted-foreground">
+                  First English, then separator &&&&, then Spanish.
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label>Maximum selections</Label>
@@ -239,7 +245,7 @@ export function PersonalizeConfigSection({
                           name: e.target.value,
                         })
                       }
-                      placeholder="Item name (e.g. No fries)"
+                      placeholder={`English name ${'&&&&'} Spanish name`}
                     />
                     <Base64ImageUploadField
                       label="Photo"
@@ -289,10 +295,10 @@ export function PersonalizeConfigSection({
           {saving ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving…
+              {t('onboarding.step2.saving')}
             </>
           ) : (
-            'Save personalize'
+            t('dashboard.common.save')
           )}
         </Button>
       </div>

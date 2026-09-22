@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { ChefHat, Loader2, Save, Wallet } from 'lucide-react';
@@ -43,6 +44,7 @@ const OPTIONS: {
 ];
 
 export function RestaurantDineInPaymentCard() {
+  const { t } = useTranslation();
   const [timing, setTiming] = useState<DineInPaymentTiming>(
     DEFAULT_DINE_IN_PAYMENT_TIMING
   );
@@ -98,17 +100,16 @@ export function RestaurantDineInPaymentCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Table / dine-in payments</CardTitle>
+        <CardTitle>{t('settings.cards.dineInPayments.title')}</CardTitle>
         <CardDescription>
-          Choose when guests pay for table orders: before kitchen, or when they
-          leave.
+          {t('settings.cards.dineInPayments.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {loading ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading…
+            {t('dashboard.common.loading')}
           </div>
         ) : (
           OPTIONS.map((option) => {

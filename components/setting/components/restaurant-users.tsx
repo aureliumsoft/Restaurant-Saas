@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Loader2, Pencil, RefreshCcw, Trash2, UserPlus, X } from 'lucide-react';
@@ -80,6 +81,7 @@ type ConfirmAction =
 export default function RestaurantUsersCard({
   roleBasedSettingsAllowed = true,
 }: RestaurantUsersCardProps) {
+  const { t } = useTranslation();
   const { isOwnerOrAdmin } = useBranchContext();
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
@@ -426,17 +428,11 @@ export default function RestaurantUsersCard({
   return (
     <Card className={settingsCardClass}>
       <CardHeader className="min-w-0">
-        <CardTitle>Team members</CardTitle>
-        <CardDescription>
-          Add people by email and set a password they can use to sign in. If the
-          email already has an account, only the invite is sent—password is
-          ignored and they accept in email.
-        </CardDescription>
+        <CardTitle>{t('settings.cards.users.title')}</CardTitle>
+        <CardDescription>{t('settings.cards.users.description')}</CardDescription>
         {!roleBasedSettingsAllowed ? (
           <p className="text-sm text-muted-foreground">
-            On Starter, new invites use the <strong>Admin</strong> role only.
-            Custom roles and permission presets are available on Growth and
-            Scale.
+            {t('settings.cards.users.starterHint')}
           </p>
         ) : null}
       </CardHeader>

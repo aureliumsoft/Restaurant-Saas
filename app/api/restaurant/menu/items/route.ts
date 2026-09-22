@@ -24,7 +24,7 @@ const createSchema = z
     variations: z
       .array(
         z.object({
-          name: z.string().min(1).max(120),
+          name: z.string().min(1).max(200),
           restaurantVariationId: z.string().uuid().optional().nullable(),
           imageUrl: z.string().max(2_800_000).optional().nullable().or(z.literal("")),
           swatchHex: z

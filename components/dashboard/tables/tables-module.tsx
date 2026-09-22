@@ -12,6 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -69,6 +70,7 @@ export type DiningTableRow = {
 const PAGE_SIZE = 20;
 
 export function TablesModule() {
+  const { t } = useTranslation();
   const {
     activeBranchId,
     activeBranchUrlId,
@@ -170,7 +172,7 @@ export function TablesModule() {
   async function handleSave() {
     const nameTrim = name.trim();
     if (!nameTrim) {
-      toast.error('Name is required');
+      toast.error(t('dashboard.tables.nameRequired'));
       return;
     }
     const sort = Math.min(
@@ -179,7 +181,7 @@ export function TablesModule() {
     );
 
     if (!editing && !activeBranchId) {
-      toast.error('Select a branch before adding tables');
+      toast.error(t('dashboard.tables.selectBranchFirst'));
       return;
     }
 
@@ -190,14 +192,14 @@ export function TablesModule() {
           name: nameTrim,
           sortOrder: sort,
         });
-        toast.success('Table updated');
+        toast.success(t('dashboard.tables.tableUpdated'));
       } else {
         await axios.post('/api/restaurant/tables', {
           name: nameTrim,
           sortOrder: sort,
           branchId: activeBranchId,
         });
-        toast.success('Table added');
+        toast.success(t('dashboard.tables.tableAdded'));
       }
       setDialogOpen(false);
       await load();
@@ -206,7 +208,7 @@ export function TablesModule() {
       const msg =
         typeof err.response?.data?.error === 'string'
           ? err.response.data.error
-          : 'Save failed';
+          : t('dashboard.tables.saveFailed');
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -218,11 +220,11 @@ export function TablesModule() {
     setDeleting(true);
     try {
       await axios.delete(tableApiPath(deleteTarget.id, '', deleteTarget.urlId));
-      toast.success('Table removed');
+      toast.success(t('dashboard.tables.tableRemoved'));
       setDeleteTarget(null);
       await load();
     } catch {
-      toast.error('Could not delete table');
+      toast.error(t('dashboard.tables.deleteFailed'));
     } finally {
       setDeleting(false);
     }
@@ -231,18 +233,20 @@ export function TablesModule() {
   return (
     <DashboardCard>
       <DashboardCardHeader>
-        <DashboardCardTitle>Dining tables</DashboardCardTitle>
+        <DashboardCardTitle>{t('dashboard.tables.diningTables')}</DashboardCardTitle>
         <DashboardCardDescription>
           {activeBranchName
-            ? `Tables for ${activeBranchName} — shown in POS and kiosk dine-in for this branch. Names must be unique per branch.`
-            : 'Select a branch to manage dining tables for POS and kiosk dine-in.'}
+            ? t('dashboard.tables.diningTablesDescBranch', {
+                branch: activeBranchName,
+              })
+            : t('dashboard.tables.diningTablesDescSelectBranch')}
         </DashboardCardDescription>
       </DashboardCardHeader>
       <DashboardCardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />
-            Add table
+            {t('dashboard.tables.addTable')}
           </Button>
           <Button
             type="button"
@@ -265,7 +269,7 @@ export function TablesModule() {
           </p>
         ) : rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No tables yet. Add one so staff can select it on the POS screen.
+            {t('dashboard.tables.noTablesYet')}
           </p>
         ) : (
           <>
@@ -273,12 +277,14 @@ export function TablesModule() {
               <DashboardTable>
                 <DashboardTableHeader>
                   <DashboardTableRow>
-                    <DashboardTableHead>Name</DashboardTableHead>
-                    <DashboardTableHead className="text-right">
-                      Sort
+                    <DashboardTableHead>
+                      {t('dashboard.tables.colName')}
                     </DashboardTableHead>
                     <DashboardTableHead className="text-right">
-                      Actions
+                      {t('dashboard.tables.colSort')}
+                    </DashboardTableHead>
+                    <DashboardTableHead className="text-right">
+                      {t('dashboard.tables.colActions')}
                     </DashboardTableHead>
                   </DashboardTableRow>
                 </DashboardTableHeader>
@@ -302,8 +308,8 @@ export function TablesModule() {
                             disabled={!restaurantSlug || !activeBranchId}
                             title={
                               restaurantSlug && activeBranchId
-                                ? 'View / download QR'
-                                : 'Restaurant slug or branch missing'
+                                ? t('dashboard.tables.qrViewDownload')
+                                : t('dashboard.tables.qrMissingSlug')
                             }
                             onClick={() => setQrTarget(row)}
                           >
@@ -346,11 +352,11 @@ export function TablesModule() {
             {restaurantSlug && activeBranchId ? (
               <div className="space-y-3 pt-2">
                 <div>
-                  <h3 className="text-sm font-semibold">Table QR codes</h3>
+                  <h3 className="text-sm font-semibold">
+                    {t('dashboard.tables.qrCodesTitle')}
+                  </h3>
                   <p className="text-xs text-muted-foreground">
-                    Scan opens kiosk dine-in for that table. Guests use mobile
-                    links; fixed terminals can use the kiosk variant from the QR
-                    dialog.
+                    {t('dashboard.tables.qrCodesHint')}
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -378,21 +384,29 @@ export function TablesModule() {
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editing ? 'Edit table' : 'Add table'}</DialogTitle>
+              <DialogTitle>
+                {editing
+                  ? t('dashboard.tables.editTable')
+                  : t('dashboard.tables.addTable')}
+              </DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-2">
               <div className="grid gap-2">
-                <Label htmlFor="table-name">Name</Label>
+                <Label htmlFor="table-name">
+                  {t('dashboard.tables.colName')}
+                </Label>
                 <Input
                   id="table-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. T1, Window 4, Patio A"
+                  placeholder={t('dashboard.tables.namePlaceholder')}
                   maxLength={120}
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="table-sort">Sort order</Label>
+                <Label htmlFor="table-sort">
+                  {t('dashboard.tables.sortOrder')}
+                </Label>
                 <Input
                   id="table-sort"
                   type="number"
@@ -402,7 +416,7 @@ export function TablesModule() {
                   onChange={(e) => setSortOrder(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Lower numbers appear first in POS.
+                  {t('dashboard.tables.sortOrderHint')}
                 </p>
               </div>
             </div>
@@ -412,7 +426,7 @@ export function TablesModule() {
                 variant="outline"
                 onClick={() => setDialogOpen(false)}
               >
-                Cancel
+                {t('dashboard.common.cancel')}
               </Button>
               <Button
                 type="button"
@@ -422,11 +436,12 @@ export function TablesModule() {
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                    <span>Creating...</span>
+                    <span>{t('dashboard.tables.creating')}</span>
                   </>
                 ) : (
                   <>
-                    <Plus className="h-4 w-4 mr-2" /> <span>Create Table</span>
+                    <Plus className="h-4 w-4 mr-2" />{' '}
+                    <span>{t('dashboard.tables.createTable')}</span>
                   </>
                 )}
               </Button>
@@ -450,15 +465,19 @@ export function TablesModule() {
         >
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete table?</AlertDialogTitle>
+              <AlertDialogTitle>{t('dashboard.tables.deleteTitle')}</AlertDialogTitle>
               <AlertDialogDescription>
                 {deleteTarget
-                  ? `Remove “${deleteTarget.name}” from the list. Past orders keep the table name on record.`
+                  ? t('dashboard.tables.deleteDescription', {
+                      name: deleteTarget.name,
+                    })
                   : ''}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel disabled={deleting}>
+                {t('dashboard.common.cancel')}
+              </AlertDialogCancel>
               <AlertDialogAction
                 disabled={deleting}
                 onClick={(e) => {
@@ -467,7 +486,9 @@ export function TablesModule() {
                 }}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                {deleting ? 'Deleting…' : 'Delete'}
+                {deleting
+                  ? t('dashboard.common.loading')
+                  : t('dashboard.common.delete')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

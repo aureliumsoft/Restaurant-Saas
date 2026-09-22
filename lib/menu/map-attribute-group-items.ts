@@ -1,3 +1,6 @@
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import type { UiLanguage } from '@/lib/i18n/resources';
+
 type LinkedItem = {
   id: string;
   name: string;
@@ -169,13 +172,17 @@ export function hydrateLinkedCategoryItems(
   });
 }
 
-export function attributeGroupDisplayName(group: AttributeGroupSource): string | null {
+export function attributeGroupDisplayName(
+  group: AttributeGroupSource,
+  lang: UiLanguage = 'es'
+): string | null {
   if (group.sourceType === 'PRODUCT') {
-    return (
+    const raw =
       group.linkedProduct?.category?.name ??
       group.linkedProduct?.name ??
-      null
-    );
+      null;
+    return raw ? resolveBilingualText(raw, lang) : null;
   }
-  return group.linkedCategory?.name ?? null;
+  const raw = group.linkedCategory?.name ?? null;
+  return raw ? resolveBilingualText(raw, lang) : null;
 }

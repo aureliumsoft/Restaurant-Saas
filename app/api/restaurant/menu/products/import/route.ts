@@ -7,6 +7,11 @@ import {
   RecommendationSourceType,
 } from '@prisma/client';
 
+import {
+  parseBilingualInput,
+  resolveBilingualText,
+  serializeBilingualInput,
+} from '@/lib/menu/bilingual-text';
 import { db } from '@/lib/db';
 import {
   parseProductsCsvImport,
@@ -24,6 +29,11 @@ import {
 export const runtime = 'nodejs';
 /** Allow long CSV imports on platforms that honor this (Vercel Hobby max is 300s). */
 export const maxDuration = 300;
+
+function csvProductNameKey(raw: string): string {
+  const en = parseBilingualInput(raw).en.trim() || raw.trim();
+  return en.toLowerCase();
+}
 
 export async function POST(req: NextRequest) {
   const auth = await getRestaurantForOwnerRequest(req, {
@@ -115,9 +125,13 @@ export async function POST(req: NextRequest) {
       where: { restaurantId },
       select: { id: true, name: true },
     });
-    const nameToId = new Map(
-      existingProducts.map((p) => [p.name.trim().toLowerCase(), p.id])
-    );
+    const nameToId = new Map<string, string>();
+    for (const p of existingProducts) {
+      const enKey = resolveBilingualText(p.name, 'en').trim().toLowerCase();
+      if (enKey) nameToId.set(enKey, p.id);
+      const rawKey = p.name.trim().toLowerCase();
+      if (rawKey) nameToId.set(rawKey, p.id);
+    }
     const createdProductIds: string[] = [];
 
     const categories = await db.menuCategory.findMany({
@@ -125,9 +139,13 @@ export async function POST(req: NextRequest) {
       select: { id: true, name: true, sortOrder: true },
       orderBy: [{ sortOrder: 'desc' }, { createdAt: 'desc' }],
     });
-    const categoryIdByName = new Map(
-      categories.map((c) => [c.name.trim().toLowerCase(), c.id])
-    );
+    const categoryIdByName = new Map<string, string>();
+    for (const c of categories) {
+      const enKey = resolveBilingualText(c.name, 'en').trim().toLowerCase();
+      if (enKey) categoryIdByName.set(enKey, c.id);
+      const rawKey = c.name.trim().toLowerCase();
+      if (rawKey) categoryIdByName.set(rawKey, c.id);
+    }
     let nextCatSort =
       categories.length > 0
         ? Math.max(...categories.map((c) => c.sortOrder)) + 1
@@ -137,10 +155,15 @@ export async function POST(req: NextRequest) {
       where: { restaurantId },
       select: { id: true, name: true, shortLabel: true, sortOrder: true },
     });
-    const varByName = new Map(
-      restaurantVariations.map((v) => [v.name.trim().toLowerCase(), v])
-    );
+    const varByName = new Map<
+      string,
+      (typeof restaurantVariations)[number]
+    >();
     for (const v of restaurantVariations) {
+      const enKey = resolveBilingualText(v.name, 'en').trim().toLowerCase();
+      if (enKey) varByName.set(enKey, v);
+      const rawKey = v.name.trim().toLowerCase();
+      if (rawKey) varByName.set(rawKey, v);
       if (v.shortLabel?.trim()) {
         varByName.set(v.shortLabel.trim().toLowerCase(), v);
       }
@@ -167,38 +190,56 @@ export async function POST(req: NextRequest) {
       batch: (typeof parsed.products)[number][]
     ) => {
         const ensureCategory = async (name: string): Promise<string> => {
-          const key = name.trim().toLowerCase();
+          const key = csvProductNameKey(name);
           const hit = categoryIdByName.get(key);
           if (hit) return hit;
+          const stored =
+            serializeBilingualInput(name) ||
+            parseBilingualInput(name).en.trim() ||
+            name.trim();
           const created = await tx.menuCategory.create({
             data: {
-              name: name.trim(),
+              name: stored,
               restaurantId,
               sortOrder: nextCatSort++,
             },
             select: { id: true, name: true },
           });
-          categoryIdByName.set(created.name.trim().toLowerCase(), created.id);
+          categoryIdByName.set(key, created.id);
+          const enKey = resolveBilingualText(created.name, 'en')
+            .trim()
+            .toLowerCase();
+          if (enKey) categoryIdByName.set(enKey, created.id);
           return created.id;
         };
 
         const ensureRestaurantVariation = async (
           label: string
         ): Promise<string> => {
-          const key = label.trim().toLowerCase();
+          const key = csvProductNameKey(label);
           const hit = varByName.get(key);
           if (hit) return hit.id;
           nextVarSort += 1;
+          const stored =
+            serializeBilingualInput(label) ||
+            parseBilingualInput(label).en.trim() ||
+            label.trim();
+          const enLabel =
+            parseBilingualInput(label).en.trim() || label.trim();
           const created = await tx.restaurantVariation.create({
             data: {
               restaurantId,
-              name: label.trim(),
-              shortLabel: label.trim().slice(0, 8),
+              name: stored,
+              shortLabel: enLabel.slice(0, 8),
               sortOrder: nextVarSort,
             },
             select: { id: true, name: true, shortLabel: true, sortOrder: true },
           });
-          varByName.set(created.name.trim().toLowerCase(), created);
+          varByName.set(key, created);
+          const enKey = resolveBilingualText(created.name, 'en')
+            .trim()
+            .toLowerCase();
+          if (enKey) varByName.set(enKey, created);
           if (created.shortLabel) {
             varByName.set(created.shortLabel.trim().toLowerCase(), created);
           }
@@ -366,8 +407,15 @@ export async function POST(req: NextRequest) {
         };
 
         for (const row of batch) {
-          const nameKey = row.name.trim().toLowerCase();
+          const nameKey = csvProductNameKey(row.name);
           const existingId = nameToId.get(nameKey);
+          const storedName =
+            serializeBilingualInput(row.name) ||
+            parseBilingualInput(row.name).en.trim() ||
+            row.name.trim();
+          const storedDescription = row.description
+            ? serializeBilingualInput(row.description) || null
+            : null;
 
           const categoryNames =
             row.categoryNames.length > 0
@@ -421,8 +469,8 @@ export async function POST(req: NextRequest) {
             await tx.menuItem.update({
               where: { id: existingId },
               data: {
-                name: row.name.trim(),
-                description: row.description,
+                name: storedName,
+                description: storedDescription,
                 price: row.price,
                 salePrice: row.salePrice,
                 categoryId: primaryCategoryId,
@@ -435,8 +483,8 @@ export async function POST(req: NextRequest) {
             const created = await tx.menuItem.create({
               data: {
                 restaurantId,
-                name: row.name.trim(),
-                description: row.description,
+                name: storedName,
+                description: storedDescription,
                 price: row.price,
                 salePrice: row.salePrice,
                 categoryId: primaryCategoryId,
@@ -470,8 +518,8 @@ export async function POST(req: NextRequest) {
             await tx.menuItemVariation.create({
               data: {
                 menuItemId: productId,
-                name: v.name,
-                title: v.title,
+                name: serializeBilingualInput(v.name) || v.name,
+                title: serializeBilingualInput(v.title) || v.title,
                 priceDelta: v.priceDelta,
                 sortOrder: v.sortOrder,
                 swatchHex: v.swatchHex,
@@ -497,13 +545,12 @@ export async function POST(req: NextRequest) {
             }
             if (g.sourceType === 'PRODUCT' && g.linkedProductName) {
               linkedProductId =
-                nameToId.get(g.linkedProductName.trim().toLowerCase()) ?? null;
+                nameToId.get(csvProductNameKey(g.linkedProductName)) ?? null;
             }
             if (g.defaultLinkedMenuItemName) {
               defaultLinkedMenuItemId =
-                nameToId.get(
-                  g.defaultLinkedMenuItemName.trim().toLowerCase()
-                ) ?? null;
+                nameToId.get(csvProductNameKey(g.defaultLinkedMenuItemName)) ??
+                null;
             }
             if (g.defaultLinkedRestaurantVariationName) {
               defaultLinkedRestaurantVariationId =
@@ -624,7 +671,7 @@ export async function POST(req: NextRequest) {
             await tx.menuItemAttributeGroup.create({
               data: {
                 menuItemId: productId,
-                name: g.name,
+                name: serializeBilingualInput(g.name) || g.name,
                 sortOrder: g.sortOrder,
                 selectionType,
                 required: g.required,
@@ -681,7 +728,8 @@ export async function POST(req: NextRequest) {
             const group = await tx.menuItemPersonalizeGroup.create({
               data: {
                 menuItemId: productId,
-                parentName: g.parentName,
+                parentName:
+                  serializeBilingualInput(g.parentName) || g.parentName,
                 maxItems: g.maxItems,
                 sortOrder: g.sortOrder,
               },
@@ -689,10 +737,11 @@ export async function POST(req: NextRequest) {
             });
             personalizeGroupsCount += 1;
             for (let i = 0; i < g.options.length; i++) {
+              const optName = g.options[i]!;
               await tx.menuItemPersonalizeOption.create({
                 data: {
                   groupId: group.id,
-                  name: g.options[i]!,
+                  name: serializeBilingualInput(optName) || optName,
                   sortOrder: i,
                 },
               });
@@ -785,7 +834,7 @@ export async function POST(req: NextRequest) {
     await db.$transaction(
       async (tx) => {
         for (const row of parsed.products) {
-          const baseId = nameToId.get(row.name.trim().toLowerCase());
+          const baseId = nameToId.get(csvProductNameKey(row.name));
           if (!baseId || !createdProductIds.includes(baseId)) continue;
           if (row.recommendations.length === 0) continue;
 
@@ -809,7 +858,8 @@ export async function POST(req: NextRequest) {
               groups.find(
                 (ag) =>
                   ag.sortOrder === g.sortOrder ||
-                  ag.name.trim().toLowerCase() === g.name.trim().toLowerCase()
+                  ag.name.trim().toLowerCase() === g.name.trim().toLowerCase() ||
+                  csvProductNameKey(ag.name) === csvProductNameKey(g.name)
               ) ?? groups[i];
             if (!group) continue;
 
@@ -825,7 +875,7 @@ export async function POST(req: NextRequest) {
               !group.linkedProductId
             ) {
               const linkedId =
-                nameToId.get(g.linkedProductName.trim().toLowerCase()) ?? null;
+                nameToId.get(csvProductNameKey(g.linkedProductName)) ?? null;
               if (linkedId) patch.linkedProductId = linkedId;
             }
 
@@ -835,9 +885,8 @@ export async function POST(req: NextRequest) {
               !group.defaultLinkedMenuItemId
             ) {
               const defaultId =
-                nameToId.get(
-                  g.defaultLinkedMenuItemName.trim().toLowerCase()
-                ) ?? null;
+                nameToId.get(csvProductNameKey(g.defaultLinkedMenuItemName)) ??
+                null;
               if (defaultId) patch.defaultLinkedMenuItemId = defaultId;
             }
 
@@ -849,7 +898,7 @@ export async function POST(req: NextRequest) {
                 patch.linkedProductId ??
                 group.linkedProductId ??
                 (g.linkedProductName
-                  ? nameToId.get(g.linkedProductName.trim().toLowerCase())
+                  ? nameToId.get(csvProductNameKey(g.linkedProductName))
                   : null) ??
                 null;
               if (linkedId) {
@@ -885,12 +934,12 @@ export async function POST(req: NextRequest) {
     await db.$transaction(
       async (tx) => {
         for (const row of parsed.products) {
-          const baseId = nameToId.get(row.name.trim().toLowerCase());
+          const baseId = nameToId.get(csvProductNameKey(row.name));
           if (!baseId || !createdProductIds.includes(baseId)) continue;
 
           for (let i = 0; i < row.offerProductNames.length; i++) {
             const offeredName = row.offerProductNames[i]!.trim();
-            const offeredId = nameToId.get(offeredName.toLowerCase());
+            const offeredId = nameToId.get(csvProductNameKey(offeredName));
             if (!offeredId || offeredId === baseId) continue;
             try {
               await tx.menuItemOffer.create({

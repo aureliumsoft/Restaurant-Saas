@@ -82,7 +82,8 @@ import {
 import { cn } from '@/lib/utils';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import { setUiLanguage } from '@/lib/i18n/client';
-import type { UiLanguage } from '@/lib/i18n/resources';
+import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { IconArrowBack } from '@tabler/icons-react';
 import {
   kioskBasePath,
@@ -147,6 +148,7 @@ function formatKioskOrderApiError(body: unknown): string {
 type CartModifierSelection = {
   attributeGroupId: string;
   groupName: string;
+  parentSelectionKey?: string;
   selections: { menuItemId: string; name: string; unitPrice: number }[];
 };
 
@@ -436,7 +438,7 @@ export function KioskApp({
   const [branchName, setBranchName] = useState<string | null>(null);
   const [branchValid, setBranchValid] = useState<boolean | null>(null);
   const { t, i18n } = useTranslation();
-  const uiLang: UiLanguage = i18n.resolvedLanguage === 'en' ? 'en' : 'es';
+  const uiLang = normalizeUiLanguage(i18n.resolvedLanguage ?? i18n.language);
   const customerAccount = useCustomerAccountOptional();
   const requiresMobileQrSignIn = fromTableQr && isMobileScan;
   const qrCustomerReady =
@@ -501,7 +503,7 @@ export function KioskApp({
     if (!restaurantMeta) return null;
     const menus: CustomerMenuCategory[] = progressiveCategories.map((c) => ({
       id: c.id,
-      name: c.name,
+      name: resolveBilingualText(c.name, uiLang),
       imageUrl: c.imageUrl,
       items: c.items.map((item) => ({ ...item, categoryId: c.id })),
     }));
@@ -518,7 +520,7 @@ export function KioskApp({
         | RestaurantServiceCharges
         | undefined,
     };
-  }, [restaurantMeta, progressiveCategories, slug]);
+  }, [restaurantMeta, progressiveCategories, slug, uiLang]);
 
   const fulfillmentSettings = useMemo(
     (): RestaurantFulfillmentSettings =>
@@ -836,11 +838,14 @@ export function KioskApp({
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
     return customizeProduct.attributeGroups.map((g) =>
-      buildCustomerAttributeGroup(g, customizeProduct.id, (id) =>
-        customerMenuItemImageUrl(id, { slug })
+      buildCustomerAttributeGroup(
+        g,
+        customizeProduct.id,
+        (id) => customerMenuItemImageUrl(id, { slug }),
+        uiLang
       )
     );
-  }, [customizeProduct, slug]);
+  }, [customizeProduct, slug, uiLang]);
 
   const addToCart = (
     product: CustomerMenuProduct,
@@ -869,13 +874,17 @@ export function KioskApp({
               ? crypto.randomUUID()
               : `l${Date.now()}`,
           menuItemId: product.id,
-          productName: product.name,
-          description: product.description ?? null,
+          productName: resolveBilingualText(product.name, uiLang),
+          description: product.description
+            ? resolveBilingualText(product.description, uiLang)
+            : null,
           imageUrl: compactCartImageUrl(product.imageUrl),
           baseUnitPrice,
           quantity: 1,
           variationId,
-          variationName: variation?.name ?? null,
+          variationName: variation?.name
+            ? resolveBilingualText(variation.name, uiLang)
+            : null,
           variationPriceDelta: variation?.priceDelta ?? 0,
           modifiers,
           modifiersSignature,
@@ -1145,6 +1154,7 @@ export function KioskApp({
       p.salePrice != null && p.salePrice > 0 && p.salePrice < p.price;
     const isCustomizable = productNeedsCustomizeDialog(p);
     const q = qtyOnMenu(p.id);
+    const displayName = resolveBilingualText(p.name, uiLang);
 
     return (
       <Card
@@ -1163,11 +1173,11 @@ export function KioskApp({
           <LazyMenuProductImage
             src={p.imageUrl}
             hasImage={p.hasImage ?? Boolean(p.imageUrl)}
-            alt={p.name}
+            alt={displayName}
             className="aspect-square w-full rounded-lg pointer-events-none"
           />
           <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-tight text-[#0f172a]">
-            {p.name}
+            {displayName}
           </h3>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-sm font-bold text-primary">
@@ -2484,9 +2494,17 @@ export function KioskApp({
         />
 
         <ProductCustomizeDialog
-          productName={customizeProduct?.name ?? ''}
+          productName={
+            customizeProduct
+              ? resolveBilingualText(customizeProduct.name, uiLang)
+              : ''
+          }
           productImageUrl={customizeProduct?.imageUrl ?? null}
-          productDescription={customizeProduct?.description ?? null}
+          productDescription={
+            customizeProduct?.description
+              ? resolveBilingualText(customizeProduct.description, uiLang)
+              : null
+          }
           themePrimaryColor={displayMenu?.themePrimaryColor ?? null}
           productBaseUnitPrice={
             customizeProduct
@@ -2500,7 +2518,10 @@ export function KioskApp({
           personalizeGroups={customizeProduct?.personalizeGroups ?? []}
           variations={(customizeProduct?.variations ?? []).map((v) => ({
             id: v.id,
-            name: v.name ?? v.title ?? 'Variation',
+            name:
+              (v.name && resolveBilingualText(v.name, uiLang)) ||
+              (v.title && resolveBilingualText(v.title, uiLang)) ||
+              'Variation',
             imageUrl: v.imageUrl ?? null,
             swatchHex: v.swatchHex,
             priceDelta: v.priceDelta,
@@ -2520,6 +2541,7 @@ export function KioskApp({
             const mapped: CartModifierSelection[] = mods.map((m) => ({
               attributeGroupId: m.attributeGroupId,
               groupName: m.groupName,
+              parentSelectionKey: m.parentSelectionKey,
               selections: m.selections.map((s) => ({
                 menuItemId: s.menuItemId,
                 name: String(s.name ?? 'Option'),

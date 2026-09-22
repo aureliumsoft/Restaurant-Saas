@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 
 import { CategoriesTab } from '@/components/dashboard/menu-manager/categories-tab';
 import { MenuPageShell } from '@/components/dashboard/menu-manager/menu-page-shell';
@@ -12,6 +13,7 @@ import type { PaginationMeta } from '@/lib/pagination';
 const CATEGORIES_PAGE_SIZE = 4;
 
 export default function CategoriesPage() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [categories, setCategories] = useState<MenuCategoryRow[]>([]);
@@ -122,8 +124,8 @@ export default function CategoriesPage() {
     <div className="w-full">
       <ErrorBoundary>
         <MenuPageShell
-          title="Categories"
-          description="Manage storefront categories and recommendation-only pools in separate tabs. Drag to reorder storefront categories."
+          title={t('dashboard.categories.title')}
+          description={t('dashboard.categories.description')}
           loading={false}
         >
           <CategoriesTab
@@ -135,9 +137,12 @@ export default function CategoriesPage() {
           />
           {pagination ? (
             <p className="mt-2 px-2 text-xs text-muted-foreground">
-              Showing {categories.length} of {pagination.total}
+              {t('dashboard.categories.showingCount', {
+                shown: categories.length,
+                total: pagination.total,
+              })}
               {loadingMore && pagination.hasNextPage
-                ? ' · loading more in background...'
+                ? t('dashboard.categories.loadingMore')
                 : ''}
             </p>
           ) : null}

@@ -7,6 +7,8 @@ export type MenuItemLike = {
   imageUrl?: string | null;
   price: number;
   salePrice?: number | null;
+  updatedAt?: string | Date | null;
+  createdAt?: string | Date | null;
   attributeGroups?: AttributeGroupLike[] | null;
   variations?: {
     id: string;

@@ -6,7 +6,7 @@ import { db } from '@/lib/db';
 const DEFAULT_LIMIT = 9;
 const MAX_LIMIT = 30;
 
-/** Public list of published blog posts (cursor = id of last item). */
+/** Public list of published blog posts (raw bilingual fields; client resolves locale). */
 export async function GET(req: NextRequest) {
   const limitRaw = Number(req.nextUrl.searchParams.get('limit') ?? DEFAULT_LIMIT);
   const limit = Math.min(
@@ -42,7 +42,14 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       data: {
-        posts: page,
+        posts: page.map((row) => ({
+          id: row.id,
+          slug: row.slug,
+          imageUrl: row.imageUrl,
+          title: row.title,
+          shortDescription: row.shortDescription,
+          publishedAt: row.publishedAt,
+        })),
         nextCursor,
         hasMore,
       },

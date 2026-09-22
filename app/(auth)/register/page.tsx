@@ -14,6 +14,7 @@ import { PublicAuthShell } from '@/components/marketing/public-auth-shell';
 import { REGISTER_ROLE_SLUG } from '@/lib/global-roles';
 import { IconBrandGoogleFilled } from '@tabler/icons-react';
 import { Loader2, UserPlus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 type GoogleSignupRole = 'OWNER' | 'WORKER';
 

@@ -11,8 +11,10 @@ import {
   type SetStateAction,
 } from 'react';
 import { Check, ChevronDown, Minus, Plus, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
+import { ORDER_ACCENT_GOLD } from '@/components/order/order-menu-header';
 import { Label } from '@/components/ui/label';
 import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
 import { modifierSelectionsUnitTotal } from '@/lib/menu/build-modifier-selections';
@@ -65,7 +67,7 @@ import {
   PersonalizeOptionsSection,
   type PersonalizeGroup,
 } from '@/components/order/personalize-options-section';
-import { buildPersonalizeModifierSelections } from '@/lib/menu/personalize-modifiers';
+import { useBilingualText } from '@/hooks/use-bilingual-text';
 import type {
   AttributeGroup,
   MenuOption,
@@ -101,25 +103,8 @@ function OptionThumbnail({
       src={imageUrl}
       alt={name}
       emptyLabel={name.slice(0, 2).toUpperCase()}
-      className="h-12 w-12 shrink-0 rounded-md"
+      className="h-14 w-14 shrink-0 rounded-lg"
     />
-  );
-}
-
-function RadioIndicator({ selected }: { selected: boolean }) {
-  return (
-    <span
-      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
-        selected
-          ? 'border-primary bg-primary'
-          : 'border-muted-foreground/35 bg-background'
-      }`}
-      aria-hidden
-    >
-      {selected ? (
-        <span className="h-2.5 w-2.5 rounded-full bg-primary-foreground" />
-      ) : null}
-    </span>
   );
 }
 
@@ -813,13 +798,17 @@ function InlineRecommendationGroups({
                         {radioMode ? (
                           <button
                             type="button"
-                            className="shrink-0 p-1"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition hover:brightness-95 active:scale-90"
                             aria-label={`Select ${it.name}`}
                             onClick={() =>
                               selectRadio(g, it.menuItemId, limits)
                             }
                           >
-                            <RadioIndicator selected={radioSelected} />
+                            {radioSelected ? (
+                              <Check className="h-4 w-4" strokeWidth={2.75} />
+                            ) : (
+                              <Plus className="h-4 w-4" strokeWidth={2.75} />
+                            )}
                           </button>
                         ) : quantityMode ? (
                           <div className="flex shrink-0 items-center gap-1.5">
@@ -889,6 +878,7 @@ type Props = {
   /** Group context for the product being configured (category option or product rec). */
   parentConfigurationGroup?: {
     required?: boolean;
+    sourceType?: 'CATEGORY' | 'PRODUCT';
     useVariationPricing?: boolean;
     defaultLinkedRestaurantVariationId?: string | null;
     includeDefaultLinkedVariationPrice?: boolean;
@@ -898,6 +888,7 @@ type Props = {
   baseProductVariationShortLabel?: string | null;
   /** Higher z-index when stacked inside another sheet. */
   stackClassName?: string;
+  stackZIndex?: number;
   onClose: () => void;
   onDone: (result: NestedRecommendationResult) => void;
 };
@@ -912,9 +903,12 @@ export function NestedRecommendationSheet({
   baseProductVariation = null,
   baseProductVariationShortLabel = null,
   stackClassName,
+  stackZIndex,
   onClose,
   onDone,
 }: Props) {
+  const { t } = useTranslation();
+  const { lang } = useBilingualText();
   const [productVariationId, setProductVariationId] = useState(
     initialProductVariationId ?? ''
   );
@@ -1415,7 +1409,19 @@ export function NestedRecommendationSheet({
   ]);
 
   const requiredMissing = useMemo(() => {
-    if (rootManualVariation && !productVariationId) return true;
+    const parentIsOptionalProduct =
+      parentConfigurationGroup?.sourceType === 'PRODUCT' &&
+      !parentConfigurationGroup.required;
+    const hasInnerSelections =
+      Object.values(selectedByGroup).some((arr) => arr.length > 0) ||
+      Object.values(selectedPersonalizeByGroup).some((arr) => arr.length > 0);
+
+    // Optional product recommendations can be declined with no variation chosen.
+    // Only require a root variation when the sheet is required, or the guest
+    // already started configuring inner options.
+    if (rootManualVariation && !productVariationId) {
+      if (!parentIsOptionalProduct || hasInnerSelections) return true;
+    }
 
     const missingProductRecs = visibleProductRecommendationGroups.some((g) => {
       const item = g.items[0];
@@ -1466,11 +1472,13 @@ export function NestedRecommendationSheet({
     configurationParentVariation,
     isProductGroupConfigured,
     optionNestedConfigs,
+    parentConfigurationGroup,
     preselectedProductVariationByGroup,
     productVariationId,
     rootManualVariation,
     selectedByGroup,
     selectedNestedVariationByOption,
+    selectedPersonalizeByGroup,
     visibleCategoryGroups,
     visibleProductRecommendationGroups,
   ]);
@@ -1491,12 +1499,14 @@ export function NestedRecommendationSheet({
       selectionTimeline,
       allGroupsFlat,
       productRecChildGroupNamePrefix: false,
+      lang,
     });
     return modifierSelectionsUnitTotal(mods);
   }, [
     allGroupsFlat,
     baseProductVariationShortLabel,
     configurationParentVariation,
+    lang,
     optionNestedConfigs,
     personalizeGroups,
     preselectedProductVariationByGroup,
@@ -1568,6 +1578,7 @@ export function NestedRecommendationSheet({
       parentVariationShortLabel: baseProductVariationShortLabel,
       selectionTimeline,
       allGroupsFlat,
+      lang,
     });
 
     onDone({
@@ -1600,17 +1611,26 @@ export function NestedRecommendationSheet({
 
   return (
     <div
-      className={`absolute inset-0 z-[90] flex min-h-0 flex-col bg-card animate-in fade-in-0 duration-200 ${stackClassName ?? ''}`}
+      className={`absolute inset-0 flex min-h-0 flex-col justify-end bg-black/45 ${stackClassName ?? ''}`}
+      style={{ zIndex: stackZIndex ?? (stackClassName ? 120 : 90) }}
       role="dialog"
       aria-modal="true"
       aria-label={`${product.name} configuration`}
+      onClick={onClose}
     >
-      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-4">
+      <div
+        className="flex max-h-[min(88dvh,44rem)] w-full shrink-0 flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl animate-in slide-in-from-bottom-8 duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+      <header className="flex shrink-0 items-start justify-between gap-3 px-5 pb-2 pt-3">
         <div className="min-w-0">
+          <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted sm:mx-0" />
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {parentGroupName}
           </p>
-          <h2 className="text-lg font-bold text-foreground">{product.name}</h2>
+          <h2 className="text-lg font-bold text-foreground">
+            {t('customizeChoose', { name: product.name })}
+          </h2>
         </div>
         <Button
           type="button"
@@ -1659,11 +1679,13 @@ export function NestedRecommendationSheet({
                     {item.name}
                   </Label>
                   {g.required ? (
-                    <span className="shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
-                      Required
+                    <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                      {t('customizeRequired')}
                     </span>
                   ) : (
-                    <span className="text-xs text-muted-foreground">Optional</span>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {t('customizeOptional')}
+                    </span>
                   )}
                 </div>
                 {configured ? (
@@ -2013,6 +2035,7 @@ export function NestedRecommendationSheet({
         <NestedRecommendationSheet
           open
           stackClassName="z-[92]"
+          stackZIndex={140}
           parentGroupName={activeProductGroup.name}
           parentConfigurationGroup={activeProductGroup}
           baseProductVariation={configurationParentVariation}
@@ -2043,29 +2066,34 @@ export function NestedRecommendationSheet({
 
       <footer className="shrink-0 border-t border-border px-4 py-4">
         {(() => {
-          const isSheetOptional =
-            !parentConfigurationGroup?.required && !rootManualVariation;
+          const parentIsOptionalProduct =
+            parentConfigurationGroup?.sourceType === 'PRODUCT' &&
+            !parentConfigurationGroup.required;
           const hasSheetSelection =
             selectedUnitTotal > 0 ||
-            Boolean(productVariationId && !rootManualVariation) ||
+            Boolean(productVariationId) ||
             Object.values(selectedByGroup).some((arr) => arr.length > 0) ||
             Object.values(selectedPersonalizeByGroup).some(
               (arr) => arr.length > 0
             );
           const sheetButtonText =
-            isSheetOptional && !hasSheetSelection ? 'No Thanks' : 'Select';
+            parentIsOptionalProduct && !hasSheetSelection
+              ? t('customizeNoThanks')
+              : t('select');
           return (
-            <Button
+            <button
               type="button"
-              className="h-12 w-full rounded-xl font-bold"
+              className="h-12 w-full rounded-xl text-sm font-bold text-primary shadow-sm transition hover:brightness-95 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60"
+              style={{ backgroundColor: ORDER_ACCENT_GOLD }}
               disabled={requiredMissing}
               onClick={handleDone}
             >
               {sheetButtonText}
-            </Button>
+            </button>
           );
         })()}
       </footer>
+      </div>
     </div>
   );
 }

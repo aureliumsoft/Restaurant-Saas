@@ -8,7 +8,7 @@ import { storyLangFromI18n } from '@/lib/marketing/home-story';
 
 const PAGES = {
   'click-and-collect': {
-    title: { en: 'Click and Collect', es: 'Click and Collect' },
+    title: { en: 'Click and Collect', es: 'Pedir y recoger' },
     line: {
       en: 'Order on your site. Pick a slot. Collect without the queue.',
       es: 'Pide en tu web. Elige hora. Recoge sin cola.',
@@ -67,8 +67,8 @@ const PAGES = {
 export type OrderPathSlug = keyof typeof PAGES;
 
 export function OrderPathContent({ slug }: { slug: OrderPathSlug }) {
-  const { i18n } = useTranslation();
-  const lang = storyLangFromI18n(i18n.language);
+  const { i18n, t } = useTranslation();
+  const lang = storyLangFromI18n(i18n.resolvedLanguage ?? i18n.language);
   const page = PAGES[slug];
 
   return (
@@ -99,7 +99,7 @@ export function OrderPathContent({ slug }: { slug: OrderPathSlug }) {
           href="/demo-request"
           className="mt-14 inline-flex items-center gap-2 text-sm font-semibold text-fire-600 hover:text-fire-500 dark:text-fire-400"
         >
-          {lang === 'es' ? 'Solicitar demo' : 'Request a demo'}
+          {t('marketingExtras.demo.ctaLink')}
           <ArrowRight className="h-4 w-4" />
         </Link>
       </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
@@ -23,6 +24,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { apiErrorMessage } from '@/lib/api-error-message';
+import {
+  bilingualInputFromStored,
+  parseBilingualInput,
+  resolveBilingualText,
+  serializeBilingualInput,
+} from '@/lib/menu/bilingual-text';
 import { filterNameTextInput } from '@/lib/validation/fields';
 
 import type { RestaurantVariationRow } from './types';
@@ -30,6 +37,7 @@ import type { RestaurantVariationRow } from './types';
 const PAGE_SIZE = 12;
 
 export function RestaurantVariationsPanel() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<RestaurantVariationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -88,10 +96,14 @@ export function RestaurantVariationsPanel() {
 
   const add = async () => {
     if (!name.trim() || adding) return;
+    if (!parseBilingualInput(name).en) {
+      toast.error('English name (before &&&&) is required.');
+      return;
+    }
     setAdding(true);
     try {
       await axios.post('/api/restaurant/variations', {
-        name: name.trim(),
+        name: serializeBilingualInput(name),
         shortLabel: shortLabel.trim() || null,
       });
       toast.success('Variation created');
@@ -107,10 +119,14 @@ export function RestaurantVariationsPanel() {
 
   const save = async () => {
     if (!pendingSave) return;
+    if (!parseBilingualInput(pendingSave.name).en) {
+      toast.error('English name (before &&&&) is required.');
+      return;
+    }
     setSaving(true);
     try {
       await axios.patch(`/api/restaurant/variations/${pendingSave.id}`, {
-        name: pendingSave.name.trim(),
+        name: serializeBilingualInput(pendingSave.name),
         shortLabel: pendingSave.shortLabel.trim() || null,
       });
       toast.success('Saved');
@@ -155,7 +171,7 @@ export function RestaurantVariationsPanel() {
                 <Label htmlFor="new-variation-name">Name</Label>
                 <Input
                   id="new-variation-name"
-                  placeholder="e.g. Medium"
+                  placeholder={`English name ${'&&&&'} Spanish name`}
                   value={name}
                   onChange={(e) =>
                     setName(filterNameTextInput(e.target.value))
@@ -166,6 +182,9 @@ export function RestaurantVariationsPanel() {
                     if (e.key === 'Enter' && canAdd) setConfirmAddOpen(true);
                   }}
                 />
+                <p className="text-xs text-muted-foreground">
+                  First English, then separator &&&&, then Spanish.
+                </p>
               </div>
               <div className="grid gap-1.5 ">
                 <Label htmlFor="new-variation-short">Short label (optional)</Label>
@@ -194,7 +213,9 @@ export function RestaurantVariationsPanel() {
             </div>
            
           </div>
-
+              {adding
+                ? t('dashboard.menuManager.adding')
+                : t('dashboard.menuManager.variation.add')}
           {loading ? (
             <p className="text-sm text-muted-foreground">
               <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
@@ -248,9 +269,13 @@ export function RestaurantVariationsPanel() {
 
       <SaveConfirmation
         open={confirmSaveOpen}
-        title="Save variation"
+        title={t('dashboard.menuManager.variation.save')}
         description="Update this variation template. Products and configuration rules that use it will reflect the new name and label."
-        itemName={pendingSave?.name}
+        itemName={
+          pendingSave?.name
+            ? resolveBilingualText(pendingSave.name, 'en')
+            : undefined
+        }
         loading={saving}
         onCancel={() => {
           if (!saving) {
@@ -262,12 +287,11 @@ export function RestaurantVariationsPanel() {
 
       <DeleteConfirmation
         open={confirmDeleteOpen}
-        title="Delete variation"
+        title={t('dashboard.menuManager.variation.delete')}
         description="This removes the template. Products already using it may need to be updated."
-        itemName={deletingRow?.name}
+        itemName={resolveBilingualText(deletingRow?.name, 'en')}
         loading={deleting}
         onConfirm={() => {
-          setDeleting(true);
           void remove();
         }}
         onCancel={() => {
@@ -293,19 +317,23 @@ function VariationCard({
   onDelete: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState(variation.name);
+  const [editName, setEditName] = useState(() =>
+    bilingualInputFromStored(variation.name)
+  );
+  const { t } = useTranslation();
   const [editShortLabel, setEditShortLabel] = useState(
     variation.shortLabel ?? ''
   );
+  const displayName = resolveBilingualText(variation.name, 'en');
 
   useEffect(() => {
-    setEditName(variation.name);
+    setEditName(bilingualInputFromStored(variation.name));
     setEditShortLabel(variation.shortLabel ?? '');
     setEditing(false);
   }, [variation.id, variation.name, variation.shortLabel]);
 
   const cancelEdit = () => {
-    setEditName(variation.name);
+    setEditName(bilingualInputFromStored(variation.name));
     setEditShortLabel(variation.shortLabel ?? '');
     setEditing(false);
   };
@@ -315,7 +343,7 @@ function VariationCard({
     if (!nextName) return;
     const nextShort = editShortLabel.trim();
     if (
-      nextName === variation.name &&
+      nextName === bilingualInputFromStored(variation.name) &&
       nextShort === (variation.shortLabel ?? '')
     ) {
       cancelEdit();
@@ -357,6 +385,7 @@ function VariationCard({
               <Label>Name</Label>
               <Input
                 value={editName}
+                placeholder={`English name ${'&&&&'} Spanish name`}
                 onChange={(e) =>
                   setEditName(filterNameTextInput(e.target.value))
                 }
@@ -367,6 +396,9 @@ function VariationCard({
                   if (e.key === 'Escape') cancelEdit();
                 }}
               />
+              <p className="text-xs text-muted-foreground">
+                First English, then separator &&&&, then Spanish.
+              </p>
             </div>
             <div className="grid gap-1.5">
               <Label>Short label</Label>
@@ -391,7 +423,7 @@ function VariationCard({
                 type="button"
                 variant="outline"
                 onClick={cancelEdit}
-                aria-label="Cancel edit"
+                aria-label={t('dashboard.common.cancel')}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -400,7 +432,7 @@ function VariationCard({
         ) : (
           <div className="flex items-start justify-between gap-2">
             <CardTitle className="text-base leading-snug">
-              {variation.name}
+              {displayName}
             </CardTitle>
             <Button
               type="button"

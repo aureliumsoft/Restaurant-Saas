@@ -64,6 +64,7 @@ import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { filterDecimalInput } from '@/lib/validation/fields';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 type IngredientRow = {
   id: string;
@@ -161,6 +162,7 @@ const NO_STORE_HEADERS = {
 };
 
 export default function InventoryPage() {
+  const { t } = useTranslation();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { canEdit, canDelete } = useDashboardPermissions();
   const canEditInv = canEdit('inventory');
@@ -185,7 +187,8 @@ export default function InventoryPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [stockRow, setStockRow] = useState<IngredientRow | null>(null);
-  const [stockQty, setStockQty] = useState('');
+  const [stockAddQty, setStockAddQty] = useState('');
+  const [stockUnitRate, setStockUnitRate] = useState('');
   const [savingStock, setSavingStock] = useState(false);
 
   const [entries, setEntries] = useState<EntryRow[]>([]);
@@ -530,13 +533,57 @@ export default function InventoryPage() {
     }
   };
 
+  const stockAddAmount = useMemo(() => {
+    const n = Number(stockAddQty);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }, [stockAddQty]);
+
+  const stockUnitRateValue = useMemo(() => {
+    const n = Number(stockUnitRate);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  }, [stockUnitRate]);
+
+  const stockTotals = useMemo(() => {
+    const previousQty = stockRow?.quantity ?? 0;
+    const previousUnitCost = stockRow?.unitCost ?? 0;
+    const totalQtyAfter = previousQty + stockAddAmount;
+    const totalCostNew =
+      Math.round(stockAddAmount * stockUnitRateValue * 100) / 100;
+    const previousValue =
+      Math.round(previousQty * previousUnitCost * 100) / 100;
+    const totalStockValue =
+      Math.round((previousValue + totalCostNew) * 100) / 100;
+    return {
+      previousQty,
+      totalQtyAfter,
+      totalCostNew,
+      totalStockValue,
+      unitLabel: stockRow ? formatIngredientUnit(stockRow.unit) : '',
+    };
+  }, [stockRow, stockAddAmount, stockUnitRateValue]);
+
+  const openStockDialog = (row: IngredientRow) => {
+    setStockRow(row);
+    setStockAddQty('');
+    setStockUnitRate(
+      row.unitCost != null && Number.isFinite(row.unitCost)
+        ? String(row.unitCost)
+        : ''
+    );
+  };
+
   const saveStock = async () => {
     if (!stockRow) return;
-    const qty = Number(stockQty);
-    if (!Number.isFinite(qty) || qty < 0) {
-      toast.error('Enter a quantity of 0 or more.');
+    if (stockAddAmount <= 0) {
+      toast.error('Enter a quantity to add greater than 0.');
       return;
     }
+    if (!Number.isFinite(Number(stockUnitRate)) || Number(stockUnitRate) < 0) {
+      toast.error('Enter a unit rate of 0 or more.');
+      return;
+    }
+    const nextQty = stockTotals.totalQtyAfter;
+    const expenseAmount = stockTotals.totalCostNew;
     setSavingStock(true);
     try {
       await axios.patch(
@@ -545,17 +592,31 @@ export default function InventoryPage() {
           activeBranchId,
           activeBranchUrlId
         ),
-        { quantity: qty }
+        {
+          quantity: nextQty,
+          unitCost: stockUnitRateValue,
+          expenseAmount,
+        }
       );
-      toast.success('Stock updated.');
+      toast.success('Stock updated and inventory expense recorded.');
       setRows((prev) =>
         prev.map((r) =>
-          r.id === stockRow.id ? { ...r, quantity: qty } : r
+          r.id === stockRow.id
+            ? {
+                ...r,
+                quantity: nextQty,
+                unitCost: stockUnitRateValue,
+                stockValue: nextQty * stockUnitRateValue,
+              }
+            : r
         )
       );
       setStockRow(null);
+      setStockAddQty('');
+      setStockUnitRate('');
       void loadIngredients(page, appliedSearch, { silent: true });
       void loadActiveIngredients();
+      void loadSummary({ silent: true });
     } catch (e) {
       toast.error(extractApiErrorMessage(e, 'Could not update stock.'));
     } finally {
@@ -587,33 +648,37 @@ export default function InventoryPage() {
           <>
             <InventoryInsightChip
               icon={Wallet}
-              label="Inventory value"
+              label={t('dashboard.inventory.inventoryValue')}
               value={formatMoney(summary?.totalInventoryValue ?? 0)}
               hint={
                 activeBranchName
-                  ? `On hand at ${activeBranchName}`
-                  : 'All branches combined'
+                  ? t('dashboard.inventory.onHandAt', {
+                      branch: activeBranchName,
+                    })
+                  : t('dashboard.inventory.allBranches')
               }
             />
             <InventoryInsightChip
               icon={AlertTriangle}
-              label="Low stock"
+              label={t('dashboard.inventory.lowStock')}
               value={String(summary?.lowStockCount ?? 0)}
-              hint="At or below alert quantity"
+              hint={t('dashboard.inventory.lowStockHint')}
               accent={(summary?.lowStockCount ?? 0) > 0}
             />
             <InventoryInsightChip
               icon={Package}
-              label="Active ingredients"
+              label={t('dashboard.inventory.activeIngredients')}
               value={String(summary?.activeIngredientCount ?? 0)}
-              hint="In your catalog"
+              hint={t('dashboard.inventory.inCatalog')}
             />
             <InventoryInsightChip
               icon={TrendingDown}
-              label="Usage (30 days)"
+              label={t('dashboard.inventory.usage30d')}
               value={formatMoney(summary?.usageValue30d ?? 0)}
-              hint={`${summary?.entryCount30d ?? 0} stock entr${
-                summary?.entryCount30d === 1 ? 'y' : 'ies'
+              hint={`${summary?.entryCount30d ?? 0} ${
+                summary?.entryCount30d === 1
+                  ? t('dashboard.inventory.stockEntry')
+                  : t('dashboard.inventory.stockEntries')
               }`}
             />
           </>
@@ -629,11 +694,11 @@ export default function InventoryPage() {
           <TabsList className="grid h-11 w-full max-w-none flex-1 grid-cols-2 sm:flex-1">
             <TabsTrigger value="ingredients" className="gap-2">
               <Package className="h-4 w-4" />
-              Ingredients
+              {t('dashboard.inventory.tabIngredients')}
             </TabsTrigger>
             <TabsTrigger value="entries" className="gap-2">
               <List className="h-4 w-4" />
-              Stock entries
+              {t('dashboard.inventory.tabEntries')}
             </TabsTrigger>
           </TabsList>
           <Button
@@ -643,7 +708,7 @@ export default function InventoryPage() {
             className="h-11 w-11 shrink-0"
             disabled={tab === 'entries' ? entriesLoading : loading}
             onClick={() => refreshInventory()}
-            title="Refresh"
+            title={t('dashboard.common.refresh')}
           >
             <RefreshCw
               className={cn(
@@ -657,12 +722,14 @@ export default function InventoryPage() {
         <TabsContent value="ingredients" className="mt-0 w-full">
         <DashboardCard className="w-full">
           <DashboardCardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <DashboardCardTitle>Ingredients</DashboardCardTitle>
+            <DashboardCardTitle>
+              {t('dashboard.inventory.tabIngredients')}
+            </DashboardCardTitle>
             {canEditInv ? (
               <Button type="button" asChild>
                 <Link href="/inventory/ingredients/create">
                   <Plus className="mr-2 h-4 w-4" />
-                  Add ingredient
+                  {t('dashboard.inventory.addIngredient')}
                 </Link>
               </Button>
             ) : null}
@@ -679,7 +746,7 @@ export default function InventoryPage() {
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search ingredients…"
+                placeholder={t('dashboard.inventory.searchIngredients')}
                 className={cn(
                   'h-10 bg-background [&::-webkit-search-cancel-button]:hidden',
                   appliedSearch && search.trim() === appliedSearch
@@ -687,7 +754,7 @@ export default function InventoryPage() {
                     : 'pr-24'
                 )}
                 autoComplete="off"
-                aria-label="Search ingredients"
+                aria-label={t('dashboard.inventory.searchIngredients')}
               />
               {appliedSearch && search.trim() === appliedSearch ? (
                 <Button
@@ -707,7 +774,7 @@ export default function InventoryPage() {
                   className="absolute right-0 top-1/2 h-10 -translate-y-1/2"
                 >
                   <Search className="mr-2 h-4 w-4 text-white" />
-                  Search
+                  {t('dashboard.common.search')}
                 </Button>
               )}
             </form>
@@ -716,8 +783,8 @@ export default function InventoryPage() {
             ) : rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 {appliedSearch
-                  ? 'No ingredients match your search.'
-                  : 'No ingredients yet.'}
+                  ? t('dashboard.inventory.emptyIngredientsSearch')
+                  : t('dashboard.inventory.emptyIngredients')}
               </p>
             ) : (
               <>
@@ -725,11 +792,21 @@ export default function InventoryPage() {
                   <DashboardTable minWidth={1040}>
                     <DashboardTableHeader>
                       <DashboardTableRow>
-                        <DashboardTableHead>Ingredient</DashboardTableHead>
-                        <DashboardTableHead>Stock</DashboardTableHead>
-                        <DashboardTableHead>Unit cost</DashboardTableHead>
-                        <DashboardTableHead>Stock value</DashboardTableHead>
-                        <DashboardTableHead>Major</DashboardTableHead>
+                        <DashboardTableHead>
+                          {t('dashboard.reports.colIngredient')}
+                        </DashboardTableHead>
+                        <DashboardTableHead>
+                          {t('dashboard.inventory.colStock')}
+                        </DashboardTableHead>
+                        <DashboardTableHead>
+                          {t('dashboard.inventory.colUnitCost')}
+                        </DashboardTableHead>
+                        <DashboardTableHead>
+                          {t('dashboard.inventory.colStockValue')}
+                        </DashboardTableHead>
+                        <DashboardTableHead>
+                          {t('dashboard.inventory.colMajor')}
+                        </DashboardTableHead>
                         <DashboardTableHead className="w-36" />
                       </DashboardTableRow>
                     </DashboardTableHeader>
@@ -797,10 +874,7 @@ export default function InventoryPage() {
                                       variant="ghost"
                                       size="icon"
                                       aria-label={`Update ${row.name} quantity`}
-                                      onClick={() => {
-                                        setStockRow(row);
-                                        setStockQty(String(row.quantity));
-                                      }}
+                                      onClick={() => openStockDialog(row)}
                                     >
                                       <PackagePlus className="h-4 w-4" />
                                     </Button>
@@ -875,15 +949,16 @@ export default function InventoryPage() {
                   type="search"
                   value={entrySearch}
                   onChange={(e) => setEntrySearch(e.target.value)}
-                  placeholder="Search entries by ingredient, product, or reason…"
+                  placeholder={t('dashboard.inventory.searchEntries')}
                   className={cn(
                     'h-10 bg-background [&::-webkit-search-cancel-button]:hidden',
-                    appliedEntrySearch && entrySearch.trim() === appliedEntrySearch
+                    appliedEntrySearch &&
+                      entrySearch.trim() === appliedEntrySearch
                       ? 'pr-12'
                       : 'pr-24'
                   )}
                   autoComplete="off"
-                  aria-label="Search stock entries"
+                  aria-label={t('dashboard.inventory.searchEntries')}
                 />
                 {appliedEntrySearch && entrySearch.trim() === appliedEntrySearch ? (
                   <Button
@@ -903,7 +978,7 @@ export default function InventoryPage() {
                     className="absolute right-0 top-1/2 h-10 -translate-y-1/2"
                   >
                     <Search className="mr-2 h-4 w-4 text-white" />
-                    Search
+                    {t('dashboard.common.search')}
                   </Button>
                 )}
               </form>
@@ -912,8 +987,8 @@ export default function InventoryPage() {
               ) : entries.length === 0 && !entriesLoading ? (
                 <p className="text-sm text-muted-foreground">
                   {appliedEntrySearch
-                    ? 'No entries match your search.'
-                    : 'No entries yet.'}
+                    ? t('dashboard.inventory.emptyEntriesSearch')
+                    : t('dashboard.inventory.emptyEntries')}
                 </p>
               ) : (
                 <>
@@ -921,12 +996,24 @@ export default function InventoryPage() {
                     <DashboardTable minWidth={960}>
                       <DashboardTableHeader>
                         <DashboardTableRow>
-                          <DashboardTableHead>When</DashboardTableHead>
-                          <DashboardTableHead>Ingredient</DashboardTableHead>
-                          <DashboardTableHead>Qty</DashboardTableHead>
-                          <DashboardTableHead>Value</DashboardTableHead>
-                          <DashboardTableHead>Product</DashboardTableHead>
-                          <DashboardTableHead>Reason</DashboardTableHead>
+                          <DashboardTableHead>
+                            {t('dashboard.inventory.colWhen')}
+                          </DashboardTableHead>
+                          <DashboardTableHead>
+                            {t('dashboard.reports.colIngredient')}
+                          </DashboardTableHead>
+                          <DashboardTableHead>
+                            {t('dashboard.reports.colQty')}
+                          </DashboardTableHead>
+                          <DashboardTableHead>
+                            {t('dashboard.inventory.colValue')}
+                          </DashboardTableHead>
+                          <DashboardTableHead>
+                            {t('dashboard.inventory.colProduct')}
+                          </DashboardTableHead>
+                          <DashboardTableHead>
+                            {t('dashboard.inventory.colReason')}
+                          </DashboardTableHead>
                         </DashboardTableRow>
                       </DashboardTableHeader>
                       <DashboardTableBody>
@@ -978,9 +1065,6 @@ export default function InventoryPage() {
                     loading={entriesLoading}
                     hideWhenSinglePage={false}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    {entryTotal} entr{entryTotal === 1 ? 'y' : 'ies'}
-                  </p>
                 </>
               )}
             </DashboardCardContent>
@@ -1086,54 +1170,135 @@ export default function InventoryPage() {
       <Dialog
         open={Boolean(stockRow)}
         onOpenChange={(open) => {
-          if (!open && !savingStock) setStockRow(null);
+          if (!open && !savingStock) {
+            setStockRow(null);
+            setStockAddQty('');
+            setStockUnitRate('');
+          }
         }}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
               {stockRow
-                ? `Update stock for "${stockRow.name}"`
-                : 'Update ingredient stock'}
+                ? `Add stock for "${stockRow.name}"`
+                : 'Add ingredient stock'}
             </DialogTitle>
             <DialogDescription>
-              Set the on-hand quantity
+              Enter the quantity to add
               {stockRow
-                ? ` in ${formatIngredientUnit(stockRow.unit)}.`
+                ? ` in ${formatIngredientUnit(stockRow.unit)}. Unit rate defaults to the current cost.`
                 : '.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-2 py-2">
-            <Label htmlFor="ingredient-stock-qty">
-              Quantity
-              {stockRow ? ` (${formatIngredientUnit(stockRow.unit)})` : ''}
-            </Label>
-            <Input
-              id="ingredient-stock-qty"
-              value={stockQty}
-              onChange={(e) => setStockQty(filterDecimalInput(e.target.value))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void saveStock();
+          <div className="grid gap-3 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="ingredient-stock-previous">Previous quantity</Label>
+              <Input
+                id="ingredient-stock-previous"
+                value={
+                  stockRow
+                    ? `${stockTotals.previousQty} ${stockTotals.unitLabel}`
+                    : ''
                 }
-              }}
-              inputMode="decimal"
-              autoFocus
-            />
+                readOnly
+                disabled
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ingredient-stock-add">
+                Add quantity
+                {stockRow ? ` (${stockTotals.unitLabel})` : ''}
+              </Label>
+              <Input
+                id="ingredient-stock-add"
+                value={stockAddQty}
+                onChange={(e) =>
+                  setStockAddQty(filterDecimalInput(e.target.value))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void saveStock();
+                  }
+                }}
+                inputMode="decimal"
+                autoFocus
+                placeholder="0"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ingredient-stock-rate">Unit rate</Label>
+              <Input
+                id="ingredient-stock-rate"
+                value={stockUnitRate}
+                onChange={(e) =>
+                  setStockUnitRate(filterDecimalInput(e.target.value))
+                }
+                inputMode="decimal"
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground">
+                Defaults to the previous unit cost
+                {stockRow?.unitCost != null
+                  ? ` (${formatMoney(stockRow.unitCost)})`
+                  : ''}
+                .
+              </p>
+            </div>
+            <div className="grid gap-2 rounded-xl border bg-muted/30 p-3 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  Total quantity after update
+                </p>
+                <p className="font-medium tabular-nums">
+                  {stockTotals.totalQtyAfter} {stockTotals.unitLabel}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  Total cost of new quantity
+                </p>
+                <p className="font-medium tabular-nums">
+                  {formatMoney(stockTotals.totalCostNew)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  Total value of total stock
+                </p>
+                <p className="font-medium tabular-nums">
+                  {formatMoney(stockTotals.totalStockValue)}
+                </p>
+              </div>
+            </div>
+            {stockAddAmount > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Saving records an Inventory expense for{' '}
+                {formatMoney(stockTotals.totalCostNew)}.
+              </p>
+            ) : null}
           </div>
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               disabled={savingStock}
-              onClick={() => setStockRow(null)}
+              onClick={() => {
+                setStockRow(null);
+                setStockAddQty('');
+                setStockUnitRate('');
+              }}
             >
               Cancel
             </Button>
             <Button
               type="button"
-              disabled={savingStock || stockQty.trim() === ''}
+              disabled={
+                savingStock ||
+                stockAddAmount <= 0 ||
+                stockUnitRate.trim() === ''
+              }
               onClick={() => void saveStock()}
             >
               {savingStock ? (
@@ -1141,7 +1306,7 @@ export default function InventoryPage() {
               ) : (
                 <PackagePlus className="mr-2 h-4 w-4" />
               )}
-              Update stock
+              Add stock
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1153,10 +1318,9 @@ export default function InventoryPage() {
           if (!deleting) setDeleteId(null);
         }}
         onConfirm={() => void confirmDelete()}
-        title="Delete ingredient?"
+        title={t('dashboard.inventory.deleteIngredientTitle')}
         description="This removes the ingredient and its recipe links."
         itemName={rows.find((r) => r.id === deleteId)?.name}
-        loading={deleting}
       />
     </MenuPageShell>
   );

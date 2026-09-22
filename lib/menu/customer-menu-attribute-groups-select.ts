@@ -1,6 +1,10 @@
 /** Shared Prisma select for menu item recommendation groups on the customer menu API. */
 
 import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
+import {
+  MENU_ITEM_CATEGORY_LINK_DATE_ORDER,
+  MENU_ITEM_DATE_ORDER,
+} from '@/lib/menu/product-order';
 
 export type CustomerMenuSelectMode = 'full' | 'legacy';
 
@@ -194,11 +198,11 @@ function buildLeafAttributeGroupsSelect(
           id: true,
           name: true,
           items: {
-            orderBy: [{ updatedAt: 'desc' as const }, { createdAt: 'desc' as const }],
+            orderBy: [...MENU_ITEM_DATE_ORDER],
             select: optionSelect,
           },
           itemLinks: {
-            orderBy: { sortOrder: 'asc' as const },
+            orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
             select: {
               menuItem: {
                 select: optionSelect,
@@ -248,11 +252,11 @@ function buildAttributeGroupsSelect(
         id: true,
         name: true,
         items: {
-          orderBy: [{ updatedAt: 'desc' as const }, { createdAt: 'desc' as const }],
+          orderBy: [...MENU_ITEM_DATE_ORDER],
           select: nestedItemSelect,
         },
         itemLinks: {
-          orderBy: { sortOrder: 'asc' as const },
+          orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
           select: {
             menuItem: {
               select: nestedItemSelect,
@@ -327,6 +331,8 @@ export function customerProductDetailOptionCardSelect(
     name: true,
     price: true,
     salePrice: true,
+    updatedAt: true,
+    createdAt: true,
     variations:
       mode === 'full'
         ? productDetailOptionVariationSelectFull
@@ -462,11 +468,11 @@ export function buildPosLiteAttributeGroupsSelect(): any {
           id: true,
           name: true,
           items: {
-            orderBy: [{ updatedAt: 'desc' as const }, { createdAt: 'desc' as const }],
+            orderBy: [...MENU_ITEM_DATE_ORDER],
             select: optionCardSelect,
           },
           itemLinks: {
-            orderBy: { sortOrder: 'asc' as const },
+            orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
             select: {
               menuItem: {
                 select: optionCardSelect,

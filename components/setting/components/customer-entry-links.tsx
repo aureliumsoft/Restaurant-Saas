@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -19,10 +20,12 @@ import { kioskBasePath } from '@/lib/kiosk-path';
 import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
 import { publicId } from '@/lib/public-id';
 import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
+import { UiLanguagePreferenceCard } from './ui-language-preference-card';
 
 type BranchRow = { id: string; urlId?: string; name: string };
 
 export function CustomerEntryLinks() {
+  const { t } = useTranslation();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const [slug, setSlug] = useState<string | null>(null);
   const [branches, setBranches] = useState<BranchRow[]>([]);
@@ -78,7 +81,7 @@ export function CustomerEntryLinks() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Website & kiosk</CardTitle>
+          <CardTitle>{t('settings.cards.customerEntry.websiteKioskTitle')}</CardTitle>
           <CardDescription>
             <Loader2 className=" animate-spin text-primary mx-auto" />{' '}
           </CardDescription>
@@ -91,10 +94,9 @@ export function CustomerEntryLinks() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Website & kiosk</CardTitle>
+          <CardTitle>{t('settings.cards.customerEntry.websiteKioskTitle')}</CardTitle>
           <CardDescription>
-            No restaurant is linked to your account yet, so customer URLs are
-            unavailable.
+            {t('settings.cards.branding.noRestaurant')}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -108,10 +110,9 @@ export function CustomerEntryLinks() {
         {fulfillmentSettings.websiteEnabled || fulfillmentSettings.kioskEnabled ? (
           <Card>
             <CardHeader>
-              <CardTitle>Public URLs</CardTitle>
+              <CardTitle>{t('settings.cards.customerEntry.publicUrlsTitle')}</CardTitle>
               <CardDescription>
-                Share or configure these absolute links (your current domain +
-                path). Each kiosk device should use its branch-specific kiosk URL.
+                {t('settings.cards.customerEntry.publicUrlsDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -197,9 +198,13 @@ export function CustomerEntryLinks() {
                   )}
                 </div>
               ) : null}
+              
+        <UiLanguagePreferenceCard />
             </CardContent>
           </Card>
         ) : null}
+
+
 
       </div>
     </>

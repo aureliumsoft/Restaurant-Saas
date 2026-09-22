@@ -17,6 +17,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiErrorMessage } from '@/lib/api-error-message';
+import {
+  parseBilingualInput,
+  serializeBilingualInput,
+} from '@/lib/menu/bilingual-text';
 import { filterNameTextInput } from '@/lib/validation/fields';
 
 import type { RestaurantVariationRow } from './types';
@@ -47,12 +51,17 @@ export function AddVariationFormDialog({
 
   const save = async () => {
     if (!name.trim() || saving) return;
+    if (!parseBilingualInput(name).en) {
+      toast.error('English name (before &&&&) is required.');
+      return;
+    }
     setSaving(true);
     try {
+      const storedName = serializeBilingualInput(name);
       const res = await axios.post<{ data: RestaurantVariationRow }>(
         '/api/restaurant/variations',
         {
-          name: name.trim(),
+          name: storedName,
           shortLabel: shortLabel.trim() || null,
         }
       );
@@ -83,7 +92,7 @@ export function AddVariationFormDialog({
             <Label htmlFor="dialog-variation-name">Name</Label>
             <Input
               id="dialog-variation-name"
-              placeholder="e.g. Medium"
+              placeholder={`English name ${'&&&&'} Spanish name`}
               value={name}
               onChange={(e) => setName(filterNameTextInput(e.target.value))}
               disabled={saving}

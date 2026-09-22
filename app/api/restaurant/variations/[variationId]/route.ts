@@ -7,7 +7,7 @@ import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const patchSchema = z.object({
-  name: z.string().min(1).max(80).optional(),
+  name: z.string().min(1).max(200).optional(),
   shortLabel: z.string().max(20).optional().nullable(),
   sortOrder: z.number().int().min(0).optional(),
 });
