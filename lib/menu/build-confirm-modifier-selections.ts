@@ -202,8 +202,12 @@ function appendFallbackCategoryOptions(
               allGroupsFlat,
               selectedNestedVariationByOption,
               parentVariation,
+<<<<<<< HEAD
               parentVariationShortLabel,
               lang
+=======
+              parentVariationShortLabel
+>>>>>>> 00b3ed753efaec1682f639284a75047442211cd7
             ),
             nestedKey
           )
@@ -339,8 +343,12 @@ export function buildConfirmModifierSelections(params: {
               allGroupsFlat,
               selectedNestedVariationByOption,
               parentVariation,
+<<<<<<< HEAD
               parentVariationShortLabel,
               lang
+=======
+              parentVariationShortLabel
+>>>>>>> 00b3ed753efaec1682f639284a75047442211cd7
             ),
             nestedKey
           )

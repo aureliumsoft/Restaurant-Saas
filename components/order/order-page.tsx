@@ -1362,6 +1362,7 @@ export default function OrderPageClient({
     return customizeProduct.attributeGroups
       .filter((g) => Boolean(g.id) && Boolean(g.selectionType))
       .map((g) =>
+<<<<<<< HEAD
         buildCustomerAttributeGroup(
           g,
           customizeProduct.id,
@@ -1374,6 +1375,16 @@ export default function OrderPageClient({
         )
       );
   }, [customizeProduct, hostSubdomain, orderInfo?.restaurantSlug, uiLang]);
+=======
+        buildCustomerAttributeGroup(g, customizeProduct.id, (id) =>
+          customerMenuItemImageUrl(id, {
+            slug: orderInfo?.restaurantSlug,
+            subdomain: hostSubdomain,
+          })
+        )
+      );
+  }, [customizeProduct, hostSubdomain, orderInfo?.restaurantSlug]);
+>>>>>>> 00b3ed753efaec1682f639284a75047442211cd7
 
   // Avoid server/client markup mismatches by rendering only after first mount.
   // Important: this must be AFTER all hooks to keep React Hook order stable.

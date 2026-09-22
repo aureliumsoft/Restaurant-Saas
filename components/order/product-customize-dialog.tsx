@@ -384,7 +384,10 @@ export function ProductCustomizeDialog({
   onConfirm,
 }: Props) {
   const { t } = useTranslation();
+<<<<<<< HEAD
   const { lang } = useBilingualText();
+=======
+>>>>>>> 00b3ed753efaec1682f639284a75047442211cd7
   const { formatMoney, regional } = useRestaurantRegional(undefined);
   const variationPickerBaseline = useMemo(
     () => variationPickerBaselineUnitPrice(productBaseUnitPrice, variations),

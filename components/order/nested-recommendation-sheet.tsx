@@ -908,7 +908,10 @@ export function NestedRecommendationSheet({
   onDone,
 }: Props) {
   const { t } = useTranslation();
+<<<<<<< HEAD
   const { lang } = useBilingualText();
+=======
+>>>>>>> 00b3ed753efaec1682f639284a75047442211cd7
   const [productVariationId, setProductVariationId] = useState(
     initialProductVariationId ?? ''
   );
@@ -2066,9 +2069,16 @@ export function NestedRecommendationSheet({
 
       <footer className="shrink-0 border-t border-border px-4 py-4">
         {(() => {
+<<<<<<< HEAD
           const parentIsOptionalProduct =
             parentConfigurationGroup?.sourceType === 'PRODUCT' &&
             !parentConfigurationGroup.required;
+=======
+          const isSheetOptional =
+            parentConfigurationGroup?.sourceType === 'PRODUCT' &&
+            !parentConfigurationGroup.required &&
+            !rootManualVariation;
+>>>>>>> 00b3ed753efaec1682f639284a75047442211cd7
           const hasSheetSelection =
             selectedUnitTotal > 0 ||
             Boolean(productVariationId) ||
@@ -2077,7 +2087,11 @@ export function NestedRecommendationSheet({
               (arr) => arr.length > 0
             );
           const sheetButtonText =
+<<<<<<< HEAD
             parentIsOptionalProduct && !hasSheetSelection
+=======
+            isSheetOptional && !hasSheetSelection
+>>>>>>> 00b3ed753efaec1682f639284a75047442211cd7
               ? t('customizeNoThanks')
               : t('select');
           return (
