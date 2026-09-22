@@ -957,9 +957,11 @@ export function PosTableOrdersSheet({
                       onFocus={() => setPaidKeyboardOpen(true)}
                     />
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Change</span>
-                    <span className="font-semibold tabular-nums">
+                  <div className="flex items-end justify-between gap-3 pt-1">
+                    <span className="pb-1 text-sm font-medium text-muted-foreground">
+                      Change
+                    </span>
+                    <span className="text-3xl font-bold tabular-nums tracking-tight">
                       {formatMoney(payChange)}
                     </span>
                   </div>
@@ -993,7 +995,12 @@ export function PosTableOrdersSheet({
             </Button>
             <Button
               type="button"
-              disabled={paying || !payCard}
+              disabled={
+                paying ||
+                !payCard ||
+                (payMethod === 'cash' &&
+                  (Number(paidInput) || 0) + 1e-9 < (payCard?.totalDue ?? 0))
+              }
               onClick={() => void handlePay()}
             >
               {paying ? (

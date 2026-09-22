@@ -314,7 +314,6 @@ type PosMenuProduct = {
 type CartModifierSelection = {
   attributeGroupId: string;
   groupName: string;
-  parentSelectionKey?: string;
   selections: { menuItemId: string; name: string; unitPrice: number }[];
 };
 
@@ -2367,6 +2366,15 @@ export function PosScreen({
   }
 
   function handleCheckoutOpenChange(open: boolean) {
+    if (
+      !open &&
+      (cardPaymentStatus === 'processing' ||
+        cardPaymentStatus === 'success' ||
+        savingOrder ||
+        terminalProcessing)
+    ) {
+      return;
+    }
     setCheckoutOpen(open);
     if (!open) {
       resetCardPayment();
@@ -2380,14 +2388,27 @@ export function PosScreen({
   useEffect(() => {
     if (!checkoutOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key !== 'Escape') return;
+      if (
+        cardPaymentStatus === 'processing' ||
+        cardPaymentStatus === 'success' ||
+        savingOrder ||
+        terminalProcessing
+      ) {
         event.preventDefault();
-        handleCheckoutOpenChange(false);
+        return;
       }
+      event.preventDefault();
+      handleCheckoutOpenChange(false);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [checkoutOpen]);
+  }, [
+    checkoutOpen,
+    cardPaymentStatus,
+    savingOrder,
+    terminalProcessing,
+  ]);
 
   function handleSelectPaymentMode(mode: 'cash' | 'card') {
     setPaymentMode(mode);
@@ -2424,6 +2445,17 @@ export function PosScreen({
     setCardTransactionId(undefined);
     setAmountPaid('');
     setPayment('');
+  }
+
+  async function placeOrderAfterCardPaid(txnId?: string) {
+    const pay = grandTotal.toFixed(2);
+    setAmountPaid(pay);
+    setPayment(pay);
+    if (txnId) setCardTransactionId(txnId);
+    await saveOrder({
+      paymentMode: 'card',
+      payment: pay,
+    });
   }
 
   async function runTerminalCardCharge(): Promise<{
@@ -2527,6 +2559,7 @@ export function PosScreen({
     if (cardPaymentCancelledRef.current) return;
     if (result.ok) {
       finalizeCardPayment('success', result.transactionId);
+      void placeOrderAfterCardPaid(result.transactionId);
       return;
     }
     if (result.cancelled) {
@@ -2538,7 +2571,9 @@ export function PosScreen({
 
   function handleCardPaymentBypass() {
     cardPaymentCancelledRef.current = true;
-    finalizeCardPayment('success', `BYPASS-${Date.now()}`, true);
+    const txnId = `BYPASS-${Date.now()}`;
+    finalizeCardPayment('success', txnId, true);
+    void placeOrderAfterCardPaid(txnId);
   }
 
   function handleCardPaymentCancel() {
@@ -2548,6 +2583,8 @@ export function PosScreen({
 
   const isCardPaymentComplete = cardPaymentStatus === 'success';
   const isCardMode = paymentMode === 'card';
+  const cashAmountPaid = Number(amountPaid) || 0;
+  const cashPaidCoversTotal = cashAmountPaid + 1e-9 >= grandTotal;
 
   async function saveOrder(opts?: { paymentMode?: string; payment?: string }) {
     if (!requireActiveShift()) return;
@@ -2588,6 +2625,16 @@ export function PosScreen({
       toast.warn(
         'This restaurant requires payment before kitchen. Enter amount paid, or change Settings → Payments to “Pay when guest leaves”.'
       );
+      return;
+    }
+    if (
+      !isEditingKiosk &&
+      !isTableOpenCheck &&
+      effectivePaymentMode !== 'card' &&
+      effectivePaymentMode !== 'card_terminal' &&
+      Number(effectivePayment) + 1e-9 < grandTotal
+    ) {
+      toast.warn('Amount paid must be at least the order total.');
       return;
     }
     const tableKitchenMinutes = isTableOpenCheck
@@ -4198,7 +4245,9 @@ export function PosScreen({
                         <div className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                           {isCardPaymentComplete ? (
                             <span className="text-emerald-700 dark:text-emerald-400">
-                              Card paid — place the order.
+                              {savingOrder
+                                ? 'Card paid — placing order…'
+                                : 'Card paid — order placed.'}
                             </span>
                           ) : cardPaymentStatus === 'error' ||
                             cardPaymentStatus === 'cancelled' ? (
@@ -4237,9 +4286,11 @@ export function PosScreen({
                           onPointerDown={() => setKeyboardField('amount')}
                           onFocus={() => setKeyboardField('amount')}
                         />
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Change</span>
-                          <span className="font-semibold tabular-nums text-foreground">
+                        <div className="flex items-end justify-between gap-3 pt-2">
+                          <span className="pb-1 text-sm font-medium text-muted-foreground">
+                            Change
+                          </span>
+                          <span className="text-3xl font-bold tabular-nums tracking-tight text-foreground">
                             {formatMoney(
                               Math.max(
                                 0,
@@ -4341,7 +4392,8 @@ export function PosScreen({
                   disabled={
                     savingOrder ||
                     terminalProcessing ||
-                    cardPaymentStatus === 'processing'
+                    cardPaymentStatus === 'processing' ||
+                    cardPaymentStatus === 'success'
                   }
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" />
@@ -4359,6 +4411,7 @@ export function PosScreen({
                     savingOrder ||
                     terminalProcessing ||
                     cardPaymentStatus === 'processing' ||
+                    cardPaymentStatus === 'success' ||
                     (isEditingKioskOrder || tablePayOnLeave
                       ? isTableMode && !tableId.trim()
                       : isCardMode
@@ -4366,8 +4419,8 @@ export function PosScreen({
                         : isTableMode
                           ? !tableId.trim() ||
                             (tablePayBeforeKitchen &&
-                              amountPaid.trim() === '')
-                          : amountPaid.trim() === '')
+                              (!amountPaid.trim() || !cashPaidCoversTotal))
+                          : !amountPaid.trim() || !cashPaidCoversTotal)
                   }
                   onClick={() => {
                     if (!canProceedWithOrderMode()) return;
@@ -5164,7 +5217,6 @@ export function PosScreen({
           const mapped: CartModifierSelection[] = mods.map((m) => ({
             attributeGroupId: m.attributeGroupId,
             groupName: m.groupName,
-            parentSelectionKey: m.parentSelectionKey,
             selections: m.selections.map((s: MenuOption) => ({
               menuItemId: s.menuItemId,
               name: s.name,
