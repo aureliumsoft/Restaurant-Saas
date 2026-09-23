@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { isAcceptedImageValue } from '@/lib/image-data-url';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 
 type SwatchRow = {
   id?: string;
@@ -28,6 +30,7 @@ type Props = {
 };
 
 export function SwatchesModule({ categories, onRefresh }: Props) {
+  const uiLang = useUiLanguage();
   const products = useMemo(
     () =>
       categories.flatMap((c) =>
@@ -142,7 +145,8 @@ export function SwatchesModule({ categories, onRefresh }: Props) {
             <SelectContent>
               {products.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
-                  {p.name} — {p.categoryName}
+                  {resolveBilingualText(p.name, uiLang)} —{' '}
+                  {resolveBilingualText(p.categoryName, uiLang)}
                 </SelectItem>
               ))}
             </SelectContent>

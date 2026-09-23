@@ -198,7 +198,7 @@ const POS_SHELL =
   'flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent text-foreground';
 /** Top chrome — glass strip like the portal header */
 const POS_HEADER =
-  'flex shrink-0 flex-wrap items-center gap-2 border-b border-fire-500/10 bg-white/75 px-3 py-2 shadow-[0_8px_28px_-18px_rgba(15,23,42,0.22)] backdrop-blur-xl dark:border-fire-500/15 dark:bg-zinc-950/80 dark:shadow-[0_8px_28px_-18px_rgba(0,0,0,0.65)] sm:gap-2.5 sm:px-4';
+  'relative z-50 flex shrink-0 flex-wrap items-center gap-2 border-b border-fire-500/10 bg-white/75 px-3 py-2 shadow-[0_8px_28px_-18px_rgba(15,23,42,0.22)] backdrop-blur-xl dark:border-fire-500/15 dark:bg-zinc-950/80 dark:shadow-[0_8px_28px_-18px_rgba(0,0,0,0.65)] sm:gap-2.5 sm:px-4';
 /** Order ticket / payment column */
 const POS_TICKET_SIDEBAR =
   'flex min-h-0 max-h-[52dvh] flex-col overflow-hidden border-l border-fire-500/10 bg-white/80 backdrop-blur-xl transition-[box-shadow] duration-300 dark:border-fire-500/15 dark:bg-zinc-950/85 lg:max-h-full';

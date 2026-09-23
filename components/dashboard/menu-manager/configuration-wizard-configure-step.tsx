@@ -14,6 +14,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import { isMenuCategoryShownInFront } from '@/lib/menu/category-visibility';
 import { menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
 import { variationLabel } from '@/lib/menu/recommendation-category-limits';
@@ -173,6 +175,8 @@ export function ConfigurationWizardConfigureStep(
     baseVariations,
   } = props;
 
+  const uiLang = useUiLanguage();
+
   const title = useMemo(() => {
     switch (kind) {
       case 'cat-one':
@@ -234,9 +238,11 @@ export function ConfigurationWizardConfigureStep(
 
   const linkedNameById = useMemo(() => {
     const map = new Map<string, string>();
-    for (const p of filteredLinkedProducts) map.set(p.id, p.name);
+    for (const p of filteredLinkedProducts) {
+      map.set(p.id, resolveBilingualText(p.name, uiLang));
+    }
     return map;
-  }, [filteredLinkedProducts]);
+  }, [filteredLinkedProducts, uiLang]);
 
   return (
     <div className="space-y-4">
@@ -265,7 +271,7 @@ export function ConfigurationWizardConfigureStep(
                 key={cat.id}
                 multi={kind === 'cat-many'}
                 active={selectedCategoryIds.includes(cat.id)}
-                title={cat.name}
+                title={resolveBilingualText(cat.name, uiLang)}
                 imageUrl={cat.imageUrl}
                 subtitle={
                   isMenuCategoryShownInFront(cat)
@@ -294,7 +300,9 @@ export function ConfigurationWizardConfigureStep(
               return (
                 <section key={categoryId} className="rounded-lg border border-border/70">
                   <div className="border-b border-border bg-muted/30 px-3 py-2 text-xs font-medium">
-                    {category?.name ?? 'Category'}
+                    {category
+                      ? resolveBilingualText(category.name, uiLang)
+                      : 'Category'}
                   </div>
                   <ul className="divide-y divide-border">
                     {products.map((product) => {
@@ -313,7 +321,7 @@ export function ConfigurationWizardConfigureStep(
                             className="h-9 w-9 shrink-0 rounded-md"
                           />
                           <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                            {product.name}
+                            {resolveBilingualText(product.name, uiLang)}
                           </span>
                           <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
                             <input
@@ -368,7 +376,7 @@ export function ConfigurationWizardConfigureStep(
                 key={cat.id}
                 multi
                 active={productCategoryIds.includes(cat.id)}
-                title={cat.name}
+                title={resolveBilingualText(cat.name, uiLang)}
                 imageUrl={cat.imageUrl}
                 subtitle={
                   isMenuCategoryShownInFront(cat)
@@ -400,8 +408,8 @@ export function ConfigurationWizardConfigureStep(
                     key={p.id}
                     multi={kind === 'prod-many'}
                     active={linkedProductIds.includes(p.id)}
-                    title={p.name}
-                    subtitle={p.categoryName}
+                    title={resolveBilingualText(p.name, uiLang)}
+                    subtitle={resolveBilingualText(p.categoryName, uiLang)}
                     imageUrl={p.imageUrl}
                     onClick={() => toggleLinkedProduct(p.id)}
                   />
@@ -466,6 +474,7 @@ export function ConfigurationWizardConfigureStep(
                 </div>
                 {selectedCategories.map((cat) => {
                   const settings = categorySettings[cat.id] ?? defaultCategorySettings();
+                  const catDisplayName = resolveBilingualText(cat.name, uiLang);
                   const limits = baseVariations.map((v) => {
                     return (
                       settings.perSizeLimits.find((r) => r.variationId === v.id) ?? {
@@ -478,7 +487,7 @@ export function ConfigurationWizardConfigureStep(
 
                   return (
                     <div key={`var-limits-${cat.id}`} className="space-y-2 rounded-xl border border-border p-3">
-                      <p className="text-sm font-semibold text-foreground">{cat.name}</p>
+                      <p className="text-sm font-semibold text-foreground">{catDisplayName}</p>
                       <div className="space-y-2">
                         {limits.map((row) => {
                           const v = baseVariations.find((x) => x.id === row.variationId);
@@ -495,7 +504,7 @@ export function ConfigurationWizardConfigureStep(
                                 type="number"
                                 min={0}
                                 className="h-9"
-                                aria-label={`${cat.name} ${label} minimum`}
+                                aria-label={`${catDisplayName} ${label} minimum`}
                                 value={row.minItems}
                                 onChange={(e) => {
                                   const val = Math.max(0, Number.parseInt(e.target.value, 10) || 0);
@@ -514,7 +523,7 @@ export function ConfigurationWizardConfigureStep(
                                 type="number"
                                 min={1}
                                 className="h-9"
-                                aria-label={`${cat.name} ${label} maximum`}
+                                aria-label={`${catDisplayName} ${label} maximum`}
                                 value={row.maxItems}
                                 onChange={(e) => {
                                   const val = Math.max(1, Number.parseInt(e.target.value, 10) || 1);
@@ -545,6 +554,7 @@ export function ConfigurationWizardConfigureStep(
                 {selectedCategories.map((cat, index) => {
                   const settings =
                     categorySettings[cat.id] ?? defaultCategorySettings();
+                  const catDisplayName = resolveBilingualText(cat.name, uiLang);
                   return (
                     <div
                       key={`minmax-${cat.id}`}
@@ -552,12 +562,12 @@ export function ConfigurationWizardConfigureStep(
                     >
                       <span className="self-center truncate text-sm font-medium">
                         {selectedCategoryIds.length > 1 ? `#${index + 1} ` : ''}
-                        {cat.name}
+                        {catDisplayName}
                       </span>
                       <Input
                         type="number"
                         min={0}
-                        aria-label={`${cat.name} minimum`}
+                        aria-label={`${catDisplayName} minimum`}
                         value={settings.minItems}
                         onChange={(e) => {
                           const val = Math.max(
@@ -572,7 +582,7 @@ export function ConfigurationWizardConfigureStep(
                       <Input
                         type="number"
                         min={1}
-                        aria-label={`${cat.name} maximum`}
+                        aria-label={`${catDisplayName} maximum`}
                         value={settings.maxItems}
                         onChange={(e) => {
                           const val = Math.max(
@@ -686,7 +696,9 @@ export function ConfigurationWizardConfigureStep(
                       key={`adv-${cat.id}`}
                       className="space-y-3 rounded-xl border border-border bg-background p-3"
                     >
-                      <p className="text-sm font-semibold">{cat.name}</p>
+                      <p className="text-sm font-semibold">
+                        {resolveBilingualText(cat.name, uiLang)}
+                      </p>
 
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
@@ -833,7 +845,7 @@ export function ConfigurationWizardConfigureStep(
                             </SelectItem>
                             {catItems.map((item) => (
                               <SelectItem key={item.id} value={item.id}>
-                                {item.name}
+                                {resolveBilingualText(item.name, uiLang)}
                               </SelectItem>
                             ))}
                           </SelectContent>

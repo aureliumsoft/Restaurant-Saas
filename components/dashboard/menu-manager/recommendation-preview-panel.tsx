@@ -16,6 +16,8 @@ import {
   type ParentVariationContext,
 } from '@/lib/menu/configuration-variation-price';
 import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   isPreviewGroupVisibleForParentVariation,
   linkedItemsForPreviewGroup,
@@ -180,6 +182,7 @@ export function RecommendationPreviewPanel({
   previewPersonalizeByGroup = {},
   onPersonalizePreviewChange,
 }: Props) {
+  const uiLang = useUiLanguage();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const [previewVariationId, setPreviewVariationId] = useState('');
   const [dealChoiceOpen, setDealChoiceOpen] = useState(false);
@@ -220,9 +223,12 @@ export function RecommendationPreviewPanel({
         title: variation.title ?? variation.name ?? null,
         restaurantVariationId: variation.restaurantVariationId ?? null,
       },
-      shortLabel: variation.title ?? variation.name ?? null,
+      shortLabel: resolveBilingualText(
+        variation.title ?? variation.name,
+        uiLang
+      ) || null,
     };
-  }, [previewVariationId, selected?.variations]);
+  }, [previewVariationId, selected?.variations, uiLang]);
 
   const visiblePreviewGroups = useMemo(() => {
     if (!selected) return [];
@@ -285,7 +291,7 @@ export function RecommendationPreviewPanel({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={selected.imageUrl}
-            alt={selected.name}
+            alt={resolveBilingualText(selected.name, uiLang)}
             className="aspect-[16/10] w-full rounded-lg object-cover"
           />
         ) : (
@@ -295,10 +301,10 @@ export function RecommendationPreviewPanel({
         )}
         <div>
           <h3 className="text-base font-semibold tracking-tight text-foreground">
-            {selected.name}
+            {resolveBilingualText(selected.name, uiLang)}
           </h3>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {selected.categoryName}
+            {resolveBilingualText(selected.categoryName, uiLang)}
           </p>
           <p className="mt-2 text-sm font-medium tabular-nums text-foreground">
             {formatMoney(
@@ -318,9 +324,10 @@ export function RecommendationPreviewPanel({
                 {selected.variations!.map((variation) => {
                   const active = previewVariationId === variation.id;
                   const label =
-                    variation.title?.trim() ||
-                    variation.name?.trim() ||
-                    'Variation';
+                    resolveBilingualText(
+                      variation.title || variation.name,
+                      uiLang
+                    ) || 'Variation';
                   return (
                     <button
                       key={variation.id}
@@ -476,7 +483,7 @@ export function RecommendationPreviewPanel({
                 )}
                 <div className="min-w-0 flex-1">
                   <span className="block truncate font-medium">
-                    {item.name}
+                    {resolveBilingualText(item.name, uiLang)}
                   </span>
                   <span className="block text-[11px] text-muted-foreground">
                     Click to test "Select a deal" preview
@@ -528,7 +535,7 @@ export function RecommendationPreviewPanel({
                 )}
                 <div className="min-w-0 flex-1">
                   <span className="block truncate font-medium">
-                    {item.name}
+                    {resolveBilingualText(item.name, uiLang)}
                   </span>
                   <span className="block text-[11px] text-muted-foreground">
                     Shown in customer cart upsell
@@ -594,6 +601,7 @@ function PreviewGroupCard({
   onDelete?: () => void;
   deleting?: boolean;
 }) {
+  const uiLang = useUiLanguage();
   const allItems = linkedItemsForPreviewGroup(
     group,
     baseProduct,
@@ -613,15 +621,18 @@ function PreviewGroupCard({
   const defaultUnit = previewDefaultListUnit(group, items, parentVariation);
   const defaultVariationLabel =
     defaultLinkedRestaurantVariationId && !useVariationPricing
-      ? group.defaultLinkedRestaurantVariation?.shortLabel?.trim() ||
-        group.defaultLinkedRestaurantVariation?.name ||
-        null
+      ? resolveBilingualText(
+          group.defaultLinkedRestaurantVariation?.shortLabel?.trim() ||
+            group.defaultLinkedRestaurantVariation?.name,
+          uiLang
+        ) || null
       : null;
+  const resolvedGroupName = resolveBilingualText(group.name, uiLang);
   const groupTitle =
     defaultVariationLabel && !useVariationPricing
-      ? `${group.name} ${defaultVariationLabel}`
+      ? `${resolvedGroupName} ${defaultVariationLabel}`
       : configurationGroupDisplayTitle(
-          group.name,
+          resolvedGroupName,
           parentVariation,
           useVariationPricing,
           variationShortLabel
@@ -662,8 +673,8 @@ function PreviewGroupCard({
           </div>
           <p className="text-xs text-muted-foreground">
             {group.sourceType === 'PRODUCT'
-              ? `Product · ${group.linkedProduct?.name ?? '—'}`
-              : `Category · ${group.linkedCategory?.name ?? '—'}`}
+              ? `Product · ${resolveBilingualText(group.linkedProduct?.name, uiLang) || '—'}`
+              : `Category · ${resolveBilingualText(group.linkedCategory?.name, uiLang) || '—'}`}
           </p>
         </div>
         {onDelete && !group.isDraft ? (
@@ -702,6 +713,7 @@ function PreviewGroupCard({
                 const qty = previewIds.filter((id) => id === it.id).length;
                 const totalUnits = previewIds.length;
                 const atMax = group.maxItems != null && totalUnits >= group.maxItems;
+                const displayName = resolveBilingualText(it.name, uiLang);
 
                 const isFreeOverride = Boolean(
                   group.productOverrides?.[it.id]?.free
@@ -742,10 +754,10 @@ function PreviewGroupCard({
                           : 'border-border bg-card hover:bg-muted/50'
                       )}
                     >
-                      <OptionThumb imageUrl={it.imageUrl} name={it.name} />
+                      <OptionThumb imageUrl={it.imageUrl} name={displayName} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold uppercase leading-snug">
-                          {it.name}
+                          {displayName}
                         </p>
                         {priceLabel ? (
                           <p className="text-xs text-muted-foreground font-medium">
@@ -769,10 +781,10 @@ function PreviewGroupCard({
                           : 'border-border bg-card'
                       )}
                     >
-                      <OptionThumb imageUrl={it.imageUrl} name={it.name} />
+                      <OptionThumb imageUrl={it.imageUrl} name={displayName} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold uppercase leading-snug">
-                          {it.name}
+                          {displayName}
                         </p>
                         {priceLabel ? (
                           <p className="text-xs text-muted-foreground font-medium">
@@ -788,7 +800,7 @@ function PreviewGroupCard({
                               variant="outline"
                               size="icon"
                               className="h-8 w-8 rounded-lg border-primary/30"
-                              aria-label={`Decrease ${it.name}`}
+                              aria-label={`Decrease ${displayName}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const idx = previewIds.lastIndexOf(it.id);
@@ -810,7 +822,7 @@ function PreviewGroupCard({
                           type="button"
                           size="icon"
                           className="h-8 w-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-                          aria-label={`Add ${it.name}`}
+                          aria-label={`Add ${displayName}`}
                           disabled={qty === 0 && atMax}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -848,10 +860,10 @@ function PreviewGroupCard({
                       atMax && !checked && 'cursor-not-allowed opacity-50'
                     )}
                   >
-                    <OptionThumb imageUrl={it.imageUrl} name={it.name} />
+                    <OptionThumb imageUrl={it.imageUrl} name={displayName} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold uppercase leading-snug">
-                        {it.name}
+                        {displayName}
                       </p>
                       {priceLabel ? (
                         <p className="text-xs text-muted-foreground font-medium">

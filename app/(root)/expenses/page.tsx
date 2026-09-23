@@ -58,7 +58,9 @@ import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { extractApiErrorMessage } from '@/lib/extract-api-error';
 import { formatIngredientUnit } from '@/lib/inventory/stock';
 import { filterDecimalInput } from '@/lib/validation/fields';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { cn } from '@/lib/utils';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import { useTranslation } from 'react-i18next';
 
 type ExpenseTypeFilter = 'all' | 'INVENTORY' | 'MANUAL';
@@ -123,6 +125,7 @@ function ExpenseInsightChip({
 
 export default function ExpensesPage() {
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { canEdit, canDelete } = useDashboardPermissions();
   const canEditExp = canEdit('expenses');
@@ -501,7 +504,7 @@ export default function ExpensesPage() {
                       <DashboardTableCell className="text-sm text-muted-foreground">
                         {row.type === 'INVENTORY' && row.ingredient ? (
                           <span>
-                            {row.ingredient.name}
+                            {resolveBilingualText(row.ingredient.name, uiLang)}
                             {row.quantity != null
                               ? ` · +${row.quantity} ${formatIngredientUnit(row.ingredient.unit)}`
                               : ''}

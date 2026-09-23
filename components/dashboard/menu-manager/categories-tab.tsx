@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 import {
-  GripVertical,
   Eye,
   EyeOff,
   Loader2,
@@ -19,6 +18,7 @@ import {
 import { AddCategoryFormDialog } from '@/components/dashboard/menu-manager/add-category-form-dialog';
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   bilingualInputFromStored,
   parseBilingualInput,
@@ -44,7 +44,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import {
   categoryHasProducts,
@@ -54,8 +53,6 @@ import { cn } from '@/lib/utils';
 
 import type { MenuCategoryRow } from './types';
 
-type CategoryTab = 'storefront' | 'recommendations';
-
 type Props = {
   categories: MenuCategoryRow[];
   onRefresh: (search?: string) => Promise<void>;
@@ -64,27 +61,20 @@ type Props = {
   search?: string;
 };
 
-function CategoryCardSkeleton({ showGrip = true }: { showGrip?: boolean }) {
+function CategoryCardSkeleton() {
   const bone = 'bg-[#e2e8f0] dark:bg-[#3f3f46] animate-pulse';
   return (
-    <div className="flex items-center gap-4 rounded-lg border bg-card p-4">
-      {showGrip ? (
-        <div className="flex w-14 items-center gap-2">
-          <div className={cn('h-4 w-4 rounded', bone)} />
-          <div className={cn('h-4 w-6 rounded', bone)} />
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className={cn('aspect-[4/3] w-full', bone)} />
+      <div className="space-y-3 p-3">
+        <div className={cn('h-4 w-3/4 rounded', bone)} />
+        <div className={cn('h-3 w-1/2 rounded', bone)} />
+        <div className={cn('h-6 w-24 rounded-full', bone)} />
+        <div className="flex gap-2">
+          <div className={cn('h-9 flex-1 rounded-md', bone)} />
+          <div className={cn('h-9 flex-1 rounded-md', bone)} />
         </div>
-      ) : null}
-      <div className={cn('h-16 w-24 shrink-0 rounded-md border', bone)} />
-      <div className="flex-1 space-y-2">
-        <div className={cn('h-5 w-40 rounded', bone)} />
-        <div className={cn('h-4 w-24 rounded', bone)} />
       </div>
-      <div className={cn('h-6 w-24 rounded-full', bone)} />
-      <div className="flex items-center gap-2">
-        <div className={cn('h-9 w-9 rounded-md', bone)} />
-        <div className={cn('h-9 w-9 rounded-md', bone)} />
-      </div>
-      <div className={cn('h-9 w-20 rounded-md', bone)} />
     </div>
   );
 }
@@ -97,39 +87,18 @@ export function CategoriesTab({
   search: appliedSearch = '',
 }: Props) {
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const { activeBranchId, branches, loading: branchesLoading } = useBranchContext();
-  const [activeTab, setActiveTab] = useState<CategoryTab>('storefront');
   const [createOpen, setCreateOpen] = useState(false);
   const [searchDraft, setSearchDraft] = useState(appliedSearch);
   const [deleting, setDeleting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [reorderingId, setReorderingId] = useState<string | null>(null);
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  const [orderedCategories, setOrderedCategories] = useState<MenuCategoryRow[]>(
-    []
-  );
 
   useEffect(() => {
     setSearchDraft(appliedSearch);
   }, [appliedSearch]);
-
-  useEffect(() => {
-    setOrderedCategories(
-      [...categories].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-    );
-  }, [categories]);
-
-  const storefrontCategories = useMemo(
-    () => orderedCategories.filter((c) => isMenuCategoryShownInFront(c)),
-    [orderedCategories]
-  );
-  const recommendationCategories = useMemo(
-    () => orderedCategories.filter((c) => !isMenuCategoryShownInFront(c)),
-    [orderedCategories]
-  );
 
   const applySearch = () => {
     void onRefresh(searchDraft.trim());
@@ -232,82 +201,39 @@ export function CategoriesTab({
     }
   };
 
-  /** Reorder only within the storefront subset; leave recommendation-only order untouched. */
-  const moveStorefrontCategory = async (fromId: string, toId: string) => {
-    if (!fromId || !toId || fromId === toId) return;
-
-    const fromIndex = storefrontCategories.findIndex((c) => c.id === fromId);
-    const toIndex = storefrontCategories.findIndex((c) => c.id === toId);
-    if (fromIndex < 0 || toIndex < 0) return;
-
-    const reorderedStorefront = [...storefrontCategories];
-    const [moved] = reorderedStorefront.splice(fromIndex, 1);
-    if (!moved) return;
-    reorderedStorefront.splice(toIndex, 0, moved);
-
-    const nextOrdered = [...reorderedStorefront, ...recommendationCategories];
-    setOrderedCategories(nextOrdered);
-    setDraggingId(null);
-    setReorderingId(fromId);
-    try {
-      await Promise.all(
-        reorderedStorefront.map((category, position) =>
-          axios.patch(`/api/restaurant/menu/categories/${category.id}`, {
-            sortOrder: position,
-          })
-        )
-      );
-      toast.success('Category order updated');
-      await onRefresh(appliedSearch);
-    } catch {
-      toast.error('Could not update category order');
-      setOrderedCategories(
-        [...categories].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-      );
-    } finally {
-      setReorderingId(null);
-    }
-  };
-
-  const renderList = (
-    list: MenuCategoryRow[],
-    opts: { draggable: boolean; emptyMessage: string }
-  ) => {
+  const renderList = () => {
     if (loading) {
       return (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <CategoryCardSkeleton
-              key={`category-skeleton-${i}`}
-              showGrip={opts.draggable}
-            />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <CategoryCardSkeleton key={`category-skeleton-${i}`} />
           ))}
         </div>
       );
     }
 
-    if (list.length === 0) {
+    if (categories.length === 0) {
       return (
-        <p className="text-sm text-muted-foreground">{opts.emptyMessage}</p>
+        <p className="text-sm text-muted-foreground">
+          {appliedSearch
+            ? t('dashboard.categories.emptySearch')
+            : t('dashboard.categories.empty')}
+        </p>
       );
     }
 
     return (
-      <div className="space-y-3">
-        {list.map((c, index) => (
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {categories.map((c) => (
           <CategoryCard
             key={c.id}
             category={c}
-            displayOrder={index + 1}
-            draggable={opts.draggable}
             toggling={togglingId === c.id}
             activeBranchId={activeBranchId}
             activeBranchName={
               branches.find((branch) => branch.id === activeBranchId)?.name ?? null
             }
             branchesLoading={branchesLoading}
-            dragging={draggingId === c.id}
-            reordering={reorderingId === c.id}
             onRename={rename}
             onImageChange={updateImage}
             onToggleShowInFront={setCategoryShowInFront}
@@ -316,25 +242,12 @@ export function CategoriesTab({
               setDeletingId(id);
               setConfirmDeleteOpen(true);
             }}
-            onReorder={moveStorefrontCategory}
-            activeDragId={activeDragId}
-            onDragStart={(id) => {
-              setDraggingId(id);
-              setActiveDragId(id);
-            }}
-            onDragEnd={() => {
-              setDraggingId(null);
-              setActiveDragId(null);
-            }}
           />
         ))}
         {loadingMore
           ? Array.from({ length: 2 }).map((_, i) => (
-            <CategoryCardSkeleton
-              key={`category-loading-more-${i}`}
-              showGrip={opts.draggable}
-            />
-          ))
+              <CategoryCardSkeleton key={`category-loading-more-${i}`} />
+            ))
           : null}
       </div>
     );
@@ -392,58 +305,13 @@ export function CategoriesTab({
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          <Tabs
-            value={activeTab}
-            onValueChange={(v) => setActiveTab(v as CategoryTab)}
-            className="w-full"
-          >
-            <TabsList className="grid h-11 w-full grid-cols-2">
-              <TabsTrigger value="storefront" className="w-full">
-                {t('dashboard.categories.tabStorefront')}
-                <span className="ml-2 text-xs text-muted-foreground">
-                  ({storefrontCategories.length})
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="recommendations" className="w-full">
-                {t('dashboard.categories.tabRecommendations')}
-                <span className="ml-2 text-xs text-muted-foreground">
-                  ({recommendationCategories.length})
-                </span>
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="storefront" className="mt-4 space-y-3">
-              <p className="text-xs text-muted-foreground">
-                {t('dashboard.categories.storefrontDragHint')}
-              </p>
-              {renderList(storefrontCategories, {
-                draggable: true,
-                emptyMessage: appliedSearch
-                  ? t('dashboard.categories.emptyStorefrontSearch')
-                  : t('dashboard.categories.emptyStorefront'),
-              })}
-            </TabsContent>
-
-            <TabsContent value="recommendations" className="mt-4 space-y-3">
-              <p className="text-xs text-muted-foreground">
-                {t('dashboard.categories.recommendationsHint')}
-              </p>
-              {renderList(recommendationCategories, {
-                draggable: false,
-                emptyMessage: appliedSearch
-                  ? t('dashboard.categories.emptyRecommendationsSearch')
-                  : t('dashboard.categories.emptyRecommendations'),
-              })}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
+        <CardContent className="space-y-4">{renderList()}</CardContent>
       </Card>
 
       <AddCategoryFormDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        defaultShowInFront={activeTab === 'storefront'}
+        defaultShowInFront
         onMenuRefresh={() => onRefresh(appliedSearch)}
       />
 
@@ -453,7 +321,7 @@ export function CategoriesTab({
         description="This category will be removed. Products in this category may need reassignment."
         itemName={resolveBilingualText(
           categories.find((c) => c.id === deletingId)?.name,
-          'en'
+          uiLang
         )}
         loading={deleting}
         onConfirm={() => {
@@ -468,44 +336,29 @@ export function CategoriesTab({
 
 function CategoryCard({
   category,
-  displayOrder,
-  draggable,
   toggling,
   activeBranchId,
   activeBranchName,
   branchesLoading,
-  dragging,
-  reordering,
   onRename,
   onImageChange,
   onToggleShowInFront,
   onToggleBranchVisibility,
   onDelete,
-  onReorder,
-  activeDragId,
-  onDragStart,
-  onDragEnd,
 }: {
   category: MenuCategoryRow;
-  displayOrder: number;
-  draggable: boolean;
   toggling: boolean;
   activeBranchId: string | null;
   activeBranchName: string | null;
   branchesLoading: boolean;
-  dragging: boolean;
-  reordering: boolean;
   onRename: (id: string, name: string) => void;
   onImageChange: (id: string, imageUrl: string) => void;
   onToggleShowInFront: (id: string, visible: boolean) => Promise<void>;
   onToggleBranchVisibility: (id: string, visible: boolean) => Promise<void>;
   onDelete: (id: string) => void;
-  onReorder: (fromId: string, toId: string) => void;
-  activeDragId: string | null;
-  onDragStart: (id: string) => void;
-  onDragEnd: () => void;
 }) {
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(() => bilingualInputFromStored(category.name));
   const [imageVal, setImageVal] = useState(category.imageUrl ?? '');
@@ -514,7 +367,7 @@ function CategoryCard({
   const [hiddenBranchIds, setHiddenBranchIds] = useState<string[]>(
     category.hiddenBranchIds ?? []
   );
-  const displayName = resolveBilingualText(category.name, 'en');
+  const displayName = resolveBilingualText(category.name, uiLang);
 
   useEffect(() => {
     setVal(bilingualInputFromStored(category.name));
@@ -532,7 +385,6 @@ function CategoryCard({
   const branchVisible =
     activeBranchId !== null &&
     !(category.hiddenBranchIds ?? []).includes(activeBranchId);
-  const canDrag = draggable && !editing && !reordering;
 
   const cancelEdit = () => {
     setVal(bilingualInputFromStored(category.name));
@@ -552,7 +404,7 @@ function CategoryCard({
     const hiddenBranchIdsChanged =
       activeBranchId !== null &&
       JSON.stringify([...hiddenBranchIds].sort()) !==
-      JSON.stringify([...(category.hiddenBranchIds ?? [])].sort());
+        JSON.stringify([...(category.hiddenBranchIds ?? [])].sort());
 
     if (!nameChanged && !imageChanged && !hiddenBranchIdsChanged) {
       cancelEdit();
@@ -579,36 +431,8 @@ function CategoryCard({
 
   return (
     <>
-      <div
-        className={`flex items-center gap-4 rounded-lg border bg-card p-4 transition-colors ${dragging ? 'border-primary bg-muted/50' : 'hover:bg-muted/30'}`}
-        draggable={canDrag}
-        onDragStart={() => {
-          if (!canDrag) return;
-          onDragStart(category.id);
-        }}
-        onDragEnd={onDragEnd}
-        onDragOver={(event) => {
-          if (!draggable) return;
-          event.preventDefault();
-        }}
-        onDrop={(event) => {
-          if (!draggable) return;
-          event.preventDefault();
-          if (!activeDragId || activeDragId === category.id) {
-            onDragEnd();
-            return;
-          }
-          onReorder(activeDragId, category.id);
-        }}
-      >
-        {draggable ? (
-          <div className="flex w-14 items-center gap-2">
-            <GripVertical className="h-4 w-4 cursor-grab text-muted-foreground active:cursor-grabbing" />
-            <span className="text-sm font-medium">{displayOrder}</span>
-          </div>
-        ) : null}
-
-        <div className="h-16 w-24 shrink-0 overflow-hidden rounded-md border bg-muted">
+      <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:bg-muted/20">
+        <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
           {category.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -621,91 +445,94 @@ function CategoryCard({
               No Image
             </div>
           )}
+          <div className="absolute right-2 top-2 flex gap-1">
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-8 w-8 bg-background/90 shadow-sm"
+              onClick={() => setEditing(true)}
+              aria-label={t('dashboard.menuManager.category.editAria')}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-8 w-8 bg-background/90 text-destructive shadow-sm hover:text-destructive"
+              onClick={() => onDelete(category.id)}
+              aria-label={t('dashboard.menuManager.category.deleteAria')}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
 
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold">{displayName}</h3>
-          <p className="text-sm text-muted-foreground">
-            {productCount} {productCount === 1 ? 'product' : 'products'}
-          </p>
+        <div className="flex flex-1 flex-col gap-3 p-3">
+          <div className="min-w-0 space-y-1">
+            <h3 className="line-clamp-2 font-semibold leading-snug">
+              {displayName}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {productCount} {productCount === 1 ? 'product' : 'products'}
+            </p>
+          </div>
+
+          <div>
+            {!hasProducts ? (
+              <Badge variant="outline">Empty</Badge>
+            ) : (
+              <Badge variant={visible ? 'default' : 'secondary'}>
+                {visible
+                  ? t('dashboard.categories.tabStorefront')
+                  : t('dashboard.categories.tabRecommendations')}
+              </Badge>
+            )}
+          </div>
+
+          <div className="mt-auto flex flex-col gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled={toggling || !hasProducts}
+              onClick={() => onToggleShowInFront(category.id, !visible)}
+            >
+              {visible ? (
+                <>
+                  <EyeOff className="mr-2 h-4 w-4" />
+                  Hide
+                </>
+              ) : (
+                <>
+                  <Eye className="mr-2 h-4 w-4" />
+                  Show
+                </>
+              )}
+            </Button>
+
+            <Button
+              variant={branchVisible ? 'outline' : 'default'}
+              size="sm"
+              className="w-full"
+              disabled={toggling || branchesLoading || !activeBranchId}
+              onClick={() =>
+                onToggleBranchVisibility(category.id, !branchVisible)
+              }
+            >
+              {branchVisible ? (
+                <>
+                  <EyeOff className="mr-2 h-4 w-4" />
+                  {t('dashboard.menuManager.category.notVisible')}
+                </>
+              ) : (
+                <>
+                  <Eye className="mr-2 h-4 w-4" />
+                  {t('dashboard.menuManager.category.visible')}
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-
-        <div className="w-40">
-          {!hasProducts ? (
-            <Badge variant="outline">Empty</Badge>
-          ) : (
-            <Badge variant={visible ? 'default' : 'secondary'}>
-              {visible
-                ? t('dashboard.categories.tabStorefront')
-                : t('dashboard.categories.tabRecommendations')}
-            </Badge>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => setEditing(true)}
-            aria-label={t('dashboard.menuManager.category.editAria')}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-
-          <Button
-            size="icon"
-            variant="ghost"
-            className="text-destructive"
-            onClick={() => onDelete(category.id)}
-            aria-label={t('dashboard.menuManager.category.deleteAria')}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {draggable ? (
-          <p className="hidden text-xs text-muted-foreground lg:block">
-            Drag to reorder
-          </p>
-        ) : null}
-
-        <Button
-          variant="outline"
-          disabled={toggling || !hasProducts}
-          onClick={() => onToggleShowInFront(category.id, !visible)}
-        >
-          {visible ? (
-            <>
-              <EyeOff className="mr-2 h-4 w-4" />
-              Hide
-            </>
-          ) : (
-            <>
-              <Eye className="mr-2 h-4 w-4" />
-              Show
-            </>
-          )}
-        </Button>
-
-        <Button
-          variant={branchVisible ? 'outline' : 'default'}
-          disabled={toggling || branchesLoading || !activeBranchId}
-          onClick={() =>
-            onToggleBranchVisibility(category.id, !branchVisible)
-          }
-        >
-          {branchVisible ? (
-            <>
-              <EyeOff className="mr-2 h-4 w-4" />
-              {t('dashboard.menuManager.category.notVisible')}
-            </>
-          ) : (
-            <>
-              <Eye className="mr-2 h-4 w-4" />
-              {t('dashboard.menuManager.category.visible')}
-            </>
-          )}
-        </Button>
       </div>
 
       <Dialog open={editing} onOpenChange={setEditing}>
@@ -773,7 +600,6 @@ function CategoryCard({
                     Hidden
                   </>
                 ) : (
-
                   <>
                     <Eye className="mr-2 h-4 w-4" />
                     Visible

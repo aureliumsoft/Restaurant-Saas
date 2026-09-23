@@ -28,11 +28,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  resolveBilingualText,
   serializeBilingualChooseAddonsTitle,
   serializeBilingualChooseTitle,
   serializeBilingualInput,
   serializeBilingualText,
 } from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   Popover,
   PopoverContent,
@@ -353,6 +355,7 @@ type ProductWithCategory = MenuItemRow & {
 
 export function RecommendationsTab(_props?: Props) {
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -714,13 +717,13 @@ export function RecommendationsTab(_props?: Props) {
       allIds.every((id) => filterCategoryIds.includes(id));
     if (isAll) return 'All categories';
     if (filterCategoryIds.length === 1) {
-      return (
-        localCategories.find((c) => c.id === filterCategoryIds[0])?.name ??
-        '1 category'
-      );
+      const cat = localCategories.find((c) => c.id === filterCategoryIds[0]);
+      return cat
+        ? resolveBilingualText(cat.name, uiLang)
+        : '1 category';
     }
     return `${filterCategoryIds.length} categories`;
-  }, [filterCategoryIds, localCategories]);
+  }, [filterCategoryIds, localCategories, uiLang]);
 
   const stripProductIdsKey = useMemo(
     () => stripProducts.map((p) => p.id).join(','),
@@ -1702,7 +1705,7 @@ export function RecommendationsTab(_props?: Props) {
                           }
                         />
                         <span className="min-w-0 flex-1 truncate">
-                          {cat.name}
+                          {resolveBilingualText(cat.name, uiLang)}
                         </span>
                         <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
                           {cat.itemCount ?? cat.items.length}
@@ -1813,10 +1816,10 @@ export function RecommendationsTab(_props?: Props) {
                           </div>
                           <div className="space-y-0.5 p-2.5">
                             <p className="line-clamp-2 text-sm font-semibold leading-snug">
-                              {p.name}
+                              {resolveBilingualText(p.name, uiLang)}
                             </p>
                             <p className="truncate text-[11px] text-muted-foreground">
-                              {p.categoryName}
+                              {resolveBilingualText(p.categoryName, uiLang)}
                             </p>
                           </div>
                         </button>
@@ -1986,9 +1989,10 @@ export function RecommendationsTab(_props?: Props) {
         description={t(
           'dashboard.menuManager.recommendations.removeRuleDescription'
         )}
-        itemName={
-          selected?.attributeGroups.find((g) => g.id === deletingRuleId)?.name
-        }
+        itemName={resolveBilingualText(
+          selected?.attributeGroups.find((g) => g.id === deletingRuleId)?.name,
+          uiLang
+        )}
         loading={deletingRule}
         onConfirm={() => void deleteRule()}
         onCancel={() => {
@@ -2049,9 +2053,10 @@ export function RecommendationsTab(_props?: Props) {
         description={t(
           'dashboard.menuManager.recommendations.removeDealDescription'
         )}
-        itemName={
-          currentDeals.find((d) => d.id === deletingDealId)?.dealItem.name
-        }
+        itemName={resolveBilingualText(
+          currentDeals.find((d) => d.id === deletingDealId)?.dealItem.name,
+          uiLang
+        )}
         loading={deletingDeal}
         onConfirm={() => void deleteDeal()}
         onCancel={() => {
@@ -2066,9 +2071,10 @@ export function RecommendationsTab(_props?: Props) {
         description={t(
           'dashboard.menuManager.recommendations.removeOfferDescription'
         )}
-        itemName={
-          currentOffers.find((o) => o.id === deletingOfferId)?.offeredItem.name
-        }
+        itemName={resolveBilingualText(
+          currentOffers.find((o) => o.id === deletingOfferId)?.offeredItem.name,
+          uiLang
+        )}
         loading={deletingOffer}
         onConfirm={() => void deleteOffer()}
         onCancel={() => {

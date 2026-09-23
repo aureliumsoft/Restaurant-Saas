@@ -2076,17 +2076,24 @@ export function NestedRecommendationSheet({
             Object.values(selectedPersonalizeByGroup).some(
               (arr) => arr.length > 0
             );
-          const sheetButtonText =
-            parentIsOptionalProduct && !hasSheetSelection
-              ? t('customizeNoThanks')
-              : t('select');
+          const canDeclineOptional =
+            parentIsOptionalProduct && !hasSheetSelection;
+          const sheetButtonText = canDeclineOptional
+            ? t('customizeNoThanks')
+            : t('select');
           return (
             <button
               type="button"
               className="h-12 w-full rounded-xl text-sm font-bold text-primary shadow-sm transition hover:brightness-95 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60"
               style={{ backgroundColor: ORDER_ACCENT_GOLD }}
-              disabled={requiredMissing}
-              onClick={handleDone}
+              disabled={!canDeclineOptional && requiredMissing}
+              onClick={() => {
+                if (canDeclineOptional) {
+                  onDone(emptyOptionNestedConfig());
+                  return;
+                }
+                handleDone();
+              }}
             >
               {sheetButtonText}
             </button>

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   isCategoryEligibleForRecommendations,
   isMenuCategoryShownInFront,
@@ -244,10 +245,13 @@ function SavedSummaryList({
   savingPersonalize?: boolean;
 }) {
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const sizeLabel =
     (selected.variations?.length ?? 0) > 0
       ? selected
-        .variations!.map((v) => v.title || v.name)
+        .variations!.map((v) =>
+          resolveBilingualText(v.title || v.name, uiLang)
+        )
         .filter(Boolean)
         .join(' · ')
       : null;
@@ -283,12 +287,14 @@ function SavedSummaryList({
         >
           <div className="min-w-0">
             <p className="text-sm font-medium">
-              {resolveBilingualText(g.name, 'en')}
+              {resolveBilingualText(g.name, uiLang)}
             </p>
             <p className="text-xs text-muted-foreground">
               {g.sourceType === 'PRODUCT'
-                ? (g.linkedProduct?.name ?? 'Product')
-                : (g.linkedCategory?.name ?? 'Category')}
+                ? resolveBilingualText(g.linkedProduct?.name, uiLang) ||
+                  'Product'
+                : resolveBilingualText(g.linkedCategory?.name, uiLang) ||
+                  'Category'}
               {g.required ? ' · Required' : ' · Optional'}
               {g.selectionType === 'SINGLE'
                 ? ' · Choose one'
@@ -307,7 +313,7 @@ function SavedSummaryList({
               variant="ghost"
               className="h-8 w-8 text-destructive"
               onClick={() => onDeleteGroup(g.id)}
-              aria-label={`Remove ${resolveBilingualText(g.name, 'en')}`}
+              aria-label={`Remove ${resolveBilingualText(g.name, uiLang)}`}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -322,12 +328,12 @@ function SavedSummaryList({
         >
           <div className="min-w-0">
             <p className="text-sm font-medium">
-              {resolveBilingualText(g.parentName, 'en')}
+              {resolveBilingualText(g.parentName, uiLang)}
             </p>
             <p className="text-xs text-muted-foreground">
               {g.options
                 .filter((o) => o.name.trim())
-                .map((o) => o.name)
+                .map((o) => resolveBilingualText(o.name, uiLang))
                 .join(', ')}{' '}
               · up to {g.maxItems} · free
             </p>
@@ -344,7 +350,7 @@ function SavedSummaryList({
                 className="h-8 w-8 text-destructive"
                 disabled={savingPersonalize}
                 onClick={() => onDeletePersonalizeGroup(i)}
-                aria-label={`Remove ${resolveBilingualText(g.parentName, 'en')}`}
+                aria-label={`Remove ${resolveBilingualText(g.parentName, uiLang)}`}
               >
                 {savingPersonalize ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -373,7 +379,9 @@ function SavedSummaryList({
                 key={deal.id}
                 className="flex items-center justify-between gap-2 text-sm text-muted-foreground"
               >
-                <span className="truncate">{deal.dealItem.name}</span>
+                <span className="truncate">
+                  {resolveBilingualText(deal.dealItem.name, uiLang)}
+                </span>
                 <Button
                   type="button"
                   size="icon"
@@ -381,7 +389,7 @@ function SavedSummaryList({
                   className="h-7 w-7 text-destructive"
                   disabled={deletingDeal && deletingDealId === deal.id}
                   onClick={() => onDeleteDeal(deal.id)}
-                  aria-label={`Remove ${deal.dealItem.name}`}
+                  aria-label={`Remove ${resolveBilingualText(deal.dealItem.name, uiLang)}`}
                 >
                   {deletingDeal && deletingDealId === deal.id ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -411,7 +419,9 @@ function SavedSummaryList({
                 key={offer.id}
                 className="flex items-center justify-between gap-2 text-sm text-muted-foreground"
               >
-                <span className="truncate">{offer.offeredItem.name}</span>
+                <span className="truncate">
+                  {resolveBilingualText(offer.offeredItem.name, uiLang)}
+                </span>
                 <Button
                   type="button"
                   size="icon"
@@ -419,7 +429,7 @@ function SavedSummaryList({
                   className="h-7 w-7 text-destructive"
                   disabled={deletingOffer && deletingOfferId === offer.id}
                   onClick={() => onDeleteOffer(offer.id)}
-                  aria-label={`Remove ${offer.offeredItem.name}`}
+                  aria-label={`Remove ${resolveBilingualText(offer.offeredItem.name, uiLang)}`}
                 >
                   {deletingOffer && deletingOfferId === offer.id ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -490,6 +500,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
   } = props;
 
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
 
   const isSaving =
     savingRules ||
@@ -914,10 +925,10 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
             />
             <div className="min-w-0 flex-1">
               <h3 className="truncate text-base font-semibold text-foreground">
-                {selected.name}
+                {resolveBilingualText(selected.name, uiLang)}
               </h3>
               <p className="truncate text-sm text-muted-foreground">
-                {selected.categoryName}
+                {resolveBilingualText(selected.categoryName, uiLang)}
                 {sizeHint ? ` · ${sizeHint}` : ''}
               </p>
             </div>
@@ -1175,7 +1186,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               {step === 4 ? (
                 <div className="space-y-4">
                   <StepHeader
-                    title={`What recommended deals should appear with ${selected.name}?`}
+                    title={`What recommended deals should appear with ${resolveBilingualText(selected.name, uiLang)}?`}
                     hint="Optional. When guests tap this item, a popup will ask if they want the product alone or one of these deals."
                   />
 
@@ -1194,7 +1205,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                           key={cat.id}
                           multi
                           active={dealCategoryIds.includes(cat.id)}
-                          title={cat.name}
+                          title={resolveBilingualText(cat.name, uiLang)}
                           imageUrl={cat.imageUrl}
                           onClick={() => {
                             setDealCategoryIds((prev) =>
@@ -1228,8 +1239,11 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                               key={p.id}
                               multi
                               active={selectedDealProductIds.includes(p.id)}
-                              title={p.name}
-                              subtitle={p.categoryName}
+                              title={resolveBilingualText(p.name, uiLang)}
+                              subtitle={resolveBilingualText(
+                                p.categoryName,
+                                uiLang
+                              )}
                               imageUrl={p.imageUrl}
                               onClick={() =>
                                 setSelectedDealProductIds((prev) =>
@@ -1279,7 +1293,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               {step === 5 ? (
                 <div className="space-y-4">
                   <StepHeader
-                    title={`What products should we recommend in the cart with ${selected.name}?`}
+                    title={`What products should we recommend in the cart with ${resolveBilingualText(selected.name, uiLang)}?`}
                     hint="Optional. Add-on items suggested on the cart page/drawer when this product is in the cart."
                   />
 
@@ -1298,7 +1312,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                           key={cat.id}
                           multi
                           active={offerCategoryIds.includes(cat.id)}
-                          title={cat.name}
+                          title={resolveBilingualText(cat.name, uiLang)}
                           imageUrl={cat.imageUrl}
                           onClick={() => {
                             setOfferCategoryIds((prev) =>
@@ -1332,8 +1346,11 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                               key={p.id}
                               multi
                               active={selectedOfferProductIds.includes(p.id)}
-                              title={p.name}
-                              subtitle={p.categoryName}
+                              title={resolveBilingualText(p.name, uiLang)}
+                              subtitle={resolveBilingualText(
+                                p.categoryName,
+                                uiLang
+                              )}
                               imageUrl={p.imageUrl}
                               onClick={() =>
                                 setSelectedOfferProductIds((prev) =>
@@ -1474,6 +1491,7 @@ function ClassicConfigSections({
   draftByVariant,
 }: ConfigurationWizardProps) {
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const isSaving =
     savingRules ||
     savingDeals ||
@@ -1551,7 +1569,7 @@ function ClassicConfigSections({
                   key={`deal-cat-${cat.id}`}
                   multi
                   active={checked}
-                  title={cat.name}
+                  title={resolveBilingualText(cat.name, uiLang)}
                   imageUrl={cat.imageUrl}
                   subtitle={
                     isMenuCategoryShownInFront(cat)
@@ -1608,9 +1626,11 @@ function ClassicConfigSections({
                         className="h-11 w-11 shrink-0 rounded-lg"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold truncate">{p.name}</p>
+                        <p className="font-semibold truncate">
+                          {resolveBilingualText(p.name, uiLang)}
+                        </p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {p.categoryName}
+                          {resolveBilingualText(p.categoryName, uiLang)}
                         </p>
                       </div>
                     </div>
@@ -1647,7 +1667,9 @@ function ClassicConfigSections({
                 key={deal.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm"
               >
-                <span className="font-medium">{deal.dealItem.name}</span>
+                <span className="font-medium">
+                  {resolveBilingualText(deal.dealItem.name, uiLang)}
+                </span>
                 <Button
                   type="button"
                   size="icon"
@@ -1688,7 +1710,7 @@ function ClassicConfigSections({
                   key={`offer-cat-${cat.id}`}
                   multi
                   active={checked}
-                  title={cat.name}
+                  title={resolveBilingualText(cat.name, uiLang)}
                   imageUrl={cat.imageUrl}
                   subtitle={
                     isMenuCategoryShownInFront(cat)
@@ -1745,9 +1767,11 @@ function ClassicConfigSections({
                         className="h-11 w-11 shrink-0 rounded-lg"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold truncate">{p.name}</p>
+                        <p className="font-semibold truncate">
+                          {resolveBilingualText(p.name, uiLang)}
+                        </p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {p.categoryName}
+                          {resolveBilingualText(p.categoryName, uiLang)}
                         </p>
                       </div>
                     </div>
@@ -1784,7 +1808,9 @@ function ClassicConfigSections({
                 key={offer.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm"
               >
-                <span className="font-medium">{offer.offeredItem.name}</span>
+                <span className="font-medium">
+                  {resolveBilingualText(offer.offeredItem.name, uiLang)}
+                </span>
                 <Button
                   type="button"
                   size="icon"
@@ -1815,6 +1841,7 @@ function SavedGroupList({
   groups: AttrGroupRow[];
   onDelete: (groupId: string) => void;
 }) {
+  const uiLang = useUiLanguage();
   if (groups.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -1831,12 +1858,12 @@ function SavedGroupList({
         >
           <div className="min-w-0">
             <p className="font-medium">
-              {resolveBilingualText(g.name, 'en')}
+              {resolveBilingualText(g.name, uiLang)}
             </p>
             <p className="text-xs text-muted-foreground">
               {g.sourceType === 'PRODUCT'
-                ? `Product · ${g.linkedProduct?.name ?? '—'}`
-                : `Category · ${g.linkedCategory?.name ?? '—'}`}
+                ? `Product · ${resolveBilingualText(g.linkedProduct?.name, uiLang) || '—'}`
+                : `Category · ${resolveBilingualText(g.linkedCategory?.name, uiLang) || '—'}`}
               {g.required ? ' · Required' : ' · Optional'}
             </p>
           </div>

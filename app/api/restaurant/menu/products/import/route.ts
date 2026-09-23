@@ -122,9 +122,9 @@ export async function POST(req: NextRequest) {
     const extraWarnings: string[] = [];
 
     const existingProducts = await db.menuItem.findMany({
-      where: { restaurantId },
-      select: { id: true, name: true },
-    });
+          where: { restaurantId },
+          select: { id: true, name: true },
+        });
     const nameToId = new Map<string, string>();
     for (const p of existingProducts) {
       const enKey = resolveBilingualText(p.name, 'en').trim().toLowerCase();
@@ -135,10 +135,10 @@ export async function POST(req: NextRequest) {
     const createdProductIds: string[] = [];
 
     const categories = await db.menuCategory.findMany({
-      where: { restaurantId },
-      select: { id: true, name: true, sortOrder: true },
-      orderBy: [{ sortOrder: 'desc' }, { createdAt: 'desc' }],
-    });
+          where: { restaurantId },
+          select: { id: true, name: true, sortOrder: true },
+          orderBy: [{ sortOrder: 'desc' }, { createdAt: 'desc' }],
+        });
     const categoryIdByName = new Map<string, string>();
     for (const c of categories) {
       const enKey = resolveBilingualText(c.name, 'en').trim().toLowerCase();
@@ -146,10 +146,10 @@ export async function POST(req: NextRequest) {
       const rawKey = c.name.trim().toLowerCase();
       if (rawKey) categoryIdByName.set(rawKey, c.id);
     }
-    let nextCatSort =
-      categories.length > 0
-        ? Math.max(...categories.map((c) => c.sortOrder)) + 1
-        : 0;
+        let nextCatSort =
+          categories.length > 0
+            ? Math.max(...categories.map((c) => c.sortOrder)) + 1
+            : 0;
 
     const restaurantVariations = await db.restaurantVariation.findMany({
       where: { restaurantId },
@@ -379,7 +379,7 @@ export async function POST(req: NextRequest) {
                 extraWarnings.push(
                   `"${productName}": ingredient "${line.ingredientName}" needs a matching variation (skipped)`
                 );
-                continue;
+            continue;
               }
             } else if (line.variationLabel) {
               extraWarnings.push(
@@ -422,7 +422,7 @@ export async function POST(req: NextRequest) {
               ? row.categoryNames
               : existingId
                 ? []
-                : ['Uncategorized'];
+              : ['Uncategorized'];
           const csvCategoryIds: string[] = [];
           for (const cn of categoryNames) {
             csvCategoryIds.push(await ensureCategory(cn));
@@ -961,14 +961,14 @@ export async function POST(req: NextRequest) {
 
     const result = {
       products: productCount,
-      createdProducts,
-      updatedProducts,
-      skippedProducts,
-      variations: variationsCount,
-      recommendations: recommendationsCount,
-      offers: offersCount,
-      personalizeGroups: personalizeGroupsCount,
-      personalizeOptions: personalizeOptionsCount,
+          createdProducts,
+          updatedProducts,
+          skippedProducts,
+          variations: variationsCount,
+          recommendations: recommendationsCount,
+          offers: offersCount,
+          personalizeGroups: personalizeGroupsCount,
+          personalizeOptions: personalizeOptionsCount,
       ingredients: ingredientsCount,
       createdIngredients,
       warnings: [...parsed.errors, ...extraWarnings].slice(0, 40),

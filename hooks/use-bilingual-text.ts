@@ -12,7 +12,7 @@ export function useBilingualText() {
   const lang = normalizeUiLanguage(i18n.resolvedLanguage ?? i18n.language);
 
   const resolve = useCallback(
-    (raw: string | null | undefined) => resolveBilingualText(raw, lang),
+    (raw: unknown) => resolveBilingualText(raw, lang),
     [lang]
   );
 

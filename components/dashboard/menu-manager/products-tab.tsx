@@ -23,6 +23,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { menuItemApiPath, productEditPath } from '@/lib/dashboard-paths';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   DashboardCard,
   DashboardCardContent,
@@ -163,6 +164,7 @@ export function ProductsTab({
   hasCategoriesHint,
 }: Props) {
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { canEdit, canDelete } = useDashboardPermissions();
   const canEditProducts = canEdit('product');
@@ -424,7 +426,7 @@ export function ProductsTab({
         <Button type="button" size="icon" variant="outline" asChild>
           <Link
             href={productEditPath(item.urlId ?? item.id)}
-            aria-label={`Edit ${resolveBilingualText(item.name, 'en')}`}
+            aria-label={`Edit ${resolveBilingualText(item.name, uiLang)}`}
           >
             <Pencil className="h-4 w-4" />
           </Link>
@@ -596,7 +598,7 @@ export function ProductsTab({
                     { value: ALL_CATEGORIES, label: 'All categories' },
                     ...categories.map((c) => ({
                       value: c.id,
-                      label: c.name,
+                      label: resolveBilingualText(c.name, uiLang),
                     })),
                   ]}
                   placeholder="Category"
@@ -687,13 +689,13 @@ export function ProductsTab({
                                   </DashboardTableCell>
                                   <DashboardTableCell>
                                     <div className="font-medium">
-                                      {resolveBilingualText(item.name, 'en')}
+                                      {resolveBilingualText(item.name, uiLang)}
                                     </div>
                                     {item.description ? (
                                       <div className="line-clamp-2 text-wrap text-xs font-light text-muted-foreground">
                                         {resolveBilingualText(
                                           item.description,
-                                          'en'
+                                          uiLang
                                         )}
                                       </div>
                                     ) : null}
@@ -706,8 +708,15 @@ export function ProductsTab({
                                   </DashboardTableCell>
                                   <DashboardTableCell className="text-muted-foreground">
                                     {categoryNames.length > 1
-                                      ? categoryNames.join(', ')
-                                      : item.categoryName}
+                                      ? categoryNames
+                                          .map((n) =>
+                                            resolveBilingualText(n, uiLang)
+                                          )
+                                          .join(', ')
+                                      : resolveBilingualText(
+                                          item.categoryName,
+                                          uiLang
+                                        )}
                                   </DashboardTableCell>
                                   <DashboardTableCell className="tabular-nums">
                                     {display.hasVariations ? (
@@ -788,12 +797,19 @@ export function ProductsTab({
                               <div className="space-y-2 p-3">
                                 <div>
                                   <p className="line-clamp-2 font-medium leading-snug">
-                                    {resolveBilingualText(item.name, 'en')}
+                                    {resolveBilingualText(item.name, uiLang)}
                                   </p>
                                   <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
                                     {categoryNames.length > 1
-                                      ? categoryNames.join(', ')
-                                      : item.categoryName}
+                                      ? categoryNames
+                                          .map((n) =>
+                                            resolveBilingualText(n, uiLang)
+                                          )
+                                          .join(', ')
+                                      : resolveBilingualText(
+                                          item.categoryName,
+                                          uiLang
+                                        )}
                                   </p>
                                   {variationCount > 0 ? (
                                     <p className="text-[11px] text-muted-foreground">

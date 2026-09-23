@@ -68,8 +68,8 @@ function LanguageFlag({
 type LanguageSwitcherProps = {
   /** Floating action button (marketing) vs inline dropdown vs segmented toggle (web-app). */
   variant?: 'fab' | 'inline' | 'toggle';
-  /** Styles for primary-colored headers (web-app) or brand primary button. */
-  tone?: 'default' | 'onPrimary' | 'brand';
+  /** Styles for primary-colored headers (web-app), brand primary button, or forced light (kiosk). */
+  tone?: 'default' | 'onPrimary' | 'brand' | 'light';
   className?: string;
 };
 
@@ -132,6 +132,9 @@ export function LanguageSwitcher({
   const isToggle = variant === 'toggle';
   const onPrimary = tone === 'onPrimary';
   const brandTone = tone === 'brand';
+  const lightTone = tone === 'light';
+  /** Light UI that ignores app dark mode (kiosk / fixed-light surfaces). */
+  const forceLight = lightTone || onPrimary || brandTone;
 
   if (isToggle) {
     return (
@@ -151,7 +154,9 @@ export function LanguageSwitcher({
               ? 'border-0 bg-white text-[#1a1033] shadow-sm hover:bg-white/90'
               : brandTone
                 ? 'border-0 bg-primary text-primary-foreground shadow-sm hover:brightness-95'
-                : 'border border-zinc-200 bg-white text-zinc-900 shadow-sm hover:border-primary/40 hover:text-primary dark:border-zinc-700 dark:bg-zinc-950 dark:text-white'
+                : lightTone
+                  ? 'border border-[#e2e8f0] bg-white text-[#0f172a] shadow-sm hover:border-primary/40 hover:text-primary'
+                  : 'border border-zinc-200 bg-white text-zinc-900 shadow-sm hover:border-primary/40 hover:text-primary dark:border-zinc-700 dark:bg-zinc-950 dark:text-white'
           )}
         >
           <span className="inline-flex items-center gap-2">
@@ -175,7 +180,7 @@ export function LanguageSwitcher({
               brandTone || !onPrimary
                 ? 'bottom-full mb-2'
                 : 'top-full mt-2',
-              onPrimary || brandTone
+              forceLight
                 ? 'border-[#e8eaef] bg-white text-[#1f1f2e]'
                 : 'border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white'
             )}
@@ -193,7 +198,7 @@ export function LanguageSwitcher({
                     'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
                     active
                       ? 'bg-primary/10 font-semibold text-primary'
-                      : onPrimary || brandTone
+                      : forceLight
                         ? 'text-[#1f1f2e] hover:bg-[#f4f4f6]'
                         : 'text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900'
                   )}
@@ -218,7 +223,7 @@ export function LanguageSwitcher({
       className={cn(
         isFab
           ? 'fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2 sm:bottom-6 sm:right-6'
-          : 'relative flex flex-col items-end',
+          : 'relative z-50 flex flex-col items-end',
         className
       )}
     >
@@ -227,17 +232,17 @@ export function LanguageSwitcher({
           role="listbox"
           aria-label={label}
           className={cn(
-            'z-50 w-48 overflow-hidden rounded-xl border p-1.5 shadow-[0_18px_50px_-20px_rgba(15,23,42,0.35)] backdrop-blur-md',
+            'z-[100] w-48 overflow-hidden rounded-xl border p-1.5 shadow-[0_18px_50px_-20px_rgba(15,23,42,0.35)] backdrop-blur-md',
             isFab ? 'mb-0' : 'absolute right-0 top-full mt-2',
-            onPrimary
-              ? 'border-white/25 bg-white/95'
+            forceLight
+              ? 'border-[#e2e8f0] bg-white text-[#0f172a]'
               : 'border-zinc-200 bg-white/95 dark:border-zinc-800 dark:bg-black/95'
           )}
         >
           <p
             className={cn(
               'px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider',
-              onPrimary ? 'text-zinc-500' : 'text-zinc-500 dark:text-zinc-400'
+              forceLight ? 'text-zinc-500' : 'text-zinc-500 dark:text-zinc-400'
             )}
           >
             {label}
@@ -254,10 +259,10 @@ export function LanguageSwitcher({
                 className={cn(
                   'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors',
                   active
-                    ? onPrimary
+                    ? forceLight
                       ? 'bg-primary/10 text-primary'
                       : 'bg-fire-500/10 text-fire-500 dark:text-fire-400'
-                    : onPrimary
+                    : forceLight
                       ? 'text-zinc-800 hover:bg-zinc-100'
                       : 'text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900'
                 )}
@@ -287,7 +292,9 @@ export function LanguageSwitcher({
           isFab ? 'h-12 pl-2.5 pr-4' : 'h-10 pl-2.5 pr-3.5',
           onPrimary
             ? 'border-white/30 bg-white/15 text-white shadow-[0_8px_24px_-8px_rgba(0,0,0,0.35)] hover:border-white/50 hover:bg-white/25'
-            : 'border-zinc-200 bg-white text-zinc-900 shadow-sm hover:border-fire-500 hover:text-fire-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-white dark:hover:border-fire-400 dark:hover:text-fire-400'
+            : lightTone
+              ? 'border-[#e2e8f0] bg-white text-[#0f172a] shadow-sm hover:border-primary hover:text-primary'
+              : 'border-zinc-200 bg-white text-zinc-900 shadow-sm hover:border-fire-500 hover:text-fire-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-white dark:hover:border-fire-400 dark:hover:text-fire-400'
         )}
       >
         <LanguageFlag

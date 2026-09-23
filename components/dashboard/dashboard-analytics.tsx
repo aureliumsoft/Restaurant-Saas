@@ -29,6 +29,7 @@ import { IconExternalLink } from '@tabler/icons-react';
 import {
   ChefHat,
   Clock3,
+  ExternalLink,
   Loader2,
   Receipt,
   ShoppingBag,
@@ -759,8 +760,8 @@ export default function DashboardAnalytics() {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Open Website
                     {t('dashboard.analytics.openWebsite')}
+                    <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
                   </a>
                 </Button>
               ) : null}
@@ -779,9 +780,8 @@ export default function DashboardAnalytics() {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Open Kiosk
                     {t('dashboard.analytics.openKiosk')}
-                    <IconExternalLink className="ml-2 h-4 w-4" aria-hidden />
+                    <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
                   </a>
                 </Button>
               ) : null}

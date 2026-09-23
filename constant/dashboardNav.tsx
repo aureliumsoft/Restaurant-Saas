@@ -24,10 +24,10 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroupDef[] = [
     groupKey: 'catalog',
     moduleKeys: [
       'categories',
-      'final-view',
       'variations',
       'product',
       'inventory',
+      'final-view',
       'recommendations',
     ],
   },

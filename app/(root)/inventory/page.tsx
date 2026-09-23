@@ -63,7 +63,9 @@ import { useDashboardPermissions } from '@/hooks/use-dashboard-permissions';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { filterDecimalInput } from '@/lib/validation/fields';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { cn } from '@/lib/utils';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import { useTranslation } from 'react-i18next';
 
 type IngredientRow = {
@@ -163,6 +165,7 @@ const NO_STORE_HEADERS = {
 
 export default function InventoryPage() {
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { canEdit, canDelete } = useDashboardPermissions();
   const canEditInv = canEdit('inventory');
@@ -466,13 +469,16 @@ export default function InventoryPage() {
     () =>
       ingredients.map((i) => ({
         value: i.id,
-        label: i.name,
+        label: resolveBilingualText(i.name, uiLang),
         hint: `${i.quantity} ${formatIngredientUnit(i.unit)}`,
       })),
-    [ingredients]
+    [ingredients, uiLang]
   );
   const productOptions = useMemo(() => {
-    const opts = products.map((p) => ({ value: p.id, label: p.name }));
+    const opts = products.map((p) => ({
+      value: p.id,
+      label: resolveBilingualText(p.name, uiLang),
+    }));
     if (
       entryProductId &&
       !opts.some((o) => o.value === entryProductId)
@@ -480,7 +486,7 @@ export default function InventoryPage() {
       opts.unshift({ value: entryProductId, label: 'Selected product' });
     }
     return opts;
-  }, [products, entryProductId]);
+  }, [products, entryProductId, uiLang]);
 
   const submitEntry = async () => {
     if (!entryIngredientId || !entryQty.trim() || !entryReason.trim()) {
@@ -826,7 +832,9 @@ export default function InventoryPage() {
                                   className="h-10 w-10 rounded-md object-cover"
                                 />
                                 <div>
-                                  <p className="font-medium">{row.name}</p>
+                                  <p className="font-medium">
+                                    {resolveBilingualText(row.name, uiLang)}
+                                  </p>
                                   {!row.isActive ? (
                                     <p className="mt-0.5 text-[11px] font-medium text-destructive">
                                       Inactive
@@ -873,7 +881,7 @@ export default function InventoryPage() {
                                       type="button"
                                       variant="ghost"
                                       size="icon"
-                                      aria-label={`Update ${row.name} quantity`}
+                                      aria-label={`Update ${resolveBilingualText(row.name, uiLang)} quantity`}
                                       onClick={() => openStockDialog(row)}
                                     >
                                       <PackagePlus className="h-4 w-4" />
@@ -1023,7 +1031,7 @@ export default function InventoryPage() {
                               {format(new Date(row.createdAt), 'dd MMM yyyy HH:mm')}
                             </DashboardTableCell>
                             <DashboardTableCell>
-                              {row.ingredient.name}
+                              {resolveBilingualText(row.ingredient.name, uiLang)}
                             </DashboardTableCell>
                             <DashboardTableCell>
                               −{row.quantity}{' '}
@@ -1038,9 +1046,9 @@ export default function InventoryPage() {
                             </DashboardTableCell>
                             <DashboardTableCell>
                               {row.menuItem
-                                ? `${row.menuItem.name}${
+                                ? `${resolveBilingualText(row.menuItem.name, uiLang)}${
                                     row.variation
-                                      ? ` (${row.variation.name})`
+                                      ? ` (${resolveBilingualText(row.variation.name, uiLang)})`
                                       : ''
                                   }`
                                 : '—'}
@@ -1181,7 +1189,7 @@ export default function InventoryPage() {
           <DialogHeader>
             <DialogTitle>
               {stockRow
-                ? `Add stock for "${stockRow.name}"`
+                ? `Add stock for "${resolveBilingualText(stockRow.name, uiLang)}"`
                 : 'Add ingredient stock'}
             </DialogTitle>
             <DialogDescription>
@@ -1320,7 +1328,14 @@ export default function InventoryPage() {
         onConfirm={() => void confirmDelete()}
         title={t('dashboard.inventory.deleteIngredientTitle')}
         description="This removes the ingredient and its recipe links."
-        itemName={rows.find((r) => r.id === deleteId)?.name}
+        itemName={
+          deleteId
+            ? resolveBilingualText(
+                rows.find((r) => r.id === deleteId)?.name,
+                uiLang
+              )
+            : undefined
+        }
       />
     </MenuPageShell>
   );

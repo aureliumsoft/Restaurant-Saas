@@ -31,6 +31,7 @@ import {
   serializeBilingualInput,
 } from '@/lib/menu/bilingual-text';
 import { filterNameTextInput } from '@/lib/validation/fields';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 
 import type { RestaurantVariationRow } from './types';
 
@@ -38,6 +39,7 @@ const PAGE_SIZE = 12;
 
 export function RestaurantVariationsPanel() {
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const [rows, setRows] = useState<RestaurantVariationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -289,7 +291,7 @@ export function RestaurantVariationsPanel() {
         open={confirmDeleteOpen}
         title={t('dashboard.menuManager.variation.delete')}
         description="This removes the template. Products already using it may need to be updated."
-        itemName={resolveBilingualText(deletingRow?.name, 'en')}
+        itemName={resolveBilingualText(deletingRow?.name, uiLang)}
         loading={deleting}
         onConfirm={() => {
           void remove();
@@ -321,10 +323,11 @@ function VariationCard({
     bilingualInputFromStored(variation.name)
   );
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const [editShortLabel, setEditShortLabel] = useState(
     variation.shortLabel ?? ''
   );
-  const displayName = resolveBilingualText(variation.name, 'en');
+  const displayName = resolveBilingualText(variation.name, uiLang);
 
   useEffect(() => {
     setEditName(bilingualInputFromStored(variation.name));

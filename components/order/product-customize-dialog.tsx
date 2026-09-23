@@ -703,15 +703,23 @@ export function ProductCustomizeDialog({
     for (const g of visibleCategoryGroups) {
       const selectedIds = nextSelectedByGroup[g.id] ?? [];
       if (selectedIds.length === 0) {
-        if (g.required) {
+        // Respect "No Thanks" before required checks — groups with min 0 can be declined
+        // even when marked required, and must not reopen after skip.
+        if (skippedOptionalGroupIdsRef.current[g.id]) continue;
+        const limits = limitsForGroup(g);
+        const min = limits.minItems ?? (g.required ? 1 : 0);
+        if (min === 0) {
+          // Optional category (0/max): prompt once so guest can pick or tap No Thanks.
           if (g.selectionType === 'SINGLE') {
             return { kind: 'group-single', groupId: g.id };
           }
           return { kind: 'group-multi', groupId: g.id };
         }
-        if (skippedOptionalGroupIdsRef.current[g.id]) continue;
-        if (g.selectionType === 'SINGLE') {
-          return { kind: 'group-single', groupId: g.id };
+        if (g.required) {
+          if (g.selectionType === 'SINGLE') {
+            return { kind: 'group-single', groupId: g.id };
+          }
+          return { kind: 'group-multi', groupId: g.id };
         }
         continue;
       }

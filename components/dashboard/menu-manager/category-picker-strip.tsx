@@ -16,6 +16,7 @@ import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import {
   resolveBilingualText,
 } from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import { cn } from '@/lib/utils';
 
 export type CategoryPickerItem = {
@@ -39,6 +40,7 @@ export function CategoryPickerStrip({
   onChange,
   emptyMessage = 'Add a category first, then assign this product.',
 }: Props) {
+  const uiLang = useUiLanguage();
   const stripRef = useRef<HTMLDivElement>(null);
   const [stripScroll, setStripScroll] = useState({ back: false, forward: false });
   const [search, setSearch] = useState('');

@@ -10,6 +10,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function partsFromRecord(parsed: Record<string, unknown>): BilingualText | null {
+  const en =
+    typeof parsed.en === 'string'
+      ? parsed.en.trim()
+      : typeof parsed.EN === 'string'
+        ? parsed.EN.trim()
+        : '';
+  const es =
+    typeof parsed.es === 'string'
+      ? parsed.es.trim()
+      : typeof parsed.ES === 'string'
+        ? parsed.ES.trim()
+        : '';
+  if (en || es || 'en' in parsed || 'es' in parsed) {
+    return { en, es };
+  }
+  return null;
+}
+
 /** Split editor input: "English &&&& Spanish". */
 export function parseBilingualInput(input: string): BilingualText {
   const raw = input ?? '';
@@ -43,13 +62,22 @@ export function serializeBilingualText(parts: BilingualText): string {
 }
 
 /**
- * Read DB / API value: JSON `{en,es}`, or legacy plain string
- * (both locales get the same text).
+ * Read DB / API value: JSON `{en,es}` string, already-parsed `{en,es}` object,
+ * or legacy plain / `&&&&` string.
  */
-export function parseStoredBilingualText(
-  raw: string | null | undefined
-): BilingualText {
+export function parseStoredBilingualText(raw: unknown): BilingualText {
   if (raw == null) return { ...EMPTY };
+
+  if (isRecord(raw)) {
+    const fromObj = partsFromRecord(raw);
+    if (fromObj) return fromObj;
+    return { ...EMPTY };
+  }
+
+  if (typeof raw !== 'string' && typeof raw !== 'number' && typeof raw !== 'boolean') {
+    return { ...EMPTY };
+  }
+
   const trimmed = String(raw).trim();
   if (!trimmed) return { ...EMPTY };
 
@@ -57,21 +85,8 @@ export function parseStoredBilingualText(
     try {
       const parsed: unknown = JSON.parse(trimmed);
       if (isRecord(parsed)) {
-        const en =
-          typeof parsed.en === 'string'
-            ? parsed.en.trim()
-            : typeof parsed.EN === 'string'
-              ? parsed.EN.trim()
-              : '';
-        const es =
-          typeof parsed.es === 'string'
-            ? parsed.es.trim()
-            : typeof parsed.ES === 'string'
-              ? parsed.ES.trim()
-              : '';
-        if (en || es || 'en' in parsed || 'es' in parsed) {
-          return { en, es };
-        }
+        const fromJson = partsFromRecord(parsed);
+        if (fromJson) return fromJson;
       }
     } catch {
       // fall through to legacy
@@ -87,7 +102,7 @@ export function parseStoredBilingualText(
 
 /** Pick locale for display; fall back to the other locale, then empty. */
 export function resolveBilingualText(
-  raw: string | null | undefined,
+  raw: unknown,
   lang: UiLanguage
 ): string {
   const parts = parseStoredBilingualText(raw);
@@ -104,9 +119,7 @@ export function serializeBilingualInput(input: string): string {
 }
 
 /** Form hydrate: DB → `en &&&& es` editor string. */
-export function bilingualInputFromStored(
-  raw: string | null | undefined
-): string {
+export function bilingualInputFromStored(raw: unknown): string {
   return bilingualInputFromParts(parseStoredBilingualText(raw));
 }
 

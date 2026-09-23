@@ -143,31 +143,7 @@ export async function loadCategoriesWithLinkedItems<
     }
   }
 
-  // Re-order each category's items by product dates after merging links + legacy.
-  const allItemIds = [
-    ...new Set(
-      [...itemsByCategory.values()].flatMap((list) =>
-        list.map((item) => (item as MenuItem & { id: string }).id)
-      )
-    ),
-  ];
-  if (allItemIds.length > 0) {
-    const dated = await db.menuItem.findMany({
-      where: { id: { in: allItemIds } },
-      orderBy: options.itemOrderBy ?? [...MENU_ITEM_DATE_ORDER],
-      select: { id: true },
-    });
-    const rank = new Map(dated.map((row, index) => [row.id, index]));
-    for (const [categoryId, list] of itemsByCategory) {
-      list.sort(
-        (a, b) =>
-          (rank.get((a as MenuItem & { id: string }).id) ?? 0) -
-          (rank.get((b as MenuItem & { id: string }).id) ?? 0)
-      );
-      itemsByCategory.set(categoryId, list);
-    }
-  }
-
+  // Keep link sortOrder (Final View); legacy-only items were appended after links.
   return categories.map((category) => {
     const categoryId = (category as { id: string }).id;
     return {
@@ -241,16 +217,7 @@ export async function loadSingleCategoryWithLinkedItems<
     orderedIds.push(row.id);
   }
 
-  // Re-order combined link + legacy IDs by product dates (newest first).
-  if (orderedIds.length > 1) {
-    const dated = await db.menuItem.findMany({
-      where: { id: { in: orderedIds } },
-      orderBy: options.itemOrderBy ?? [...MENU_ITEM_DATE_ORDER],
-      select: { id: true },
-    });
-    orderedIds.length = 0;
-    for (const row of dated) orderedIds.push(row.id);
-  }
+  // Keep MenuItemCategory.sortOrder (Final View); legacy-only IDs stay appended.
 
   const itemTotal = orderedIds.length;
   const skip = options.pagination?.skip ?? 0;

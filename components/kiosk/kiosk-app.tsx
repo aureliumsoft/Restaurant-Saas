@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -43,14 +44,9 @@ import {
   productNeedsDetailFetch,
 } from '@/lib/menu/fetch-menu-product-detail';
 import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
+import { LanguageSwitcher } from '@/components/main/language-switcher';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -81,8 +77,8 @@ import {
 } from '@/lib/cart-storage';
 import { cn } from '@/lib/utils';
 import { buildThemeCssVars } from '@/lib/restaurant-theme';
-import { setUiLanguage } from '@/lib/i18n/client';
 import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
+import type { UiLanguage } from '@/lib/i18n/resources';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { IconArrowBack } from '@tabler/icons-react';
 import {
@@ -298,6 +294,181 @@ function effectiveUnitPrice(price: number, salePrice: number | null) {
   return price;
 }
 
+type KioskProductCardProps = {
+  p: CustomerMenuProduct;
+  uiLang: UiLanguage;
+  formatMoney: (n: number) => string;
+  qty: number;
+  customizeLabel: string;
+  addLabel: string;
+  onTap: (p: CustomerMenuProduct) => void;
+  onBumpQty: (productId: string, delta: number) => void;
+  cardRef?: (el: HTMLDivElement | null) => void;
+  onCaptureFlyOrigin?: (productId: string, el: HTMLElement) => void;
+};
+
+/** Stable outside KioskApp so cart updates do not remount every tile (image blink). */
+const KioskProductCard = memo(function KioskProductCard({
+  p,
+  uiLang,
+  formatMoney,
+  qty,
+  customizeLabel,
+  addLabel,
+  onTap,
+  onBumpQty,
+  cardRef,
+  onCaptureFlyOrigin,
+}: KioskProductCardProps) {
+  const unit = effectiveUnitPrice(p.price, p.salePrice);
+  const showStrike =
+    p.salePrice != null && p.salePrice > 0 && p.salePrice < p.price;
+  const isCustomizable = productNeedsCustomizeDialog(p);
+  const displayName = resolveBilingualText(p.name, uiLang);
+
+  const captureOrigin = (el: HTMLElement | null) => {
+    if (!el || !onCaptureFlyOrigin) return;
+    onCaptureFlyOrigin(p.id, el);
+  };
+
+  return (
+    <Card
+      ref={cardRef}
+      role="button"
+      tabIndex={0}
+      className={cn(KIOSK_PRODUCT_CARD, 'rounded-lg border')}
+      onPointerDown={(e) => {
+        captureOrigin(e.currentTarget);
+      }}
+      onClick={() => onTap(p)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          captureOrigin(e.currentTarget);
+          onTap(p);
+        }
+      }}
+    >
+      <CardContent className="p-3">
+        <LazyMenuProductImage
+          src={p.imageUrl}
+          hasImage={p.hasImage ?? Boolean(p.imageUrl)}
+          alt={displayName}
+          className="aspect-square w-full rounded-lg pointer-events-none"
+        />
+        <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-tight text-[#0f172a]">
+          {displayName}
+        </h3>
+        <div className="mt-1 flex items-baseline gap-2">
+          <span className="text-sm font-bold text-primary">
+            {formatMoney(unit)}
+          </span>
+          {showStrike ? (
+            <span className="text-xs text-[#94a3b8] line-through">
+              {formatMoney(p.price)}
+            </span>
+          ) : null}
+        </div>
+        <div
+          className="mt-3 flex items-center gap-2"
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            captureOrigin(e.currentTarget.closest('[role="button"]') as HTMLElement | null);
+          }}
+        >
+          {qty > 0 ? (
+            <>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-9 w-9 shrink-0"
+                onClick={() => onBumpQty(p.id, -1)}
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <span className="min-w-[2ch] text-center text-sm font-medium">
+                {qty}
+              </span>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-9 w-9 shrink-0"
+                onClick={() => onTap(p)}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              className="w-full bg-primary font-semibold text-primary-foreground hover:brightness-95"
+              onClick={() => onTap(p)}
+            >
+              {isCustomizable ? customizeLabel : addLabel}
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
+
+type KioskHorizontalRowProps = {
+  title: string;
+  products: CustomerMenuProduct[];
+  uiLang: UiLanguage;
+  formatMoney: (n: number) => string;
+  qtyOnMenu: (productId: string) => number;
+  customizeLabel: string;
+  addLabel: string;
+  onTap: (p: CustomerMenuProduct) => void;
+  onBumpQty: (productId: string, delta: number) => void;
+  setProductCardRef: (productId: string, el: HTMLDivElement | null) => void;
+  onCaptureFlyOrigin: (productId: string, el: HTMLElement) => void;
+};
+
+const KioskHorizontalRow = memo(function KioskHorizontalRow({
+  title,
+  products,
+  uiLang,
+  formatMoney,
+  qtyOnMenu,
+  customizeLabel,
+  addLabel,
+  onTap,
+  onBumpQty,
+  setProductCardRef,
+  onCaptureFlyOrigin,
+}: KioskHorizontalRowProps) {
+  if (products.length === 0) return null;
+  return (
+    <section className="mb-6">
+      <h2 className="mb-3 text-lg font-bold text-[#0f172a]">{title}</h2>
+      <div className="flex gap-3 overflow-x-auto pb-2">
+        {products.map((p) => (
+          <div key={p.id} className="w-[140px] shrink-0">
+            <KioskProductCard
+              p={p}
+              uiLang={uiLang}
+              formatMoney={formatMoney}
+              qty={qtyOnMenu(p.id)}
+              customizeLabel={customizeLabel}
+              addLabel={addLabel}
+              onTap={onTap}
+              onBumpQty={onBumpQty}
+              cardRef={(el) => setProductCardRef(p.id, el)}
+              onCaptureFlyOrigin={onCaptureFlyOrigin}
+            />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+});
+
 function getSignature(
   mods: CartModifierSelection[],
   variationId: string | null
@@ -403,6 +574,16 @@ export function KioskApp({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [customizeLoading, setCustomizeLoading] = useState(false);
   const customizeLoadTokenRef = useRef(0);
+  const productCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const cartFlyTargetRef = useRef<HTMLElement | null>(null);
+  const lastFlyFromRef = useRef<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [cartBump, setCartBump] = useState(false);
+  const cartBumpTimerRef = useRef<number | null>(null);
   const [menuOfferOpen, setMenuOfferOpen] = useState(false);
   const [menuOfferProduct, setMenuOfferProduct] =
     useState<CustomerMenuProduct | null>(null);
@@ -847,11 +1028,191 @@ export function KioskApp({
     );
   }, [customizeProduct, slug, uiLang]);
 
+  const captureFlyOrigin = useCallback(
+    (productId: string, el: HTMLElement) => {
+      const img = el.querySelector('img');
+      const rect = (img ?? el).getBoundingClientRect();
+      lastFlyFromRef.current = {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      };
+      productCardRefs.current[productId] = el as HTMLDivElement;
+    },
+    []
+  );
+
+  const setProductCardRef = useCallback(
+    (productId: string, el: HTMLDivElement | null) => {
+      productCardRefs.current[productId] = el;
+    },
+    []
+  );
+
+  const spawnFlyToCart = useCallback(
+    (product: { id: string; name: string; imageUrl: string | null }) => {
+      if (typeof document === 'undefined' || typeof window === 'undefined') {
+        return;
+      }
+      const bumpCart = () => {
+        setCartBump(true);
+        if (cartBumpTimerRef.current != null) {
+          window.clearTimeout(cartBumpTimerRef.current);
+        }
+        cartBumpTimerRef.current = window.setTimeout(() => {
+          setCartBump(false);
+          cartBumpTimerRef.current = null;
+        }, 280);
+      };
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        bumpCart();
+        return;
+      }
+
+      const toEl = cartFlyTargetRef.current;
+      const fromEl = productCardRefs.current[product.id];
+      const fromImg = fromEl?.querySelector('img') ?? null;
+      const captured = lastFlyFromRef.current;
+      lastFlyFromRef.current = null;
+
+      const fromRect =
+        captured ??
+        fromImg?.getBoundingClientRect() ??
+        fromEl?.getBoundingClientRect() ??
+        null;
+      const toRect = toEl?.getBoundingClientRect() ?? null;
+      if (!toRect || toRect.width < 2 || toRect.height < 2) {
+        bumpCart();
+        return;
+      }
+
+      const size = fromRect
+        ? Math.max(
+            36,
+            Math.min(64, Math.min(fromRect.width, fromRect.height) * 0.75)
+          )
+        : 48;
+      const startLeft = fromRect
+        ? fromRect.left + fromRect.width / 2 - size / 2
+        : Math.max(16, window.innerWidth * 0.35 - size / 2);
+      const startTop = fromRect
+        ? fromRect.top + fromRect.height / 2 - size / 2
+        : Math.max(16, window.innerHeight * 0.4 - size / 2);
+      const endLeft = toRect.left + toRect.width / 2 - size / 2;
+      const endTop = toRect.top + toRect.height / 2 - size / 2;
+      const dx = endLeft - startLeft;
+      const dy = endTop - startTop;
+
+      if (Math.hypot(dx, dy) < 24) {
+        bumpCart();
+        return;
+      }
+
+      const ghost = document.createElement('div');
+      ghost.setAttribute('aria-hidden', 'true');
+      ghost.className = 'kiosk-fly-to-cart-ghost';
+      Object.assign(ghost.style, {
+        position: 'fixed',
+        left: `${startLeft}px`,
+        top: `${startTop}px`,
+        width: `${size}px`,
+        height: `${size}px`,
+        zIndex: '2147483000',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
+        background: '#2a2a2a',
+        margin: '0',
+        padding: '0',
+        transform: 'translate3d(0,0,0) scale(1)',
+        opacity: '1',
+        willChange: 'transform, opacity',
+      } as CSSStyleDeclaration);
+
+      if (product.imageUrl) {
+        const img = document.createElement('img');
+        img.src = product.imageUrl;
+        img.alt = '';
+        img.draggable = false;
+        Object.assign(img.style, {
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+        } as CSSStyleDeclaration);
+        ghost.appendChild(img);
+      } else {
+        ghost.style.display = 'flex';
+        ghost.style.alignItems = 'center';
+        ghost.style.justifyContent = 'center';
+        ghost.style.fontWeight = '700';
+        ghost.style.fontSize = `${Math.round(size * 0.36)}px`;
+        ghost.style.color = '#f5f5f5';
+        ghost.textContent = (product.name || '?').charAt(0).toUpperCase();
+      }
+
+      document.body.appendChild(ghost);
+      void ghost.offsetWidth;
+
+      const midX = dx * 0.45;
+      const midY = dy * 0.35 - Math.min(80, Math.abs(dy) * 0.25 + 28);
+      const anim = ghost.animate(
+        [
+          {
+            transform: 'translate3d(0px, 0px, 0) scale(1)',
+            opacity: 1,
+          },
+          {
+            transform: `translate3d(${midX}px, ${midY}px, 0) scale(0.85)`,
+            opacity: 1,
+            offset: 0.55,
+          },
+          {
+            transform: `translate3d(${dx}px, ${dy}px, 0) scale(0.28)`,
+            opacity: 0.2,
+          },
+        ],
+        {
+          duration: 700,
+          easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+          fill: 'forwards',
+        }
+      );
+
+      anim.finished.then(() => {
+        ghost.remove();
+        bumpCart();
+      }).catch(() => {
+        ghost.remove();
+      });
+    },
+    []
+  );
+
+  useEffect(() => {
+    return () => {
+      if (cartBumpTimerRef.current != null) {
+        window.clearTimeout(cartBumpTimerRef.current);
+      }
+    };
+  }, []);
+
   const addToCart = (
     product: CustomerMenuProduct,
     modifiers: CartModifierSelection[],
-    variation?: SelectedProductVariation | null
+    variation?: SelectedProductVariation | null,
+    opts?: { skipFly?: boolean }
   ) => {
+    if (!opts?.skipFly) {
+      spawnFlyToCart({
+        id: product.id,
+        name: resolveBilingualText(product.name, uiLang),
+        imageUrl: product.imageUrl ?? null,
+      });
+    }
+
     const baseUnitPrice = effectiveUnitPrice(product.price, product.salePrice);
     const variationId = variation?.id ?? null;
     const modifiersSignature = getSignature(modifiers, variationId);
@@ -979,26 +1340,29 @@ export function KioskApp({
     [cart]
   );
 
-  const bumpProductQty = (productId: string, delta: number) => {
-    if (delta > 0) {
-      const p = allProducts.find((x) => x.id === productId);
-      if (!p) return;
-      handleProductSelect(p);
-      return;
-    }
-    setCart((current) => {
-      const copy = [...current];
-      for (let i = copy.length - 1; i >= 0; i--) {
-        if (copy[i]!.menuItemId !== productId) continue;
-        const line = copy[i]!;
-        if (line.quantity <= 1) copy.splice(i, 1);
-        else copy[i] = { ...line, quantity: line.quantity - 1 };
-        break;
+  const bumpProductQty = useCallback(
+    (productId: string, delta: number) => {
+      if (delta > 0) {
+        const p = allProducts.find((x) => x.id === productId);
+        if (!p) return;
+        handleProductSelect(p);
+        return;
       }
-      saveCart(slug, branchId, copy);
-      return copy;
-    });
-  };
+      setCart((current) => {
+        const copy = [...current];
+        for (let i = copy.length - 1; i >= 0; i--) {
+          if (copy[i]!.menuItemId !== productId) continue;
+          const line = copy[i]!;
+          if (line.quantity <= 1) copy.splice(i, 1);
+          else copy[i] = { ...line, quantity: line.quantity - 1 };
+          break;
+        }
+        saveCart(slug, branchId, copy);
+        return copy;
+      });
+    },
+    [allProducts, branchId, slug]
+  );
 
   const adjustLine = (lineId: string, delta: number) => {
     const next = cart
@@ -1148,111 +1512,21 @@ export function KioskApp({
     }
   };
 
-  const ProductCard = ({ p }: { p: CustomerMenuProduct }) => {
-    const unit = effectiveUnitPrice(p.price, p.salePrice);
-    const showStrike =
-      p.salePrice != null && p.salePrice > 0 && p.salePrice < p.price;
-    const isCustomizable = productNeedsCustomizeDialog(p);
-    const q = qtyOnMenu(p.id);
-    const displayName = resolveBilingualText(p.name, uiLang);
-
-    return (
-      <Card
-        role="button"
-        tabIndex={0}
-        className={cn(KIOSK_PRODUCT_CARD, 'rounded-lg border')}
-        onClick={() => onProductTap(p)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onProductTap(p);
-          }
-        }}
-      >
-        <CardContent className="p-3">
-          <LazyMenuProductImage
-            src={p.imageUrl}
-            hasImage={p.hasImage ?? Boolean(p.imageUrl)}
-            alt={displayName}
-            className="aspect-square w-full rounded-lg pointer-events-none"
-          />
-          <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-tight text-[#0f172a]">
-            {displayName}
-          </h3>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-sm font-bold text-primary">
-              {formatMoney(unit)}
-            </span>
-            {showStrike ? (
-              <span className="text-xs text-[#94a3b8] line-through">
-                {formatMoney(p.price)}
-              </span>
-            ) : null}
-          </div>
-          <div
-            className="mt-3 flex items-center gap-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {q > 0 ? (
-              <>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="outline"
-                  className="h-9 w-9 shrink-0"
-                  onClick={() => bumpProductQty(p.id, -1)}
-                >
-                  <Minus className="h-4 w-4" />
-                </Button>
-                <span className="min-w-[2ch] text-center text-sm font-medium">
-                  {q}
-                </span>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="outline"
-                  className="h-9 w-9 shrink-0"
-                  onClick={() => onProductTap(p)}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </>
-            ) : (
-              <Button
-                type="button"
-                className="w-full bg-primary font-semibold text-primary-foreground hover:brightness-95"
-                onClick={() => onProductTap(p)}
-              >
-                {isCustomizable ? t('customizePlus') : t('addPlus')}
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  const HorizontalRow = ({
-    title,
-    products,
-  }: {
-    title: string;
-    products: CustomerMenuProduct[];
-  }) => {
-    if (products.length === 0) return null;
-    return (
-      <section className="mb-6">
-        <h2 className="mb-3 text-lg font-bold text-[#0f172a]">{title}</h2>
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {products.map((p) => (
-            <div key={p.id} className="w-[140px] shrink-0">
-              <ProductCard p={p} />
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  };
+  const renderProductCard = (p: CustomerMenuProduct) => (
+    <KioskProductCard
+      key={p.id}
+      p={p}
+      uiLang={uiLang}
+      formatMoney={formatMoney}
+      qty={qtyOnMenu(p.id)}
+      customizeLabel={t('customizePlus')}
+      addLabel={t('addPlus')}
+      onTap={onProductTap}
+      onBumpQty={bumpProductQty}
+      cardRef={(el) => setProductCardRef(p.id, el)}
+      onCaptureFlyOrigin={captureFlyOrigin}
+    />
+  );
 
   if (branchValid === null) {
     return (
@@ -1329,7 +1603,7 @@ export function KioskApp({
     slug,
     menus: progressiveCategories.map((c) => ({
       id: c.id,
-      name: c.name,
+      name: resolveBilingualText(c.name, uiLang),
       imageUrl: c.imageUrl,
       items: [],
     })),
@@ -1382,12 +1656,16 @@ export function KioskApp({
                 ) : null}
                 {fulfillment ? (
                   <p className="text-xs text-[#64748b]">
-                    {fulfillment === 'dine_in' ? 'Dine in' : 'Take away'}
+                    {fulfillment === 'dine_in' ? t('dineIn') : t('takeAway')}
                     {fulfillment === 'dine_in' && selectedTableId
-                      ? ` · Table ${
-                          diningTables.find((t) => t.id === selectedTableId)
-                            ?.name ?? selectedTableId
-                        }`
+                      ? ` · ${(() => {
+                          const tableName =
+                            diningTables.find((x) => x.id === selectedTableId)
+                              ?.name ?? selectedTableId;
+                          return /^(table|mesa)\b/i.test(tableName.trim())
+                            ? tableName.trim()
+                            : `${t('table')} ${tableName}`;
+                        })()}`
                       : ''}
                     {' · '}
                     {fulfillmentSettings.dineInEnabled ? (
@@ -1400,7 +1678,7 @@ export function KioskApp({
                         setFulfillmentChangeOpen(true);
                       }}
                     >
-                      Change
+                      {t('orderMethodChangeConfirm')}
                     </button>
                     ) : null}
                   </p>
@@ -1408,43 +1686,37 @@ export function KioskApp({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="default"
-                    className="border-[#e2e8f0] bg-white text-[#0f172a] hover:bg-[#f8fafc]"
-                  >
-                    {t('language')}: {uiLang.toUpperCase()}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setUiLanguage('es');
-                    }}
-                  >
-                    Espanol
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setUiLanguage('en');
-                    }}
-                  >
-                    English
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <LanguageSwitcher variant="inline" tone="light" />
               {step === 'menu' ? (
                 <Button
                   type="button"
                   variant="default"
-                  className="border-[#e2e8f0] bg-white text-[#0f172a] hover:bg-[#f8fafc]"
+                  className={cn(
+                    'relative border-[#e2e8f0] bg-white text-[#0f172a] hover:bg-[#f8fafc]',
+                    cartBump && 'ring-2 ring-primary/40'
+                  )}
                   onClick={() => setStep('cart')}
                 >
-                  <ShoppingCart className="h-4 w-4" />
-                  <span className="text-xs font-medium text-primary mb-2">
-                    {cartCount}
+                  <span
+                    ref={(el) => {
+                      cartFlyTargetRef.current = el;
+                    }}
+                    className="inline-flex items-center gap-1"
+                  >
+                    <ShoppingCart
+                      className={cn(
+                        'h-4 w-4 transition-transform duration-200',
+                        cartBump && 'scale-110 text-primary'
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        'text-xs font-medium text-primary transition-transform duration-200',
+                        cartBump && 'scale-110'
+                      )}
+                    >
+                      {cartCount}
+                    </span>
                   </span>
                 </Button>
               ) : null}
@@ -1619,20 +1891,38 @@ export function KioskApp({
                   />
                 ) : (
                   <>
-                <HorizontalRow
+                <KioskHorizontalRow
                   title={t('recommended')}
                   products={recommended}
+                  uiLang={uiLang}
+                  formatMoney={formatMoney}
+                  qtyOnMenu={qtyOnMenu}
+                  customizeLabel={t('customizePlus')}
+                  addLabel={t('addPlus')}
+                  onTap={onProductTap}
+                  onBumpQty={bumpProductQty}
+                  setProductCardRef={setProductCardRef}
+                  onCaptureFlyOrigin={captureFlyOrigin}
                 />
-                <HorizontalRow
+                <KioskHorizontalRow
                   title={t('offersAndAddons')}
                   products={offeredPool}
+                  uiLang={uiLang}
+                  formatMoney={formatMoney}
+                  qtyOnMenu={qtyOnMenu}
+                  customizeLabel={t('customizePlus')}
+                  addLabel={t('addPlus')}
+                  onTap={onProductTap}
+                  onBumpQty={bumpProductQty}
+                  setProductCardRef={setProductCardRef}
+                  onCaptureFlyOrigin={captureFlyOrigin}
                 />
 
                     {categoryId === 'all' ? (
                       progressiveCategories.map((category) => (
                         <section key={category.id} className="mb-6">
                           <h2 className=" mb-3 text-lg font-bold">
-                            {category.name}
+                            {resolveBilingualText(category.name, uiLang)}
                           </h2>
                           {category.loading ||
                           (!category.loaded && category.items.length === 0) ? (
@@ -1647,12 +1937,12 @@ export function KioskApp({
                             </p>
                           ) : (
                             <div className={KIOSK_PRODUCT_GRID}>
-                              {category.items.map((p) => (
-                                <ProductCard
-                                  key={p.id}
-                                  p={{ ...p, categoryId: category.id }}
-                                />
-                              ))}
+                              {category.items.map((p) =>
+                                renderProductCard({
+                                  ...p,
+                                  categoryId: category.id,
+                                })
+                              )}
                             </div>
                           )}
                         </section>
@@ -1692,10 +1982,10 @@ export function KioskApp({
                           }
                           return (
                             <div className={KIOSK_PRODUCT_GRID}>
-                      {displayedProducts.map((p) => (
-                        <ProductCard key={p.id} p={p} />
-                      ))}
-                    </div>
+                              {displayedProducts.map((p) =>
+                                renderProductCard(p)
+                              )}
+                            </div>
                           );
                         })()}
                 </section>
@@ -2011,19 +2301,29 @@ export function KioskApp({
 
         {qrCustomerReady && step === 'checkout' && (
           <div className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 py-6">
-            <h1 className="text-2xl font-bold">Checkout</h1>
+            <h1 className="text-2xl font-bold">{t('checkout')}</h1>
             <p className="text-sm text-[#64748b]">
-              {fulfillment === 'dine_in'
-                ? requiresMobileQrSignIn
-                ? `Dine in · Table ${
-                      diningTables.find((t) => t.id === selectedTableId)
-                        ?.name ?? selectedTableId
-                    } · ${customerName || 'Guest'} · ${customerEmail || 'No email'}`
-                  : `Dine in · Table ${
-                      diningTables.find((t) => t.id === selectedTableId)
-                        ?.name ?? selectedTableId
-                  }`
-                : `Take away · ${customerName || 'Guest'} · ${customerPhone || 'No phone'}`}
+              {(() => {
+                const tableName =
+                  diningTables.find((x) => x.id === selectedTableId)?.name ??
+                  selectedTableId;
+                const tableLabel = tableName
+                  ? /^(table|mesa)\b/i.test(tableName.trim())
+                    ? tableName.trim()
+                    : `${t('table')} ${tableName}`
+                  : '';
+                if (fulfillment === 'dine_in') {
+                  if (requiresMobileQrSignIn) {
+                    return `${t('dineIn')} · ${tableLabel} · ${
+                      customerName || t('guest')
+                    } · ${customerEmail || t('noEmail')}`;
+                  }
+                  return `${t('dineIn')} · ${tableLabel}`;
+                }
+                return `${t('takeAway')} · ${customerName || t('guest')} · ${
+                  customerPhone || t('noPhone')
+                }`;
+              })()}
             </p>
             <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-sm text-[#0f172a]">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#64748b]">
@@ -2232,7 +2532,6 @@ export function KioskApp({
                   cardPayment.setCardPaymentOutcomeOpen
                 }
                 setCardProcessingOpen={cardPayment.setCardProcessingOpen}
-                onBypass={cardPayment.handleCardPaymentBypass}
                 onCancel={cardPayment.handleCardPaymentCancel}
                 formatMoney={formatMoney}
               />
@@ -2552,7 +2851,12 @@ export function KioskApp({
             }));
             const times = Math.max(1, Math.floor(quantity));
             for (let i = 0; i < times; i += 1) {
-              addToCart(customizeProduct, mapped, variation ?? null);
+              addToCart(
+                customizeProduct,
+                mapped,
+                variation ?? null,
+                i > 0 ? { skipFly: true } : undefined
+              );
             }
             setDialogOpen(false);
             setCustomizeProduct(null);

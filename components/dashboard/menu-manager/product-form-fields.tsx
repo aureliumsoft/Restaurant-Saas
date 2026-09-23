@@ -29,6 +29,7 @@ import {
   filterNameTextInput,
 } from '@/lib/validation/fields';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   priceFieldLabel,
   salePriceFieldLabel,
@@ -126,13 +127,13 @@ function FieldLabel({
   );
 }
 
+/** Raw template name for SAVE (preserves bilingual JSON / both locales). */
 function templateName(
   templates: RestaurantVariationRow[],
   id: string | undefined
 ) {
   if (!id) return '';
-  const raw = templates.find((t) => t.id === id)?.name ?? '';
-  return raw ? resolveBilingualText(raw, 'en') : '';
+  return templates.find((t) => t.id === id)?.name ?? '';
 }
 
 function parseVariationRows(
@@ -149,7 +150,11 @@ function parseVariationRows(
         restaurantVariationId: r.restaurantVariationId || null,
       };
     })
-    .filter((r) => r.restaurantVariationId && r.name.length > 0);
+    .filter(
+      (r) =>
+        r.restaurantVariationId &&
+        resolveBilingualText(r.name, 'en').length > 0
+    );
 }
 
 function isVariationRowValid(
@@ -177,6 +182,7 @@ export function ProductFormFields({
   onIngredientRowsChange,
 }: Props) {
   const { t: tr } = useTranslation();
+  const uiLang = useUiLanguage();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const internalTemplates = useRestaurantVariationTemplates();
   const variationTemplates =
@@ -438,7 +444,7 @@ export function ProductFormFields({
                       <SelectContent>
                         {selectableTemplates.map((t) => (
                           <SelectItem key={t.id} value={t.id}>
-                            {resolveBilingualText(t.name, 'en')}
+                            {resolveBilingualText(t.name, uiLang)}
                             {t.shortLabel ? ` (${t.shortLabel})` : ''}
                           </SelectItem>
                         ))}

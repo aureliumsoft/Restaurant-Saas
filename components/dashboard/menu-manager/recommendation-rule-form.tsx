@@ -16,6 +16,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   isCategoryEligibleForRecommendations,
   isMenuCategoryShownInFront,
@@ -137,6 +139,7 @@ export function RecommendationRuleForm({
   resetKey = 0,
   draftByVariant = {},
 }: Props) {
+  const uiLang = useUiLanguage();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
   const locked = variantDefaults(variant);
@@ -705,7 +708,9 @@ export function RecommendationRuleForm({
                         <Badge variant="outline" className="tabular-nums">
                           #{index + 1}
                         </Badge>
-                        <span className="text-sm font-medium">{cat.name}</span>
+                        <span className="text-sm font-medium">
+                          {resolveBilingualText(cat.name, uiLang)}
+                        </span>
                       </div>
                      
                       {!noFreeItems ? (
@@ -811,7 +816,7 @@ export function RecommendationRuleForm({
                       key={cat.id}
                       multi={selectionType === 'MULTIPLE'}
                       active={checked}
-                      title={cat.name}
+                      title={resolveBilingualText(cat.name, uiLang)}
                       imageUrl={cat.imageUrl}
                       subtitle={
                         onMenu
@@ -888,7 +893,9 @@ export function RecommendationRuleForm({
                               emptyLabel="—"
                               className="h-7 w-7 shrink-0 rounded-md"
                             />
-                            <span className="font-semibold text-sm truncate">{cat.name}</span>
+                            <span className="font-semibold text-sm truncate">
+                              {resolveBilingualText(cat.name, uiLang)}
+                            </span>
                             <Badge variant="outline" className="text-[10px] shrink-0 font-normal">
                               {onMenu ? 'On menu' : 'Add-on only'}
                             </Badge>
@@ -1124,7 +1131,7 @@ export function RecommendationRuleForm({
                                   }
                                 />
                                 <span className="min-w-0 flex-1 truncate">
-                                  {it.name}
+                                  {resolveBilingualText(it.name, uiLang)}
                                 </span>
                                 <span className="shrink-0 tabular-nums text-muted-foreground">
                                   {formatMoney(
@@ -1202,7 +1209,7 @@ export function RecommendationRuleForm({
                   key={`rec-prod-cat-${cat.id}`}
                   multi
                   active={checked}
-                  title={cat.name}
+                  title={resolveBilingualText(cat.name, uiLang)}
                   imageUrl={cat.imageUrl}
                   subtitle={onMenu ? 'On customer menu' : 'Add-on only'}
                   onClick={() => toggleProductCategory(cat.id)}
@@ -1276,10 +1283,10 @@ export function RecommendationRuleForm({
                       </div>
                       <div className="flex flex-1 flex-col gap-1.5 p-3">
                         <p className="line-clamp-2 text-sm font-semibold leading-snug">
-                          {p.name}
+                          {resolveBilingualText(p.name, uiLang)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {p.categoryName}
+                          {resolveBilingualText(p.categoryName, uiLang)}
                         </p>
                       </div>
                     </div>
@@ -1339,10 +1346,10 @@ export function RecommendationRuleForm({
                       </div>
                       <div className="flex flex-1 flex-col gap-1.5 p-3">
                         <p className="line-clamp-2 text-sm font-semibold leading-snug">
-                          {p.name}
+                          {resolveBilingualText(p.name, uiLang)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {p.categoryName}
+                          {resolveBilingualText(p.categoryName, uiLang)}
                         </p>
                       </div>
                     </div>
@@ -1369,19 +1376,20 @@ export function RecommendationRuleForm({
             {selectedCategories.map((cat) => {
               const limits =
                 categoryMinMax[cat.id] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
+              const catDisplayName = resolveBilingualText(cat.name, uiLang);
               return (
                 <div
                   key={`minmax-${cat.id}`}
                   className="grid gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-[minmax(0,1fr)_5rem_5rem]"
                 >
                   <span className="self-center text-sm font-medium">
-                    {cat.name}
+                    {catDisplayName}
                   </span>
                   <Input
                     type="number"
                     min={0}
                     className="h-9"
-                    aria-label={`${cat.name} minimum`}
+                    aria-label={`${catDisplayName} minimum`}
                     maxLength={limits.maxItems.toString().length}
                     disabled={limits.minItems >= limits.maxItems}
                     value={limits.minItems}
@@ -1403,7 +1411,7 @@ export function RecommendationRuleForm({
                     type="number"
                     min={1}
                     className="h-9"
-                    aria-label={`${cat.name} maximum`}
+                    aria-label={`${catDisplayName} maximum`}
                     // minLength={limits.maxItems.toString().length}
                     disabled={limits.minItems >= limits.maxItems}
                     value={limits.maxItems}
@@ -1448,7 +1456,9 @@ export function RecommendationRuleForm({
                       key={`free-qty-product-${productId}`}
                       className="space-y-2 rounded-md border border-border/60 bg-background p-2"
                     >
-                      <span className="text-sm font-medium">{product.name}</span>
+                      <span className="text-sm font-medium">
+                        {resolveBilingualText(product.name, uiLang)}
+                      </span>
                       <label className="flex items-center gap-2 text-xs">
                         <input
                           type="checkbox"
@@ -1508,6 +1518,10 @@ export function RecommendationRuleForm({
             {linkedProductIds.map((productId) => {
               const product = allProducts.find((p) => p.id === productId);
               if (!product) return null;
+              const productDisplayName = resolveBilingualText(
+                product.name,
+                uiLang
+              );
               const limits =
                 productMinMax[productId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
               return (
@@ -1516,13 +1530,13 @@ export function RecommendationRuleForm({
                   className="grid gap-2 rounded-md border border-border bg-background p-2 sm:grid-cols-[minmax(0,1fr)_5rem_5rem]"
                 >
                   <span className="self-center text-sm font-medium">
-                    {product.name}
+                    {productDisplayName}
                   </span>
                   <Input
                     type="number"
                     min={0}
                     className="h-9"
-                    aria-label={`${product.name} minimum`}
+                    aria-label={`${productDisplayName} minimum`}
                     value={limits.minItems}
                     onChange={(e) => {
                       const val = Math.max(
@@ -1542,7 +1556,7 @@ export function RecommendationRuleForm({
                     type="number"
                     min={1}
                     className="h-9"
-                    aria-label={`${product.name} maximum`}
+                    aria-label={`${productDisplayName} maximum`}
                     value={limits.maxItems}
                     onChange={(e) => {
                       const val = Math.max(
@@ -1583,7 +1597,7 @@ export function RecommendationRuleForm({
               return (
                 <div key={`overrides-${cat.id}`} className="rounded-md border border-border/70">
                   <div className="flex items-center justify-between border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold">
-                    <span>{cat.name}</span>
+                    <span>{resolveBilingualText(cat.name, uiLang)}</span>
                     {loading && (
                       <span className="flex items-center gap-1 text-[11px] font-normal text-muted-foreground">
                         <Loader2 className="h-3 w-3 animate-spin" /> Loading products…
@@ -1601,6 +1615,10 @@ export function RecommendationRuleForm({
                           excluded: false,
                           free: false,
                         };
+                        const productDisplayName = resolveBilingualText(
+                          product.name,
+                          uiLang
+                        );
                         return (
                           <li key={product.id} className="flex items-center gap-3 px-3 py-2">
                             {product.imageUrl ? (
@@ -1612,11 +1630,11 @@ export function RecommendationRuleForm({
                               />
                             ) : (
                               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted text-[10px] text-muted-foreground">
-                                {product.name.slice(0, 2).toUpperCase()}
+                                {productDisplayName.slice(0, 2).toUpperCase()}
                               </div>
                             )}
                             <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
-                              {product.name}
+                              {productDisplayName}
                             </span>
                             <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-foreground cursor-pointer">
                               <input
@@ -1671,10 +1689,11 @@ export function RecommendationRuleForm({
               const rows =
                 categoryVariationLimits[cat.id] ??
                 defaultVariationLimitsForVariations(baseVariations);
+              const catDisplayName = resolveBilingualText(cat.name, uiLang);
               return (
                 <div key={`var-limits-${cat.id}`} className="space-y-2">
                   <p className="text-sm font-semibold text-foreground">
-                    {cat.name}
+                    {catDisplayName}
                   </p>
                   {rows.map((row, index) => {
                     const v = baseVariations.find(
@@ -1693,7 +1712,7 @@ export function RecommendationRuleForm({
                           type="number"
                           min={0}
                           className="h-9"
-                          aria-label={`${cat.name} ${label} minimum`}
+                          aria-label={`${catDisplayName} ${label} minimum`}
                           value={row.minItems}
                           onChange={(e) => {
                             const val = Math.max(
@@ -1719,7 +1738,7 @@ export function RecommendationRuleForm({
                           type="number"
                           min={1}
                           className="h-9"
-                          aria-label={`${cat.name} ${label} maximum`}
+                          aria-label={`${catDisplayName} ${label} maximum`}
                           value={row.maxItems}
                           onChange={(e) => {
                             const val = Math.max(

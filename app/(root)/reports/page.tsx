@@ -50,6 +50,8 @@ import { formatIngredientUnit } from '@/lib/inventory/stock';
 import { defaultReportFromToKeys } from '@/lib/reports/date-range';
 import { cn } from '@/lib/utils';
 import type { TransactionHistoryRow } from '@/types/transaction-history';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import { useTranslation } from 'react-i18next';
 
 type TrackTab = 'financial' | 'orders' | 'inventory' | 'expenses';
@@ -152,6 +154,7 @@ function ReportInsightChip({
 
 export default function ReportsPage() {
   const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const { formatMoney } = useOwnerRestaurantRegional();
   const {
     loading: branchLoading,
@@ -715,7 +718,9 @@ export default function ReportsPage() {
                       </DashboardTableCell>
                       <DashboardTableCell>
                         <div>
-                          <p className="font-medium">{row.ingredient.name}</p>
+                          <p className="font-medium">
+                            {resolveBilingualText(row.ingredient.name, uiLang)}
+                          </p>
                           <p className="truncate text-xs text-muted-foreground">
                             {row.reason}
                           </p>
@@ -763,7 +768,7 @@ export default function ReportsPage() {
                           <p className="font-medium">{row.title}</p>
                           {row.ingredient ? (
                             <p className="text-xs text-muted-foreground">
-                              {row.ingredient.name}
+                              {resolveBilingualText(row.ingredient.name, uiLang)}
                               {row.quantity != null
                                 ? ` · +${row.quantity} ${formatIngredientUnit(row.ingredient.unit)}`
                                 : ''}

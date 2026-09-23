@@ -21,6 +21,13 @@ import { extractApiErrorMessage } from '@/lib/extract-api-error';
 import { INGREDIENT_UNIT_VALUES } from '@/lib/inventory/validation';
 import { formatIngredientUnit } from '@/lib/inventory/stock';
 import { filterDecimalInput } from '@/lib/validation/fields';
+import {
+  bilingualInputFromStored,
+  parseBilingualInput,
+  resolveBilingualText,
+  serializeBilingualInput,
+} from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 import { Textarea } from '@/components/ui/textarea';
 import {
   CreateProductSaveConfirmation,
@@ -88,15 +95,28 @@ export function IngredientForm({
   ingredientId?: string;
 }) {
   const router = useRouter();
+  const uiLang = useUiLanguage();
   const { activeBranchId, activeBranchUrlId } = useBranchContext();
-  const [form, setForm] = useState<IngredientFormState>(
-    initial ?? EMPTY_INGREDIENT_FORM
+  const [form, setForm] = useState<IngredientFormState>(() =>
+    initial
+      ? {
+          ...initial,
+          name: bilingualInputFromStored(initial.name),
+          description: bilingualInputFromStored(initial.description),
+        }
+      : EMPTY_INGREDIENT_FORM
   );
   const [saving, setSaving] = useState<'close' | 'new' | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [imageFileKey, setImageFileKey] = useState<number>(0);
-  const [baseline, setBaseline] = useState<IngredientFormState>(
-    initial ?? EMPTY_INGREDIENT_FORM
+  const [baseline, setBaseline] = useState<IngredientFormState>(() =>
+    initial
+      ? {
+          ...initial,
+          name: bilingualInputFromStored(initial.name),
+          description: bilingualInputFromStored(initial.description),
+        }
+      : EMPTY_INGREDIENT_FORM
   );
   const isEdit = Boolean(ingredientId);
   const isDirty = formFingerprint(form) !== formFingerprint(baseline);
@@ -113,7 +133,7 @@ export function IngredientForm({
   });
 
   const canSave = useMemo(() => {
-    if (!form.name.trim()) return false;
+    if (!parseBilingualInput(form.name).en.trim()) return false;
     const qty = Number(form.quantity);
     if (!Number.isFinite(qty) || qty < 0) return false;
     if (form.minQuantity.trim()) {
@@ -127,10 +147,14 @@ export function IngredientForm({
     return true;
   }, [form]);
 
+  const displayName = resolveBilingualText(form.name, uiLang);
+
   const save = async (mode: 'close' | 'new') => {
     const payload = {
-      name: form.name.trim(),
-      description: form.description.trim() || null,
+      name: serializeBilingualInput(form.name),
+      description: form.description.trim()
+        ? serializeBilingualInput(form.description)
+        : null,
       quantity: Number(form.quantity),
       unit: form.unit,
       isMajor: form.isMajor,
@@ -194,8 +218,11 @@ export function IngredientForm({
         <Input
           value={form.name}
           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          placeholder="Chicken"
+          placeholder={`English name ${'&&&&'} Spanish name`}
         />
+        <p className="text-xs text-muted-foreground">
+          First English, then separator &&&&, then Spanish.
+        </p>
       </div>
       <div className="grid gap-2">
         <Label>Description</Label>
@@ -205,8 +232,11 @@ export function IngredientForm({
           onChange={(e) =>
             setForm((f) => ({ ...f, description: e.target.value }))
           }
-          placeholder="Optional notes"
+          placeholder={`English notes ${'&&&&'} Spanish notes`}
         />
+        <p className="text-xs text-muted-foreground">
+          First English, then separator &&&&, then Spanish.
+        </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
@@ -356,7 +386,7 @@ export function IngredientForm({
           open={confirmOpen}
           title="Update ingredient"
           description="Save changes to this ingredient?"
-          itemName={form.name.trim() || 'Ingredient'}
+          itemName={displayName || 'Ingredient'}
           loading={Boolean(saving)}
           onConfirm={() => void save('close')}
           onCancel={() => setConfirmOpen(false)}
@@ -364,10 +394,10 @@ export function IngredientForm({
       ) : (
         <CreateProductSaveConfirmation
           open={confirmOpen}
-          itemName={form.name.trim() || undefined}
+          itemName={displayName || undefined}
           title={
-            form.name.trim()
-              ? `Create "${form.name.trim()}"?`
+            displayName
+              ? `Create "${displayName}"?`
               : 'Create ingredient?'
           }
           description="Choose how you want to save this ingredient."

@@ -10,7 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { formatIngredientUnit } from '@/lib/inventory/stock';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { filterDecimalInput } from '@/lib/validation/fields';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 
 import type { MenuItemRow, RestaurantVariationRow } from './types';
 
@@ -162,6 +164,7 @@ export function ProductIngredientRecipes({
   ingredientRows: IngredientRecipeRow[];
   onIngredientRowsChange: (rows: IngredientRecipeRow[]) => void;
 }) {
+  const uiLang = useUiLanguage();
   const [ingredients, setIngredients] = useState<IngredientOption[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -202,11 +205,11 @@ export function ProductIngredientRecipes({
         .filter((i) => i.id === currentId || !usedInSection.has(i.id))
         .map((i) => ({
           value: i.id,
-          label: i.name,
+          label: resolveBilingualText(i.name, uiLang),
           hint: `${i.quantity} ${formatIngredientUnit(i.unit)}`,
         }));
     },
-    [ingredients]
+    [ingredients, uiLang]
   );
 
   const hasVariations = variationRows.some((r) => r.restaurantVariationId);
@@ -215,9 +218,11 @@ export function ProductIngredientRecipes({
         .filter((r) => r.restaurantVariationId)
         .map((r) => ({
           key: r.restaurantVariationId as string,
-          title:
+          title: resolveBilingualText(
             variationTemplates.find((t) => t.id === r.restaurantVariationId)
               ?.name ?? r.name,
+            uiLang
+          ),
         }))
     : [{ key: null as string | null, title: 'Product' }];
 

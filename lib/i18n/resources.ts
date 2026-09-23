@@ -18,6 +18,9 @@ export const resources = {
       takeAway: 'Take away',
       selectTable: 'Select table',
       table: 'Table',
+      guest: 'Guest',
+      noEmail: 'No email',
+      noPhone: 'No phone',
       cancel: 'Cancel',
       continue: 'Continue',
       chooseTableFirst: 'Please select a table first.',
@@ -960,7 +963,7 @@ export const resources = {
         categories: {
           title: 'Categories',
           description:
-            'Manage storefront categories and recommendation-only pools in separate tabs. Drag to reorder storefront categories.',
+            'Create and manage menu categories. Use Final View to set the order guests see on web, kiosk, and POS.',
           showingCount: 'Showing {{shown}} of {{total}}',
           loadingMore: ' · loading more in background...',
           searchPlaceholder: 'Search categories by name…',
@@ -968,12 +971,12 @@ export const resources = {
           clearSearchAria: 'Clear search',
           cardTitle: 'Menu categories',
           cardDescription:
-            'Storefront categories appear on web, kiosk, and POS. Recommendations categories are add-on pools only.',
+            'Storefront categories appear on web, kiosk, and POS. Hide a category from the storefront to use it as a recommendation pool only. Reorder in Final View.',
           newCategory: 'New category',
           tabStorefront: 'Storefront',
           tabRecommendations: 'Recommendations',
           storefrontDragHint:
-            'Drag rows to change the order guests see on storefront.',
+            'Use Final View to change the order guests see on storefront.',
           recommendationsHint:
             'Add-on / recommendation pools — not shown on the storefront browse.',
           emptyStorefrontSearch:
@@ -984,6 +987,30 @@ export const resources = {
             'No recommendation categories match your search.',
           emptyRecommendations:
             'No recommendation-only categories yet. Hide a category from the storefront to use it here.',
+          emptySearch: 'No categories match your search.',
+          empty: 'No categories yet. Create one to get started.',
+        },
+        finalView: {
+          title: 'Final View',
+          description:
+            'Set the order of categories and products for storefront and recommendation pools. Guests see this order on web, kiosk, and POS.',
+          tabStorefront: 'Storefront',
+          tabRecommendations: 'Recommendation',
+          searchPlaceholder: 'Search category',
+          emptySearch: 'No categories match your search.',
+          emptyStorefront: 'No storefront categories yet.',
+          emptyRecommendations: 'No recommendation categories yet.',
+          loadError: 'Could not load Final View.',
+          saveSuccess: 'Order saved.',
+          saveError: 'Could not save order.',
+          saveOrDiscardFirst: 'Save or leave edit mode before switching tabs.',
+          saveConfirmTitle: 'Save order?',
+          saveConfirmDescription:
+            'This updates the category and product order for this tab. Guests will see the new order on web, kiosk, and POS.',
+          unsavedTitle: 'Unsaved changes',
+          unsavedLeave:
+            'You have unsaved Final View changes. Leave without saving?',
+          leaveWithoutSaving: 'Leave without saving',
         },
         variations: {
           title: 'Variations',
@@ -1830,6 +1857,9 @@ export const resources = {
       takeAway: 'Para llevar',
       selectTable: 'Seleccionar mesa',
       table: 'Mesa',
+      guest: 'Invitado',
+      noEmail: 'Sin email',
+      noPhone: 'Sin telefono',
       cancel: 'Cancelar',
       continue: 'Continuar',
       chooseTableFirst: 'Primero selecciona una mesa.',
@@ -2782,7 +2812,7 @@ export const resources = {
         categories: {
           title: 'Categorías',
           description:
-            'Gestiona categorías de la tienda y grupos solo de recomendaciones en pestañas separadas. Arrastra para reordenar categorías.',
+            'Crea y gestiona categorías del menú. Usa Vista final para definir el orden que ven los clientes en web, quiosco y TPV.',
           showingCount: 'Mostrando {{shown}} de {{total}}',
           loadingMore: ' · cargando más en segundo plano...',
           searchPlaceholder: 'Buscar categorías por nombre…',
@@ -2790,12 +2820,12 @@ export const resources = {
           clearSearchAria: 'Limpiar búsqueda',
           cardTitle: 'Categorías del menú',
           cardDescription:
-            'Las categorías de tienda aparecen en web, quiosco y TPV. Las de recomendaciones son solo grupos de complementos.',
+            'Las categorías de tienda aparecen en web, quiosco y TPV. Oculta una categoría de la tienda para usarla solo como grupo de recomendaciones. Reordena en Vista final.',
           newCategory: 'Nueva categoría',
           tabStorefront: 'Tienda',
           tabRecommendations: 'Recomendaciones',
           storefrontDragHint:
-            'Arrastra filas para cambiar el orden que ven los clientes.',
+            'Usa Vista final para cambiar el orden que ven los clientes.',
           recommendationsHint:
             'Grupos de complementos — no se muestran en el catálogo de la tienda.',
           emptyStorefrontSearch:
@@ -2806,6 +2836,31 @@ export const resources = {
             'Ninguna categoría de recomendaciones coincide con la búsqueda.',
           emptyRecommendations:
             'Aún no hay categorías solo de recomendaciones. Oculta una categoría de la tienda para usarla aquí.',
+          emptySearch: 'Ninguna categoría coincide con la búsqueda.',
+          empty: 'Aún no hay categorías. Crea una para empezar.',
+        },
+        finalView: {
+          title: 'Vista final',
+          description:
+            'Define el orden de categorías y productos para la tienda y los grupos de recomendaciones. Los clientes ven este orden en web, quiosco y TPV.',
+          tabStorefront: 'Tienda',
+          tabRecommendations: 'Recomendación',
+          searchPlaceholder: 'Buscar categoría',
+          emptySearch: 'Ninguna categoría coincide con la búsqueda.',
+          emptyStorefront: 'Aún no hay categorías de tienda.',
+          emptyRecommendations: 'Aún no hay categorías de recomendaciones.',
+          loadError: 'No se pudo cargar Vista final.',
+          saveSuccess: 'Orden guardado.',
+          saveError: 'No se pudo guardar el orden.',
+          saveOrDiscardFirst:
+            'Guarda o sal del modo edición antes de cambiar de pestaña.',
+          saveConfirmTitle: '¿Guardar orden?',
+          saveConfirmDescription:
+            'Esto actualiza el orden de categorías y productos de esta pestaña. Los clientes verán el nuevo orden en web, quiosco y TPV.',
+          unsavedTitle: 'Cambios sin guardar',
+          unsavedLeave:
+            'Tienes cambios sin guardar en Vista final. ¿Salir sin guardar?',
+          leaveWithoutSaving: 'Salir sin guardar',
         },
         variations: {
           title: 'Variaciones',

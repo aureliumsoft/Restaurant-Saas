@@ -152,29 +152,49 @@ export async function applyFinalViewReorder(
     }
   }
 
-  await db.$transaction(async (tx) => {
-    if (input.tab === 'storefront') {
-      for (let i = 0; i < input.categories.length; i++) {
-        await tx.menuCategory.update({
-          where: { id: input.categories[i].id },
-          data: { sortOrder: i },
-        });
-      }
+  // Parallelize in chunks — sequential updateMany trips close the TX (P2028).
+  const CHUNK = 40;
+  const runChunked = async <T>(jobs: Array<() => Promise<T>>) => {
+    for (let i = 0; i < jobs.length; i += CHUNK) {
+      await Promise.all(jobs.slice(i, i + CHUNK).map((job) => job()));
     }
+  };
 
-    for (const cat of input.categories) {
-      const uniqueProductIds = [...new Set(cat.productIds)];
-      for (let i = 0; i < uniqueProductIds.length; i++) {
-        await tx.menuItemCategory.updateMany({
-          where: {
-            categoryId: cat.id,
-            menuItemId: uniqueProductIds[i],
-          },
-          data: { sortOrder: i },
-        });
+  await db.$transaction(
+    async (tx) => {
+      if (input.tab === 'storefront') {
+        await runChunked(
+          input.categories.map(
+            (cat, i) => () =>
+              tx.menuCategory.update({
+                where: { id: cat.id },
+                data: { sortOrder: i },
+              })
+          )
+        );
       }
-    }
-  });
+
+      const linkJobs: Array<() => Promise<unknown>> = [];
+      for (const cat of input.categories) {
+        const uniqueProductIds = [...new Set(cat.productIds)];
+        for (let i = 0; i < uniqueProductIds.length; i++) {
+          const menuItemId = uniqueProductIds[i];
+          const sortOrder = i;
+          linkJobs.push(() =>
+            tx.menuItemCategory.updateMany({
+              where: {
+                categoryId: cat.id,
+                menuItemId,
+              },
+              data: { sortOrder },
+            })
+          );
+        }
+      }
+      await runChunked(linkJobs);
+    },
+    { maxWait: 15_000, timeout: 60_000 }
+  );
 
   return { ok: true };
 }
