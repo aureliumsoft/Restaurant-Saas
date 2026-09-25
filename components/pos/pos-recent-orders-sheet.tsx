@@ -22,7 +22,7 @@ import {
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { apiErrorMessage } from '@/lib/api-error-message';
-import eventBus from '@/lib/even';
+import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { isCanceledOrderStatus } from '@/lib/sales-order-status';
 import { cn } from '@/lib/utils';
 
@@ -181,12 +181,16 @@ export function PosRecentOrdersSheet({
     setHasMore(false);
     setNextOffset(null);
     void loadOrders({ offset: 0 });
-    const onRefresh = () => void loadOrders({ silent: true, offset: 0 });
-    eventBus.on('refreshRecentOrders', onRefresh);
-    return () => {
-      eventBus.removeListener('refreshRecentOrders', onRefresh);
-    };
   }, [open, branchId, loadOrders]);
+
+  useRealtimeRefresh(
+    ['refreshRecentOrders', 'refreshWorkingOrders', 'refreshTableOrders'],
+    () => {
+      if (!open) return;
+      void loadOrders({ silent: true, offset: 0 });
+    },
+    { runOnMount: false }
+  );
 
   const loadMore = useCallback(() => {
     if (loading || loadingMore || !hasMore || nextOffset == null) return;

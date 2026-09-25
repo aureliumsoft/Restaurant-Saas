@@ -757,13 +757,13 @@ export default function DashboardAnalytics() {
                 >
                   <a
                     href={restaurantStorefrontPath(slug)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                     {t('dashboard.analytics.openWebsite')}
                     <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
-                  </a>
-                </Button>
+              </a>
+            </Button>
               ) : null}
               {fulfillmentSettings.kioskEnabled ? (
                 <Button
@@ -777,13 +777,13 @@ export default function DashboardAnalytics() {
                         ? kioskBasePath(slug, activeBranchId, activeBranchUrlId)
                         : `/kiosk/${encodeURIComponent(slug)}`
                     }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                     {t('dashboard.analytics.openKiosk')}
                     <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
-                  </a>
-                </Button>
+              </a>
+            </Button>
               ) : null}
             </>
         ) : null}
@@ -851,14 +851,14 @@ export default function DashboardAnalytics() {
 
       {/* 1. Revenue first */}
       <Card className={CHART_CARD}>
-        <CardHeader>
+                <CardHeader>
           <CardTitle>
             {t('dashboard.analytics.revenueReport', { period: chartDaysLabel })}
-          </CardTitle>
-          <CardDescription>
+                  </CardTitle>
+                  <CardDescription>
             {t('dashboard.analytics.revenueReportDesc')}
-          </CardDescription>
-        </CardHeader>
+                  </CardDescription>
+                </CardHeader>
         <CardContent className="w-full min-w-0 pt-0">
           {isLoading || !analytics ? (
             <AnalyticsChartLoader className="h-[320px]" />
@@ -873,8 +873,8 @@ export default function DashboardAnalytics() {
               formatTip={(n) => `${currencySymbol}${formatCompact(n)}`}
             />
           )}
-        </CardContent>
-      </Card>
+                </CardContent>
+              </Card>
 
       {/* 2. Orders line + channel mix */}
       <div className="grid min-w-0 gap-4 lg:grid-cols-[1.25fr_0.75fr]">
@@ -885,7 +885,7 @@ export default function DashboardAnalytics() {
                 ? t('dashboard.analytics.ordersByChannel')
                 : t('dashboard.analytics.ordersTrend')}{' '}
               ({chartDaysLabel})
-            </CardTitle>
+                  </CardTitle>
                   <CardDescription>
               {t('dashboard.analytics.ordersChartDesc')}
                   </CardDescription>
@@ -989,14 +989,14 @@ export default function DashboardAnalytics() {
             <CardTitle className="flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-fire-500" aria-hidden />
               {t('dashboard.analytics.peakHours')}
-            </CardTitle>
-            <CardDescription>
+                    </CardTitle>
+                    <CardDescription>
               {t('dashboard.analytics.peakHoursDesc', {
                 period: chartDaysLabel,
               })}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
             {isLoading || !analytics ? (
               <AnalyticsChartLoader className="h-[220px]" />
             ) : hourlyOrders.every((h) => h.orders === 0) ? (
@@ -1035,8 +1035,8 @@ export default function DashboardAnalytics() {
                   </p>
                   <p className="text-[11px] text-muted-foreground">
                     {t('dashboard.analytics.openTickets')}
-                  </p>
-                </div>
+                        </p>
+                      </div>
                 <div className="rounded-2xl bg-muted/40 p-4">
                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                     <UtensilsCrossed className="h-3.5 w-3.5" aria-hidden />
@@ -1047,8 +1047,8 @@ export default function DashboardAnalytics() {
                   </p>
                   <p className="text-[11px] text-muted-foreground">
                     {t('dashboard.analytics.openTabs')}
-                  </p>
-                </div>
+                        </p>
+                      </div>
                 <div className="rounded-2xl bg-muted/40 p-4">
                   <div className="text-xs font-medium text-muted-foreground">
                     {t('dashboard.analytics.displayQueue')}
@@ -1058,34 +1058,34 @@ export default function DashboardAnalytics() {
                   </p>
                   <p className="text-[11px] text-muted-foreground">
                     {t('dashboard.analytics.inProgress')}
-                  </p>
-                </div>
+                        </p>
+                      </div>
                 <div className="rounded-2xl bg-muted/40 p-4">
                   <div className="text-xs font-medium text-muted-foreground">
                     {t('dashboard.analytics.canceled')}
-                  </div>
+                    </div>
                   <p className="mt-2 text-2xl font-bold tabular-nums">
                     {ops?.canceledOrders ?? 0}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
                     {t('dashboard.analytics.inPeriod')}
                   </p>
-                </div>
+                    </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+                  </CardContent>
+                </Card>
 
         <Card className={cn('min-w-0', CHART_CARD)}>
-          <CardHeader>
+                  <CardHeader>
             <CardTitle>{t('dashboard.analytics.paymentMix')}</CardTitle>
-            <CardDescription>
+                    <CardDescription>
               {t('dashboard.analytics.paymentMixDesc', {
                 period: chartDaysLabel,
               })}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
             {isLoading || !analytics ? (
               <AnalyticsChartLoader className="h-[220px]" />
             ) : paymentTotal <= 0 ? (

@@ -116,12 +116,12 @@ export function useOpenTableOrders(branchId: string | null) {
   }, [branchId, mutate]);
 
   const scheduleRefresh = useCallback(() => {
-    if (document.hidden) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => {
       refreshTimerRef.current = null;
       void refresh();
-    }, 1_000);
+    }, 300);
   }, [refresh]);
 
   useRealtimeRefresh('refreshTableOrders', scheduleRefresh, {

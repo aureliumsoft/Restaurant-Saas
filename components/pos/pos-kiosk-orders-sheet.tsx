@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Loader2, Monitor, Pencil, Printer } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -68,6 +68,11 @@ export function PosKioskOrdersSheet({
   const [payOrder, setPayOrder] = useState<KioskPendingOrderRow | null>(null);
   const [paidInput, setPaidInput] = useState('');
   const [paying, setPaying] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    void refresh();
+  }, [open, refresh]);
 
   const notifyChanged = (removedOrderId: string) => {
     removeOrder(removedOrderId);

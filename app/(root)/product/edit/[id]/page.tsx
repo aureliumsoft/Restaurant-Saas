@@ -50,12 +50,15 @@ import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import { productEditPath, menuItemApiPath } from '@/lib/dashboard-paths';
 import { isEncodedUrlId } from '@/lib/url-id-shared';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 
 export default function ProductEditPage() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useParams();
   const productId = typeof params.id === 'string' ? params.id : '';
+  const uiLang = useUiLanguage();
 
   const {
     categories,
@@ -305,7 +308,9 @@ export default function ProductEditPage() {
               <CardHeader className="flex flex-col gap-4 space-y-0">
                 <div className="flex flex-row flex-wrap items-center justify-between gap-2">
                   <CardTitle className="text-lg">
-                    {item?.name ?? 'Edit product'}
+                    {item
+                      ? resolveBilingualText(item.name, uiLang) || 'Edit product'
+                      : 'Edit product'}
                   </CardTitle>
                   <Button
                     type="button"
@@ -424,7 +429,11 @@ export default function ProductEditPage() {
           open={saveConfirmOpen}
           title="Update product"
           description="Save changes to this product?"
-          itemName={form.name.trim() || item?.name || 'Product'}
+          itemName={
+            resolveBilingualText(form.name, uiLang) ||
+            (item ? resolveBilingualText(item.name, uiLang) : '') ||
+            'Product'
+          }
           loading={saving}
           onConfirm={() => void save()}
           onCancel={() => setSaveConfirmOpen(false)}

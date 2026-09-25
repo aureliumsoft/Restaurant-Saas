@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Upload } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -79,9 +80,24 @@ export function ProductCsvImportWizard({
   const [skipDuplicates, setSkipDuplicates] = useState(true);
   const [mapping, setMapping] = useState<ColumnMapping>(emptyColumnMapping());
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+
+  // Soft progress while the server processes the CSV (no streamed %).
+  useEffect(() => {
+    if (!importing) return;
+    setImportProgress(4);
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      const elapsed = Date.now() - started;
+      // Ease toward ~92% over ~45s so long imports still feel active.
+      const next = Math.min(92, Math.round(4 + (1 - Math.exp(-elapsed / 18000)) * 88));
+      setImportProgress(next);
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [importing]);
 
   const reset = () => {
     setStep(1);
@@ -93,6 +109,7 @@ export function ProductCsvImportWizard({
     setSkipDuplicates(true);
     setMapping(emptyColumnMapping());
     setImporting(false);
+    setImportProgress(0);
     setResult(null);
     setShowCancelConfirm(false);
     setShowFinishConfirm(false);
@@ -173,7 +190,10 @@ export function ProductCsvImportWizard({
 
   const runImport = async () => {
     if (!file) return;
+    setShowFinishConfirm(false);
     setImporting(true);
+    setImportProgress(4);
+    setResult(null);
     try {
       const formData = new FormData();
       formData.set('file', file);
@@ -196,11 +216,12 @@ export function ProductCsvImportWizard({
             : body.error ?? 'Import failed'
         );
       }
+      setImportProgress(100);
       setResult(body.data ?? null);
-      setShowFinishConfirm(false);
       toast.success('Import finished');
       await onImported();
     } catch (e: unknown) {
+      setImportProgress(0);
       toast.error(e instanceof Error ? e.message : 'Import failed');
     } finally {
       setImporting(false);
@@ -548,7 +569,31 @@ export function ProductCsvImportWizard({
 
             {step === 4 ? (
               <div className="space-y-4">
-                {!result ? (
+                {importing ? (
+                  <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <p className="font-medium">
+                        Importing products…
+                      </p>
+                      <span className="tabular-nums text-muted-foreground">
+                        {importProgress}%
+                      </span>
+                    </div>
+                    <Progress value={importProgress} className="h-2.5" />
+                    <p className="text-xs text-muted-foreground">
+                      Writing{' '}
+                      <strong className="text-foreground">
+                        {previewParsed?.products.length ?? totalDataRows}
+                      </strong>{' '}
+                      product(s) from{' '}
+                      <strong className="text-foreground">
+                        {file?.name ?? 'CSV'}
+                      </strong>
+                      . Keep this window open until it finishes.
+                    </p>
+                  </div>
+                ) : null}
+                {!result && !importing ? (
                   <>
                     <p className="text-sm">
                       Ready to import{' '}
@@ -578,7 +623,8 @@ export function ProductCsvImportWizard({
                       database. You will be asked to confirm.
                     </p>
                   </>
-                ) : (
+                ) : null}
+                {result ? (
                   <div className="space-y-2 rounded-lg border border-emerald-600/30 bg-emerald-500/10 p-4 text-sm">
                     <p className="font-medium text-emerald-800 dark:text-emerald-200">
                       Import complete
@@ -596,7 +642,7 @@ export function ProductCsvImportWizard({
                       <li>Recipe lines: {result.ingredients ?? 0}</li>
                     </ul>
                   </div>
-                )}
+                ) : null}
               </div>
             ) : null}
           </div>

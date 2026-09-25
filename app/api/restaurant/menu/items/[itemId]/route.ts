@@ -217,7 +217,7 @@ export async function GET(
 
 const patchSchema = z
   .object({
-    name: z.string().min(1).max(200).optional(),
+    name: z.string().min(1).max(500).optional(),
     description: z.string().max(2000).optional().nullable(),
     categoryId: z.string().uuid().optional(),
     categoryIds: z.array(z.string().uuid()).min(1).optional(),

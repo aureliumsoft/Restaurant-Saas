@@ -346,9 +346,9 @@ type RestaurantMenuApi = {
     themePrimaryColor?: string | null;
     serviceCharges?: RestaurantServiceCharges;
     menus?: Array<{
-      id: string;
-      name: string;
-      imageUrl?: string | null;
+        id: string;
+        name: string;
+        imageUrl?: string | null;
       showInFront?: boolean;
       items?: PosMenuProduct[];
     }>;
@@ -858,7 +858,7 @@ export function PosScreen({
     ];
     for (const menu of progressiveCategories) {
       next.push({
-        id: menu.id,
+            id: menu.id,
         label: resolveProductText(menu.name || 'UNNAMED').toUpperCase(),
         imageUrl: getCategoryDisplayImageUrl(menu),
         itemCount: menu.items?.length ?? 0,
@@ -871,7 +871,7 @@ export function PosScreen({
     const next: PosMenuProduct[] = [];
     for (const menu of progressiveCategories) {
       for (const item of menu.items) {
-        const base = Number(item.price);
+            const base = Number(item.price);
         const saleRaw = item.salePrice;
         const sale =
           saleRaw != null && Number.isFinite(Number(saleRaw))
@@ -880,18 +880,18 @@ export function PosScreen({
         next.push({
           ...item,
           description: item.description ?? null,
-          imageUrl: item.imageUrl ?? null,
+              imageUrl: item.imageUrl ?? null,
           price: Number.isFinite(base) ? base : 0,
           salePrice: sale,
           categoryId: menu.id,
           attributeGroups: item.attributeGroups ?? [],
-          variations: (item.variations ?? []).map((v) => ({
+              variations: (item.variations ?? []).map((v) => ({
             ...v,
-            priceDelta: Number(v.priceDelta ?? 0),
-          })),
-        });
-      }
-    }
+                priceDelta: Number(v.priceDelta ?? 0),
+              })),
+            });
+          }
+        }
     return next;
   }, [progressiveCategories]);
 
@@ -916,9 +916,9 @@ export function PosScreen({
       if (!res.ok) throw new Error('Failed to load');
       const json = (await res.json()) as { data?: PosPendingKitchenOrder[] };
       setPendingKitchenOrders(json.data ?? []);
-    } catch {
+      } catch {
       setPendingKitchenOrders([]);
-    } finally {
+      } finally {
       setLoadingPendingKitchen(false);
     }
   }, [selectedBranchId, activeBranchId, activeBranchUrlId, scopedBranches]);
@@ -1020,7 +1020,7 @@ export function PosScreen({
 
   useEffect(() => {
     const list = scopedBranches.map((b) => ({ id: b.id, name: b.name }));
-    setBranches(list);
+        setBranches(list);
     setSelectedBranchId((prev) => prev || list[0]?.id || activeBranchId || '');
   }, [scopedBranches, activeBranchId]);
 
@@ -1621,7 +1621,7 @@ export function PosScreen({
           ? 'Card'
           : receiptMode === 'split'
             ? 'Split'
-            : receiptMode.charAt(0).toUpperCase() + receiptMode.slice(1);
+        : receiptMode.charAt(0).toUpperCase() + receiptMode.slice(1);
 
     const ok = printPosOrderReceipt({
       orderRef,
@@ -1860,9 +1860,9 @@ export function PosScreen({
         imageUrl: product.imageUrl ?? null,
 
         baseUnitPrice,
-        unitPrice,
-        qty: 1,
-        lineDiscPct: 0,
+          unitPrice,
+          qty: 1,
+          lineDiscPct: 0,
         variationId,
         variationName: variation?.name
           ? resolveProductText(variation.name)
@@ -1906,8 +1906,8 @@ export function PosScreen({
           setCustomizeProduct(null);
           setCustomizeLoading(false);
           toast.error('Could not load product configuration.');
-          return;
-        }
+      return;
+    }
         setCustomizeProduct({
           ...full,
           categoryId: p.categoryId,
@@ -2285,7 +2285,7 @@ export function PosScreen({
           `Kitchen ticket saved offline · ${minutes} min (will sync when online)`
         );
       } else {
-        toast.success(`Order sent to kitchen · ${minutes} min prep`);
+      toast.success(`Order sent to kitchen · ${minutes} min prep`);
       }
       resetKitchenSendDialog();
       void loadPendingKitchenOrders();
@@ -2647,19 +2647,19 @@ export function PosScreen({
       return;
     }
     if (!isEditingKiosk) {
-      if (nameTrim && !phoneTrim) {
-        toast.warn(
-          'Enter customer phone to save customer details, or clear the name.'
-        );
-        return;
-      }
-      if (isTableMode && !tableTrim) {
-        toast.warn('Select a table for table orders.');
-        return;
-      }
-      if (isDeliveryMode && (!addressTrim || !phoneTrim)) {
-        toast.warn('Delivery requires customer phone and address.');
-        return;
+    if (nameTrim && !phoneTrim) {
+      toast.warn(
+        'Enter customer phone to save customer details, or clear the name.'
+      );
+      return;
+    }
+    if (isTableMode && !tableTrim) {
+      toast.warn('Select a table for table orders.');
+      return;
+    }
+    if (isDeliveryMode && (!addressTrim || !phoneTrim)) {
+      toast.warn('Delivery requires customer phone and address.');
+      return;
       }
     }
     setSavingOrder(true);
@@ -2676,7 +2676,7 @@ export function PosScreen({
         ? grandTotal.toFixed(2)
         : isTableOpenCheck
           ? (effectivePayment.trim() || grandTotal.toFixed(2))
-          : effectivePayment.trim();
+        : effectivePayment.trim();
       const orderPayload = {
         grandTotal,
         payment: paymentAmount,
@@ -2922,7 +2922,7 @@ export function PosScreen({
         if (finalStatus !== 'completed') {
           toast.error(
             terminalMessage ||
-            'Card terminal payment was not approved. Order remains pending.'
+              'Card terminal payment was not approved. Order remains pending.'
           );
           return;
         }
@@ -2938,9 +2938,9 @@ export function PosScreen({
       );
       if (!isTableOpenCheck) {
         printOrderReceipt(trackingId, ticketNumber, {
-          mode: effectivePaymentMode,
-          paid: Number(paymentAmount) || 0,
-        });
+        mode: effectivePaymentMode,
+        paid: Number(paymentAmount) || 0,
+      });
       }
 
       const branchId = selectedBranchId || activeBranchId || '';
@@ -2975,13 +2975,12 @@ export function PosScreen({
             }
           : null;
 
-      // Non-table: keep sales/inventory/working refresh. Table path uses optimistic cache.
-      if (!isTableOpenCheck) {
+      // Always refresh POS sheets (recent / working / table / inventory).
       eventBus.emit('refreshSalesOrders');
-        eventBus.emit('refreshRecentOrders');
-        eventBus.emit('refreshWorkingOrders');
-        eventBus.emit('realtime:inventory.stock');
-      }
+      eventBus.emit('refreshRecentOrders');
+      eventBus.emit('refreshWorkingOrders');
+      eventBus.emit('refreshTableOrders');
+      eventBus.emit('realtime:inventory.stock');
 
       const resetAfterPlace = () => {
       clearCart();
@@ -3046,8 +3045,8 @@ export function PosScreen({
           shortOrderId: trackingId,
           ticketNumber,
           items: kitchenItemsForDialog,
-        });
-        void loadPendingKitchenOrders();
+      });
+      void loadPendingKitchenOrders();
           } else {
             toast.success('Order placed successfully.');
           }
@@ -3531,11 +3530,11 @@ export function PosScreen({
                 categories.map((c) => {
                   const isActive = activeCategoryPillId === c.id;
                   return (
-                  <button
-                    key={c.id}
-                    type="button"
+                <button
+                  key={c.id}
+                  type="button"
                     data-pos-category-pill={c.id}
-                    className={cn(
+                  className={cn(
                       'inline-flex h-10 max-w-[11rem] shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-left text-xs font-semibold tracking-tight transition-colors sm:max-w-[12rem]',
                       isActive ? POS_CATEGORY_ACTIVE : POS_CATEGORY_INACTIVE
                     )}
@@ -3563,7 +3562,7 @@ export function PosScreen({
                       </span>
                     )}
                     <span className="min-w-0 truncate leading-none">{c.label}</span>
-                  </button>
+                </button>
                   );
                 })
               )}
@@ -3668,7 +3667,7 @@ export function PosScreen({
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     {t('pos.backToAllProducts')}
                   </Button>
-                </div>
+                    </div>
               ) : null}
             </div>
           </ScrollArea>
@@ -3762,7 +3761,7 @@ export function PosScreen({
                     Cancel
                   </Button>
                 ) : null}
-              </div>
+                </div>
               <div className="flex items-center gap-1 rounded-xl bg-muted/60 p-1">
                 {fulfillmentSettings.dineInEnabled ? (
                 <Select
@@ -3819,18 +3818,18 @@ export function PosScreen({
                 {modeButtons
                   .filter((b) => b.id !== 'tables')
                   .map((b) => {
-                  const active = orderMode === b.id;
-                  const Icon = b.icon;
-                  return (
-                    <button
-                      key={b.id}
-                      type="button"
+              const active = orderMode === b.id;
+              const Icon = b.icon;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
                         title={b.label}
                         aria-label={b.label}
                         aria-pressed={active}
-                      className={cn(
+                  className={cn(
                           'flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-all',
-                        active
+                    active
                             ? 'min-w-0 flex-[1.6] bg-fire-500 px-2.5 text-white shadow-sm shadow-fire-500/25'
                             : 'w-9 shrink-0 text-muted-foreground hover:bg-background/50 hover:text-foreground'
                       )}
@@ -3840,10 +3839,10 @@ export function PosScreen({
                         {active ? (
                       <span className="truncate">{b.label}</span>
                         ) : null}
-                    </button>
-                  );
-                })}
-              </div>
+                </button>
+              );
+            })}
+          </div>
             </div>
           )}
 
@@ -4482,13 +4481,13 @@ export function PosScreen({
                           {t('pos.tapItemsToAdd')}
                       </p>
                     </div>
-                  ) : (
-                    cart.map((line) => {
+                ) : (
+                  cart.map((line) => {
                       const gross = lineUnitTotal(line) * line.qty;
-                      const discAmt = gross * (line.lineDiscPct / 100);
-                      const lineTotal = gross - discAmt;
-                      return (
-                        <div
+                    const discAmt = gross * (line.lineDiscPct / 100);
+                    const lineTotal = gross - discAmt;
+                    return (
+                      <div
                           key={line.lineId}
                             className="rounded-xl px-1.5 py-2 hover:bg-muted/40"
                         >
@@ -4516,13 +4515,13 @@ export function PosScreen({
                             </div>
                               <p className="shrink-0 text-sm font-bold tabular-nums">
                               {formatMoney(lineTotal)}
-                            </p>
-                          </div>
+                          </p>
+                        </div>
                             <div className="mt-1.5 flex items-center gap-1 pl-12">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
                               className={cn(
                                   'h-7 w-7 rounded-lg',
                                 POS_OUTLINE_BTN
@@ -4530,16 +4529,16 @@ export function PosScreen({
                                 onClick={() =>
                                   setQty(line.lineId, line.qty - 1)
                                 }
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
                               <span className="w-6 text-center text-xs font-semibold tabular-nums">
-                              {line.qty}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
+                            {line.qty}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
                               className={cn(
                                   'h-7 w-7 rounded-lg',
                                 POS_OUTLINE_BTN
@@ -4547,29 +4546,29 @@ export function PosScreen({
                                 onClick={() =>
                                   setQty(line.lineId, line.qty + 1)
                                 }
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
                                 className="ml-auto h-7 w-7 rounded-lg text-destructive hover:bg-destructive/10"
-                              onClick={() =>
-                                setCart((prev) =>
+                            onClick={() =>
+                              setCart((prev) =>
                                   prev.filter((l) => l.lineId !== line.lineId)
-                                )
-                              }
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
+                              )
+                            }
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              </ScrollArea>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
             </div>
 
               <div className="shrink-0 space-y-2 px-3 py-3 sm:px-4">
@@ -4602,35 +4601,35 @@ export function PosScreen({
                   {formatMoney(grandTotal)}
                         </p>
               </div>
-            </div>
+              </div>
                     {adjustOpen ? (
                       <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/40 p-2">
-              <div className="space-y-1">
+            <div className="space-y-1">
                           <label className="text-[10px] text-muted-foreground">
-                  Tax %
-                </label>
-                <Input
+                Tax %
+              </label>
+              <Input
                             className={cn(
                               'h-8 rounded-lg text-xs',
                               POS_INPUT_CLASS
                             )}
-                  value={taxPct}
-                  onChange={(e) => setTaxPct(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
+                value={taxPct}
+                onChange={(e) => setTaxPct(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
                           <label className="text-[10px] text-muted-foreground">
-                  Discount %
-                </label>
-                <Input
+                Discount %
+              </label>
+              <Input
                             className={cn(
                               'h-8 rounded-lg text-xs',
                               POS_INPUT_CLASS
                             )}
-                  value={disPct}
-                  onChange={(e) => setDisPct(e.target.value)}
-                />
-              </div>
+                value={disPct}
+                onChange={(e) => setDisPct(e.target.value)}
+              />
+            </div>
                         {(taxAmount > 0 ||
                           disAmount > 0 ||
                           activeServiceChargeAmount > 0) && (
@@ -4640,7 +4639,7 @@ export function PosScreen({
                               <span className="tabular-nums">
                                 {formatMoney(subtotal)}
                               </span>
-            </div>
+          </div>
                             {taxAmount > 0 ? (
                               <div className="flex justify-between">
                                 <span>Tax</span>
@@ -4686,19 +4685,19 @@ export function PosScreen({
               >
                     <Trash2 className="h-4 w-4" />
               </Button>
-              <Button
-                type="button"
+                <Button
+                  type="button"
                     variant="ghost"
                     size="icon"
                     className="h-11 w-11 shrink-0 rounded-xl"
-                disabled={
-                  cart.length === 0 || savingOrder || terminalProcessing
-                }
+                  disabled={
+                    cart.length === 0 || savingOrder || terminalProcessing
+                  }
                     title="Hold order"
-                onClick={holdCurrentOrder}
-              >
+                  onClick={holdCurrentOrder}
+                >
                     <Clock className="h-4 w-4" />
-              </Button>
+                </Button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -4710,12 +4709,12 @@ export function PosScreen({
                   <Archive className="h-4 w-4" />
                   {archivedOrders.length > 0 ? (
                       <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
-                      {archivedOrders.length}
-                    </span>
+                    {archivedOrders.length}
+                  </span>
                   ) : null}
                 </Button>
-            <Button
-              type="button"
+                <Button
+                  type="button"
               className={cn(
                       'flex h-11 min-w-0 flex-1 items-center justify-between rounded-xl px-3 text-sm font-semibold',
                 POS_ACCENT_BTN
@@ -4724,7 +4723,7 @@ export function PosScreen({
                   cart.length === 0 || savingOrder || terminalProcessing
                 }
               ref={proceedOrderButtonRef}
-              onClick={() => {
+                onClick={() => {
                       if (!canProceedWithOrderMode()) return;
                       if (!requireActiveShift()) return;
                 resetCardPayment();
@@ -4732,7 +4731,7 @@ export function PosScreen({
                       setAmountPaid(
                         isEditingKioskOrder ? grandTotal.toFixed(2) : ''
                       );
-                setCheckoutOpen(true);
+                  setCheckoutOpen(true);
                       if (tablePayOnLeave) {
                         setTableCheckoutPrepMinutes(15);
                         setTableCheckoutCustomMinutes('');
@@ -4758,12 +4757,12 @@ export function PosScreen({
                     <span className="tabular-nums">
                       {formatMoney(grandTotal)}
                     </span>
-            </Button>
+              </Button>
+            </div>
           </div>
-        </div>
             </>
           )}
-      </div>
+        </div>
       </div>
 
       <AlertDialog
@@ -5064,7 +5063,7 @@ export function PosScreen({
                       disabled={sendingToKitchen}
                       variant={
                         kitchenPrepMinutes[kitchenSendOrder.id] === m &&
-                          !kitchenCustomMinutes.trim()
+                        !kitchenCustomMinutes.trim()
                           ? 'default'
                           : 'outline'
                       }
@@ -5326,6 +5325,6 @@ export function PosScreen({
         onLogoutOnly={handleLogoutOnly}
         onEndShiftAndLogout={handleLogoutEndShift}
       />
-    </div>
+          </div>
   );
 }

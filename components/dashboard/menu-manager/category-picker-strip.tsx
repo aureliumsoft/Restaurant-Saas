@@ -47,17 +47,28 @@ export function CategoryPickerStrip({
 
   const filteredCategories = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return categories;
-    return categories.filter((category) => {
-      const haystack = [
-        resolveBilingualText(category.name, 'en'),
-        resolveBilingualText(category.name, 'es'),
-      ]
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [categories, search]);
+    const matched = !q
+      ? categories
+      : categories.filter((category) => {
+          const haystack = [
+            resolveBilingualText(category.name, 'en'),
+            resolveBilingualText(category.name, 'es'),
+          ]
+            .join(' ')
+            .toLowerCase();
+          return haystack.includes(q);
+        });
+
+    // Selected first (preserve selection order), then the rest.
+    const selectedSet = new Set(selectedIds);
+    const selected: CategoryPickerItem[] = [];
+    for (const id of selectedIds) {
+      const row = matched.find((c) => c.id === id);
+      if (row) selected.push(row);
+    }
+    const rest = matched.filter((c) => !selectedSet.has(c.id));
+    return [...selected, ...rest];
+  }, [categories, search, selectedIds]);
 
   const visibleIdsKey = filteredCategories.map((c) => c.id).join(',');
 

@@ -26,7 +26,6 @@ import {
 } from '@/lib/menu/bilingual-text';
 import {
   filterDecimalInput,
-  filterNameTextInput,
 } from '@/lib/validation/fields';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useUiLanguage } from '@/hooks/use-ui-language';
@@ -302,9 +301,7 @@ export function ProductFormFields({
           inputMode="text"
           autoComplete="off"
           value={form.name}
-          onChange={(e) =>
-            onFormChange({ name: filterNameTextInput(e.target.value) })
-          }
+          onChange={(e) => onFormChange({ name: e.target.value })}
           placeholder={`English name ${'&&&&'} Spanish name`}
           required={showRequired}
           aria-required={showRequired || undefined}
@@ -842,17 +839,21 @@ export function ProductFormSkeleton() {
   );
 }
 
-/** Keep selected category ids visible while paginated catalog still loads. */
+/** Keep selected category ids visible while paginated catalog still loads.
+ * Selected categories appear first (in selection order), then the rest. */
 export function categoriesWithSelectedIds(
   categories: MenuCategoryRow[],
   selectedIds: string[]
 ): MenuCategoryRow[] {
-  if (selectedIds.length === 0) return categories;
   const byId = new Map(categories.map((c) => [c.id, c]));
-  const merged = [...categories];
+  const selectedSet = new Set(selectedIds);
+  const selected: MenuCategoryRow[] = [];
   for (const id of selectedIds) {
-    if (!byId.has(id)) {
-      merged.push({
+    const existing = byId.get(id);
+    if (existing) {
+      selected.push(existing);
+    } else {
+      selected.push({
         id,
         name: 'Category',
         imageUrl: null,
@@ -862,5 +863,6 @@ export function categoriesWithSelectedIds(
       });
     }
   }
-  return merged;
+  const rest = categories.filter((c) => !selectedSet.has(c.id));
+  return [...selected, ...rest];
 }

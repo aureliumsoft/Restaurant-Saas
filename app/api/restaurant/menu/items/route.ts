@@ -14,7 +14,7 @@ import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 
 const createSchema = z
   .object({
-    name: z.string().min(1, "Name is required").max(200),
+    name: z.string().min(1, "Name is required").max(500),
     description: z.string().max(2000).optional().nullable(),
     categoryId: z.string().uuid().optional(),
     categoryIds: z.array(z.string().uuid()).min(1).optional(),

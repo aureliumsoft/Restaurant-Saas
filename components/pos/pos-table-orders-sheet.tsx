@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import {
   Banknote,
@@ -144,7 +144,7 @@ export function PosTableOrdersSheet({
   );
   const [cancellingOrder, setCancellingOrder] = useState(false);
 
-  const [kitchenOrder, setKitchenOrder] = useState<OpenTableOrderRow | null>(
+  const [kitchenOrders, setKitchenOrders] = useState<OpenTableOrderRow[] | null>(
     null
   );
   const [kitchenPrepMinutes, setKitchenPrepMinutes] = useState(15);
@@ -156,6 +156,11 @@ export function PosTableOrdersSheet({
 
   const anyBusy =
     busyOrderId != null || paying || sendingToKitchen || cancellingOrder;
+
+  useEffect(() => {
+    if (!open) return;
+    void refresh();
+  }, [open, refresh]);
 
   const toggleTicketExpanded = (orderId: string) => {
     setExpandedTicketIds((prev) => {
@@ -171,6 +176,8 @@ export function PosTableOrdersSheet({
     confirmInBackground();
     window.setTimeout(() => {
       eventBus.emit('refreshRecentOrders');
+      eventBus.emit('refreshWorkingOrders');
+      eventBus.emit('refreshTableOrders');
       onOrdersChanged?.();
     }, 0);
   };
@@ -215,19 +222,20 @@ export function PosTableOrdersSheet({
     }
   };
 
-  const openKitchenDialog = (order: OpenTableOrderRow) => {
-    if (order.kitchenSent) {
-      toast.info('This order is already in the kitchen.');
+  const openKitchenDialog = (orders: OpenTableOrderRow[]) => {
+    const held = orders.filter((o) => !o.kitchenSent);
+    if (held.length === 0) {
+      toast.info('All tickets are already in the kitchen.');
       return;
     }
-    setKitchenOrder(order);
+    setKitchenOrders(held);
     setKitchenPrepMinutes(15);
     setKitchenCustomMinutes('');
   };
 
   const closeKitchenDialog = () => {
     if (sendingToKitchen) return;
-    setKitchenOrder(null);
+    setKitchenOrders(null);
     setKitchenCustomMinutes('');
   };
 
@@ -252,16 +260,31 @@ export function PosTableOrdersSheet({
   };
 
   const handleSendKitchenConfirm = async () => {
-    if (!kitchenOrder) return;
+    if (!kitchenOrders?.length) return;
     if (!fulfillmentSettings.kdsEnabled) {
       setSendingToKitchen(true);
       try {
-        await axios.post(`/api/restaurant/pos-order/${encodeURIComponent(kitchenOrder.id)}/complete`);
-        toast.success('Order completed.');
-        setKitchenOrder(null);
+        await Promise.all(
+          kitchenOrders.map((order) =>
+            axios.post(
+              `/api/restaurant/pos-order/${encodeURIComponent(order.id)}/complete`
+            )
+          )
+        );
+        toast.success(
+          kitchenOrders.length === 1
+            ? 'Order completed.'
+            : `${kitchenOrders.length} orders completed.`
+        );
+        for (const order of kitchenOrders) {
+          markOpenTableOrderKitchenSent(branchId, order.id);
+        }
+        setKitchenOrders(null);
         setKitchenCustomMinutes('');
-        markOpenTableOrderKitchenSent(branchId, kitchenOrder.id);
         confirmInBackground();
+        eventBus.emit('refreshRecentOrders');
+        eventBus.emit('refreshWorkingOrders');
+        eventBus.emit('refreshTableOrders');
         onOrdersChanged?.();
       } catch (error) {
         toast.error(apiErrorMessage(error, 'Could not complete order.'));
@@ -277,20 +300,27 @@ export function PosTableOrdersSheet({
     setSendingToKitchen(true);
     try {
       await axios.post('/api/restaurant/table-orders/send-kitchen', {
-        orderIds: [kitchenOrder.id],
+        orderIds: kitchenOrders.map((o) => o.id),
         selectedMinutes: minutes,
       });
       toast.success(
-        `Sent to kitchen · ${minutes} min · ${
-          kitchenOrder.ticketNumber != null
-            ? `ticket #${String(kitchenOrder.ticketNumber).padStart(2, '0')}`
-            : kitchenOrder.shortOrderId
-        }`
+        kitchenOrders.length === 1
+          ? `Sent to kitchen · ${minutes} min · ${
+              kitchenOrders[0].ticketNumber != null
+                ? `ticket #${String(kitchenOrders[0].ticketNumber).padStart(2, '0')}`
+                : kitchenOrders[0].shortOrderId
+            }`
+          : `Sent ${kitchenOrders.length} tickets to kitchen · ${minutes} min`
       );
-      setKitchenOrder(null);
+      for (const order of kitchenOrders) {
+        markOpenTableOrderKitchenSent(branchId, order.id);
+      }
+      setKitchenOrders(null);
       setKitchenCustomMinutes('');
-      markOpenTableOrderKitchenSent(branchId, kitchenOrder.id);
       confirmInBackground();
+      eventBus.emit('refreshRecentOrders');
+      eventBus.emit('refreshWorkingOrders');
+      eventBus.emit('refreshTableOrders');
       onOrdersChanged?.();
     } catch (error) {
       toast.error(apiErrorMessage(error, 'Could not send to kitchen.'));
@@ -567,7 +597,9 @@ export function PosTableOrdersSheet({
                           const orderBusy =
                             busyOrderId === order.id ||
                             (sendingToKitchen &&
-                              kitchenOrder?.id === order.id);
+                              Boolean(
+                                kitchenOrders?.some((o) => o.id === order.id)
+                              ));
                           const kitchen = kitchenTone(order);
                           const unpaid = isUnpaid(order);
                           const expanded = expandedTicketIds.has(order.id);
@@ -625,23 +657,6 @@ export function PosTableOrdersSheet({
                                 </button>
 
                                 <div className="flex shrink-0 items-center gap-1 pt-0.5">
-                                  {!order.kitchenSent ? (
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      variant="outline"
-                                      className="h-8 w-8 rounded-lg"
-                                      title={fulfillmentSettings.kdsEnabled ? "Send to kitchen" : "Complete order"}
-                                      disabled={anyBusy || orderBusy}
-                                      onClick={() => openKitchenDialog(order)}
-                                    >
-                                      {fulfillmentSettings.kdsEnabled ? (
-                                        <ChefHat className="h-3.5 w-3.5" />
-                                      ) : (
-                                        <Check className="h-3.5 w-3.5 text-emerald-600" />
-                                      )}
-                                    </Button>
-                                  ) : null}
                                   <Button
                                     type="button"
                                     size="icon"
@@ -689,30 +704,52 @@ export function PosTableOrdersSheet({
                       </ul>
 
                       <div className="border-t border-border/40 px-3 py-2.5">
-                        {card.totalDue > 0 ? (
+                        {card.kitchenPendingCount > 0 ? (
                           <div className="space-y-1.5">
-                            {card.kitchenPendingCount > 0 ? (
+                            {card.totalDue > 0 ? (
                               <p className="text-center text-[11px] text-amber-700 dark:text-amber-300">
                                 Send {card.kitchenPendingCount} held ticket
                                 {card.kitchenPendingCount === 1 ? '' : 's'} before
                                 paying
                               </p>
-                            ) : null}
+                            ) : (
+                              <p className="text-center text-[11px] text-muted-foreground">
+                                Paid — send {card.kitchenPendingCount} held
+                                ticket
+                                {card.kitchenPendingCount === 1 ? '' : 's'} when
+                                ready
+                              </p>
+                            )}
                             <Button
                               type="button"
                               className="h-11 w-full rounded-xl text-sm font-semibold"
-                              disabled={anyBusy || !canPay}
-                              onClick={() => openPay(card)}
+                              disabled={anyBusy}
+                              onClick={() => openKitchenDialog(card.orders)}
                             >
-                              <Banknote className="mr-2 h-4 w-4" />
-                              Pay {formatMoney(card.totalDue)}
+                              <ChefHat className="mr-2 h-4 w-4" />
+                              {fulfillmentSettings.kdsEnabled
+                                ? `Send to kitchen${
+                                    card.kitchenPendingCount > 1
+                                      ? ` (${card.kitchenPendingCount})`
+                                      : ''
+                                  }`
+                                : `Complete order${
+                                    card.kitchenPendingCount > 1
+                                      ? ` (${card.kitchenPendingCount})`
+                                      : ''
+                                  }`}
                             </Button>
                           </div>
-                        ) : card.kitchenPendingCount > 0 ? (
-                          <p className="text-center text-xs text-muted-foreground">
-                            Paid — send {card.kitchenPendingCount} held ticket
-                            {card.kitchenPendingCount === 1 ? '' : 's'} when ready
-                          </p>
+                        ) : card.totalDue > 0 ? (
+                          <Button
+                            type="button"
+                            className="h-11 w-full rounded-xl text-sm font-semibold"
+                            disabled={anyBusy || !canPay}
+                            onClick={() => openPay(card)}
+                          >
+                            <Banknote className="mr-2 h-4 w-4" />
+                            Pay {formatMoney(card.totalDue)}
+                          </Button>
                         ) : (
                           <p className="text-center text-xs text-emerald-700 dark:text-emerald-300">
                             All tickets paid and in kitchen
@@ -768,7 +805,7 @@ export function PosTableOrdersSheet({
       />
 
       <Dialog
-        open={kitchenOrder != null}
+        open={kitchenOrders != null}
         onOpenChange={(next) => {
           if (!next) closeKitchenDialog();
         }}
@@ -785,22 +822,31 @@ export function PosTableOrdersSheet({
           <DialogHeader>
             <DialogTitle>Send to kitchen</DialogTitle>
           </DialogHeader>
-          {kitchenOrder ? (
+          {kitchenOrders?.length ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Choose prep time to show this ticket on the kitchen display.
-                Payment stays pending until the table is paid.
+                Choose prep time to show{' '}
+                {kitchenOrders.length === 1
+                  ? 'this ticket'
+                  : `these ${kitchenOrders.length} tickets`}{' '}
+                on the kitchen display. Payment stays pending until the table is
+                paid.
               </p>
               <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
                 <p className="font-medium">
-                  Order{' '}
-                  {kitchenOrder.ticketNumber != null
-                    ? `#${String(kitchenOrder.ticketNumber).padStart(2, '0')}`
-                    : kitchenOrder.shortOrderId}
+                  {kitchenOrders.length === 1
+                    ? `Order ${
+                        kitchenOrders[0].ticketNumber != null
+                          ? `#${String(kitchenOrders[0].ticketNumber).padStart(2, '0')}`
+                          : kitchenOrders[0].shortOrderId
+                      }`
+                    : `${kitchenOrders.length} held tickets`}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Table {kitchenOrder.tableLabel ?? '—'} ·{' '}
-                  {kitchenOrder.shortOrderId}
+                  Table {kitchenOrders[0].tableLabel ?? '—'}
+                  {kitchenOrders.length === 1
+                    ? ` · ${kitchenOrders[0].shortOrderId}`
+                    : null}
                 </p>
               </div>
               <div className="space-y-2">
@@ -851,7 +897,7 @@ export function PosTableOrdersSheet({
             </Button>
             <Button
               type="button"
-              disabled={sendingToKitchen || !kitchenOrder}
+              disabled={sendingToKitchen || !kitchenOrders?.length}
               onClick={() => void handleSendKitchenConfirm()}
             >
               {sendingToKitchen ? (
@@ -862,7 +908,9 @@ export function PosTableOrdersSheet({
               ) : (
                 <>
                   <Check className="mr-2 h-4 w-4" />
-                  {fulfillmentSettings.kdsEnabled ? 'Proceed to kitchen' : 'Complete order'}
+                  {fulfillmentSettings.kdsEnabled
+                    ? 'Proceed to kitchen'
+                    : 'Complete order'}
                 </>
               )}
             </Button>
