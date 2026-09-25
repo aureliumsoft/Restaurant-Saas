@@ -1,4 +1,5 @@
 import type { UiLanguage } from '@/lib/i18n/resources';
+import { resources } from '@/lib/i18n/resources';
 
 export const BILINGUAL_SEPARATOR = '&&&&';
 
@@ -123,6 +124,24 @@ export function bilingualInputFromStored(raw: unknown): string {
   return bilingualInputFromParts(parseStoredBilingualText(raw));
 }
 
+function resourceTemplate(
+  lang: UiLanguage,
+  key: string,
+  vars?: Record<string, string>
+): string {
+  const translation = resources[lang]?.translation as unknown as
+    | Record<string, unknown>
+    | undefined;
+  const raw = translation?.[key];
+  let template = typeof raw === 'string' ? raw : key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      template = template.replaceAll(`{{${k}}}`, v);
+    }
+  }
+  return template;
+}
+
 /**
  * Build a bilingual "Choose …" style title from a stored bilingual subject
  * (category/product name). Persists as JSON `{en,es}`.
@@ -136,19 +155,31 @@ export function serializeBilingualChooseTitle(
   const esName = subject.es || subject.en;
   if (mode === 'addons') {
     return serializeBilingualText({
-      en: enName ? `Choose add-ons (${enName})` : 'Choose add-ons',
-      es: esName ? `Choose add-ons (${esName})` : 'Choose add-ons',
+      en: enName
+        ? resourceTemplate('en', 'customizeChooseAddonsNamed', { name: enName })
+        : resourceTemplate('en', 'customizeChooseAddons'),
+      es: esName
+        ? resourceTemplate('es', 'customizeChooseAddonsNamed', { name: esName })
+        : resourceTemplate('es', 'customizeChooseAddons'),
     });
   }
   if (mode === 'chooseFrom') {
     return serializeBilingualText({
-      en: enName ? `Choose from ${enName}` : 'Choose from options',
-      es: esName ? `Choose from ${esName}` : 'Choose from options',
+      en: enName
+        ? resourceTemplate('en', 'customizeChooseFrom', { name: enName })
+        : resourceTemplate('en', 'customizeChooseFromOptions'),
+      es: esName
+        ? resourceTemplate('es', 'customizeChooseFrom', { name: esName })
+        : resourceTemplate('es', 'customizeChooseFromOptions'),
     });
   }
   return serializeBilingualText({
-    en: enName ? `Choose ${enName}` : 'Recommended',
-    es: esName ? `Choose ${esName}` : 'Recommended',
+    en: enName
+      ? resourceTemplate('en', 'customizeChoose', { name: enName })
+      : resourceTemplate('en', 'recommended'),
+    es: esName
+      ? resourceTemplate('es', 'customizeChoose', { name: esName })
+      : resourceTemplate('es', 'recommended'),
   });
 }
 
@@ -168,7 +199,11 @@ export function serializeBilingualChooseAddonsTitle(
   const enList = enParts.join(', ');
   const esList = esParts.join(', ') || enList;
   return serializeBilingualText({
-    en: enList ? `Choose add-ons (${enList})` : 'Choose add-ons',
-    es: esList ? `Choose add-ons (${esList})` : 'Choose add-ons',
+    en: enList
+      ? resourceTemplate('en', 'customizeChooseAddonsNamed', { name: enList })
+      : resourceTemplate('en', 'customizeChooseAddons'),
+    es: esList
+      ? resourceTemplate('es', 'customizeChooseAddonsNamed', { name: esList })
+      : resourceTemplate('es', 'customizeChooseAddons'),
   });
 }

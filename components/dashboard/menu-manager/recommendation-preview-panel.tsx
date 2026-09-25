@@ -17,6 +17,7 @@ import {
 } from '@/lib/menu/configuration-variation-price';
 import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { recommendationGroupDisplayLabel } from '@/lib/cart-line-display';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   isPreviewGroupVisibleForParentVariation,
@@ -627,7 +628,10 @@ function PreviewGroupCard({
           uiLang
         ) || null
       : null;
-  const resolvedGroupName = resolveBilingualText(group.name, uiLang);
+  const resolvedGroupName = recommendationGroupDisplayLabel(
+    group.name,
+    uiLang
+  );
   const groupTitle =
     defaultVariationLabel && !useVariationPricing
       ? `${resolvedGroupName} ${defaultVariationLabel}`

@@ -84,6 +84,9 @@ export async function GET(req: NextRequest) {
           imageUrl: true,
           showInFront: true,
           sortOrder: true,
+          hiddenBranches: {
+            select: { branchId: true },
+          },
           _count: {
             select: {
               itemLinks: true,
@@ -102,7 +105,7 @@ export async function GET(req: NextRequest) {
               name: c.name,
               imageUrl: c.imageUrl,
               showInFront: c.showInFront,
-              hiddenBranchIds: [],
+              hiddenBranchIds: c.hiddenBranches.map((h) => h.branchId),
               sortOrder: c.sortOrder,
               itemCount: Math.max(c._count.itemLinks, c._count.items),
               items: [],

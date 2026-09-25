@@ -160,25 +160,36 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const { hiddenBranchIds, ...categoryData } = data;
     const updated = await db.$transaction(async (tx) => {
-      const category = await tx.menuCategory.update({
-        where: { id: trimmed },
-        data: categoryData,
-        select: {
-          id: true,
-          name: true,
-          imageUrl: true,
-          showInFront: true,
-          sortOrder: true,
-        },
-      });
+      const category =
+        Object.keys(categoryData).length > 0
+          ? await tx.menuCategory.update({
+              where: { id: trimmed },
+              data: categoryData,
+              select: {
+                id: true,
+                name: true,
+                imageUrl: true,
+                showInFront: true,
+                sortOrder: true,
+              },
+            })
+          : await tx.menuCategory.findUniqueOrThrow({
+              where: { id: trimmed },
+              select: {
+                id: true,
+                name: true,
+                imageUrl: true,
+                showInFront: true,
+                sortOrder: true,
+              },
+            });
 
-      if (hiddenBranchIds !== undefined && 'menuCategoryHiddenBranch' in tx) {
-        const branchDelegate = (tx as Record<string, any>).menuCategoryHiddenBranch;
-        await branchDelegate.deleteMany({
+      if (hiddenBranchIds !== undefined) {
+        await tx.menuCategoryHiddenBranch.deleteMany({
           where: { categoryId: trimmed },
         });
         if (hiddenBranchIds.length > 0) {
-          await branchDelegate.createMany({
+          await tx.menuCategoryHiddenBranch.createMany({
             data: hiddenBranchIds.map((branchId: string) => ({
               categoryId: trimmed,
               branchId,
@@ -187,7 +198,15 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         }
       }
 
-      return category;
+      const hidden = await tx.menuCategoryHiddenBranch.findMany({
+        where: { categoryId: trimmed },
+        select: { branchId: true },
+      });
+
+      return {
+        ...category,
+        hiddenBranchIds: hidden.map((h) => h.branchId),
+      };
     });
 
     return NextResponse.json({ data: updated }, { status: 200 });

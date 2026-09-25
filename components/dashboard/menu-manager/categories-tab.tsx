@@ -88,7 +88,11 @@ export function CategoriesTab({
 }: Props) {
   const { t } = useTranslation();
   const uiLang = useUiLanguage();
-  const { activeBranchId, branches, loading: branchesLoading } = useBranchContext();
+  const {
+    activeBranchId,
+    branches,
+    loading: branchesLoading,
+  } = useBranchContext();
   const [createOpen, setCreateOpen] = useState(false);
   const [searchDraft, setSearchDraft] = useState(appliedSearch);
   const [deleting, setDeleting] = useState(false);
@@ -231,7 +235,8 @@ export function CategoriesTab({
             toggling={togglingId === c.id}
             activeBranchId={activeBranchId}
             activeBranchName={
-              branches.find((branch) => branch.id === activeBranchId)?.name ?? null
+              branches.find((branch) => branch.id === activeBranchId)?.name ??
+              null
             }
             branchesLoading={branchesLoading}
             onRename={rename}
@@ -398,8 +403,7 @@ function CategoryCard({
 
     const nextImage = imageVal.trim();
     const currentImage = (category.imageUrl ?? '').trim();
-    const nameChanged =
-      nextName !== bilingualInputFromStored(category.name);
+    const nameChanged = nextName !== bilingualInputFromStored(category.name);
     const imageChanged = nextImage !== currentImage;
     const hiddenBranchIdsChanged =
       activeBranchId !== null &&
@@ -448,8 +452,8 @@ function CategoryCard({
           <div className="absolute right-2 top-2 flex gap-1">
             <Button
               size="icon"
-              variant="secondary"
-              className="h-8 w-8 bg-background/90 shadow-sm"
+              variant="outline"
+              className="h-8 w-8 shadow-sm bg-background hover:bg-background/80"
               onClick={() => setEditing(true)}
               aria-label={t('dashboard.menuManager.category.editAria')}
             >
@@ -457,8 +461,8 @@ function CategoryCard({
             </Button>
             <Button
               size="icon"
-              variant="secondary"
-              className="h-8 w-8 bg-background/90 text-destructive shadow-sm hover:text-destructive"
+              variant="destructive"
+              className="h-8 w-8 shadow-sm"
               onClick={() => onDelete(category.id)}
               aria-label={t('dashboard.menuManager.category.deleteAria')}
             >
@@ -489,31 +493,29 @@ function CategoryCard({
             )}
           </div>
 
-          <div className="mt-auto flex flex-col gap-2">
+          <div className="mt-auto flex gap-2">
             <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
+              variant={visible ? 'outline' : 'default'}
+              className="flex-1"
               disabled={toggling || !hasProducts}
               onClick={() => onToggleShowInFront(category.id, !visible)}
             >
               {visible ? (
                 <>
                   <EyeOff className="mr-2 h-4 w-4" />
-                  Hide
+                  {t('dashboard.menuManager.category.hide')}
                 </>
               ) : (
                 <>
                   <Eye className="mr-2 h-4 w-4" />
-                  Show
+                  {t('dashboard.menuManager.category.show')}
                 </>
               )}
             </Button>
 
             <Button
               variant={branchVisible ? 'outline' : 'default'}
-              size="sm"
-              className="w-full"
+              className="flex-1"
               disabled={toggling || branchesLoading || !activeBranchId}
               onClick={() =>
                 onToggleBranchVisibility(category.id, !branchVisible)
@@ -538,7 +540,9 @@ function CategoryCard({
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{t('dashboard.menuManager.category.edit')}</DialogTitle>
+            <DialogTitle>
+              {t('dashboard.menuManager.category.edit')}
+            </DialogTitle>
             <DialogDescription>
               Update the category information.
             </DialogDescription>
@@ -565,7 +569,9 @@ function CategoryCard({
               label={t('dashboard.menuManager.category.categoryImage')}
               value={imageVal}
               onChange={setImageVal}
-              helperText={t('dashboard.menuManager.category.categoryImageHelper')}
+              helperText={t(
+                'dashboard.menuManager.category.categoryImageHelper'
+              )}
             />
 
             <div className="space-y-2 rounded-md border p-3">
@@ -596,13 +602,13 @@ function CategoryCard({
               >
                 {activeBranchId && !hiddenBranchIds.includes(activeBranchId) ? (
                   <>
-                    <EyeOff className="mr-2 h-4 w-4" />
-                    Hidden
+                    <Eye className="mr-2 h-4 w-4" />
+                    {t('dashboard.menuManager.category.visible')}
                   </>
                 ) : (
                   <>
-                    <Eye className="mr-2 h-4 w-4" />
-                    Visible
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    {t('dashboard.menuManager.category.notVisible')}
                   </>
                 )}
               </Button>

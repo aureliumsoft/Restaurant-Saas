@@ -384,7 +384,7 @@ export function ProductCustomizeDialog({
   onConfirm,
 }: Props) {
   const { t } = useTranslation();
-  const { lang } = useBilingualText();
+  const { lang, resolve } = useBilingualText();
   const { formatMoney, regional } = useRestaurantRegional(undefined);
   const variationPickerBaseline = useMemo(
     () => variationPickerBaselineUnitPrice(productBaseUnitPrice, variations),
@@ -1419,18 +1419,19 @@ export function ProductCustomizeDialog({
         (g) => g.id === picker.groupId
       );
       const item = group?.items[0];
-      return item?.name?.trim() || t('select');
+      return resolve(item?.name) || t('select');
     }
     if (picker.kind === 'group-single' || picker.kind === 'group-multi') {
       const group = categoryGroups.find((g) => g.id === picker.groupId);
       return recommendationGroupDisplayLabel(
-        group?.name?.trim() || t('select')
+        group?.name?.trim() || t('select'),
+        lang
       );
     }
     const group = categoryGroups.find((g) => g.id === picker.groupId);
     const item = group?.items.find((i) => i.menuItemId === picker.optionId);
-    return item?.name?.trim() || t('select');
-  }, [categoryGroups, picker, productRecommendationGroups, t]);
+    return resolve(item?.name) || t('select');
+  }, [categoryGroups, lang, picker, productRecommendationGroups, resolve, t]);
 
   const pickerSubtitle = useMemo(() => {
     if (picker?.kind === 'recommendation-product-variation') {
@@ -1500,7 +1501,7 @@ export function ProductCustomizeDialog({
     if (picker.kind === 'variation') {
       return variations.map((v) => ({
         id: v.id,
-        name: v.name,
+        name: resolve(v.name),
         price: chargeableVariationUnitPrice(
           v.priceDelta,
           variationPickerBaseline
@@ -1575,7 +1576,7 @@ export function ProductCustomizeDialog({
         );
         return {
         id: it.menuItemId,
-        name: it.name,
+        name: resolve(it.name),
         price,
         priceLabel,
         imageUrl: it.imageUrl,
@@ -1673,7 +1674,7 @@ export function ProductCustomizeDialog({
         );
         return {
         id: it.menuItemId,
-        name: it.name,
+        name: resolve(it.name),
         price,
         priceLabel,
         imageUrl: it.imageUrl,
@@ -1898,7 +1899,7 @@ export function ProductCustomizeDialog({
                     return (
                       <CustomizeGroupSkeleton
                         key={`product-rec-skel-${g.id || 'row'}-${index}`}
-                        title={g.name}
+                        title={recommendationGroupDisplayLabel(g.name, lang)}
                         required={g.required}
                       />
                     );
@@ -1934,7 +1935,7 @@ export function ProductCustomizeDialog({
                     >
                       <div className="flex items-center justify-between gap-3 border-b border-[#f4f4f4] px-[15px] py-3">
                         <Label className="text-sm font-semibold text-primary">
-                          {item.name}
+                          {resolve(item.name)}
                         </Label>
                         {g.required ? (
                           <span className={GROUP_REQUIRED_LABEL}>
@@ -1990,7 +1991,7 @@ export function ProductCustomizeDialog({
                     return (
                       <CustomizeGroupSkeleton
                         key={`category-group-skel-${g.id || 'row'}-${index}`}
-                        title={g.name}
+                        title={recommendationGroupDisplayLabel(g.name, lang)}
                         required={g.required}
                       />
                     );
@@ -2009,11 +2010,12 @@ export function ProductCustomizeDialog({
                           <Label className="text-sm font-semibold leading-snug text-primary">
                             {recommendationGroupDisplayLabel(
                               configurationGroupDisplayTitle(
-                                g.name,
+                                resolve(g.name),
                                 baseProductVariationContext.parent,
                                 g.useVariationPricing ?? false,
                                 baseProductVariationContext.shortLabel
-                              )
+                              ),
+                              lang
                             )}
                           </Label>
                         </div>
@@ -2473,7 +2475,10 @@ export function ProductCustomizeDialog({
                 open
                 stackClassName="z-[120]"
                 stackZIndex={120}
-                parentGroupName={activeCategoryOptionTarget.group.name}
+                parentGroupName={recommendationGroupDisplayLabel(
+                  activeCategoryOptionTarget.group.name,
+                  lang
+                )}
                 parentConfigurationGroup={activeCategoryOptionTarget.group}
                 baseProductVariation={baseProductVariationContext.parent}
                 baseProductVariationShortLabel={
@@ -2545,7 +2550,10 @@ export function ProductCustomizeDialog({
                 open={activeProductGroupId === activeProductGroup.id}
                 stackClassName="z-[120]"
                 stackZIndex={120}
-                parentGroupName={activeProductGroup.name}
+                parentGroupName={recommendationGroupDisplayLabel(
+                  activeProductGroup.name,
+                  lang
+                )}
                 parentConfigurationGroup={activeProductGroup}
                 baseProductVariation={baseProductVariationContext.parent}
                 baseProductVariationShortLabel={

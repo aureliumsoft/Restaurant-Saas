@@ -1,5 +1,10 @@
 import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
 import { normalizeCartModifiers } from '@/lib/cart-normalize';
+import {
+  DEFAULT_UI_LANGUAGE,
+  type UiLanguage,
+} from '@/lib/i18n/resources';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 
 export type CartModifierSelectionLike = {
   selections: { name?: string | null; menuItemId?: string }[];
@@ -189,21 +194,31 @@ export function cartLineTitle(
 }
 
 /**
- * Strip "Choose" / "Choose from" / "Choose add-ons (...)" so only the
- * recommended category or product name remains. Nested labels
+ * Resolve bilingual group titles and strip "Choose" / "Choose from" /
+ * "Choose add-ons (...)" (and Spanish equivalents) so only the recommended
+ * category or product name remains. Nested labels
  * (`Parent — Choose from Sauces`) keep the leaf name (Sauces).
  */
-export function recommendationGroupDisplayLabel(raw: string): string {
-  const source = String(raw ?? '').trim();
+export function recommendationGroupDisplayLabel(
+  raw: unknown,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
+): string {
+  const resolved = resolveBilingualText(raw, lang).trim();
+  const source = resolved || String(raw ?? '').trim();
   if (!source) return 'Add-ons';
 
   const stripPart = (part: string): string => {
     let s = part.trim();
     if (!s) return '';
-    const addOns = s.match(/^Choose add-ons\s*\((.+)\)\s*$/i);
-    if (addOns?.[1]) return addOns[1].trim();
+    const addOnsEn = s.match(/^Choose add-ons\s*\((.+)\)\s*$/i);
+    if (addOnsEn?.[1]) return addOnsEn[1].trim();
+    const addOnsEs = s.match(/^Elige complementos\s*\((.+)\)\s*$/i);
+    if (addOnsEs?.[1]) return addOnsEs[1].trim();
     s = s.replace(/^Choose from\s+/i, '');
+    s = s.replace(/^Elige de\s+/i, '');
+    s = s.replace(/^Elige entre\s+/i, '');
     s = s.replace(/^Choose\s+/i, '');
+    s = s.replace(/^Elige\s+/i, '');
     return s.trim();
   };
 

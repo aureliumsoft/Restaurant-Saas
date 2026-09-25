@@ -9,7 +9,7 @@ export const DASHBOARD_MODULES = [
     title: 'Order Display',
     path: '/order-display',
   },
-  { moduleKey: 'branched', title: 'Branched', path: '/branched' },
+  { moduleKey: 'branched', title: 'Branches', path: '/branched' },
   { moduleKey: 'tables', title: 'Tables', path: '/tables' },
   { moduleKey: 'categories', title: 'Categories', path: '/categories' },
   { moduleKey: 'variations', title: 'Variations', path: '/variations' },

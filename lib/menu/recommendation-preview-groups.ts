@@ -14,6 +14,10 @@ import {
 } from '@/lib/menu/configuration-variation-price';
 import { enrichAttributeGroupSource } from '@/lib/menu/product-recommendation-pool';
 import { mapAttributeGroupItems } from '@/lib/menu/map-attribute-group-items';
+import {
+  serializeBilingualChooseAddonsTitle,
+  serializeBilingualChooseTitle,
+} from '@/lib/menu/bilingual-text';
 
 import type { RecommendationRuleDraft } from '@/components/dashboard/menu-manager/recommendation-rule-form';
 import type {
@@ -100,8 +104,8 @@ function categoryGroupName(
   selectionType: 'SINGLE' | 'MULTIPLE'
 ): string {
   return selectionType === 'SINGLE'
-    ? `Choose ${catName}`
-    : `Choose from ${catName}`;
+    ? serializeBilingualChooseTitle(catName, 'choose')
+    : serializeBilingualChooseTitle(catName, 'chooseFrom');
 }
 
 function productGroupName(
@@ -110,12 +114,12 @@ function productGroupName(
   selectionType: 'SINGLE' | 'MULTIPLE'
 ): string {
   if (catNames.length > 1) {
-    return `Choose add-ons (${catNames.join(', ')})`;
+    return serializeBilingualChooseAddonsTitle(catNames);
   }
-  const cat = catNames[0] ?? product.categoryName ?? 'products';
+  const cat = catNames[0] ?? product.categoryName ?? '';
   return selectionType === 'SINGLE'
-    ? `Choose ${product.name}`
-    : `Choose from ${cat}`;
+    ? serializeBilingualChooseTitle(product.name, 'choose')
+    : serializeBilingualChooseTitle(cat || product.name, 'chooseFrom');
 }
 
 export function variantFromDraft(

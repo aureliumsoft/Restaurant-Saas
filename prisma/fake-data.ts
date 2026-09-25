@@ -639,6 +639,12 @@ export function fakeMenuCategoryComplete() {
     updatedAt: faker.date.anytime(),
   };
 }
+export function fakeMenuCategoryHiddenBranchComplete() {
+  return {
+    categoryId: faker.string.uuid(),
+    branchId: faker.string.uuid(),
+  };
+}
 export function fakeMenuItemCategoryComplete() {
   return {
     menuItemId: faker.string.uuid(),

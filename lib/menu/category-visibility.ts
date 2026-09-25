@@ -12,9 +12,15 @@ export const CUSTOMER_MENU_CATEGORY_WHERE: Prisma.MenuCategoryWhereInput = {
 };
 
 export function categoryVisibleForBranch(
-  _branchId: string
+  branchId: string
 ): Prisma.MenuCategoryWhereInput {
-  return {};
+  return {
+    NOT: {
+      hiddenBranches: {
+        some: { branchId },
+      },
+    },
+  };
 }
 
 /** Categories usable as recommendation sources (on-menu and add-on only), non-empty. */

@@ -68,6 +68,7 @@ import {
   type PersonalizeGroup,
 } from '@/components/order/personalize-options-section';
 import { useBilingualText } from '@/hooks/use-bilingual-text';
+import { recommendationGroupDisplayLabel } from '@/lib/cart-line-display';
 import type {
   AttributeGroup,
   MenuOption,
@@ -275,6 +276,7 @@ function OptionNestedPanel({
   onAppendTimelineKey,
   onRemoveTimelineKey,
 }: OptionNestedPanelProps) {
+  const { resolve } = useBilingualText();
   const configurationParentVariation =
     parentVariationFromItemVariation(item.variations, variationId) ?? null;
 
@@ -289,7 +291,7 @@ function OptionNestedPanel({
   return (
     <div className="mt-3 border-l-2 border-primary/20 pl-4">
       <p className="mb-2 text-xs font-medium text-muted-foreground">
-        Options for {item.name}
+        Options for {resolve(item.name)}
       </p>
       <InlineRecommendationGroups
         groups={nestedGroups}
@@ -365,6 +367,8 @@ function InlineRecommendationGroups({
   onAppendTimelineKey,
   onRemoveTimelineKey,
 }: InlineGroupsProps) {
+  const { lang, resolve } = useBilingualText();
+  const { t } = useTranslation();
   const limitsForGroup = useCallback(
     (group: AttributeGroup) =>
       getRecommendationLimits(
@@ -664,15 +668,21 @@ function InlineRecommendationGroups({
           >
             <div className="flex items-center justify-between gap-3 bg-muted/60 px-4 py-2.5">
               <Label className="text-sm font-bold uppercase tracking-wide text-foreground">
-                {configurationGroupDisplayTitle(
-                  g.name,
-                  baseProductVariation,
-                  g.useVariationPricing ?? false,
-                  baseProductVariationShortLabel
+                {recommendationGroupDisplayLabel(
+                  configurationGroupDisplayTitle(
+                    resolve(g.name),
+                    baseProductVariation,
+                    g.useVariationPricing ?? false,
+                    baseProductVariationShortLabel
+                  ),
+                  lang
                 )}
               </Label>
               <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
-                {count}/{limits.maxItems} max.
+                {t('customizeMaxCount', {
+                  count,
+                  max: limits.maxItems,
+                })}
               </span>
             </div>
 
@@ -764,7 +774,7 @@ function InlineRecommendationGroups({
                       <div className="flex items-center gap-3">
                         <OptionThumbnail
                           imageUrl={it.imageUrl}
-                          name={it.name}
+                          name={resolve(it.name)}
                         />
                         <button
                           type="button"
@@ -786,7 +796,7 @@ function InlineRecommendationGroups({
                           }}
                         >
                           <p className="text-sm font-bold uppercase leading-snug text-foreground">
-                            {it.name}
+                            {resolve(it.name)}
                           </p>
                           {addonLabel ? (
                             <p className="mt-0.5 text-xs font-medium text-muted-foreground">
@@ -799,7 +809,7 @@ function InlineRecommendationGroups({
                           <button
                             type="button"
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition hover:brightness-95 active:scale-90"
-                            aria-label={`Select ${it.name}`}
+                            aria-label={`Select ${resolve(it.name)}`}
                             onClick={() =>
                               selectRadio(g, it.menuItemId, limits)
                             }
@@ -819,7 +829,7 @@ function InlineRecommendationGroups({
                                   variant="outline"
                                   size="icon"
                                   className="h-9 w-9 rounded-lg border-primary/30"
-                                  aria-label={`Decrease ${it.name}`}
+                                  aria-label={`Decrease ${resolve(it.name)}`}
                                   onClick={() =>
                                     decreaseMultiQty(g.id, it.menuItemId)
                                   }
@@ -835,7 +845,7 @@ function InlineRecommendationGroups({
                               type="button"
                               size="icon"
                               className="h-9 w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-                              aria-label={`Add ${it.name}`}
+                              aria-label={`Add ${resolve(it.name)}`}
                               disabled={qty === 0 && atMax}
                               onClick={() => increaseMultiQty(g, it.menuItemId)}
                             >
@@ -846,7 +856,7 @@ function InlineRecommendationGroups({
                           <button
                             type="button"
                             className="shrink-0 p-1"
-                            aria-label={`Toggle ${it.name}`}
+                            aria-label={`Toggle ${resolve(it.name)}`}
                             disabled={!checkboxSelected && atMax}
                             onClick={() =>
                               toggleMultiCheckbox(g, it.menuItemId)
@@ -908,7 +918,7 @@ export function NestedRecommendationSheet({
   onDone,
 }: Props) {
   const { t } = useTranslation();
-  const { lang } = useBilingualText();
+  const { lang, resolve } = useBilingualText();
   const [productVariationId, setProductVariationId] = useState(
     initialProductVariationId ?? ''
   );
@@ -1615,7 +1625,7 @@ export function NestedRecommendationSheet({
       style={{ zIndex: stackZIndex ?? (stackClassName ? 120 : 90) }}
       role="dialog"
       aria-modal="true"
-      aria-label={`${product.name} configuration`}
+      aria-label={`${resolve(product.name)} configuration`}
       onClick={onClose}
     >
       <div
@@ -1626,10 +1636,10 @@ export function NestedRecommendationSheet({
         <div className="min-w-0">
           <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted sm:mx-0" />
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {parentGroupName}
+            {recommendationGroupDisplayLabel(parentGroupName, lang)}
           </p>
           <h2 className="text-lg font-bold text-foreground">
-            {t('customizeChoose', { name: product.name })}
+            {t('customizeChoose', { name: resolve(product.name) })}
           </h2>
         </div>
         <Button
@@ -1676,7 +1686,7 @@ export function NestedRecommendationSheet({
               >
                 <div className="flex items-start justify-between gap-3">
                   <Label className="text-sm font-semibold text-foreground">
-                    {item.name}
+                    {resolve(item.name)}
                   </Label>
                   {g.required ? (
                     <span className="shrink-0 text-xs font-medium text-muted-foreground">
@@ -1705,9 +1715,9 @@ export function NestedRecommendationSheet({
                     <span className="truncate text-muted-foreground">
                       {configured
                         ? selectedVariationLabel
-                          ? `${item.name} (${selectedVariationLabel})`
-                          : `Selected ${item.name}`
-                        : `Select ${item.name}`}
+                          ? `${resolve(item.name)} (${selectedVariationLabel})`
+                          : `Selected ${resolve(item.name)}`
+                        : `Select ${resolve(item.name)}`}
                     </span>
                     <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </button>
@@ -1763,7 +1773,7 @@ export function NestedRecommendationSheet({
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <h3 className="text-base font-semibold text-foreground">
-                  Select {product.name}
+                  Select {resolve(product.name)}
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Choose a variation
@@ -1839,7 +1849,7 @@ export function NestedRecommendationSheet({
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <h3 className="text-base font-semibold text-foreground">
-                  Select {productRecVariationTarget.item.name}
+                  Select {resolve(productRecVariationTarget.item.name)}
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Choose a variation
@@ -1918,7 +1928,7 @@ export function NestedRecommendationSheet({
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <h3 className="text-base font-semibold text-foreground">
-                  Select {optionVariationTarget.item.name}
+                  Select {resolve(optionVariationTarget.item.name)}
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Choose a variation
