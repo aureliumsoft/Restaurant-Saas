@@ -78,31 +78,16 @@ export function mapAttributeGroupItems(
     )?.itemLinks
       ?.map((l) => l.menuItem)
       .filter((it): it is LinkedItem => Boolean(it)) ?? [];
+  // Prefer MenuItemCategory link order (Final View); append legacy-only items.
   const combined: LinkedItem[] = [];
   const seen = new Set<string>();
-  for (const it of [...direct, ...links]) {
+  for (const it of [...links, ...direct]) {
     if (it && it.id && !seen.has(it.id)) {
       seen.add(it.id);
       combined.push(it);
     }
   }
-  const filtered = combined.filter((it) => it.id !== baseProductId);
-
-  // Sort by latest updatedAt first (fallback to createdAt, then name)
-  return filtered.sort((a, b) => {
-    const timeA = a.updatedAt
-      ? new Date(a.updatedAt).getTime()
-      : a.createdAt
-        ? new Date(a.createdAt).getTime()
-        : 0;
-    const timeB = b.updatedAt
-      ? new Date(b.updatedAt).getTime()
-      : b.createdAt
-        ? new Date(b.createdAt).getTime()
-        : 0;
-    if (timeB !== timeA) return timeB - timeA;
-    return a.name.localeCompare(b.name);
-  });
+  return combined.filter((it) => it.id !== baseProductId);
 }
 
 function linkedCategoryLinkItems(
@@ -157,8 +142,8 @@ export function hydrateLinkedCategoryItems(
     }
 
     const items = mergeLinkedItems([
-      ...(group.linkedCategory.items ?? []),
       ...linkedCategoryLinkItems(group),
+      ...(group.linkedCategory.items ?? []),
     ]);
 
     return {

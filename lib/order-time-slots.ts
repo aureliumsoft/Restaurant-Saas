@@ -44,6 +44,10 @@ export function normalizeTimeValue(value: string | undefined | null): string {
   return `${String(safeHours).padStart(2, '0')}:${String(safeMinutes).padStart(2, '0')}`;
 }
 
+function coerceIsOpen(value: unknown): boolean {
+  return value === true || value === 1 || value === 'true' || value === '1';
+}
+
 export function normalizeOpeningHours(
   openingHours: unknown
 ): BranchOpeningHours {
@@ -75,14 +79,18 @@ export function normalizeOpeningHours(
   const merged = new Map<number, BranchOpeningHour>();
   for (const raw of rows) {
     if (!raw || typeof raw !== 'object') continue;
-    const entry = raw as Partial<BranchOpeningHour> & { dayOfWeek?: unknown };
+    const entry = raw as Record<string, unknown>;
     const dayOfWeek = Number(entry.dayOfWeek);
     if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) continue;
     merged.set(dayOfWeek, {
       dayOfWeek,
-      isOpen: entry.isOpen === true,
-      openTime: normalizeTimeValue(entry.openTime),
-      closeTime: normalizeTimeValue(entry.closeTime),
+      isOpen: coerceIsOpen(entry.isOpen),
+      openTime: normalizeTimeValue(
+        typeof entry.openTime === 'string' ? entry.openTime : null
+      ),
+      closeTime: normalizeTimeValue(
+        typeof entry.closeTime === 'string' ? entry.closeTime : null
+      ),
     });
   }
 
@@ -104,7 +112,7 @@ function getBranchOpeningHour(
   if (!match) return null;
   return {
     dayOfWeek: dayIndex,
-    isOpen: match.isOpen === true,
+    isOpen: coerceIsOpen(match.isOpen),
     openTime: normalizeTimeValue(match.openTime),
     closeTime: normalizeTimeValue(match.closeTime),
   };

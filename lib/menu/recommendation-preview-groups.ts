@@ -12,7 +12,9 @@ import {
   isConfigurationItemAvailableForParentVariation,
   type ParentVariationContext,
 } from '@/lib/menu/configuration-variation-price';
-import { enrichAttributeGroupSource } from '@/lib/menu/product-recommendation-pool';
+import {
+  enrichAttributeGroupFromPool,
+} from '@/lib/menu/product-recommendation-pool';
 import { mapAttributeGroupItems } from '@/lib/menu/map-attribute-group-items';
 import {
   serializeBilingualChooseAddonsTitle,
@@ -284,7 +286,11 @@ export function buildDraftPreviewGroups(
 export function buildPreviewCategoriesWithProducts(
   categories: MenuCategoryRow[],
   allProducts: Array<
-    MenuItemRow & { categoryIds?: string[]; categoryName?: string }
+    MenuItemRow & {
+      categoryIds?: string[];
+      categoryName?: string;
+      sortOrderByCategory?: Record<string, number>;
+    }
   >
 ): MenuCategoryRow[] {
   const productsByCategory = new Map<string, MenuItemRow[]>();
@@ -305,9 +311,16 @@ export function buildPreviewCategoriesWithProducts(
 
   return categories.map((category) => {
     const loaded = productsByCategory.get(category.id);
-    return loaded && loaded.length > 0
-      ? { ...category, items: loaded }
-      : category;
+    if (!loaded || loaded.length === 0) return category;
+    const sorted = [...loaded].sort((a, b) => {
+      const orderA =
+        a.sortOrderByCategory?.[category.id] ?? Number.MAX_SAFE_INTEGER;
+      const orderB =
+        b.sortOrderByCategory?.[category.id] ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name);
+    });
+    return { ...category, items: sorted };
   });
 }
 
@@ -324,7 +337,13 @@ export function linkedItemsForPreviewGroup(
     allProducts
   );
 
-  const enriched = enrichAttributeGroupSource(
+  const poolCategories = categoriesWithProducts.map((c) => ({
+    id: c.id,
+    name: c.name,
+    items: c.items,
+  }));
+
+  const enriched = enrichAttributeGroupFromPool(
     {
       sourceType: group.sourceType ?? 'CATEGORY',
       productCategoryIds: group.productCategoryIds,
@@ -353,11 +372,7 @@ export function linkedItemsForPreviewGroup(
           }
         : null,
     },
-    categoriesWithProducts.map((c) => ({
-      id: c.id,
-      name: c.name,
-      items: c.items,
-    })),
+    poolCategories,
     baseProduct.id
   );
 

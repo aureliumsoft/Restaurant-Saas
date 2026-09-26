@@ -56,7 +56,7 @@ const WEEKDAY_I18N_KEYS = [
 
 function branchHoursStatusLabel(
   openingHours: BranchOpeningHours | null | undefined,
-  timeZone: string,
+  timeZone: string | null | undefined,
   methodLabel: string,
   t: (key: string, options?: Record<string, string>) => string
 ) {
@@ -131,8 +131,14 @@ export function Sidebar({
   deliveryEnabled = true,
 }: SidebarProps) {
   const { t } = useTranslation();
-  const { regional } = useRestaurantRegional(restaurantSlug);
-  const branchTimeZone = timezoneForRestaurantCountry(regional.countryCode);
+  const { regional, loading: regionalLoading } =
+    useRestaurantRegional(restaurantSlug);
+  const [branchesTimeZone, setBranchesTimeZone] = useState<string | null>(null);
+  const branchTimeZone =
+    branchesTimeZone ??
+    (regionalLoading
+      ? undefined
+      : timezoneForRestaurantCountry(regional.countryCode));
   const customerAccount = useCustomerAccountOptional();
   const customerName = customerAccount?.account?.name?.trim() ?? '';
   const [activeStores, setActiveStores] = useState<Store[]>();
@@ -167,6 +173,7 @@ export function Sidebar({
   useEffect(() => {
     if (!restaurantSlug?.trim()) return;
     let cancelled = false;
+    setBranchesTimeZone(null);
     (async () => {
       setBranchesLoading(true);
       try {
@@ -176,6 +183,12 @@ export function Sidebar({
         const json = await res.json().catch(() => ({}));
         const rows = Array.isArray(json?.data) ? json.data : [];
         if (cancelled) return;
+        if (
+          typeof json?.timeZone === 'string' &&
+          json.timeZone.trim().length > 0
+        ) {
+          setBranchesTimeZone(json.timeZone.trim());
+        }
         if (rows.length === 0) {
           setActiveStores([]);
           return;

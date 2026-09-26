@@ -110,7 +110,8 @@ export function filterConfigurationItemsForDefaultLinkedVariation<
   );
 }
 
-/** Visible configuration items after parent-variation and fixed-default filters. */
+/** Visible configuration items after parent-variation and fixed-default filters.
+ * Preserves input order (Final View / MenuItemCategory.sortOrder). */
 export function filterConfigurationItemsForGroup<
   T extends ConfigurationItemLike,
 >(
@@ -139,22 +140,7 @@ export function filterConfigurationItemsForGroup<
       true
     );
   }
-  return [...filtered].sort((a, b) => {
-    const timeA = (a as { updatedAt?: string | Date | null }).updatedAt
-      ? new Date((a as { updatedAt?: string | Date | null }).updatedAt!).getTime()
-      : (a as { createdAt?: string | Date | null }).createdAt
-        ? new Date((a as { createdAt?: string | Date | null }).createdAt!).getTime()
-        : 0;
-    const timeB = (b as { updatedAt?: string | Date | null }).updatedAt
-      ? new Date((b as { updatedAt?: string | Date | null }).updatedAt!).getTime()
-      : (b as { createdAt?: string | Date | null }).createdAt
-        ? new Date((b as { createdAt?: string | Date | null }).createdAt!).getTime()
-        : 0;
-    if (timeB !== timeA) return timeB - timeA;
-    const nameA = (a as { name?: string | null }).name ?? '';
-    const nameB = (b as { name?: string | null }).name ?? '';
-    return nameA.localeCompare(nameB);
-  });
+  return filtered;
 }
 
 /** Whether a configuration section should render for the current filters. */

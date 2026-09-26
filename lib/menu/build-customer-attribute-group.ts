@@ -61,7 +61,8 @@ export function buildCustomerAttributeGroup(
 
   const mergedCategoryItems: typeof directItems = [];
   const seenIds = new Set<string>();
-  for (const it of [...directItems, ...linkItems]) {
+  // Prefer MenuItemCategory link order (Final View); append legacy-only items.
+  for (const it of [...linkItems, ...directItems]) {
     if (it && it.id && !seenIds.has(it.id)) {
       seenIds.add(it.id);
       mergedCategoryItems.push(it);
@@ -146,8 +147,7 @@ export function buildCustomerAttributeGroup(
     useVariationPricing: group.useVariationPricing ?? false,
     defaultLinkedRestaurantVariationId: defaultRestaurantVariationId,
     includeDefaultLinkedVariationPrice,
-    items: items
-      .map((it) => {
+    items: items.map((it) => {
         const raw = rawItems.find((r) => r.id === it.id);
         const nestedGroups =
           (raw?.attributeGroups?.length ? raw.attributeGroups : null) ??
@@ -194,20 +194,6 @@ export function buildCustomerAttributeGroup(
             (raw as { personalizeGroups?: PersonalizeGroup[] } | undefined)
               ?.personalizeGroups ?? undefined,
         };
-      })
-      .sort((a, b) => {
-        const timeA = a.updatedAt
-          ? new Date(a.updatedAt).getTime()
-          : a.createdAt
-            ? new Date(a.createdAt).getTime()
-            : 0;
-        const timeB = b.updatedAt
-          ? new Date(b.updatedAt).getTime()
-          : b.createdAt
-            ? new Date(b.createdAt).getTime()
-            : 0;
-        if (timeB !== timeA) return timeB - timeA;
-        return a.name.localeCompare(b.name);
       }),
   };
 }

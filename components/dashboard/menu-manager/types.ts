@@ -78,6 +78,8 @@ export type MenuItemRow = {
   salePrice: number | null;
   categoryId: string;
   categoryIds?: string[];
+  /** Final View order per category id (MenuItemCategory.sortOrder). */
+  sortOrderByCategory?: Record<string, number>;
   updatedAt?: string;
   createdAt?: string;
   variations?: {

@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { normalizeOpeningHours } from '@/lib/order-time-slots';
+import {
+  parseRestaurantRegionalSettings,
+  timezoneForRestaurantCountry,
+} from '@/lib/restaurant-regional';
 
 function getSubdomainFromHost(hostname: string) {
   if (hostname.endsWith('.localhost')) {
@@ -42,6 +46,8 @@ export async function GET(req: NextRequest) {
       where,
       select: {
         id: true,
+        countryCode: true,
+        currencyCode: true,
         branches: {
           orderBy: { createdAt: 'asc' },
           select: {
@@ -55,12 +61,17 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    const regional = parseRestaurantRegionalSettings(restaurant);
+    const timeZone = timezoneForRestaurantCountry(regional.countryCode);
+
     return NextResponse.json(
       {
         data: (restaurant?.branches ?? []).map((branch) => ({
           ...branch,
           openingHours: normalizeOpeningHours(branch.openingHours),
         })),
+        countryCode: regional.countryCode,
+        timeZone,
       },
       { status: 200 }
     );

@@ -173,12 +173,16 @@ export async function GET(req: NextRequest) {
     const [categoryLinks, imageFlags] = await Promise.all([
       itemIds.length === 0
         ? Promise.resolve(
-            [] as Array<{ menuItemId: string; categoryId: string }>
+            [] as Array<{
+              menuItemId: string;
+              categoryId: string;
+              sortOrder: number;
+            }>
           )
         : db.menuItemCategory.findMany({
             where: { menuItemId: { in: itemIds } },
             orderBy: { sortOrder: 'asc' },
-            select: { menuItemId: true, categoryId: true },
+            select: { menuItemId: true, categoryId: true, sortOrder: true },
           }),
       // Presence only — avoids transferring base64 blobs into the list response.
       itemIds.length === 0
@@ -195,10 +199,14 @@ export async function GET(req: NextRequest) {
     );
 
     const categoryIdsByItem = new Map<string, string[]>();
+    const sortOrderByCategoryByItem = new Map<string, Record<string, number>>();
     for (const link of categoryLinks) {
       const list = categoryIdsByItem.get(link.menuItemId) ?? [];
       list.push(link.categoryId);
       categoryIdsByItem.set(link.menuItemId, list);
+      const orders = sortOrderByCategoryByItem.get(link.menuItemId) ?? {};
+      orders[link.categoryId] = link.sortOrder;
+      sortOrderByCategoryByItem.set(link.menuItemId, orders);
     }
 
     // Prefer names from this response; fall back to primary category relation via map.
@@ -239,6 +247,7 @@ export async function GET(req: NextRequest) {
         salePrice: item.salePrice,
         categoryId: item.categoryId,
         categoryIds: ids,
+        sortOrderByCategory: sortOrderByCategoryByItem.get(item.id) ?? {},
         categoryNames:
           categoryNames.length > 0
             ? categoryNames

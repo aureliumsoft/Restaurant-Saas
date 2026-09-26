@@ -606,10 +606,14 @@ export default function OrderPageClient({
   const orderInfo = useOrderInfo(orderId, orderType, initialOrderInfo);
   const restaurantSlug =
     orderInfo?.restaurantSlug?.trim() || orderInfo?.storeId?.trim() || '';
-  const { formatMoney, regional } = useRestaurantRegional(
-    restaurantSlug || undefined
-  );
-  const branchTimeZone = timezoneForRestaurantCountry(regional.countryCode);
+  const { formatMoney, regional, loading: regionalLoading } =
+    useRestaurantRegional(restaurantSlug || undefined);
+  const [branchesTimeZone, setBranchesTimeZone] = useState<string | null>(null);
+  const branchTimeZone =
+    branchesTimeZone ??
+    (regionalLoading
+      ? undefined
+      : timezoneForRestaurantCountry(regional.countryCode));
   const storefrontPath = restaurantSlug
     ? `/web-app/${encodeURIComponent(restaurantSlug)}`
     : '/web-app';
@@ -931,7 +935,17 @@ export default function OrderPageClient({
           cache: 'no-store',
         });
         if (!res.ok) return;
-        const json = (await res.json().catch(() => ({}))) as { data?: Array<{ id?: string; openingHours?: BranchOpeningHours | null }> };
+        const json = (await res.json().catch(() => ({}))) as {
+          data?: Array<{ id?: string; openingHours?: BranchOpeningHours | null }>;
+          timeZone?: string;
+        };
+        if (
+          !cancelled &&
+          typeof json.timeZone === 'string' &&
+          json.timeZone.trim().length > 0
+        ) {
+          setBranchesTimeZone(json.timeZone.trim());
+        }
         const branch = (json.data ?? []).find((item) => item.id === branchId);
         if (!cancelled) {
           setBranchHours(branch?.openingHours ?? null);
