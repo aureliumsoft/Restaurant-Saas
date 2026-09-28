@@ -89,7 +89,10 @@ import { menuItemCategoryIds } from '@/lib/menu/menu-item-category-ids';
 import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-price';
 
 import {
-  buildDraftPreviewGroups,
+  attrGroupToRuleDraft,
+} from '@/lib/menu/configuration-wizard-draft';
+import {
+  buildLivePreviewGroups,
   buildPreviewCategoriesWithProducts,
   buildRecommendationSortPlan,
   draftHasContent,
@@ -327,9 +330,29 @@ async function persistRecommendationDraft(
     localCategories: MenuCategoryRow[];
     allProducts: (MenuItemRow & { categoryName: string })[];
     sortOrderByKey: Map<string, number>;
+    editingGroupId?: string | null;
+    editingSortOrder?: number | null;
   }
 ): Promise<AttrGroupRow[]> {
   const payloads = buildRecommendationPayloads(draft, context);
+  if (context.editingGroupId) {
+    const body = {
+      ...payloads[0],
+      sortOrder:
+        context.editingSortOrder ??
+        (typeof payloads[0]?.sortOrder === 'number'
+          ? payloads[0].sortOrder
+          : 0),
+    };
+    if (!body) {
+      throw new Error('Nothing to update');
+    }
+    const res = await axios.patch<{ data: AttrGroupRow }>(
+      `/api/restaurant/menu/attributes/${context.editingGroupId}`,
+      body
+    );
+    return [res.data.data];
+  }
   const responses = await Promise.all(
     payloads.map((body) =>
       axios.post<{ data: AttrGroupRow }>(
@@ -814,6 +837,15 @@ export function RecommendationsTab(_props?: Props) {
     Partial<Record<RecommendationFormVariant, RecommendationRuleDraft>>
   >({});
   const [formResetKeys, setFormResetKeys] = useState(INITIAL_FORM_RESET_KEYS);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingSortOrder, setEditingSortOrder] = useState<number | null>(null);
+  const [editingVariant, setEditingVariant] =
+    useState<RecommendationFormVariant | null>(null);
+  const [editSeedRequest, setEditSeedRequest] = useState<{
+    nonce: number;
+    draft: RecommendationRuleDraft;
+  } | null>(null);
+  const [configureResetKey, setConfigureResetKey] = useState(0);
 
   const pickerCategoryIds = useMemo(() => {
     const ids = new Set<string>(offerCategoryIds);
@@ -845,6 +877,97 @@ export function RecommendationsTab(_props?: Props) {
       [variant]: (prev[variant] ?? 0) + 1,
     }));
   }, []);
+
+  const clearEditingState = useCallback(() => {
+    setEditingGroupId(null);
+    setEditingSortOrder(null);
+    setEditingVariant(null);
+    setEditSeedRequest(null);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    const variant = editingVariant;
+    clearEditingState();
+    if (variant) {
+      setDraftByVariant((prev) => {
+        const next = { ...prev };
+        delete next[variant];
+        return next;
+      });
+      bumpFormReset(variant);
+    }
+    setConfigureResetKey((n) => n + 1);
+  }, [editingVariant, clearEditingState, bumpFormReset]);
+
+  const beginEditSavedGroup = useCallback(
+    (groupId: string) => {
+      if (!selected) return;
+      const group = selected.attributeGroups.find((g) => g.id === groupId);
+      if (!group) return;
+      const draft = attrGroupToRuleDraft(group);
+      const variant = variantFromDraft(draft);
+      setEditingGroupId(group.id);
+      setEditingSortOrder(group.sortOrder ?? 0);
+      setEditingVariant(variant);
+      setDraftByVariant((prev) => ({ ...prev, [variant]: draft }));
+      setEditSeedRequest({ nonce: Date.now(), draft });
+      bumpFormReset(variant);
+      // Keep the currently selected Classic / Advanced view.
+    },
+    [selected, bumpFormReset]
+  );
+
+  const beginEditDraftGroup = useCallback(
+    (groupId: string) => {
+      // draft ids: draft-<variant>-<entityId>
+      const match = groupId.match(
+        /^draft-(category-single|category-multiple|product-single|product-multiple)-/
+      );
+      const variant = (match?.[1] ?? null) as RecommendationFormVariant | null;
+      if (!variant) return;
+      const draft = draftByVariant[variant];
+      if (!draft || !draftHasContent(variant, draft)) return;
+      clearEditingState();
+      setEditingVariant(variant);
+      setEditSeedRequest({ nonce: Date.now(), draft });
+      bumpFormReset(variant);
+      // Keep the currently selected Classic / Advanced view.
+    },
+    [draftByVariant, clearEditingState, bumpFormReset]
+  );
+
+  const cancelPreviewGroup = useCallback(
+    (groupId: string, options?: { isDraft?: boolean; isEditing?: boolean }) => {
+      if (options?.isEditing || editingGroupId === groupId) {
+        cancelEdit();
+        return;
+      }
+      if (!options?.isDraft) return;
+      const match = groupId.match(
+        /^draft-(category-single|category-multiple|product-single|product-multiple)-/
+      );
+      const variant = (match?.[1] ?? null) as RecommendationFormVariant | null;
+      if (!variant) return;
+      setDraftByVariant((prev) => {
+        if (!(variant in prev)) return prev;
+        const next = { ...prev };
+        delete next[variant];
+        return next;
+      });
+      if (editingVariant === variant) {
+        clearEditingState();
+      }
+      bumpFormReset(variant);
+      setConfigureResetKey((n) => n + 1);
+    },
+    [
+      editingGroupId,
+      editingVariant,
+      cancelEdit,
+      clearEditingState,
+      bumpFormReset,
+    ]
+  );
 
   const bumpAllFormResets = useCallback(() => {
     setFormResetKeys((prev) =>
@@ -902,6 +1025,10 @@ export function RecommendationsTab(_props?: Props) {
     setOfferCategoryIds([]);
     setSelectedOfferProductIds([]);
     setDraftByVariant({});
+    setEditingGroupId(null);
+    setEditingSortOrder(null);
+    setEditingVariant(null);
+    setEditSeedRequest(null);
     bumpAllFormResets();
   }, [bumpAllFormResets]);
 
@@ -1151,7 +1278,8 @@ export function RecommendationsTab(_props?: Props) {
 
     const duplicateError = findDuplicateRecommendationAssignments(
       selected,
-      { ...draftByVariant, [variantFromDraft(draft)]: draft }
+      { ...draftByVariant, [variantFromDraft(draft)]: draft },
+      editingGroupId
     );
     if (duplicateError) {
       toast.error(duplicateError);
@@ -1162,7 +1290,7 @@ export function RecommendationsTab(_props?: Props) {
     try {
       const variant = variantFromDraft(draft);
       const sortOrderByKey = buildRecommendationSortPlan(
-        selected.attributeGroups,
+        selected.attributeGroups.filter((g) => g.id !== editingGroupId),
         { ...draftByVariant, [variant]: draft }
       );
       const createdGroups = await persistRecommendationDraft(draft, {
@@ -1170,17 +1298,31 @@ export function RecommendationsTab(_props?: Props) {
         localCategories,
         allProducts,
         sortOrderByKey,
+        editingGroupId,
+        editingSortOrder,
       });
-      updateSelectedItem((item) => ({
-        ...item,
-        attributeGroups: [
-          ...item.attributeGroups,
-          ...createdGroups.filter(
-            (group) =>
-              !item.attributeGroups.some((existing) => existing.id === group.id)
+      if (editingGroupId) {
+        const updated = createdGroups[0];
+        updateSelectedItem((item) => ({
+          ...item,
+          attributeGroups: item.attributeGroups.map((group) =>
+            group.id === editingGroupId && updated ? updated : group
           ),
-        ],
-      }));
+        }));
+        toast.success('Recommendation updated');
+      } else {
+        updateSelectedItem((item) => ({
+          ...item,
+          attributeGroups: [
+            ...item.attributeGroups,
+            ...createdGroups.filter(
+              (group) =>
+                !item.attributeGroups.some((existing) => existing.id === group.id)
+            ),
+          ],
+        }));
+        toast.success('Recommendation saved');
+      }
       if (options?.resetAfter !== false) {
         const variant = variantFromDraft(draft);
         setDraftByVariant((prev) => {
@@ -1188,9 +1330,9 @@ export function RecommendationsTab(_props?: Props) {
           delete next[variant];
           return next;
         });
+        clearEditingState();
         bumpFormReset(variant);
-        toast.success('Recommendation saved');
-      allowNextNavigation();
+        allowNextNavigation();
       }
       return true;
     } catch (e: unknown) {
@@ -1483,18 +1625,25 @@ export function RecommendationsTab(_props?: Props) {
 
   const previewGroups = useMemo((): PreviewAttrGroup[] => {
     if (!selected) return [];
-    const saved = selected.attributeGroups as PreviewAttrGroup[];
-    const drafts = buildDraftPreviewGroups(
-      draftByVariant,
+    return buildLivePreviewGroups({
+      savedGroups: selected.attributeGroups,
+      drafts: draftByVariant,
       localCategories,
       allProducts,
-      selected,
-      saved
-    );
-    return [...saved, ...drafts].sort(
-      (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
-    );
-  }, [selected, draftByVariant, localCategories, allProducts]);
+      baseProduct: selected,
+      editingGroupId,
+      editingVariant,
+      editingSortOrder,
+    });
+  }, [
+    selected,
+    draftByVariant,
+    localCategories,
+    allProducts,
+    editingGroupId,
+    editingVariant,
+    editingSortOrder,
+  ]);
 
   const previewCategories = useMemo(
     () => buildPreviewCategoriesWithProducts(localCategories, allProducts),
@@ -1543,16 +1692,29 @@ export function RecommendationsTab(_props?: Props) {
     (): Record<
       RecommendationFormVariant,
       (draft: RecommendationRuleDraft) => void
-    > => ({
-      'category-single': (draft) =>
-        setDraftByVariant((prev) => ({ ...prev, 'category-single': draft })),
-      'category-multiple': (draft) =>
-        setDraftByVariant((prev) => ({ ...prev, 'category-multiple': draft })),
-      'product-single': (draft) =>
-        setDraftByVariant((prev) => ({ ...prev, 'product-single': draft })),
-      'product-multiple': (draft) =>
-        setDraftByVariant((prev) => ({ ...prev, 'product-multiple': draft })),
-    }),
+    > => {
+      const upsertOrClear = (
+        variant: RecommendationFormVariant,
+        draft: RecommendationRuleDraft
+      ) => {
+        setDraftByVariant((prev) => {
+          if (!draftHasContent(variant, draft)) {
+            if (!(variant in prev)) return prev;
+            const next = { ...prev };
+            delete next[variant];
+            return next;
+          }
+          return { ...prev, [variant]: draft };
+        });
+      };
+      return {
+        'category-single': (draft) => upsertOrClear('category-single', draft),
+        'category-multiple': (draft) =>
+          upsertOrClear('category-multiple', draft),
+        'product-single': (draft) => upsertOrClear('product-single', draft),
+        'product-multiple': (draft) => upsertOrClear('product-multiple', draft),
+      };
+    },
     []
   );
 
@@ -1874,6 +2036,24 @@ export function RecommendationsTab(_props?: Props) {
               </p>
                     </div>
           ) : selected ? (
+            <div className="space-y-3">
+              {editingGroupId && editingVariant ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+                  <p className="font-medium text-foreground">
+                    Editing step{' '}
+                    {(editingSortOrder ?? 0) + 1} ·{' '}
+                    {RECOMMENDATION_SECTION_LABELS[editingVariant]}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={cancelEdit}
+                  >
+                    Cancel edit
+                  </Button>
+                </div>
+              ) : null}
             <ConfigurationWizard
               viewMode={editorViewMode}
               onViewModeChange={setEditorViewMode}
@@ -1890,6 +2070,11 @@ export function RecommendationsTab(_props?: Props) {
                 setDeletingRuleId(groupId);
                 setDeleteRuleConfirmOpen(true);
               }}
+              onEditGroup={(groupId) => beginEditSavedGroup(groupId)}
+              editSeedRequest={editSeedRequest}
+              editingGroupId={editingGroupId}
+              editingVariant={editingVariant}
+              onCancelEdit={cancelEdit}
               dealCategoryIds={dealCategoryIds}
               setDealCategoryIds={setDealCategoryIds}
               selectedDealProductIds={selectedDealProductIds}
@@ -1934,9 +2119,11 @@ export function RecommendationsTab(_props?: Props) {
                 savePersonalize(groups ? { groups } : undefined)
               }
               formResetKeys={formResetKeys}
+              configureResetKey={configureResetKey}
               draftByVariant={draftByVariant}
-                              />
-                            ) : (
+            />
+            </div>
+          ) : (
             <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-12 text-center">
               <p className="text-sm font-medium text-foreground">
                 Select a product above
@@ -1963,8 +2150,15 @@ export function RecommendationsTab(_props?: Props) {
             onDeleteGroup={(groupId, isDraft) => {
               if (isDraft) return;
               setDeletingRuleId(groupId);
-                              setDeleteRuleConfirmOpen(true);
-                            }}
+              setDeleteRuleConfirmOpen(true);
+            }}
+            onEditGroup={(groupId, isDraft) => {
+              if (isDraft) beginEditDraftGroup(groupId);
+              else beginEditSavedGroup(groupId);
+            }}
+            onCancelGroup={(groupId, meta) => {
+              cancelPreviewGroup(groupId, meta);
+            }}
             deletingRuleId={deletingRuleId}
             deletingRule={deletingRule}
             loadingPersonalize={loadingPersonalize}

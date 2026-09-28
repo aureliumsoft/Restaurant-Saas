@@ -40,6 +40,7 @@ import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import {
   fetchCustomerMenuProductDetail,
+  overlayLiveCatalogPrices,
   prefetchCustomerMenuProductDetail,
   productNeedsDetailFetch,
 } from '@/lib/menu/fetch-menu-product-detail';
@@ -734,22 +735,21 @@ export default function OrderPageClient({
       return;
     }
     setEditingLineId(line.lineId);
-    if (productNeedsDetailFetch(product)) {
-      const token = ++customizeLoadTokenRef.current;
-      openCustomizeForProduct(product, { loading: true });
-      const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
-        product.id,
-        {
-          slug: orderInfo?.restaurantSlug ?? undefined,
-          subdomain: hostSubdomain ?? undefined,
-        }
-      );
-      if (token !== customizeLoadTokenRef.current) return;
-      if (full) {
-        setCustomizeProduct({ ...full, categoryId: product.categoryId });
-        setCustomizeLoading(false);
-        return;
-      }
+    const token = ++customizeLoadTokenRef.current;
+    openCustomizeForProduct(product, { loading: true });
+    const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
+      product.id,
+      {
+        slug: orderInfo?.restaurantSlug ?? undefined,
+        subdomain: hostSubdomain ?? undefined,
+      },
+      { force: true }
+    );
+    if (token !== customizeLoadTokenRef.current) return;
+    if (full) {
+      setCustomizeProduct({ ...full, categoryId: product.categoryId });
+      setCustomizeLoading(false);
+      return;
     }
     openCustomizeForProduct(product);
   };
@@ -1021,22 +1021,21 @@ export default function OrderPageClient({
 
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     if (productNeedsCustomizeDialog(p)) {
-      if (productNeedsDetailFetch(p)) {
-        const token = ++customizeLoadTokenRef.current;
-        openCustomizeForProduct(p, { loading: true });
-        const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
-          p.id,
-          {
-            slug: orderInfo?.restaurantSlug ?? undefined,
-            subdomain: hostSubdomain ?? undefined,
-          }
-        );
-        if (token !== customizeLoadTokenRef.current) return;
-        if (full) {
-          setCustomizeProduct({ ...full, categoryId: p.categoryId });
-          setCustomizeLoading(false);
-          return;
-        }
+      const token = ++customizeLoadTokenRef.current;
+      openCustomizeForProduct(p, { loading: true });
+      const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
+        p.id,
+        {
+          slug: orderInfo?.restaurantSlug ?? undefined,
+          subdomain: hostSubdomain ?? undefined,
+        },
+        { force: true }
+      );
+      if (token !== customizeLoadTokenRef.current) return;
+      if (full) {
+        setCustomizeProduct({ ...full, categoryId: p.categoryId });
+        setCustomizeLoading(false);
+        return;
       }
       openCustomizeForProduct(p);
     } else {
@@ -1373,7 +1372,14 @@ export default function OrderPageClient({
 
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
-    return customizeProduct.attributeGroups
+    const priceById = new Map<
+      string,
+      { price: number; salePrice: number | null }
+    >();
+    for (const p of products) {
+      priceById.set(p.id, { price: p.price, salePrice: p.salePrice });
+    }
+    const built = customizeProduct.attributeGroups
       .filter((g) => Boolean(g.id) && Boolean(g.selectionType))
       .map((g) =>
         buildCustomerAttributeGroup(
@@ -1387,7 +1393,14 @@ export default function OrderPageClient({
           uiLang
         )
       );
-  }, [customizeProduct, hostSubdomain, orderInfo?.restaurantSlug, uiLang]);
+    return overlayLiveCatalogPrices(built, priceById);
+  }, [
+    customizeProduct,
+    hostSubdomain,
+    orderInfo?.restaurantSlug,
+    products,
+    uiLang,
+  ]);
 
   // Avoid server/client markup mismatches by rendering only after first mount.
   // Important: this must be AFTER all hooks to keep React Hook order stable.

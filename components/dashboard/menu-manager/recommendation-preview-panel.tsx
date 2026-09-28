@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Loader2, Minus, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Check, Loader2, Minus, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -151,6 +151,11 @@ type Props = {
   dealsItems?: OfferPreviewItem[];
   offeredItems?: OfferPreviewItem[];
   onDeleteGroup?: (groupId: string, isDraft: boolean) => void;
+  onEditGroup?: (groupId: string, isDraft: boolean) => void;
+  onCancelGroup?: (
+    groupId: string,
+    meta: { isDraft: boolean; isEditing: boolean }
+  ) => void;
   deletingRuleId?: string | null;
   deletingRule?: boolean;
   loadingPersonalize?: boolean;
@@ -175,6 +180,8 @@ export function RecommendationPreviewPanel({
   dealsItems = [],
   offeredItems = [],
   onDeleteGroup,
+  onEditGroup,
+  onCancelGroup,
   deletingRuleId,
   deletingRule,
   loadingPersonalize = false,
@@ -312,11 +319,17 @@ export function RecommendationPreviewPanel({
               effectiveUnitPrice(selected.price, selected.salePrice)
             )}
           </p>
-          {selected.description?.trim() ? (
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              {selected.description}
-            </p>
-          ) : null}
+          {(() => {
+            const description = resolveBilingualText(
+              selected.description,
+              uiLang
+            ).trim();
+            return description ? (
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                {description}
+              </p>
+            ) : null;
+          })()}
         </div>
           {(selected.variations?.length ?? 0) > 0 ? (
             <div className="space-y-2">
@@ -394,8 +407,22 @@ export function RecommendationPreviewPanel({
               regional={regional}
               onPreviewChange={(ids) => onPreviewChange(g.id, ids)}
               onDelete={
-                onDeleteGroup
-                  ? () => onDeleteGroup(g.id, Boolean(g.isDraft))
+                onDeleteGroup && !g.isDraft && !g.isEditing
+                  ? () => onDeleteGroup(g.id, false)
+                  : undefined
+              }
+              onEdit={
+                onEditGroup && !g.isEditing
+                  ? () => onEditGroup(g.id, Boolean(g.isDraft))
+                  : undefined
+              }
+              onCancel={
+                onCancelGroup && (g.isDraft || g.isEditing)
+                  ? () =>
+                      onCancelGroup(g.id, {
+                        isDraft: Boolean(g.isDraft),
+                        isEditing: Boolean(g.isEditing),
+                      })
                   : undefined
               }
               deleting={
@@ -588,6 +615,8 @@ function PreviewGroupCard({
   regional,
   onPreviewChange,
   onDelete,
+  onEdit,
+  onCancel,
   deleting,
 }: {
   group: PreviewAttrGroup;
@@ -600,6 +629,8 @@ function PreviewGroupCard({
   regional: RestaurantRegionalSettings;
   onPreviewChange: (ids: string[]) => void;
   onDelete?: () => void;
+  onEdit?: () => void;
+  onCancel?: () => void;
   deleting?: boolean;
 }) {
   const uiLang = useUiLanguage();
@@ -646,9 +677,11 @@ function PreviewGroupCard({
     <section
       className={cn(
         'rounded-lg border bg-background p-4 text-foreground shadow-sm',
-        group.isDraft
-          ? 'border-dashed border-primary/40'
-          : 'border-border'
+        group.isEditing
+          ? 'border-primary/50 ring-1 ring-primary/20'
+          : group.isDraft
+            ? 'border-dashed border-primary/40'
+            : 'border-border'
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -658,11 +691,25 @@ function PreviewGroupCard({
               Step {(group.sortOrder ?? 0) + 1}
             </Badge>
             <Label className="text-sm font-semibold">{groupTitle}</Label>
-            {group.isDraft ? (
+            {group.isEditing ? (
+              <Badge
+                variant="outline"
+                className="border-primary/40 bg-primary/5 text-[10px] uppercase text-primary"
+              >
+                Edit
+              </Badge>
+            ) : group.isDraft ? (
               <Badge variant="outline" className="text-[10px] uppercase">
                 Draft
               </Badge>
-            ) : null}
+            ) : (
+              <Badge
+                variant="outline"
+                className="border-emerald-200 bg-emerald-50 text-[10px] uppercase text-emerald-700"
+              >
+                Saved
+              </Badge>
+            )}
             {group.required ? (
               <Badge
                 variant="outline"
@@ -681,22 +728,56 @@ function PreviewGroupCard({
               : `Category · ${resolveBilingualText(group.linkedCategory?.name, uiLang) || '—'}`}
           </p>
         </div>
-        {onDelete && !group.isDraft ? (
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="shrink-0 text-destructive hover:text-destructive"
-            onClick={onDelete}
-            disabled={deleting}
-            aria-label="Remove rule"
-          >
-            {deleting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 className="h-4 w-4" />
-            )}
-          </Button>
+        {onEdit || onDelete || onCancel ? (
+          <div className="flex shrink-0 items-center gap-0.5">
+            {onEdit ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="shrink-0"
+                onClick={onEdit}
+                disabled={deleting}
+                aria-label={
+                  group.isDraft ? 'Edit draft' : 'Edit rule'
+                }
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            ) : null}
+            {onCancel ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+                onClick={onCancel}
+                disabled={deleting}
+                aria-label={
+                  group.isEditing ? 'Cancel edit' : 'Discard draft'
+                }
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+            {onDelete && !group.isDraft && !group.isEditing ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="shrink-0 text-destructive hover:text-destructive"
+                onClick={onDelete}
+                disabled={deleting}
+                aria-label="Remove rule"
+              >
+                {deleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

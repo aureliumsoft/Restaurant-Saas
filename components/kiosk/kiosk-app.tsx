@@ -41,7 +41,7 @@ import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import {
   fetchCustomerMenuProductDetail,
-  productNeedsDetailFetch,
+  overlayLiveCatalogPrices,
 } from '@/lib/menu/fetch-menu-product-detail';
 import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
 import { LanguageSwitcher } from '@/components/main/language-switcher';
@@ -1018,7 +1018,14 @@ export function KioskApp({
 
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
-    return customizeProduct.attributeGroups.map((g) =>
+    const priceById = new Map<
+      string,
+      { price: number; salePrice: number | null }
+    >();
+    for (const p of allProducts) {
+      priceById.set(p.id, { price: p.price, salePrice: p.salePrice });
+    }
+    const built = customizeProduct.attributeGroups.map((g) =>
       buildCustomerAttributeGroup(
         g,
         customizeProduct.id,
@@ -1026,7 +1033,8 @@ export function KioskApp({
         uiLang
       )
     );
-  }, [customizeProduct, slug, uiLang]);
+    return overlayLiveCatalogPrices(built, priceById);
+  }, [allProducts, customizeProduct, slug, uiLang]);
 
   const captureFlyOrigin = useCallback(
     (productId: string, el: HTMLElement) => {
@@ -1275,27 +1283,23 @@ export function KioskApp({
 
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     if (productNeedsCustomizeDialog(p)) {
-      if (productNeedsDetailFetch(p)) {
-        const token = ++customizeLoadTokenRef.current;
-        openCustomize(p, { loading: true });
-        const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
-          p.id,
-          { slug }
-        );
-        if (token !== customizeLoadTokenRef.current) return;
-        if (!full) {
-          setDialogOpen(false);
-          setCustomizeProduct(null);
-          setCustomizeLoading(false);
-          toast.error(t('productNotFoundToModify'));
-          return;
-        }
-        setCustomizeProduct({ ...full, categoryId: p.categoryId });
+      const token = ++customizeLoadTokenRef.current;
+      openCustomize(p, { loading: true });
+      const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
+        p.id,
+        { slug },
+        { force: true }
+      );
+      if (token !== customizeLoadTokenRef.current) return;
+      if (!full) {
+        setDialogOpen(false);
+        setCustomizeProduct(null);
         setCustomizeLoading(false);
+        toast.error(t('productNotFoundToModify'));
         return;
       }
-      customizeLoadTokenRef.current += 1;
-      openCustomize(p);
+      setCustomizeProduct({ ...full, categoryId: p.categoryId });
+      setCustomizeLoading(false);
       return;
     }
     addToCart(p, []);
@@ -2532,6 +2536,7 @@ export function KioskApp({
                   cardPayment.setCardPaymentOutcomeOpen
                 }
                 setCardProcessingOpen={cardPayment.setCardProcessingOpen}
+                onBypass={cardPayment.handleCardPaymentBypass}
                 onCancel={cardPayment.handleCardPaymentCancel}
                 formatMoney={formatMoney}
               />

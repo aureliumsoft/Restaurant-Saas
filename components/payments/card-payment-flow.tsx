@@ -177,6 +177,11 @@ export function useCardPaymentFlow({
     finalizeCardPayment('error');
   }
 
+  function handleCardPaymentBypass() {
+    cardPaymentCancelledRef.current = true;
+    finalizeCardPayment('success', `BYPASS-${Date.now()}`, true);
+  }
+
   function handleCardPaymentCancel() {
     cardPaymentCancelledRef.current = true;
     finalizeCardPayment('cancelled');
@@ -191,6 +196,7 @@ export function useCardPaymentFlow({
     isCardPaymentComplete: cardPaymentStatus === 'success',
     resetCardPayment,
     handleCardPayClick,
+    handleCardPaymentBypass,
     handleCardPaymentCancel,
     setCardProcessingOpen,
     formatMoney,
@@ -205,6 +211,7 @@ type CardPaymentDialogsProps = {
   cardPaymentOutcomeOpen: 'success' | 'error' | null;
   setCardPaymentOutcomeOpen: (v: 'success' | 'error' | null) => void;
   setCardProcessingOpen: (open: boolean) => void;
+  onBypass: () => void;
   onCancel: () => void;
   formatMoney?: (n: number) => string;
   successContinueLabel?: string;
@@ -218,6 +225,7 @@ export function CardPaymentDialogs({
   cardPaymentOutcomeOpen,
   setCardPaymentOutcomeOpen,
   setCardProcessingOpen,
+  onBypass,
   onCancel,
   formatMoney = defaultFormatMoney,
   successContinueLabel = 'Continue',
@@ -261,6 +269,14 @@ export function CardPaymentDialogs({
             </p>
           </div>
           <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={onBypass}
+            >
+              Bypass payment (test)
+            </Button>
             <Button
               type="button"
               variant="outline"

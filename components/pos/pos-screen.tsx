@@ -164,7 +164,7 @@ import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import {
   fetchRestaurantMenuProductDetail,
-  productNeedsDetailFetch,
+  overlayLiveCatalogPrices,
 } from '@/lib/menu/fetch-menu-product-detail';
 import {
   isOfflineLocalOrderId,
@@ -1351,7 +1351,14 @@ export function PosScreen({
 
   const attributeGroupsForDialog: AttributeGroup[] = useMemo(() => {
     if (!customizeProduct) return [];
-    return customizeProduct.attributeGroups.map((g) =>
+    const priceById = new Map<
+      string,
+      { price: number; salePrice: number | null }
+    >();
+    for (const p of products) {
+      priceById.set(p.id, { price: p.price, salePrice: p.salePrice });
+    }
+    const built = customizeProduct.attributeGroups.map((g) =>
       buildCustomerAttributeGroup(
         g,
         customizeProduct.id,
@@ -1359,7 +1366,8 @@ export function PosScreen({
         uiLang
       )
     );
-  }, [customizeProduct, uiLang]);
+    return overlayLiveCatalogPrices(built, priceById);
+  }, [customizeProduct, products, uiLang]);
 
   const subtotal = useMemo(() => {
     return cart.reduce((sum, line) => {
@@ -1894,41 +1902,36 @@ export function PosScreen({
 
   const proceedWithProduct = async (p: PosMenuProduct) => {
     if (productNeedsCustomizeDialog(p)) {
-      if (productNeedsDetailFetch(p)) {
-        const token = ++customizeLoadTokenRef.current;
-        openCustomize(p, { loading: true });
-        const full = await fetchRestaurantMenuProductDetail<
-          PosMenuProduct & { categoryIds?: string[] }
-        >(p.id);
-        if (token !== customizeLoadTokenRef.current) return;
-        if (!full) {
-          setCustomizeOpen(false);
-          setCustomizeProduct(null);
-          setCustomizeLoading(false);
-          toast.error('Could not load product configuration.');
-      return;
-    }
-        setCustomizeProduct({
-          ...full,
-          categoryId: p.categoryId,
-          description: full.description ?? null,
-          imageUrl: full.imageUrl ?? null,
-          price: Number(full.price),
-          salePrice:
-            full.salePrice != null && Number.isFinite(Number(full.salePrice))
-              ? Number(full.salePrice)
-              : null,
-          attributeGroups: full.attributeGroups ?? [],
-          variations: (full.variations ?? []).map((v) => ({
-            ...v,
-            priceDelta: Number(v.priceDelta ?? 0),
-          })),
-        });
+      const token = ++customizeLoadTokenRef.current;
+      openCustomize(p, { loading: true });
+      const full = await fetchRestaurantMenuProductDetail<
+        PosMenuProduct & { categoryIds?: string[] }
+      >(p.id, { force: true });
+      if (token !== customizeLoadTokenRef.current) return;
+      if (!full) {
+        setCustomizeOpen(false);
+        setCustomizeProduct(null);
         setCustomizeLoading(false);
+        toast.error('Could not load product configuration.');
         return;
       }
-      customizeLoadTokenRef.current += 1;
-      openCustomize(p);
+      setCustomizeProduct({
+        ...full,
+        categoryId: p.categoryId,
+        description: full.description ?? null,
+        imageUrl: full.imageUrl ?? null,
+        price: Number(full.price),
+        salePrice:
+          full.salePrice != null && Number.isFinite(Number(full.salePrice))
+            ? Number(full.salePrice)
+            : null,
+        attributeGroups: full.attributeGroups ?? [],
+        variations: (full.variations ?? []).map((v) => ({
+          ...v,
+          priceDelta: Number(v.priceDelta ?? 0),
+        })),
+      });
+      setCustomizeLoading(false);
       return;
     }
     addToCart(p, []);

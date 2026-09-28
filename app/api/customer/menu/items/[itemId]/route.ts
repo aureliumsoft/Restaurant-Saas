@@ -6,7 +6,8 @@ import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query
 import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const MENU_CACHE_HEADERS = {
-  'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+  // Nested add-on prices change with product edits — do not CDN-cache this payload.
+  'Cache-Control': 'private, no-store',
 };
 
 type RouteContext = { params: Promise<{ itemId: string }> };
@@ -27,6 +28,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const data = await loadCustomerMenuProductDetail({
       ...resolved,
       itemId: trimmed,
+      // Always re-read add-on / recommendation prices from the DB.
+      skipCache: true,
     });
 
     if (!data) {

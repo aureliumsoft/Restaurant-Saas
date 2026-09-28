@@ -105,10 +105,16 @@ type Props = {
   onDraftChange?: (draft: RecommendationRuleDraft) => void;
   /** Bumps when the form should reset (after save, discard, or product change). */
   resetKey?: string | number;
+  /** When set with resetKey, form seeds from this draft instead of empty defaults. */
+  initialDraft?: RecommendationRuleDraft | null;
   /** Unsaved drafts from other sections — used to hide already-picked categories/products. */
   draftByVariant?: Partial<
     Record<RecommendationFormVariant, RecommendationRuleDraft>
   >;
+  /** Saved group currently being edited — keep its category/product pickable. */
+  editingGroupId?: string | null;
+  /** Optional cancel while editing a saved rule. */
+  onCancelEdit?: () => void;
 };
 
 function variantDefaults(variant: RecommendationFormVariant): {
@@ -137,7 +143,10 @@ export function RecommendationRuleForm({
   onSave,
   onDraftChange,
   resetKey = 0,
+  initialDraft = null,
   draftByVariant = {},
+  editingGroupId = null,
+  onCancelEdit,
 }: Props) {
   const uiLang = useUiLanguage();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
@@ -248,13 +257,24 @@ export function RecommendationRuleForm({
 
   const reservedCategoryIds = useMemo(
     () =>
-      reservedRecommendationCategoryIds(selected, draftByVariant, variant),
-    [selected, draftByVariant, variant]
+      reservedRecommendationCategoryIds(
+        selected,
+        draftByVariant,
+        variant,
+        editingGroupId
+      ),
+    [selected, draftByVariant, variant, editingGroupId]
   );
 
   const reservedProductIds = useMemo(
-    () => reservedRecommendationProductIds(selected, draftByVariant, variant),
-    [selected, draftByVariant, variant]
+    () =>
+      reservedRecommendationProductIds(
+        selected,
+        draftByVariant,
+        variant,
+        editingGroupId
+      ),
+    [selected, draftByVariant, variant, editingGroupId]
   );
 
   const [categorySearch, setCategorySearch] = useState('');
@@ -562,26 +582,52 @@ export function RecommendationRuleForm({
   const onDraftChangeRef = useRef(onDraftChange);
   onDraftChangeRef.current = onDraftChange;
   const lastDraftKeyRef = useRef('');
+  const initialDraftRef = useRef(initialDraft);
+  initialDraftRef.current = initialDraft;
 
   useEffect(() => {
-    setMultipleMode('CHECKBOX');
-    setRequired(false);
-    setRuleCategoryIds([]);
-    setCategoryDefaults({});
-    setCategoryDefaultVariations({});
-    setCategoryIncludeDefaultVariationPrice({});
-    setProductCategoryIds([]);
-    setLinkedProductId('');
-    setLinkedProductIds([]);
-    setCategoryFreeQuantity({});
-    setCategoryMinMax({});
-    setCategoryVariationLimits({});
-    setProductFreeQuantity({});
-    setProductMinMax({});
-    setCategoryVariationPricing({});
-    setCategoryDiscountPercent({});
-    setCategoryExtraCostPercent({});
-    setCategoryProductOverrides({});
+    const seed = initialDraftRef.current;
+    if (seed) {
+      setMultipleMode(seed.multipleMode);
+      setRequired(seed.required);
+      setRuleCategoryIds([...seed.ruleCategoryIds]);
+      setCategoryDefaults({ ...seed.categoryDefaults });
+      setCategoryDefaultVariations({ ...seed.categoryDefaultVariations });
+      setCategoryIncludeDefaultVariationPrice({
+        ...seed.categoryIncludeDefaultVariationPrice,
+      });
+      setProductCategoryIds([...seed.productCategoryIds]);
+      setLinkedProductId(seed.linkedProductId);
+      setLinkedProductIds([...seed.linkedProductIds]);
+      setCategoryFreeQuantity({ ...seed.categoryFreeQuantity });
+      setCategoryMinMax({ ...seed.categoryMinMax });
+      setCategoryVariationLimits({ ...seed.categoryVariationLimits });
+      setProductFreeQuantity({ ...seed.productFreeQuantity });
+      setProductMinMax({ ...seed.productMinMax });
+      setCategoryVariationPricing({ ...seed.categoryVariationPricing });
+      setCategoryDiscountPercent({ ...seed.categoryDiscountPercent });
+      setCategoryExtraCostPercent({ ...seed.categoryExtraCostPercent });
+      setCategoryProductOverrides({ ...seed.categoryProductOverrides });
+    } else {
+      setMultipleMode('CHECKBOX');
+      setRequired(false);
+      setRuleCategoryIds([]);
+      setCategoryDefaults({});
+      setCategoryDefaultVariations({});
+      setCategoryIncludeDefaultVariationPrice({});
+      setProductCategoryIds([]);
+      setLinkedProductId('');
+      setLinkedProductIds([]);
+      setCategoryFreeQuantity({});
+      setCategoryMinMax({});
+      setCategoryVariationLimits({});
+      setProductFreeQuantity({});
+      setProductMinMax({});
+      setCategoryVariationPricing({});
+      setCategoryDiscountPercent({});
+      setCategoryExtraCostPercent({});
+      setCategoryProductOverrides({});
+    }
     setCategoryProductsById({});
     setCategoryProductsLoadingById({});
     setCategorySearch('');
@@ -1770,24 +1816,37 @@ export function RecommendationRuleForm({
         </div>
       ) : null}
 
-      <Button
-        type="button"
-        className="w-full"
-        disabled={saving}
-        onClick={() => onSave(currentDraft)}
-      >
-        {saving ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Saving…
-          </>
-        ) : (
-          <>
-            <Save className="mr-2 h-4 w-4" />
-            {saveLabel}
-          </>
-        )}
-      </Button>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        {onCancelEdit ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            disabled={saving}
+            onClick={onCancelEdit}
+          >
+            Cancel edit
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          className="w-full flex-1"
+          disabled={saving}
+          onClick={() => onSave(currentDraft)}
+        >
+          {saving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              {saveLabel}
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

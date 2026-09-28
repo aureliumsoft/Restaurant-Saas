@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, Children } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Dispatch, SetStateAction } from 'react';
-import { ChevronDown, Loader2, Save, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, Loader2, Pencil, Save, Search, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ import {
   isManyKind,
   isOneKind,
   isProductKind,
+  seedWizardStateFromDraft,
   wizardKindToVariant,
   type CategoryWizardSettings,
   type ProductWizardSettings,
@@ -81,6 +82,15 @@ export type ConfigurationWizardProps = {
     (draft: RecommendationRuleDraft) => void
   >;
   onDeleteGroup: (groupId: string) => void;
+  onEditGroup?: (groupId: string) => void;
+  /** When set, advanced wizard seeds configure step from this draft. */
+  editSeedRequest?: {
+    nonce: number;
+    draft: RecommendationRuleDraft;
+  } | null;
+  editingGroupId?: string | null;
+  editingVariant?: RecommendationFormVariant | null;
+  onCancelEdit?: () => void;
   dealCategoryIds: string[];
   setDealCategoryIds: Dispatch<SetStateAction<string[]>>;
   selectedDealProductIds: string[];
@@ -112,6 +122,8 @@ export type ConfigurationWizardProps = {
     groups?: PersonalizeGroupDraft[]
   ) => Promise<boolean> | boolean;
   formResetKeys: Record<RecommendationFormVariant, number>;
+  /** Bump to clear advanced wizard category/product selection (cancel edit/draft). */
+  configureResetKey?: number;
   draftByVariant: Partial<
     Record<RecommendationFormVariant, RecommendationRuleDraft>
   >;
@@ -228,6 +240,7 @@ function SavedSummaryList({
   deletingOffer,
   deletingOfferId,
   savingPersonalize,
+  onEditGroup,
 }: {
   selected: ProductWithCategory;
   savedGroups: AttrGroupRow[];
@@ -235,6 +248,7 @@ function SavedSummaryList({
   currentOffers: NonNullable<MenuItemRow['offersFromThis']>;
   personalizeDraft: PersonalizeGroupDraft[];
   onDeleteGroup: (groupId: string) => void;
+  onEditGroup?: (groupId: string) => void;
   onDeleteDeal: (dealId: string) => void;
   onDeleteOffer: (offerId: string) => void;
   onDeletePersonalizeGroup?: (index: number) => void;
@@ -307,6 +321,18 @@ function SavedSummaryList({
             <Badge variant="secondary" className="text-[10px]">
               {g.selectionType === 'SINGLE' ? 'One' : 'Extras'}
             </Badge>
+            {onEditGroup ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                onClick={() => onEditGroup(g.id)}
+                aria-label={`Edit ${resolveBilingualText(g.name, uiLang)}`}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="icon"
@@ -469,6 +495,11 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     onSaveDraft,
     draftChangeHandlers,
     onDeleteGroup,
+    onEditGroup,
+    editSeedRequest,
+    editingGroupId,
+    editingVariant,
+    onCancelEdit,
     dealCategoryIds,
     setDealCategoryIds,
     selectedDealProductIds,
@@ -496,6 +527,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     onPersonalizeDraftChange,
     savingPersonalize,
     formResetKeys,
+    configureResetKey = 0,
     draftByVariant,
   } = props;
 
@@ -560,9 +592,10 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     return reservedRecommendationCategoryIds(
       selected,
       draftByVariant,
-      exclude && isCategoryKind(kind) ? exclude : undefined
+      exclude && isCategoryKind(kind) ? exclude : undefined,
+      editingGroupId
     );
-  }, [selected, draftByVariant, kind]);
+  }, [selected, draftByVariant, kind, editingGroupId]);
 
   const reservedProductIds = useMemo(() => {
     const exclude =
@@ -570,9 +603,10 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     return reservedRecommendationProductIds(
       selected,
       draftByVariant,
-      exclude && isProductKind(kind) ? exclude : undefined
+      exclude && isProductKind(kind) ? exclude : undefined,
+      editingGroupId
     );
-  }, [selected, draftByVariant, kind]);
+  }, [selected, draftByVariant, kind, editingGroupId]);
 
   const eligibleCategories = useMemo(() => {
     const ownIds = new Set(menuItemCategoryIds(selected));
@@ -706,6 +740,28 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on product change only
   }, [selected.id, viewMode]);
 
+  useEffect(() => {
+    if (!editSeedRequest || viewMode !== 'advanced') return;
+    const seeded = seedWizardStateFromDraft(editSeedRequest.draft);
+    setKind(seeded.kind);
+    setRequired(seeded.required);
+    setMultipleMode(seeded.multipleMode);
+    setSelectedCategoryIds(seeded.selectedCategoryIds);
+    setProductCategoryIds(seeded.productCategoryIds);
+    setLinkedProductIds(seeded.linkedProductIds);
+    setCategorySettings(seeded.categorySettings);
+    setProductSettings(seeded.productSettings);
+    setShowAdvanced(true);
+    setStep(2);
+  }, [editSeedRequest, viewMode]);
+
+  useEffect(() => {
+    if (configureResetKey <= 0) return;
+    resetConfigureState();
+    // Keep the user on configure (step 2) if they were editing there; empty selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional clear on cancel only
+  }, [configureResetKey]);
+
   const currentDraftInput = useMemo(() => {
     if (kind === 'prefs') return null;
     return {
@@ -733,13 +789,14 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
 
   useEffect(() => {
     if (step !== 2 || !currentDraftInput) return;
-    const canPreview =
-      (isCategoryKind(currentDraftInput.kind) &&
-        currentDraftInput.selectedCategoryIds.length > 0) ||
-      (isProductKind(currentDraftInput.kind) &&
-        currentDraftInput.linkedProductIds.length > 0 &&
-        currentDraftInput.productCategoryIds.length > 0);
-    if (!canPreview) return;
+    if (
+      !isCategoryKind(currentDraftInput.kind) &&
+      !isProductKind(currentDraftInput.kind)
+    ) {
+      return;
+    }
+    // Always sync — including empty selection — so unselected categories are
+    // removed from draftByVariant and disappear from customer preview.
     const draft = buildWizardRuleDraft(currentDraftInput);
     draftChangeHandlers[wizardKindToVariant(currentDraftInput.kind)]?.(draft);
   }, [step, currentDraftInput, draftChangeHandlers]);
@@ -1427,6 +1484,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                 currentOffers={currentOffers}
                 personalizeDraft={personalizeDraft}
                 onDeleteGroup={onDeleteGroup}
+                onEditGroup={onEditGroup}
                 onDeleteDeal={onDeleteDeal}
                 onDeleteOffer={onDeleteOffer}
                 onDeletePersonalizeGroup={(index) => {
@@ -1459,6 +1517,10 @@ function ClassicConfigSections({
   onSaveDraft,
   draftChangeHandlers,
   onDeleteGroup,
+  onEditGroup,
+  editingGroupId = null,
+  editingVariant = null,
+  onCancelEdit,
   dealCategoryIds,
   setDealCategoryIds,
   selectedDealProductIds,
@@ -1524,12 +1586,31 @@ function ClassicConfigSections({
           title={RECOMMENDATION_SECTION_LABELS[variant]}
           description=""
         >
-          <SavedGroupList groups={groups} onDelete={onDeleteGroup} />
+          <SavedGroupList
+            groups={groups}
+            onDelete={onDeleteGroup}
+            onEdit={onEditGroup}
+          />
           <RecommendationRuleForm
             variant={variant}
             {...formProps}
             resetKey={`${selected.id}:${formResetKeys[variant]}`}
-            saveLabel={`Save ${RECOMMENDATION_SECTION_LABELS[variant]}`}
+            initialDraft={
+              editingVariant === variant
+                ? (draftByVariant[variant] ?? null)
+                : null
+            }
+            editingGroupId={
+              editingVariant === variant ? editingGroupId : null
+            }
+            onCancelEdit={
+              editingVariant === variant ? onCancelEdit : undefined
+            }
+            saveLabel={
+              editingVariant === variant && editingGroupId
+                ? `Update ${RECOMMENDATION_SECTION_LABELS[variant]}`
+                : `Save ${RECOMMENDATION_SECTION_LABELS[variant]}`
+            }
             onDraftChange={draftChangeHandlers[variant]}
           />
         </RecommendationConfigSectionShell>
@@ -1837,9 +1918,11 @@ function ClassicConfigSections({
 function SavedGroupList({
   groups,
   onDelete,
+  onEdit,
 }: {
   groups: AttrGroupRow[];
   onDelete: (groupId: string) => void;
+  onEdit?: (groupId: string) => void;
 }) {
   const uiLang = useUiLanguage();
   if (groups.length === 0) {
@@ -1867,16 +1950,30 @@ function SavedGroupList({
               {g.required ? ' · Required' : ' · Optional'}
             </p>
           </div>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="shrink-0 text-destructive"
-            onClick={() => onDelete(g.id)}
-            aria-label="Remove rule"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {onEdit ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="shrink-0"
+                onClick={() => onEdit(g.id)}
+                aria-label="Edit rule"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="shrink-0 text-destructive"
+              onClick={() => onDelete(g.id)}
+              aria-label="Remove rule"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </li>
       ))}
     </ul>

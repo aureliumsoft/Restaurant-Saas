@@ -17,6 +17,7 @@ import {
   customerMenuItemCoreSelect,
   customerMenuLinkedItemCoreSelect,
 } from "@/lib/menu/customer-menu-attribute-groups-select";
+import { clearCustomerMenuProductDetailCache } from "@/lib/menu/load-customer-menu-progressive";
 import { personalizeGroupsSelect } from "@/lib/menu/personalize-groups-select";
 import {
   restaurantMenuItemImageUrl,
@@ -183,7 +184,7 @@ export async function GET(
       {
         status: 200,
         headers: {
-          "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
+          "Cache-Control": "private, no-store",
         },
       }
     );
@@ -448,6 +449,14 @@ export async function PATCH(
 
     const resolvedCategoryIds =
       categoryIds ?? (await getMenuItemCategoryIds(itemId));
+
+    // Drop customize payloads that embed this item's price as a recommendation add-on.
+    if (
+      parsed.data.price !== undefined ||
+      parsed.data.salePrice !== undefined
+    ) {
+      clearCustomerMenuProductDetailCache();
+    }
 
     return NextResponse.json(
       { data: { ...updated, categoryIds: resolvedCategoryIds } },

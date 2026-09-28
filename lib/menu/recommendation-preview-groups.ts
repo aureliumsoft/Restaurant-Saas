@@ -98,6 +98,8 @@ export const RECOMMENDATION_SECTION_LABELS: Record<
 
 export type PreviewAttrGroup = AttrGroupRow & {
   isDraft?: boolean;
+  /** True while a saved rule is open in the editor (live preview on the same card). */
+  isEditing?: boolean;
   draftKey?: string;
 };
 
@@ -280,6 +282,108 @@ export function buildDraftPreviewGroups(
   }
 
   return out;
+}
+
+/**
+ * Build customer-preview groups: saved cards stay in place; while editing a
+ * saved rule, merge the live draft onto that card (Edit) instead of adding a
+ * separate Draft box. Pure new drafts still appear as Draft cards.
+ */
+export function buildLivePreviewGroups(options: {
+  savedGroups: AttrGroupRow[];
+  drafts: Partial<Record<RecommendationFormVariant, RecommendationRuleDraft>>;
+  localCategories: MenuCategoryRow[];
+  allProducts: (MenuItemRow & { categoryName: string })[];
+  baseProduct: MenuItemRow;
+  editingGroupId?: string | null;
+  editingVariant?: RecommendationFormVariant | null;
+  editingSortOrder?: number | null;
+}): PreviewAttrGroup[] {
+  const {
+    savedGroups,
+    drafts,
+    localCategories,
+    allProducts,
+    baseProduct,
+    editingGroupId,
+    editingVariant,
+    editingSortOrder,
+  } = options;
+
+  const draftGroups = buildDraftPreviewGroups(
+    drafts,
+    localCategories,
+    allProducts,
+    baseProduct,
+    savedGroups
+  );
+
+  const markSaved = (group: AttrGroupRow): PreviewAttrGroup => ({
+    ...group,
+    isDraft: false,
+    isEditing: false,
+  });
+
+  if (!editingGroupId || !editingVariant) {
+    return [...savedGroups.map(markSaved), ...draftGroups].sort(
+      (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+    );
+  }
+
+  const editingPrefix = `draft-${editingVariant}-`;
+  const editingDrafts = draftGroups.filter((d) =>
+    d.id.startsWith(editingPrefix)
+  );
+  const otherDrafts = draftGroups.filter(
+    (d) => !d.id.startsWith(editingPrefix)
+  );
+  const original = savedGroups.find((g) => g.id === editingGroupId);
+  const otherSaved = savedGroups.filter((g) => g.id !== editingGroupId);
+
+  let primaryDraft: PreviewAttrGroup | undefined;
+  if (original) {
+    primaryDraft = editingDrafts.find((d) => {
+      if (original.sourceType === 'PRODUCT' || d.sourceType === 'PRODUCT') {
+        return (
+          d.linkedProduct?.id != null &&
+          d.linkedProduct.id === original.linkedProduct?.id
+        );
+      }
+      return (
+        d.linkedCategory?.id != null &&
+        d.linkedCategory.id === original.linkedCategory?.id
+      );
+    });
+  }
+  if (!primaryDraft) primaryDraft = editingDrafts[0];
+
+  const extraEditingDrafts = primaryDraft
+    ? editingDrafts.filter((d) => d.id !== primaryDraft!.id)
+    : editingDrafts;
+
+  const merged: PreviewAttrGroup[] = otherSaved.map(markSaved);
+
+  if (primaryDraft) {
+    merged.push({
+      ...primaryDraft,
+      id: editingGroupId,
+      isDraft: false,
+      isEditing: true,
+      draftKey: undefined,
+      sortOrder:
+        editingSortOrder ?? original?.sortOrder ?? primaryDraft.sortOrder ?? 0,
+    });
+  } else if (original) {
+    merged.push({
+      ...original,
+      isDraft: false,
+      isEditing: true,
+      sortOrder: editingSortOrder ?? original.sortOrder ?? 0,
+    });
+  }
+
+  merged.push(...extraEditingDrafts, ...otherDrafts);
+  return merged.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 }
 
 /** Merge loaded products into category rows for configuration preview. */

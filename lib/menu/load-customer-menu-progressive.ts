@@ -345,7 +345,7 @@ export async function loadCustomerMenuCategoryItems(options: {
 }
 
 const PRODUCT_DETAIL_OPTION_TAKE = 40;
-const PRODUCT_DETAIL_CACHE_TTL_MS = 60_000;
+const PRODUCT_DETAIL_CACHE_TTL_MS = 10_000;
 
 type CachedProductDetail = {
   expiresAt: number;
@@ -360,6 +360,17 @@ function productDetailCacheKey(options: {
   itemId: string;
 }) {
   return `${options.slug?.trim() ?? ''}|${options.subdomain?.trim() ?? ''}|${options.itemId}`;
+}
+
+/** Drop cached customize payloads so recommendation prices refresh after edits. */
+export function clearCustomerMenuProductDetailCache(itemId?: string) {
+  if (!itemId) {
+    productDetailCache.clear();
+    return;
+  }
+  for (const key of productDetailCache.keys()) {
+    if (key.endsWith(`|${itemId}`)) productDetailCache.delete(key);
+  }
 }
 
 type DetailGroup = AttributeGroupSource & {
@@ -771,17 +782,23 @@ export async function loadCustomerMenuProductDetail(options: {
   slug?: string | null;
   subdomain?: string | null;
   itemId: string;
+  /** Skip in-memory cache so recommendation / add-on prices stay current. */
+  skipCache?: boolean;
 }) {
   const key = productDetailCacheKey(options);
-  const cached = productDetailCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.data as Awaited<
-      ReturnType<typeof loadCustomerMenuProductDetailUncached>
-    >;
+  if (!options.skipCache) {
+    const cached = productDetailCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data as Awaited<
+        ReturnType<typeof loadCustomerMenuProductDetailUncached>
+      >;
+    }
+  } else {
+    productDetailCache.delete(key);
   }
 
   const data = await loadCustomerMenuProductDetailUncached(options);
-  if (data) {
+  if (data && !options.skipCache) {
     productDetailCache.set(key, {
       expiresAt: Date.now() + PRODUCT_DETAIL_CACHE_TTL_MS,
       data,

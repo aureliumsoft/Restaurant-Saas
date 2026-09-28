@@ -18,10 +18,12 @@ export function reservedRecommendationCategoryIds(
   draftByVariant: Partial<
     Record<RecommendationFormVariant, RecommendationRuleDraft>
   >,
-  excludeVariant?: RecommendationFormVariant
+  excludeVariant?: RecommendationFormVariant,
+  excludeGroupId?: string | null
 ): Set<string> {
   const ids = new Set<string>();
   for (const group of selected.attributeGroups) {
+    if (excludeGroupId && group.id === excludeGroupId) continue;
     if (group.linkedCategory) ids.add(group.linkedCategory.id);
   }
   for (const variant of RECOMMENDATION_FORM_VARIANTS) {
@@ -39,10 +41,12 @@ export function reservedRecommendationProductIds(
   draftByVariant: Partial<
     Record<RecommendationFormVariant, RecommendationRuleDraft>
   >,
-  excludeVariant?: RecommendationFormVariant
+  excludeVariant?: RecommendationFormVariant,
+  excludeGroupId?: string | null
 ): Set<string> {
   const ids = new Set<string>([selected.id]);
   for (const group of selected.attributeGroups) {
+    if (excludeGroupId && group.id === excludeGroupId) continue;
     if (group.linkedProduct) ids.add(group.linkedProduct.id);
   }
   for (const variant of RECOMMENDATION_FORM_VARIANTS) {
@@ -58,10 +62,12 @@ export function findDuplicateRecommendationAssignments(
   selected: MenuItemRow,
   draftByVariant: Partial<
     Record<RecommendationFormVariant, RecommendationRuleDraft>
-  >
+  >,
+  excludeGroupId?: string | null
 ): string | null {
   const categoryOwners = new Map<string, string>();
   for (const group of selected.attributeGroups) {
+    if (excludeGroupId && group.id === excludeGroupId) continue;
     if (group.linkedCategory) {
       categoryOwners.set(
         group.linkedCategory.id,
@@ -72,6 +78,7 @@ export function findDuplicateRecommendationAssignments(
 
   const productOwners = new Map<string, string>();
   for (const group of selected.attributeGroups) {
+    if (excludeGroupId && group.id === excludeGroupId) continue;
     if (group.linkedProduct) {
       productOwners.set(
         group.linkedProduct.id,

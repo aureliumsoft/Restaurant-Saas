@@ -3,6 +3,7 @@ import type {
   RecommendationProductOverrideDraft,
   VariationLimitDraft,
 } from '@/components/dashboard/menu-manager/recommendation-rule-form';
+import type { AttrGroupRow } from '@/components/dashboard/menu-manager/types';
 import type { RecommendationFormVariant } from '@/lib/menu/recommendation-preview-groups';
 import {
   DEFAULT_CATEGORY_MIN_MAX,
@@ -49,6 +50,21 @@ export function wizardKindToVariant(
   }
 }
 
+export function variantToWizardKind(
+  variant: RecommendationFormVariant
+): Exclude<WizardChoiceKind, 'prefs'> {
+  switch (variant) {
+    case 'category-single':
+      return 'cat-one';
+    case 'category-multiple':
+      return 'cat-many';
+    case 'product-single':
+      return 'prod-one';
+    case 'product-multiple':
+      return 'prod-many';
+  }
+}
+
 export function emptyRuleDraft(
   sourceType: 'CATEGORY' | 'PRODUCT',
   selectionType: 'SINGLE' | 'MULTIPLE'
@@ -74,6 +90,179 @@ export function emptyRuleDraft(
     categoryDiscountPercent: {},
     categoryExtraCostPercent: {},
     categoryProductOverrides: {},
+  };
+}
+
+/** Map a saved attribute group into a classic/advanced editor draft (1:1). */
+export function attrGroupToRuleDraft(group: AttrGroupRow): RecommendationRuleDraft {
+  const sourceType = group.sourceType ?? 'CATEGORY';
+  const selectionType = group.selectionType;
+  const draft = emptyRuleDraft(sourceType, selectionType);
+  draft.required = group.required;
+  draft.multipleMode =
+    group.multipleMode === 'QUANTITY' ? 'QUANTITY' : 'CHECKBOX';
+
+  if (sourceType === 'CATEGORY' && group.linkedCategory?.id) {
+    const catId = group.linkedCategory.id;
+    draft.ruleCategoryIds = [catId];
+    if (group.defaultLinkedMenuItemId) {
+      draft.categoryDefaults[catId] = group.defaultLinkedMenuItemId;
+    } else if (group.defaultLinkedMenuItem?.id) {
+      draft.categoryDefaults[catId] = group.defaultLinkedMenuItem.id;
+    }
+    const variationId =
+      group.defaultLinkedRestaurantVariationId ??
+      group.defaultLinkedRestaurantVariation?.id ??
+      null;
+    if (variationId) {
+      draft.categoryDefaultVariations[catId] = variationId;
+      draft.categoryIncludeDefaultVariationPrice[catId] =
+        group.includeDefaultLinkedVariationPrice ?? true;
+    }
+    if (group.useVariationPricing) {
+      draft.categoryVariationPricing[catId] = true;
+    }
+    if (group.categoryDiscountPercent != null) {
+      draft.categoryDiscountPercent[catId] = group.categoryDiscountPercent;
+    }
+    if (group.categoryExtraCostPercent != null) {
+      draft.categoryExtraCostPercent[catId] = group.categoryExtraCostPercent;
+    }
+    if (group.productOverrides && Object.keys(group.productOverrides).length > 0) {
+      draft.categoryProductOverrides[catId] = Object.fromEntries(
+        Object.entries(group.productOverrides).map(([productId, override]) => [
+          productId,
+          {
+            excluded: Boolean(override.excluded),
+            free: Boolean(override.free),
+          },
+        ])
+      );
+    }
+    if (selectionType === 'MULTIPLE') {
+      if (draft.multipleMode === 'QUANTITY') {
+        draft.categoryFreeQuantity[catId] =
+          group.freeQuantity === undefined ? 0 : group.freeQuantity;
+      }
+      if (group.variationLimits && group.variationLimits.length > 0) {
+        draft.categoryVariationLimits[catId] = group.variationLimits.map(
+          (row) => ({
+            variationId: row.variationId,
+            minItems: row.minItems,
+            maxItems: row.maxItems,
+          })
+        );
+      } else {
+        draft.categoryMinMax[catId] = {
+          minItems: group.minItems ?? DEFAULT_CATEGORY_MIN_MAX.minItems,
+          maxItems: group.maxItems ?? DEFAULT_CATEGORY_MIN_MAX.maxItems,
+        };
+      }
+    }
+  } else if (sourceType === 'PRODUCT' && group.linkedProduct?.id) {
+    const productId = group.linkedProduct.id;
+    draft.linkedProductId = productId;
+    draft.linkedProductIds = [productId];
+    draft.productCategoryIds = [...(group.productCategoryIds ?? [])];
+    if (selectionType === 'MULTIPLE') {
+      draft.productMinMax[productId] = {
+        minItems: group.minItems ?? DEFAULT_CATEGORY_MIN_MAX.minItems,
+        maxItems: group.maxItems ?? DEFAULT_CATEGORY_MIN_MAX.maxItems,
+      };
+      if (draft.multipleMode === 'QUANTITY') {
+        draft.productFreeQuantity[productId] =
+          group.freeQuantity === undefined ? 0 : group.freeQuantity;
+      }
+    }
+  }
+
+  return draft;
+}
+
+/** Seed advanced wizard local settings from a rule draft. */
+export function seedWizardStateFromDraft(draft: RecommendationRuleDraft): {
+  kind: Exclude<WizardChoiceKind, 'prefs'>;
+  required: boolean;
+  multipleMode: 'CHECKBOX' | 'QUANTITY';
+  selectedCategoryIds: string[];
+  productCategoryIds: string[];
+  linkedProductIds: string[];
+  categorySettings: Record<string, CategoryWizardSettings>;
+  productSettings: Record<string, ProductWizardSettings>;
+} {
+  const kind = variantToWizardKind(
+    draft.sourceType === 'CATEGORY'
+      ? draft.selectionType === 'SINGLE'
+        ? 'category-single'
+        : 'category-multiple'
+      : draft.selectionType === 'SINGLE'
+        ? 'product-single'
+        : 'product-multiple'
+  );
+  const categorySettings: Record<string, CategoryWizardSettings> = {};
+  const productSettings: Record<string, ProductWizardSettings> = {};
+
+  if (draft.sourceType === 'CATEGORY') {
+    for (const catId of draft.ruleCategoryIds) {
+      const minMax =
+        draft.categoryMinMax[catId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
+      const perSize = draft.categoryVariationLimits[catId] ?? [];
+      categorySettings[catId] = {
+        ...defaultCategorySettings(minMax.minItems, minMax.maxItems),
+        discountPercent: draft.categoryDiscountPercent[catId] ?? null,
+        extraCostPercent: draft.categoryExtraCostPercent[catId] ?? null,
+        recommendedVariationId: draft.categoryDefaultVariations[catId] ?? '',
+        includeRecommendedVariationPrice:
+          draft.categoryIncludeDefaultVariationPrice[catId] ?? true,
+        defaultItemId: draft.categoryDefaults[catId] ?? '',
+        useVariationPricing: Boolean(draft.categoryVariationPricing[catId]),
+        freeQuantity:
+          catId in draft.categoryFreeQuantity
+            ? draft.categoryFreeQuantity[catId]
+            : undefined,
+        usePerSizeLimits: perSize.length > 0,
+        perSizeLimits: perSize.map((row) => ({ ...row })),
+        productOverrides: Object.fromEntries(
+          Object.entries(draft.categoryProductOverrides[catId] ?? {}).map(
+            ([productId, override]) => [productId, { ...override }]
+          )
+        ),
+      };
+    }
+  } else {
+    const productIds =
+      draft.linkedProductIds.length > 0
+        ? draft.linkedProductIds
+        : draft.linkedProductId
+          ? [draft.linkedProductId]
+          : [];
+    for (const productId of productIds) {
+      const minMax =
+        draft.productMinMax[productId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
+      productSettings[productId] = {
+        ...defaultProductSettings(minMax.minItems, minMax.maxItems),
+        freeQuantity:
+          productId in draft.productFreeQuantity
+            ? draft.productFreeQuantity[productId]
+            : undefined,
+      };
+    }
+  }
+
+  return {
+    kind,
+    required: draft.required,
+    multipleMode: draft.multipleMode,
+    selectedCategoryIds: [...draft.ruleCategoryIds],
+    productCategoryIds: [...draft.productCategoryIds],
+    linkedProductIds:
+      draft.linkedProductIds.length > 0
+        ? [...draft.linkedProductIds]
+        : draft.linkedProductId
+          ? [draft.linkedProductId]
+          : [],
+    categorySettings,
+    productSettings,
   };
 }
 
