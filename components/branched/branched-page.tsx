@@ -7,31 +7,40 @@ import type { TFunction } from 'i18next';
 
 import {
   DeleteConfirmation,
-  SaveConfirmation,
 } from '@/components/ui/confirmation-dialogs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'react-toastify';
 import {
-  Cross,
+  Building2,
   Loader2,
-  Loader2Icon,
   Pencil,
   Plus,
   Save,
-  Trash,
   Trash2,
-  X,
 } from 'lucide-react';
 import { useStaffPermissions } from '@/hooks/use-staff-permissions';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useBranchContext } from '@/hooks/use-branch-context';
+import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
+import { TablesModule } from '@/components/dashboard/tables/tables-module';
 import { timezoneForRestaurantCountry } from '@/lib/restaurant-regional';
 import {
   createDefaultOpeningHours,
   normalizeOpeningHours,
   type BranchOpeningHours,
 } from '@/lib/order-time-slots';
+import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 type BranchRow = {
   id: string;
@@ -95,11 +104,13 @@ function formatOpeningHoursSummary(
   return `${label} + ${enabledDays.length - 1} more`;
 }
 
-export function BranchedPage() {
+export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation();
   const weekdayLabels = useMemo(() => weekdayLabelsFor(t), [t]);
   const { plan } = useStaffPermissions();
   const { regional } = useOwnerRestaurantRegional();
+  const { branches: scopedBranches } = useBranchContext();
+  const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const branchTimeZone = timezoneForRestaurantCountry(regional.countryCode);
   const restaurantZoneLabel =
     regional.countryCode === 'PK'
@@ -111,6 +122,7 @@ export function BranchedPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
@@ -119,9 +131,8 @@ export function BranchedPage() {
     createDefaultOpeningHours()
   );
 
-  const [confirmAddOpen, setConfirmAddOpen] = useState(false);
-  const [confirmEditOpen, setConfirmEditOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -143,6 +154,17 @@ export function BranchedPage() {
   }, []);
 
   useEffect(() => {
+    if (loading || branches.length === 0) return;
+    if (
+      selectedBranchId &&
+      branches.some((b) => b.id === selectedBranchId)
+    ) {
+      return;
+    }
+    setSelectedBranchId(branches[0]!.id);
+  }, [loading, branches, selectedBranchId]);
+
+  useEffect(() => {
     const tick = () => {
       setRestaurantClock(
         new Date().toLocaleTimeString('en-GB', {
@@ -158,7 +180,10 @@ export function BranchedPage() {
     return () => window.clearInterval(id);
   }, [branchTimeZone]);
 
-  const activeBranch = branches.find((b) => b.id === activeId) ?? null;
+  const selectedBranch =
+    branches.find((b) => b.id === selectedBranchId) ?? null;
+  const selectedBranchUrlId =
+    scopedBranches.find((b) => b.id === selectedBranchId)?.urlId ?? null;
   const cannotDeleteLastBranch = branches.length <= 1;
   const maxBranches = plan?.maxBranches ?? 1;
   const branchCap =
@@ -177,6 +202,11 @@ export function BranchedPage() {
     setOpeningHours(createDefaultOpeningHours());
   }
 
+  function openAddForm() {
+    resetForm();
+    setFormOpen(true);
+  }
+
   function updateOpeningHour(dayOfWeek: number, patch: Partial<BranchOpeningHours[number]>) {
     setOpeningHours((current) =>
       current.map((entry) =>
@@ -191,6 +221,14 @@ export function BranchedPage() {
     setAddress(branch.address ?? '');
     setPhone(branch.phone ?? '');
     setOpeningHours(normalizeOpeningHours(branch.openingHours));
+    setSelectedBranchId(branch.id);
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    if (saving) return;
+    setFormOpen(false);
+    resetForm();
   }
 
   async function createBranch() {
@@ -199,9 +237,12 @@ export function BranchedPage() {
       toast.warn(t('dashboard.branches.nameRequired'));
       return;
     }
+    if (!address.trim() || !phone.trim()) {
+      toast.warn(t('dashboard.branches.nameRequired'));
+      return;
+    }
     if (atBranchLimit) {
       toast.warn(t('dashboard.branches.branchLimitReached'));
-      setConfirmAddOpen(false);
       return;
     }
     setSaving(true);
@@ -213,8 +254,8 @@ export function BranchedPage() {
         openingHours,
       });
       toast.success(t('dashboard.branches.created'));
+      setFormOpen(false);
       resetForm();
-      setConfirmAddOpen(false);
       await load();
     } catch (e: unknown) {
       const msg =
@@ -244,8 +285,8 @@ export function BranchedPage() {
         openingHours,
       });
       toast.success(t('dashboard.branches.updated'));
+      setFormOpen(false);
       resetForm();
-      setConfirmEditOpen(false);
       await load();
     } catch (e: unknown) {
       const msg =
@@ -272,6 +313,7 @@ export function BranchedPage() {
       toast.success(t('dashboard.branches.deleted'));
       resetForm();
       setConfirmDeleteOpen(false);
+      setSelectedBranchId((prev) => (prev === branchId ? null : prev));
       await load();
     } catch (e: unknown) {
       const msg =
@@ -287,21 +329,32 @@ export function BranchedPage() {
 
   return (
     <>
-      <div className="flex flex-col gap-2 mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {t('dashboard.branches.title')}
-        </h1>
-        <p className="text-sm text-muted-foreground space-y-2">
-          {t('dashboard.branches.intro', { limit: branchLimitLabel })}
-        </p>
-      </div>
+      {!embedded ? (
+        <div className="mb-6 flex flex-col gap-2">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {t('dashboard.branches.title')}
+          </h1>
+          <p className="space-y-2 text-sm text-muted-foreground">
+            {t('dashboard.branches.intro', { limit: branchLimitLabel })}
+          </p>
+        </div>
+      ) : null}
+
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <CardTitle>{t('dashboard.branches.management')}</CardTitle>
+          <Button
+            type="button"
+            onClick={openAddForm}
+            disabled={loading || atBranchLimit}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {t('dashboard.branches.addNew')}
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!loading && atBranchLimit && !activeId ? (
-            <p className="rounded-md border border-dashed border-destructive p-3 text-sm text-destructive bg-destructive/10">
+          {!loading && atBranchLimit ? (
+            <p className="rounded-md border border-dashed border-destructive bg-destructive/10 p-3 text-sm text-destructive">
               {t('dashboard.branches.planLimitWarning', {
                 limit:
                   maxBranches === null
@@ -316,26 +369,182 @@ export function BranchedPage() {
               })}
             </p>
           ) : null}
-          <div className="grid gap-3 md:grid-cols-3">
-            <Input
-              placeholder={t('dashboard.branches.branchNamePlaceholder')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+
+          {loading ? (
+            <p className="text-sm text-muted-foreground">
+              <Loader2 className="mx-auto animate-spin text-center text-primary" />
+            </p>
+          ) : branches.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t('dashboard.branches.noBranchesYet')}
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {branches.length <= 1 ? (
+                <p className="text-xs text-amber-600">
+                  {t('dashboard.branches.keepOneBranch')}
+                </p>
+              ) : null}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {branches.map((b, index) => {
+                  const selected = b.id === selectedBranchId;
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setSelectedBranchId(b.id)}
+                      className={cn(
+                        'relative w-full min-w-0 overflow-hidden rounded-xl border bg-background p-4 text-left transition-colors',
+                        selected
+                          ? 'border-primary ring-1 ring-primary/30'
+                          : 'border-border hover:border-primary/40'
+                      )}
+                    >
+                      <Building2
+                        className="pointer-events-none absolute -right-2 bottom-0 h-24 w-24 text-muted-foreground/15 opacity-25"
+                        aria-hidden
+                      />
+                      <div className="relative z-[1] flex items-start justify-between gap-2">
+                        <div className="min-w-0 pr-10">
+                          <p className="text-sm font-semibold">
+                            {index + 1}. {b.name}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {b.address || t('dashboard.branches.noAddress')}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {b.phone || t('dashboard.branches.noPhone')}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatOpeningHoursSummary(
+                              b.openingHours,
+                              weekdayLabels,
+                              t
+                            )}
+                          </p>
+                        </div>
+                        {selected ? (
+                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
+                            Selected
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="relative z-[1] mt-3 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEdit(b);
+                          }}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" />
+                          <span>{t('dashboard.branches.edit')}</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          disabled={cannotDeleteLastBranch}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveId(b.id);
+                            setSelectedBranchId(b.id);
+                            setConfirmDeleteOpen(true);
+                          }}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          <span>{t('dashboard.branches.delete')}</span>
+                        </Button>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {selectedBranch ? (
+        <div className="mt-6 space-y-3">
+          {fulfillmentSettings.dineInEnabled ? (
+            <TablesModule
+              branchId={selectedBranch.id}
+              branchUrlId={selectedBranchUrlId}
+              branchName={selectedBranch.name}
             />
-            <Input
-              placeholder={t('dashboard.branches.addressPlaceholder')}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-            />
-            <Input
-              type="tel"
-              placeholder={t('dashboard.branches.phonePlaceholder')}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
-            />
-          </div>
-          <div className="rounded-lg border p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
+          ) : (
+            <Card>
+              <CardContent className="space-y-3 p-6">
+                <p className="text-sm text-muted-foreground">
+                  Enable dine-in in Basic settings to manage tables for{' '}
+                  <span className="font-medium text-foreground">
+                    {selectedBranch.name}
+                  </span>
+                  .
+                </p>
+                <Button type="button" variant="outline" asChild>
+                  <Link href="/settings">Open basic settings</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      ) : null}
+
+      <Dialog
+        open={formOpen}
+        onOpenChange={(open) => {
+          if (!open) closeForm();
+          else setFormOpen(true);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {activeId
+                ? t('dashboard.branches.edit')
+                : t('dashboard.branches.addNew')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-1">
+            <div className="grid gap-2">
+              <Label htmlFor="branch-name">
+                {t('dashboard.branches.branchNamePlaceholder')}
+              </Label>
+              <Input
+                id="branch-name"
+                placeholder={t('dashboard.branches.branchNamePlaceholder')}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="branch-address">
+                {t('dashboard.branches.addressPlaceholder')}
+              </Label>
+              <Input
+                id="branch-address"
+                placeholder={t('dashboard.branches.addressPlaceholder')}
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="branch-phone">
+                {t('dashboard.branches.phonePlaceholder')}
+              </Label>
+              <Input
+                id="branch-phone"
+                type="tel"
+                placeholder={t('dashboard.branches.phonePlaceholder')}
+                value={phone}
+                onChange={(e) =>
+                  setPhone(e.target.value.replace(/[^0-9]/g, ''))
+                }
+              />
+            </div>
+            <div className="space-y-2 rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">
                   {t('dashboard.branches.weeklyHours')}
@@ -347,211 +556,116 @@ export function BranchedPage() {
                   })}
                 </p>
               </div>
-            </div>
-            <div className="space-y-2">
-              {openingHours.map((entry) => (
-                <div
-                  key={entry.dayOfWeek}
-                  className="grid gap-2 sm:grid-cols-[140px_80px_120px_120px] items-center"
-                >
-                  <span className="text-sm">{weekdayLabels[entry.dayOfWeek]}</span>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={entry.isOpen}
+              <div className="space-y-2">
+                {openingHours.map((entry) => (
+                  <div
+                    key={entry.dayOfWeek}
+                    className="grid items-center gap-2 sm:grid-cols-[110px_70px_1fr_1fr]"
+                  >
+                    <span className="text-sm">
+                      {weekdayLabels[entry.dayOfWeek]}
+                    </span>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={entry.isOpen}
+                        onChange={(event) =>
+                          updateOpeningHour(entry.dayOfWeek, {
+                            isOpen: event.target.checked,
+                          })
+                        }
+                      />
+                      {t('dashboard.branches.open')}
+                    </label>
+                    <Input
+                      type="time"
+                      step={60}
+                      value={entry.openTime}
+                      disabled={!entry.isOpen}
+                      className="min-w-0"
                       onChange={(event) =>
                         updateOpeningHour(entry.dayOfWeek, {
-                          isOpen: event.target.checked,
+                          openTime: event.target.value,
                         })
                       }
                     />
-                    {t('dashboard.branches.open')}
-                  </label>
-                  <Input
-                    type="time"
-                    step={60}
-                    value={entry.openTime}
-                    disabled={!entry.isOpen}
-                    onChange={(event) =>
-                      updateOpeningHour(entry.dayOfWeek, {
-                        openTime: event.target.value,
-                      })
-                    }
-                  />
-                  <Input
-                    type="time"
-                    step={60}
-                    value={entry.closeTime}
-                    disabled={!entry.isOpen}
-                    onChange={(event) =>
-                      updateOpeningHour(entry.dayOfWeek, {
-                        closeTime: event.target.value,
-                      })
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {activeId ? (
-              <>
-                <Button
-                  type="button"
-                  disabled={saving || deletingId === activeId}
-                  onClick={() => setConfirmEditOpen(true)}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                      <span>{t('dashboard.branches.updating')}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      <span>{t('dashboard.branches.update')}</span>
-                    </>
-                  )}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="destructive"
-                  disabled={
-                    saving || deletingId === activeId || cannotDeleteLastBranch
-                  }
-                  onClick={() => setConfirmDeleteOpen(true)}
-                >
-                  {deletingId === activeId ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                      <span>{t('dashboard.branches.deleting')}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      <span>{t('dashboard.branches.delete')}</span>
-                    </>
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={saving || deletingId === activeId}
-                  onClick={resetForm}
-                >
-                  <>
-                    <X className="h-4 w-4 mr-2" />
-                    <span>{t('dashboard.common.cancel')}</span>
-                  </>
-                </Button>
-              </>
-            ) : (
-              <Button
-                type="button"
-                onClick={() => setConfirmAddOpen(true)}
-                disabled={saving || atBranchLimit || !name.trim() || !address.trim() || !phone.trim()}
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                    <span>{t('dashboard.branches.adding')}</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4 mr-2" />{' '}
-                    <span>{t('dashboard.branches.addNew')}</span>
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
-
-          {loading ? (
-            <p className="text-sm text-muted-foreground">
-              <Loader2 className="animate-spin text-primary text-center mx-auto" />
-            </p>
-          ) : branches.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {t('dashboard.branches.noBranchesYet')}
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {branches.length <= 1 ? (
-                <p className="text-xs text-amber-600">
-                  {t('dashboard.branches.keepOneBranch')}
-                </p>
-              ) : null}
-              {branches.map((b, index) => {
-                const editing = b.id === activeId;
-                return (
-                  <div
-                    key={b.id}
-                    className={`rounded-lg border p-3 ${editing ? 'border-primary' : ''}`}
-                  >
-                    <p className="text-sm font-semibold">
-                      {index + 1}. {b.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {b.address || t('dashboard.branches.noAddress')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {b.phone || t('dashboard.branches.noPhone')}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {formatOpeningHoursSummary(
-                        b.openingHours,
-                        weekdayLabels,
-                        t
-                      )}
-                    </p>
-                    <div className="mt-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => startEdit(b)}
-                      >
-                        <>
-                          <Pencil className="h-4 w-4 mr-2" />
-                          <span>{t('dashboard.branches.edit')}</span>
-                        </>
-                      </Button>
-                    </div>
+                    <Input
+                      type="time"
+                      step={60}
+                      value={entry.closeTime}
+                      disabled={!entry.isOpen}
+                      className="min-w-0"
+                      onChange={(event) =>
+                        updateOpeningHour(entry.dayOfWeek, {
+                          closeTime: event.target.value,
+                        })
+                      }
+                    />
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving}
+              onClick={closeForm}
+            >
+              {t('dashboard.common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                saving ||
+                !name.trim() ||
+                !address.trim() ||
+                !phone.trim() ||
+                (!activeId && atBranchLimit)
+              }
+              onClick={() =>
+                void (activeId ? updateBranch() : createBranch())
+              }
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <span>
+                    {activeId
+                      ? t('dashboard.branches.updating')
+                      : t('dashboard.branches.adding')}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  <span>
+                    {activeId
+                      ? t('dashboard.branches.update')
+                      : t('dashboard.branches.addNew')}
+                  </span>
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      <SaveConfirmation
-        open={confirmAddOpen}
-        title={t('dashboard.branches.confirmAddTitle')}
-        description={t('dashboard.branches.confirmAddDesc')}
-        itemName={name.trim() || t('dashboard.branches.newBranch')}
-        loading={saving}
-        onConfirm={() => void createBranch()}
-        onCancel={() => setConfirmAddOpen(false)}
-      />
-      <SaveConfirmation
-        open={confirmEditOpen}
-        title={t('dashboard.branches.confirmUpdateTitle')}
-        description={t('dashboard.branches.confirmUpdateDesc')}
-        itemName={(activeBranch?.name ?? name.trim()) || t('dashboard.branches.title')}
-        loading={saving}
-        onConfirm={() => void updateBranch()}
-        onCancel={() => setConfirmEditOpen(false)}
-      />
       <DeleteConfirmation
         open={confirmDeleteOpen}
         title={t('dashboard.branches.confirmDeleteTitle')}
         description={t('dashboard.branches.confirmDeleteDesc')}
-        itemName={activeBranch?.name ?? t('dashboard.branches.title')}
+        itemName={
+          branches.find((b) => b.id === activeId)?.name ??
+          t('dashboard.branches.title')
+        }
         loading={deletingId === activeId}
         onConfirm={() => void deleteBranch()}
-        onCancel={() => setConfirmDeleteOpen(false)}
+        onCancel={() => {
+          setConfirmDeleteOpen(false);
+          if (!formOpen) setActiveId(null);
+        }}
       />
     </>
   );

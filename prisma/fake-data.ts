@@ -1,4 +1,4 @@
-import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, IngredientUnit, IngredientStockEntrySource, OrderSourceType, PosShiftStatus, CustomerPaymentProvider, DineInPaymentTiming, ExpenseType } from '@prisma/client';
+import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, IngredientUnit, IngredientStockEntrySource, OrderSourceType, PosShiftStatus, CustomerPaymentProvider, DineInPaymentTiming, DiningTableShape, DiningTableStatus, ExpenseType } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import Decimal from 'decimal.js';
 
@@ -250,6 +250,12 @@ export function fakeDiningTableComplete() {
     branchId: undefined,
     name: faker.person.fullName(),
     sortOrder: 0,
+    shape: DiningTableShape.SQUARE,
+    status: DiningTableStatus.AVAILABLE,
+    gridRow: 0,
+    gridCol: 0,
+    gridRowSpan: 1,
+    gridColSpan: 1,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -271,6 +277,8 @@ export function fakeBranchComplete() {
     phone: undefined,
     openingHours: [],
     slotDurationMinutes: 30,
+    tableFloorRows: 4,
+    tableFloorCols: 4,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };

@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { releaseDiningTableIfIdle } from '@/lib/dining-table-status';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 import { resolveRouteId, resolveRouteParams } from '@/lib/resolve-route-id';
@@ -28,7 +29,7 @@ export async function POST(
 
     const order = await db.order.findFirst({
       where: { id: orderId, restaurantId: auth.restaurantId },
-      select: { id: true, status: true, branchId: true },
+      select: { id: true, status: true, branchId: true, diningTableId: true },
     });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
@@ -61,6 +62,8 @@ export async function POST(
         },
         data: { status: 'completed' },
       });
+
+      await releaseDiningTableIfIdle(tx, order.diningTableId);
     });
 
     publishOrderLifecycleUpdate({

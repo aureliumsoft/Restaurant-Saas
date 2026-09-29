@@ -240,6 +240,17 @@ enum DineInPaymentTiming {
   BEFORE_KITCHEN
 }
 
+enum DiningTableShape {
+  CIRCLE
+  SQUARE
+  RECTANGLE
+}
+
+enum DiningTableStatus {
+  AVAILABLE
+  RESERVED
+}
+
 /// Restaurant-owned PayPal REST API credentials for customer order payments.
 model RestaurantPayPalCredentials {
   id              String   @id @default(uuid())
@@ -339,13 +350,21 @@ model RestaurantPayPalIntegration {
 
 /// Seating labels for POS / kiosk dine-in (scoped per branch).
 model DiningTable {
-  id           String   @id @default(uuid())
+  id           String            @id @default(uuid())
   restaurantId String
   branchId     String?
   name         String
-  sortOrder    Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  sortOrder    Int               @default(0)
+  shape        DiningTableShape  @default(SQUARE)
+  /// Floor availability: RESERVED while an active dine-in order is on the table.
+  status       DiningTableStatus @default(AVAILABLE)
+  /// 0-based floor grid cell.
+  gridRow      Int               @default(0)
+  gridCol      Int               @default(0)
+  gridRowSpan  Int               @default(1)
+  gridColSpan  Int               @default(1)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   branch     Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
@@ -354,6 +373,7 @@ model DiningTable {
   @@unique([restaurantId, branchId, name])
   @@index([restaurantId])
   @@index([branchId])
+  @@index([status])
 }
 
 model Branch {
@@ -365,6 +385,9 @@ model Branch {
   openingHours        Json?    @default("[]")
   /// Guest order time-slot length in minutes (15 | 30 | 60).
   slotDurationMinutes Int      @default(30)
+  /// Dining floor plan grid size for this branch.
+  tableFloorRows      Int      @default(4)
+  tableFloorCols      Int      @default(4)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

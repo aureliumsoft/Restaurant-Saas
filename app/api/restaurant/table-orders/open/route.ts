@@ -10,6 +10,7 @@ import {
   loadOpenTableOrderCards,
   openTableOrdersWhere,
 } from '@/lib/table-open-orders';
+import { resolveQueryParam } from '@/lib/resolve-route-id';
 import { db } from '@/lib/db';
 
 /**
@@ -31,7 +32,10 @@ export async function GET(req: NextRequest) {
       auth.userId,
       auth.restaurantId
     );
-    const branchIdFromQuery = req.nextUrl.searchParams.get('branchId')?.trim();
+    const branchIdFromQuery = resolveQueryParam(
+      req.nextUrl.searchParams,
+      'branchId'
+    );
     let branchId = branchScope?.activeBranchId ?? null;
     if (branchIdFromQuery) {
       const valid = await validateBranchForRestaurant(

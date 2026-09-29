@@ -110,6 +110,7 @@ export function TableQrCard({
   slug,
   branchId,
   mobile = true,
+  size = 160,
   className,
 }: {
   tableName: string;
@@ -117,6 +118,7 @@ export function TableQrCard({
   slug: string;
   branchId: string;
   mobile?: boolean;
+  size?: number;
   className?: string;
 }) {
   const { absoluteUrl } = useTableQrUrl(slug, branchId, tableId, mobile);
@@ -124,12 +126,14 @@ export function TableQrCard({
   return (
     <div
       className={cn(
-        'flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm',
+        'flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-4 shadow-sm',
         className
       )}
     >
-      <QrCanvas url={absoluteUrl} size={160} />
-      <p className="text-center text-sm font-semibold">{tableName}</p>
+      <QrCanvas url={absoluteUrl} size={size} />
+      <p className="line-clamp-2 text-center text-sm font-semibold leading-snug">
+        {tableName}
+      </p>
     </div>
   );
 }

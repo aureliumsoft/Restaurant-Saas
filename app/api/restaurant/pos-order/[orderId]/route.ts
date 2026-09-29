@@ -7,6 +7,7 @@ import {
   validateBranchForRestaurant,
 } from '@/lib/branch/branch-scope';
 import { findDiningTableForBranch } from '@/lib/dining-tables-query';
+import { syncDiningTableStatusOnOrderTableChange } from '@/lib/dining-table-status';
 import { db } from '@/lib/db';
 import { resolvePosPaymentLedgerAmount } from '@/lib/order-payment';
 import { orderItemDisplayName } from '@/lib/orders/order-item-name';
@@ -201,6 +202,7 @@ export async function PATCH(
         id: true,
         status: true,
         branchId: true,
+        diningTableId: true,
         payments: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -431,6 +433,11 @@ export async function PATCH(
           },
         });
       }
+
+      await syncDiningTableStatusOnOrderTableChange(tx, {
+        previousDiningTableId: existing.diningTableId,
+        nextDiningTableId: diningTableId,
+      });
     });
 
     const updated = await db.order.findFirst({

@@ -31,6 +31,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 
 import { MenuOfferChoiceDialog } from '@/components/order/menu-offer-choice-dialog';
+import { TableFloorPickerDialog } from '@/components/dashboard/tables/table-floor-picker';
 import {
   ProductCustomizeDialog,
   type AttributeGroup,
@@ -609,6 +610,8 @@ export function KioskApp({
     'dine_in' | 'take_away' | null
   >(null);
   const [changeDraftTableId, setChangeDraftTableId] = useState('');
+  const [changeDraftTableName, setChangeDraftTableName] = useState('');
+  const [changeFloorPickerOpen, setChangeFloorPickerOpen] = useState(false);
   const [keyboardField, setKeyboardField] = useState<KioskKeyboardField | null>(
     null
   );
@@ -1679,6 +1682,10 @@ export function KioskApp({
                       onClick={() => {
                         setChangeDraftFulfillment(fulfillment);
                         setChangeDraftTableId(selectedTableId);
+                        setChangeDraftTableName(
+                          diningTables.find((x) => x.id === selectedTableId)
+                            ?.name ?? ''
+                        );
                         setFulfillmentChangeOpen(true);
                       }}
                     >
@@ -2584,10 +2591,15 @@ export function KioskApp({
         <Dialog
           open={fulfillmentChangeOpen}
           onOpenChange={(open) => {
+            // Nested floor-picker dialog: ignore dismiss while it is open so
+            // selecting a table does not wipe the change-method draft.
+            if (!open && changeFloorPickerOpen) return;
             setFulfillmentChangeOpen(open);
             if (!open) {
               setChangeDraftFulfillment(null);
               setChangeDraftTableId('');
+              setChangeDraftTableName('');
+              setChangeFloorPickerOpen(false);
             }
           }}
         >
@@ -2624,6 +2636,7 @@ export function KioskApp({
                 onClick={() => {
                   setChangeDraftFulfillment('take_away');
                   setChangeDraftTableId('');
+                  setChangeDraftTableName('');
                 }}
                 className={cn(
                   'flex flex-col items-center gap-2 rounded-xl border-2 p-5 transition',
@@ -2639,27 +2652,18 @@ export function KioskApp({
 
             {changeDraftFulfillment === 'dine_in' ? (
               <div className="space-y-2">
-                <Label htmlFor="kiosk-change-table">{t('table')}</Label>
-                <select
-                  id="kiosk-change-table"
-                  className="h-10 w-full rounded-md border border-[#e2e8f0] bg-white px-3 text-sm text-[#0f172a] outline-none ring-offset-0 focus:border-primary focus:ring-2 focus:ring-primary/30"
-                  value={changeDraftTableId}
-                  onChange={(e) => setChangeDraftTableId(e.target.value)}
-                  disabled={!diningTablesLoaded}
+                <Label>{t('table')}</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 w-full justify-start border-[#e2e8f0] bg-white text-[#0f172a] hover:bg-[#f8fafc]"
+                  onClick={() => setChangeFloorPickerOpen(true)}
                 >
-                  <option value="">
-                    {!diningTablesLoaded
-                      ? 'Loading tables…'
-                      : diningTables.length === 0
-                        ? 'No tables available'
-                        : t('selectTable')}
-                  </option>
-                  {diningTables.map((table) => (
-                    <option key={table.id} value={table.id}>
-                      {table.name}
-                    </option>
-                  ))}
-                </select>
+                  {changeDraftTableName ||
+                    diningTables.find((x) => x.id === changeDraftTableId)
+                      ?.name ||
+                    t('selectTable')}
+                </Button>
               </div>
             ) : null}
 
@@ -2702,72 +2706,47 @@ export function KioskApp({
           </DialogContent>
         </Dialog>
 
-        <Dialog
+        <TableFloorPickerDialog
+          open={changeFloorPickerOpen}
+          onOpenChange={setChangeFloorPickerOpen}
+          source="customer"
+          branchId={branchId}
+          branchUrlId={branchUrlId ?? null}
+          restaurantSlug={slug}
+          selectedTableId={changeDraftTableId || null}
+          title={t('selectTable')}
+          confirmLabel={t('continue')}
+          onConfirm={(table) => {
+            setChangeDraftTableId(table.id);
+            setChangeDraftTableName(table.name);
+            setChangeDraftFulfillment('dine_in');
+            // Apply immediately so nested-dialog dismiss cannot wipe the draft.
+            setSelectedTableId(table.id);
+            setFulfillment('dine_in');
+            setChangeFloorPickerOpen(false);
+            setFulfillmentChangeOpen(false);
+          }}
+        />
+
+        <TableFloorPickerDialog
           open={pendingFulfillment === 'dine_in'}
           onOpenChange={(open) => {
             if (!open) setPendingFulfillment(null);
           }}
-        >
-          <DialogContent className="border-[#e2e8f0] bg-[#f8fafc] text-[#0f172a] shadow-xl">
-            <DialogHeader>
-              <DialogTitle className="text-primary">
-                {t('selectTable')}
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-2">
-              <Label htmlFor="kiosk-table">{t('table')}</Label>
-              <select
-                id="kiosk-table"
-                className="h-10 w-full rounded-md border border-[#e2e8f0] bg-white px-3 text-sm text-[#0f172a] outline-none ring-offset-0 focus:border-primary focus:ring-2 focus:ring-primary/30"
-                value={selectedTableId}
-                onChange={(e) => setSelectedTableId(e.target.value)}
-                disabled={!diningTablesLoaded}
-              >
-                <option value="">
-                  {!diningTablesLoaded
-                    ? 'Loading tables…'
-                    : diningTables.length === 0
-                      ? 'No tables available'
-                      : t('selectTable')}
-                </option>
-                {diningTables.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                className="border-[#e2e8f0] bg-white text-[#0f172a] hover:bg-[#f1f5f9]"
-                onClick={() => {
-                  setPendingFulfillment(null);
-                }}
-              >
-                {t('cancel')}
-              </Button>
-              <Button
-                type="button"
-                className="bg-primary text-primary-foreground hover:brightness-95"
-                onClick={() => {
-                  if (!selectedTableId) {
-                    toast.warn(t('chooseTableFirst'));
-                    return;
-                  }
-                  setFulfillment('dine_in');
-                  setStep('menu');
-                  setPendingFulfillment(null);
-                }}
-              >
-                {t('continue')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          source="customer"
+          branchId={branchId}
+          branchUrlId={branchUrlId ?? null}
+          restaurantSlug={slug}
+          selectedTableId={selectedTableId || null}
+          title={t('selectTable')}
+          confirmLabel={t('continue')}
+          onConfirm={(table) => {
+            setSelectedTableId(table.id);
+            setFulfillment('dine_in');
+            setStep('menu');
+            setPendingFulfillment(null);
+          }}
+        />
 
         <MenuOfferChoiceDialog
           open={menuOfferOpen}

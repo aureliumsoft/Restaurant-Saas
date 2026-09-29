@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { OrderSourceType } from '@prisma/client';
 
 import { db } from '@/lib/db';
+import { releaseDiningTableIfIdle } from '@/lib/dining-table-status';
 import { cancelOrderPayments } from '@/lib/order-payment';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
@@ -35,6 +36,7 @@ export async function PATCH(
         id: true,
         status: true,
         branchId: true,
+        diningTableId: true,
         kitchenTickets: {
           where: { status: { in: ['pending', 'making'] } },
           select: { id: true },
@@ -73,6 +75,7 @@ export async function PATCH(
         },
         data: { status: 'canceled' },
       });
+      await releaseDiningTableIfIdle(tx, order.diningTableId);
     });
 
     publishOrderLifecycleUpdate({

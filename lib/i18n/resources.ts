@@ -606,6 +606,11 @@ export const resources = {
             title: 'Basic settings',
             description: 'Customer links, branding, and storefront appearance.',
           },
+          branches: {
+            title: 'Branches',
+            description:
+              'Manage locations, weekly hours, and dining tables for each branch.',
+          },
           access: {
             title: 'User access & roles',
             description: 'Invite team members and manage permissions.',
@@ -2456,6 +2461,11 @@ export const resources = {
             title: 'Configuración básica',
             description:
               'Enlaces de clientes, marca y apariencia de la tienda.',
+          },
+          branches: {
+            title: 'Sucursales',
+            description:
+              'Gestiona ubicaciones, horarios y mesas de cada sucursal.',
           },
           access: {
             title: 'Acceso y roles',

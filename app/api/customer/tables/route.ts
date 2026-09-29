@@ -2,7 +2,11 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
-import { listDiningTables } from '@/lib/dining-tables-query';
+import {
+  getBranchFloorSize,
+  listDiningTables,
+} from '@/lib/dining-tables-query';
+import { isDiningTableReserved } from '@/lib/dining-table-status';
 import { db } from '@/lib/db';
 import { resolveQueryParam } from '@/lib/resolve-route-id';
 
@@ -20,18 +24,21 @@ export async function GET(req: NextRequest) {
       select: { id: true },
     });
     if (!restaurant) {
-      return NextResponse.json({ data: [] }, { status: 200 });
+      return NextResponse.json({ data: [], floor: null }, { status: 200 });
     }
 
     if (!branchId) {
-      return NextResponse.json({ data: [] }, { status: 200 });
+      return NextResponse.json({ data: [], floor: null }, { status: 200 });
     }
 
     if (!(await validateBranchForRestaurant(branchId, restaurant.id))) {
       return NextResponse.json({ error: 'Invalid branch' }, { status: 400 });
     }
 
-    const rows = await listDiningTables(restaurant.id, branchId);
+    const [rows, floor] = await Promise.all([
+      listDiningTables(restaurant.id, branchId),
+      getBranchFloorSize(restaurant.id, branchId),
+    ]);
 
     return NextResponse.json(
       {
@@ -39,7 +46,15 @@ export async function GET(req: NextRequest) {
           id: r.id,
           name: r.name,
           sortOrder: r.sortOrder,
+          shape: r.shape,
+          status: r.status,
+          gridRow: r.gridRow,
+          gridCol: r.gridCol,
+          gridRowSpan: r.gridRowSpan,
+          gridColSpan: r.gridColSpan,
+          occupied: isDiningTableReserved(r.status),
         })),
+        floor,
       },
       { status: 200 }
     );

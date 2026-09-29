@@ -1,64 +1,19 @@
 'use client';
 
-import Link from 'next/link';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 
-import ErrorBoundary from '@/components/toaster/toaster';
-import { MenuPageShell } from '@/components/dashboard/menu-manager/menu-page-shell';
-import { TablesModule } from '@/components/dashboard/tables/tables-module';
-import { Button } from '@/components/ui/button';
-import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
-
-function TablesPageContent() {
-  const { t } = useTranslation();
-  const { settings, loading } = useRestaurantFulfillmentSettings();
-
-  if (loading) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!settings.dineInEnabled) {
-    return (
-      <MenuPageShell
-        title="Tables"
-        description="Dine-in is turned off in Settings → Basic → Order channels."
-        loading={false}
-      >
-        <div className="rounded-xl border border-dashed border-border bg-muted/20 p-8 text-center">
-          <p className="text-sm text-muted-foreground"> 
-            Enable dine-in in restaurant settings to manage tables and table QR
-            codes.
-          </p>
-          <Button type="button" className="mt-4" asChild>
-            <Link href="/settings">Open settings</Link>
-          </Button>
-        </div>
-      </MenuPageShell>
-    );
-  }
-
-  return (
-    <MenuPageShell
-      title={t('dashboard.tables.title')}
-      description={t('dashboard.tables.descriptionEnabled')}
-      loading={false}
-    >
-      <TablesModule />
-    </MenuPageShell>
-  );
-}
-
+/** Tables moved under Settings → Branches (select a branch to manage tables). */
 export default function TablesPage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace('/settings?section=branches');
+  }, [router]);
+
   return (
-    <div className="w-full">
-      <ErrorBoundary>
-        <TablesPageContent />
-      </ErrorBoundary>
+    <div className="flex min-h-[40vh] w-full items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
+import { releaseDiningTableIfIdle } from '@/lib/dining-table-status';
 import { getOpenPosShift } from '@/lib/pos-shift';
 import {
   parseRestaurantFulfillmentSettings,
@@ -185,6 +186,7 @@ export async function POST(req: NextRequest) {
           },
         });
       }
+      await releaseDiningTableIfIdle(tx, diningTableId);
     });
 
     const remainingUnpaid = await db.order.count({

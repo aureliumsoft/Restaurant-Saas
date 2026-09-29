@@ -6,9 +6,16 @@ import { db } from '@/lib/db';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { resolveRouteParams } from '@/lib/resolve-route-id';
 
+const shapeSchema = z.enum(['CIRCLE', 'SQUARE', 'RECTANGLE']);
+
 const patchSchema = z.object({
   name: z.string().min(1).max(120).trim().optional(),
   sortOrder: z.number().int().min(0).max(9999).optional(),
+  shape: shapeSchema.optional(),
+  gridRow: z.number().int().min(0).max(39).optional(),
+  gridCol: z.number().int().min(0).max(39).optional(),
+  gridRowSpan: z.number().int().min(1).max(4).optional(),
+  gridColSpan: z.number().int().min(1).max(4).optional(),
 });
 
 export async function PATCH(
@@ -44,7 +51,16 @@ export async function PATCH(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  if (parsed.data.name === undefined && parsed.data.sortOrder === undefined) {
+  const data = parsed.data;
+  if (
+    data.name === undefined &&
+    data.sortOrder === undefined &&
+    data.shape === undefined &&
+    data.gridRow === undefined &&
+    data.gridCol === undefined &&
+    data.gridRowSpan === undefined &&
+    data.gridColSpan === undefined
+  ) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
   }
 
@@ -52,10 +68,31 @@ export async function PATCH(
     const updated = await db.diningTable.update({
       where: { id: tableId },
       data: {
-        ...(parsed.data.name !== undefined ? { name: parsed.data.name.trim() } : {}),
-        ...(parsed.data.sortOrder !== undefined ? { sortOrder: parsed.data.sortOrder } : {}),
+        ...(data.name !== undefined ? { name: data.name.trim() } : {}),
+        ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
+        ...(data.shape !== undefined ? { shape: data.shape } : {}),
+        ...(data.gridRow !== undefined ? { gridRow: data.gridRow } : {}),
+        ...(data.gridCol !== undefined ? { gridCol: data.gridCol } : {}),
+        ...(data.gridRowSpan !== undefined
+          ? { gridRowSpan: data.gridRowSpan }
+          : {}),
+        ...(data.gridColSpan !== undefined
+          ? { gridColSpan: data.gridColSpan }
+          : {}),
       },
-      select: { id: true, name: true, sortOrder: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true,
+        name: true,
+        sortOrder: true,
+        branchId: true,
+        shape: true,
+        gridRow: true,
+        gridCol: true,
+        gridRowSpan: true,
+        gridColSpan: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
     return NextResponse.json({ data: updated }, { status: 200 });
   } catch (e: unknown) {

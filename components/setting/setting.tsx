@@ -13,7 +13,7 @@ import { RestaurantBillingCard } from './components/restaurant-billing-card';
 import { RestaurantServiceChargesCard } from './components/restaurant-service-charges-card';
 import { RestaurantFulfillmentSettingsCard } from './components/restaurant-fulfillment-settings-card';
 import { RestaurantDineInPaymentCard } from './components/restaurant-dine-in-payment-card';
-import { UiLanguagePreferenceCard } from './components/ui-language-preference-card';
+import { BranchedPage } from '@/components/branched/branched-page';
 import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import { SettingsSectionNav } from './settings-section-nav';
 import {
@@ -70,7 +70,7 @@ export function Setting() {
   return (
     <div className="flex w-full min-w-0 flex-col">
       <div className="flex min-w-0 flex-1 flex-col bg-muted/40 px-4 pb-8 pt-2">
-        <div className="mx-auto grid w-full min-w-0 max-w-6xl items-start gap-2 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
+        <div className="grid w-full min-w-0 items-start gap-2 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
           <aside className="min-w-0 lg:sticky lg:top-6 lg:self-start">
             <p className="mb-3 hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:block">
               {t('settings.title')}
@@ -99,6 +99,10 @@ export function Setting() {
                   <RestaurantFulfillmentSettingsCard />
                   <RestaurantBrandingCard brandingAllowed={brandingAllowed} />
                 </>
+              ) : null}
+
+              {activeSection === 'branches' ? (
+                <BranchedPage embedded />
               ) : null}
 
               {activeSection === 'access' && roleBasedSettingsAllowed ? (

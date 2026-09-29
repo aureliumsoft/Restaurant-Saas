@@ -7,6 +7,7 @@ import {
   validateBranchForRestaurant,
 } from '@/lib/branch/branch-scope';
 import { findDiningTableForBranch } from '@/lib/dining-tables-query';
+import { markDiningTableReserved } from '@/lib/dining-table-status';
 import { db } from '@/lib/db';
 import {
   allocateTicketNumber,
@@ -392,6 +393,10 @@ export async function POST(req: NextRequest) {
             restaurantId,
           },
         });
+
+        if (diningTableId) {
+          await markDiningTableReserved(tx, diningTableId);
+        }
 
         return { order, ticketNumber };
       },

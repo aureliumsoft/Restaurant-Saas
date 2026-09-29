@@ -1,7 +1,12 @@
 import type { LucideIcon } from 'lucide-react';
-import { CreditCard, Receipt, Settings, Users } from 'lucide-react';
+import { Building2, CreditCard, Receipt, Settings, Users } from 'lucide-react';
 
-export type SettingsSectionId = 'basic' | 'access' | 'payments' | 'billing';
+export type SettingsSectionId =
+  | 'basic'
+  | 'branches'
+  | 'access'
+  | 'payments'
+  | 'billing';
 
 export type SettingsSection = {
   id: SettingsSectionId;
@@ -18,6 +23,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: Settings,
   },
   {
+    id: 'branches',
+    title: 'Branches',
+    description: 'Locations, hours, and dining tables for each branch.',
+    icon: Building2,
+  },
+  {
     id: 'access',
     title: 'User access & roles',
     description: 'Invite team members and manage permissions.',
@@ -26,7 +37,8 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     id: 'payments',
     title: 'Payment methods',
-    description: 'Service charges, table pay timing, PayPal or Stripe, and customer payments.',
+    description:
+      'Service charges, table pay timing, PayPal or Stripe, and customer payments.',
     icon: CreditCard,
   },
   {
@@ -44,6 +56,7 @@ export function parseSettingsSection(
     value === 'access' ||
     value === 'payments' ||
     value === 'billing' ||
+    value === 'branches' ||
     value === 'basic'
   ) {
     return value;

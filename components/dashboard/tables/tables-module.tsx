@@ -1,14 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import {
+  Columns3,
   Loader2,
   Pencil,
-  Plus,
   QrCode,
   RefreshCcw,
-  RefreshCw,
+  Rows3,
+  Save,
   Trash2,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -22,15 +23,6 @@ import {
   DashboardCardHeader,
   DashboardCardTitle,
 } from '@/components/dashboard/dashboard-card';
-import {
-  DashboardTable,
-  DashboardTableBody,
-  DashboardTableCell,
-  DashboardTableHead,
-  DashboardTableHeader,
-  DashboardTableRow,
-  DashboardTableWrapper,
-} from '@/components/dashboard/dashboard-table';
 import {
   Dialog,
   DialogContent,
@@ -51,25 +43,57 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
-import { tableApiPath } from '@/lib/dashboard-paths';
-import { TablePagination } from '@/components/ui/table-pagination';
+import { TableQrDialog } from '@/components/dashboard/tables/table-qr-card';
+import { TableFloorPlan } from '@/components/dashboard/tables/table-floor-plan';
 import {
-  TableQrCard,
-  TableQrDialog,
-} from '@/components/dashboard/tables/table-qr-card';
+  canPlaceTable,
+  compactEmptyFloor,
+  DEFAULT_FLOOR_SIZE,
+  newDraftTableId,
+  spansForShape,
+  type DiningTableShape,
+  type FloorSize,
+  type FloorTable,
+} from '@/lib/dining-table-floor';
 
-export type DiningTableRow = {
+type ApiTable = {
   id: string;
-  urlId?: string;
   name: string;
   sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
+  shape?: DiningTableShape;
+  status?: 'AVAILABLE' | 'RESERVED';
+  gridRow?: number;
+  gridCol?: number;
+  gridRowSpan?: number;
+  gridColSpan?: number;
 };
 
-const PAGE_SIZE = 20;
+type TablesModuleProps = {
+  branchId?: string | null;
+  branchUrlId?: string | null;
+  branchName?: string | null;
+};
 
-export function TablesModule() {
+function mapApiTables(rows: ApiTable[]): FloorTable[] {
+  return rows.map((r, index) => ({
+    id: r.id,
+    name: r.name,
+    shape: r.shape ?? 'SQUARE',
+    gridRow: r.gridRow ?? Math.floor(index / 4),
+    gridCol: r.gridCol ?? index % 4,
+    gridRowSpan: r.gridRowSpan ?? 1,
+    gridColSpan: r.gridColSpan ?? 1,
+    sortOrder: r.sortOrder ?? index,
+    persisted: true,
+    occupied: r.status === 'RESERVED',
+  }));
+}
+
+export function TablesModule({
+  branchId: branchIdProp,
+  branchUrlId: branchUrlIdProp,
+  branchName: branchNameProp,
+}: TablesModuleProps = {}) {
   const { t } = useTranslation();
   const {
     activeBranchId,
@@ -77,26 +101,44 @@ export function TablesModule() {
     loading: branchLoading,
     branches,
   } = useBranchContext();
+  const scopedBranchId =
+    branchIdProp !== undefined ? branchIdProp : activeBranchId;
+  const scopedBranchUrlId =
+    branchUrlIdProp !== undefined
+      ? branchUrlIdProp
+      : activeBranchUrlId ??
+        branches.find((b) => b.id === scopedBranchId)?.urlId ??
+        null;
   const activeBranchName =
-    branches.find((b) => b.id === activeBranchId)?.name ?? null;
-  const [rows, setRows] = useState<DiningTableRow[]>([]);
+    branchNameProp ??
+    branches.find((b) => b.id === scopedBranchId)?.name ??
+    null;
+
+  const [floor, setFloor] = useState<FloorSize>({ ...DEFAULT_FLOOR_SIZE });
+  const [tables, setTables] = useState<FloorTable[]>([]);
+  const [baseline, setBaseline] = useState('');
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    pageSize: PAGE_SIZE,
-    total: 0,
-    totalPages: 1,
-  });
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<DiningTableRow | null>(null);
-  const [name, setName] = useState('');
-  const [sortOrder, setSortOrder] = useState('0');
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<DiningTableRow | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
+  const [placeRow, setPlaceRow] = useState(0);
+  const [placeCol, setPlaceCol] = useState(0);
+  const [name, setName] = useState('');
+  const [shape, setShape] = useState<DiningTableShape>('SQUARE');
+  const [deleteTarget, setDeleteTarget] = useState<FloorTable | null>(null);
   const [restaurantSlug, setRestaurantSlug] = useState<string | null>(null);
-  const [qrTarget, setQrTarget] = useState<DiningTableRow | null>(null);
+  const [qrTarget, setQrTarget] = useState<FloorTable | null>(null);
+
+  const dirty = useMemo(() => {
+    const snapshot = JSON.stringify({
+      floor,
+      tables: tables.map(serializeDraft),
+    });
+    return snapshot !== baseline;
+  }, [baseline, floor, tables]);
+
+  const selected = tables.find((t) => t.id === selectedId) ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -119,121 +161,201 @@ export function TablesModule() {
   }, []);
 
   const load = useCallback(async () => {
+    if (!scopedBranchId) {
+      setTables([]);
+      setFloor({ ...DEFAULT_FLOOR_SIZE });
+      setBaseline(JSON.stringify({ floor: DEFAULT_FLOOR_SIZE, tables: [] }));
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await axios.get<{
-        data: DiningTableRow[];
-        pagination?: {
-          page: number;
-          pageSize: number;
-          total: number;
-          totalPages: number;
-        };
+      const tablesRes = await axios.get<{
+        data: ApiTable[];
+        floor?: FloorSize;
       }>(
         withBranchQuery(
-          `/api/restaurant/tables?page=${page}&limit=${PAGE_SIZE}`,
-          activeBranchId,
-          activeBranchUrlId
+          `/api/restaurant/tables`,
+          scopedBranchId,
+          scopedBranchUrlId
         )
       );
-      setRows(Array.isArray(res.data?.data) ? res.data.data : []);
-      if (res.data.pagination) setPagination(res.data.pagination);
+      const nextFloor = tablesRes.data.floor ?? { ...DEFAULT_FLOOR_SIZE };
+      const nextTables = mapApiTables(tablesRes.data.data ?? []);
+      setFloor(nextFloor);
+      setTables(nextTables);
+      setBaseline(
+        JSON.stringify({
+          floor: nextFloor,
+          tables: nextTables.map(serializeDraft),
+        })
+      );
+      setSelectedId(null);
     } catch {
       toast.error('Could not load tables');
-      setRows([]);
+      setTables([]);
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId, page]);
+  }, [scopedBranchId, scopedBranchUrlId]);
 
   useEffect(() => {
-    setPage(1);
-  }, [activeBranchId]);
-
-  useEffect(() => {
-    if (branchLoading) return;
+    if (branchLoading && branchIdProp === undefined) return;
     void load();
-  }, [load, branchLoading]);
+  }, [load, branchLoading, branchIdProp]);
 
-  function openCreate() {
-    setEditing(null);
+  function openAddAt(row: number, col: number) {
+    setFormMode('add');
+    setPlaceRow(row);
+    setPlaceCol(col);
     setName('');
-    setSortOrder(String(pagination.total));
-    setDialogOpen(true);
+    setShape('SQUARE');
+    setFormOpen(true);
   }
 
-  function openEdit(row: DiningTableRow) {
-    setEditing(row);
-    setName(row.name);
-    setSortOrder(String(row.sortOrder));
-    setDialogOpen(true);
+  function openEditSelected() {
+    if (!selected) return;
+    setFormMode('edit');
+    setPlaceRow(selected.gridRow);
+    setPlaceCol(selected.gridCol);
+    setName(selected.name);
+    setShape(selected.shape);
+    setFormOpen(true);
   }
 
-  async function handleSave() {
-    const nameTrim = name.trim();
-    if (!nameTrim) {
+  function applyForm() {
+    const trimmed = name.trim();
+    if (!trimmed) {
       toast.error(t('dashboard.tables.nameRequired'));
       return;
     }
-    const sort = Math.min(
-      9999,
-      Math.max(0, Math.floor(Number(sortOrder) || 0))
-    );
+    const spans = spansForShape(shape);
+    if (formMode === 'add') {
+      const probe = {
+        id: '__new__',
+        gridRow: placeRow,
+        gridCol: placeCol,
+        ...spans,
+      };
+      if (!canPlaceTable(tables, probe, floor)) {
+        toast.error('That cell is not free for this shape.');
+        return;
+      }
+      const draft: FloorTable = {
+        id: newDraftTableId(),
+        name: trimmed,
+        shape,
+        gridRow: placeRow,
+        gridCol: placeCol,
+        ...spans,
+        sortOrder: tables.length,
+        persisted: false,
+      };
+      setTables((prev) => [...prev, draft]);
+      setSelectedId(draft.id);
+    } else if (selected) {
+      const next = {
+        ...selected,
+        name: trimmed,
+        shape,
+        ...spans,
+      };
+      if (!canPlaceTable(tables, next, floor)) {
+        toast.error('Shape does not fit in the current cell.');
+        return;
+      }
+      setTables((prev) => prev.map((t) => (t.id === selected.id ? next : t)));
+    }
+    setFormOpen(false);
+  }
 
-    if (!editing && !activeBranchId) {
+  function addRow() {
+    setFloor((f) => ({ ...f, tableFloorRows: f.tableFloorRows + 1 }));
+  }
+
+  function addColumn() {
+    setFloor((f) => ({ ...f, tableFloorCols: f.tableFloorCols + 1 }));
+  }
+
+  function removeSelectedDraft() {
+    if (!selected) return;
+    const remaining = tables.filter((t) => t.id !== selected.id);
+    const compacted = compactEmptyFloor(remaining, floor);
+    setTables(compacted.tables);
+    setFloor(compacted.floor);
+    setSelectedId(null);
+    setDeleteTarget(null);
+  }
+
+  async function handleSave() {
+    if (!scopedBranchId) {
       toast.error(t('dashboard.tables.selectBranchFirst'));
       return;
     }
-
     setSaving(true);
     try {
-      if (editing) {
-        await axios.patch(tableApiPath(editing.id, '', editing.urlId), {
-          name: nameTrim,
-          sortOrder: sort,
-        });
-        toast.success(t('dashboard.tables.tableUpdated'));
-      } else {
-        await axios.post('/api/restaurant/tables', {
-          name: nameTrim,
-          sortOrder: sort,
-          branchId: activeBranchId,
-        });
-        toast.success(t('dashboard.tables.tableAdded'));
-      }
-      setDialogOpen(false);
-      await load();
+      const compacted = compactEmptyFloor(tables, floor);
+      const originalIds = new Set(
+        (JSON.parse(baseline) as { tables: FloorTable[] }).tables
+          ?.filter((t) => t.persisted)
+          .map((t) => t.id) ?? []
+      );
+      const currentPersisted = new Set(
+        compacted.tables.filter((t) => t.persisted).map((t) => t.id)
+      );
+      const deletedIds = [...originalIds].filter(
+        (id) => !currentPersisted.has(id)
+      );
+
+      const res = await axios.post<{
+        data: ApiTable[];
+        floor?: FloorSize;
+      }>('/api/restaurant/tables/floor', {
+        branchId: scopedBranchId,
+        tableFloorRows: compacted.floor.tableFloorRows,
+        tableFloorCols: compacted.floor.tableFloorCols,
+        deletedIds,
+        tables: compacted.tables.map((table, index) => ({
+          id: table.persisted ? table.id : null,
+          name: table.name,
+          shape: table.shape,
+          gridRow: table.gridRow,
+          gridCol: table.gridCol,
+          gridRowSpan: table.gridRowSpan,
+          gridColSpan: table.gridColSpan,
+          sortOrder: index,
+        })),
+      });
+      const nextFloor = res.data.floor ?? compacted.floor;
+      const nextTables = mapApiTables(res.data.data ?? []);
+      setFloor(nextFloor);
+      setTables(nextTables);
+      setBaseline(
+        JSON.stringify({
+          floor: nextFloor,
+          tables: nextTables.map(serializeDraft),
+        })
+      );
+      setSelectedId(null);
+      toast.success('Floor plan saved');
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: unknown } } };
       const msg =
         typeof err.response?.data?.error === 'string'
           ? err.response.data.error
-          : t('dashboard.tables.saveFailed');
+          : 'Failed to save floor plan';
       toast.error(msg);
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await axios.delete(tableApiPath(deleteTarget.id, '', deleteTarget.urlId));
-      toast.success(t('dashboard.tables.tableRemoved'));
-      setDeleteTarget(null);
-      await load();
-    } catch {
-      toast.error(t('dashboard.tables.deleteFailed'));
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   return (
     <DashboardCard>
       <DashboardCardHeader>
-        <DashboardCardTitle>{t('dashboard.tables.diningTables')}</DashboardCardTitle>
+        <DashboardCardTitle>
+          {t('dashboard.tables.diningTables')}
+        </DashboardCardTitle>
         <DashboardCardDescription>
           {activeBranchName
             ? t('dashboard.tables.diningTablesDescBranch', {
@@ -244,9 +366,33 @@ export function TablesModule() {
       </DashboardCardHeader>
       <DashboardCardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            {t('dashboard.tables.addTable')}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addRow}
+            disabled={!scopedBranchId}
+          >
+            <Rows3 className="mr-2 h-4 w-4" />Add Row
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addColumn}
+            disabled={!scopedBranchId}
+          >
+            <Columns3 className="mr-2 h-4 w-4" />Add Column
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={!scopedBranchId || !dirty || saving}
+          >
+            {saving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Save
           </Button>
           <Button
             type="button"
@@ -256,7 +402,7 @@ export function TablesModule() {
             disabled={loading}
           >
             {loading ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <RefreshCcw className="h-4 w-4 animate-spin" />
             ) : (
               <RefreshCcw className="h-4 w-4" />
             )}
@@ -265,138 +411,74 @@ export function TablesModule() {
 
         {loading ? (
           <p className="text-sm text-muted-foreground">
-            <Loader2 className="animate-spin text-primary text-center mx-auto" />
+            <Loader2 className="mx-auto animate-spin text-center text-primary" />
           </p>
-        ) : rows.length === 0 ? (
+        ) : !scopedBranchId ? (
           <p className="text-sm text-muted-foreground">
-            {t('dashboard.tables.noTablesYet')}
+            {t('dashboard.tables.selectBranchFirst')}
           </p>
         ) : (
           <>
-            <DashboardTableWrapper>
-              <DashboardTable>
-                <DashboardTableHeader>
-                  <DashboardTableRow>
-                    <DashboardTableHead>
-                      {t('dashboard.tables.colName')}
-                    </DashboardTableHead>
-                    <DashboardTableHead className="text-right">
-                      {t('dashboard.tables.colSort')}
-                    </DashboardTableHead>
-                    <DashboardTableHead className="text-right">
-                      {t('dashboard.tables.colActions')}
-                    </DashboardTableHead>
-                  </DashboardTableRow>
-                </DashboardTableHeader>
-                <DashboardTableBody>
-                  {rows.map((row) => (
-                    <DashboardTableRow key={row.id}>
-                      <DashboardTableCell className="font-medium">
-                        {row.name}
-                      </DashboardTableCell>
-                      <DashboardTableCell className="text-right tabular-nums">
-                        {row.sortOrder}
-                      </DashboardTableCell>
-                      <DashboardTableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="rounded-lg"
-                            aria-label={`QR code for ${row.name}`}
-                            disabled={!restaurantSlug || !activeBranchId}
-                            title={
-                              restaurantSlug && activeBranchId
-                                ? t('dashboard.tables.qrViewDownload')
-                                : t('dashboard.tables.qrMissingSlug')
-                            }
-                            onClick={() => setQrTarget(row)}
-                          >
-                            <QrCode className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="rounded-lg"
-                            aria-label={`Edit ${row.name}`}
-                            onClick={() => openEdit(row)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="rounded-lg text-destructive"
-                            aria-label={`Delete ${row.name}`}
-                            onClick={() => setDeleteTarget(row)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </DashboardTableCell>
-                    </DashboardTableRow>
-                  ))}
-                </DashboardTableBody>
-              </DashboardTable>
-            </DashboardTableWrapper>
-            <TablePagination
-              pagination={pagination}
-              page={page}
-              onPageChange={setPage}
-              loading={loading}
-            />
-
-            {restaurantSlug && activeBranchId ? (
-              <div className="space-y-3 pt-2">
-                <div>
-                  <h3 className="text-sm font-semibold">
-                    {t('dashboard.tables.qrCodesTitle')}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    {t('dashboard.tables.qrCodesHint')}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                  {rows.map((row) => (
-                    <button
-                      key={`qr-${row.id}`}
-                      type="button"
-                      className="text-left transition hover:opacity-90"
-                      onClick={() => setQrTarget(row)}
-                    >
-                      <TableQrCard
-                        tableName={row.name}
-                        tableId={row.id}
-                        slug={restaurantSlug}
-                        branchId={activeBranchId}
-                      />
-                    </button>
-                  ))}
-                </div>
+            {selected ? (
+              <div className="flex max-w-xl items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2">
+                <p className="mr-auto text-sm font-medium">{selected.name}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!restaurantSlug || !selected.persisted}
+                  onClick={() => setQrTarget(selected)}
+                >
+                  <QrCode className="mr-2 h-3.5 w-3.5" />
+                  QR
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={openEditSelected}
+                >
+                  <Pencil className="mr-2 h-3.5 w-3.5" />
+                  Edit
+                </Button>
+               
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setDeleteTarget(selected)}
+                >
+                  <Trash2 className="mr-2 h-3.5 w-3.5" />
+                  Remove
+                </Button>
               </div>
-            ) : null}
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Click a + on an empty cell to place a table, or select a table
+                to edit. Changes stay local until you press Save.
+              </p>
+            )}
+
+            <TableFloorPlan
+              mode="editor"
+              floor={floor}
+              tables={tables}
+              selectedId={selectedId}
+              onSelectCell={(row, col) => openAddAt(row, col)}
+              onSelectTable={(table) => setSelectedId(table.id)}
+            />
           </>
         )}
 
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={formOpen} onOpenChange={setFormOpen}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {editing
-                  ? t('dashboard.tables.editTable')
-                  : t('dashboard.tables.addTable')}
+                {formMode === 'edit' ? 'Edit table' : 'Add table'}
               </DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-2">
               <div className="grid gap-2">
-                <Label htmlFor="table-name">
-                  {t('dashboard.tables.colName')}
-                </Label>
+                <Label htmlFor="floor-table-name">Name</Label>
                 <Input
-                  id="table-name"
+                  id="floor-table-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={t('dashboard.tables.namePlaceholder')}
@@ -404,58 +486,49 @@ export function TablesModule() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="table-sort">
-                  {t('dashboard.tables.sortOrder')}
-                </Label>
-                <Input
-                  id="table-sort"
-                  type="number"
-                  min={0}
-                  max={9999}
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t('dashboard.tables.sortOrderHint')}
-                </p>
+                <Label>Shape</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      ['CIRCLE', 'Circle'],
+                      ['SQUARE', 'Square'],
+                      ['RECTANGLE', 'Rectangle'],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant={shape === value ? 'default' : 'outline'}
+                      onClick={() => setShape(value)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </div>
             <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setDialogOpen(false)}
+                onClick={() => setFormOpen(false)}
               >
                 {t('dashboard.common.cancel')}
               </Button>
-              <Button
-                type="button"
-                disabled={saving}
-                onClick={() => void handleSave()}
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                    <span>{t('dashboard.tables.creating')}</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4 mr-2" />{' '}
-                    <span>{t('dashboard.tables.createTable')}</span>
-                  </>
-                )}
+              <Button type="button" onClick={applyForm}>
+                {formMode === 'edit' ? 'Update' : 'Place'}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {restaurantSlug && activeBranchId ? (
+        {restaurantSlug && scopedBranchId && qrTarget?.persisted ? (
           <TableQrDialog
             open={!!qrTarget}
             onOpenChange={(open) => !open && setQrTarget(null)}
             table={qrTarget}
             slug={restaurantSlug}
-            branchId={activeBranchId}
+            branchId={scopedBranchId}
           />
         ) : null}
 
@@ -465,30 +538,27 @@ export function TablesModule() {
         >
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>{t('dashboard.tables.deleteTitle')}</AlertDialogTitle>
+              <AlertDialogTitle>
+                {t('dashboard.tables.deleteTitle')}
+              </AlertDialogTitle>
               <AlertDialogDescription>
                 {deleteTarget
-                  ? t('dashboard.tables.deleteDescription', {
-                      name: deleteTarget.name,
-                    })
+                  ? `${deleteTarget.name} will be removed from the draft. Save to apply.`
                   : ''}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleting}>
+              <AlertDialogCancel>
                 {t('dashboard.common.cancel')}
               </AlertDialogCancel>
               <AlertDialogAction
-                disabled={deleting}
                 onClick={(e) => {
                   e.preventDefault();
-                  void handleDelete();
+                  removeSelectedDraft();
                 }}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                {deleting
-                  ? t('dashboard.common.loading')
-                  : t('dashboard.common.delete')}
+                Remove
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -496,4 +566,18 @@ export function TablesModule() {
       </DashboardCardContent>
     </DashboardCard>
   );
+}
+
+function serializeDraft(table: FloorTable) {
+  return {
+    id: table.id,
+    name: table.name,
+    shape: table.shape,
+    gridRow: table.gridRow,
+    gridCol: table.gridCol,
+    gridRowSpan: table.gridRowSpan,
+    gridColSpan: table.gridColSpan,
+    sortOrder: table.sortOrder,
+    persisted: table.persisted,
+  };
 }

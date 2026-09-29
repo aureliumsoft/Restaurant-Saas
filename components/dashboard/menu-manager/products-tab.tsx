@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { menuItemApiPath, productEditPath } from '@/lib/dashboard-paths';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { useUiLanguage } from '@/hooks/use-ui-language';
@@ -706,17 +707,28 @@ export function ProductsTab({
                                       </div>
                                     ) : null}
                                   </DashboardTableCell>
-                                  <DashboardTableCell className="text-muted-foreground">
-                                    {categoryNames.length > 1
-                                      ? categoryNames
-                                          .map((n) =>
-                                            resolveBilingualText(n, uiLang)
-                                          )
-                                          .join(', ')
-                                      : resolveBilingualText(
-                                          item.categoryName,
+                                  <DashboardTableCell>
+                                    <div className="flex flex-wrap gap-1">
+                                      {(categoryNames.length > 0
+                                        ? categoryNames
+                                        : [item.categoryName]
+                                      ).map((name, index) => {
+                                        const label = resolveBilingualText(
+                                          name,
                                           uiLang
-                                        )}
+                                        );
+                                        if (!label) return null;
+                                        return (
+                                          <Badge
+                                            key={`${item.id}-cat-${index}`}
+                                            variant="secondary"
+                                            className="max-w-[10rem] truncate text-[10px] font-normal"
+                                          >
+                                            {label}
+                                          </Badge>
+                                        );
+                                      })}
+                                    </div>
                                   </DashboardTableCell>
                                   <DashboardTableCell className="tabular-nums">
                                     {display.hasVariations ? (
@@ -799,18 +811,27 @@ export function ProductsTab({
                                   <p className="line-clamp-2 font-medium leading-snug">
                                     {resolveBilingualText(item.name, uiLang)}
                                   </p>
-                                  <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-                                    {categoryNames.length > 1
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {(categoryNames.length > 0
                                       ? categoryNames
-                                          .map((n) =>
-                                            resolveBilingualText(n, uiLang)
-                                          )
-                                          .join(', ')
-                                      : resolveBilingualText(
-                                          item.categoryName,
-                                          uiLang
-                                        )}
-                                  </p>
+                                      : [item.categoryName]
+                                    ).map((name, index) => {
+                                      const label = resolveBilingualText(
+                                        name,
+                                        uiLang
+                                      );
+                                      if (!label) return null;
+                                      return (
+                                        <Badge
+                                          key={`${item.id}-card-cat-${index}`}
+                                          variant="secondary"
+                                          className="max-w-full truncate text-[10px] font-normal"
+                                        >
+                                          {label}
+                                        </Badge>
+                                      );
+                                    })}
+                                  </div>
                                   {variationCount > 0 ? (
                                     <p className="text-[11px] text-muted-foreground">
                                       {variationCount} variation

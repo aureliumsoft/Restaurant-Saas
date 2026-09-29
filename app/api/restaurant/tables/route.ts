@@ -9,20 +9,28 @@ import {
 import {
   createDiningTableRow,
   countDiningTables,
+  getBranchFloorSize,
   listDiningTables,
 } from '@/lib/dining-tables-query';
-import { db } from '@/lib/db';
 import {
   buildPaginationMeta,
   parsePaginationParams,
 } from '@/lib/pagination';
+import { resolveQueryParam } from '@/lib/resolve-route-id';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { withUrlIds } from '@/lib/with-url-id';
+
+const shapeSchema = z.enum(['CIRCLE', 'SQUARE', 'RECTANGLE']);
 
 const postSchema = z.object({
   name: z.string().min(1).max(120).trim(),
   sortOrder: z.number().int().min(0).max(9999).optional(),
   branchId: z.string().uuid().optional(),
+  shape: shapeSchema.optional(),
+  gridRow: z.number().int().min(0).max(39).optional(),
+  gridCol: z.number().int().min(0).max(39).optional(),
+  gridRowSpan: z.number().int().min(1).max(4).optional(),
+  gridColSpan: z.number().int().min(1).max(4).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -39,8 +47,11 @@ export async function GET(req: NextRequest) {
     auth.user.id,
     auth.restaurant.id
   );
-  const activeBranchId = branchScope?.activeBranchId ?? null;
+  const queryBranchId = resolveQueryParam(req.nextUrl.searchParams, 'branchId');
+  const activeBranchId =
+    queryBranchId || branchScope?.activeBranchId || null;
   const wantsPagination = req.nextUrl.searchParams.get('page') != null;
+  const floor = await getBranchFloorSize(auth.restaurant.id, activeBranchId);
 
   if (!wantsPagination) {
     const rows = await listDiningTables(auth.restaurant.id, activeBranchId);
@@ -48,6 +59,7 @@ export async function GET(req: NextRequest) {
       {
         data: withUrlIds(rows),
         activeBranchId,
+        floor,
       },
       { status: 200 }
     );
@@ -66,6 +78,7 @@ export async function GET(req: NextRequest) {
     {
       data: withUrlIds(rows),
       activeBranchId,
+      floor,
       pagination: buildPaginationMeta(page, pageSize, total),
     },
     { status: 200 }
@@ -134,6 +147,11 @@ export async function POST(req: NextRequest) {
       branchId,
       name,
       sortOrder,
+      shape: parsed.data.shape,
+      gridRow: parsed.data.gridRow,
+      gridCol: parsed.data.gridCol,
+      gridRowSpan: parsed.data.gridRowSpan,
+      gridColSpan: parsed.data.gridColSpan,
     });
     return NextResponse.json({ data: created }, { status: 201 });
   } catch (e: unknown) {

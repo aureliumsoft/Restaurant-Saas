@@ -7,6 +7,7 @@ import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
 import { buildKitchenTicketItemRows } from '@/lib/kitchen-ticket-items';
 import { getCustomerAccountSession } from '@/lib/customer-auth/session';
 import { findDiningTableForBranch } from '@/lib/dining-tables-query';
+import { markDiningTableReserved } from '@/lib/dining-table-status';
 import { db } from '@/lib/db';
 import {
   isPersonalizeModifierMenuItemId,
@@ -292,6 +293,12 @@ export async function POST(req: NextRequest) {
     if (!table) {
       return NextResponse.json({ error: 'Selected table not found' }, { status: 400 });
     }
+    if (table.status === 'RESERVED') {
+      return NextResponse.json(
+        { error: 'That table is already reserved. Choose an available table.' },
+        { status: 409 }
+      );
+    }
     selectedTableId = table.id;
     selectedTableName = table.name;
   }
@@ -452,6 +459,10 @@ export async function POST(req: NextRequest) {
           modifiers: line.modifiers,
         })),
       });
+
+      if (selectedTableId) {
+        await markDiningTableReserved(tx, selectedTableId);
+      }
 
       return { order, ticketNumber, isTableOpenCheck };
     }, { timeout: 20000, maxWait: 10000 });
