@@ -12,7 +12,6 @@ import {
   getTodayCreatedAtBounds,
   salesOrderFilterTimezone,
 } from '@/lib/sales-order-period';
-import type { TransactionHistoryKind } from '@/types/transaction-history';
 
 export async function GET(req: NextRequest) {
   try {
@@ -67,7 +66,6 @@ export async function GET(req: NextRequest) {
       };
     }
 
-    // Records page historically shows all history for owners when no dates set
     if (canViewHistorical && !hasExplicitRange) {
       range = {
         from: new Date(0),
@@ -78,12 +76,8 @@ export async function GET(req: NextRequest) {
     }
 
     const kindRaw = req.nextUrl.searchParams.get('kind');
-    const kind: 'ALL' | TransactionHistoryKind =
-      kindRaw === 'ORDER' ||
-      kindRaw === 'SUBSCRIPTION' ||
-      kindRaw === 'REGISTER'
-        ? kindRaw
-        : 'ALL';
+    const kind =
+      kindRaw === 'ORDER' || kindRaw === 'INVENTORY' ? kindRaw : 'ALL';
 
     const result = await queryTransactionLedger({
       restaurantId,

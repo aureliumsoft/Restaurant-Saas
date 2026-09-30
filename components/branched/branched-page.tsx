@@ -336,8 +336,8 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
           </h1>
           <p className="space-y-2 text-sm text-muted-foreground">
             {t('dashboard.branches.intro', { limit: branchLimitLabel })}
-          </p>
-        </div>
+        </p>
+      </div>
       ) : null}
 
       <Card>
@@ -512,38 +512,38 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
               <Label htmlFor="branch-name">
                 {t('dashboard.branches.branchNamePlaceholder')}
               </Label>
-              <Input
+            <Input
                 id="branch-name"
                 placeholder={t('dashboard.branches.branchNamePlaceholder')}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="branch-address">
                 {t('dashboard.branches.addressPlaceholder')}
               </Label>
-              <Input
+            <Input
                 id="branch-address"
                 placeholder={t('dashboard.branches.addressPlaceholder')}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="branch-phone">
                 {t('dashboard.branches.phonePlaceholder')}
               </Label>
-              <Input
+            <Input
                 id="branch-phone"
-                type="tel"
+              type="tel"
                 placeholder={t('dashboard.branches.phonePlaceholder')}
-                value={phone}
+              value={phone}
                 onChange={(e) =>
                   setPhone(e.target.value.replace(/[^0-9]/g, ''))
                 }
-              />
-            </div>
+            />
+          </div>
             <div className="space-y-2 rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">
@@ -555,68 +555,68 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
                     time: restaurantClock,
                   })}
                 </p>
-              </div>
-              <div className="space-y-2">
-                {openingHours.map((entry) => (
-                  <div
-                    key={entry.dayOfWeek}
+            </div>
+            <div className="space-y-2">
+              {openingHours.map((entry) => (
+                <div
+                  key={entry.dayOfWeek}
                     className="grid items-center gap-2 sm:grid-cols-[110px_70px_1fr_1fr]"
-                  >
+                >
                     <span className="text-sm">
                       {weekdayLabels[entry.dayOfWeek]}
                     </span>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={entry.isOpen}
-                        onChange={(event) =>
-                          updateOpeningHour(entry.dayOfWeek, {
-                            isOpen: event.target.checked,
-                          })
-                        }
-                      />
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={entry.isOpen}
+                      onChange={(event) =>
+                        updateOpeningHour(entry.dayOfWeek, {
+                          isOpen: event.target.checked,
+                        })
+                      }
+                    />
                       {t('dashboard.branches.open')}
-                    </label>
-                    <Input
-                      type="time"
-                      step={60}
-                      value={entry.openTime}
-                      disabled={!entry.isOpen}
+                  </label>
+                  <Input
+                    type="time"
+                    step={60}
+                    value={entry.openTime}
+                    disabled={!entry.isOpen}
                       className="min-w-0"
-                      onChange={(event) =>
-                        updateOpeningHour(entry.dayOfWeek, {
-                          openTime: event.target.value,
-                        })
-                      }
-                    />
-                    <Input
-                      type="time"
-                      step={60}
-                      value={entry.closeTime}
-                      disabled={!entry.isOpen}
+                    onChange={(event) =>
+                      updateOpeningHour(entry.dayOfWeek, {
+                        openTime: event.target.value,
+                      })
+                    }
+                  />
+                  <Input
+                    type="time"
+                    step={60}
+                    value={entry.closeTime}
+                    disabled={!entry.isOpen}
                       className="min-w-0"
-                      onChange={(event) =>
-                        updateOpeningHour(entry.dayOfWeek, {
-                          closeTime: event.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
+                    onChange={(event) =>
+                      updateOpeningHour(entry.dayOfWeek, {
+                        closeTime: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+              ))}
             </div>
           </div>
+          </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
+                <Button
+                  type="button"
+                  variant="outline"
               disabled={saving}
               onClick={closeForm}
-            >
+                >
               {t('dashboard.common.cancel')}
-            </Button>
-            <Button
-              type="button"
+                </Button>
+              <Button
+                type="button"
               disabled={
                 saving ||
                 !name.trim() ||
@@ -627,27 +627,27 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
               onClick={() =>
                 void (activeId ? updateBranch() : createBranch())
               }
-            >
-              {saving ? (
-                <>
+              >
+                {saving ? (
+                  <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   <span>
                     {activeId
                       ? t('dashboard.branches.updating')
                       : t('dashboard.branches.adding')}
                   </span>
-                </>
-              ) : (
-                <>
+                  </>
+                ) : (
+                  <>
                   <Save className="mr-2 h-4 w-4" />
                   <span>
                     {activeId
                       ? t('dashboard.branches.update')
                       : t('dashboard.branches.addNew')}
                   </span>
-                </>
-              )}
-            </Button>
+                  </>
+                )}
+              </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

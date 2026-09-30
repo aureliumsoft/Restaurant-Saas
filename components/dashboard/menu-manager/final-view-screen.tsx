@@ -12,14 +12,12 @@ import {
   Loader2,
   Pencil,
   Save,
-  Search,
-  X,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { MenuPageShell } from '@/components/dashboard/menu-manager/menu-page-shell';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { SearchField } from '@/components/ui/search-field';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   AlertDialog,
@@ -282,37 +280,16 @@ export function FinalViewScreen() {
           </TabsList>
         </Tabs>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              value={searchDraft}
-              onChange={(e) => setSearchDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') applySearch();
-              }}
-              placeholder={t('dashboard.finalView.searchPlaceholder')}
-              className="h-10 bg-background pl-9 pr-10 [&::-webkit-search-cancel-button]:hidden"
-              aria-label={t('dashboard.finalView.searchPlaceholder')}
-            />
-            {appliedSearch && searchDraft.trim() === appliedSearch ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
-                onClick={clearSearch}
-                aria-label={t('dashboard.common.clear')}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            ) : null}
-          </div>
-          <Button type="button" variant="secondary" onClick={applySearch}>
-            <Search className="mr-2 h-4 w-4" />
-            {t('dashboard.common.search')}
-          </Button>
+        <SearchField
+          className="sm:max-w-xl"
+          value={searchDraft}
+          onChange={setSearchDraft}
+          onSearch={applySearch}
+          onClear={clearSearch}
+          appliedValue={appliedSearch}
+          placeholder={t('dashboard.finalView.searchPlaceholder')}
+        />
+        <div className="flex flex-wrap items-center gap-2">
           {editing ? (
             <Button
               type="button"

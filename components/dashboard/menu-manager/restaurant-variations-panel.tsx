@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/confirmation-dialogs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchField } from '@/components/ui/search-field';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import {
@@ -49,6 +50,8 @@ export function RestaurantVariationsPanel() {
     total: 0,
     totalPages: 1,
   });
+  const [searchDraft, setSearchDraft] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
 
   const [name, setName] = useState('');
   const [shortLabel, setShortLabel] = useState('');
@@ -67,6 +70,11 @@ export function RestaurantVariationsPanel() {
   const [saving, setSaving] = useState(false);
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
 
+  const applySearch = () => {
+    setAppliedSearch(searchDraft.trim());
+    setPage(1);
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -79,7 +87,11 @@ export function RestaurantVariationsPanel() {
           totalPages: number;
         };
       }>('/api/restaurant/variations', {
-        params: { page, limit: PAGE_SIZE },
+        params: {
+          page,
+          limit: PAGE_SIZE,
+          q: appliedSearch || undefined,
+        },
       });
       setRows(res.data.data ?? []);
       if (res.data.pagination) setPagination(res.data.pagination);
@@ -88,7 +100,7 @@ export function RestaurantVariationsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, appliedSearch]);
 
   useEffect(() => {
     void load();
@@ -168,9 +180,12 @@ export function RestaurantVariationsPanel() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
-            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 items-end">
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 items-end justify-end">
               <div className="grid gap-1.5">
                 <Label htmlFor="new-variation-name">Name</Label>
+                <p className="text-xs text-muted-foreground">
+                  First English, then separator &&&&, then Spanish.
+                </p>
                 <Input
                   id="new-variation-name"
                   placeholder={`English name ${'&&&&'} Spanish name`}
@@ -184,9 +199,7 @@ export function RestaurantVariationsPanel() {
                     if (e.key === 'Enter' && canAdd) setConfirmAddOpen(true);
                   }}
                 />
-                <p className="text-xs text-muted-foreground">
-                  First English, then separator &&&&, then Spanish.
-                </p>
+               
               </div>
               <div className="grid gap-1.5 ">
                 <Label htmlFor="new-variation-short">Short label (optional)</Label>
@@ -215,9 +228,18 @@ export function RestaurantVariationsPanel() {
             </div>
            
           </div>
-              {adding
-                ? t('dashboard.menuManager.adding')
-                : t('dashboard.menuManager.variation.add')}
+          <SearchField
+            value={searchDraft}
+            onChange={setSearchDraft}
+            onSearch={applySearch}
+            onClear={() => {
+              setSearchDraft('');
+              setAppliedSearch('');
+              setPage(1);
+            }}
+            appliedValue={appliedSearch}
+            placeholder={t('dashboard.variations.searchPlaceholder')}
+          />
           {loading ? (
             <p className="text-sm text-muted-foreground">
               <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
@@ -251,7 +273,9 @@ export function RestaurantVariationsPanel() {
 
           {!loading && rows.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No variations yet. Add your first one above.
+              {appliedSearch
+                ? t('dashboard.variations.emptySearch')
+                : t('dashboard.variations.empty')}
             </p>
           )}
         </CardContent>

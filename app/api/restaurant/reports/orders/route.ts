@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
+import { OrderSourceType, Prisma } from '@prisma/client';
 
 import {
   getBranchScopeFromRequest,
@@ -15,7 +15,12 @@ import {
 } from '@/lib/pagination';
 import { resolveReportDateRange } from '@/lib/reports/date-range';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
-import { orderCountsTowardRevenue } from '@/lib/sales-order-status';
+import {
+  orderCountsTowardRevenue,
+  salesOrderStatusBucket,
+} from '@/lib/sales-order-status';
+
+type ChannelFilter = 'all' | 'online' | 'pos' | 'kiosk';
 
 function statusWhere(
   statusFilter: 'all' | 'completed' | 'pending' | 'canceled'
@@ -57,6 +62,20 @@ function statusWhere(
   return undefined;
 }
 
+function channelWhere(channel: ChannelFilter): Prisma.OrderWhereInput | undefined {
+  if (channel === 'pos') return { sourceType: OrderSourceType.POS };
+  if (channel === 'kiosk') return { sourceType: OrderSourceType.KIOSK };
+  if (channel === 'online') return { sourceType: OrderSourceType.ONLINE };
+  return undefined;
+}
+
+function parseChannel(raw: string | null): ChannelFilter {
+  if (raw === 'pos' || raw === 'kiosk' || raw === 'online' || raw === 'web') {
+    return raw === 'web' ? 'online' : raw;
+  }
+  return 'all';
+}
+
 export async function GET(req: NextRequest) {
   const auth = await getRestaurantForOwnerRequest(req, {
     moduleKey: 'reports',
@@ -91,6 +110,7 @@ export async function GET(req: NextRequest) {
     statusRaw === 'canceled'
       ? statusRaw
       : 'all';
+  const channel = parseChannel(req.nextUrl.searchParams.get('channel'));
 
   const { page, pageSize } = parsePaginationParams(req.nextUrl.searchParams, {
     defaultPageSize: 20,
@@ -98,11 +118,11 @@ export async function GET(req: NextRequest) {
   });
 
   const ticket = Number.parseInt(q.replace(/^#/, ''), 10);
-  const where: Prisma.OrderWhereInput = {
+  const baseWhere: Prisma.OrderWhereInput = {
     restaurantId: auth.restaurant.id,
     ...orderBranchWhere(branchId),
     createdAt: { gte: range.from, lte: range.to },
-    ...statusWhere(statusFilter),
+    ...channelWhere(channel),
     ...(q
       ? {
           OR: [
@@ -116,7 +136,22 @@ export async function GET(req: NextRequest) {
       : {}),
   };
 
-  const total = await db.order.count({ where });
+  const where: Prisma.OrderWhereInput = {
+    ...baseWhere,
+    ...statusWhere(statusFilter),
+  };
+
+  const [total, statOrders] = await Promise.all([
+    db.order.count({ where }),
+    db.order.findMany({
+      where: baseWhere,
+      select: {
+        status: true,
+        total: true,
+      },
+    }),
+  ]);
+
   const safePage = clampPage(page, total, pageSize);
   const rows = await db.order.findMany({
     where,
@@ -138,6 +173,31 @@ export async function GET(req: NextRequest) {
       },
     },
   });
+
+  const stats = {
+    totalOrders: 0,
+    totalAmount: 0,
+    pending: { count: 0, amount: 0 },
+    canceled: { count: 0, amount: 0 },
+    completed: { count: 0, amount: 0 },
+  };
+
+  for (const o of statOrders) {
+    const amount = Number(o.total) || 0;
+    stats.totalOrders += 1;
+    stats.totalAmount += amount;
+    const bucket = salesOrderStatusBucket(o.status);
+    if (bucket === 'pending') {
+      stats.pending.count += 1;
+      stats.pending.amount += amount;
+    } else if (bucket === 'canceled') {
+      stats.canceled.count += 1;
+      stats.canceled.amount += amount;
+    } else if (bucket === 'completed') {
+      stats.completed.count += 1;
+      stats.completed.amount += amount;
+    }
+  }
 
   const data = rows.map((o) => {
     const payment = o.payments[0];
@@ -164,11 +224,13 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(
     {
       data,
+      stats,
       meta: {
         ...buildPaginationMeta(safePage, pageSize, total),
         from: range.fromKey,
         to: range.toKey,
         canViewHistorical,
+        channel,
       },
     },
     { headers: { 'Cache-Control': 'no-store' } }

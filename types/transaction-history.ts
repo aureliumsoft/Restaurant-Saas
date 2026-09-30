@@ -1,4 +1,4 @@
-export type TransactionHistoryKind = 'ORDER' | 'SUBSCRIPTION' | 'REGISTER';
+export type TransactionHistoryKind = 'ORDER' | 'INVENTORY';
 
 export type TransactionHistoryRow = {
   key: string;
@@ -30,4 +30,3 @@ export type TransactionHistoryResponse = {
     dataScope?: 'all' | 'today';
   };
 };
-

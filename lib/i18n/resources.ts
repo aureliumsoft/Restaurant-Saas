@@ -120,8 +120,8 @@ export const resources = {
       storefrontLocationsSubtitle: 'Find a branch near you for takeaway.',
       storefrontOrderFromLocation: 'Order from a location →',
       storefrontFullMenu: 'Full menu',
-      storefrontFullMenuSubtitle: 'Everything available to order online today.',
-      storefrontOrderOnline: 'Order online',
+      storefrontFullMenuSubtitle: 'Everything available to order on the website today.',
+      storefrontOrderOnline: 'Order on website',
       storefrontLogin: 'Log in',
       storefrontToLogIn: 'To log in',
       storefrontMenu: 'Menu',
@@ -180,7 +180,7 @@ export const resources = {
       storefrontFooterPrivacyPolicy: 'Privacy Policy',
       storefrontFooterLegalNotice: 'Legal notice',
       storefrontFooterPoweredBy: 'Powered by',
-      storefrontFooterTagline: 'Order online for delivery or takeaway.',
+      storefrontFooterTagline: 'Order on the website for delivery or takeaway.',
       storefrontFooterPayments: 'Secure payments',
       storefrontFooterRights: 'All rights reserved.',
       menuOfferTitle: 'Would you like a menu?',
@@ -604,7 +604,7 @@ export const resources = {
         sections: {
           basic: {
             title: 'Basic settings',
-            description: 'Customer links, branding, and storefront appearance.',
+            description: 'Customer links, branding, and website appearance.',
           },
           branches: {
             title: 'Branches',
@@ -628,7 +628,7 @@ export const resources = {
         uiLanguage: {
           title: 'Interface language',
           description:
-            'Choose English or Spanish for the dashboard, POS, and other staff screens. Guests use the same preference on the storefront and kiosk.',
+            'Choose English or Spanish for the dashboard, POS, and other staff screens. Guests use the same preference on the website and kiosk.',
           label: 'Language',
         },
         cards: {
@@ -710,7 +710,7 @@ export const resources = {
               'When guests pay at the table vs. when staff collect at POS.',
           },
           paymentProvider: {
-            title: 'Stripe (online payments)',
+            title: 'Stripe (website payments)',
             description:
               'Connect Stripe so guests can pay on your website and kiosk.',
           },
@@ -831,6 +831,7 @@ export const resources = {
           edit: 'Edit',
           create: 'Create',
           search: 'Search',
+          clearSearch: 'Clear search',
           loading: 'Loading…',
           noResults: 'No results found.',
           confirm: 'Confirm',
@@ -921,11 +922,58 @@ export const resources = {
         reports: {
           title: 'Reports',
           description:
-            'Track financial, orders, inventory, and expenses with profit and loss.',
+            'Generate comprehensive business reports and analytics.',
           descriptionBranch:
-            'Financial, orders, inventory, and expenses for {{branch}}.',
+            'Business reports and analytics for {{branch}}.',
           dateRangeTitle: 'Date range',
-          dateRangeHint: 'KPIs, P&L, and track tables use this range.',
+          dateRangeHint:
+            'KPIs and tables use this range. Switching report type keeps your dates.',
+          selectReportType: 'Select Report Type',
+          selectDateRange: 'Select Date Range',
+          typeSales: 'Sales Report',
+          typeInventory: 'Inventory Report',
+          typeExpenses: 'Expense Report',
+          typeFinancial: 'Financial Overview',
+          week: 'Week',
+          month: 'Month',
+          printReport: 'Print Report',
+          exportCsv: 'Export CSV',
+          confirmPrintTitle: 'Print this report?',
+          confirmExportTitle: 'Export CSV?',
+          confirmPrintBody:
+            'Print {{type}} for {{range}}. Only the current view will be included.',
+          confirmExportBody:
+            'Download {{type}} as CSV for {{range}}. Only loaded rows on this page are included.',
+          exportDone: 'CSV downloaded.',
+          printBlocked: 'Could not open the print dialog. Please try again.',
+          totalSales: 'Total Sales',
+          numberOfSales: 'Number of Sales',
+          totalStockValue: 'Total Stock Value',
+          totalInventoryItems: 'Total inventory items',
+          usageInRange: 'Usage in range',
+          lowStock: 'Low stock items',
+          entriesInRange: '{{count}} entries',
+          totalExpenses: 'Total Expenses',
+          numberOfExpenses: 'Number of Expenses',
+          totalAssets: 'Total Assets',
+          totalLiabilities: 'Total Liabilities',
+          netWorth: 'Net Worth',
+          netProfit: 'Net Profit',
+          cashIn: 'Cash In',
+          cashOut: 'Cash Out',
+          netCashFlow: 'Net Cash Flow',
+          cashInHint: 'Paid sales revenue in range',
+          cashOutHint: 'Expenses in range',
+          assetsLiabilities: 'Assets & Liabilities',
+          incomeExpenses: 'Income & Expenses',
+          inventoryStock: 'Inventory stock value',
+          salesRevenue: 'Sales revenue',
+          allTransactions: 'All Transactions',
+          emptySales: 'No sales found for the selected date range.',
+          emptyInventory: 'No inventory movements for the selected date range.',
+          emptyExpenses: 'No expenses found for the selected date range.',
+          emptyFinancial:
+            'No cash flow transactions found for the selected date range.',
           financial: 'Financial',
           orders: 'Orders',
           inventory: 'Inventory',
@@ -952,6 +1000,7 @@ export const resources = {
           kindOrder: 'Order',
           kindRegister: 'Register',
           kindSubscription: 'Subscription',
+          kindInventory: 'Inventory',
           filterAllStatuses: 'All statuses',
           statusCompleted: 'Completed',
           statusPending: 'Pending',
@@ -980,34 +1029,34 @@ export const resources = {
           clearSearchAria: 'Clear search',
           cardTitle: 'Menu categories',
           cardDescription:
-            'Storefront categories appear on web, kiosk, and POS. Hide a category from the storefront to use it as a recommendation pool only. Reorder in Final View.',
+            'Website categories appear on web, kiosk, and POS. Hide a category from the website to use it as a recommendation pool only. Reorder in Final View.',
           newCategory: 'New category',
-          tabStorefront: 'Storefront',
+          tabStorefront: 'Website',
           tabRecommendations: 'Recommendations',
           storefrontDragHint:
-            'Use Final View to change the order guests see on storefront.',
+            'Use Final View to change the order guests see on the website.',
           recommendationsHint:
-            'Add-on / recommendation pools — not shown on the storefront browse.',
+            'Add-on / recommendation pools — not shown on the website browse.',
           emptyStorefrontSearch:
-            'No storefront categories match your search.',
+            'No website categories match your search.',
           emptyStorefront:
-            'No storefront categories yet. Create one with “Show in front” enabled.',
+            'No website categories yet. Create one with “Show in front” enabled.',
           emptyRecommendationsSearch:
             'No recommendation categories match your search.',
           emptyRecommendations:
-            'No recommendation-only categories yet. Hide a category from the storefront to use it here.',
+            'No recommendation-only categories yet. Hide a category from the website to use it here.',
           emptySearch: 'No categories match your search.',
           empty: 'No categories yet. Create one to get started.',
         },
         finalView: {
           title: 'Final View',
           description:
-            'Set the order of categories and products for storefront and recommendation pools. Guests see this order on web, kiosk, and POS.',
-          tabStorefront: 'Storefront',
+            'Set the order of categories and products for website and recommendation pools. Guests see this order on web, kiosk, and POS.',
+          tabStorefront: 'Website',
           tabRecommendations: 'Recommendation',
           searchPlaceholder: 'Search category',
           emptySearch: 'No categories match your search.',
-          emptyStorefront: 'No storefront categories yet.',
+          emptyStorefront: 'No website categories yet.',
           emptyRecommendations: 'No recommendation categories yet.',
           loadError: 'Could not load Final View.',
           saveSuccess: 'Order saved.',
@@ -1025,6 +1074,9 @@ export const resources = {
           title: 'Variations',
           description:
             'Define size templates (Small, Medium, Large) used on products and configuration add-ons. Set per-product rates and photos when editing a product.',
+          searchPlaceholder: 'Search by name or short label…',
+          empty: 'No variations yet. Add your first one above.',
+          emptySearch: 'No variations match your search.',
         },
         product: {
           title: 'Products',
@@ -1034,7 +1086,7 @@ export const resources = {
         sales: {
           pageTitle: 'Sale Records',
           pageDescription:
-            'Online, POS, and kiosk orders with fulfillment method, totals, and per-order details.',
+            'Website, POS, and kiosk orders with fulfillment method, totals, and per-order details.',
           ordersCardTitle: 'Orders',
           searchPlaceholder: 'Search orders…',
           filterAll: 'All filters',
@@ -1110,7 +1162,7 @@ export const resources = {
           channelMix: 'Channel mix',
           channelMixDesc: 'Where completed revenue comes from.',
           noChannelRevenue: 'No completed revenue to split yet.',
-          channelOnline: 'Online',
+          channelOnline: 'Website',
           channelPos: 'POS',
           channelKiosk: 'Kiosk',
           topSelling: 'Top selling items',
@@ -1250,18 +1302,26 @@ export const resources = {
           descriptionToday: 'Transaction records for today only.',
           descriptionAll:
             'Unified transaction records for orders, subscriptions, and register sales.',
+          descriptionOrdersInventory:
+            'Order payments and inventory restock transactions.',
           transactions: 'Transactions',
           searchPlaceholder:
             'Search by tracking number, order id, or status...',
           allTypes: 'All types',
           typeOrders: 'Orders',
+          typeInventory: 'Inventory',
           typeSubscriptions: 'Subscriptions',
           typeRegister: 'Register',
           recordsCount: '{{count}} records',
           inCurrentPage: 'in current page',
           kpiOrders: 'Orders',
+          kpiInventory: 'Inventory',
           kpiSubscriptions: 'Subscriptions',
           kpiRegister: 'Register',
+          filterAllPayments: 'All payments',
+          paymentCash: 'Cash',
+          paymentCard: 'Card',
+          paymentOther: 'Other',
           loadFailed: 'Could not load transaction history.',
           noRecords: 'No records found.',
           transactionDetails: 'Transaction details',
@@ -1287,6 +1347,10 @@ export const resources = {
           badgeOrder: 'Order',
           badgeSubscription: 'Subscription',
           badgeRegister: 'Register',
+          kindOrder: 'Order',
+          kindInventory: 'Inventory',
+          kindSubscription: 'Subscription',
+          kindRegister: 'Register',
         },
         configuration: {
           title: 'Configuration',
@@ -1782,8 +1846,8 @@ export const resources = {
             'These surfaces are how guests and staff interact with live menu and order data. They complement the dashboard modules listed in the next section.',
           channels: {
             'customer-website': {
-              title: 'Customer website (online ordering)',
-              body: 'Your branded storefront lets guests browse the menu, build a cart, and place orders for delivery or pick-up. It uses your restaurant slug, logo, banners, and theme colors (when included on your plan). Customers reach it at your public web-app URL—share it from Settings after setup.',
+              title: 'Customer website',
+              body: 'Your branded website lets guests browse the menu, build a cart, and place orders for delivery or pick-up. It uses your restaurant slug, logo, banners, and theme colors (when included on your plan). Customers reach it at your public web-app URL—share it from Settings after setup.',
             },
             kiosk: {
               title: 'Kiosk',
@@ -1795,12 +1859,12 @@ export const resources = {
             },
             kds: {
               title: 'KDS (kitchen display system)',
-              body: 'Kitchen screen lists open tickets from POS, kiosk, and online orders so the line can bump, prioritize, and complete items. Reduces paper tickets and keeps prep aligned with live order flow.',
+              body: 'Kitchen screen lists open tickets from POS, kiosk, and website orders so the line can bump, prioritize, and complete items. Reduces paper tickets and keeps prep aligned with live order flow.',
             },
           },
           modules: {
             dashboard:
-              'Overview metrics, quick links to other modules, and shortcuts to open your public storefront and kiosk.',
+              'Overview metrics, quick links to other modules, and shortcuts to open your public website and kiosk.',
             sales:
               'Sales-focused views and workflows to review order activity and revenue-oriented tasks.',
             pos: 'In-venue point of sale: browse menu, modifiers, cart, and take payment or send orders to the kitchen.',
@@ -1833,7 +1897,7 @@ export const resources = {
             '3Open': 'Open',
             '3Or': 'or',
             '3Suffix':
-              'on venue devices; share your web storefront and kiosk URLs from the dashboard when you go live.',
+              'on venue devices; share your website and kiosk URLs from the dashboard when you go live.',
             '4Prefix': 'Use',
             pricingLink: 'Pricing',
             '4Suffix':
@@ -1970,8 +2034,8 @@ export const resources = {
       storefrontLocationsSubtitle: 'Encuentra una sucursal para recoger.',
       storefrontOrderFromLocation: 'Pedir desde una ubicacion →',
       storefrontFullMenu: 'Menu completo',
-      storefrontFullMenuSubtitle: 'Todo lo disponible para pedir en linea hoy.',
-      storefrontOrderOnline: 'Pedir en linea',
+      storefrontFullMenuSubtitle: 'Todo lo disponible para pedir en el sitio web hoy.',
+      storefrontOrderOnline: 'Pedir en el sitio web',
       storefrontLogin: 'Iniciar sesion',
       storefrontToLogIn: 'Iniciar sesion',
       storefrontMenu: 'Menu',
@@ -2030,7 +2094,7 @@ export const resources = {
       storefrontFooterPrivacyPolicy: 'Politica de privacidad',
       storefrontFooterLegalNotice: 'Aviso legal',
       storefrontFooterPoweredBy: 'Desarrollado por',
-      storefrontFooterTagline: 'Pide en linea para entrega o para llevar.',
+      storefrontFooterTagline: 'Pide en el sitio web para entrega o para llevar.',
       storefrontFooterPayments: 'Pagos seguros',
       storefrontFooterRights: 'Todos los derechos reservados.',
       menuOfferTitle: '¿Quieres un menu?',
@@ -2460,7 +2524,7 @@ export const resources = {
           basic: {
             title: 'Configuración básica',
             description:
-              'Enlaces de clientes, marca y apariencia de la tienda.',
+              'Enlaces de clientes, marca y apariencia del sitio web.',
           },
           branches: {
             title: 'Sucursales',
@@ -2484,7 +2548,7 @@ export const resources = {
         uiLanguage: {
           title: 'Idioma de la interfaz',
           description:
-            'Elige inglés o español para el panel, el POS y otras pantallas del personal. Los clientes usan la misma preferencia en la tienda y el kiosco.',
+            'Elige inglés o español para el panel, el POS y otras pantallas del personal. Los clientes usan la misma preferencia en el sitio web y el kiosco.',
           label: 'Idioma',
         },
         cards: {
@@ -2567,7 +2631,7 @@ export const resources = {
               'Cuándo pagan los clientes en mesa vs. cuándo cobra el personal en TPV.',
           },
           paymentProvider: {
-            title: 'Stripe (pagos online)',
+            title: 'Stripe (pagos del sitio web)',
             description:
               'Conecta Stripe para que los clientes paguen en web y kiosco.',
           },
@@ -2688,6 +2752,7 @@ export const resources = {
           edit: 'Editar',
           create: 'Crear',
           search: 'Buscar',
+          clearSearch: 'Limpiar búsqueda',
           loading: 'Cargando…',
           noResults: 'No se encontraron resultados.',
           confirm: 'Confirmar',
@@ -2780,12 +2845,59 @@ export const resources = {
         reports: {
           title: 'Informes',
           description:
-            'Sigue finanzas, pedidos, inventario y gastos con pérdidas y ganancias.',
+            'Genera informes y analítica completos del negocio.',
           descriptionBranch:
-            'Finanzas, pedidos, inventario y gastos de {{branch}}.',
+            'Informes y analítica de {{branch}}.',
           dateRangeTitle: 'Rango de fechas',
           dateRangeHint:
-            'Los KPI, P&G y las tablas usan este rango.',
+            'Los KPI y tablas usan este rango. Al cambiar de informe se mantienen las fechas.',
+          selectReportType: 'Seleccionar tipo de informe',
+          selectDateRange: 'Seleccionar rango de fechas',
+          typeSales: 'Informe de ventas',
+          typeInventory: 'Informe de inventario',
+          typeExpenses: 'Informe de gastos',
+          typeFinancial: 'Resumen financiero',
+          week: 'Semana',
+          month: 'Mes',
+          printReport: 'Imprimir informe',
+          exportCsv: 'Exportar CSV',
+          confirmPrintTitle: '¿Imprimir este informe?',
+          confirmExportTitle: '¿Exportar CSV?',
+          confirmPrintBody:
+            'Imprimir {{type}} para {{range}}. Solo se incluye la vista actual.',
+          confirmExportBody:
+            'Descargar {{type}} en CSV para {{range}}. Solo se incluyen las filas cargadas en esta página.',
+          exportDone: 'CSV descargado.',
+          printBlocked: 'No se pudo abrir el diálogo de impresión. Inténtalo de nuevo.',
+          totalSales: 'Ventas totales',
+          numberOfSales: 'Número de ventas',
+          totalStockValue: 'Valor total del stock',
+          totalInventoryItems: 'Total de artículos de inventario',
+          usageInRange: 'Uso en el rango',
+          lowStock: 'Artículos con stock bajo',
+          entriesInRange: '{{count}} registros',
+          totalExpenses: 'Gastos totales',
+          numberOfExpenses: 'Número de gastos',
+          totalAssets: 'Activos totales',
+          totalLiabilities: 'Pasivos totales',
+          netWorth: 'Patrimonio neto',
+          netProfit: 'Beneficio neto',
+          cashIn: 'Entrada de caja',
+          cashOut: 'Salida de caja',
+          netCashFlow: 'Flujo de caja neto',
+          cashInHint: 'Ingresos de ventas pagadas en el rango',
+          cashOutHint: 'Gastos en el rango',
+          assetsLiabilities: 'Activos y pasivos',
+          incomeExpenses: 'Ingresos y gastos',
+          inventoryStock: 'Valor del stock de inventario',
+          salesRevenue: 'Ingresos por ventas',
+          allTransactions: 'Todas las transacciones',
+          emptySales: 'No hay ventas en el rango de fechas seleccionado.',
+          emptyInventory:
+            'No hay movimientos de inventario en el rango seleccionado.',
+          emptyExpenses: 'No hay gastos en el rango de fechas seleccionado.',
+          emptyFinancial:
+            'No hay transacciones de flujo de caja en el rango seleccionado.',
           financial: 'Finanzas',
           orders: 'Pedidos',
           inventory: 'Inventario',
@@ -2812,6 +2924,7 @@ export const resources = {
           kindOrder: 'Pedido',
           kindRegister: 'Caja',
           kindSubscription: 'Suscripción',
+          kindInventory: 'Inventario',
           filterAllStatuses: 'Todos los estados',
           statusCompleted: 'Completado',
           statusPending: 'Pendiente',
@@ -2840,34 +2953,34 @@ export const resources = {
           clearSearchAria: 'Limpiar búsqueda',
           cardTitle: 'Categorías del menú',
           cardDescription:
-            'Las categorías de tienda aparecen en web, quiosco y TPV. Oculta una categoría de la tienda para usarla solo como grupo de recomendaciones. Reordena en Vista final.',
+            'Las categorías del sitio web aparecen en web, quiosco y TPV. Oculta una categoría del sitio web para usarla solo como grupo de recomendaciones. Reordena en Vista final.',
           newCategory: 'Nueva categoría',
-          tabStorefront: 'Tienda',
+          tabStorefront: 'Sitio web',
           tabRecommendations: 'Recomendaciones',
           storefrontDragHint:
             'Usa Vista final para cambiar el orden que ven los clientes.',
           recommendationsHint:
-            'Grupos de complementos — no se muestran en el catálogo de la tienda.',
+            'Grupos de complementos — no se muestran en el catálogo del sitio web.',
           emptyStorefrontSearch:
-            'Ninguna categoría de tienda coincide con la búsqueda.',
+            'Ninguna categoría del sitio web coincide con la búsqueda.',
           emptyStorefront:
-            'Aún no hay categorías de tienda. Crea una con “Mostrar en tienda” activado.',
+            'Aún no hay categorías del sitio web. Crea una con “Mostrar en sitio web” activado.',
           emptyRecommendationsSearch:
             'Ninguna categoría de recomendaciones coincide con la búsqueda.',
           emptyRecommendations:
-            'Aún no hay categorías solo de recomendaciones. Oculta una categoría de la tienda para usarla aquí.',
+            'Aún no hay categorías solo de recomendaciones. Oculta una categoría del sitio web para usarla aquí.',
           emptySearch: 'Ninguna categoría coincide con la búsqueda.',
           empty: 'Aún no hay categorías. Crea una para empezar.',
         },
         finalView: {
           title: 'Vista final',
           description:
-            'Define el orden de categorías y productos para la tienda y los grupos de recomendaciones. Los clientes ven este orden en web, quiosco y TPV.',
-          tabStorefront: 'Tienda',
+            'Define el orden de categorías y productos para el sitio web y los grupos de recomendaciones. Los clientes ven este orden en web, quiosco y TPV.',
+          tabStorefront: 'Sitio web',
           tabRecommendations: 'Recomendación',
           searchPlaceholder: 'Buscar categoría',
           emptySearch: 'Ninguna categoría coincide con la búsqueda.',
-          emptyStorefront: 'Aún no hay categorías de tienda.',
+          emptyStorefront: 'Aún no hay categorías del sitio web.',
           emptyRecommendations: 'Aún no hay categorías de recomendaciones.',
           loadError: 'No se pudo cargar Vista final.',
           saveSuccess: 'Orden guardado.',
@@ -2886,6 +2999,9 @@ export const resources = {
           title: 'Variaciones',
           description:
             'Define plantillas de tamaño (pequeño, mediano, grande) para productos y complementos. Configura precios y fotos al editar un producto.',
+          searchPlaceholder: 'Buscar por nombre o etiqueta corta…',
+          empty: 'Aún no hay variaciones. Añade la primera arriba.',
+          emptySearch: 'Ninguna variación coincide con la búsqueda.',
         },
         product: {
           title: 'Productos',
@@ -2895,7 +3011,7 @@ export const resources = {
         sales: {
           pageTitle: 'Registro de ventas',
           pageDescription:
-            'Pedidos online, TPV y quiosco con método de entrega, totales y detalle por pedido.',
+            'Pedidos del sitio web, TPV y quiosco con método de entrega, totales y detalle por pedido.',
           ordersCardTitle: 'Pedidos',
           searchPlaceholder: 'Buscar pedidos…',
           filterAll: 'Todos los filtros',
@@ -2972,7 +3088,7 @@ export const resources = {
           channelMix: 'Mezcla de canales',
           channelMixDesc: 'De dónde vienen los ingresos completados.',
           noChannelRevenue: 'Aún no hay ingresos completados para repartir.',
-          channelOnline: 'Online',
+          channelOnline: 'Sitio web',
           channelPos: 'TPV',
           channelKiosk: 'Kiosco',
           topSelling: 'Productos más vendidos',
@@ -3115,18 +3231,26 @@ export const resources = {
           descriptionToday: 'Registros de transacciones solo de hoy.',
           descriptionAll:
             'Registro unificado de pedidos, suscripciones y ventas de caja.',
+          descriptionOrdersInventory:
+            'Pagos de pedidos y transacciones de reposición de inventario.',
           transactions: 'Transacciones',
           searchPlaceholder:
             'Buscar por número de seguimiento, id de pedido o estado...',
           allTypes: 'Todos los tipos',
           typeOrders: 'Pedidos',
+          typeInventory: 'Inventario',
           typeSubscriptions: 'Suscripciones',
           typeRegister: 'Caja',
           recordsCount: '{{count}} registros',
           inCurrentPage: 'en esta página',
           kpiOrders: 'Pedidos',
+          kpiInventory: 'Inventario',
           kpiSubscriptions: 'Suscripciones',
           kpiRegister: 'Caja',
+          filterAllPayments: 'Todos los pagos',
+          paymentCash: 'Efectivo',
+          paymentCard: 'Tarjeta',
+          paymentOther: 'Otro',
           loadFailed: 'No se pudo cargar el historial de transacciones.',
           noRecords: 'No se encontraron registros.',
           transactionDetails: 'Detalle de transacción',
@@ -3152,6 +3276,10 @@ export const resources = {
           badgeOrder: 'Pedido',
           badgeSubscription: 'Suscripción',
           badgeRegister: 'Caja',
+          kindOrder: 'Pedido',
+          kindInventory: 'Inventario',
+          kindSubscription: 'Suscripción',
+          kindRegister: 'Caja',
         },
         configuration: {
           title: 'Configuración',
@@ -3653,8 +3781,8 @@ export const resources = {
             'Estas superficies son cómo invitados y personal interactúan con el menú y los pedidos en vivo. Complementan los módulos del panel de la siguiente sección.',
           channels: {
             'customer-website': {
-              title: 'Web del cliente (pedidos online)',
-              body: 'Tu escaparate de marca permite ver el menú, armar el carrito y pedir entrega o recogida. Usa el slug del restaurante, logo, banners y colores del tema (si tu plan lo incluye). Los clientes entran por la URL pública de la app — compártela desde Configuración tras el alta.',
+              title: 'Sitio web del cliente',
+              body: 'Tu sitio web de marca permite ver el menú, armar el carrito y pedir entrega o recogida. Usa el slug del restaurante, logo, banners y colores del tema (si tu plan lo incluye). Los clientes entran por la URL pública de la app — compártela desde Configuración tras el alta.',
             },
             kiosk: {
               title: 'Kiosco',
@@ -3666,7 +3794,7 @@ export const resources = {
             },
             kds: {
               title: 'KDS (pantalla de cocina)',
-              body: 'La pantalla de cocina lista tickets abiertos de TPV, kiosco y pedidos online para priorizar y completar ítems. Reduce papel y alinea la preparación con el flujo de pedidos en vivo.',
+              body: 'La pantalla de cocina lista tickets abiertos de TPV, kiosco y pedidos del sitio web para priorizar y completar ítems. Reduce papel y alinea la preparación con el flujo de pedidos en vivo.',
             },
           },
           modules: {

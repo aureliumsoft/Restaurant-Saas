@@ -14,14 +14,13 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Search,
   Trash2,
-  X,
   Upload,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { SearchField } from '@/components/ui/search-field';
 import { menuItemApiPath, productEditPath } from '@/lib/dashboard-paths';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { useUiLanguage } from '@/hooks/use-ui-language';
@@ -44,7 +43,6 @@ import {
   DeleteConfirmation,
   SaveConfirmation,
 } from '@/components/ui/confirmation-dialogs';
-import { Input } from '@/components/ui/input';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
@@ -543,47 +541,15 @@ export function ProductsTab({
                   </Link>
                 </Button>
               ) : null}
-              <form
-                className="flex min-w-0 flex-1 gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  applySearch();
-                }}
-              >
-                <div className="relative min-w-0 flex-1">
-                  <Input
-                    type="search"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search by name, description, or category…"
-                    className={cn(
-                      'h-10 bg-background [&::-webkit-search-cancel-button]:hidden'
-                    )}
-                    aria-label="Search products"
-                  />
-                  {appliedSearch && search.trim() === appliedSearch ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-0 top-1/2 h-10 w-10 -translate-y-1/2"
-                      aria-label="Clear search"
-                      onClick={clearSearch}
-                    >
-                      <X className="h-4 w-4 font-bold" />
-                    </Button>
-                  ) : (
-                    <Button
-                      type="submit"
-                      variant="default"
-                      className="absolute right-0 top-1/2 h-10 -translate-y-1/2"
-                    > 
-                      <Search className="mr-2 h-4 w-4" />
-                      Search
-                    </Button>
-                  )}
-                </div>
-              </form>
+              <SearchField
+                className="min-w-0 flex-1"
+                value={search}
+                onChange={setSearch}
+                onSearch={applySearch}
+                onClear={clearSearch}
+                appliedValue={appliedSearch}
+                placeholder="Search by name, description, or category…"
+              />
               <div className="flex w-full items-center gap-2 sm:w-auto sm:min-w-[14rem]">
                 <ListFilter
                   className="h-4 w-4 shrink-0 text-muted-foreground"

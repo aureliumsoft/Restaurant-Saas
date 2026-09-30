@@ -1,7 +1,6 @@
 /** Dashboard sidebar modules used for RBAC (keys must stay stable). */
 export const DASHBOARD_MODULES = [
   { moduleKey: 'dashboard', title: 'Dashboard', path: '/dashboard' },
-  { moduleKey: 'sales', title: 'Sales', path: '/sales' },
   { moduleKey: 'pos', title: 'POS', path: '/pos' },
   { moduleKey: 'kds', title: 'KDS', path: '/kds' },
   {

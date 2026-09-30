@@ -47,7 +47,7 @@ async function loadFirstPage() {
   });
   const hasMore = rows.length > limit;
   const posts = (hasMore ? rows.slice(0, limit) : rows).map(
-    (p: any) =>
+    (p) =>
       ({
         id: p.id,
         slug: p.slug,

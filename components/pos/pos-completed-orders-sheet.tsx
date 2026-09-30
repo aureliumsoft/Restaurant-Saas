@@ -54,7 +54,7 @@ function OrderSkeletonRow() {
 function sourceLabel(sourceType?: string): string {
   const s = String(sourceType ?? '').toUpperCase();
   if (s === 'KIOSK') return 'Kiosk';
-  if (s === 'ONLINE') return 'Online';
+  if (s === 'ONLINE') return 'Website';
   if (s === 'POS') return 'POS';
   return s || 'Order';
 }

@@ -30,10 +30,10 @@ const FEATURE_CONFIG: Record<
   }
 > = {
   website: {
-    title: 'Website & Online Ordering Disabled',
-    subtitle: 'Storefront Currently Inactive',
+    title: 'Website Ordering Disabled',
+    subtitle: 'Website Currently Inactive',
     description:
-      'Online ordering and the customer website are currently disabled for this restaurant. Please contact the restaurant directly or check back later.',
+      'Website ordering and the customer website are currently disabled for this restaurant. Please contact the restaurant directly or check back later.',
     icon: Globe,
     accentColor: 'from-amber-500/20 to-orange-500/10 text-amber-500 border-amber-500/30',
   },

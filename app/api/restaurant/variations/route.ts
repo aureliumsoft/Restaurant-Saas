@@ -25,9 +25,19 @@ export async function GET(req: NextRequest) {
   }
 
   const wantsPagination = req.nextUrl.searchParams.get('page') != null;
+  const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';
+  const searchWhere = q
+    ? {
+        OR: [
+          { name: { contains: q, mode: 'insensitive' as const } },
+          { shortLabel: { contains: q, mode: 'insensitive' as const } },
+        ],
+      }
+    : {};
+
   if (!wantsPagination) {
     const rows = await db.restaurantVariation.findMany({
-      where: { restaurantId: auth.restaurant.id },
+      where: { restaurantId: auth.restaurant.id, ...searchWhere },
       orderBy: { sortOrder: 'asc' },
     });
     return NextResponse.json({ data: rows });
@@ -37,7 +47,7 @@ export async function GET(req: NextRequest) {
     req.nextUrl.searchParams,
     { defaultPageSize: 12 }
   );
-  const where = { restaurantId: auth.restaurant.id };
+  const where = { restaurantId: auth.restaurant.id, ...searchWhere };
   const [total, rows] = await Promise.all([
     db.restaurantVariation.count({ where }),
     db.restaurantVariation.findMany({

@@ -81,7 +81,7 @@ function channelMeta(sourceType: string): {
   const norm = String(sourceType ?? '').toUpperCase();
   if (norm === 'ONLINE') {
     return {
-      label: 'Online Store',
+      label: 'Website',
       icon: Globe,
       badgeClass:
         'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
@@ -241,7 +241,7 @@ export function PosWorkingOrdersSheet({
                     </Badge>
                   </div>
                   <SheetDescription className="text-xs text-muted-foreground">
-                    Active incoming orders across Online, Kiosk, and POS
+                    Active incoming orders across Website, Kiosk, and POS
                   </SheetDescription>
                 </div>
               </div>
@@ -283,7 +283,13 @@ export function PosWorkingOrdersSheet({
                       channelFilter === ch && 'bg-fire-500 hover:bg-fire-600'
                     )}
                   >
-                    {ch === 'ALL' ? 'All' : ch === 'ONLINE' ? 'Online' : ch === 'KIOSK' ? 'Kiosk' : 'POS'}
+                    {ch === 'ALL'
+                      ? 'All'
+                      : ch === 'ONLINE'
+                        ? 'Website'
+                        : ch === 'KIOSK'
+                          ? 'Kiosk'
+                          : 'POS'}
                   </Button>
                 ))}
               </div>

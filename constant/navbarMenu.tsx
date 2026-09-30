@@ -1,7 +1,6 @@
 import {
   Home,
   Package,
-  ShoppingCart,
   ScanLine,
   Monitor,
   Tv,
@@ -26,7 +25,6 @@ export const MODULE_ICONS: Record<
   LucideIcon
 > = {
   dashboard: Home,
-  sales: ShoppingCart,
   pos: ScanLine,
   kds: Monitor,
   'order-display': Tv,

@@ -44,8 +44,8 @@ const CHANNELS: {
   },
   {
     key: 'online',
-    label: 'Online',
-    description: 'Shown on online cart and checkout pages.',
+    label: 'Website',
+    description: 'Shown on website cart and checkout pages.',
   },
 ];
 

@@ -37,7 +37,7 @@ export function parseDayKey(raw: string | null | undefined): string | null {
 
 /**
  * Resolve report date range.
- * Owners: default last 30 calendar days (inclusive).
+ * Owners: default today (from = to) when params omitted; otherwise use from/to.
  * Non-owners: forced to today only.
  */
 export async function resolveReportDateRange(opts: {
@@ -62,9 +62,7 @@ export async function resolveReportDateRange(opts: {
   let toKey = parseDayKey(opts.toParam) ?? todayKey;
   let fromKey = parseDayKey(opts.fromParam);
   if (!fromKey) {
-    const [y, m, d] = todayKey.split('-').map(Number);
-    const start = new Date(Date.UTC(y, (m ?? 1) - 1, (d ?? 1) - 29));
-    fromKey = start.toISOString().slice(0, 10);
+    fromKey = todayKey;
   }
   if (fromKey > toKey) {
     const tmp = fromKey;
@@ -102,16 +100,29 @@ export function subscriptionPaidAtRangeSql(range: ReportDateRange): Prisma.Sql {
   return Prisma.sql`AND s."paidAt" >= ${range.from} AND s."paidAt" <= ${range.to}`;
 }
 
-export function defaultReportFromToKeys(canViewHistorical: boolean): {
+export function defaultReportFromToKeys(_canViewHistorical?: boolean): {
   from: string;
   to: string;
 } {
   const tz = salesOrderFilterTimezone();
   const today = calendarDayKeyInTimezone(new Date(), tz);
-  if (!canViewHistorical) {
-    return { from: today, to: today };
-  }
+  return { from: today, to: today };
+}
+
+/** Last 7 calendar days inclusive ending today (restaurant TZ). */
+export function weekReportFromToKeys(): { from: string; to: string } {
+  const tz = salesOrderFilterTimezone();
+  const today = calendarDayKeyInTimezone(new Date(), tz);
   const [y, m, d] = today.split('-').map(Number);
-  const start = new Date(Date.UTC(y, (m ?? 1) - 1, (d ?? 1) - 29));
+  const start = new Date(Date.UTC(y, (m ?? 1) - 1, (d ?? 1) - 6));
   return { from: start.toISOString().slice(0, 10), to: today };
+}
+
+/** Calendar month containing today (restaurant TZ). */
+export function monthReportFromToKeys(): { from: string; to: string } {
+  const tz = salesOrderFilterTimezone();
+  const today = calendarDayKeyInTimezone(new Date(), tz);
+  const [y, m] = today.split('-').map(Number);
+  const from = `${y}-${String(m ?? 1).padStart(2, '0')}-01`;
+  return { from, to: today };
 }

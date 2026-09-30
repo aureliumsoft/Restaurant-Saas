@@ -71,7 +71,7 @@ const CHANNELS: {
       key: 'websiteEnabled',
       label: 'Website',
       description:
-        'Customer online store & ordering website. When off, website links are hidden and online store access is blocked.',
+        'Customer ordering website. When off, website links are hidden and website access is blocked.',
       icon: Globe,
       iconColor: 'text-sky-600 dark:text-sky-400',
       iconBg: 'bg-sky-500/10 border-sky-500/20',

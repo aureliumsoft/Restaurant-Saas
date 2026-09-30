@@ -201,6 +201,11 @@ export async function GET(req: NextRequest) {
   );
 
   const profit = revenueAmount - expensesTotal;
+  const cashIn = revenueAmount;
+  const cashOut = expensesTotal;
+  const assets = totalInventoryValue + cashIn;
+  const liabilities = expensesTotal;
+  const netWorth = assets - liabilities;
 
   return NextResponse.json(
     {
@@ -221,6 +226,7 @@ export async function GET(req: NextRequest) {
           lowStockCount,
           usageValueInRange,
           entryCountInRange: usageEntries.length,
+          itemCount: ingredients.length,
         },
         expenses: {
           totalAmount: expensesTotal,
@@ -233,6 +239,21 @@ export async function GET(req: NextRequest) {
         revenue: revenueAmount,
         expenses: expensesTotal,
         profit,
+      },
+      financialOverview: {
+        assets,
+        liabilities,
+        netWorth,
+        netProfit: profit,
+        cashIn,
+        cashOut,
+        netCash: cashIn - cashOut,
+        breakdown: {
+          inventoryStockValue: totalInventoryValue,
+          salesRevenue: revenueAmount,
+          inventoryExpenses: inventoryAmount,
+          manualExpenses: manualAmount,
+        },
       },
       meta: {
         from: range.fromKey,

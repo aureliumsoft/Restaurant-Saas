@@ -256,7 +256,7 @@ export function RichTextEditor({
       ) : null}
       <div className="overflow-hidden rounded-xl border border-input bg-background shadow-sm">
         <div
-          className="flex flex-wrap gap-1 border-b border-border/80 bg-muted/40 p-2"
+          className="flex flex-wrap gap-1 border-b border-border bg-muted/40 p-2"
           data-unsaved-ignore
         >
           <ToolbarButton label="Bold" onClick={() => run('bold')}>

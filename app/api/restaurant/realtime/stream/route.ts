@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const auth = await getRestaurantIdForRequest(req, {
-    moduleKeys: ['dashboard', 'kds', 'pos', 'sales', 'order-display', 'inventory'],
+    moduleKeys: ['dashboard', 'kds', 'pos', 'order-display', 'inventory'],
     action: 'access',
   });
   if (!auth.ok) {

@@ -7,6 +7,7 @@ import {
   HelpCircle,
   LayoutDashboard,
   Mail,
+  Receipt,
   Search,
   Settings,
   Inbox,
@@ -50,6 +51,12 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         path: '/admin/subscriptions',
         icon: <CreditCard className="h-4 w-4" />,
         description: 'Plans & billing',
+      },
+      {
+        title: 'Transactions',
+        path: '/admin/transactions',
+        icon: <Receipt className="h-4 w-4" />,
+        description: 'Subscription payments',
       },
       {
         title: 'Requests',

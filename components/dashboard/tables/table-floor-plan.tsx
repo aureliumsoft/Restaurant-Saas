@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -8,7 +9,11 @@ import type {
   FloorSize,
   FloorTable,
 } from '@/lib/dining-table-floor';
-import { buildOccupancyMap, cellKey } from '@/lib/dining-table-floor';
+import {
+  buildOccupancyMap,
+  canPlaceTable,
+  cellKey,
+} from '@/lib/dining-table-floor';
 
 type Props = {
   mode: 'editor' | 'picker';
@@ -17,10 +22,14 @@ type Props = {
   selectedId?: string | null;
   onSelectCell?: (row: number, col: number) => void;
   onSelectTable?: (table: FloorTable) => void;
+  /** Move a table to a new grid origin (editor only). */
+  onMoveTable?: (tableId: string, row: number, col: number) => void;
   /** POS may select occupied tables; kiosk keeps them blocked. */
   allowOccupiedSelect?: boolean;
   className?: string;
 };
+
+const DND_MIME = 'application/x-foodluk-table-id';
 
 function shapeClass(shape: DiningTableShape) {
   if (shape === 'CIRCLE') return 'rounded-full';
@@ -53,14 +62,18 @@ export function TableFloorPlan({
   selectedId = null,
   onSelectCell,
   onSelectTable,
+  onMoveTable,
   allowOccupiedSelect = false,
   className,
 }: Props) {
   const occupancy = buildOccupancyMap(tables);
   const rendered = new Set<string>();
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   const cols = Math.max(1, floor.tableFloorCols);
   const rows = Math.max(1, floor.tableFloorRows);
+  const editorDnd = mode === 'editor' && Boolean(onMoveTable);
 
   // Viewport shows ~3.5 cells; extra rows/cols peek half-in and scroll into view.
   const cellRem = 7;
@@ -69,6 +82,28 @@ export function TableFloorPlan({
   const visibleCells = 4.5;
   const viewportRem =
     padRem * 2 + visibleCells * cellRem + Math.floor(visibleCells) * gapRem;
+
+  function draggingTable() {
+    if (!draggingId) return null;
+    return tables.find((t) => t.id === draggingId) ?? null;
+  }
+
+  function canDropAt(row: number, col: number) {
+    const table = draggingTable();
+    if (!table) return false;
+    if (table.gridRow === row && table.gridCol === col) return false;
+    return canPlaceTable(
+      tables,
+      {
+        id: table.id,
+        gridRow: row,
+        gridCol: col,
+        gridRowSpan: table.gridRowSpan,
+        gridColSpan: table.gridColSpan,
+      },
+      floor
+    );
+  }
 
   return (
     <div className={cn('w-full', className)}>
@@ -79,7 +114,6 @@ export function TableFloorPlan({
           maxWidth: `${viewportRem}rem`,
           height: `${viewportRem}rem`,
           scrollbarWidth: 'thin',
-          // Force classic always-visible scrollbars where the browser supports it.
           scrollbarGutter: 'stable',
         }}
       >
@@ -100,8 +134,6 @@ export function TableFloorPlan({
             const table = occupancy.get(key);
 
             if (table) {
-              // Spanned cells are covered by the origin button — don't insert
-              // auto-flow placeholders or the grid leaves holes.
               if (table.gridRow !== row || table.gridCol !== col) {
                 return null;
               }
@@ -114,11 +146,25 @@ export function TableFloorPlan({
                 mode === 'picker' &&
                 Boolean(table.occupied) &&
                 !allowOccupiedSelect;
+              const isDragging = draggingId === table.id;
               return (
                 <button
                   key={table.id}
                   type="button"
                   disabled={blocked}
+                  draggable={editorDnd && !blocked}
+                  onDragStart={(e) => {
+                    if (!editorDnd) return;
+                    e.dataTransfer.setData(DND_MIME, table.id);
+                    e.dataTransfer.setData('text/plain', table.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    setDraggingId(table.id);
+                    onSelectTable?.(table);
+                  }}
+                  onDragEnd={() => {
+                    setDraggingId(null);
+                    setDropTarget(null);
+                  }}
                   onClick={() => onSelectTable?.(table)}
                   className={cn(
                     'relative flex h-full w-full flex-col items-center justify-center border bg-card p-2 shadow-sm transition',
@@ -126,7 +172,10 @@ export function TableFloorPlan({
                     statusRing(table, selected, mode, allowOccupiedSelect),
                     blocked
                       ? 'cursor-not-allowed opacity-80'
-                      : 'hover:brightness-[0.98]'
+                      : editorDnd
+                        ? 'cursor-grab active:cursor-grabbing hover:brightness-[0.98]'
+                        : 'hover:brightness-[0.98]',
+                    isDragging && 'opacity-50'
                   )}
                   style={{
                     gridRow: `${table.gridRow + 1} / span ${table.gridRowSpan}`,
@@ -135,7 +184,9 @@ export function TableFloorPlan({
                   title={
                     table.occupied
                       ? `${table.name} · Occupied`
-                      : `${table.name} · Available`
+                      : editorDnd
+                        ? `${table.name} · Drag to move`
+                        : `${table.name} · Available`
                   }
                 >
                   <span
@@ -160,17 +211,48 @@ export function TableFloorPlan({
               );
             }
 
+            const isDropHover = dropTarget === key;
+            const dropOk = draggingId ? canDropAt(row, col) : false;
+
             return (
               <button
                 key={key}
                 type="button"
                 disabled={mode === 'picker'}
                 onClick={() => onSelectCell?.(row, col)}
+                onDragOver={(e) => {
+                  if (!editorDnd || !draggingId) return;
+                  if (!canDropAt(row, col)) {
+                    e.dataTransfer.dropEffect = 'none';
+                    setDropTarget(null);
+                    return;
+                  }
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDropTarget(key);
+                }}
+                onDragLeave={() => {
+                  setDropTarget((prev) => (prev === key ? null : prev));
+                }}
+                onDrop={(e) => {
+                  if (!editorDnd) return;
+                  e.preventDefault();
+                  const id =
+                    e.dataTransfer.getData(DND_MIME) ||
+                    e.dataTransfer.getData('text/plain');
+                  setDraggingId(null);
+                  setDropTarget(null);
+                  if (!id || !canDropAt(row, col)) return;
+                  onMoveTable?.(id, row, col);
+                }}
                 className={cn(
                   'flex h-full w-full items-center justify-center rounded-xl border border-dashed border-border/80 bg-background/60 transition',
                   mode === 'editor'
                     ? 'text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary'
-                    : 'cursor-default opacity-60'
+                    : 'cursor-default opacity-60',
+                  isDropHover &&
+                    dropOk &&
+                    'border-primary bg-primary/15 text-primary ring-2 ring-primary/40'
                 )}
                 style={{
                   gridRow: row + 1,
@@ -199,6 +281,11 @@ export function TableFloorPlan({
           <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
           Occupied
         </span>
+        {editorDnd ? (
+          <span className="text-muted-foreground/80">
+            Drag a table onto an empty cell to move it
+          </span>
+        ) : null}
       </div>
     </div>
   );

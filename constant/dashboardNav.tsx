@@ -14,7 +14,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroupDef[] = [
   },
   {
     groupKey: 'operations',
-    moduleKeys: ['sales', 'pos', 'kds', 'order-display'],
+    moduleKeys: ['pos', 'kds', 'order-display'],
   },
   {
     groupKey: 'catalog',

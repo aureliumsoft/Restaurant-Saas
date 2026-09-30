@@ -15,11 +15,9 @@ import {
   Plus,
   RefreshCw,
   Save,
-  Search,
   Trash2,
   TrendingDown,
   Wallet,
-  X,
 } from 'lucide-react';
 
 import { ingredientEditPath, ingredientApiPath } from '@/lib/dashboard-paths';
@@ -44,6 +42,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { SearchField } from '@/components/ui/search-field';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -741,49 +740,15 @@ export default function InventoryPage() {
             ) : null}
           </DashboardCardHeader>
           <DashboardCardContent className="space-y-4">
-            <form
-              className="relative w-full max-w-xl"
-              onSubmit={(e) => {
-                e.preventDefault();
-                applySearch();
-              }}
-            >
-              <Input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t('dashboard.inventory.searchIngredients')}
-                className={cn(
-                  'h-10 bg-background [&::-webkit-search-cancel-button]:hidden',
-                  appliedSearch && search.trim() === appliedSearch
-                    ? 'pr-12'
-                    : 'pr-24'
-                )}
-                autoComplete="off"
-                aria-label={t('dashboard.inventory.searchIngredients')}
-              />
-              {appliedSearch && search.trim() === appliedSearch ? (
-                <Button
-                  type="button"
-                  variant="default"
-                  size="icon"
-                  className="absolute right-0 top-1/2 h-10 w-10 -translate-y-1/2"
-                  aria-label="Clear search"
-                  onClick={clearSearch}
-                >
-                  <X className="h-4 w-4 text-white" />
-                </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  variant="default"
-                  className="absolute right-0 top-1/2 h-10 -translate-y-1/2"
-                >
-                  <Search className="mr-2 h-4 w-4 text-white" />
-                  {t('dashboard.common.search')}
-                </Button>
-              )}
-            </form>
+            <SearchField
+              className="max-w-xl"
+              value={search}
+              onChange={setSearch}
+              onSearch={applySearch}
+              onClear={clearSearch}
+              appliedValue={appliedSearch}
+              placeholder={t('dashboard.inventory.searchIngredients')}
+            />
             {loading ? (
               <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
             ) : rows.length === 0 ? (
@@ -946,50 +911,15 @@ export default function InventoryPage() {
               ) : null}
             </DashboardCardHeader>
             <DashboardCardContent className="space-y-4">
-              <form
-                className="relative w-full max-w-xl"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  applyEntrySearch();
-                }}
-              >
-                <Input
-                  type="search"
-                  value={entrySearch}
-                  onChange={(e) => setEntrySearch(e.target.value)}
-                  placeholder={t('dashboard.inventory.searchEntries')}
-                  className={cn(
-                    'h-10 bg-background [&::-webkit-search-cancel-button]:hidden',
-                    appliedEntrySearch &&
-                      entrySearch.trim() === appliedEntrySearch
-                      ? 'pr-12'
-                      : 'pr-24'
-                  )}
-                  autoComplete="off"
-                  aria-label={t('dashboard.inventory.searchEntries')}
-                />
-                {appliedEntrySearch && entrySearch.trim() === appliedEntrySearch ? (
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="icon"
-                    className="absolute right-0 top-1/2 h-10 w-10 -translate-y-1/2"
-                    aria-label="Clear search"
-                    onClick={clearEntrySearch}
-                  >
-                    <X className="h-4 w-4 text-white" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    variant="default"
-                    className="absolute right-0 top-1/2 h-10 -translate-y-1/2"
-                  >
-                    <Search className="mr-2 h-4 w-4 text-white" />
-                    {t('dashboard.common.search')}
-                  </Button>
-                )}
-              </form>
+              <SearchField
+                className="max-w-xl"
+                value={entrySearch}
+                onChange={setEntrySearch}
+                onSearch={applyEntrySearch}
+                onClear={clearEntrySearch}
+                appliedValue={appliedEntrySearch}
+                placeholder={t('dashboard.inventory.searchEntries')}
+              />
               {entriesLoading && entries.length === 0 ? (
                 <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
               ) : entries.length === 0 && !entriesLoading ? (

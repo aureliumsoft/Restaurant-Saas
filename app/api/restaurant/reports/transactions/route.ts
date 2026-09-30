@@ -9,7 +9,6 @@ import { db } from '@/lib/db';
 import { resolveReportDateRange } from '@/lib/reports/date-range';
 import { queryTransactionLedger } from '@/lib/reports/transaction-ledger';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
-import type { TransactionHistoryKind } from '@/types/transaction-history';
 
 export async function GET(req: NextRequest) {
   const auth = await getRestaurantForOwnerRequest(req, {
@@ -37,12 +36,8 @@ export async function GET(req: NextRequest) {
   });
 
   const kindRaw = req.nextUrl.searchParams.get('kind');
-  const kind: 'ALL' | TransactionHistoryKind =
-    kindRaw === 'ORDER' ||
-    kindRaw === 'SUBSCRIPTION' ||
-    kindRaw === 'REGISTER'
-      ? kindRaw
-      : 'ALL';
+  const kind =
+    kindRaw === 'ORDER' || kindRaw === 'INVENTORY' ? kindRaw : 'ALL';
 
   const result = await queryTransactionLedger({
     restaurantId: auth.restaurant.id,

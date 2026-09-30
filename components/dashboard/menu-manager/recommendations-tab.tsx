@@ -20,13 +20,12 @@ import {
   ListFilter,
   Loader2,
   Save,
-  Search,
   Trash2,
   X,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { SearchField } from '@/components/ui/search-field';
 import {
   resolveBilingualText,
   serializeBilingualChooseAddonsTitle,
@@ -490,7 +489,7 @@ export function RecommendationsTab(_props?: Props) {
   /** Checked category ids for the product strip + search. Empty = none. */
   const [filterCategoryIds, setFilterCategoryIds] = useState<string[]>([]);
   const [productSearch, setProductSearch] = useState('');
-  const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
+  const [appliedProductSearch, setAppliedProductSearch] = useState('');
   const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
 
   /** Facebook-style infinite strip: load only visible chunks, then next page. */
@@ -511,13 +510,14 @@ export function RecommendationsTab(_props?: Props) {
   const stripHasMoreRef = useRef(false);
   const stripPrefetchingRef = useRef(false);
 
-  useEffect(() => {
-    const id = window.setTimeout(
-      () => setDebouncedProductSearch(productSearch.trim()),
-      300
-    );
-    return () => window.clearTimeout(id);
-  }, [productSearch]);
+  const applyProductSearch = () => {
+    setAppliedProductSearch(productSearch.trim());
+  };
+
+  const clearProductSearch = () => {
+    setProductSearch('');
+    setAppliedProductSearch('');
+  };
 
   const categoryIdsSignature = useMemo(
     () =>
@@ -628,8 +628,8 @@ export function RecommendationsTab(_props?: Props) {
           limit: STRIP_PAGE_SIZE,
           categoryIds: filterCategoryIds.join(','),
         };
-        if (debouncedProductSearch) {
-          params.search = debouncedProductSearch;
+        if (appliedProductSearch) {
+          params.search = appliedProductSearch;
         }
 
         const res = await axios.get<{
@@ -670,7 +670,7 @@ export function RecommendationsTab(_props?: Props) {
         return false;
       }
     },
-    [filterCategoryIds, debouncedProductSearch]
+    [filterCategoryIds, appliedProductSearch]
   );
 
   const prefetchStripChain = useCallback(
@@ -729,7 +729,7 @@ export function RecommendationsTab(_props?: Props) {
         }
       }
     })();
-  }, [filterCategoryIds, debouncedProductSearch, loadStripPage, prefetchStripChain]);
+  }, [filterCategoryIds, appliedProductSearch, loadStripPage, prefetchStripChain]);
 
   const activeCategoryFilterLabel = useMemo(() => {
     const allIds = localCategories.map((c) => c.id);
@@ -1771,26 +1771,18 @@ export function RecommendationsTab(_props?: Props) {
           </p>
         </div>
         <div className="flex min-w-0 w-full max-w-full flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
-          <div className="relative min-h-10 min-w-0 flex-1">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
-            <Input
-              type="search"
-              value={productSearch}
-              onChange={(e) => setProductSearch(e.target.value)}
-              placeholder={t(
-                'dashboard.menuManager.recommendations.searchProductsPlaceholder'
-              )}
-              className="h-11 min-h-11 rounded-xl bg-background pl-9 text-base sm:h-10 sm:text-sm"
-              autoComplete="off"
-              enterKeyHint="search"
-              aria-label={t(
-                'dashboard.menuManager.recommendations.searchProductsAria'
-              )}
-            />
-          </div>
+          <SearchField
+            className="min-w-0 flex-1"
+            value={productSearch}
+            onChange={setProductSearch}
+            onSearch={applyProductSearch}
+            onClear={clearProductSearch}
+            appliedValue={appliedProductSearch}
+            placeholder={t(
+              'dashboard.menuManager.recommendations.searchProductsPlaceholder'
+            )}
+            inputClassName="h-11 min-h-11 rounded-xl text-base sm:h-10 sm:text-sm"
+          />
           <Popover
             open={categoryFilterOpen}
             onOpenChange={setCategoryFilterOpen}

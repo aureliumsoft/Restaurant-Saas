@@ -10,9 +10,7 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Search,
   Trash2,
-  X,
 } from 'lucide-react';
 
 import { AddCategoryFormDialog } from '@/components/dashboard/menu-manager/add-category-form-dialog';
@@ -27,6 +25,7 @@ import {
 } from '@/lib/menu/bilingual-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { SearchField } from '@/components/ui/search-field';
 import {
   Card,
   CardContent,
@@ -277,37 +276,14 @@ export function CategoriesTab({
             </Button>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Input
-                type="search"
-                value={searchDraft}
-                onChange={(e) => setSearchDraft(e.target.value)}
-                placeholder={t('dashboard.categories.searchPlaceholder')}
-                className="h-10 bg-background pr-10 [&::-webkit-search-cancel-button]:hidden"
-                aria-label={t('dashboard.categories.searchAria')}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') applySearch();
-                }}
-              />
-              {appliedSearch && searchDraft.trim() === appliedSearch ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
-                  aria-label={t('dashboard.categories.clearSearchAria')}
-                  onClick={clearSearch}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              ) : null}
-            </div>
-            <Button type="button" variant="secondary" onClick={applySearch}>
-              <Search className="mr-2 h-4 w-4" />
-              {t('dashboard.common.search')}
-            </Button>
-          </div>
+          <SearchField
+            value={searchDraft}
+            onChange={setSearchDraft}
+            onSearch={applySearch}
+            onClear={clearSearch}
+            appliedValue={appliedSearch}
+            placeholder={t('dashboard.categories.searchPlaceholder')}
+          />
         </CardHeader>
 
         <CardContent className="space-y-4">{renderList()}</CardContent>

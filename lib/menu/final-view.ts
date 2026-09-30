@@ -123,7 +123,7 @@ export async function applyFinalViewReorder(
     if (input.tab === 'storefront' && !isFront) {
       return {
         ok: false,
-        error: 'Storefront reorder includes a recommendation-only category.',
+        error: 'Website reorder includes a recommendation-only category.',
         status: 400,
       };
     }

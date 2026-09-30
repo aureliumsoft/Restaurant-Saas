@@ -451,8 +451,8 @@ export function TablesModule({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Click a + on an empty cell to place a table, or select a table
-                to edit. Changes stay local until you press Save.
+                Click a + to place a table, drag to move, or select a table to
+                edit. Changes stay local until you press Save.
               </p>
             )}
 
@@ -463,6 +463,23 @@ export function TablesModule({
               selectedId={selectedId}
               onSelectCell={(row, col) => openAddAt(row, col)}
               onSelectTable={(table) => setSelectedId(table.id)}
+              onMoveTable={(tableId, row, col) => {
+                const current = tables.find((t) => t.id === tableId);
+                if (!current) return;
+                const next = {
+                  ...current,
+                  gridRow: row,
+                  gridCol: col,
+                };
+                if (!canPlaceTable(tables, next, floor)) {
+                  toast.error('That cell is not free for this table.');
+                  return;
+                }
+                setTables((prev) =>
+                  prev.map((t) => (t.id === tableId ? next : t))
+                );
+                setSelectedId(tableId);
+              }}
             />
           </>
         )}

@@ -1,15 +1,6 @@
-import React from 'react';
-import { Orders } from '@/components/order/demo';
-import ErrorBoundary from '@/components/toaster/toaster';
+import { redirect } from 'next/navigation';
 
-const page = () => {
-  return (
-    <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-      <ErrorBoundary>  
-        <Orders />
-      </ErrorBoundary>
-    </div>
-  );
-};
-
-export default page;
+/** Sales moved into Reports → Sales. */
+export default function SalesPageRedirect() {
+  redirect('/reports?type=sales');
+}

@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import {
   RefreshCw,
   Loader2,
-  Search,
   ShoppingBag,
   CircleDollarSign,
   Clock3,
@@ -25,7 +24,7 @@ import {
   kpiSparklineFromValue,
   OrdersKpiCard,
 } from '@/components/sales/orders-kpi-card';
-import { Input } from '@/components/ui/input';
+import { SearchField } from '@/components/ui/search-field';
 import {
   Select,
   SelectContent,
@@ -343,20 +342,23 @@ export function SalesOrdersTabs() {
   }, [load, branchLoading]);
 
   useEffect(() => {
-    const t = window.setTimeout(() => {
-      setSearch(searchInput);
-      setPage(1);
-    }, 350);
-    return () => window.clearTimeout(t);
-  }, [searchInput]);
-
-  useEffect(() => {
     const handler = () => load();
     eventBus.on('refreshSalesOrders', handler);
     return () => {
       eventBus.removeListener('refreshSalesOrders', handler);
     };
   }, [load]);
+
+  function applySearch() {
+    setSearch(searchInput.trim());
+    setPage(1);
+  }
+
+  function clearSearch() {
+    setSearchInput('');
+    setSearch('');
+    setPage(1);
+  }
 
   async function openDetail(row: SalesOrderRow) {
     setActiveRow(row);
@@ -462,15 +464,16 @@ export function SalesOrdersTabs() {
 
       <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-          <div className="relative min-w-[200px] flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="rounded-xl bg-background pl-9"
-              placeholder={t('dashboard.sales.searchPlaceholder')}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-            />
-          </div>
+          <SearchField
+            className="min-w-[200px] flex-1"
+            value={searchInput}
+            onChange={setSearchInput}
+            onSearch={applySearch}
+            onClear={clearSearch}
+            appliedValue={search}
+            placeholder={t('dashboard.sales.searchPlaceholder')}
+            inputClassName="rounded-xl"
+          />
 
           <Tabs
             value={activeTab}
@@ -484,20 +487,20 @@ export function SalesOrdersTabs() {
                 value="online"
                 className="rounded-lg text-muted-foreground data-[state=active]:bg-[#ed6e40] data-[state=active]:text-white"
               >
-                Online
-              </TabsTrigger>
-              <TabsTrigger
-                value="pos"
-                className="rounded-lg text-muted-foreground data-[state=active]:bg-[#7c3aed] data-[state=active]:text-white"
-              >
-                POS
-              </TabsTrigger>
-              <TabsTrigger
-                value="kiosk"
-                className="rounded-lg text-muted-foreground data-[state=active]:bg-[#e11d48] data-[state=active]:text-white"
-              >
-                Kiosk
-              </TabsTrigger>
+                    {t('dashboard.analytics.channelOnline')}
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="pos"
+                    className="rounded-lg text-muted-foreground data-[state=active]:bg-[#7c3aed] data-[state=active]:text-white"
+                  >
+                    POS
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="kiosk"
+                    className="rounded-lg text-muted-foreground data-[state=active]:bg-[#e11d48] data-[state=active]:text-white"
+                  >
+                    Kiosk
+                  </TabsTrigger>
             </TabsList>
           </Tabs>
 

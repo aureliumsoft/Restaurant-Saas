@@ -14,7 +14,7 @@ export async function GET(
     const { orderId } = await resolveRouteParams(params, ['orderId']);
 
     const auth = await getRestaurantIdForRequest(_req, {
-      moduleKey: 'sales',
+      moduleKey: 'reports',
       action: 'access',
     });
     if (!auth.ok) {

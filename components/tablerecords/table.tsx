@@ -13,7 +13,6 @@ import {
   DashboardCardTitle,
 } from '@/components/dashboard/dashboard-card';
 import { OrdersKpiCard, kpiSparklineFromValue } from '@/components/sales/orders-kpi-card';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -21,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SearchField } from '@/components/ui/search-field';
 import {
   DashboardTable as Table,
   DashboardTableBody as TableBody,
@@ -40,7 +40,6 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetDescription,
 } from '@/components/ui/sheet';
 import type {
   TransactionHistoryKind,
@@ -48,8 +47,7 @@ import type {
   TransactionHistoryRow,
 } from '@/types/transaction-history';
 import {
-  CircleDollarSign,
-  Clock3,
+  Boxes,
   Eye,
   Loader2,
   RefreshCcw,
@@ -58,27 +56,9 @@ import {
 
 const PAGE_SIZE = 20;
 
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const id = window.setTimeout(() => setDebounced(value), delayMs);
-    return () => window.clearTimeout(id);
-  }, [value, delayMs]);
-  return debounced;
-}
-
-function kindBadge(
-  kind: TransactionHistoryKind,
-  t?: (key: string) => string
-) {
-  if (t) {
-    if (kind === 'ORDER') return t('dashboard.records.kindOrder');
-    if (kind === 'SUBSCRIPTION') return t('dashboard.records.kindSubscription');
-    return t('dashboard.records.kindRegister');
-  }
-  if (kind === 'ORDER') return 'Order';
-  if (kind === 'SUBSCRIPTION') return 'Subscription';
-  return 'Register';
+function kindBadge(kind: TransactionHistoryKind, t: (key: string) => string) {
+  if (kind === 'INVENTORY') return t('dashboard.records.kindInventory');
+  return t('dashboard.records.kindOrder');
 }
 
 function trackingNumberLabel(row: TransactionHistoryRow): string {
@@ -89,6 +69,20 @@ function trackingNumberLabel(row: TransactionHistoryRow): string {
   );
   if (!token) return '—';
   return token.length <= 8 ? token.toUpperCase() : token.slice(0, 6).toUpperCase();
+}
+
+function sourceLabel(row: TransactionHistoryRow, t: (key: string) => string) {
+  const raw = String(row.source ?? '').trim();
+  if (!raw) return '—';
+  const upper = raw.toUpperCase();
+  if (upper === 'ONLINE' || upper === 'WEB') {
+    return t('dashboard.analytics.channelOnline');
+  }
+  if (upper === 'POS') return t('dashboard.analytics.channelPos');
+  if (upper === 'KIOSK') return t('dashboard.analytics.channelKiosk');
+  if (upper === 'INVENTORY') return t('dashboard.records.kindInventory');
+  if (upper === 'WALK_IN' || upper === 'WALK-IN') return 'Walk-in';
+  return raw;
 }
 
 function formatPaymentMethod(method: string | null | undefined) {
@@ -114,8 +108,11 @@ export function Records() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
-  const debouncedQ = useDebouncedValue(q, 300);
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [kind, setKind] = useState<'ALL' | TransactionHistoryKind>('ALL');
+  const [status, setStatus] = useState('all');
+  const [source, setSource] = useState('all');
+  const [payment, setPayment] = useState('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -123,6 +120,11 @@ export function Records() {
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [active, setActive] = useState<TransactionHistoryRow | null>(null);
+
+  const applySearch = () => {
+    setAppliedSearch(q.trim());
+    setPage(1);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -132,8 +134,11 @@ export function Records() {
         '/api/restaurant/transaction-history',
         {
           params: {
-            q: debouncedQ || undefined,
+            q: appliedSearch || undefined,
             kind: kind === 'ALL' ? undefined : kind,
+            status: status === 'all' ? undefined : status,
+            source: source === 'all' ? undefined : source,
+            payment: payment === 'all' ? undefined : payment,
             page,
             take: PAGE_SIZE,
             ...(activeBranchId ? { branchId: activeBranchId } : {}),
@@ -146,11 +151,20 @@ export function Records() {
       setDataScope(res.data.meta?.dataScope ?? 'all');
     } catch {
       setRows([]);
-      setError('Could not load transaction history.');
+      setError(t('dashboard.records.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [debouncedQ, kind, page, activeBranchId]);
+  }, [
+    appliedSearch,
+    kind,
+    status,
+    source,
+    payment,
+    page,
+    activeBranchId,
+    t,
+  ]);
 
   useEffect(() => {
     if (branchLoading) return;
@@ -159,28 +173,33 @@ export function Records() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQ, kind]);
+  }, [kind, status, source, payment]);
 
   const stats = useMemo(() => {
     const orderCount = rows.filter((r) => r.kind === 'ORDER').length;
-    const subCount = rows.filter((r) => r.kind === 'SUBSCRIPTION').length;
-    const regCount = rows.filter((r) => r.kind === 'REGISTER').length;
-    return { orderCount, subCount, regCount };
+    const inventoryCount = rows.filter((r) => r.kind === 'INVENTORY').length;
+    return { orderCount, inventoryCount };
   }, [rows]);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        {' '}
-        <div className="flex flex-col justify-center items-start gap-2">
-          <h1 className="text-2xl font-bold">Transaction Records</h1>{' '}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col items-start gap-2">
+          <h1 className="text-2xl font-bold">
+            {t('dashboard.records.transactionRecords')}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {dataScope === 'today' || !isOwnerOrAdmin
-              ? 'Transaction records for today only.'
-              : 'Unified transaction records for orders, subscriptions, and register sales.'}
+              ? t('dashboard.records.descriptionToday')
+              : t('dashboard.records.descriptionOrdersInventory')}
           </p>
         </div>
-        <Button type="button" variant="ghost" size="icon" onClick={() => void load()}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => void load()}
+        >
           {loading ? (
             <RefreshCcw className="h-4 w-4 animate-spin" />
           ) : (
@@ -188,70 +207,142 @@ export function Records() {
           )}
         </Button>
       </div>
+
       <DashboardCard>
         <DashboardCardHeader>
-          <DashboardCardTitle>Transactions</DashboardCardTitle>
+          <DashboardCardTitle>
+            {t('dashboard.records.transactions')}
+          </DashboardCardTitle>
         </DashboardCardHeader>
         <DashboardCardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-3">
-            <Input
-              placeholder="Search by tracking number, order id, or status..."
+          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
+            <SearchField
+              className="min-w-[200px] flex-1"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={setQ}
+              onSearch={applySearch}
+              onClear={() => {
+                setQ('');
+                setAppliedSearch('');
+                setPage(1);
+              }}
+              appliedValue={appliedSearch}
+              placeholder={t('dashboard.records.searchPlaceholder')}
             />
             <Select
               value={kind}
               onValueChange={(v: 'ALL' | TransactionHistoryKind) => setKind(v)}
             >
-              <SelectTrigger>
-                <SelectValue />
+              <SelectTrigger className="w-full lg:w-[150px]">
+                <SelectValue placeholder={t('dashboard.records.allTypes')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All types</SelectItem>
-                <SelectItem value="ORDER">Orders</SelectItem>
-                <SelectItem value="SUBSCRIPTION">Subscriptions</SelectItem>
-                <SelectItem value="REGISTER">Register</SelectItem>
+                <SelectItem value="ALL">
+                  {t('dashboard.records.allTypes')}
+                </SelectItem>
+                <SelectItem value="ORDER">
+                  {t('dashboard.records.typeOrders')}
+                </SelectItem>
+                <SelectItem value="INVENTORY">
+                  {t('dashboard.records.typeInventory')}
+                </SelectItem>
               </SelectContent>
             </Select>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="w-full lg:w-[150px]">
+                <SelectValue
+                  placeholder={t('dashboard.reports.filterAllStatuses')}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {t('dashboard.reports.filterAllStatuses')}
+                </SelectItem>
+                <SelectItem value="completed">
+                  {t('dashboard.reports.statusCompleted')}
+                </SelectItem>
+                <SelectItem value="pending">
+                  {t('dashboard.reports.statusPending')}
+                </SelectItem>
+                <SelectItem value="canceled">
+                  {t('dashboard.reports.statusCanceled')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={source} onValueChange={setSource}>
+              <SelectTrigger className="w-full lg:w-[150px]">
+                <SelectValue
+                  placeholder={t('dashboard.reports.filterAllSources')}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {t('dashboard.reports.filterAllSources')}
+                </SelectItem>
+                <SelectItem value="ONLINE">
+                  {t('dashboard.analytics.channelOnline')}
+                </SelectItem>
+                <SelectItem value="POS">
+                  {t('dashboard.analytics.channelPos')}
+                </SelectItem>
+                <SelectItem value="KIOSK">
+                  {t('dashboard.analytics.channelKiosk')}
+                </SelectItem>
+                <SelectItem value="INVENTORY">
+                  {t('dashboard.records.kindInventory')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={payment} onValueChange={setPayment}>
+              <SelectTrigger className="w-full lg:w-[150px]">
+                <SelectValue
+                  placeholder={t('dashboard.records.filterAllPayments')}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {t('dashboard.records.filterAllPayments')}
+                </SelectItem>
+                <SelectItem value="cash">
+                  {t('dashboard.records.paymentCash')}
+                </SelectItem>
+                <SelectItem value="card">
+                  {t('dashboard.records.paymentCard')}
+                </SelectItem>
+                <SelectItem value="other">
+                  {t('dashboard.records.paymentOther')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div className="text-sm text-muted-foreground md:text-right">
-              {total} records
-            </div>
+          <div className="text-sm text-muted-foreground">
+            {t('dashboard.records.recordsCount', { count: total })}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <OrdersKpiCard
+              label={t('dashboard.records.kpiOrders')}
+              subtitle={t('dashboard.records.inCurrentPage')}
+              value={stats.orderCount.toLocaleString()}
+              sparklineData={kpiSparklineFromValue(stats.orderCount)}
+              accentColor="#ed6e40"
+              icon={ShoppingBag}
+            />
+            <OrdersKpiCard
+              label={t('dashboard.records.kpiInventory')}
+              subtitle={t('dashboard.records.inCurrentPage')}
+              value={stats.inventoryCount.toLocaleString()}
+              sparklineData={kpiSparklineFromValue(stats.inventoryCount)}
+              accentColor="#0ea5e9"
+              icon={Boxes}
+            />
           </div>
 
           {loading ? (
-            <>
-              <Loader2 className="  animate-spin text-primary text-center mx-auto" />{' '}
-            </>
+            <Loader2 className="mx-auto animate-spin text-primary" />
           ) : (
             <>
-              <div className="grid gap-3 md:grid-cols-3">
-                <OrdersKpiCard
-                  label="Orders"
-                  subtitle="in current page"
-                  value={stats.orderCount.toLocaleString()}
-                  sparklineData={kpiSparklineFromValue(stats.orderCount)}
-                  accentColor="#ed6e40"
-                  icon={ShoppingBag}
-                />
-                <OrdersKpiCard
-                  label="Subscriptions"
-                  subtitle="in current page"
-                  value={stats.subCount.toLocaleString()}
-                  sparklineData={kpiSparklineFromValue(stats.subCount)}
-                  accentColor="#7c3aed"
-                  icon={CircleDollarSign}
-                />
-                <OrdersKpiCard
-                  label="Register"
-                  subtitle="in current page"
-                  value={stats.regCount.toLocaleString()}
-                  sparklineData={kpiSparklineFromValue(stats.regCount)}
-                  accentColor="#14b8a6"
-                  icon={Clock3}
-                />
-              </div>
-
               <TableWrapper>
                 <Table>
                   <TableHeader>
@@ -277,19 +368,10 @@ export function Records() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {loading ? (
+                    {error ? (
                       <TableRow>
                         <TableCell
-                          colSpan={10}
-                          className="text-center text-muted-foreground"
-                        >
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        </TableCell>
-                      </TableRow>
-                    ) : error ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={10}
+                          colSpan={8}
                           className="text-center text-destructive"
                         >
                           {error}
@@ -298,7 +380,7 @@ export function Records() {
                     ) : rows.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={10}
+                          colSpan={8}
                           className="text-center text-muted-foreground"
                         >
                           {t('dashboard.records.noRecords')}
@@ -311,7 +393,12 @@ export function Records() {
                             <Badge variant="secondary">
                               {kindBadge(row.kind, t)}
                             </Badge>
-                            {row.source}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {trackingNumberLabel(row)}
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            {sourceLabel(row, t)}
                           </TableCell>
                           <TableCell>{row.status}</TableCell>
                           <TableCell className="hidden md:table-cell">
@@ -320,7 +407,7 @@ export function Records() {
                           <TableCell className="text-right tabular-nums">
                             {formatRowMoney(row.amount, row.currency)}
                           </TableCell>
-                          <TableCell className="hidden lg:table-cell text-muted-foreground">
+                          <TableCell className="hidden text-muted-foreground lg:table-cell">
                             {new Date(row.createdAt).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right">
@@ -332,7 +419,7 @@ export function Records() {
                                 setDetailOpen(true);
                               }}
                             >
-                              <Eye className="h-4 w-4 mr-2" />{' '}
+                              <Eye className="mr-2 h-4 w-4" />
                               {t('dashboard.records.view')}
                             </Button>
                           </TableCell>
@@ -353,6 +440,7 @@ export function Records() {
                 page={page}
                 onPageChange={setPage}
                 loading={loading}
+                hideWhenSinglePage={false}
               />
             </>
           )}
@@ -419,7 +507,7 @@ export function Records() {
                   <p className="text-xs text-muted-foreground">
                     {t('dashboard.records.detailSource')}
                   </p>
-                  <p>{active.source}</p>
+                  <p>{sourceLabel(active, t)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">
@@ -431,7 +519,9 @@ export function Records() {
               {active.customerName ? (
                 <div className="rounded-md border p-3">
                   <p className="text-xs text-muted-foreground">
-                    {t('dashboard.records.detailCustomer')}
+                    {active.kind === 'INVENTORY'
+                      ? t('dashboard.reports.colIngredient')
+                      : t('dashboard.records.detailCustomer')}
                   </p>
                   <p>{active.customerName}</p>
                 </div>

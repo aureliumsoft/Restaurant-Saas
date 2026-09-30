@@ -9,19 +9,45 @@ import {
   parsePaginationParams,
 } from '@/lib/pagination';
 import type { ReportDateRange } from '@/lib/reports/date-range';
-import {
-  orderCreatedAtRangeSql,
-  prismaCreatedAtRangeWhere,
-  prismaPaidAtRangeWhere,
-  subscriptionPaidAtRangeSql,
-  transactionCreatedAtRangeSql,
-} from '@/lib/reports/date-range';
-import type {
-  TransactionHistoryKind,
-  TransactionHistoryRow,
-} from '@/types/transaction-history';
+import { orderCreatedAtRangeSql } from '@/lib/reports/date-range';
+import type { TransactionHistoryRow } from '@/types/transaction-history';
 
-type UnifiedKey = { id: string; kind: TransactionHistoryKind };
+/** Restaurant ops ledger kinds (orders + inventory restocks). */
+export type RestaurantLedgerKind = 'ORDER' | 'INVENTORY';
+
+type UnifiedKey = { id: string; kind: RestaurantLedgerKind };
+
+export type LedgerFilters = {
+  status?: string | null;
+  source?: string | null;
+  payment?: string | null;
+};
+
+function parseLedgerKind(
+  raw: string | null | undefined
+): 'ALL' | RestaurantLedgerKind {
+  if (raw === 'ORDER' || raw === 'INVENTORY') return raw;
+  return 'ALL';
+}
+
+function normalizeFilter(raw: string | null | undefined): string | null {
+  const v = raw?.trim();
+  if (!v || v === 'all' || v === 'ALL') return null;
+  return v;
+}
+
+export function parseLedgerFilters(
+  searchParams?: URLSearchParams | null
+): LedgerFilters {
+  if (!searchParams) return {};
+  return {
+    status: normalizeFilter(searchParams.get('status')),
+    source: normalizeFilter(searchParams.get('source')),
+    payment: normalizeFilter(
+      searchParams.get('payment') ?? searchParams.get('method')
+    ),
+  };
+}
 
 function orderSearchWhere(q: string): Prisma.OrderWhereInput | undefined {
   if (!q) return undefined;
@@ -38,27 +64,217 @@ function orderSearchWhere(q: string): Prisma.OrderWhereInput | undefined {
   };
 }
 
-function subscriptionSearchWhere(
-  q: string
-): Prisma.SubscriptionPaymentWhereInput | undefined {
+function inventorySearchWhere(q: string): Prisma.ExpenseWhereInput | undefined {
   if (!q) return undefined;
   return {
     OR: [
       { id: { contains: q, mode: 'insensitive' } },
+      { title: { contains: q, mode: 'insensitive' } },
       { notes: { contains: q, mode: 'insensitive' } },
-      { currency: { contains: q, mode: 'insensitive' } },
     ],
   };
 }
 
-function registerSearchWhere(q: string): Prisma.TransactionWhereInput | undefined {
-  if (!q) return undefined;
+function expenseOccurredAtRangeWhere(range: ReportDateRange) {
+  return { occurredAt: { gte: range.from, lte: range.to } };
+}
+
+function expenseOccurredAtRangeSql(range: ReportDateRange): Prisma.Sql {
+  return Prisma.sql`AND e."occurredAt" >= ${range.from} AND e."occurredAt" <= ${range.to}`;
+}
+
+function orderStatusWhere(
+  status: string | null | undefined
+): Prisma.OrderWhereInput | undefined {
+  if (!status) return undefined;
+  const s = status.toLowerCase();
+  if (s === 'completed' || s === 'complete' || s === 'paid') {
+    return {
+      OR: [
+        { status: { equals: 'completed', mode: 'insensitive' } },
+        { status: { equals: 'complete', mode: 'insensitive' } },
+        { status: { equals: 'delivered', mode: 'insensitive' } },
+        {
+          payments: {
+            some: { status: { equals: 'completed', mode: 'insensitive' } },
+          },
+        },
+        {
+          payments: {
+            some: { status: { equals: 'paid', mode: 'insensitive' } },
+          },
+        },
+      ],
+    };
+  }
+  if (s === 'canceled' || s === 'cancelled') {
+    return {
+      OR: [
+        { status: { equals: 'canceled', mode: 'insensitive' } },
+        { status: { equals: 'cancelled', mode: 'insensitive' } },
+        { status: { equals: 'failed', mode: 'insensitive' } },
+      ],
+    };
+  }
+  if (s === 'pending') {
+    return {
+      NOT: {
+        OR: [
+          { status: { equals: 'completed', mode: 'insensitive' } },
+          { status: { equals: 'complete', mode: 'insensitive' } },
+          { status: { equals: 'delivered', mode: 'insensitive' } },
+          { status: { equals: 'canceled', mode: 'insensitive' } },
+          { status: { equals: 'cancelled', mode: 'insensitive' } },
+          { status: { equals: 'failed', mode: 'insensitive' } },
+        ],
+      },
+    };
+  }
+  return { status: { contains: status, mode: 'insensitive' } };
+}
+
+function orderSourceWhere(
+  source: string | null | undefined
+): Prisma.OrderWhereInput | undefined {
+  if (!source) return undefined;
+  const upper = source.toUpperCase();
+  if (upper === 'WEB') return { sourceType: 'ONLINE' as never };
+  if (upper === 'INVENTORY') return { id: '__none__' };
+  return { sourceType: upper as never };
+}
+
+function orderPaymentWhere(
+  payment: string | null | undefined
+): Prisma.OrderWhereInput | undefined {
+  if (!payment) return undefined;
+  const p = payment.toLowerCase();
+  if (p === 'cash') {
+    return {
+      payments: { some: { method: { contains: 'cash', mode: 'insensitive' } } },
+    };
+  }
+  if (p === 'card') {
+    return {
+      payments: {
+        some: {
+          OR: [
+            { method: { contains: 'card', mode: 'insensitive' } },
+            { method: { contains: 'stripe', mode: 'insensitive' } },
+            { method: { contains: 'visa', mode: 'insensitive' } },
+            { method: { contains: 'master', mode: 'insensitive' } },
+            { method: { contains: 'terminal', mode: 'insensitive' } },
+            { method: { contains: 'debit', mode: 'insensitive' } },
+            { method: { contains: 'credit', mode: 'insensitive' } },
+          ],
+        },
+      },
+    };
+  }
+  if (p === 'other') {
+    return {
+      payments: {
+        some: {
+          AND: [
+            { NOT: { method: { contains: 'cash', mode: 'insensitive' } } },
+            { NOT: { method: { contains: 'card', mode: 'insensitive' } } },
+            { NOT: { method: { contains: 'stripe', mode: 'insensitive' } } },
+          ],
+        },
+      },
+    };
+  }
   return {
-    OR: [
-      { id: { contains: q, mode: 'insensitive' } },
-      { sourceType: { equals: q.toUpperCase() as never } },
-    ],
+    payments: {
+      some: { method: { contains: payment, mode: 'insensitive' } },
+    },
   };
+}
+
+function inventoryMatchesFilters(filters: LedgerFilters): boolean {
+  if (filters.payment) return false;
+  if (filters.source) {
+    const s = filters.source.toUpperCase();
+    if (s !== 'INVENTORY') return false;
+  }
+  if (filters.status) {
+    const s = filters.status.toLowerCase();
+    if (s !== 'completed' && s !== 'complete' && s !== 'paid') return false;
+  }
+  return true;
+}
+
+function orderStatusSql(status: string | null | undefined): Prisma.Sql {
+  if (!status) return Prisma.empty;
+  const s = status.toLowerCase();
+  if (s === 'completed' || s === 'complete' || s === 'paid') {
+    return Prisma.sql`AND (
+      o.status ILIKE 'completed' OR o.status ILIKE 'complete' OR o.status ILIKE 'delivered'
+      OR EXISTS (
+        SELECT 1 FROM "Payment" p
+        WHERE p."orderId" = o.id::text
+          AND (p.status ILIKE 'completed' OR p.status ILIKE 'paid')
+      )
+    )`;
+  }
+  if (s === 'canceled' || s === 'cancelled') {
+    return Prisma.sql`AND (
+      o.status ILIKE 'canceled' OR o.status ILIKE 'cancelled' OR o.status ILIKE 'failed'
+    )`;
+  }
+  if (s === 'pending') {
+    return Prisma.sql`AND NOT (
+      o.status ILIKE 'completed' OR o.status ILIKE 'complete' OR o.status ILIKE 'delivered'
+      OR o.status ILIKE 'canceled' OR o.status ILIKE 'cancelled' OR o.status ILIKE 'failed'
+    )`;
+  }
+  const like = `%${status}%`;
+  return Prisma.sql`AND o.status ILIKE ${like}`;
+}
+
+function orderSourceSql(source: string | null | undefined): Prisma.Sql {
+  if (!source) return Prisma.empty;
+  const upper = source.toUpperCase() === 'WEB' ? 'ONLINE' : source.toUpperCase();
+  if (upper === 'INVENTORY') {
+    return Prisma.sql`AND FALSE`;
+  }
+  return Prisma.sql`AND o."sourceType"::text = ${upper}`;
+}
+
+function orderPaymentSql(payment: string | null | undefined): Prisma.Sql {
+  if (!payment) return Prisma.empty;
+  const p = payment.toLowerCase();
+  if (p === 'cash') {
+    return Prisma.sql`AND EXISTS (
+      SELECT 1 FROM "Payment" pay
+      WHERE pay."orderId" = o.id::text AND pay.method ILIKE '%cash%'
+    )`;
+  }
+  if (p === 'card') {
+    return Prisma.sql`AND EXISTS (
+      SELECT 1 FROM "Payment" pay
+      WHERE pay."orderId" = o.id::text
+        AND (
+          pay.method ILIKE '%card%' OR pay.method ILIKE '%stripe%'
+          OR pay.method ILIKE '%visa%' OR pay.method ILIKE '%master%'
+          OR pay.method ILIKE '%terminal%' OR pay.method ILIKE '%debit%'
+          OR pay.method ILIKE '%credit%'
+        )
+    )`;
+  }
+  if (p === 'other') {
+    return Prisma.sql`AND EXISTS (
+      SELECT 1 FROM "Payment" pay
+      WHERE pay."orderId" = o.id::text
+        AND pay.method NOT ILIKE '%cash%'
+        AND pay.method NOT ILIKE '%card%'
+        AND pay.method NOT ILIKE '%stripe%'
+    )`;
+  }
+  const like = `%${payment}%`;
+  return Prisma.sql`AND EXISTS (
+    SELECT 1 FROM "Payment" pay
+    WHERE pay."orderId" = o.id::text AND pay.method ILIKE ${like}
+  )`;
 }
 
 async function loadOrderRows(
@@ -109,75 +325,41 @@ async function loadOrderRows(
   return map;
 }
 
-async function loadSubscriptionRows(
-  ids: string[]
-): Promise<Map<string, TransactionHistoryRow>> {
-  if (ids.length === 0) return new Map();
-  const rows = await db.subscriptionPayment.findMany({
-    where: { id: { in: ids } },
-    select: {
-      id: true,
-      amount: true,
-      currency: true,
-      paidAt: true,
-      notes: true,
-      restaurantSubscriptionId: true,
-    },
-  });
-  const map = new Map<string, TransactionHistoryRow>();
-  for (const p of rows) {
-    map.set(p.id, {
-      key: `SUBSCRIPTION:${p.id}`,
-      kind: 'SUBSCRIPTION',
-      transactionId: p.id,
-      referenceId: p.restaurantSubscriptionId ?? null,
-      shortOrderId: null,
-      ticketNumber: null,
-      amount: p.amount,
-      currency: p.currency || 'EUR',
-      status: 'completed',
-      method: 'subscription',
-      source: 'SAAS',
-      note: p.notes ?? null,
-      customerName: null,
-      createdAt: p.paidAt.toISOString(),
-    });
-  }
-  return map;
-}
-
-async function loadRegisterRows(
+async function loadInventoryRows(
   ids: string[],
   orderCurrency: string
 ): Promise<Map<string, TransactionHistoryRow>> {
   if (ids.length === 0) return new Map();
-  const rows = await db.transaction.findMany({
-    where: { id: { in: ids } },
+  const rows = await db.expense.findMany({
+    where: { id: { in: ids }, type: 'INVENTORY' },
     select: {
       id: true,
-      totalAmount: true,
-      isComplete: true,
-      sourceType: true,
-      createdAt: true,
+      title: true,
+      amount: true,
+      notes: true,
+      occurredAt: true,
+      quantity: true,
+      ingredientId: true,
+      ingredient: { select: { name: true } },
     },
   });
   const map = new Map<string, TransactionHistoryRow>();
-  for (const t of rows) {
-    map.set(t.id, {
-      key: `REGISTER:${t.id}`,
-      kind: 'REGISTER',
-      transactionId: t.id,
-      referenceId: null,
+  for (const e of rows) {
+    map.set(e.id, {
+      key: `INVENTORY:${e.id}`,
+      kind: 'INVENTORY',
+      transactionId: e.id,
+      referenceId: e.ingredientId ?? null,
       shortOrderId: null,
       ticketNumber: null,
-      amount: t.totalAmount != null ? Number(t.totalAmount) : null,
+      amount: e.amount,
       currency: orderCurrency,
-      status: t.isComplete ? 'completed' : 'open',
-      method: 'register',
-      source: t.sourceType,
-      note: null,
-      customerName: null,
-      createdAt: t.createdAt.toISOString(),
+      status: 'completed',
+      method: null,
+      source: 'INVENTORY',
+      note: e.notes ?? e.title,
+      customerName: e.ingredient?.name ?? e.title,
+      createdAt: e.occurredAt.toISOString(),
     });
   }
   return map;
@@ -188,7 +370,10 @@ export type QueryTransactionLedgerInput = {
   activeBranchId: string | null;
   range: ReportDateRange;
   q?: string;
-  kind?: 'ALL' | TransactionHistoryKind;
+  kind?: 'ALL' | RestaurantLedgerKind | string | null;
+  status?: string | null;
+  source?: string | null;
+  payment?: string | null;
   page?: number;
   pageSize?: number;
   searchParams?: URLSearchParams;
@@ -210,7 +395,7 @@ export type QueryTransactionLedgerResult = {
   };
 };
 
-/** Paginated unified transaction ledger with date range. */
+/** Paginated restaurant ledger: orders + inventory restock expenses. */
 export async function queryTransactionLedger(
   input: QueryTransactionLedgerInput
 ): Promise<QueryTransactionLedgerResult> {
@@ -218,12 +403,15 @@ export async function queryTransactionLedger(
   const activeBranchId = input.activeBranchId;
   const range = input.range;
   const q = input.q?.trim() ?? '';
-  const kindFilter =
-    input.kind === 'ORDER' ||
-    input.kind === 'SUBSCRIPTION' ||
-    input.kind === 'REGISTER'
-      ? input.kind
-      : 'ALL';
+  const kindFilter = parseLedgerKind(
+    input.kind ?? input.searchParams?.get('kind')
+  );
+  const spFilters = parseLedgerFilters(input.searchParams);
+  const filters: LedgerFilters = {
+    status: normalizeFilter(input.status) ?? spFilters.status,
+    source: normalizeFilter(input.source) ?? spFilters.source,
+    payment: normalizeFilter(input.payment) ?? spFilters.payment,
+  };
 
   const pagination = input.searchParams
     ? parsePaginationParams(input.searchParams, {
@@ -239,8 +427,9 @@ export async function queryTransactionLedger(
   const { page, pageSize } = pagination;
 
   const orderBranchFilter = orderBranchWhere(activeBranchId);
-  const createdAtRange = prismaCreatedAtRangeWhere(range);
-  const paidAtRange = prismaPaidAtRangeWhere(range);
+  const expenseBranchFilter = activeBranchId
+    ? { branchId: activeBranchId }
+    : {};
 
   const restaurant = await db.restaurant.findUnique({
     where: { id: restaurantId },
@@ -250,13 +439,17 @@ export async function queryTransactionLedger(
 
   let keys: UnifiedKey[] = [];
   let total = 0;
+  let aggregateAmount = 0;
 
   if (kindFilter === 'ORDER') {
     const where: Prisma.OrderWhereInput = {
       restaurantId,
       ...orderBranchFilter,
-      ...createdAtRange,
+      createdAt: { gte: range.from, lte: range.to },
       ...orderSearchWhere(q),
+      ...orderStatusWhere(filters.status),
+      ...orderSourceWhere(filters.source),
+      ...orderPaymentWhere(filters.payment),
     };
     total = await db.order.count({ where });
     const safePage = clampPage(page, total, pageSize);
@@ -268,47 +461,64 @@ export async function queryTransactionLedger(
       select: { id: true },
     });
     keys = rows.map((r) => ({ id: r.id, kind: 'ORDER' as const }));
-  } else if (kindFilter === 'SUBSCRIPTION') {
-    const where: Prisma.SubscriptionPaymentWhereInput = {
+    const agg = await aggregateTransactionLedger({
       restaurantId,
-      ...paidAtRange,
-      ...subscriptionSearchWhere(q),
+      activeBranchId,
+      range,
+      kind: 'ORDER',
+      q,
+      ...filters,
+    });
+    aggregateAmount = agg.transactionAmount;
+  } else if (kindFilter === 'INVENTORY') {
+    if (!inventoryMatchesFilters(filters)) {
+      return {
+        data: [],
+        meta: buildPaginationMeta(1, pageSize, 0),
+        aggregates: { transactionCount: 0, transactionAmount: 0 },
+      };
+    }
+    const where: Prisma.ExpenseWhereInput = {
+      restaurantId,
+      type: 'INVENTORY',
+      ...expenseBranchFilter,
+      ...expenseOccurredAtRangeWhere(range),
+      ...inventorySearchWhere(q),
     };
-    total = await db.subscriptionPayment.count({ where });
+    total = await db.expense.count({ where });
     const safePage = clampPage(page, total, pageSize);
-    const rows = await db.subscriptionPayment.findMany({
+    const rows = await db.expense.findMany({
       where,
-      orderBy: { paidAt: 'desc' },
+      orderBy: { occurredAt: 'desc' },
       skip: (safePage - 1) * pageSize,
       take: pageSize,
       select: { id: true },
     });
-    keys = rows.map((r) => ({ id: r.id, kind: 'SUBSCRIPTION' as const }));
-  } else if (kindFilter === 'REGISTER') {
-    const where: Prisma.TransactionWhereInput = {
+    keys = rows.map((r) => ({ id: r.id, kind: 'INVENTORY' as const }));
+    const agg = await aggregateTransactionLedger({
       restaurantId,
-      ...createdAtRange,
-      ...registerSearchWhere(q),
-    };
-    total = await db.transaction.count({ where });
-    const safePage = clampPage(page, total, pageSize);
-    const rows = await db.transaction.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip: (safePage - 1) * pageSize,
-      take: pageSize,
-      select: { id: true },
+      activeBranchId,
+      range,
+      kind: 'INVENTORY',
+      q,
+      ...filters,
     });
-    keys = rows.map((r) => ({ id: r.id, kind: 'REGISTER' as const }));
+    aggregateAmount = agg.transactionAmount;
   } else {
+    const includeOrders =
+      !filters.source || filters.source.toUpperCase() !== 'INVENTORY';
+    const includeInventory = inventoryMatchesFilters(filters);
+
     const like = q ? `%${q}%` : null;
     const ticket = q
       ? Number.parseInt(q.replace(/^#/, ''), 10)
       : Number.NaN;
     const hasTicket = Number.isFinite(ticket);
-
     const branchSql = activeBranchId
       ? Prisma.sql`AND o."branchId" = ${activeBranchId}`
+      : Prisma.empty;
+    const expenseBranchSql = activeBranchId
+      ? Prisma.sql`AND e."branchId" = ${activeBranchId}`
       : Prisma.empty;
 
     const orderSearchSql = like
@@ -324,21 +534,17 @@ export async function queryTransactionLedger(
             ${hasTicket ? Prisma.sql`OR o."ticketNumber" = ${ticket}` : Prisma.empty}
           )`
       : Prisma.empty;
-    const subSearchSql = like
+    const invSearchSql = like
       ? Prisma.sql`AND (
-            s.id::text ILIKE ${like}
-            OR COALESCE(s.notes, '') ILIKE ${like}
-            OR s.currency ILIKE ${like}
-          )`
-      : Prisma.empty;
-    const regSearchSql = like
-      ? Prisma.sql`AND (
-            t.id::text ILIKE ${like}
-            OR t."sourceType"::text ILIKE ${like}
+            e.id::text ILIKE ${like}
+            OR e.title ILIKE ${like}
+            OR COALESCE(e.notes, '') ILIKE ${like}
           )`
       : Prisma.empty;
 
-    const unionBody = Prisma.sql`
+    const parts: Prisma.Sql[] = [];
+    if (includeOrders) {
+      parts.push(Prisma.sql`
         SELECT o.id::text AS id, 'ORDER'::text AS kind, o."createdAt" AS sort_at,
                COALESCE(
                  (SELECT p.amount FROM "Payment" p
@@ -351,21 +557,36 @@ export async function queryTransactionLedger(
           ${branchSql}
           ${orderCreatedAtRangeSql(range)}
           ${orderSearchSql}
-        UNION ALL
-        SELECT s.id::text AS id, 'SUBSCRIPTION'::text AS kind, s."paidAt" AS sort_at,
-               COALESCE(s.amount, 0)::float AS amt
-        FROM "SubscriptionPayment" s
-        WHERE s."restaurantId" = ${restaurantId}
-          ${subscriptionPaidAtRangeSql(range)}
-          ${subSearchSql}
-        UNION ALL
-        SELECT t.id::text AS id, 'REGISTER'::text AS kind, t."createdAt" AS sort_at,
-               COALESCE(t."totalAmount", 0)::float AS amt
-        FROM "Transaction" t
-        WHERE t."restaurantId" = ${restaurantId}
-          ${transactionCreatedAtRangeSql(range)}
-          ${regSearchSql}
-      `;
+          ${orderStatusSql(filters.status)}
+          ${orderSourceSql(filters.source)}
+          ${orderPaymentSql(filters.payment)}
+      `);
+    }
+    if (includeInventory) {
+      parts.push(Prisma.sql`
+        SELECT e.id::text AS id, 'INVENTORY'::text AS kind, e."occurredAt" AS sort_at,
+               COALESCE(e.amount, 0)::float AS amt
+        FROM "Expense" e
+        WHERE e."restaurantId" = ${restaurantId}
+          AND e.type = 'INVENTORY'::"ExpenseType"
+          ${expenseBranchSql}
+          ${expenseOccurredAtRangeSql(range)}
+          ${invSearchSql}
+      `);
+    }
+
+    if (parts.length === 0) {
+      return {
+        data: [],
+        meta: buildPaginationMeta(1, pageSize, 0),
+        aggregates: { transactionCount: 0, transactionAmount: 0 },
+      };
+    }
+
+    const unionBody =
+      parts.length === 1
+        ? parts[0]!
+        : Prisma.sql`${parts[0]!} UNION ALL ${parts[1]!}`;
 
     const countRows = await db.$queryRaw<
       Array<{ count: bigint; amount: number }>
@@ -373,7 +594,7 @@ export async function queryTransactionLedger(
       Prisma.sql`SELECT COUNT(*)::bigint AS count, COALESCE(SUM(amt), 0)::float AS amount FROM (${unionBody}) AS u`
     );
     total = Number(countRows[0]?.count ?? 0);
-    const aggregateAmount = Number(countRows[0]?.amount ?? 0);
+    aggregateAmount = Number(countRows[0]?.amount ?? 0);
     const safePage = clampPage(page, total, pageSize);
     const pageSkip = (safePage - 1) * pageSize;
 
@@ -386,23 +607,16 @@ export async function queryTransactionLedger(
     );
     keys = pageRows
       .filter(
-        (r): r is { id: string; kind: TransactionHistoryKind } =>
-          r.kind === 'ORDER' ||
-          r.kind === 'SUBSCRIPTION' ||
-          r.kind === 'REGISTER'
+        (r): r is { id: string; kind: RestaurantLedgerKind } =>
+          r.kind === 'ORDER' || r.kind === 'INVENTORY'
       )
       .map((r) => ({ id: r.id, kind: r.kind }));
 
     const orderIds = keys.filter((k) => k.kind === 'ORDER').map((k) => k.id);
-    const subIds = keys
-      .filter((k) => k.kind === 'SUBSCRIPTION')
-      .map((k) => k.id);
-    const regIds = keys.filter((k) => k.kind === 'REGISTER').map((k) => k.id);
-
-    const [orderMap, subMap, regMap] = await Promise.all([
+    const invIds = keys.filter((k) => k.kind === 'INVENTORY').map((k) => k.id);
+    const [orderMap, invMap] = await Promise.all([
       loadOrderRows(orderIds, orderCurrency),
-      loadSubscriptionRows(subIds),
-      loadRegisterRows(regIds, orderCurrency),
+      loadInventoryRows(invIds, orderCurrency),
     ]);
 
     const data: TransactionHistoryRow[] = [];
@@ -410,16 +624,13 @@ export async function queryTransactionLedger(
       const row =
         key.kind === 'ORDER'
           ? orderMap.get(key.id)
-          : key.kind === 'SUBSCRIPTION'
-            ? subMap.get(key.id)
-            : regMap.get(key.id);
+          : invMap.get(key.id);
       if (row) data.push(row);
     }
 
-    const meta = buildPaginationMeta(safePage, pageSize, total);
     return {
       data,
-      meta,
+      meta: buildPaginationMeta(safePage, pageSize, total),
       aggregates: {
         transactionCount: total,
         transactionAmount: aggregateAmount,
@@ -427,63 +638,59 @@ export async function queryTransactionLedger(
     };
   }
 
-  // Single-kind path: hydrate + separate aggregate
   const orderIds = keys.filter((k) => k.kind === 'ORDER').map((k) => k.id);
-  const subIds = keys
-    .filter((k) => k.kind === 'SUBSCRIPTION')
-    .map((k) => k.id);
-  const regIds = keys.filter((k) => k.kind === 'REGISTER').map((k) => k.id);
-
-  const [orderMap, subMap, regMap, aggregates] = await Promise.all([
+  const invIds = keys.filter((k) => k.kind === 'INVENTORY').map((k) => k.id);
+  const [orderMap, invMap] = await Promise.all([
     loadOrderRows(orderIds, orderCurrency),
-    loadSubscriptionRows(subIds),
-    loadRegisterRows(regIds, orderCurrency),
-    aggregateTransactionLedger({
-      restaurantId,
-      activeBranchId,
-      range,
-      kind: kindFilter,
-      q,
-    }),
+    loadInventoryRows(invIds, orderCurrency),
   ]);
 
   const data: TransactionHistoryRow[] = [];
   for (const key of keys) {
     const row =
-      key.kind === 'ORDER'
-        ? orderMap.get(key.id)
-        : key.kind === 'SUBSCRIPTION'
-          ? subMap.get(key.id)
-          : regMap.get(key.id);
+      key.kind === 'ORDER' ? orderMap.get(key.id) : invMap.get(key.id);
     if (row) data.push(row);
   }
 
   const safePage = clampPage(page, total, pageSize);
-  const meta = buildPaginationMeta(safePage, pageSize, total);
   return {
     data,
-    meta,
-    aggregates,
+    meta: buildPaginationMeta(safePage, pageSize, total),
+    aggregates: {
+      transactionCount: total,
+      transactionAmount: aggregateAmount,
+    },
   };
 }
 
-/** Aggregate count + amount for ledger in range (no pagination). */
+/** Aggregate count + amount for restaurant ledger in range (orders + inventory). */
 export async function aggregateTransactionLedger(opts: {
   restaurantId: string;
   activeBranchId: string | null;
   range: ReportDateRange;
-  kind?: 'ALL' | TransactionHistoryKind;
+  kind?: 'ALL' | RestaurantLedgerKind | string | null;
   q?: string;
+  status?: string | null;
+  source?: string | null;
+  payment?: string | null;
 }): Promise<{ transactionCount: number; transactionAmount: number }> {
   const q = opts.q?.trim() ?? '';
   const like = q ? `%${q}%` : null;
   const ticket = q ? Number.parseInt(q.replace(/^#/, ''), 10) : Number.NaN;
   const hasTicket = Number.isFinite(ticket);
-  const kind = opts.kind ?? 'ALL';
+  const kind = parseLedgerKind(opts.kind);
   const range = opts.range;
   const restaurantId = opts.restaurantId;
+  const filters: LedgerFilters = {
+    status: normalizeFilter(opts.status),
+    source: normalizeFilter(opts.source),
+    payment: normalizeFilter(opts.payment),
+  };
   const branchSql = opts.activeBranchId
     ? Prisma.sql`AND o."branchId" = ${opts.activeBranchId}`
+    : Prisma.empty;
+  const expenseBranchSql = opts.activeBranchId
+    ? Prisma.sql`AND e."branchId" = ${opts.activeBranchId}`
     : Prisma.empty;
 
   const orderSearchSql = like
@@ -499,17 +706,11 @@ export async function aggregateTransactionLedger(opts: {
             ${hasTicket ? Prisma.sql`OR o."ticketNumber" = ${ticket}` : Prisma.empty}
           )`
     : Prisma.empty;
-  const subSearchSql = like
+  const invSearchSql = like
     ? Prisma.sql`AND (
-            s.id::text ILIKE ${like}
-            OR COALESCE(s.notes, '') ILIKE ${like}
-            OR s.currency ILIKE ${like}
-          )`
-    : Prisma.empty;
-  const regSearchSql = like
-    ? Prisma.sql`AND (
-            t.id::text ILIKE ${like}
-            OR t."sourceType"::text ILIKE ${like}
+            e.id::text ILIKE ${like}
+            OR e.title ILIKE ${like}
+            OR COALESCE(e.notes, '') ILIKE ${like}
           )`
     : Prisma.empty;
 
@@ -524,30 +725,42 @@ export async function aggregateTransactionLedger(opts: {
         WHERE o."restaurantId" = ${restaurantId}
           ${branchSql}
           ${orderCreatedAtRangeSql(range)}
-          ${orderSearchSql}`;
+          ${orderSearchSql}
+          ${orderStatusSql(filters.status)}
+          ${orderSourceSql(filters.source)}
+          ${orderPaymentSql(filters.payment)}`;
 
-  const subPart = Prisma.sql`
-        SELECT COALESCE(s.amount, 0)::float AS amt
-        FROM "SubscriptionPayment" s
-        WHERE s."restaurantId" = ${restaurantId}
-          ${subscriptionPaidAtRangeSql(range)}
-          ${subSearchSql}`;
+  const invPart = Prisma.sql`
+        SELECT COALESCE(e.amount, 0)::float AS amt
+        FROM "Expense" e
+        WHERE e."restaurantId" = ${restaurantId}
+          AND e.type = 'INVENTORY'::"ExpenseType"
+          ${expenseBranchSql}
+          ${expenseOccurredAtRangeSql(range)}
+          ${invSearchSql}`;
 
-  const regPart = Prisma.sql`
-        SELECT COALESCE(t."totalAmount", 0)::float AS amt
-        FROM "Transaction" t
-        WHERE t."restaurantId" = ${restaurantId}
-          ${transactionCreatedAtRangeSql(range)}
-          ${regSearchSql}`;
-
-  const body =
-    kind === 'ORDER'
-      ? orderPart
-      : kind === 'SUBSCRIPTION'
-        ? subPart
-        : kind === 'REGISTER'
-          ? regPart
-          : Prisma.sql`${orderPart} UNION ALL ${subPart} UNION ALL ${regPart}`;
+  let body: Prisma.Sql;
+  if (kind === 'ORDER') {
+    body = orderPart;
+  } else if (kind === 'INVENTORY') {
+    if (!inventoryMatchesFilters(filters)) {
+      return { transactionCount: 0, transactionAmount: 0 };
+    }
+    body = invPart;
+  } else {
+    const includeOrders =
+      !filters.source || filters.source.toUpperCase() !== 'INVENTORY';
+    const includeInventory = inventoryMatchesFilters(filters);
+    if (includeOrders && includeInventory) {
+      body = Prisma.sql`${orderPart} UNION ALL ${invPart}`;
+    } else if (includeOrders) {
+      body = orderPart;
+    } else if (includeInventory) {
+      body = invPart;
+    } else {
+      return { transactionCount: 0, transactionAmount: 0 };
+    }
+  }
 
   const rows = await db.$queryRaw<Array<{ count: bigint; amount: number }>>(
     Prisma.sql`SELECT COUNT(*)::bigint AS count, COALESCE(SUM(amt), 0)::float AS amount FROM (${body}) AS u`

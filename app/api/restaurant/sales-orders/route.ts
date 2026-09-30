@@ -145,7 +145,7 @@ function sourceSqlForTab(tab: SalesOrdersTab): Prisma.Sql {
 export async function GET(req: NextRequest) {
   try {
     const auth = await getRestaurantIdForRequest(req, {
-      moduleKey: 'sales',
+      moduleKey: 'reports',
       action: 'access',
     });
     if (!auth.ok) {

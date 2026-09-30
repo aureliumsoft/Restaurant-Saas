@@ -10,7 +10,6 @@ import {
   Loader2,
   Plus,
   Receipt,
-  Search,
   Trash2,
   Wallet,
 } from 'lucide-react';
@@ -34,6 +33,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchField } from '@/components/ui/search-field';
 import { Textarea } from '@/components/ui/textarea';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { DeleteConfirmation } from '@/components/ui/confirmation-dialogs';
@@ -375,24 +375,19 @@ export default function ExpensesPage() {
                 {t('dashboard.expenses.addExpense')}
               </Button>
             ) : null}
-            <div className="relative w-full flex-1">
-              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="pl-8"
-                placeholder={t('dashboard.expenses.searchPlaceholder')}
-                value={searchDraft}
-                onChange={(e) => setSearchDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    applySearch();
-                  }
-                }}
-              />
-            </div>
-            <Button type="button" variant="secondary" onClick={applySearch}>
-              {t('dashboard.common.search')}
-            </Button>
+            <SearchField
+              className="w-full flex-1"
+              value={searchDraft}
+              onChange={setSearchDraft}
+              onSearch={applySearch}
+              onClear={() => {
+                setSearchDraft('');
+                setAppliedSearch('');
+                setPage(1);
+              }}
+              appliedValue={appliedSearch}
+              placeholder={t('dashboard.expenses.searchPlaceholder')}
+            />
             <Select
               value={typeFilter}
               onValueChange={(v) => {
