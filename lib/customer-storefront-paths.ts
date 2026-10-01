@@ -47,7 +47,7 @@ export const STOREFRONT_RESERVED_SEGMENTS = new Set([
   'reset-password',
   'restaurant-signup',
   'role',
-  'sales',
+  'reports',
   'settings',
   'sitemap',
   'subscription-returns',

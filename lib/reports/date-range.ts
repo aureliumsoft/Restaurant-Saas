@@ -118,11 +118,12 @@ export function weekReportFromToKeys(): { from: string; to: string } {
   return { from: start.toISOString().slice(0, 10), to: today };
 }
 
-/** Calendar month containing today (restaurant TZ). */
+/** Last 30 calendar days inclusive ending today (restaurant TZ). */
 export function monthReportFromToKeys(): { from: string; to: string } {
   const tz = salesOrderFilterTimezone();
   const today = calendarDayKeyInTimezone(new Date(), tz);
-  const [y, m] = today.split('-').map(Number);
-  const from = `${y}-${String(m ?? 1).padStart(2, '0')}-01`;
-  return { from, to: today };
+  const [y, m, d] = today.split('-').map(Number);
+  const start = new Date(Date.UTC(y, (m ?? 1) - 1, (d ?? 1) - 29));
+  return { from: start.toISOString().slice(0, 10), to: today };
 }
+

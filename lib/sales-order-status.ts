@@ -64,19 +64,16 @@ export function isCanceledPaymentStatus(
   );
 }
 
-/** Revenue counts only when payment is completed (not pending/cancelled). */
+/**
+ * Revenue counts only when order status is completed AND payment status is
+ * completed (both required — no fallback when payment is missing).
+ */
 export function orderCountsTowardRevenue(opts: {
   orderStatus: string;
   paymentStatus: string | null | undefined;
 }): boolean {
-  const payment = String(opts.paymentStatus ?? '').trim();
-  if (payment) {
-    if (isCanceledPaymentStatus(payment) || isPendingPaymentStatus(payment)) {
-      return false;
-    }
-    return isCompletedPaymentStatus(payment);
-  }
-  return isCompletedSalesStatus(opts.orderStatus);
+  if (!isCompletedSalesStatus(opts.orderStatus)) return false;
+  return isCompletedPaymentStatus(opts.paymentStatus);
 }
 
 /** Prisma filter: active orders for dashboard charts (excludes canceled/failed). */

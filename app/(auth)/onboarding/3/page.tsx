@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AddressMapPicker } from "@/components/ui/address-map-picker";
 import {
   clearOnboardingRestaurantId,
   getOnboardingRestaurantId,
@@ -161,12 +162,14 @@ export default function OnboardingStep3Page() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`addr-${i}`}>{t("onboarding.step3.addressLabel")}</Label>
-              <Input
+              <AddressMapPicker
                 id={`addr-${i}`}
-                value={row.address}
-                onChange={(e) => updateRow(i, "address", e.target.value)}
+                label={t("onboarding.step3.addressLabel")}
                 placeholder={t("onboarding.step3.addressPlaceholder")}
+                value={row.address}
+                onChange={(v) => updateRow(i, "address", v)}
+                disabled={loading}
+                mapClassName="h-52 w-full"
               />
             </div>
             <div className="space-y-2">

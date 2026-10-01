@@ -58,6 +58,7 @@ import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { extractApiErrorMessage } from '@/lib/extract-api-error';
 import { formatIngredientUnit } from '@/lib/inventory/stock';
 import { filterDecimalInput } from '@/lib/validation/fields';
+import { formatExpenseDisplayTitle } from '@/lib/expenses/format-expense-title';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { cn } from '@/lib/utils';
 import { useUiLanguage } from '@/hooks/use-ui-language';
@@ -488,7 +489,15 @@ export default function ExpensesPage() {
                       </DashboardTableCell>
                       <DashboardTableCell>
                         <div className="min-w-0">
-                          <p className="font-medium">{row.title}</p>
+                          <p className="font-medium">
+                            {formatExpenseDisplayTitle({
+                              title: row.title,
+                              type: row.type,
+                              ingredientName: row.ingredient?.name,
+                              lang: uiLang,
+                              restockLabel: t('dashboard.expenses.restockLabel'),
+                            })}
+                          </p>
                           {row.notes ? (
                             <p className="truncate text-xs text-muted-foreground">
                               {row.notes}
@@ -641,7 +650,17 @@ export default function ExpensesPage() {
         onConfirm={() => void confirmDelete()}
         title={t('dashboard.expenses.deleteTitle')}
         description={t('dashboard.expenses.deleteDescription')}
-        itemName={rows.find((r) => r.id === deleteId)?.title}
+        itemName={(() => {
+          const row = rows.find((r) => r.id === deleteId);
+          if (!row) return undefined;
+          return formatExpenseDisplayTitle({
+            title: row.title,
+            type: row.type,
+            ingredientName: row.ingredient?.name,
+            lang: uiLang,
+            restockLabel: t('dashboard.expenses.restockLabel'),
+          });
+        })()}
         loading={deleting}
       />
     </MenuPageShell>

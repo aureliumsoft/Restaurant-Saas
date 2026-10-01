@@ -1,5 +1,7 @@
 import type { Expense, ExpenseType, Prisma } from '@prisma/client';
 
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+
 export type CreateExpenseInput = {
   restaurantId: string;
   branchId?: string | null;
@@ -85,7 +87,8 @@ export async function createInventoryRestockExpense(
     restaurantId: options.restaurantId,
     branchId: options.branchId,
     type: 'INVENTORY',
-    title: `Restock: ${options.ingredientName}`,
+    // Store a plain readable title (EN) — UI re-resolves from ingredient + locale.
+    title: `Restock: ${resolveBilingualText(options.ingredientName, 'en')}`,
     amount,
     quantity: delta,
     ingredientId: options.ingredientId,

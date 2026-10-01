@@ -216,19 +216,32 @@ function ChannelLineChart({
   const yAt = (v: number) => padTop + plotH - (v / max) * plotH;
 
   return (
-    <div className="flex h-[260px] w-full min-w-0 flex-col">
-      <div className="relative min-h-0 flex-1">
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between py-1">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="border-t border-dashed border-border/50" />
-          ))}
-        </div>
+    <div className="flex w-full min-w-0 flex-col">
+      <div className="relative w-full min-w-0 aspect-[32/11]">
         <svg
           viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="xMidYMid meet"
           className="absolute inset-0 h-full w-full overflow-visible"
           role="img"
           aria-label={t('dashboard.analytics.ordersOverTimeAria')}
         >
+          <g className="pointer-events-none">
+            {[0, 1, 2, 3].map((i) => {
+              const y = padTop + (plotH * i) / 3;
+              return (
+                <line
+                  key={i}
+                  x1={padX}
+                  x2={width - padX}
+                  y1={y}
+                  y2={y}
+                  stroke="var(--border)"
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.5}
+                />
+              );
+            })}
+          </g>
           {seriesKeys.map((s) => {
             const points = data.map((p, i) => {
               const v = Number(p[s.key]) || 0;
@@ -340,11 +353,11 @@ function CombinedRevenueLineChart({
   }));
 
   return (
-    <div className="flex h-[320px] w-full min-w-0 flex-col">
-      <div className="relative min-h-0 w-full flex-1">
+    <div className="flex w-full min-w-0 flex-col">
+      <div className="relative w-full min-w-0 aspect-[16/5]">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          preserveAspectRatio="none"
+          preserveAspectRatio="xMidYMid meet"
           className="absolute inset-0 h-full w-full"
           role="img"
           aria-label={t('dashboard.analytics.revenueOverTimeAria')}
@@ -395,7 +408,6 @@ function CombinedRevenueLineChart({
             strokeWidth={3.5}
             strokeLinejoin="round"
             strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
             points={linePoints}
           />
           {totalPoints.map((pt) => (
@@ -407,7 +419,6 @@ function CombinedRevenueLineChart({
               fill={CHANNEL_COLORS.online}
               stroke="var(--card, #fff)"
               strokeWidth={2}
-              vectorEffect="non-scaling-stroke"
             >
               <title>
                 {formatDayLabel(pt.day)} · {formatTip(pt.v)}
@@ -418,7 +429,10 @@ function CombinedRevenueLineChart({
       </div>
       <div
         className="mt-2 flex w-full gap-1 sm:gap-1.5"
-        style={{ paddingLeft: 48, paddingRight: 12 }}
+        style={{
+          paddingLeft: `${(padL / width) * 100}%`,
+          paddingRight: `${(padR / width) * 100}%`,
+        }}
       >
         {withTotal.map((p) => (
           <div
@@ -861,10 +875,10 @@ export default function DashboardAnalytics() {
                 </CardHeader>
         <CardContent className="w-full min-w-0 pt-0">
           {isLoading || !analytics ? (
-            <AnalyticsChartLoader className="h-[320px]" />
+            <AnalyticsChartLoader className="aspect-[16/5] w-full" />
           ) : insights.totalRevenue <= 0 ? (
             <ChartEmpty
-              className="h-[320px]"
+              className="aspect-[16/5] w-full"
               message={t('dashboard.analytics.noCompletedPayments')}
             />
           ) : (
@@ -892,9 +906,12 @@ export default function DashboardAnalytics() {
                 </CardHeader>
                 <CardContent className="pt-0">
             {isLoading || !analytics ? (
-              <AnalyticsChartLoader />
+              <AnalyticsChartLoader className="aspect-[32/11] w-full" />
             ) : insights.totalOrders <= 0 ? (
-              <ChartEmpty message={t('dashboard.analytics.noOrdersPeriod')} />
+              <ChartEmpty
+                className="aspect-[32/11] w-full"
+                message={t('dashboard.analytics.noOrdersPeriod')}
+              />
             ) : (
               <>
                 <ChannelLegend advanced={showAdvanced} />

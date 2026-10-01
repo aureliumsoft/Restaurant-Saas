@@ -730,6 +730,14 @@ export default function InventoryPage() {
             <DashboardCardTitle>
               {t('dashboard.inventory.tabIngredients')}
             </DashboardCardTitle>
+            <SearchField
+              value={search}
+              onChange={setSearch}
+              onSearch={applySearch}
+              onClear={clearSearch}
+              appliedValue={appliedSearch}
+              placeholder={t('dashboard.inventory.searchIngredients')}
+            />
             {canEditInv ? (
               <Button type="button" asChild>
                 <Link href="/inventory/ingredients/create">
@@ -740,15 +748,6 @@ export default function InventoryPage() {
             ) : null}
           </DashboardCardHeader>
           <DashboardCardContent className="space-y-4">
-            <SearchField
-              className="max-w-xl"
-              value={search}
-              onChange={setSearch}
-              onSearch={applySearch}
-              onClear={clearSearch}
-              appliedValue={appliedSearch}
-              placeholder={t('dashboard.inventory.searchIngredients')}
-            />
             {loading ? (
               <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
             ) : rows.length === 0 ? (
@@ -902,7 +901,15 @@ export default function InventoryPage() {
         <TabsContent value="entries" className="mt-0 w-full">
           <DashboardCard className="w-full">
             <DashboardCardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <DashboardCardTitle>Stock entries</DashboardCardTitle>
+              <DashboardCardTitle>{t('dashboard.inventory.tabEntries')}</DashboardCardTitle>
+              <SearchField
+                value={entrySearch}
+                onChange={setEntrySearch}
+                onSearch={applyEntrySearch}
+                onClear={clearEntrySearch}
+                appliedValue={appliedEntrySearch}
+                placeholder={t('dashboard.inventory.searchEntries')}
+              />
               {canEditInv ? (
                 <Button type="button" onClick={openEntryDialog}>
                   <Plus className="mr-2 h-4 w-4" />
@@ -911,15 +918,7 @@ export default function InventoryPage() {
               ) : null}
             </DashboardCardHeader>
             <DashboardCardContent className="space-y-4">
-              <SearchField
-                className="max-w-xl"
-                value={entrySearch}
-                onChange={setEntrySearch}
-                onSearch={applyEntrySearch}
-                onClear={clearEntrySearch}
-                appliedValue={appliedEntrySearch}
-                placeholder={t('dashboard.inventory.searchEntries')}
-              />
+              
               {entriesLoading && entries.length === 0 ? (
                 <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
               ) : entries.length === 0 && !entriesLoading ? (

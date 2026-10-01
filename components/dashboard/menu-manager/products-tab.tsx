@@ -529,18 +529,7 @@ export function ProductsTab({
         ) : showToolbarAndTable ? (
           <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              {canEditProducts ? (
-                <Button
-                  type="button"
-                  asChild
-                  disabled={categories.length === 0}
-                >
-                  <Link href="/product/create">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add product
-                  </Link>
-                </Button>
-              ) : null}
+              
               <SearchField
                 className="min-w-0 flex-1"
                 value={search}
@@ -573,6 +562,18 @@ export function ProductsTab({
                   emptyText="No categories match."
                 />
               </div>
+              {canEditProducts ? (
+                <Button
+                  type="button"
+                  asChild
+                  disabled={categories.length === 0}
+                >
+                  <Link href="/product/create">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add product
+                  </Link>
+                </Button>
+              ) : null}
               <div className="flex shrink-0 rounded-md border border-border p-0.5">
                 <Button
                   type="button"

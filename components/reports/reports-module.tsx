@@ -14,6 +14,7 @@ import { toast } from 'react-toastify';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Boxes,
+  Calendar,
   Download,
   FileBarChart,
   Loader2,
@@ -51,6 +52,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SearchField } from '@/components/ui/search-field';
@@ -68,6 +70,7 @@ import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 import { extractApiErrorMessage } from '@/lib/extract-api-error';
 import { formatIngredientUnit } from '@/lib/inventory/stock';
+import { formatExpenseDisplayTitle } from '@/lib/expenses/format-expense-title';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import {
   defaultReportFromToKeys,
@@ -81,10 +84,16 @@ import {
   rowsToHtmlTable,
 } from '@/lib/reports/export';
 import { cn } from '@/lib/utils';
+import {
+  isCanceledPaymentStatus,
+  isCompletedPaymentStatus,
+  isPendingPaymentStatus,
+  salesOrderStatusBucket,
+} from '@/lib/sales-order-status';
 import type { TransactionHistoryRow } from '@/types/transaction-history';
 
 export type ReportType = 'sales' | 'inventory' | 'expenses' | 'financial';
-type SalesChannel = 'online' | 'pos' | 'kiosk';
+type SalesChannel = 'all' | 'online' | 'pos' | 'kiosk';
 
 type OrderStats = {
   totalOrders: number;
@@ -126,20 +135,17 @@ type ReportSummary = {
       count: number;
     };
   };
-  pnl: { revenue: number; expenses: number; profit: number };
-  financialOverview?: {
-    assets: number;
-    liabilities: number;
-    netWorth: number;
-    netProfit: number;
-    cashIn: number;
-    cashOut: number;
-    netCash: number;
-    breakdown: {
-      inventoryStockValue: number;
-      salesRevenue: number;
-      inventoryExpenses: number;
-      manualExpenses: number;
+  pnl: {
+    revenue: number;
+    expenses: number;
+    inventoryExpenses?: number;
+    operatingExpenses?: number;
+    profit: number;
+    profitMargin?: number;
+    paymentBreakdown?: {
+      cash: number;
+      card: number;
+      other: number;
     };
   };
   meta: {
@@ -194,6 +200,101 @@ function formatOrderChannel(
   return sourceType || '—';
 }
 
+function formatPaymentStatusLabel(
+  paymentStatus: string | null | undefined,
+  t: (key: string) => string
+): string {
+  if (!paymentStatus?.trim()) return '—';
+  if (isCompletedPaymentStatus(paymentStatus)) {
+    return t('dashboard.reports.statusCompleted');
+  }
+  if (isPendingPaymentStatus(paymentStatus)) {
+    return t('dashboard.reports.statusPending');
+  }
+  if (isCanceledPaymentStatus(paymentStatus)) {
+    return t('dashboard.reports.statusCanceled');
+  }
+  return paymentStatus;
+}
+
+function formatOrderStatusLabel(
+  status: string,
+  t: (key: string) => string
+): string {
+  const bucket = salesOrderStatusBucket(status);
+  if (bucket === 'completed') return t('dashboard.reports.statusCompleted');
+  if (bucket === 'canceled') return t('dashboard.reports.statusCanceled');
+  if (bucket === 'pending') return t('dashboard.reports.statusPending');
+  return status || '—';
+}
+
+function statusToneClass(
+  tone: 'completed' | 'pending' | 'canceled' | 'neutral'
+): string {
+  if (tone === 'completed') {
+    return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400';
+  }
+  if (tone === 'pending') {
+    return 'bg-orange-500/15 text-orange-700 dark:text-orange-400';
+  }
+  if (tone === 'canceled') {
+    return 'bg-rose-500/15 text-rose-700 dark:text-rose-400';
+  }
+  return 'bg-muted text-muted-foreground';
+}
+
+function OrderStatusBadge({
+  status,
+  t,
+}: {
+  status: string;
+  t: (key: string) => string;
+}) {
+  const bucket = salesOrderStatusBucket(status);
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        'rounded-full border-0 px-3 py-0.5 text-xs font-semibold capitalize',
+        statusToneClass(bucket)
+      )}
+    >
+      {formatOrderStatusLabel(status, t)}
+    </Badge>
+  );
+}
+
+function PaymentStatusBadge({
+  paymentStatus,
+  t,
+}: {
+  paymentStatus: string | null | undefined;
+  t: (key: string) => string;
+}) {
+  if (!paymentStatus?.trim()) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const tone: 'completed' | 'pending' | 'canceled' | 'neutral' =
+    isCompletedPaymentStatus(paymentStatus)
+      ? 'completed'
+      : isPendingPaymentStatus(paymentStatus)
+        ? 'pending'
+        : isCanceledPaymentStatus(paymentStatus)
+          ? 'canceled'
+          : 'neutral';
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        'rounded-full border-0 px-3 py-0.5 text-xs font-semibold capitalize',
+        statusToneClass(tone)
+      )}
+    >
+      {formatPaymentStatusLabel(paymentStatus, t)}
+    </Badge>
+  );
+}
+
 function trackingNumberLabel(
   shortOrderId?: string | null,
   fallbackId?: string | null
@@ -233,17 +334,17 @@ function KpiCard({
   tone?: 'default' | 'green' | 'red' | 'blue' | 'orange' | 'purple';
 }) {
   const toneClass =
-    tone === 'green'
-      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+    tone === 'green'  
+      ? 'border-emerald-200 bg-emerald-100 text-emerald-900'
       : tone === 'red'
-        ? 'border-rose-200 bg-rose-50 text-rose-900'
+        ? 'border-rose-200 bg-rose-100 text-rose-900'
         : tone === 'blue'
-          ? 'border-sky-200 bg-sky-50 text-sky-900'
+          ? 'border-sky-200 bg-sky-100 text-sky-900'
           : tone === 'orange'
-            ? 'border-orange-200 bg-orange-50 text-orange-900'
+            ? 'border-orange-200 bg-orange-100 text-orange-900'
             : tone === 'purple'
-              ? 'border-violet-200 bg-violet-50 text-violet-900'
-              : 'border-border bg-card text-foreground';
+              ? 'border-violet-200 bg-violet-100 text-violet-900'
+              : 'border-border bg-secondary text-foreground';
   return (
     <div className={cn('rounded-xl border p-4 shadow-sm', toneClass)}>
       <p className="text-xs font-medium uppercase tracking-wide opacity-80">
@@ -320,7 +421,7 @@ export function ReportsModule() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
-  const [salesChannel, setSalesChannel] = useState<SalesChannel>('online');
+  const [salesChannel, setSalesChannel] = useState<SalesChannel>('all');
   const [orderStats, setOrderStats] = useState<OrderStats>(emptyOrderStats);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -503,7 +604,7 @@ export function ReportsModule() {
     setStatusFilter('all');
     setSourceFilter('all');
     setPaymentFilter('all');
-    setSalesChannel('online');
+    setSalesChannel('all');
     setOrderStats(emptyOrderStats);
     setSearchDraft('');
     setAppliedSearch('');
@@ -569,7 +670,6 @@ export function ReportsModule() {
 
   const kpis = summary?.kpis;
   const pnl = summary?.pnl;
-  const overview = summary?.financialOverview;
   const rangeLabel = `${appliedFrom} → ${appliedTo}`;
 
   const exportPayload = useMemo(() => {
@@ -579,7 +679,8 @@ export function ReportsModule() {
         t('dashboard.reports.colTicket'),
         t('dashboard.records.colTracking'),
         t('dashboard.reports.colChannel'),
-        t('dashboard.common.status'),
+        t('dashboard.reports.colOrderStatus'),
+        t('dashboard.reports.colPaymentStatus'),
         t('dashboard.reports.colTotal'),
         t('dashboard.reports.revenue'),
       ];
@@ -588,7 +689,8 @@ export function ReportsModule() {
         ticketNumberLabel(row.ticketNumber),
         trackingNumberLabel(row.shortOrderId, row.id),
         formatOrderChannel(row.sourceType, t),
-        row.status,
+        formatOrderStatusLabel(row.status, t),
+        formatPaymentStatusLabel(row.paymentStatus, t),
         row.total ?? 0,
         row.revenueAmount,
       ]);
@@ -668,7 +770,13 @@ export function ReportsModule() {
       const rows = expRows.map((row) => [
         format(new Date(row.occurredAt), 'yyyy-MM-dd'),
         row.type,
-        row.title,
+        formatExpenseDisplayTitle({
+          title: row.title,
+          type: row.type,
+          ingredientName: row.ingredient?.name,
+          lang: uiLang,
+          restockLabel: t('dashboard.expenses.restockLabel'),
+        }),
         row.amount,
       ]);
       return {
@@ -716,20 +824,32 @@ export function ReportsModule() {
       rows,
       kpiLines: [
         {
-          label: t('dashboard.reports.totalAssets'),
-          value: formatMoney(overview?.assets ?? 0),
+          label: t('dashboard.reports.revenue'),
+          value: formatMoney(pnl?.revenue ?? 0),
         },
         {
-          label: t('dashboard.reports.totalLiabilities'),
-          value: formatMoney(overview?.liabilities ?? 0),
+          label: t('dashboard.reports.expenses'),
+          value: formatMoney(pnl?.expenses ?? 0),
         },
         {
-          label: t('dashboard.reports.netWorth'),
-          value: formatMoney(overview?.netWorth ?? 0),
+          label: t('dashboard.reports.inventory'),
+          value: formatMoney(pnl?.inventoryExpenses ?? 0),
         },
         {
           label: t('dashboard.reports.netProfit'),
-          value: formatMoney(overview?.netProfit ?? pnl?.profit ?? 0),
+          value: formatMoney(pnl?.profit ?? 0),
+        },
+        {
+          label: t('dashboard.reports.cashPayments'),
+          value: formatMoney(pnl?.paymentBreakdown?.cash ?? 0),
+        },
+        {
+          label: t('dashboard.reports.cardPayments'),
+          value: formatMoney(pnl?.paymentBreakdown?.card ?? 0),
+        },
+        {
+          label: t('dashboard.reports.otherPayments'),
+          value: formatMoney(pnl?.paymentBreakdown?.other ?? 0),
         },
       ],
       filename: `financial-overview-${appliedFrom}_${appliedTo}.csv`,
@@ -742,7 +862,6 @@ export function ReportsModule() {
     expRows,
     txnRows,
     kpis,
-    overview,
     pnl,
     appliedFrom,
     appliedTo,
@@ -862,24 +981,26 @@ export function ReportsModule() {
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               disabled={historicalLocked}
               onClick={() => {
                 const r = weekReportFromToKeys();
                 applyDates(r.from, r.to);
               }}
             >
+              <Calendar className="mr-2 h-4 w-4 text-primary" />
               {t('dashboard.reports.week')}
             </Button>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               disabled={historicalLocked}
               onClick={() => {
                 const r = monthReportFromToKeys();
                 applyDates(r.from, r.to);
               }}
             >
+              <Calendar className="mr-2 h-4 w-4 text-primary" />
               {t('dashboard.reports.month')}
             </Button>
             <Input
@@ -910,7 +1031,7 @@ export function ReportsModule() {
       </DashboardCard>
 
       <DashboardCard>
-        <DashboardCardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-end sm:justify-between">
+        <DashboardCardHeader className="flex flex-row items-end justify-between gap-3 space-y-0">
           <div>
             <DashboardCardTitle>
               {reportTypes.find((r) => r.id === reportType)?.label}
@@ -925,7 +1046,7 @@ export function ReportsModule() {
               })}
             </p>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:max-w-3xl sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="flex w-full items-center gap-2">
             <SearchField
               className="min-w-[180px] flex-1"
               value={searchDraft}
@@ -947,7 +1068,13 @@ export function ReportsModule() {
                   setPage(1);
                 }}
               >
-                <TabsList className="grid h-auto grid-cols-3 rounded-xl border border-border bg-muted/40 p-1">
+                <TabsList className="grid h-auto grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:grid-cols-4">
+                  <TabsTrigger
+                    value="all"
+                    className="rounded-lg text-muted-foreground data-[state=active]:bg-foreground data-[state=active]:text-background"
+                  >
+                    {t('dashboard.reports.channelAll')}
+                  </TabsTrigger>
                   <TabsTrigger
                     value="online"
                     className="rounded-lg text-muted-foreground data-[state=active]:bg-[#ed6e40] data-[state=active]:text-white"
@@ -1164,136 +1291,111 @@ export function ReportsModule() {
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <KpiCard
                   tone="green"
-                  label={t('dashboard.reports.totalAssets')}
-                  value={formatMoney(overview?.assets ?? 0)}
+                  label={t('dashboard.reports.revenue')}
+                  value={formatMoney(pnl?.revenue ?? 0)}
+                  hint={t('dashboard.reports.revenueHint')}
                 />
                 <KpiCard
-                  tone="red"
-                  label={t('dashboard.reports.totalLiabilities')}
-                  value={formatMoney(overview?.liabilities ?? 0)}
+                  tone="orange"
+                  label={t('dashboard.reports.expenses')}
+                  value={formatMoney(pnl?.expenses ?? 0)}
                 />
                 <KpiCard
                   tone="blue"
-                  label={t('dashboard.reports.netWorth')}
-                  value={formatMoney(overview?.netWorth ?? 0)}
+                  label={t('dashboard.reports.inventory')}
+                  value={formatMoney(pnl?.inventoryExpenses ?? 0)}
+                  hint={t('dashboard.reports.inventoryCostsHint')}
                 />
                 <KpiCard
-                  tone="purple"
+                  tone={(pnl?.profit ?? 0) >= 0 ? 'green' : 'red'}
                   label={t('dashboard.reports.netProfit')}
-                  value={formatMoney(overview?.netProfit ?? pnl?.profit ?? 0)}
+                  value={formatMoney(pnl?.profit ?? 0)}
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <KpiCard
-                  tone="green"
-                  label={t('dashboard.reports.cashIn')}
-                  value={formatMoney(overview?.cashIn ?? 0)}
-                  hint={t('dashboard.reports.cashInHint')}
+                  tone="purple"
+                  label={t('dashboard.reports.cashPayments')}
+                  value={formatMoney(pnl?.paymentBreakdown?.cash ?? 0)}
+                  hint={t('dashboard.reports.paymentMixHint')}
                 />
                 <KpiCard
-                  tone="red"
-                  label={t('dashboard.reports.cashOut')}
-                  value={formatMoney(overview?.cashOut ?? 0)}
-                  hint={t('dashboard.reports.cashOutHint')}
+                  tone="default"
+                  label={t('dashboard.reports.cardPayments')}
+                  value={formatMoney(pnl?.paymentBreakdown?.card ?? 0)}
+                  hint={t('dashboard.reports.paymentMixHint')}
                 />
                 <KpiCard
-                  tone="blue"
-                  label={t('dashboard.reports.netCashFlow')}
-                  value={formatMoney(overview?.netCash ?? 0)}
+                  tone="default"
+                  label={t('dashboard.reports.otherPayments')}
+                  value={formatMoney(pnl?.paymentBreakdown?.other ?? 0)}
+                  hint={t('dashboard.reports.paymentMixHint')}
                 />
               </div>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-xl border p-4">
-                  <h3 className="mb-3 text-sm font-semibold">
-                    {t('dashboard.reports.assetsLiabilities')}
-                  </h3>
-                  <dl className="space-y-2 text-sm">
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-muted-foreground">
-                        {t('dashboard.reports.inventoryStock')}
-                      </dt>
-                      <dd className="tabular-nums font-medium">
-                        {formatMoney(
-                          overview?.breakdown.inventoryStockValue ?? 0
-                        )}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-muted-foreground">
-                        {t('dashboard.reports.salesRevenue')}
-                      </dt>
-                      <dd className="tabular-nums font-medium">
-                        {formatMoney(overview?.breakdown.salesRevenue ?? 0)}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-3 border-t pt-2 font-semibold">
-                      <dt>{t('dashboard.reports.totalAssets')}</dt>
-                      <dd className="tabular-nums">
-                        {formatMoney(overview?.assets ?? 0)}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-3 pt-2">
-                      <dt className="text-muted-foreground">
-                        {t('dashboard.expenses.inventory')}
-                      </dt>
-                      <dd className="tabular-nums font-medium">
-                        {formatMoney(
-                          overview?.breakdown.inventoryExpenses ?? 0
-                        )}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-muted-foreground">
-                        {t('dashboard.expenses.manual')}
-                      </dt>
-                      <dd className="tabular-nums font-medium">
-                        {formatMoney(overview?.breakdown.manualExpenses ?? 0)}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-3 border-t pt-2 font-semibold">
-                      <dt>{t('dashboard.reports.totalLiabilities')}</dt>
-                      <dd className="tabular-nums">
-                        {formatMoney(overview?.liabilities ?? 0)}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-                <div className="rounded-xl border p-4">
-                  <h3 className="mb-3 text-sm font-semibold">
-                    {t('dashboard.reports.incomeExpenses')}
-                  </h3>
-                  <dl className="space-y-2 text-sm">
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-muted-foreground">
-                        {t('dashboard.reports.revenue')}
-                      </dt>
-                      <dd className="tabular-nums font-medium">
-                        {formatMoney(pnl?.revenue ?? 0)}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-muted-foreground">
-                        {t('dashboard.reports.expenses')}
-                      </dt>
-                      <dd className="tabular-nums font-medium">
-                        {formatMoney(pnl?.expenses ?? 0)}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-3 border-t pt-2 font-semibold">
-                      <dt className="inline-flex items-center gap-1">
-                        {(pnl?.profit ?? 0) >= 0 ? (
-                          <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
-                        ) : (
-                          <TrendingDown className="h-3.5 w-3.5 text-rose-600" />
-                        )}
-                        {t('dashboard.reports.profitLoss')}
-                      </dt>
-                      <dd className="tabular-nums">
-                        {formatMoney(pnl?.profit ?? 0)}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
+              <div className={`rounded-xl border p-4 ${(pnl?.profit ?? 0) >= 0 ? 'bg-emerald-50' : 'bg-red-100'}`}>
+                <h3 className="mb-3 text-sm font-semibold text-black">
+                  {t('dashboard.reports.incomeStatement')}
+                </h3>
+                <dl className="space-y-2 text-sm">
+
+                <div className="flex justify-between gap-3 text-gray-600">
+                    <dt>{t('dashboard.reports.cashPayments')}</dt>
+                    <dd className="tabular-nums font-medium">
+                      {formatMoney(pnl?.paymentBreakdown?.cash ?? 0)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3 text-gray-600">
+                    <dt>{t('dashboard.reports.cardPayments')}</dt>
+                    <dd className="tabular-nums font-medium">
+                      {formatMoney(pnl?.paymentBreakdown?.card ?? 0)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-gray-300 pb-2 text-gray-600">
+                    <dt>{t('dashboard.reports.otherPayments')}</dt>
+                    <dd className="tabular-nums font-medium">
+                      {formatMoney(pnl?.paymentBreakdown?.other ?? 0)}
+                    </dd>
+                  </div>
+
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-emerald-900">
+                      {t('dashboard.reports.revenue')}
+                    </dt>
+                    <dd className="tabular-nums font-medium text-emerald-900">
+                      {formatMoney(pnl?.revenue ?? 0)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-blue-900">
+                      {t('dashboard.reports.inventory')}
+                    </dt>
+                    <dd className="tabular-nums font-medium text-blue-900">
+                      {formatMoney(pnl?.inventoryExpenses ?? 0)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-orange-900">
+                      {t('dashboard.reports.operatingExpenses')}
+                    </dt>
+                    <dd className="tabular-nums font-medium text-orange-900">
+                      {formatMoney(pnl?.operatingExpenses ?? 0)}
+                    </dd>
+                  </div>
+               
+                  <div className="flex justify-between gap-3 border-t border-gray-300 pt-2 font-semibold">
+                    <dt className="inline-flex items-center gap-1 text-black">
+                      {(pnl?.profit ?? 0) >= 0 ? (
+                        <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
+                      ) : (
+                        <TrendingDown className="h-3.5 w-3.5 text-rose-600" />
+                      )}
+                      {t('dashboard.reports.profitLoss')}
+                    </dt>
+                    <dd className={`tabular-nums ${(pnl?.profit ?? 0) >= 0 ? 'text-emerald-900' : 'text-rose-900'}`}>
+                      {formatMoney(pnl?.profit ?? 0)}
+                    </dd>
+                  </div>
+                </dl>
               </div>
             </div>
           )}
@@ -1319,7 +1421,10 @@ export function ReportsModule() {
                     {t('dashboard.reports.colChannel')}
                   </DashboardTableHead>
                   <DashboardTableHead>
-                    {t('dashboard.common.status')}
+                    {t('dashboard.reports.colOrderStatus')}
+                  </DashboardTableHead>
+                  <DashboardTableHead>
+                    {t('dashboard.reports.colPaymentStatus')}
                   </DashboardTableHead>
                   <DashboardTableHead className="text-right">
                     {t('dashboard.reports.colTotal')}
@@ -1344,7 +1449,15 @@ export function ReportsModule() {
                     <DashboardTableCell>
                       {formatOrderChannel(row.sourceType, t)}
                     </DashboardTableCell>
-                    <DashboardTableCell>{row.status}</DashboardTableCell>
+                    <DashboardTableCell>
+                      <OrderStatusBadge status={row.status} t={t} />
+                    </DashboardTableCell>
+                    <DashboardTableCell>
+                      <PaymentStatusBadge
+                        paymentStatus={row.paymentStatus}
+                        t={t}
+                      />
+                    </DashboardTableCell>
                     <DashboardTableCell className="text-right tabular-nums">
                       {formatMoney(row.total ?? 0)}
                     </DashboardTableCell>
@@ -1447,7 +1560,15 @@ export function ReportsModule() {
                     </DashboardTableCell>
                     <DashboardTableCell>
                       <div>
-                        <p className="font-medium">{row.title}</p>
+                        <p className="font-medium">
+                          {formatExpenseDisplayTitle({
+                            title: row.title,
+                            type: row.type,
+                            ingredientName: row.ingredient?.name,
+                            lang: uiLang,
+                            restockLabel: t('dashboard.expenses.restockLabel'),
+                          })}
+                        </p>
                         {row.ingredient ? (
                           <p className="text-xs text-muted-foreground">
                             {resolveBilingualText(row.ingredient.name, uiLang)}
@@ -1527,7 +1648,9 @@ export function ReportsModule() {
                           ? t('dashboard.reports.kindInventory')
                           : formatOrderChannel(row.source, t)}
                       </DashboardTableCell>
-                      <DashboardTableCell>{row.status}</DashboardTableCell>
+                      <DashboardTableCell>
+                        <OrderStatusBadge status={row.status} t={t} />
+                      </DashboardTableCell>
                       <DashboardTableCell className="text-right tabular-nums">
                         {row.amount != null ? formatMoney(row.amount) : '—'}
                       </DashboardTableCell>

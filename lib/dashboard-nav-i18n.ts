@@ -26,7 +26,6 @@ export function dashboardNavGroupLabelKey(
 /** URL segments → module i18n key suffix (includes analytics routes not in sidebar RBAC). */
 const PATH_SEGMENT_MODULE: Record<string, string> = {
   dashboard: 'dashboard',
-  sales: 'sales',
   pos: 'pos',
   kds: 'kds',
   'order-display': 'order-display',

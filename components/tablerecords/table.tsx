@@ -53,12 +53,48 @@ import {
   RefreshCcw,
   ShoppingBag,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { salesOrderStatusBucket } from '@/lib/sales-order-status';
 
 const PAGE_SIZE = 20;
 
 function kindBadge(kind: TransactionHistoryKind, t: (key: string) => string) {
   if (kind === 'INVENTORY') return t('dashboard.records.kindInventory');
   return t('dashboard.records.kindOrder');
+}
+
+function formatStatusLabel(status: string, t: (key: string) => string): string {
+  const bucket = salesOrderStatusBucket(status);
+  if (bucket === 'completed') return t('dashboard.reports.statusCompleted');
+  if (bucket === 'canceled') return t('dashboard.reports.statusCanceled');
+  if (bucket === 'pending') return t('dashboard.reports.statusPending');
+  return status || '—';
+}
+
+function StatusBadge({
+  status,
+  t,
+}: {
+  status: string;
+  t: (key: string) => string;
+}) {
+  const bucket = salesOrderStatusBucket(status);
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        'rounded-full border-0 px-3 py-0.5 text-xs font-semibold capitalize',
+        bucket === 'completed' &&
+          'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+        bucket === 'pending' &&
+          'bg-orange-500/15 text-orange-700 dark:text-orange-400',
+        bucket === 'canceled' &&
+          'bg-rose-500/15 text-rose-700 dark:text-rose-400'
+      )}
+    >
+      {formatStatusLabel(status, t)}
+    </Badge>
+  );
 }
 
 function trackingNumberLabel(row: TransactionHistoryRow): string {
@@ -400,7 +436,9 @@ export function Records() {
                           <TableCell className="hidden lg:table-cell">
                             {sourceLabel(row, t)}
                           </TableCell>
-                          <TableCell>{row.status}</TableCell>
+                          <TableCell>
+                            <StatusBadge status={row.status} t={t} />
+                          </TableCell>
                           <TableCell className="hidden md:table-cell">
                             {formatPaymentMethod(row.method)}
                           </TableCell>
@@ -471,7 +509,7 @@ export function Records() {
                   <p className="text-xs text-muted-foreground">
                     {t('dashboard.records.detailStatus')}
                   </p>
-                  <p>{active.status}</p>
+                  <StatusBadge status={active.status} t={t} />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">

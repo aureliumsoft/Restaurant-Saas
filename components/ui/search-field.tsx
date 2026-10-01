@@ -96,24 +96,26 @@ export function SearchField({
             variant="ghost"
             size="icon"
             disabled={disabled}
-            className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            className="absolute right-[110px] top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             aria-label={clearText}
             onClick={handleClear}
           >
             <X className="h-4 w-4" />
           </Button>
-        ) : null}
+        ) : (
+          null
+        )}
+        <Button
+            type="button"
+            variant="secondary"
+            disabled={disabled}
+            className="shrink-0 absolute right-1 top-1/2 -translate-y-1/2"
+            onClick={onSearch}
+          >
+            <Search className="mr-2 h-4 w-4" aria-hidden />
+            {searchText}
+          </Button>
       </div>
-      <Button
-        type="button"
-        variant="secondary"
-        disabled={disabled}
-        className="shrink-0"
-        onClick={onSearch}
-      >
-        <Search className="mr-2 h-4 w-4" aria-hidden />
-        {searchText}
-      </Button>
     </div>
   );
 }

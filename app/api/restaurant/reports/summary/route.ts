@@ -11,7 +11,6 @@ import { listBranchStockForIngredients } from '@/lib/inventory/branch-stock';
 import {
   orderCreatedAtRangeSql,
   resolveReportDateRange,
-  transactionCreatedAtRangeSql,
 } from '@/lib/reports/date-range';
 import { aggregateTransactionLedger } from '@/lib/reports/transaction-ledger';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
@@ -49,13 +48,44 @@ export async function GET(req: NextRequest) {
     ? Prisma.sql`AND o."branchId" = ${branchId}`
     : Prisma.empty;
   const orderRangeSql = orderCreatedAtRangeSql(range);
-  const txRangeSql = transactionCreatedAtRangeSql(range);
+
+  const revenuePaymentJoin = Prisma.sql`
+    LEFT JOIN LATERAL (
+      SELECT p.amount, p.status, p.method
+      FROM "Payment" p
+      WHERE p."orderId" = o.id::text
+      ORDER BY p."createdAt" DESC
+      LIMIT 1
+    ) lp ON true
+  `;
+  // Strict: order completed AND payment completed (both required).
+  const revenueEligibleSql = Prisma.sql`
+    AND lower(o.status) IN ('completed', 'complete', 'delivered')
+    AND lower(COALESCE(lp.status, '')) IN (
+      'completed', 'complete', 'paid', 'success'
+    )
+  `;
+  const paymentBucketSql = Prisma.sql`
+    CASE
+      WHEN lower(COALESCE(lp.method, '')) LIKE '%cash%' THEN 'cash'
+      WHEN (
+        lower(COALESCE(lp.method, '')) LIKE '%card%'
+        OR lower(COALESCE(lp.method, '')) LIKE '%visa%'
+        OR lower(COALESCE(lp.method, '')) LIKE '%master%'
+        OR lower(COALESCE(lp.method, '')) LIKE '%stripe%'
+        OR lower(COALESCE(lp.method, '')) LIKE '%terminal%'
+        OR lower(COALESCE(lp.method, '')) LIKE '%debit%'
+        OR lower(COALESCE(lp.method, '')) LIKE '%credit%'
+      ) THEN 'card'
+      ELSE 'other'
+    END
+  `;
 
   const [
     financial,
     orderStatRows,
     revenueStatRows,
-    txCompleteRows,
+    paymentMixRows,
     expenseAgg,
     expenseByType,
     ingredients,
@@ -80,34 +110,23 @@ export async function GET(req: NextRequest) {
       SELECT COUNT(*)::int AS cnt,
              COALESCE(SUM(COALESCE(lp.amount, o.total)), 0)::float AS amt
       FROM "Order" o
-      LEFT JOIN LATERAL (
-        SELECT p.amount, p.status
-        FROM "Payment" p
-        WHERE p."orderId" = o.id::text
-        ORDER BY p."createdAt" DESC
-        LIMIT 1
-      ) lp ON true
+      ${revenuePaymentJoin}
       WHERE o."restaurantId" = ${rid}
         ${branchSql}
         ${orderRangeSql}
-        AND (
-          lower(COALESCE(lp.status, '')) IN (
-            'completed', 'complete', 'paid', 'success'
-          )
-          OR (
-            lp.status IS NULL
-            AND lower(o.status) IN ('completed', 'complete', 'delivered')
-          )
-        )
+        ${revenueEligibleSql}
     `).catch(() => [] as Array<{ cnt: number; amt: number }>),
-    db.$queryRaw<Array<{ cnt: number; amt: number }>>(Prisma.sql`
-      SELECT COUNT(*)::int AS cnt,
-             COALESCE(SUM(t."totalAmount"), 0)::float AS amt
-      FROM "Transaction" t
-      WHERE t."restaurantId" = ${rid}
-        AND t."isComplete" = true
-        ${txRangeSql}
-    `).catch(() => [] as Array<{ cnt: number; amt: number }>),
+    db.$queryRaw<Array<{ bucket: string; amt: number }>>(Prisma.sql`
+      SELECT ${paymentBucketSql} AS bucket,
+             COALESCE(SUM(COALESCE(lp.amount, o.total)), 0)::float AS amt
+      FROM "Order" o
+      ${revenuePaymentJoin}
+      WHERE o."restaurantId" = ${rid}
+        ${branchSql}
+        ${orderRangeSql}
+        ${revenueEligibleSql}
+      GROUP BY 1
+    `).catch(() => [] as Array<{ bucket: string; amt: number }>),
     db.expense.aggregate({
       where: {
         restaurantId: rid,
@@ -159,13 +178,16 @@ export async function GET(req: NextRequest) {
     else if (bucket === 'canceled') canceledCount += count;
   }
 
-  let revenueAmount = Number(revenueStatRows[0]?.amt ?? 0) || 0;
-  let revenueOrders = Number(revenueStatRows[0]?.cnt ?? 0) || 0;
-  const txAmt = Number(txCompleteRows[0]?.amt ?? 0) || 0;
-  const txCnt = Number(txCompleteRows[0]?.cnt ?? 0) || 0;
-  revenueAmount += txAmt;
-  revenueOrders += txCnt;
-  orderCount += txCnt;
+  const revenueAmount = Number(revenueStatRows[0]?.amt ?? 0) || 0;
+  const revenueOrders = Number(revenueStatRows[0]?.cnt ?? 0) || 0;
+
+  const paymentBreakdown = { cash: 0, card: 0, other: 0 };
+  for (const row of paymentMixRows) {
+    const amt = Number(row.amt) || 0;
+    if (row.bucket === 'cash') paymentBreakdown.cash += amt;
+    else if (row.bucket === 'card') paymentBreakdown.card += amt;
+    else paymentBreakdown.other += amt;
+  }
 
   let inventoryAmount = 0;
   let manualAmount = 0;
@@ -201,11 +223,8 @@ export async function GET(req: NextRequest) {
   );
 
   const profit = revenueAmount - expensesTotal;
-  const cashIn = revenueAmount;
-  const cashOut = expensesTotal;
-  const assets = totalInventoryValue + cashIn;
-  const liabilities = expensesTotal;
-  const netWorth = assets - liabilities;
+  const profitMargin =
+    revenueAmount > 0 ? (profit / revenueAmount) * 100 : 0;
 
   return NextResponse.json(
     {
@@ -238,22 +257,11 @@ export async function GET(req: NextRequest) {
       pnl: {
         revenue: revenueAmount,
         expenses: expensesTotal,
+        inventoryExpenses: inventoryAmount,
+        operatingExpenses: manualAmount,
         profit,
-      },
-      financialOverview: {
-        assets,
-        liabilities,
-        netWorth,
-        netProfit: profit,
-        cashIn,
-        cashOut,
-        netCash: cashIn - cashOut,
-        breakdown: {
-          inventoryStockValue: totalInventoryValue,
-          salesRevenue: revenueAmount,
-          inventoryExpenses: inventoryAmount,
-          manualExpenses: manualAmount,
-        },
+        profitMargin,
+        paymentBreakdown,
       },
       meta: {
         from: range.fromKey,

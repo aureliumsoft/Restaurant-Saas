@@ -12,6 +12,7 @@ import {
   Loader2,
   Pencil,
   Save,
+  X,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -39,6 +40,7 @@ import type {
 } from '@/lib/menu/final-view';
 import { cn } from '@/lib/utils';
 import { extractApiErrorMessage } from '@/lib/extract-api-error';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 type FinalViewTab = 'storefront' | 'recommendations';
 
@@ -79,6 +81,7 @@ export function FinalViewScreen() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [allCategories, setAllCategories] = useState<FinalViewCategory[]>([]);
   const [draft, setDraft] = useState<FinalViewCategory[]>([]);
   const [baselineFp, setBaselineFp] = useState('');
@@ -99,8 +102,7 @@ export function FinalViewScreen() {
     side: 'before' | 'after';
   } | null>(null);
 
-  const isDirty =
-    editing && catalogFingerprint(draft) !== baselineFp;
+  const isDirty = editing && catalogFingerprint(draft) !== baselineFp;
 
   const {
     leaveOpen,
@@ -159,6 +161,26 @@ export function FinalViewScreen() {
     setDraft(next);
     setBaselineFp(catalogFingerprint(next));
     setEditing(true);
+  };
+
+  const cancelBeginEdit = () => {
+    setCancelConfirmOpen(false);
+    setEditing(false);
+    setDraft([]);
+    setBaselineFp('');
+    setCategoryDragId(null);
+    setCategoryDropTarget(null);
+    setProductDrag(null);
+    setProductDropTarget(null);
+  };
+
+  const requestCancelEdit = () => {
+    if (saving) return;
+    if (isDirty) {
+      setCancelConfirmOpen(true);
+      return;
+    }
+    cancelBeginEdit();
   };
 
   const requestTabChange = (next: FinalViewTab) => {
@@ -264,10 +286,10 @@ export function FinalViewScreen() {
           onValueChange={(v) => requestTabChange(v as FinalViewTab)}
           className="w-full"
         >
-          <TabsList className="grid h-12 w-full grid-cols-2 rounded-full p-1">
+          <TabsList className="grid  w-full grid-cols-2 rounded-full p-1">
             <TabsTrigger
               value="storefront"
-              className="rounded-full data-[state=active]:bg-foreground data-[state=active]:text-background"
+              className="rounded-full data-[state=active]:bg-foreground   data-[state=active]:text-background"
             >
               {t('dashboard.finalView.tabStorefront')}
             </TabsTrigger>
@@ -280,129 +302,143 @@ export function FinalViewScreen() {
           </TabsList>
         </Tabs>
 
-        <SearchField
-          className="sm:max-w-xl"
-          value={searchDraft}
-          onChange={setSearchDraft}
-          onSearch={applySearch}
-          onClear={clearSearch}
-          appliedValue={appliedSearch}
-          placeholder={t('dashboard.finalView.searchPlaceholder')}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          {editing ? (
-            <Button
-              type="button"
-              onClick={() => setSaveConfirmOpen(true)}
-              disabled={!isDirty || saving}
-            >
-              {saving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              {t('dashboard.common.save')}
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={beginEdit}
-              disabled={loading || displayCategories.length === 0}
-            >
-              <Pencil className="mr-2 h-4 w-4" />
-              {t('dashboard.common.edit')}
-            </Button>
-          )}
-        </div>
+        <Card className="w-full">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <SearchField
+              value={searchDraft}
+              onChange={setSearchDraft}
+              onSearch={applySearch}
+              onClear={clearSearch}
+              appliedValue={appliedSearch}
+              placeholder={t('dashboard.finalView.searchPlaceholder')}
+            />
+            {editing ? (
+              <>
+                <Button
+                  type="button"
+                  onClick={() => setSaveConfirmOpen(true)}
+                  disabled={!isDirty || saving}
+                >
+                  {saving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  {t('dashboard.common.save')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={requestCancelEdit}
+                  disabled={saving}
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  {t('dashboard.common.cancel')}
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="default"
+                onClick={beginEdit}
+                disabled={loading || displayCategories.length === 0}
+              >
+                <Pencil className="mr-2 h-4 w-4" />
+                {t('dashboard.common.edit')}
+              </Button>
+            )}
+          </CardHeader>
 
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : displayCategories.length === 0 ? (
-          <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-            {appliedSearch
-              ? t('dashboard.finalView.emptySearch')
-              : tab === 'storefront'
-                ? t('dashboard.finalView.emptyStorefront')
-                : t('dashboard.finalView.emptyRecommendations')}
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {displayCategories.map((category) => (
-              <FinalViewCategoryBlock
-                key={category.id}
-                category={category}
-                sortableCategory={editing && tab === 'storefront'}
-                sortableProducts={editing}
-                lang={uiLang}
-                categoryDragId={categoryDragId}
-                categoryDropTarget={categoryDropTarget}
-                productDrag={productDrag}
-                productDropTarget={productDropTarget}
-                onCategoryDragStart={(id) => {
-                  setCategoryDragId(id);
-                  setProductDrag(null);
-                  setProductDropTarget(null);
-                }}
-                onCategoryDragEnd={() => {
-                  setCategoryDragId(null);
-                  setCategoryDropTarget(null);
-                }}
-                onCategoryDragOver={(categoryId, side) => {
-                  if (!categoryDragId || categoryDragId === categoryId) {
-                    setCategoryDropTarget(null);
-                    return;
-                  }
-                  setCategoryDropTarget({ categoryId, side });
-                }}
-                onCategoryDrop={(toId, side) => {
-                  if (categoryDragId) {
-                    reorderCategories(categoryDragId, toId, side);
-                  }
-                  setCategoryDragId(null);
-                  setCategoryDropTarget(null);
-                }}
-                onProductDragStart={(categoryId, productId) => {
-                  setProductDrag({ categoryId, productId });
-                  setCategoryDragId(null);
-                  setCategoryDropTarget(null);
-                }}
-                onProductDragEnd={() => {
-                  setProductDrag(null);
-                  setProductDropTarget(null);
-                }}
-                onProductDragOver={(categoryId, productId, side) => {
-                  if (
-                    !productDrag ||
-                    productDrag.categoryId !== categoryId ||
-                    productDrag.productId === productId
-                  ) {
-                    setProductDropTarget(null);
-                    return;
-                  }
-                  setProductDropTarget({ categoryId, productId, side });
-                }}
-                onProductDrop={(categoryId, toProductId, side) => {
-                  if (
-                    productDrag &&
-                    productDrag.categoryId === categoryId
-                  ) {
-                    reorderProducts(
-                      categoryId,
-                      productDrag.productId,
-                      toProductId,
-                      side
-                    );
-                  }
-                  setProductDrag(null);
-                  setProductDropTarget(null);
-                }}
-              />
-            ))}
-          </div>
-        )}
+          <CardContent>
+            {loading ? (
+              <div className="flex justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : displayCategories.length === 0 ? (
+              <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                {appliedSearch
+                  ? t('dashboard.finalView.emptySearch')
+                  : tab === 'storefront'
+                    ? t('dashboard.finalView.emptyStorefront')
+                    : t('dashboard.finalView.emptyRecommendations')}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {displayCategories.map((category) => (
+                  <FinalViewCategoryBlock
+                    key={category.id}
+                    category={category}
+                    sortableCategory={editing && tab === 'storefront'}
+                    sortableProducts={editing}
+                    lang={uiLang}
+                    categoryDragId={categoryDragId}
+                    categoryDropTarget={categoryDropTarget}
+                    productDrag={productDrag}
+                    productDropTarget={productDropTarget}
+                    onCategoryDragStart={(id) => {
+                      setCategoryDragId(id);
+                      setProductDrag(null);
+                      setProductDropTarget(null);
+                    }}
+                    onCategoryDragEnd={() => {
+                      setCategoryDragId(null);
+                      setCategoryDropTarget(null);
+                    }}
+                    onCategoryDragOver={(categoryId, side) => {
+                      if (!categoryDragId || categoryDragId === categoryId) {
+                        setCategoryDropTarget(null);
+                        return;
+                      }
+                      setCategoryDropTarget({ categoryId, side });
+                    }}
+                    onCategoryDrop={(toId, side) => {
+                      if (categoryDragId) {
+                        reorderCategories(categoryDragId, toId, side);
+                      }
+                      setCategoryDragId(null);
+                      setCategoryDropTarget(null);
+                    }}
+                    onProductDragStart={(categoryId, productId) => {
+                      setProductDrag({ categoryId, productId });
+                      setCategoryDragId(null);
+                      setCategoryDropTarget(null);
+                    }}
+                    onProductDragEnd={() => {
+                      setProductDrag(null);
+                      setProductDropTarget(null);
+                    }}
+                    onProductDragOver={(categoryId, productId, side) => {
+                      if (
+                        !productDrag ||
+                        productDrag.categoryId !== categoryId ||
+                        productDrag.productId === productId
+                      ) {
+                        setProductDropTarget(null);
+                        return;
+                      }
+                      setProductDropTarget({ categoryId, productId, side });
+                    }}
+                    onProductDrop={(categoryId, toProductId, side) => {
+                      if (
+                        productDrag &&
+                        productDrag.categoryId === categoryId
+                      ) {
+                        reorderProducts(
+                          categoryId,
+                          productDrag.productId,
+                          toProductId,
+                          side
+                        );
+                      }
+                      setProductDrag(null);
+                      setProductDropTarget(null);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <SaveConfirmation
@@ -415,6 +451,32 @@ export function FinalViewScreen() {
           if (!saving) setSaveConfirmOpen(false);
         }}
       />
+
+      <AlertDialog
+        open={cancelConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open) setCancelConfirmOpen(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('dashboard.finalView.discardConfirmTitle')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('dashboard.finalView.discardConfirmDescription')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              {t('dashboard.common.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={cancelBeginEdit}>
+              {t('dashboard.finalView.discardChanges')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={leaveOpen}
@@ -523,7 +585,8 @@ function FinalViewCategoryBlock({
       }}
       onDragEnd={onCategoryDragEnd}
       onDragOver={(e) => {
-        if (!sortableCategory || draggingCategory || !categoryDragActive) return;
+        if (!sortableCategory || draggingCategory || !categoryDragActive)
+          return;
         e.preventDefault();
         onCategoryDragOver(
           category.id,
@@ -531,7 +594,8 @@ function FinalViewCategoryBlock({
         );
       }}
       onDrop={(e) => {
-        if (!sortableCategory || draggingCategory || !categoryDragActive) return;
+        if (!sortableCategory || draggingCategory || !categoryDragActive)
+          return;
         e.preventDefault();
         onCategoryDrop(
           category.id,
@@ -592,16 +656,12 @@ function FinalViewCategoryBlock({
                   productDrag.productId === product.id
                 }
                 dropSide={dropHere}
-                onDragStart={() =>
-                  onProductDragStart(category.id, product.id)
-                }
+                onDragStart={() => onProductDragStart(category.id, product.id)}
                 onDragEnd={onProductDragEnd}
                 onDragOverSide={(side) =>
                   onProductDragOver(category.id, product.id, side)
                 }
-                onDrop={(side) =>
-                  onProductDrop(category.id, product.id, side)
-                }
+                onDrop={(side) => onProductDrop(category.id, product.id, side)}
               />
             );
           })}
@@ -634,7 +694,10 @@ function FinalViewProductPill({
 }) {
   const name = resolveBilingualText(product.name, lang);
 
-  const resolveSide = (clientX: number, el: HTMLElement): 'before' | 'after' => {
+  const resolveSide = (
+    clientX: number,
+    el: HTMLElement
+  ): 'before' | 'after' => {
     const rect = el.getBoundingClientRect();
     return clientX < rect.left + rect.width / 2 ? 'before' : 'after';
   };

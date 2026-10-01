@@ -58,7 +58,7 @@ function AccessLoadingScreen({
         'fire-mesh-bg fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground transition-opacity duration-300 ease-out',
         fading ? 'pointer-events-none opacity-0' : 'opacity-100'
       )}
-      aria-busy={!fading}
+      aria-busy={fading ? undefined : true}
       aria-live="polite"
     >
       <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -85,6 +85,8 @@ const RootLayout = ({ children }: RootLayoutProps) => {
   const openedForSessionRef = useRef(false);
   const redirectedToPricingRef = useRef(false);
   const [accessGateVisible, setAccessGateVisible] = useState(true);
+  /** Keep SSR and the first client paint identical (loading only). */
+  const [clientMounted, setClientMounted] = useState(false);
 
   const { loading: accessLoading, failed: accessFailed, ready: accessReady } =
     useStaffAccessGate();
@@ -114,9 +116,13 @@ const RootLayout = ({ children }: RootLayoutProps) => {
             ? t('dashboard.shell.loadingPermissions')
             : null;
 
+  useEffect(() => {
+    setClientMounted(true);
+  }, []);
+
   // Fade out the access gate once the dashboard is ready to show.
   useEffect(() => {
-    if (!securityReady) {
+    if (!clientMounted || !securityReady) {
       setAccessGateVisible(true);
       return;
     }
@@ -124,7 +130,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
       setAccessGateVisible(false);
     }, 300);
     return () => window.clearTimeout(id);
-  }, [securityReady]);
+  }, [clientMounted, securityReady]);
 
   useEffect(() => {
     try {
@@ -240,9 +246,11 @@ const RootLayout = ({ children }: RootLayoutProps) => {
     );
   }
 
-  const accessGateFading = securityReady && accessGateVisible;
+  const accessGateFading = clientMounted && securityReady && accessGateVisible;
+  const showShell = clientMounted && securityReady;
   const showAccessOverlay =
-    accessGateVisible && (Boolean(blockingMessage) || securityReady);
+    !showShell ||
+    (accessGateVisible && (Boolean(blockingMessage) || securityReady));
 
   return (
     <BranchProvider>
@@ -257,7 +265,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
             />
           ) : null}
 
-          {securityReady ? (
+          {showShell ? (
             <div className="min-h-screen animate-in fade-in duration-300">
               <DashboardAppShell
                 sidebarOpen={sidebarOpen}

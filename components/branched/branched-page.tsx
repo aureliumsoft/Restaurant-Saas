@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AddressMapPicker } from '@/components/ui/address-map-picker';
 import { toast } from 'react-toastify';
 import {
   Building2,
@@ -499,7 +500,7 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
           else setFormOpen(true);
         }}
       >
-        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {activeId
@@ -512,38 +513,38 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
               <Label htmlFor="branch-name">
                 {t('dashboard.branches.branchNamePlaceholder')}
               </Label>
-            <Input
+              <Input
                 id="branch-name"
                 placeholder={t('dashboard.branches.branchNamePlaceholder')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="branch-address">
-                {t('dashboard.branches.addressPlaceholder')}
-              </Label>
-            <Input
+            {formOpen ? (
+              <AddressMapPicker
                 id="branch-address"
+                label={t('dashboard.branches.addressPlaceholder')}
                 placeholder={t('dashboard.branches.addressPlaceholder')}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-            />
-            </div>
-            <div className="grid gap-2">
+                value={address}
+                onChange={setAddress}
+                countryCode={regional.countryCode}
+                disabled={saving}
+                mapClassName="h-64 w-full sm:h-72"
+              />
+            ) : null}            <div className="grid gap-2">
               <Label htmlFor="branch-phone">
                 {t('dashboard.branches.phonePlaceholder')}
               </Label>
-            <Input
+              <Input
                 id="branch-phone"
-              type="tel"
+                type="tel"
                 placeholder={t('dashboard.branches.phonePlaceholder')}
-              value={phone}
+                value={phone}
                 onChange={(e) =>
                   setPhone(e.target.value.replace(/[^0-9]/g, ''))
                 }
-            />
-          </div>
+              />
+            </div>
             <div className="space-y-2 rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">
