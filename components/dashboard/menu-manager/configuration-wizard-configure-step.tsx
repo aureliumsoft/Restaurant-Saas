@@ -208,10 +208,21 @@ export function ConfigurationWizardConfigureStep(
   const productsByCategory = useMemo(() => {
     const map = new Map<string, ProductWithCategory[]>();
     for (const catId of selectedCategoryIds) {
-      map.set(
-        catId,
-        allProducts.filter((p) => menuItemCategoryIds(p).includes(catId))
+      const list = allProducts.filter((p) =>
+        menuItemCategoryIds(p).includes(catId)
       );
+      const sorted = [...list].sort((a, b) => {
+        const orderA =
+          a.sortOrderByCategory?.[catId] ?? Number.MAX_SAFE_INTEGER;
+        const orderB =
+          b.sortOrderByCategory?.[catId] ?? Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        const createA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const createB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        if (createA !== createB) return createA - createB;
+        return a.name.localeCompare(b.name);
+      });
+      map.set(catId, sorted);
     }
     return map;
   }, [allProducts, selectedCategoryIds]);

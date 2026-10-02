@@ -422,6 +422,9 @@ export function buildPreviewCategoriesWithProducts(
       const orderB =
         b.sortOrderByCategory?.[category.id] ?? Number.MAX_SAFE_INTEGER;
       if (orderA !== orderB) return orderA - orderB;
+      const createA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const createB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (createA !== createB) return createA - createB;
       return a.name.localeCompare(b.name);
     });
     return { ...category, items: sorted };

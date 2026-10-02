@@ -96,7 +96,7 @@ export function SearchField({
             variant="ghost"
             size="icon"
             disabled={disabled}
-            className="absolute right-[110px] top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            className="absolute right-[105px] top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             aria-label={clearText}
             onClick={handleClear}
           >
@@ -109,7 +109,7 @@ export function SearchField({
             type="button"
             variant="secondary"
             disabled={disabled}
-            className="shrink-0 absolute right-1 top-1/2 -translate-y-1/2"
+            className="shrink-0 absolute right-0 top-1/2 -translate-y-1/2"
             onClick={onSearch}
           >
             <Search className="mr-2 h-4 w-4" aria-hidden />

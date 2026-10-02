@@ -1130,7 +1130,25 @@ export function RecommendationsTab(_props?: Props) {
       }
       byId.set(p.id, p);
     }
-    return Array.from(byId.values());
+    return Array.from(byId.values()).sort((a, b) => {
+      const firstCatA = (a.categoryIds ?? [a.categoryId]).find((id) =>
+        dealCategoryIds.includes(id)
+      );
+      const firstCatB = (b.categoryIds ?? [b.categoryId]).find((id) =>
+        dealCategoryIds.includes(id)
+      );
+      const orderA =
+        (firstCatA ? a.sortOrderByCategory?.[firstCatA] : undefined) ??
+        Number.MAX_SAFE_INTEGER;
+      const orderB =
+        (firstCatB ? b.sortOrderByCategory?.[firstCatB] : undefined) ??
+        Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      const createA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const createB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (createA !== createB) return createA - createB;
+      return a.name.localeCompare(b.name);
+    });
   }, [allProducts, currentDeals, dealCategoryIds, selected]);
 
   const currentOffers = selected?.offersFromThis ?? [];
@@ -1152,7 +1170,25 @@ export function RecommendationsTab(_props?: Props) {
       }
       byId.set(p.id, p);
     }
-    return Array.from(byId.values());
+    return Array.from(byId.values()).sort((a, b) => {
+      const firstCatA = (a.categoryIds ?? [a.categoryId]).find((id) =>
+        offerCategoryIds.includes(id)
+      );
+      const firstCatB = (b.categoryIds ?? [b.categoryId]).find((id) =>
+        offerCategoryIds.includes(id)
+      );
+      const orderA =
+        (firstCatA ? a.sortOrderByCategory?.[firstCatA] : undefined) ??
+        Number.MAX_SAFE_INTEGER;
+      const orderB =
+        (firstCatB ? b.sortOrderByCategory?.[firstCatB] : undefined) ??
+        Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      const createA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const createB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (createA !== createB) return createA - createB;
+      return a.name.localeCompare(b.name);
+    });
   }, [allProducts, currentOffers, offerCategoryIds, selected]);
 
   const toggleInArray = (arr: string[], id: string) =>
@@ -2050,7 +2086,7 @@ export function RecommendationsTab(_props?: Props) {
               viewMode={editorViewMode}
               onViewModeChange={setEditorViewMode}
               selected={selected}
-              localCategories={localCategories}
+              localCategories={previewCategories}
               allProducts={allProducts}
               linkedOptions={linkedOptions}
               savedGroupsByType={savedGroupsByType}

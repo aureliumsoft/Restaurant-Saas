@@ -35,7 +35,7 @@ export async function validateMenuItemCategoryIds(
   return unique;
 }
 
-/** Replace category links and return the primary category id (first in list). */
+/** Replace category links, preserving existing category sortOrders (unaffected by product edits). */
 export async function syncMenuItemCategoryLinks(
   client: DbClient,
   menuItemId: string,
@@ -46,13 +46,47 @@ export async function syncMenuItemCategoryLinks(
     throw new Error('At least one category is required');
   }
 
+  // Preserve existing sortOrder for this item in each category
+  const existingLinks = await client.menuItemCategory.findMany({
+    where: { menuItemId },
+    select: { categoryId: true, sortOrder: true },
+  });
+  const existingOrderMap = new Map<string, number>(
+    existingLinks.map((l) => [l.categoryId, l.sortOrder])
+  );
+
+  // For categories where this item is newly added, find the current max sortOrder to append at end
+  const newCatIds = unique.filter((id) => !existingOrderMap.has(id));
+  const maxOrderMap = new Map<string, number>();
+  if (newCatIds.length > 0) {
+    const maxRows = await client.menuItemCategory.groupBy({
+      by: ['categoryId'],
+      where: { categoryId: { in: newCatIds } },
+      _max: { sortOrder: true },
+    });
+    for (const r of maxRows) {
+      maxOrderMap.set(r.categoryId, r._max.sortOrder ?? -1);
+    }
+  }
+
   await client.menuItemCategory.deleteMany({ where: { menuItemId } });
   await client.menuItemCategory.createMany({
-    data: unique.map((categoryId, index) => ({
-      menuItemId,
-      categoryId,
-      sortOrder: index,
-    })),
+    data: unique.map((categoryId) => {
+      const existing = existingOrderMap.get(categoryId);
+      if (existing !== undefined) {
+        return {
+          menuItemId,
+          categoryId,
+          sortOrder: existing,
+        };
+      }
+      const maxOrder = maxOrderMap.get(categoryId) ?? -1;
+      return {
+        menuItemId,
+        categoryId,
+        sortOrder: maxOrder + 1,
+      };
+    }),
   });
 
   return unique[0];

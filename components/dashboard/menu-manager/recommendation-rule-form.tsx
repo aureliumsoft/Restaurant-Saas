@@ -320,7 +320,28 @@ export function RecommendationRuleForm({
   const productsFromSelectedCategories = useMemo(() => {
     if (productCategoryIds.length === 0) return [];
     const allow = new Set(productCategoryIds);
-    return assignableProducts.filter((p) => allow.has(p.categoryId));
+    const list = assignableProducts.filter(
+      (p) =>
+        allow.has(p.categoryId) ||
+        menuItemCategoryIds(p).some((id) => allow.has(id))
+    );
+    return [...list].sort((a, b) => {
+      const firstCatA =
+        menuItemCategoryIds(a).find((id) => allow.has(id)) ?? a.categoryId;
+      const firstCatB =
+        menuItemCategoryIds(b).find((id) => allow.has(id)) ?? b.categoryId;
+      const orderA =
+        (firstCatA ? a.sortOrderByCategory?.[firstCatA] : undefined) ??
+        Number.MAX_SAFE_INTEGER;
+      const orderB =
+        (firstCatB ? b.sortOrderByCategory?.[firstCatB] : undefined) ??
+        Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      const createA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const createB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (createA !== createB) return createA - createB;
+      return a.name.localeCompare(b.name);
+    });
   }, [assignableProducts, productCategoryIds]);
 
   const toggleInArray = (arr: string[], id: string) =>
@@ -609,21 +630,21 @@ export function RecommendationRuleForm({
       setCategoryExtraCostPercent({ ...seed.categoryExtraCostPercent });
       setCategoryProductOverrides({ ...seed.categoryProductOverrides });
     } else {
-      setMultipleMode('CHECKBOX');
-      setRequired(false);
-      setRuleCategoryIds([]);
-      setCategoryDefaults({});
-      setCategoryDefaultVariations({});
-      setCategoryIncludeDefaultVariationPrice({});
-      setProductCategoryIds([]);
-      setLinkedProductId('');
-      setLinkedProductIds([]);
-      setCategoryFreeQuantity({});
-      setCategoryMinMax({});
-      setCategoryVariationLimits({});
-      setProductFreeQuantity({});
-      setProductMinMax({});
-      setCategoryVariationPricing({});
+    setMultipleMode('CHECKBOX');
+    setRequired(false);
+    setRuleCategoryIds([]);
+    setCategoryDefaults({});
+    setCategoryDefaultVariations({});
+    setCategoryIncludeDefaultVariationPrice({});
+    setProductCategoryIds([]);
+    setLinkedProductId('');
+    setLinkedProductIds([]);
+    setCategoryFreeQuantity({});
+    setCategoryMinMax({});
+    setCategoryVariationLimits({});
+    setProductFreeQuantity({});
+    setProductMinMax({});
+    setCategoryVariationPricing({});
       setCategoryDiscountPercent({});
       setCategoryExtraCostPercent({});
       setCategoryProductOverrides({});
@@ -834,13 +855,13 @@ export function RecommendationRuleForm({
         ) : (
           <div className="space-y-4">
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">
-                For each category, optionally choose a recommended variation
-                (e.g. Medium) and/or a default item. A recommended variation
-                filters add-ons to that size and applies it automatically at
-                checkout. When a default item is set, guests only see an extra
-                charge (+{currencySymbol}) for options priced above that default.
-              </p>
+            <p className="text-xs text-muted-foreground">
+              For each category, optionally choose a recommended variation
+              (e.g. Medium) and/or a default item. A recommended variation
+              filters add-ons to that size and applies it automatically at
+              checkout. When a default item is set, guests only see an extra
+              charge (+{currencySymbol}) for options priced above that default.
+            </p>
             </div>
 
             <div>
@@ -854,12 +875,12 @@ export function RecommendationRuleForm({
                 emptyMessage="No categories match your search."
               >
                 {filteredAssignableCategories.map((cat) => {
-                  const checked = ruleCategoryIds.includes(cat.id);
-                  const selectionOrder = ruleCategoryIds.indexOf(cat.id);
-                  const onMenu = isMenuCategoryShownInFront(cat);
-                  return (
+                const checked = ruleCategoryIds.includes(cat.id);
+                const selectionOrder = ruleCategoryIds.indexOf(cat.id);
+                const onMenu = isMenuCategoryShownInFront(cat);
+                return (
                     <SelectableRow
-                      key={cat.id}
+                    key={cat.id}
                       multi={selectionType === 'MULTIPLE'}
                       active={checked}
                       title={resolveBilingualText(cat.name, uiLang)}
@@ -872,18 +893,18 @@ export function RecommendationRuleForm({
                       badge={
                         checked ? (
                           <div className="flex items-center gap-1.5">
-                            <Badge
-                              variant="secondary"
-                              className="shrink-0 tabular-nums text-[10px]"
-                            >
-                              #{selectionOrder + 1}
-                            </Badge>
-                            <Badge
-                              variant="outline"
-                              className="shrink-0 text-[10px] font-normal"
-                            >
-                              {onMenu ? 'On menu' : 'Add-on only'}
-                            </Badge>
+                        <Badge
+                          variant="secondary"
+                          className="shrink-0 tabular-nums text-[10px]"
+                        >
+                          #{selectionOrder + 1}
+                        </Badge>
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 text-[10px] font-normal"
+                      >
+                        {onMenu ? 'On menu' : 'Add-on only'}
+                      </Badge>
                           </div>
                         ) : (
                           <Badge
@@ -1053,76 +1074,76 @@ export function RecommendationRuleForm({
                         {/* Recommended variation */}
                         {variationTemplatesLoading ? (
                           <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            Loading variation options...
-                          </div>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Loading variation options...
+                      </div>
                         ) : defaultVariationOptions.length > 0 ? (
                           <div className="space-y-2 border-t border-border pt-3">
-                            <Label
-                              htmlFor={`recommended-variation-${cat.id}`}
-                              className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-                            >
-                              Recommended variation (optional)
-                            </Label>
-                            <p className="text-[11px] text-muted-foreground">
+                        <Label
+                          htmlFor={`recommended-variation-${cat.id}`}
+                          className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                        >
+                          Recommended variation (optional)
+                        </Label>
+                        <p className="text-[11px] text-muted-foreground">
                               Pick a size for this category (e.g. Medium). Only add-ons with that variation are shown, and it is applied automatically when the guest selects one.
-                            </p>
-                            <Select
-                              value={defaultVariationId || '__none__'}
-                              onValueChange={(value) => {
-                                if (value === '__none__') {
-                                  clearCategoryDefaultVariation(cat.id);
-                                } else {
-                                  setCategoryDefaultVariation(cat.id, value);
-                                }
-                              }}
-                            >
-                              <SelectTrigger
-                                id={`recommended-variation-${cat.id}`}
-                                className="h-10 bg-background text-sm"
+                        </p>
+                        <Select
+                          value={defaultVariationId || '__none__'}
+                          onValueChange={(value) => {
+                            if (value === '__none__') {
+                              clearCategoryDefaultVariation(cat.id);
+                            } else {
+                              setCategoryDefaultVariation(cat.id, value);
+                            }
+                          }}
+                        >
+                          <SelectTrigger
+                            id={`recommended-variation-${cat.id}`}
+                            className="h-10 bg-background text-sm"
+                          >
+                            <SelectValue placeholder="Select variation" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">None</SelectItem>
+                            {defaultVariationOptions.map((option) => (
+                              <SelectItem
+                                key={`${cat.id}-${option.restaurantVariationId}`}
+                                value={option.restaurantVariationId}
                               >
-                                <SelectValue placeholder="Select variation" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">None</SelectItem>
-                                {defaultVariationOptions.map((option) => (
-                                  <SelectItem
-                                    key={`${cat.id}-${option.restaurantVariationId}`}
-                                    value={option.restaurantVariationId}
-                                  >
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <label className="mt-2 flex cursor-pointer items-start gap-2">
-                              <input
-                                type="checkbox"
-                                className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                                checked={includeDefaultVariationPrice}
-                                onChange={(e) =>
-                                  setCategoryIncludeDefaultVariationPriceEnabled(
-                                    cat.id,
-                                    e.target.checked
-                                  )
-                                }
-                              />
-                              <span className="text-xs">
-                                <span className="font-medium text-foreground">
-                                  Show recommended variation price
-                                </span>
-                                <span className="mt-0.5 block text-muted-foreground">
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <label className="mt-2 flex cursor-pointer items-start gap-2">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                            checked={includeDefaultVariationPrice}
+                            onChange={(e) =>
+                              setCategoryIncludeDefaultVariationPriceEnabled(
+                                cat.id,
+                                e.target.checked
+                              )
+                            }
+                          />
+                          <span className="text-xs">
+                            <span className="font-medium text-foreground">
+                              Show recommended variation price
+                            </span>
+                            <span className="mt-0.5 block text-muted-foreground">
                                   When unchecked, guests see base product prices only (the recommended size is free).
-                                </span>
-                              </span>
-                            </label>
-                          </div>
+                            </span>
+                          </span>
+                        </label>
+                      </div>
                         ) : (
                           <p className="border-t border-border pt-3 text-[11px] text-muted-foreground">
-                            No variation templates yet. Add sizes on the{' '}
-                            <Link href="/variations" className="underline">
-                              Variations
-                            </Link>{' '}
+                        No variation templates yet. Add sizes on the{' '}
+                        <Link href="/variations" className="underline">
+                          Variations
+                        </Link>{' '}
                             page, then pick a recommended variation for this category.
                           </p>
                         )}
@@ -1130,102 +1151,102 @@ export function RecommendationRuleForm({
                         {/* Default item */}
                         {categoryItemsLoading ? (
                           <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            Loading category products...
-                          </div>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Loading category products...
+                      </div>
                         ) : categoryItems.length > 0 ? (
                           <div className="max-h-40 space-y-1 overflow-y-auto border-t border-border pt-3">
-                            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                              Default item (optional)
-                            </p>
-                            <label
-                              className={cn(
-                                'mb-1 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs',
-                                !defaultId
-                                  ? 'bg-primary/10 text-foreground'
-                                  : 'hover:bg-muted/50'
-                              )}
-                            >
-                              <input
-                                type="radio"
-                                name={`default-${cat.id}`}
-                                className="h-3.5 w-3.5 accent-primary"
-                                checked={!defaultId}
-                                onChange={() => clearCategoryDefault(cat.id)}
-                              />
-                              <span className="italic text-muted-foreground">
-                                None
-                              </span>
-                            </label>
-                            {categoryItems.map((it) => (
-                              <label
-                                key={it.id}
-                                className={cn(
-                                  'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs',
-                                  defaultId === it.id
-                                    ? 'bg-primary/10 text-foreground'
-                                    : 'hover:bg-muted/50'
-                                )}
-                              >
-                                <input
-                                  type="radio"
-                                  name={`default-${cat.id}`}
-                                  className="h-3.5 w-3.5 accent-primary"
-                                  checked={defaultId === it.id}
-                                  onChange={() =>
-                                    setCategoryDefault(cat.id, it.id)
-                                  }
-                                />
-                                <span className="min-w-0 flex-1 truncate">
+                        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Default item (optional)
+                        </p>
+                        <label
+                          className={cn(
+                            'mb-1 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs',
+                            !defaultId
+                              ? 'bg-primary/10 text-foreground'
+                              : 'hover:bg-muted/50'
+                          )}
+                        >
+                          <input
+                            type="radio"
+                            name={`default-${cat.id}`}
+                            className="h-3.5 w-3.5 accent-primary"
+                            checked={!defaultId}
+                            onChange={() => clearCategoryDefault(cat.id)}
+                          />
+                          <span className="italic text-muted-foreground">
+                            None
+                          </span>
+                        </label>
+                        {categoryItems.map((it) => (
+                          <label
+                            key={it.id}
+                            className={cn(
+                              'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs',
+                              defaultId === it.id
+                                ? 'bg-primary/10 text-foreground'
+                                : 'hover:bg-muted/50'
+                            )}
+                          >
+                            <input
+                              type="radio"
+                              name={`default-${cat.id}`}
+                              className="h-3.5 w-3.5 accent-primary"
+                              checked={defaultId === it.id}
+                              onChange={() =>
+                                setCategoryDefault(cat.id, it.id)
+                              }
+                            />
+                            <span className="min-w-0 flex-1 truncate">
                                   {resolveBilingualText(it.name, uiLang)}
-                                </span>
-                                <span className="shrink-0 tabular-nums text-muted-foreground">
-                                  {formatMoney(
-                                    it.salePrice != null &&
-                                    it.salePrice > 0 &&
-                                    it.salePrice < it.price
-                                      ? it.salePrice
-                                      : it.price
-                                  )}
-                                </span>
-                              </label>
-                            ))}
-                          </div>
+                            </span>
+                            <span className="shrink-0 tabular-nums text-muted-foreground">
+                              {formatMoney(
+                                it.salePrice != null &&
+                                it.salePrice > 0 &&
+                                it.salePrice < it.price
+                                  ? it.salePrice
+                                  : it.price
+                              )}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
                         ) : (
-                          <p className="mt-2 text-xs text-destructive">
-                            Add products to this category first.
-                          </p>
+                      <p className="mt-2 text-xs text-destructive">
+                        Add products to this category first.
+                      </p>
                         )}
 
                         {/* Price add-ons by product variation */}
                         {baseVariations.length > 0 && categoryItems.length > 0 ? (
                           <label className="flex cursor-pointer items-start gap-2 border-t border-border pt-3">
-                            <input
-                              type="checkbox"
-                              className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                              checked={variationPricingEnabled}
-                              disabled={Boolean(defaultVariationId)}
-                              onChange={(e) =>
-                                setCategoryVariationPricingEnabled(
-                                  cat.id,
-                                  e.target.checked
-                                )
-                              }
-                            />
-                            <span className="text-xs">
-                              <span className="font-medium text-foreground">
-                                Price add-ons by product variation
-                              </span>
-                              <span className="mt-0.5 block text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                          checked={variationPricingEnabled}
+                          disabled={Boolean(defaultVariationId)}
+                          onChange={(e) =>
+                            setCategoryVariationPricingEnabled(
+                              cat.id,
+                              e.target.checked
+                            )
+                          }
+                        />
+                        <span className="text-xs">
+                          <span className="font-medium text-foreground">
+                            Price add-ons by product variation
+                          </span>
+                          <span className="mt-0.5 block text-muted-foreground">
                                 Use each add-on&apos;s variation rate when the guest picks Small, Medium, or Large on this product.
-                              </span>
-                            </span>
-                          </label>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
+                          </span>
+                        </span>
+                      </label>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
               </div>
             )}
           </div>
@@ -1258,7 +1279,7 @@ export function RecommendationRuleForm({
                   title={resolveBilingualText(cat.name, uiLang)}
                   imageUrl={cat.imageUrl}
                   subtitle={onMenu ? 'On customer menu' : 'Add-on only'}
-                  onClick={() => toggleProductCategory(cat.id)}
+                    onClick={() => toggleProductCategory(cat.id)}
                 />
               );
             })}
@@ -1818,8 +1839,8 @@ export function RecommendationRuleForm({
 
       <div className="flex flex-col gap-2 sm:flex-row">
         {onCancelEdit ? (
-          <Button
-            type="button"
+      <Button
+        type="button"
             variant="outline"
             className="w-full sm:w-auto"
             disabled={saving}
@@ -1831,21 +1852,21 @@ export function RecommendationRuleForm({
         <Button
           type="button"
           className="w-full flex-1"
-          disabled={saving}
-          onClick={() => onSave(currentDraft)}
-        >
-          {saving ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            <>
-              <Save className="mr-2 h-4 w-4" />
-              {saveLabel}
-            </>
-          )}
-        </Button>
+        disabled={saving}
+        onClick={() => onSave(currentDraft)}
+      >
+        {saving ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Saving…
+          </>
+        ) : (
+          <>
+            <Save className="mr-2 h-4 w-4" />
+            {saveLabel}
+          </>
+        )}
+      </Button>
       </div>
     </div>
   );

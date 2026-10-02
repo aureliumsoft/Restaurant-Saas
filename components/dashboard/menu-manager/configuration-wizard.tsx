@@ -650,13 +650,32 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
 
   const productsFromSelectedCategories = useMemo(() => {
     if (productCategoryIds.length === 0) return [];
-    return allProducts.filter((p) => {
+    const list = allProducts.filter((p) => {
       if (reservedProductIds.has(p.id) && !linkedProductIds.includes(p.id)) {
         return false;
       }
       return menuItemCategoryIds(p).some((id) =>
         productCategoryIds.includes(id)
       );
+    });
+    return [...list].sort((a, b) => {
+      const firstCatA = menuItemCategoryIds(a).find((id) =>
+        productCategoryIds.includes(id)
+      );
+      const firstCatB = menuItemCategoryIds(b).find((id) =>
+        productCategoryIds.includes(id)
+      );
+      const orderA =
+        (firstCatA ? a.sortOrderByCategory?.[firstCatA] : undefined) ??
+        Number.MAX_SAFE_INTEGER;
+      const orderB =
+        (firstCatB ? b.sortOrderByCategory?.[firstCatB] : undefined) ??
+        Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      const createA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const createB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (createA !== createB) return createA - createB;
+      return a.name.localeCompare(b.name);
     });
   }, [
     allProducts,
@@ -709,9 +728,28 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
 
   const categoryProducts = useMemo(() => {
     if (selectedCategoryIds.length === 0) return [];
-    return allProducts.filter((p) =>
+    const list = allProducts.filter((p) =>
       menuItemCategoryIds(p).some((id) => selectedCategoryIds.includes(id))
     );
+    return [...list].sort((a, b) => {
+      const firstCatA = menuItemCategoryIds(a).find((id) =>
+        selectedCategoryIds.includes(id)
+      );
+      const firstCatB = menuItemCategoryIds(b).find((id) =>
+        selectedCategoryIds.includes(id)
+      );
+      const orderA =
+        (firstCatA ? a.sortOrderByCategory?.[firstCatA] : undefined) ??
+        Number.MAX_SAFE_INTEGER;
+      const orderB =
+        (firstCatB ? b.sortOrderByCategory?.[firstCatB] : undefined) ??
+        Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      const createA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const createB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (createA !== createB) return createA - createB;
+      return a.name.localeCompare(b.name);
+    });
   }, [allProducts, selectedCategoryIds]);
 
   const resetConfigureState = () => {
