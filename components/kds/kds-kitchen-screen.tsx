@@ -16,7 +16,7 @@ import {
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   KdsOrderActionDialog,
   type KdsOrderActionKind,
@@ -41,8 +41,9 @@ import {
 } from '@/lib/offline/local-tickets';
 import { isBrowserOffline } from '@/lib/offline/db';
 import { enqueueOrderOutbox, isOfflineLocalOrderId } from '@/lib/offline/outbox';
-import { LanguageSwitcher } from '@/components/main/language-switcher';
 import { useTranslation } from 'react-i18next';
+import { cn } from '@/lib/utils';
+import { i18n } from '@/lib/i18n/client';
 
 type Ticket = {
   id: string;
@@ -57,6 +58,8 @@ type Ticket = {
   customerName: string | null;
   cutleryRequested?: boolean;
   customerComment?: string | null;
+  address?: string | null;
+  tableLabel?: string | null;
   /** Daily token number (resets per restaurant per day). */
   ticketNumber: number | null;
   /** 6-char public tracking id from the order. */
@@ -80,6 +83,39 @@ function trackingLabel(t: {
   orderId: string;
 }): string {
   return (t.shortOrderId ?? t.orderId.slice(0, 6)).toUpperCase();
+}
+
+function getLocalizedName(val: string, lang: string) {
+  try {
+    const obj = JSON.parse(val);
+    if (typeof obj === 'object' && obj !== null) {
+      return obj[lang] || obj.en || Object.values(obj)[0] || val;
+    }
+    return val;
+  } catch {
+    return val;
+  }
+}
+
+function getOrderMethodLabel(t: Ticket, tr: any) {
+  if (t.tableLabel) {
+    return `${tr('kds.table', { defaultValue: 'Table' })} ${t.tableLabel}`;
+  }
+
+  const addr = (t.address || '').trim();
+  const addrLower = addr.toLowerCase().replace(/\s+/g, '');
+
+  if (addrLower === 'takeaway' || t.sourceType === 'takeaway') {
+    return tr('kds.takeaway', { defaultValue: 'Takeaway' });
+  }
+
+  // If there's an address that isn't 'takeaway', it's a delivery
+  if (addr || t.sourceType === 'delivery') {
+    return tr('kds.delivery', { defaultValue: 'Delivery' });
+  }
+
+  // Default to Takeaway for POS, Kiosk, or QR Code orders without a table/address
+  return tr('kds.takeaway', { defaultValue: 'Takeaway' });
 }
 
 type MenuItemRow = {
@@ -394,7 +430,6 @@ export function KdsKitchenScreen() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <LanguageSwitcher variant="inline" />
           <Button
             variant="ghost"
             size="icon"
@@ -426,7 +461,7 @@ export function KdsKitchenScreen() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="flex flex-row flex-wrap items-start gap-4">
           {sorted.map((t) => {
             const left = remainingSeconds(
               t.startedAt,
@@ -435,198 +470,185 @@ export function KdsKitchenScreen() {
             );
             const overdue = left < 0;
             return (
-              <Card key={t.id} className={overdue ? 'border-red-500' : ''}>
-                <CardContent className="pt-5">
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                            <div className="flex items-baseline gap-2">
-                              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                                {tr('kds.token')}
-                              </span>
-                              <span className="font-mono text-3xl font-extrabold leading-none tabular-nums">
-                                {tokenLabel(t)}
-                              </span>
-                            </div>
-                            <span className="hidden h-5 w-px bg-border sm:inline-block" />
-                            <div className="flex items-baseline gap-2">
-                              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                                {tr('kds.tracking')}
-                              </span>
-                              <span className="font-mono text-sm font-semibold uppercase tracking-wider">
-                                {trackingLabel(t)}
-                              </span>
-                            </div>
+              <Card key={t.id} className={cn("w-max shrink-0 h-[calc(50vh-70px)]", overdue ? 'border-red-500' : '')}>
+                <div className="flex flex-col flex-wrap content-start h-full gap-x-6 gap-y-1.5 p-4 ">
+                  <div className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 pb-3 space-y-3 border-b">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <div className="flex items-baseline gap-2">
+                            
+                            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                              {tr('kds.token')}
+                            </span>
+
+                            <span className="font-mono text-3xl font-extrabold leading-none tabular-nums">
+                              {tokenLabel(t)}
+                            </span>
+
                           </div>
-                          <p className="text-sm font-medium">
-                            {t.customerName || tr('kds.walkIn')}
-                          </p>
-                        </div>
-                        <Badge variant={overdue ? 'destructive' : 'secondary'}>
-                          {t.sourceType}
+                            <Badge variant={overdue ? 'destructive' : 'secondary'}>
+                          {getOrderMethodLabel(t, tr)}
                         </Badge>
+                          <span className="hidden h-5 w-px bg-border sm:inline-block" />
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                              {tr('kds.tracking')}
+                            </span>
+                            <span className="font-mono text-sm font-semibold uppercase tracking-wider">
+                              {trackingLabel(t)}
+                            </span>
+                          </div>
+                        </div>
+                        
                       </div>
-
-                      <OrderCustomerExtras
-                        cutleryRequested={t.cutleryRequested}
-                        customerComment={t.customerComment}
-                        compact
-                      />
-
-                      <div className="space-y-1">
-                        {t.items.map((it) => {
-                          const row = parseKitchenTicketItemDisplay(
-                            it.productName,
-                            it.quantity
-                          );
-                          if (row.kind === 'branch') {
-                            return (
-                              <p
-                                key={it.id}
-                                className="pt-0.5 text-sm font-medium leading-snug text-muted-foreground"
-                              >
-                                ↳ {row.name}
-                              </p>
-                            );
-                          }
-                          if (row.kind === 'nested' || row.kind === 'addon') {
-                            return (
-                              <p
-                                key={it.id}
-                                className="pl-3 text-sm leading-snug text-muted-foreground"
-                              >
-                                - {row.name}
-                              </p>
-                            );
-                          }
-                          if (row.kind === 'personalize') {
-                            return (
-                              <p
-                                key={it.id}
-                                className="text-sm leading-snug text-muted-foreground"
-                              >
-                                {row.name}
-                              </p>
-                            );
-                          }
-                          return (
-                            <p key={it.id} className="text-sm leading-snug">
-                              <span className="font-semibold tabular-nums">
-                                {row.quantity}×
-                              </span>{' '}
-                              {row.name}
-                            </p>
-                          );
-                        })}
-                      </div>
-
-                      <p className="text-xs font-semibold">
-                        {formatMoney(t.orderTotal)}
-                      </p>
+                    <div className="flex flex-col w-1/3  justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          {tr('kds.selectedTime')}
+                        </p>
+                        <p
+                          className={`text-2xl font-bold tabular-nums ${overdue ? 'text-red-500' : ''}`}
+                        >
+                          {formatCountdown(left)}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {tr('kds.targetMinutes', {
+                            minutes: t.selectedMinutes,
+                          })}
+                        </p>
+                    </div>
                     </div>
 
-                    <div className="flex flex-col justify-between gap-3">
-                      <div className="flex items-center justify-between rounded-md border p-3">
-                        <Clock3 className="w-12 h-12 text-muted-foreground" />
-                        <div className="flex flex-col justify-between">
-                          <p className="text-xs text-muted-foreground">
-                            {tr('kds.selectedTime')}
-                          </p>
-                          <p
-                            className={`text-2xl font-bold tabular-nums ${overdue ? 'text-red-500' : ''}`}
-                          >
-                            {formatCountdown(left)}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {tr('kds.targetMinutes', {
-                              minutes: t.selectedMinutes,
-                            })}
-                          </p>
-                        </div>
-                      </div>
+                  </div>
 
-                      <div className="grid grid-cols-1 gap-2">
-                        <Button
-                          type="button"
-                          size="lg"
-                          className="h-12 justify-start gap-2 text-base"
-                          disabled={
-                            (activeCompleteCount > 0 &&
-                              activeCompletingTicketId !== t.id) ||
-                            (activeCompletingTicketId !== null &&
-                              activeCompletingTicketId === t.id) ||
-                            (activeCancelCount > 0 &&
-                              activeCancelingTicketId === t.id)
-                          }
-                          onClick={() =>
-                            setPendingAction({
-                              kind: 'complete',
-                              ticketId: t.id,
-                              label: tokenLabel(t),
-                            })
-                          }
+                  {t.items.map((it) => {
+                    const row = parseKitchenTicketItemDisplay(
+                      it.productName,
+                      it.quantity
+                    );
+                    const currentLang = typeof i18n !== 'undefined' ? i18n.language : 'en';
+                    const localizedName = getLocalizedName(row.name, currentLang);
+
+                    if (row.kind === 'branch') {
+                      return (
+                        <p
+                          key={it.id}
+                          className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 pt-0.5 text-sm font-medium leading-snug text-muted-foreground"
                         >
-                          {activeCompleteCount > 0 &&
-                          activeCompletingTicketId === t.id ? (
-                            <>
-                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
-                              <span className="text-sm font-medium">
-                                {tr('kds.completing')}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle2 className="mr-2 h-5 w-5" />{' '}
-                              <span className="text-sm font-medium">
-                                {tr('kds.complete')}
-                              </span>
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="lg"
-                          variant="destructive"
-                          className="h-12 justify-start gap-2 text-base"
-                          disabled={
-                            (activeCancelCount > 0 &&
-                              activeCancelingTicketId !== t.id) ||
-                            (activeCancelingTicketId !== null &&
-                              activeCancelingTicketId === t.id) ||
-                            (activeCompleteCount > 0 &&
-                              activeCompletingTicketId === t.id)
-                          }
-                          onClick={() =>
-                            setPendingAction({
-                              kind: 'cancel',
-                              ticketId: t.id,
-                              label: tokenLabel(t),
-                            })
-                          }
+                          ↳ {localizedName}
+                        </p>
+                      );
+                    }
+                    if (row.kind === 'nested' || row.kind === 'addon') {
+                      return (
+                        <p
+                          key={it.id}
+                          className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 pl-4 text-sm leading-snug text-muted-foreground"
                         >
-                          {activeCancelCount > 0 &&
+                          + {localizedName}
+                        </p>
+                      );
+                    }
+                    if (row.kind === 'personalize') {
+                      return (
+                        <p
+                          key={it.id}
+                          className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 pl-4 text-sm font-medium leading-snug text-amber-600 dark:text-amber-500 italic"
+                        >
+                          • {localizedName}
+                        </p>
+                      );
+                    }
+                    return (
+                      <p key={it.id} className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 pt-2 first:pt-0 text-base font-bold leading-snug">
+                        <span className="tabular-nums mr-1.5">
+                          {row.quantity}×
+                        </span>
+                        {localizedName}
+                      </p>
+                    );
+                  })}
+                  <div className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 mt-auto pt-3 border-t border-border/50 flex flex-col justify-between gap-3">
+                    <div className="flex justify-between w-full gap-2">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={
+                          (activeCancelCount > 0 &&
+                            activeCancelingTicketId !== t.id) ||
+                          (activeCancelingTicketId !== null &&
+                            activeCancelingTicketId === t.id) ||
+                          (activeCompleteCount > 0 &&
+                            activeCompletingTicketId === t.id)
+                        }
+                        onClick={() =>
+                          setPendingAction({
+                            kind: 'cancel',
+                            ticketId: t.id,
+                            label: tokenLabel(t),
+                          })
+                        }
+                      >
+                        {activeCancelCount > 0 &&
                           activeCancelingTicketId === t.id ? (
-                            <>
-                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
-                              <span className="text-sm font-medium">
-                                {tr('kds.canceling')}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <XCircle className="mr-2 h-5 w-5" />{' '}
-                              <span className="text-sm font-medium">
-                                {tr('kds.cancelOrder')}
-                              </span>
-                            </>
-                          )}
-                        </Button>
-                      </div>
+                          <>
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
+                            <span className="text-sm font-medium">
+                              {tr('kds.canceling')}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="mr-2 h-5 w-5" />{' '}
+                            <span className="text-sm font-medium">
+                              {tr('kds.cancelOrder')}
+                            </span>
+                          </>
+                        )}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        disabled={
+                          (activeCompleteCount > 0 &&
+                            activeCompletingTicketId !== t.id) ||
+                          (activeCompletingTicketId !== null &&
+                            activeCompletingTicketId === t.id) ||
+                          (activeCancelCount > 0 &&
+                            activeCancelingTicketId === t.id)
+                        }
+                        onClick={() =>
+                          setPendingAction({
+                            kind: 'complete',
+                            ticketId: t.id,
+                            label: tokenLabel(t),
+                          })
+                        }
+                      >
+                        {activeCompleteCount > 0 &&
+                          activeCompletingTicketId === t.id ? (
+                          <>
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
+                            <span className="text-sm font-medium">
+                              {tr('kds.completing')}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="mr-2 h-5 w-5" />{' '}
+                            <span className="text-sm font-medium">
+                              {tr('kds.complete')}
+                            </span>
+                          </>
+                        )}
+                      </Button>
                     </div>
                   </div>
-                </CardContent>
+
+                </div>
+
+
+
               </Card>
             );
           })}
@@ -639,10 +661,10 @@ export function KdsKitchenScreen() {
         loading={
           pendingAction?.kind === 'complete'
             ? activeCompleteCount > 0 &&
-              activeCompletingTicketId === pendingAction.ticketId
+            activeCompletingTicketId === pendingAction.ticketId
             : pendingAction?.kind === 'cancel'
               ? activeCancelCount > 0 &&
-                activeCancelingTicketId === pendingAction.ticketId
+              activeCancelingTicketId === pendingAction.ticketId
               : false
         }
         onCancel={() => setPendingAction(null)}

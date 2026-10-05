@@ -106,13 +106,16 @@ export function TableFloorPlan({
   }
 
   return (
-    <div className={cn('w-full', className)}>
+    <div className={cn('w-full flex flex-col', className)}>
       <div
-        className="overflow-scroll overscroll-contain rounded-2xl border border-border bg-muted/20 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent"
+        className={cn(
+          "flex-1 min-h-0 overflow-auto overscroll-contain rounded-2xl [scrollbar-gutter:stable] [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent",
+          mode === 'editor' && "border border-border bg-muted/20"
+        )}
         style={{
           width: '100%',
-          maxWidth: `${viewportRem}rem`,
-          height: `${viewportRem}rem`,
+          maxWidth: mode === 'picker' ? '100%' : `${viewportRem}rem`,
+          height: mode === 'picker' ? undefined : `${viewportRem}rem`,
           scrollbarWidth: 'thin',
           scrollbarGutter: 'stable',
         }}
@@ -167,15 +170,20 @@ export function TableFloorPlan({
                   }}
                   onClick={() => onSelectTable?.(table)}
                   className={cn(
-                    'relative flex h-full w-full flex-col items-center justify-center border bg-card p-2 shadow-sm transition',
+                    'relative flex h-full w-full flex-col items-center justify-center p-2 shadow-sm transition',
                     shapeClass(table.shape),
                     statusRing(table, selected, mode, allowOccupiedSelect),
+                    table.occupied ? 'bg-red-500' : 'bg-emerald-500',
+                    selected ? 'bg-primary' : null,
                     blocked
                       ? 'cursor-not-allowed opacity-80'
                       : editorDnd
                         ? 'cursor-grab active:cursor-grabbing hover:brightness-[0.98]'
                         : 'hover:brightness-[0.98]',
-                    isDragging && 'opacity-50'
+                    isDragging && 'opacity-50',
+
+
+
                   )}
                   style={{
                     gridRow: `${table.gridRow + 1} / span ${table.gridRowSpan}`,
@@ -189,21 +197,11 @@ export function TableFloorPlan({
                         : `${table.name} · Available`
                   }
                 >
-                  <span
-                    className={cn(
-                      'flex h-11 w-11 items-center justify-center text-xs font-bold text-white shadow',
-                      shapeClass(table.shape),
-                      table.occupied ? 'bg-red-500' : 'bg-emerald-500',
-                      selected ? 'bg-primary' : null
-                    )}
-                  >
-                    {table.sortOrder + 1}
-                  </span>
-                  <span className="mt-1.5 line-clamp-1 max-w-full px-1 text-center text-xs font-medium text-foreground">
+                  <span className="mt-1.5 line-clamp-1 max-w-full px-1 text-center text-xl font-bold text-white">
                     {table.name}
                   </span>
                   {table.occupied ? (
-                    <span className="mt-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-600">
+                    <span className="mt-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase text-red-600">
                       Occupied
                     </span>
                   ) : null}
@@ -214,12 +212,16 @@ export function TableFloorPlan({
             const isDropHover = dropTarget === key;
             const dropOk = draggingId ? canDropAt(row, col) : false;
 
+            if (mode === 'picker') {
+              return null; // The CSS grid handles empty space automatically, no need to render empty cells.
+            }
+
             return (
               <button
                 key={key}
                 type="button"
-                disabled={mode === 'picker'}
-                onClick={() => onSelectCell?.(row, col)}
+                disabled={true}
+                onClick={undefined}
                 onDragOver={(e) => {
                   if (!editorDnd || !draggingId) return;
                   if (!canDropAt(row, col)) {
@@ -246,13 +248,13 @@ export function TableFloorPlan({
                   onMoveTable?.(id, row, col);
                 }}
                 className={cn(
-                  'flex h-full w-full items-center justify-center rounded-xl border border-dashed border-border/80 bg-background/60 transition',
+                  'flex h-full w-full items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/20 bg-background/60 transition cursor-default',
                   mode === 'editor'
-                    ? 'text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary'
-                    : 'cursor-default opacity-60',
+                    ? 'hover:border-primary/50'
+                    : '',
                   isDropHover &&
-                    dropOk &&
-                    'border-primary bg-primary/15 text-primary ring-2 ring-primary/40'
+                  dropOk &&
+                  'border-primary bg-primary/15 text-primary ring-2 ring-primary/40'
                 )}
                 style={{
                   gridRow: row + 1,
@@ -264,9 +266,7 @@ export function TableFloorPlan({
                     : `Empty cell row ${row + 1} column ${col + 1}`
                 }
               >
-                {mode === 'editor' ? (
-                  <Plus className="h-6 w-6" strokeWidth={2} />
-                ) : null}
+                {/* Plus icon removed as requested */}
               </button>
             );
           })}

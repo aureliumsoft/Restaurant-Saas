@@ -70,6 +70,8 @@ type TicketRow = {
   ticketNumber: number | null;
   cutleryRequested: boolean;
   customerComment: string | null;
+  address: string | null;
+  tableLabel: string | null;
 };
 
 type TicketItemRow = {
@@ -117,6 +119,8 @@ export async function GET(req: NextRequest) {
           o."ticketNumber",
           o."cutleryRequested",
           o."customerComment",
+          o."address",
+          o."tableLabel",
           c."name" AS "customerName"
         FROM "KitchenTicket" kt
         JOIN "Order" o ON o."id" = kt."orderId"

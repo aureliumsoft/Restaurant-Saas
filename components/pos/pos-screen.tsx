@@ -11,7 +11,6 @@ import {
   Trash2,
   Clock,
   UtensilsCrossed,
-  Table as TableIcon,
   Truck,
   ShoppingBag,
   CreditCard,
@@ -34,6 +33,7 @@ import {
   PackageCheck,
   WifiOff,
   Activity,
+  Utensils,
 } from 'lucide-react';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { TableFloorPickerDialog } from '@/components/dashboard/tables/table-floor-picker';
@@ -2589,12 +2589,12 @@ export function PosScreen({
     finalizeCardPayment('error');
   }
 
-  function handleCardPaymentBypass() {
-    cardPaymentCancelledRef.current = true;
-    const txnId = `BYPASS-${Date.now()}`;
-    finalizeCardPayment('success', txnId, true);
-    void placeOrderAfterCardPaid(txnId);
-  }
+  // function handleCardPaymentBypass() {
+  //   cardPaymentCancelledRef.current = true;
+  //   const txnId = `BYPASS-${Date.now()}`;
+  //   finalizeCardPayment('success', txnId, true);
+  //   void placeOrderAfterCardPaid(txnId);
+  // }
 
   function handleCardPaymentCancel() {
     cardPaymentCancelledRef.current = true;
@@ -3100,7 +3100,7 @@ export function PosScreen({
     icon: ComponentType<{ className?: string }>;
   }[] = useMemo(() => {
     const all = [
-      { id: 'tables' as const, label: t('pos.table'), icon: TableIcon },
+      { id: 'tables' as const, label: t('pos.table'), icon: Utensils },
       { id: 'delivery' as const, label: t('pos.deliveryMode'), icon: Truck },
       {
         id: 'takeaway' as const,
@@ -3525,9 +3525,9 @@ export function PosScreen({
           <div className="relative shrink-0">
             <Button
               type="button"
-              variant="ghost"
+              variant="default"
               size="icon"
-              className="absolute left-0 top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 rounded-full bg-background/90 text-foreground shadow-sm sm:flex"
+              className="absolute left-0 top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 rounded-full  shadow-sm sm:flex"
               onClick={() => scrollCategories('left')}
               aria-label="Scroll categories left"
             >
@@ -3535,9 +3535,9 @@ export function PosScreen({
             </Button>
             <Button
               type="button"
-              variant="ghost"
+              variant="default"
               size="icon"
-              className="absolute right-0 top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 rounded-full bg-background/90 text-foreground shadow-sm sm:flex"
+              className="absolute right-0 top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 rounded-full shadow-sm sm:flex"
               onClick={() => scrollCategories('right')}
               aria-label="Scroll categories right"
             >
@@ -3806,7 +3806,7 @@ export function PosScreen({
                   }
                   onClick={() => beginTableSelection()}
                 >
-                  <TableIcon className="h-3.5 w-3.5 shrink-0" />
+                  <Utensils className="h-3.5 w-3.5 shrink-0" />
                   {orderMode === 'tables' ? (
                     <span className="truncate text-xs font-semibold leading-none">
                       {selectedTableName || t('pos.selectTableShort')}
@@ -3857,7 +3857,7 @@ export function PosScreen({
                           Order
                         </p>
                         <span className="inline-flex items-center gap-1 rounded-lg bg-fire-500/10 px-2 py-0.5 text-[11px] font-semibold text-fire-600 dark:text-fire-400">
-                          <TableIcon className="h-3 w-3" />
+                          <Utensils className="h-3 w-3" />
                           {selectedTableName || 'Select table'}
                         </span>
             </div>
@@ -3918,7 +3918,7 @@ export function PosScreen({
                         )}
                         onClick={() => beginTableSelection()}
                       >
-                        <TableIcon className="mr-2 h-4 w-4" />
+                        <Utensils className="mr-2 h-4 w-4" />
                         {tablesLoading
                           ? 'Loading tables…'
                           : selectedTableName || 'Select table'}
@@ -4059,7 +4059,7 @@ export function PosScreen({
                       )}
                       onClick={() => beginTableSelection()}
                     >
-                      <TableIcon className="mr-2 h-4 w-4" />
+                      <Utensils className="mr-2 h-4 w-4" />
                       {tablesLoading
                         ? 'Loading tables…'
                         : selectedTableName || 'Select table'}
@@ -4291,14 +4291,14 @@ export function PosScreen({
                         {formatMoney(grandTotal)}
                       </p>
                       <div className="flex w-full flex-col gap-2">
-                        <Button
+                        {/* <Button
                           type="button"
                           variant="secondary"
                           className="h-10 w-full rounded-xl"
                           onClick={handleCardPaymentBypass}
                         >
                           Bypass (test)
-                        </Button>
+                        </Button> */}
                         <Button
                           type="button"
                           variant="outline"

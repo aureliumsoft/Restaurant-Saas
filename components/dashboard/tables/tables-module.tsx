@@ -6,6 +6,7 @@ import {
   Columns3,
   Loader2,
   Pencil,
+  Plus,
   QrCode,
   RefreshCcw,
   Rows3,
@@ -213,6 +214,26 @@ export function TablesModule({
     setFormOpen(true);
   }
 
+  function openAddAnywhere() {
+    let foundRow = -1;
+    let foundCol = -1;
+    for (let r = 0; r < floor.tableFloorRows; r++) {
+      for (let c = 0; c < floor.tableFloorCols; c++) {
+        if (canPlaceTable(tables, { id: '__new__', gridRow: r, gridCol: c, gridRowSpan: 1, gridColSpan: 1 }, floor)) {
+          foundRow = r;
+          foundCol = c;
+          break;
+        }
+      }
+      if (foundRow !== -1) break;
+    }
+    if (foundRow === -1) {
+      toast.error('No empty space left on the floor. Please add rows or columns.');
+      return;
+    }
+    openAddAt(foundRow, foundCol);
+  }
+
   function openEditSelected() {
     if (!selected) return;
     setFormMode('edit');
@@ -384,6 +405,14 @@ export function TablesModule({
           </Button>
           <Button
             type="button"
+            variant="default"
+            onClick={openAddAnywhere}
+            disabled={!scopedBranchId}
+          >
+            <Plus className="mr-2 h-4 w-4" />Add table
+          </Button>
+          <Button
+            type="button"
             onClick={() => void handleSave()}
             disabled={!scopedBranchId || !dirty || saving}
           >
@@ -451,7 +480,7 @@ export function TablesModule({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Click a + to place a table, drag to move, or select a table to
+                Click <strong>Add table</strong> to place a table, drag to move, or select a table to
                 edit. Changes stay local until you press Save.
               </p>
             )}

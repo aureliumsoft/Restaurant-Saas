@@ -2543,7 +2543,7 @@ export function KioskApp({
                   cardPayment.setCardPaymentOutcomeOpen
                 }
                 setCardProcessingOpen={cardPayment.setCardProcessingOpen}
-                onBypass={cardPayment.handleCardPaymentBypass}
+                  // onBypass={cardPayment.handleCardPaymentBypass}
                 onCancel={cardPayment.handleCardPaymentCancel}
                 formatMoney={formatMoney}
               />

@@ -149,8 +149,8 @@ export function TableFloorPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-h-[90vh] max-w-[95vw] w-fit overflow-hidden flex flex-col p-0">
+        <DialogHeader className="p-6 pb-2 shrink-0">
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         {loading ? (
@@ -158,47 +158,27 @@ export function TableFloorPickerDialog({
             <Loader2 className="h-7 w-7 animate-spin text-primary" />
           </div>
         ) : tables.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
+          <p className="py-8 px-6 text-center text-sm text-muted-foreground">
             No tables available for this branch.
           </p>
         ) : (
-          <TableFloorPlan
-            mode="picker"
-            floor={floor}
-            tables={tables}
-            selectedId={pickedId}
-            allowOccupiedSelect={allowOccupiedSelect}
-            onSelectTable={(table) => {
-              if (table.occupied && !allowOccupiedSelect) return;
-              setPickedId(table.id);
-            }}
-          />
+          <div className="flex-1 flex flex-col overflow-hidden p-6 pt-0 min-h-0 min-w-0">
+            <TableFloorPlan
+              className="flex-1 min-h-0"
+              mode="picker"
+              floor={floor}
+              tables={tables}
+              selectedId={pickedId}
+              allowOccupiedSelect={allowOccupiedSelect}
+              onSelectTable={(table) => {
+                if (table.occupied && !allowOccupiedSelect) return;
+                setPickedId(table.id);
+                onConfirm({ id: table.id, name: table.name });
+                onOpenChange(false);
+              }}
+            />
+          </div>
         )}
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={
-              !picked ||
-              (Boolean(picked.occupied) && !allowOccupiedSelect)
-            }
-            onClick={() => {
-              if (!picked) return;
-              if (picked.occupied && !allowOccupiedSelect) return;
-              onConfirm({ id: picked.id, name: picked.name });
-              onOpenChange(false);
-            }}
-          >
-            {confirmLabel}
-            {picked ? ` · ${picked.name}` : ''}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -29,7 +29,6 @@ import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfill
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
-import { LanguageSwitcher } from '@/components/main/language-switcher';
 import { useTranslation } from 'react-i18next';
 
 type PendingOrder = {
@@ -278,9 +277,8 @@ export function KdsManagerBoard() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <LanguageSwitcher variant="inline" />
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={() => void load()}
             disabled={refreshing}
