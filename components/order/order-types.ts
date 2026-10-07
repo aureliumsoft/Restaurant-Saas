@@ -11,4 +11,6 @@ export type OrderInfo = {
   customerPhone?: string;
   /** Path-based storefront (`/{slug}`); loads menu via `/api/customer/menu?slug=` */
   restaurantSlug?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 };

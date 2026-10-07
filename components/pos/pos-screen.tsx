@@ -553,6 +553,8 @@ export function PosScreen({
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [orderAddress, setOrderAddress] = useState('');
+  const [orderApartment, setOrderApartment] = useState('');
+  const [orderDoorNumber, setOrderDoorNumber] = useState('');
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState('');
   const [serviceCharges, setServiceCharges] =
@@ -591,6 +593,8 @@ export function PosScreen({
     | 'name'
     | 'phone'
     | 'address'
+    | 'apartment'
+    | 'doorNumber'
     | 'amount'
     | 'prepCustom';
   const [keyboardField, setKeyboardField] = useState<PosKeyboardField | null>(
@@ -2011,6 +2015,8 @@ export function PosScreen({
     setCustomerName('');
     setCustomerPhone('');
     setOrderAddress('');
+    setOrderApartment('');
+    setOrderDoorNumber('');
     setCheckoutOpen(false);
     toast.info('Order edit canceled.');
   }
@@ -2619,7 +2625,11 @@ export function PosScreen({
     const nameTrim = customerName.trim();
     const phoneTrim = customerPhone.trim();
     const tableTrim = tableId.trim();
-    const addressTrim = orderAddress.trim();
+    const addressTrim = [
+      orderApartment.trim() && `Apt/Suite: ${orderApartment.trim()}`,
+      orderDoorNumber.trim() && `Door/Gate: ${orderDoorNumber.trim()}`,
+      orderAddress.trim()
+    ].filter(Boolean).join('\n').trim();
     // Table + pay-on-leave + cash → open check: payment stays pending; kitchen is later.
     // Table + pay-before-kitchen requires completed payment at place (same as takeaway).
     const isTableOpenCheck =
@@ -2808,6 +2818,10 @@ export function PosScreen({
           resetCardPayment();
           setPaymentMode('cash');
           setOrderAddress('');
+    setOrderApartment('');
+    setOrderDoorNumber('');
+        setOrderApartment('');
+        setOrderDoorNumber('');
           setCustomerName('');
           setCustomerPhone('');
           setTableId('');
@@ -3009,6 +3023,8 @@ export function PosScreen({
       resetCardPayment();
       setPaymentMode('cash');
       setOrderAddress('');
+    setOrderApartment('');
+    setOrderDoorNumber('');
       setCustomerName('');
       setCustomerPhone('');
       setTableId('');
@@ -3519,7 +3535,10 @@ export function PosScreen({
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:grid-rows-1">
+      <div
+        className="grid min-h-0 flex-1 grid-cols-1 gap-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:grid-rows-1"
+        onPointerDown={() => setKeyboardField(null)}
+      >
         {/* Menu area */}
         <div className="flex min-h-0 flex-col gap-2 overflow-hidden px-3 pt-2.5 sm:px-4 sm:pt-3 lg:pr-2">
           <div className="relative shrink-0">
@@ -3726,10 +3745,10 @@ export function PosScreen({
                   {isEditingKioskOrder
                     ? 'Update kiosk order'
                     : editingOrderId
-                      ? 'Update order'
+                      ? t('pos.update')
                       : tablePayOnLeave
                         ? 'Confirm'
-                        : 'Payment'}
+                        : t('pos.paymentTitle')}
                 </h3>
                 <p className="text-xs text-muted-foreground">
                   {tablePayOnLeave
@@ -3891,7 +3910,7 @@ export function PosScreen({
                       </div>
                       <div className="flex items-baseline justify-between pt-2.5">
                         <span className="text-sm text-muted-foreground">
-                          Total
+                          {t('pos.total')}
                         </span>
                         <span
               className={cn(
@@ -3999,7 +4018,7 @@ export function PosScreen({
                             e.target.value.replace(/\D/g, '')
                           )
                         }
-                        onPointerDown={() => setKeyboardField('prepCustom')}
+                        onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('prepCustom'); }}
                         onFocus={() => setKeyboardField('prepCustom')}
                       />
                     </div>
@@ -4033,7 +4052,7 @@ export function PosScreen({
                     );
                   })}
                   <div className="flex items-center justify-between pt-2">
-                    <span className="text-sm font-semibold">Total</span>
+                    <span className="text-sm font-semibold">{t('pos.total')}</span>
                     <span
                       className={cn(
                         'text-lg font-bold tabular-nums',
@@ -4048,7 +4067,7 @@ export function PosScreen({
                 {isTableMode ? (
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Table
+                      {t('pos.table')}
                     </label>
                     <Button
                       type="button"
@@ -4071,7 +4090,7 @@ export function PosScreen({
                   <div className="space-y-2.5">
                     <div className="space-y-1">
                       <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Name
+                        {t('pos.name')}
                       </label>
                       <Input
                         className={cn(
@@ -4083,13 +4102,13 @@ export function PosScreen({
                         inputMode="none"
                         autoComplete="off"
                         onChange={(e) => setCustomerName(e.target.value)}
-                        onPointerDown={() => setKeyboardField('name')}
+                        onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('name'); }}
                         onFocus={() => setKeyboardField('name')}
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Phone
+                        {t('pos.phone')}
                       </label>
                       <Input
                         className={cn(
@@ -4103,31 +4122,73 @@ export function PosScreen({
                         onChange={(e) =>
                           setCustomerPhone(e.target.value.replace(/\D/g, ''))
                         }
-                        onPointerDown={() => setKeyboardField('phone')}
+                        onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('phone'); }}
                         onFocus={() => setKeyboardField('phone')}
                       />
                     </div>
                     {isDeliveryMode ? (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Delivery address
-                        </label>
-                        <textarea
-                          className={cn(
-                            'flex min-h-[72px] w-full cursor-pointer rounded-xl border-0 px-3 py-2 text-sm shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fire-500/25',
-                            POS_INPUT_CLASS,
-                            keyboardField === 'address' &&
-                              'ring-2 ring-fire-500/40'
-                          )}
-                          placeholder="Enter delivery address"
-                          value={orderAddress}
-                          inputMode="none"
-                          autoComplete="off"
-                          onChange={(e) => setOrderAddress(e.target.value)}
-                          onPointerDown={() => setKeyboardField('address')}
-                          onFocus={() => setKeyboardField('address')}
-                          rows={3}
-                        />
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              {t('pos.apartment', { defaultValue: 'Apartment / Suite' })}
+                            </label>
+                            <Input
+                              className={cn(
+                                'h-11 cursor-pointer rounded-xl',
+                                POS_INPUT_CLASS,
+                                keyboardField === 'apartment' && 'ring-2 ring-fire-500/40'
+                              )}
+                              value={orderApartment}
+                              inputMode="none"
+                              autoComplete="off"
+                              placeholder={t('pos.apartmentHint', { defaultValue: 'e.g. 12B' })}
+                              onChange={(e) => setOrderApartment(e.target.value)}
+                              onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('apartment'); }}
+                              onFocus={() => setKeyboardField('apartment')}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              {t('pos.doorNumber', { defaultValue: 'Door / Gate' })}
+                            </label>
+                            <Input
+                              className={cn(
+                                'h-11 cursor-pointer rounded-xl',
+                                POS_INPUT_CLASS,
+                                keyboardField === 'doorNumber' && 'ring-2 ring-fire-500/40'
+                              )}
+                              value={orderDoorNumber}
+                              inputMode="none"
+                              autoComplete="off"
+                              placeholder={t('pos.doorNumberHint', { defaultValue: 'e.g. 4' })}
+                              onChange={(e) => setOrderDoorNumber(e.target.value)}
+                              onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('doorNumber'); }}
+                              onFocus={() => setKeyboardField('doorNumber')}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                            {t('pos.deliveryAddress', { defaultValue: 'Complete Address' })}
+                          </label>
+                          <textarea
+                            className={cn(
+                              'flex min-h-[72px] w-full cursor-pointer rounded-xl border-0 px-3 py-2 text-sm shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fire-500/25',
+                              POS_INPUT_CLASS,
+                              keyboardField === 'address' &&
+                                'ring-2 ring-fire-500/40'
+                            )}
+                            placeholder={t('pos.enterDeliveryAddress', { defaultValue: 'Street name, city, zip code...' })}
+                            value={orderAddress}
+                            inputMode="none"
+                            autoComplete="off"
+                            onChange={(e) => setOrderAddress(e.target.value)}
+                            onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('address'); }}
+                            onFocus={() => setKeyboardField('address')}
+                            rows={3}
+                          />
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -4142,7 +4203,7 @@ export function PosScreen({
                   <div className="space-y-3">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Payment method
+                        {t('pos.paymentMethod')}
                       </label>
                       <div className="grid grid-cols-2 gap-2">
                         <Button
@@ -4156,7 +4217,7 @@ export function PosScreen({
                           onClick={() => handleSelectPaymentMode('cash')}
                         >
                           <Banknote className="h-4 w-4" />
-                          Cash
+                          {t('pos.cash')}
                         </Button>
                         {fulfillmentSettings.cardPaymentsEnabled ? (
                         <Button
@@ -4169,7 +4230,7 @@ export function PosScreen({
                           onClick={() => handleSelectPaymentMode('card')}
                         >
                           <CreditCard className="h-4 w-4" />
-                          Card
+                          {t('pos.card')}
                         </Button>
                         ) : null}
                       </div>
@@ -4238,7 +4299,7 @@ export function PosScreen({
                     ) : (
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Amount paid
+                          {t('pos.amountPaid')}
                         </label>
                         {tablePayBeforeKitchen ? (
                           <p className="text-[11px] text-muted-foreground">
@@ -4257,14 +4318,14 @@ export function PosScreen({
                           placeholder="0.00"
                           value={amountPaid}
                           onChange={(e) => setAmountPaid(e.target.value)}
-                          onPointerDown={() => setKeyboardField('amount')}
+                          onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('amount'); }}
                           onFocus={() => setKeyboardField('amount')}
                         />
                         <div className="flex items-end justify-between gap-3 pt-2">
                           <span className="pb-1 text-sm font-medium text-muted-foreground">
-                            Change
+                            {t('pos.change')}
                           </span>
-                          <span className="text-3xl font-bold tabular-nums tracking-tight text-foreground">
+                          <span className="text-xl font-bold tabular-nums tracking-tight text-foreground">
                             {formatMoney(
                               Math.max(
                                 0,
@@ -4314,7 +4375,8 @@ export function PosScreen({
               </div>
 
               {keyboardField ? (
-                <PosOnScreenKeyboard
+                <div onPointerDown={(e) => e.stopPropagation()}>
+                  <PosOnScreenKeyboard
                   mode={
                     keyboardField === 'amount'
                       ? 'numeric'
@@ -4328,11 +4390,15 @@ export function PosScreen({
                       ? customerName
                       : keyboardField === 'phone'
                         ? customerPhone
-                        : keyboardField === 'address'
-                          ? orderAddress
-                          : keyboardField === 'prepCustom'
-                            ? tableCheckoutCustomMinutes
-                            : amountPaid
+                        : keyboardField === 'apartment'
+                          ? orderApartment
+                          : keyboardField === 'doorNumber'
+                            ? orderDoorNumber
+                            : keyboardField === 'address'
+                              ? orderAddress
+                              : keyboardField === 'prepCustom'
+                                ? tableCheckoutCustomMinutes
+                                : amountPaid
                   }
                   maxLength={
                     keyboardField === 'phone'
@@ -4347,6 +4413,10 @@ export function PosScreen({
                     if (keyboardField === 'name') setCustomerName(next);
                     else if (keyboardField === 'phone')
                       setCustomerPhone(next.replace(/\D/g, ''));
+                    else if (keyboardField === 'apartment')
+                      setOrderApartment(next);
+                    else if (keyboardField === 'doorNumber')
+                      setOrderDoorNumber(next);
                     else if (keyboardField === 'address')
                       setOrderAddress(next);
                     else if (keyboardField === 'prepCustom')
@@ -4355,6 +4425,7 @@ export function PosScreen({
                   }}
                   onClose={() => setKeyboardField(null)}
                 />
+                </div>
               ) : null}
 
               <div className="shrink-0 space-y-2 px-3 py-3 sm:px-4">
@@ -4371,7 +4442,7 @@ export function PosScreen({
                   }
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back
+                  {t('pos.back')}
                 </Button>
                 <Button
                   ref={placeOrderButtonRef}
@@ -4837,6 +4908,17 @@ export function PosScreen({
                   </ul>
 
                   <div className="flex shrink-0 flex-col gap-2 sm:flex-row mt-2 w-full">
+                    
+                    <Button
+                      className="w-full"
+                      type="button"
+                      variant="destructive"
+                      onClick={() => setCancelKitchenOrder(order)}
+                    >
+                      <Cross2Icon className="h-4 w-4 mr-2" />
+                      Cancel order
+                    </Button>
+
                     <Button
                       className="w-full"
                       type="button"
@@ -4851,15 +4933,6 @@ export function PosScreen({
                     >
                       <ChefHatIcon className="h-4 w-4 mr-2" />
                       Send to kitchen
-                    </Button>
-                    <Button
-                      className="w-full"
-                      type="button"
-                      variant="destructive"
-                      onClick={() => setCancelKitchenOrder(order)}
-                    >
-                      <Cross2Icon className="h-4 w-4 mr-2" />
-                      Cancel order
                     </Button>
                   </div>
                 </div>

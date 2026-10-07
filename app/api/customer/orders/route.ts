@@ -65,6 +65,8 @@ const orderInfoSchema = z.object({
   addressName: z.string().optional(),
   customerPhone: z.string().optional(),
   restaurantSlug: z.string().optional(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
 });
 
 const orderScheduleSchema = z.object({
@@ -137,9 +139,9 @@ function buildAddressSnapshot(
     if (info.customerPhone?.trim()) lines.push(`Phone: ${info.customerPhone.trim()}`);
     if (info.storeName?.trim()) lines.push(`Branch: ${info.storeName.trim()}`);
     if (info.storeAddress?.trim()) lines.push(`Branch address: ${info.storeAddress.trim()}`);
-    if (info.address?.trim()) lines.push(`Address: ${info.address.trim()}`);
     if (info.apartment?.trim()) lines.push(`Apartment / door: ${info.apartment.trim()}`);
     if (info.gateCode?.trim()) lines.push(`Gate code: ${info.gateCode.trim()}`);
+    if (info.address?.trim()) lines.push(`Address: ${info.address.trim()}`);
   } else {
     lines.push(`Name: ${resolveWebCustomerName(orderType, info.addressName)}`);
     if (info.customerPhone?.trim()) lines.push(`Phone: ${info.customerPhone.trim()}`);
@@ -245,8 +247,46 @@ export async function POST(req: NextRequest) {
   }
 
   const branchId = orderInfo.storeId?.trim() || null;
-  if (!branchId || !(await validateBranchForRestaurant(branchId, restaurant.id))) {
+  if (!branchId) {
     return NextResponse.json({ error: 'Invalid branch for this restaurant' }, { status: 400 });
+  }
+
+  const branch = await db.branch.findFirst({
+    where: { id: branchId, restaurantId: restaurant.id },
+    select: { id: true, latitude: true, longitude: true, deliveryRadiusKm: true },
+  });
+
+  if (!branch) {
+    return NextResponse.json({ error: 'Invalid branch for this restaurant' }, { status: 400 });
+  }
+
+  if (
+    orderType === 'delivery' &&
+    branch.deliveryRadiusKm != null &&
+    branch.latitude != null &&
+    branch.longitude != null
+  ) {
+    const custLat = orderInfo.latitude;
+    const custLon = orderInfo.longitude;
+    if (custLat == null || custLon == null) {
+      return NextResponse.json(
+        { error: 'Please provide a valid delivery location on the map.' },
+        { status: 400 }
+      );
+    }
+    const { computeHaversineDistanceKm } = await import('@/lib/geo/distance');
+    const dist = computeHaversineDistanceKm(
+      branch.latitude,
+      branch.longitude,
+      custLat,
+      custLon
+    );
+    if (dist > branch.deliveryRadiusKm) {
+      return NextResponse.json(
+        { error: `Delivery address is outside the allowed radius (${branch.deliveryRadiusKm} km).` },
+        { status: 400 }
+      );
+    }
   }
 
   const menuRows = await db.menuItem.findMany({

@@ -48,6 +48,9 @@ type BranchRow = {
   name: string;
   address: string | null;
   phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  deliveryRadiusKm: number | null;
   openingHours: BranchOpeningHours | null;
   createdAt: string;
 };
@@ -128,6 +131,9 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [deliveryRadiusKm, setDeliveryRadiusKm] = useState<string>('');
   const [openingHours, setOpeningHours] = useState<BranchOpeningHours>(
     createDefaultOpeningHours()
   );
@@ -200,6 +206,9 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
     setName('');
     setAddress('');
     setPhone('');
+    setLatitude(null);
+    setLongitude(null);
+    setDeliveryRadiusKm('');
     setOpeningHours(createDefaultOpeningHours());
   }
 
@@ -221,6 +230,9 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
     setName(branch.name);
     setAddress(branch.address ?? '');
     setPhone(branch.phone ?? '');
+    setLatitude(branch.latitude ?? null);
+    setLongitude(branch.longitude ?? null);
+    setDeliveryRadiusKm(branch.deliveryRadiusKm != null ? String(branch.deliveryRadiusKm) : '');
     setOpeningHours(normalizeOpeningHours(branch.openingHours));
     setSelectedBranchId(branch.id);
     setFormOpen(true);
@@ -252,6 +264,9 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
         name: trimmed,
         address: address.trim(),
         phone: phone.trim(),
+        latitude,
+        longitude,
+        deliveryRadiusKm: deliveryRadiusKm ? parseFloat(deliveryRadiusKm) : null,
         openingHours,
       });
       toast.success(t('dashboard.branches.created'));
@@ -283,6 +298,9 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
         name: trimmed,
         address: address.trim(),
         phone: phone.trim(),
+        latitude,
+        longitude,
+        deliveryRadiusKm: deliveryRadiusKm ? parseFloat(deliveryRadiusKm) : null,
         openingHours,
       });
       toast.success(t('dashboard.branches.updated'));
@@ -527,11 +545,31 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
                 placeholder={t('dashboard.branches.addressPlaceholder')}
                 value={address}
                 onChange={setAddress}
+                onCoordsChange={(coords) => {
+                  setLatitude(coords?.lat ?? null);
+                  setLongitude(coords?.lon ?? null);
+                }}
                 countryCode={regional.countryCode}
                 disabled={saving}
                 mapClassName="h-64 w-full sm:h-72"
               />
-            ) : null}            <div className="grid gap-2">
+            ) : null}
+            <div className="grid gap-2">
+              <Label htmlFor="branch-radius">
+                Delivery Radius (km)
+              </Label>
+              <Input
+                id="branch-radius"
+                type="number"
+                min={0}
+                step={0.1}
+                placeholder="e.g. 5.5"
+                value={deliveryRadiusKm}
+                onChange={(e) => setDeliveryRadiusKm(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Maximum distance for delivery orders.</p>
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="branch-phone">
                 {t('dashboard.branches.phonePlaceholder')}
               </Label>

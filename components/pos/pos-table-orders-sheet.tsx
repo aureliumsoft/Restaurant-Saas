@@ -45,6 +45,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  useCardPaymentFlow,
+  CardPaymentDialogs,
+} from '@/components/payments/card-payment-flow';
 
 type Props = {
   open: boolean;
@@ -156,6 +160,12 @@ export function PosTableOrdersSheet({
 
   const anyBusy =
     busyOrderId != null || paying || sendingToKitchen || cancellingOrder;
+
+  const cardPayment = useCardPaymentFlow({
+    amount: payCard?.totalDue ?? 0,
+    orderIdPrefix: 'POS-TBL',
+    formatMoney,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -417,6 +427,7 @@ export function PosTableOrdersSheet({
     setPayMethod('cash');
     setPaidInput('');
     setPaidKeyboardOpen(false);
+    cardPayment.resetCardPayment();
   };
 
   const payChange =
@@ -456,6 +467,14 @@ export function PosTableOrdersSheet({
     }
     setPaying(true);
     const tableId = payCard.diningTableId;
+
+    if (payMethod === 'card') {
+      if (cardPayment.cardPaymentStatus !== 'success') {
+        toast.warn('Please complete the card payment first.');
+        return;
+      }
+    }
+
     try {
       const res = await axios.post<{
         data: {
@@ -477,6 +496,7 @@ export function PosTableOrdersSheet({
       setPayMethod('cash');
       setPaidInput('');
       setPaidKeyboardOpen(false);
+      cardPayment.resetCardPayment();
       toast.success(
         payMethod === 'card'
           ? `Table ${payCard.tableLabel} · ${ticketCount} ticket${ticketCount === 1 ? '' : 's'} paid by card`
@@ -1025,9 +1045,60 @@ export function PosTableOrdersSheet({
                   ) : null}
                 </>
               ) : (
-                <div className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                  Charge {formatMoney(payCard.totalDue)} on the card terminal /
-                  card machine, then complete payment.
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    className={cn(
+                      'h-11 w-full gap-2 rounded-xl',
+                      cardPayment.cardPaymentStatus === 'success' &&
+                        'bg-emerald-600 hover:bg-emerald-600/90',
+                      (cardPayment.cardPaymentStatus === 'error' ||
+                        cardPayment.cardPaymentStatus === 'cancelled') &&
+                        'bg-destructive hover:bg-destructive/90'
+                    )}
+                    disabled={
+                      cardPayment.cardPaymentStatus === 'processing' ||
+                      cardPayment.cardPaymentStatus === 'success'
+                    }
+                    onClick={() => void cardPayment.handleCardPayClick()}
+                  >
+                    {cardPayment.cardPaymentStatus === 'success' ? (
+                      <>
+                        <Check className="h-4 w-4" />
+                        Paid
+                      </>
+                    ) : cardPayment.cardPaymentStatus === 'error' ||
+                      cardPayment.cardPaymentStatus === 'cancelled' ? (
+                      <>
+                        <X className="h-4 w-4" />
+                        Pay again
+                      </>
+                    ) : cardPayment.cardPaymentStatus === 'processing' ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-4 w-4" />
+                        Pay {formatMoney(payCard.totalDue)}
+                      </>
+                    )}
+                  </Button>
+                  <div className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                    {cardPayment.isCardPaymentComplete ? (
+                      <span className="text-emerald-700 dark:text-emerald-400">
+                        Card paid — please complete payment below.
+                      </span>
+                    ) : cardPayment.cardPaymentStatus === 'error' ||
+                      cardPayment.cardPaymentStatus === 'cancelled' ? (
+                      <span className="text-destructive">
+                        Terminal payment failed or was canceled.
+                      </span>
+                    ) : (
+                      `Click above to send ${formatMoney(payCard.totalDue)} to the card terminal.`
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1047,7 +1118,8 @@ export function PosTableOrdersSheet({
                 paying ||
                 !payCard ||
                 (payMethod === 'cash' &&
-                  (Number(paidInput) || 0) + 1e-9 < (payCard?.totalDue ?? 0))
+                  (Number(paidInput) || 0) + 1e-9 < (payCard?.totalDue ?? 0)) ||
+                (payMethod === 'card' && !cardPayment.isCardPaymentComplete)
               }
               onClick={() => void handlePay()}
             >
@@ -1063,6 +1135,12 @@ export function PosTableOrdersSheet({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <CardPaymentDialogs
+        {...cardPayment}
+        amount={payCard?.totalDue ?? 0}
+        formatMoney={formatMoney}
+        onCancel={cardPayment.handleCardPaymentCancel}
+      />
     </>
   );
 }

@@ -633,7 +633,11 @@ export default function CheckoutPageClient({
                       <div className="flex justify-between gap-3">
                         <span className="text-[#64748b]">{t('deliveryAddress')}:</span>
                         <span className="text-right font-semibold text-[#0f172a]">
-                          {orderInfo.address || 'N/A'}
+                          {[
+                              orderInfo.apartment?.trim() && `Apt: ${orderInfo.apartment.trim()}`,
+                              orderInfo.gateCode?.trim() && `Gate: ${orderInfo.gateCode.trim()}`,
+                              orderInfo.address?.trim()
+                            ].filter(Boolean).join(', ') || 'N/A'}
                         </span>
                       </div>
                       <div className="flex justify-between gap-3">

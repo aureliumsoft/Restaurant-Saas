@@ -382,6 +382,9 @@ model Branch {
   name                String
   address             String?
   phone               String?
+  latitude            Float?
+  longitude           Float?
+  deliveryRadiusKm    Float?
   openingHours        Json?    @default("[]")
   /// Guest order time-slot length in minutes (15 | 30 | 60).
   slotDurationMinutes Int      @default(30)

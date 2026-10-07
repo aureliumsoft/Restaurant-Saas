@@ -232,7 +232,8 @@ export function OrderMenuHeader({
   );
 
   return (
-    <header
+    <>
+      <header
       className={cn(
         'fixed inset-x-0 top-0 z-50 bg-primary text-primary-foreground',
         className
@@ -299,7 +300,13 @@ export function OrderMenuHeader({
         </div>
       </div>
 
-      <div className="border-t border-white/20 bg-primary">
+      </header>
+
+      <div
+        className="bg-primary"
+        style={{ marginTop: ORDER_TOP_BAR_HEIGHT_PX }}
+      >
+        <div className="border-t border-white/20">
         <div
           className="mx-auto flex w-full flex-row items-stretch divide-x divide-white/25 px-4 sm:px-6"
           style={{
@@ -372,6 +379,7 @@ export function OrderMenuHeader({
           </div>
         </div>
       </div>
+      </div>
 
       <AlertDialog open={methodChangeOpen} onOpenChange={setMethodChangeOpen}>
         <AlertDialogContent className="max-w-[min(100vw-2rem,400px)] gap-0 rounded-2xl border-0 p-6 shadow-xl">
@@ -417,7 +425,7 @@ export function OrderMenuHeader({
         locationTitle={branchLabel}
         address={storeAddress?.trim() || ''}
       />
-    </header>
+    </>
   );
 }
 

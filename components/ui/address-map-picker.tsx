@@ -40,6 +40,9 @@ export type AddressMapPickerProps = {
   placeholder?: string;
   className?: string;
   mapClassName?: string;
+  circleRadiusKm?: number | null;
+  circleCenter?: MapCoords | null;
+  onCoordsChange?: (coords: MapCoords | null) => void;
 };
 
 export function AddressMapPicker({
@@ -52,6 +55,9 @@ export function AddressMapPicker({
   placeholder,
   className,
   mapClassName,
+  circleRadiusKm,
+  circleCenter,
+  onCoordsChange,
 }: AddressMapPickerProps) {
   const { t } = useTranslation();
   const fallbackCenter = useMemo(
@@ -82,6 +88,7 @@ export function AddressMapPicker({
     const trimmed = value.trim();
     if (!trimmed) {
       setMarker(null);
+      onCoordsChange?.(null);
       lastResolvedAddress.current = '';
       return;
     }
@@ -104,6 +111,7 @@ export function AddressMapPicker({
           if (!hit) return;
           lastResolvedAddress.current = trimmed;
           setMarker({ lat: hit.lat, lon: hit.lon });
+          onCoordsChange?.({ lat: hit.lat, lon: hit.lon });
           setCenter({ lat: hit.lat, lon: hit.lon });
           setZoom(16);
         } catch {
@@ -131,11 +139,13 @@ export function AddressMapPicker({
       skipNextGeocode.current = true;
       lastResolvedAddress.current = labelText;
       onChange(labelText);
+      onCoordsChange?.(coords);
     } catch {
       const fallback = formatCoordsFallback(coords);
       skipNextGeocode.current = true;
       lastResolvedAddress.current = fallback;
       onChange(fallback);
+      onCoordsChange?.(coords);
     } finally {
       setResolving(false);
     }
@@ -195,6 +205,8 @@ export function AddressMapPicker({
             center={center}
             marker={marker}
             zoom={zoom}
+            circleRadiusKm={circleRadiusKm}
+            circleCenter={circleCenter}
             onPick={(coords) => {
               if (disabled) return;
               void applyCoords(coords);

@@ -265,6 +265,9 @@ export function fakeBranch() {
     name: faker.person.fullName(),
     address: undefined,
     phone: undefined,
+    latitude: undefined,
+    longitude: undefined,
+    deliveryRadiusKm: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -275,6 +278,9 @@ export function fakeBranchComplete() {
     name: faker.person.fullName(),
     address: undefined,
     phone: undefined,
+    latitude: undefined,
+    longitude: undefined,
+    deliveryRadiusKm: undefined,
     openingHours: [],
     slotDurationMinutes: 30,
     tableFloorRows: 4,

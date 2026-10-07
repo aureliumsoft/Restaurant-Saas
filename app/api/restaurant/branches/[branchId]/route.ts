@@ -18,6 +18,9 @@ const updateBranchSchema = z.object({
   name: z.string().trim().min(1).max(120),
   address: z.string().trim().max(500).optional().or(z.literal('')),
   phone: z.string().trim().max(60).optional().or(z.literal('')),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  deliveryRadiusKm: z.number().min(0).max(100).optional().nullable(),
   openingHours: z
     .array(openingHourSchema)
     .optional()
@@ -54,6 +57,9 @@ export async function PATCH(
         name: parsed.data.name.trim(),
         address: parsed.data.address?.trim() || null,
         phone: parsed.data.phone?.trim() || null,
+        latitude: parsed.data.latitude ?? null,
+        longitude: parsed.data.longitude ?? null,
+        deliveryRadiusKm: parsed.data.deliveryRadiusKm ?? null,
         openingHours: parsed.data.openingHours as Prisma.InputJsonValue,
       },
     });
@@ -69,6 +75,9 @@ export async function PATCH(
         name: true,
         address: true,
         phone: true,
+        latitude: true,
+        longitude: true,
+        deliveryRadiusKm: true,
         openingHours: true,
         createdAt: true,
       },

@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { cancelOrderPayments } from '@/lib/order-payment';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
+import { releaseDiningTableIfIdle } from '@/lib/dining-table-status';
 
 const bodySchema = z.object({
   orderIds: z.array(z.string().uuid()).min(1).max(50).optional(),
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
           },
         },
       },
-      select: { id: true, branchId: true },
+      select: { id: true, branchId: true, diningTableId: true },
     });
 
     if (orders.length === 0) {
@@ -73,7 +74,9 @@ export async function POST(req: NextRequest) {
     }
 
     await db.$transaction(async (tx) => {
+      const tableIds = new Set<string>();
       for (const order of orders) {
+        if (order.diningTableId) tableIds.add(order.diningTableId);
         await tx.order.update({
           where: { id: order.id },
           data: { status: 'canceled' },
@@ -86,6 +89,9 @@ export async function POST(req: NextRequest) {
           },
           data: { status: 'canceled' },
         });
+      }
+      for (const tId of tableIds) {
+        await releaseDiningTableIfIdle(tx, tId);
       }
     });
 

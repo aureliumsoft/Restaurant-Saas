@@ -5,9 +5,11 @@ import {
   icon,
   map as createMap,
   marker as createMarker,
+  circle as createCircle,
   tileLayer,
   type Map as LeafletMap,
   type Marker as LeafletMarker,
+  type Circle as LeafletCircle,
 } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -30,6 +32,8 @@ export type AddressMapPickerMapProps = {
   zoom?: number;
   onPick: (coords: MapCoords) => void;
   className?: string;
+  circleRadiusKm?: number | null;
+  circleCenter?: MapCoords | null;
 };
 
 /**
@@ -43,10 +47,13 @@ export default function AddressMapPickerMap({
   zoom = 14,
   onPick,
   className,
+  circleRadiusKm,
+  circleCenter,
 }: AddressMapPickerMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markerRef = useRef<LeafletMarker | null>(null);
+  const circleRef = useRef<LeafletCircle | null>(null);
   const onPickRef = useRef(onPick);
   const initialRef = useRef({ center, zoom });
 
@@ -87,6 +94,7 @@ export default function AddressMapPickerMap({
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
+      circleRef.current = null;
     };
   }, []);
 
@@ -121,6 +129,33 @@ export default function AddressMapPickerMap({
 
     markerRef.current.setLatLng([marker.lat, marker.lon]);
   }, [marker?.lat, marker?.lon]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!circleRadiusKm || !circleCenter) {
+      circleRef.current?.remove();
+      circleRef.current = null;
+      return;
+    }
+
+    const radiusMeters = circleRadiusKm * 1000;
+
+    if (!circleRef.current) {
+      circleRef.current = createCircle([circleCenter.lat, circleCenter.lon], {
+        radius: radiusMeters,
+        color: 'var(--primary)',
+        fillColor: 'var(--primary)',
+        fillOpacity: 0.1,
+        weight: 2,
+      }).addTo(map);
+      return;
+    }
+
+    circleRef.current.setLatLng([circleCenter.lat, circleCenter.lon]);
+    circleRef.current.setRadius(radiusMeters);
+  }, [circleRadiusKm, circleCenter?.lat, circleCenter?.lon]);
 
   useEffect(() => {
     const map = mapRef.current;

@@ -44,6 +44,8 @@ export function WebAppStorefront({
   const [mode, setMode] = useState<'delivery' | 'takeaway'>('delivery');
   const [deliveryEnabled, setDeliveryEnabled] = useState(true);
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
   const [apartmentDoorNumber, setApartmentDoorNumber] = useState('');
   const [gateCode, setGateCode] = useState('');
   const [addressName, setAddressName] = useState('');
@@ -211,6 +213,10 @@ export function WebAppStorefront({
                     setMode={setMode}
                     deliveryAddress={deliveryAddress}
                     setDeliveryAddress={setDeliveryAddress}
+                    latitude={latitude}
+                    setLatitude={setLatitude}
+                    longitude={longitude}
+                    setLongitude={setLongitude}
                     apartmentDoorNumber={apartmentDoorNumber}
                     setApartmentDoorNumber={setApartmentDoorNumber}
                     gateCode={gateCode}

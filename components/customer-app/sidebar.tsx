@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { AddressMapPicker } from '@/components/ui/address-map-picker';
 import { Input } from '@/components/ui/input';
 import {
   IconBike,
@@ -34,6 +35,8 @@ import {
   type BranchOpeningHours,
 } from '@/lib/order-time-slots';
 import type { OrderInfo } from '@/components/order/order-types';
+import { Label } from '@/components/ui/label';
+import { computeHaversineDistanceKm } from '@/lib/geo/distance';
 
 function splitAddressLines(address: string): [string, string] {
   const parts = address
@@ -86,6 +89,9 @@ type Store = {
   address: string;
   phone?: string;
   collectionFrom?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  deliveryRadiusKm?: number | null;
   openingHours?: BranchOpeningHours | null;
 };
 
@@ -94,6 +100,10 @@ type SidebarProps = {
   setMode: (mode: 'delivery' | 'takeaway') => void;
   deliveryAddress: string;
   setDeliveryAddress: (value: string) => void;
+  latitude?: number | null;
+  setLatitude?: (val: number | null) => void;
+  longitude?: number | null;
+  setLongitude?: (val: number | null) => void;
   apartmentDoorNumber: string;
   setApartmentDoorNumber: (value: string) => void;
   gateCode: string;
@@ -115,6 +125,10 @@ export function Sidebar({
   setMode,
   deliveryAddress,
   setDeliveryAddress,
+  latitude,
+  setLatitude,
+  longitude,
+  setLongitude,
   apartmentDoorNumber,
   setApartmentDoorNumber,
   gateCode,
@@ -164,11 +178,28 @@ export function Sidebar({
     void createOrder(storeId);
   };
 
+  const selectedStore = activeStores?.find((s) => s.id === selectedStoreId);
+
   const canProceedDelivery =
     Boolean(selectedStoreId) &&
     deliveryAddress.trim().length > 0 &&
     addressName.trim().length > 0 &&
-    customerPhone.trim().length > 0;
+    customerPhone.trim().length > 0 &&
+    (latitude != null || !selectedStore?.deliveryRadiusKm);
+
+  const outOfRange =
+    selectedStore?.deliveryRadiusKm != null &&
+    selectedStore.latitude != null &&
+    selectedStore.longitude != null &&
+    latitude != null &&
+    longitude != null
+      ? computeHaversineDistanceKm(
+          selectedStore.latitude,
+          selectedStore.longitude,
+          latitude,
+          longitude
+        ) > selectedStore.deliveryRadiusKm
+      : false;
 
   useEffect(() => {
     if (!restaurantSlug?.trim()) return;
@@ -200,12 +231,18 @@ export function Sidebar({
               name?: unknown;
               address?: unknown;
               phone?: unknown;
+              latitude?: number | null;
+              longitude?: number | null;
+              deliveryRadiusKm?: number | null;
               openingHours?: BranchOpeningHours | null;
             }) => ({
               id: String(b.id),
               name: String(b.name || 'Branch'),
               address: String(b.address || 'No address'),
               phone: b.phone ? String(b.phone) : undefined,
+              latitude: b.latitude,
+              longitude: b.longitude,
+              deliveryRadiusKm: b.deliveryRadiusKm,
               openingHours: Array.isArray(b.openingHours) ? b.openingHours : null,
             })
           )
@@ -232,8 +269,8 @@ export function Sidebar({
         const json = await res.json().catch(() => ({}));
         const urls = Array.isArray(json?.data?.menuBannerUrls)
           ? (json.data.menuBannerUrls as string[]).filter(
-              (u) => typeof u === 'string' && u.trim() !== ''
-            )
+            (u) => typeof u === 'string' && u.trim() !== ''
+          )
           : [];
         if (!cancelled) {
           const name =
@@ -279,7 +316,6 @@ export function Sidebar({
       (typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID().replace(/-/g, '')
         : `id${Date.now().toString(16)}`);
-    const selectedStore = activeStores?.find((s) => s.id === storeId);
 
     const orderType = mode === 'delivery' ? 'delivery' : 'pickUp';
     const orderInfo: OrderInfo = {
@@ -288,11 +324,13 @@ export function Sidebar({
       storeName: selectedStore?.name || '',
       storeAddress: selectedStore?.address || '',
       address: deliveryAddress.trim(),
-      apartment: '',
-      gateCode: '',
+      apartment: apartmentDoorNumber.trim(),
+      gateCode: gateCode.trim(),
       addressName:
         mode === 'takeaway' ? WEB_CUSTOMER_TAKEAWAY_NAME : addressName,
       customerPhone: mode === 'takeaway' ? '' : customerPhone,
+      latitude: mode === 'delivery' ? latitude : undefined,
+      longitude: mode === 'delivery' ? longitude : undefined,
       ...(restaurantSlug?.trim() ? { restaurantSlug: restaurantSlug.trim() } : {}),
       ...(restaurantName ? { restaurantName } : {}),
     };
@@ -384,9 +422,8 @@ export function Sidebar({
             <button
               key={idx}
               type="button"
-              className={`h-1.5 rounded-full transition-all ${
-                idx === bannerIndex ? 'w-5 bg-primary' : 'w-1.5 bg-[#cbd5e1]'
-              }`}
+              className={`h-1.5 rounded-full transition-all ${idx === bannerIndex ? 'w-5 bg-primary' : 'w-1.5 bg-[#cbd5e1]'
+                }`}
               onClick={() => setBannerIndex(idx)}
               aria-label={`Go to promotion ${idx + 1}`}
             />
@@ -404,11 +441,10 @@ export function Sidebar({
           setMode('delivery');
           setDeliveryInfoOpen(false);
         }}
-        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition ${
-          mode === 'delivery'
+        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition ${mode === 'delivery'
             ? 'bg-primary text-primary-foreground shadow-sm'
             : 'text-[#64748b] hover:bg-white'
-        }`}
+          }`}
       >
         <IconTruck className="h-5 w-5 shrink-0" />
         {t('delivery')}
@@ -419,11 +455,10 @@ export function Sidebar({
           setMode('takeaway');
           setDeliveryInfoOpen(false);
         }}
-        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition ${
-          mode === 'takeaway'
+        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition ${mode === 'takeaway'
             ? 'bg-primary text-primary-foreground shadow-sm'
             : 'text-[#64748b] hover:bg-white'
-        }`}
+          }`}
       >
         <IconShoppingBag className="h-5 w-5 shrink-0" />
         {t('takeAwayLabel')}
@@ -437,7 +472,7 @@ export function Sidebar({
         {t('selectBranch')}
       </p>
       {!selectedStoreId ? (
-            <div className="flex items-center gap-2 rounded-xl border border-[#ececf0] bg-[#f8fafc] px-3 py-2 text-sm text-[#8e8e9a]">
+        <div className="flex items-center gap-2 rounded-xl border border-[#ececf0] bg-[#f8fafc] px-3 py-2 text-sm text-[#8e8e9a]">
           <span className="h-2 w-2 shrink-0 rounded-full bg-slate-400" />
           <span>{t('selectBranchToContinue')}</span>
         </div>
@@ -464,34 +499,32 @@ export function Sidebar({
             t
           );
           return (
-          <button
-            key={store.id}
-            type="button"
-            onClick={() =>
-              mode === 'delivery'
-                ? selectDeliveryBranch(store.id)
-                : setSelectedStoreId(store.id)
-            }
-            className={`flex w-full items-start justify-between rounded-xl border px-3 py-3 text-left transition ${
-              selectedStoreId === store.id
-                ? 'border-primary bg-primary/5'
-                : 'border-[#e5e7eb] bg-white hover:border-primary/40'
-            }`}
-          >
-            <div className="min-w-0 flex-1 pr-2">
-              <p className="text-sm font-semibold text-[#0f172a]">{store.name}</p>
-              <p className="mt-0.5 text-xs text-[#64748b]">{store.address}</p>
-              <div className="mt-2 flex items-center gap-2 text-xs text-[#64748b]">
-                <span
-                  className={`h-2 w-2 shrink-0 rounded-full ${
-                    openNow ? 'bg-emerald-500' : 'bg-rose-500'
-                  }`}
-                />
-                <span>{statusLabel}</span>
+            <button
+              key={store.id}
+              type="button"
+              onClick={() =>
+                mode === 'delivery'
+                  ? selectDeliveryBranch(store.id)
+                  : setSelectedStoreId(store.id)
+              }
+              className={`flex w-full items-start justify-between rounded-xl border px-3 py-3 text-left transition ${selectedStoreId === store.id
+                  ? 'border-primary bg-primary/5'
+                  : 'border-[#e5e7eb] bg-white hover:border-primary/40'
+                }`}
+            >
+              <div className="min-w-0 flex-1 pr-2">
+                <p className="text-sm font-semibold text-[#0f172a]">{store.name}</p>
+                <p className="mt-0.5 text-xs text-[#64748b]">{store.address}</p>
+                <div className="mt-2 flex items-center gap-2 text-xs text-[#64748b]">
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${openNow ? 'bg-emerald-500' : 'bg-rose-500'
+                      }`}
+                  />
+                  <span>{statusLabel}</span>
+                </div>
               </div>
-            </div>
-            <IconChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[#94a3b8]" />
-          </button>
+              <IconChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[#94a3b8]" />
+            </button>
           );
         })}
       </div>
@@ -507,39 +540,108 @@ export function Sidebar({
             {t('deliveryInfoHint')}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <Input
-            placeholder={t('yourName')}
-            value={addressName}
-            onChange={(event) => setAddressName(event.target.value)}
-            className="rounded-xl border-[#e2e8f0]"
-            autoComplete="name"
-          />
-          <Input
-            type="tel"
-            placeholder={t('phoneNumber')}
-            value={customerPhone}
-            onChange={(event) => {
-              const value = event.target.value.replace(/\D/g, '');
-              setCustomerPhone(value);
-            }}
-            className="rounded-xl border-[#e2e8f0]"
-            autoComplete="tel"
-          />
-          <Input
-            placeholder={t('yourAddressRequired')}
-            value={deliveryAddress}
-            onChange={(event) => {
-              setDeliveryAddress(event.target.value);
-              if (apartmentDoorNumber) setApartmentDoorNumber('');
-            }}
-            className={
-              deliveryAddress.trim()
-                ? 'rounded-xl border-[#e2e8f0]'
-                : 'rounded-xl border-primary/70 ring-1 ring-primary/30'
-            }
-            autoComplete="street-address"
-          />
+        <div className="flex-col space-y-3">
+          <div>
+
+            <Label
+              htmlFor="addressName"
+              className="text-sm font-medium text-[#0f172a]"
+            >
+              {t('yourName')}
+            </Label>
+            <Input
+              placeholder={t('yourName')}
+              name='addressName'
+              value={addressName}
+              onChange={(event) => setAddressName(event.target.value)}
+              className="rounded-xl border-[#e2e8f0]"
+              autoComplete="name"
+            />
+          </div>
+
+          <div>
+
+            <Label
+              htmlFor="customerPhone"
+              className="text-sm font-medium text-[#0f172a] mt-6"
+            >
+              {t('phoneNumber')}
+            </Label>
+            <Input
+              type="tel"
+              placeholder={t('phoneNumber')}
+              id='customerPhone'
+              name='customerPhone'
+              value={customerPhone}
+              onChange={(event) => {
+                const value = event.target.value.replace(/\D/g, '');
+                setCustomerPhone(value);
+              }}
+              className="rounded-xl border-[#e2e8f0]"
+              autoComplete="tel"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Label
+              htmlFor="apartmentDoorNumber"
+              className="text-sm font-medium text-[#0f172a]"
+            >
+              {t('pos.apartment', { defaultValue: 'Apartment / Suite' })}
+            </Label>
+            <Label
+              htmlFor="gateCode"
+              className="text-sm font-medium text-[#0f172a]"
+            >
+              {t('pos.doorNumber', { defaultValue: 'Door / Gate' })}
+            </Label>
+            <Input
+              placeholder={t('pos.apartment', { defaultValue: 'Apartment / Suite' })}
+              name='apartmentDoorNumber'
+              id='apartmentDoorNumber'
+              value={apartmentDoorNumber}
+              onChange={(event) => setApartmentDoorNumber(event.target.value)}
+              className="rounded-xl border-[#e2e8f0]"
+            />
+            <Input
+              placeholder={t('pos.doorNumber', { defaultValue: 'Door / Gate' })}
+              name='gateCode'
+              id='gateCode'
+              value={gateCode}
+              onChange={(event) => setGateCode(event.target.value)}
+              className="rounded-xl border-[#e2e8f0]"
+            />
+          </div>
+          <div>
+
+            <AddressMapPicker
+              id="deliveryAddress"
+              label={t('yourAddressRequired', { defaultValue: 'Complete Address' })}
+              placeholder={t('yourAddressRequired', { defaultValue: 'Complete Address' })}
+              value={deliveryAddress}
+              onChange={setDeliveryAddress}
+              onCoordsChange={(coords) => {
+                setLatitude?.(coords?.lat ?? null);
+                setLongitude?.(coords?.lon ?? null);
+              }}
+              countryCode={regional.countryCode}
+              circleRadiusKm={selectedStore?.deliveryRadiusKm}
+              circleCenter={
+                selectedStore?.latitude != null && selectedStore?.longitude != null
+                  ? { lat: selectedStore.latitude, lon: selectedStore.longitude }
+                  : null
+              }
+              className={
+                deliveryAddress.trim()
+                  ? ''
+                  : '[&_input]:border-primary/70 [&_input]:ring-1 [&_input]:ring-primary/30'
+              }
+            />
+          </div>
+          {outOfRange ? (
+            <p className="text-xs text-rose-500 font-medium">
+              Address is outside the delivery radius ({selectedStore?.deliveryRadiusKm} km).
+            </p>
+          ) : null}
           {!canProceedDelivery ? (
             <p className="text-xs text-[#64748b]">
               {t('deliveryProceedRequired')}
@@ -550,7 +652,7 @@ export function Sidebar({
           <Button
             className="w-full gap-2 bg-primary text-primary-foreground hover:brightness-95"
             onClick={() => void createOrder()}
-            disabled={!canProceedDelivery || isStartingOrder}
+            disabled={!canProceedDelivery || isStartingOrder || outOfRange}
           >
             {isStartingOrder ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -571,217 +673,216 @@ export function Sidebar({
         className={cn('flex h-full min-h-0 flex-col bg-white', className)}
       >
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 pb-4 pt-4 sm:space-y-6 sm:px-5 sm:pt-5 lg:px-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <p className="text-[1.65rem] font-bold leading-tight text-primary">
-          {customerName
-            ? `${t('storefrontHi')} ${customerName}`
-            : t('storefrontHi')}
-        </p>
+          <p className="text-[1.65rem] font-bold leading-tight text-primary">
+            {customerName
+              ? `${t('storefrontHi')} ${customerName}`
+              : t('storefrontHi')}
+          </p>
 
-        {menuBanners.length > 0 ? (
-          <div className="relative">
-            <div className="overflow-hidden">
-              <div
-                className="flex gap-3 transition-transform duration-300 ease-out"
-                style={{
-                  transform: `translateX(calc(-${bannerIndex} * (88% + 0.75rem)))`,
+          {menuBanners.length > 0 ? (
+            <div className="relative">
+              <div className="overflow-hidden">
+                <div
+                  className="flex gap-3 transition-transform duration-300 ease-out"
+                  style={{
+                    transform: `translateX(calc(-${bannerIndex} * (88% + 0.75rem)))`,
+                  }}
+                >
+                  {menuBanners.map((url, idx) => (
+                    <div key={url + idx} className="w-[88%] shrink-0">
+                      <img
+                        src={url}
+                        alt={`Promotion ${idx + 1}`}
+                        className="h-[168px] w-full rounded-2xl object-cover sm:h-48"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {menuBanners.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    className="absolute left-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105"
+                    onClick={() =>
+                      setBannerIndex((prev) =>
+                        prev === 0 ? menuBanners.length - 1 : prev - 1
+                      )
+                    }
+                    aria-label="Previous promotion"
+                  >
+                    <IconChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="absolute right-6 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105"
+                    onClick={() =>
+                      setBannerIndex((prev) => (prev + 1) % menuBanners.length)
+                    }
+                    aria-label="Next promotion"
+                  >
+                    <IconChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div
+            className={cn(
+              'grid gap-3',
+              deliveryEnabled ? 'grid-cols-2' : 'grid-cols-1'
+            )}
+          >
+            {deliveryEnabled ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('delivery');
+                  setDeliveryInfoOpen(false);
                 }}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-2.5 rounded-2xl px-3 py-7 transition-colors sm:gap-3 sm:py-8',
+                  mode === 'delivery'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-[#f4f4f6] text-primary hover:bg-[#ececf0]'
+                )}
               >
-                {menuBanners.map((url, idx) => (
-                  <div key={url + idx} className="w-[88%] shrink-0">
-                    <img
-                      src={url}
-                      alt={`Promotion ${idx + 1}`}
-                      className="h-[168px] w-full rounded-2xl object-cover sm:h-48"
-                    />
-                  </div>
-                ))}
+                <IconBike className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" stroke={1.5} />
+                <span className="text-sm font-semibold">{t('delivery')}</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setMode('takeaway');
+                setDeliveryInfoOpen(false);
+              }}
+              className={cn(
+                'flex flex-col items-center justify-center gap-2.5 rounded-2xl px-3 py-7 transition-colors sm:gap-3 sm:py-8',
+                mode === 'takeaway'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-[#f4f4f6] text-primary hover:bg-[#ececf0]'
+              )}
+            >
+              <IconShoppingBag className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" stroke={1.5} />
+              <span className="text-sm font-semibold">{t('takeAwayLabel')}</span>
+            </button>
+          </div>
+
+          {mode === 'delivery' ? (
+            <div className="space-y-3">
+              <p className="text-sm font-bold leading-snug text-primary">
+                {t('storefrontDeliveryAddressHint')}
+              </p>
+
+              <div className="flex overflow-hidden rounded-2xl bg-[#f4f4f6]">
+                <input
+                  type="text"
+                  placeholder={t('storefrontAddAddress')}
+                  value={deliveryAddress}
+                  onChange={(event) => setDeliveryAddress(event.target.value)}
+                  autoComplete="street-address"
+                  className="min-w-0 flex-1 border-0 bg-transparent px-4 py-3.5 text-sm text-[#1f1f2e] outline-none placeholder:text-[#9ca3af]"
+                />
+                <button
+                  type="button"
+                  className="flex w-14 shrink-0 items-center justify-center bg-primary text-primary-foreground transition hover:brightness-95 disabled:opacity-60"
+                  onClick={handleGeolocate}
+                  disabled={geoLoading}
+                  aria-label={t('storefrontGeolocate')}
+                >
+                  {geoLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <IconCrosshair className="h-5 w-5" stroke={1.75} />
+                  )}
+                </button>
               </div>
             </div>
-            {menuBanners.length > 1 ? (
-              <>
-                <button
-                  type="button"
-                  className="absolute left-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105"
-                  onClick={() =>
-                    setBannerIndex((prev) =>
-                      prev === 0 ? menuBanners.length - 1 : prev - 1
-                    )
-                  }
-                  aria-label="Previous promotion"
-                >
-                  <IconChevronLeft className="h-5 w-5" />
-                </button>
-                <button
-                  type="button"
-                  className="absolute right-6 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105"
-                  onClick={() =>
-                    setBannerIndex((prev) => (prev + 1) % menuBanners.length)
-                  }
-                  aria-label="Next promotion"
-                >
-                  <IconChevronRight className="h-5 w-5" />
-                </button>
-              </>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div
-          className={cn(
-            'grid gap-3',
-            deliveryEnabled ? 'grid-cols-2' : 'grid-cols-1'
-          )}
-        >
-          {deliveryEnabled ? (
-          <button
-            type="button"
-            onClick={() => {
-              setMode('delivery');
-              setDeliveryInfoOpen(false);
-            }}
-            className={cn(
-              'flex flex-col items-center justify-center gap-2.5 rounded-2xl px-3 py-7 transition-colors sm:gap-3 sm:py-8',
-              mode === 'delivery'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'bg-[#f4f4f6] text-primary hover:bg-[#ececf0]'
-            )}
-          >
-            <IconBike className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" stroke={1.5} />
-            <span className="text-sm font-semibold">{t('delivery')}</span>
-          </button>
           ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              setMode('takeaway');
-              setDeliveryInfoOpen(false);
-            }}
-            className={cn(
-              'flex flex-col items-center justify-center gap-2.5 rounded-2xl px-3 py-7 transition-colors sm:gap-3 sm:py-8',
-              mode === 'takeaway'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'bg-[#f4f4f6] text-primary hover:bg-[#ececf0]'
-            )}
-          >
-            <IconShoppingBag className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" stroke={1.5} />
-            <span className="text-sm font-semibold">{t('takeAwayLabel')}</span>
-          </button>
-        </div>
 
-        {mode === 'delivery' ? (
           <div className="space-y-3">
-            <p className="text-sm font-bold leading-snug text-primary">
-              {t('storefrontDeliveryAddressHint')}
-            </p>
+            {branchesLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : null}
+            {!branchesLoading && activeStores?.length === 0 ? (
+              <p className="py-4 text-center text-sm text-[#8e8e9a]">
+                {t('noBranchesTakeaway')}
+              </p>
+            ) : null}
+            {!branchesLoading && !selectedStoreId && (activeStores?.length ?? 0) > 0 ? (
+              <div className="flex items-center gap-2 rounded-2xl border border-[#ececf0] bg-[#f8fafc] px-4 py-3 text-sm text-[#8e8e9a]">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-slate-400" />
+                <span>{t('selectBranchToContinue')}</span>
+              </div>
+            ) : null}
+            {activeStores?.map((store) => {
+              const [line1, line2] = splitAddressLines(store.address);
+              const selected = selectedStoreId === store.id;
+              const openNow = isBranchOpenNow(
+                store.openingHours,
+                new Date(),
+                branchTimeZone
+              );
+              const methodLabel =
+                mode === 'delivery' ? t('delivery') : t('takeAwayLabel');
+              const statusLabel = branchHoursStatusLabel(
+                store.openingHours,
+                branchTimeZone,
+                methodLabel,
+                t
+              );
 
-            <div className="flex overflow-hidden rounded-2xl bg-[#f4f4f6]">
-              <input
-                type="text"
-                placeholder={t('storefrontAddAddress')}
-                value={deliveryAddress}
-                onChange={(event) => setDeliveryAddress(event.target.value)}
-                autoComplete="street-address"
-                className="min-w-0 flex-1 border-0 bg-transparent px-4 py-3.5 text-sm text-[#1f1f2e] outline-none placeholder:text-[#9ca3af]"
-              />
-              <button
-                type="button"
-                className="flex w-14 shrink-0 items-center justify-center bg-primary text-primary-foreground transition hover:brightness-95 disabled:opacity-60"
-                onClick={handleGeolocate}
-                disabled={geoLoading}
-                aria-label={t('storefrontGeolocate')}
-              >
-                {geoLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <IconCrosshair className="h-5 w-5" stroke={1.75} />
-                )}
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="space-y-3">
-          {branchesLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          ) : null}
-          {!branchesLoading && activeStores?.length === 0 ? (
-            <p className="py-4 text-center text-sm text-[#8e8e9a]">
-              {t('noBranchesTakeaway')}
-            </p>
-          ) : null}
-          {!branchesLoading && !selectedStoreId && (activeStores?.length ?? 0) > 0 ? (
-            <div className="flex items-center gap-2 rounded-2xl border border-[#ececf0] bg-[#f8fafc] px-4 py-3 text-sm text-[#8e8e9a]">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-slate-400" />
-              <span>{t('selectBranchToContinue')}</span>
-            </div>
-          ) : null}
-          {activeStores?.map((store) => {
-            const [line1, line2] = splitAddressLines(store.address);
-            const selected = selectedStoreId === store.id;
-            const openNow = isBranchOpenNow(
-              store.openingHours,
-              new Date(),
-              branchTimeZone
-            );
-            const methodLabel =
-              mode === 'delivery' ? t('delivery') : t('takeAwayLabel');
-            const statusLabel = branchHoursStatusLabel(
-              store.openingHours,
-              branchTimeZone,
-              methodLabel,
-              t
-            );
-
-            return (
-              <button
-                key={store.id}
-                type="button"
-                onClick={() =>
-                  mode === 'delivery'
-                    ? selectDeliveryBranch(store.id)
-                    : selectTakeawayBranch(store.id)
-                }
-                disabled={isStartingOrder}
-                className={cn(
-                  'w-full rounded-2xl border bg-white p-4 text-left transition',
-                  selected
-                    ? 'border-primary shadow-[0_0_0_1px_var(--primary)]'
-                    : 'border-[#ececf0] hover:border-primary/30',
-                  isStartingOrder && 'opacity-70'
-                )}
-              >
-                <p className="text-base font-bold text-primary">{store.name}</p>
-                <p className="mt-2 text-sm leading-relaxed text-[#8e8e9a]">
-                  {line1}
-                </p>
-                {line2 ? (
-                  <p className="text-sm leading-relaxed text-[#8e8e9a]">{line2}</p>
-                ) : null}
-                <div className="mt-3 flex items-center gap-2 text-sm text-[#8e8e9a]">
-                  {selected && isStartingOrder && mode === 'takeaway' ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      <span className="font-medium text-primary">
-                        {t('processing')}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span
-                        className={`h-2 w-2 shrink-0 rounded-full ${
-                          openNow ? 'bg-emerald-500' : 'bg-rose-500'
-                        }`}
-                      />
-                      <span>{statusLabel}</span>
-                    </>
+              return (
+                <button
+                  key={store.id}
+                  type="button"
+                  onClick={() =>
+                    mode === 'delivery'
+                      ? selectDeliveryBranch(store.id)
+                      : selectTakeawayBranch(store.id)
+                  }
+                  disabled={isStartingOrder}
+                  className={cn(
+                    'w-full rounded-2xl border bg-white p-4 text-left transition',
+                    selected
+                      ? 'border-primary shadow-[0_0_0_1px_var(--primary)]'
+                      : 'border-[#ececf0] hover:border-primary/30',
+                    isStartingOrder && 'opacity-70'
                   )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                >
+                  <p className="text-base font-bold text-primary">{store.name}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-[#8e8e9a]">
+                    {line1}
+                  </p>
+                  {line2 ? (
+                    <p className="text-sm leading-relaxed text-[#8e8e9a]">{line2}</p>
+                  ) : null}
+                  <div className="mt-3 flex items-center gap-2 text-sm text-[#8e8e9a]">
+                    {selected && isStartingOrder && mode === 'takeaway' ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <span className="font-medium text-primary">
+                          {t('processing')}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span
+                          className={`h-2 w-2 shrink-0 rounded-full ${openNow ? 'bg-emerald-500' : 'bg-rose-500'
+                            }`}
+                        />
+                        <span>{statusLabel}</span>
+                      </>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
 
         </div>
 

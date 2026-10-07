@@ -469,7 +469,7 @@ function CategoryCard({
             )}
           </div>
 
-          <div className="mt-auto flex gap-2">
+          <div className="mt-auto flex flex-wrap gap-2">
             <Button
               variant={visible ? 'outline' : 'default'}
               className="flex-1"

@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
                 id: true,
                 name: true,
                 description: true,
+                imageUrl: true,
                 price: true,
                 salePrice: true,
               },
@@ -100,6 +101,7 @@ export async function GET(req: NextRequest) {
                 id: true,
                 name: true,
                 description: true,
+                imageUrl: true,
                 price: true,
                 salePrice: true,
               },
@@ -115,6 +117,7 @@ export async function GET(req: NextRequest) {
                         id: true,
                         name: true,
                         description: true,
+                        imageUrl: true,
                         price: true,
                         salePrice: true,
                       },
@@ -128,6 +131,7 @@ export async function GET(req: NextRequest) {
                     id: true,
                     name: true,
                     description: true,
+                    imageUrl: true,
                     price: true,
                     salePrice: true,
                   },
@@ -157,6 +161,7 @@ export async function GET(req: NextRequest) {
             id: string;
             name: string;
             description: string | null;
+            imageUrl: string | null;
             price: number;
             salePrice: number | null;
           }
@@ -168,7 +173,7 @@ export async function GET(req: NextRequest) {
         id: row.id,
         name: row.name,
         description: row.description,
-        imageUrl: null,
+        imageUrl: row.imageUrl,
         price: row.price,
         salePrice: row.salePrice,
       });

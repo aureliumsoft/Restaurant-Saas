@@ -63,6 +63,7 @@ import {
 import {
   ORDER_CATEGORY_BAR_HEIGHT_PX,
   ORDER_MENU_HEADER_HEIGHT_PX,
+  ORDER_TOP_BAR_HEIGHT_PX,
   ORDER_SIDEBAR_WIDTH_PX,
   ORDER_PAGE_MAX_WIDTH_PX,
   ORDER_TOP_OFFSET_PX,
@@ -574,7 +575,7 @@ function ProductCard({
           {displayName}
         </h3>
         {displayDescription ? (
-          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#8e8e9a]">
+          <p className="mt-1 line-clamp-3 text-xs leading-tight text-[#8e8e9a]">
             {displayDescription}
           </p>
         ) : (
@@ -1094,20 +1095,26 @@ export default function OrderPageClient({
   }, [products, selectedCategory, search]);
 
   const displayedCategories = useMemo(() => {
+    let result: CustomerMenuCategory[];
     if (selectedCategory === ALL_CATEGORY_ID) {
-      return categories.map((category) => ({
+      result = categories.map((category) => ({
         ...category,
         items: filteredProducts.filter((p) => p.categoryId === category.id),
       }));
+    } else {
+      result = categories
+        .filter((category) => category.id === selectedCategory)
+        .map((category) => ({
+          ...category,
+          items: filteredProducts,
+        }));
     }
 
-    return categories
-      .filter((category) => category.id === selectedCategory)
-      .map((category) => ({
-        ...category,
-        items: filteredProducts,
-      }));
-  }, [categories, filteredProducts, selectedCategory]);
+    if (search.trim()) {
+      return result.filter((category) => category.items.length > 0);
+    }
+    return result;
+  }, [categories, filteredProducts, selectedCategory, search]);
 
   const total = useMemo(
     () => cart.reduce((sum, line) => sum + lineTotal(line), 0),
@@ -1638,9 +1645,9 @@ export default function OrderPageClient({
       />
 
       <div
-        className="fixed inset-x-0 z-40 border-b border-[#ececf0] bg-white"
+        className="sticky inset-x-0 z-40 border-b border-[#ececf0] bg-white"
         style={{
-          top: ORDER_MENU_HEADER_HEIGHT_PX,
+          top: ORDER_TOP_BAR_HEIGHT_PX,
           height: ORDER_CATEGORY_BAR_HEIGHT_PX,
         }}
       >
@@ -1654,8 +1661,8 @@ export default function OrderPageClient({
 
       {searchOpen ? (
         <div
-          className="fixed inset-x-0 z-30 flex justify-center bg-white border-b border-[#ececf0]"
-          style={{ top: ORDER_TOP_OFFSET_PX }}
+          className="sticky inset-x-0 z-30 flex justify-center bg-white border-b border-[#ececf0]"
+          style={{ top: ORDER_TOP_BAR_HEIGHT_PX + ORDER_CATEGORY_BAR_HEIGHT_PX }}
         >
           <div
             className="mx-auto w-full px-4 py-2 sm:px-6"
@@ -1691,9 +1698,6 @@ export default function OrderPageClient({
         className="mx-auto flex min-h-screen w-full flex-col lg:flex-row"
         style={{
           maxWidth: ORDER_PAGE_MAX_WIDTH_PX,
-          paddingTop: searchOpen
-            ? ORDER_TOP_OFFSET_PX + 56
-            : ORDER_TOP_OFFSET_PX,
         }}
       >
         <main

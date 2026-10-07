@@ -8,6 +8,7 @@ import { getOpenPosShift } from '@/lib/pos-shift';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 import { resolveRouteParams } from '@/lib/resolve-route-id';
+import { releaseDiningTableIfIdle } from '@/lib/dining-table-status';
 
 export async function PATCH(
   _req: NextRequest,
@@ -29,7 +30,7 @@ export async function PATCH(
         restaurantId: auth.restaurantId,
         sourceType: OrderSourceType.KIOSK,
       },
-      select: { id: true, status: true, branchId: true },
+      select: { id: true, status: true, branchId: true, diningTableId: true },
     });
 
     if (!order) {
@@ -68,6 +69,9 @@ export async function PATCH(
         data: { status: 'canceled' },
       });
       await cancelOrderPayments(tx, order.id);
+      if (order.diningTableId) {
+        await releaseDiningTableIfIdle(tx, order.diningTableId);
+      }
     });
 
     publishOrderLifecycleUpdate({

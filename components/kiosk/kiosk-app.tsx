@@ -1629,6 +1629,7 @@ export function KioskApp({
         isMobileScan && 'mx-auto w-full max-w-lg shadow-xl'
       )}
       style={kioskThemeVars}
+      onPointerDown={() => setKeyboardField(null)}
     >
       <div
         className={cn(
@@ -2200,7 +2201,7 @@ export function KioskApp({
                         value={customerName}
                         inputMode="none"
                         onChange={(e) => setCustomerName(e.target.value)}
-                        onPointerDown={() => setKeyboardField('name')}
+                        onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('name'); }}
                         onFocus={() => setKeyboardField('name')}
                         maxLength={120}
                         autoComplete="name"
@@ -2224,7 +2225,7 @@ export function KioskApp({
                           const value = e.target.value.replace(/\D/g, '');
                           setCustomerPhone(value);
                         }}
-                        onPointerDown={() => setKeyboardField('phone')}
+                        onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('phone'); }}
                         onFocus={() => setKeyboardField('phone')}
                         maxLength={40}
                         autoComplete="tel"
@@ -2241,7 +2242,7 @@ export function KioskApp({
                   value={cookingNote}
                   readOnly
                   inputMode="none"
-                  onPointerDown={() => setKeyboardField('instructions')}
+                  onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('instructions'); }}
                   onFocus={() => setKeyboardField('instructions')}
                   rows={3}
                   className={cn(
@@ -2252,7 +2253,8 @@ export function KioskApp({
                   )}
                 />
                 {step === 'cart' && keyboardField ? (
-                  <PosOnScreenKeyboard
+                  <div onPointerDown={(e) => e.stopPropagation()}>
+                    <PosOnScreenKeyboard
                     mode={keyboardField === 'phone' ? 'phone' : 'text'}
                     value={
                       keyboardField === 'name'
@@ -2279,6 +2281,7 @@ export function KioskApp({
                           : 500
                     }
                   />
+                  </div>
                 ) : null}
                 <Button
                   type="button"
