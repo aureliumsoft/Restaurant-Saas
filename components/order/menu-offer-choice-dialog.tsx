@@ -168,7 +168,9 @@ export function MenuOfferChoiceDialog({
                   </p>
                   {product ? (
                     <p className="text-sm text-muted-foreground">
-                      {formatMenuItemPrice(product)}
+                      {formatMenuItemPrice(product, {
+                        fromLabel: t('priceFromLabel'),
+                      })}
                     </p>
                   ) : null}
                 </div>
@@ -216,7 +218,9 @@ export function MenuOfferChoiceDialog({
                       {resolve(bundle.name)}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {formatMenuItemPrice(bundle)}
+                      {formatMenuItemPrice(bundle, {
+                        fromLabel: t('priceFromLabel'),
+                      })}
                     </p>
                   </div>
                 </button>

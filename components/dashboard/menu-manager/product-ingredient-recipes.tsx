@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -164,6 +165,7 @@ export function ProductIngredientRecipes({
   ingredientRows: IngredientRecipeRow[];
   onIngredientRowsChange: (rows: IngredientRecipeRow[]) => void;
 }) {
+  const { t } = useTranslation();
   const uiLang = useUiLanguage();
   const [ingredients, setIngredients] = useState<IngredientOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -224,7 +226,12 @@ export function ProductIngredientRecipes({
             uiLang
           ),
         }))
-    : [{ key: null as string | null, title: 'Product' }];
+    : [
+        {
+          key: null as string | null,
+          title: t('dashboard.menuManager.productsBasics.productFallback'),
+        },
+      ];
 
   const updateRow = (
     index: number,
@@ -257,7 +264,13 @@ export function ProductIngredientRecipes({
         ) : null}
         {indexes.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No ingredients on this {hasVariations ? 'variation' : 'product'} yet.
+            {hasVariations
+              ? t(
+                  'dashboard.menuManager.productsBasics.noIngredientsOnVariation'
+                )
+              : t(
+                  'dashboard.menuManager.productsBasics.noIngredientsOnProduct'
+                )}
           </p>
         ) : (
           <div className="space-y-2">
@@ -270,8 +283,12 @@ export function ProductIngredientRecipes({
                   value={row.ingredientId}
                   onChange={(ingredientId) => updateRow(i, { ingredientId })}
                   options={optionsForRow(row.ingredientId, used)}
-                  placeholder="Select ingredient"
-                  searchPlaceholder="Search ingredient…"
+                  placeholder={t(
+                    'dashboard.menuManager.productsBasics.selectIngredient'
+                  )}
+                  searchPlaceholder={t(
+                    'dashboard.menuManager.productsBasics.searchIngredient'
+                  )}
                 />
                 <Input
                   value={row.quantity}
@@ -281,7 +298,9 @@ export function ProductIngredientRecipes({
                     })
                   }
                   inputMode="decimal"
-                  placeholder="Qty"
+                  placeholder={t(
+                    'dashboard.menuManager.productsBasics.qtyPlaceholder'
+                  )}
                 />
                 <Button
                   type="button"
@@ -293,7 +312,9 @@ export function ProductIngredientRecipes({
                       ingredientRows.filter((_, idx) => idx !== i)
                     )
                   }
-                  aria-label="Remove ingredient"
+                  aria-label={t(
+                    'dashboard.menuManager.productsBasics.removeIngredientAria'
+                  )}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -312,7 +333,7 @@ export function ProductIngredientRecipes({
           }
         >
           <Plus className="mr-2 h-4 w-4" />
-          Add ingredient
+          {t('dashboard.menuManager.productsBasics.addIngredientToRecipe')}
         </Button>
       </div>
     );
@@ -321,22 +342,28 @@ export function ProductIngredientRecipes({
   return (
     <div className="space-y-3">
       <div>
-        <Label className="text-base">Ingredients</Label>
+        <Label className="text-base">
+          {t('dashboard.menuManager.productsBasics.ingredientsSection')}
+        </Label>
         <p className="mt-1 text-sm text-muted-foreground">
           {hasVariations
-            ? 'Set a recipe for each variation. Orders deduct these quantities from inventory.'
-            : 'Link ingredients used by this product. Orders deduct these quantities from inventory.'}
+            ? t(
+                'dashboard.menuManager.productsBasics.ingredientsHintVariations'
+              )
+            : t('dashboard.menuManager.productsBasics.ingredientsHintSimple')}
         </p>
       </div>
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading ingredients…</p>
+        <p className="text-sm text-muted-foreground">
+          {t('dashboard.menuManager.productsBasics.loadingIngredients')}
+        </p>
       ) : ingredients.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No ingredients yet.{' '}
+          {t('dashboard.menuManager.productsBasics.noIngredientsYet')}{' '}
           <Link href="/inventory" className="underline underline-offset-2">
-            Add them in Inventory
+            {t('dashboard.menuManager.productsBasics.addThemInInventory')}
           </Link>{' '}
-          first.
+          {t('dashboard.menuManager.productsBasics.first')}
         </p>
       ) : null}
       <div className="space-y-6">

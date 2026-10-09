@@ -306,14 +306,15 @@ function configurationItemPickerPrice(
 
 function multiSelectionHint(
   minItems: number | null | undefined,
-  maxItems: number | null | undefined
+  maxItems: number | null | undefined,
+  t: (key: string, opts?: Record<string, string | number>) => string
 ): string {
   if (minItems != null && maxItems != null) {
-    return `Choose ${minItems}–${maxItems} options`;
+    return t('chooseNtoM', { min: minItems, max: maxItems });
   }
-  if (minItems != null) return `Choose at least ${minItems}`;
-  if (maxItems != null) return `Choose up to ${maxItems}`;
-  return 'Choose one or more';
+  if (minItems != null) return t('chooseAtLeast', { min: minItems });
+  if (maxItems != null) return t('chooseUpTo', { max: maxItems });
+  return t('chooseOneOrMore');
 }
 
 function groupSelectionCount(selectedIds: string[]) {
@@ -1458,7 +1459,7 @@ export function ProductCustomizeDialog({
         ? `${t('customizeRequired')} · ${progress}`
         : progress;
     }
-    const hint = multiSelectionHint(limits.minItems, limits.maxItems);
+    const hint = multiSelectionHint(limits.minItems, limits.maxItems, t);
     return `${hint} · ${progress}`;
   }, [categoryGroups, limitsForGroup, picker, selectedByGroup, t]);
 
@@ -1536,7 +1537,7 @@ export function ProductCustomizeDialog({
       if (!group || !item) return [];
       return (item.variations ?? []).map((v) => ({
         id: v.id,
-        name: v.name ?? v.title ?? 'Variation',
+        name: resolve(v.name ?? v.title) || t('variationLabel'),
         price: productRecommendationVariationUnitPrice(item, v.id),
         priceLabel: productRecommendationVariationPriceLabel(
           item,
@@ -1716,7 +1717,7 @@ export function ProductCustomizeDialog({
       );
     return (item.variations ?? []).map((v) => ({
       id: v.id,
-      name: v.name ?? v.title ?? 'Variation',
+      name: resolve(v.name ?? v.title) || t('variationLabel'),
       price: chargeableVariationUnitPrice(
         v.priceDelta,
         optionVariationBaseline
@@ -1859,7 +1860,7 @@ export function ProductCustomizeDialog({
                   <section className="overflow-hidden rounded-[10px] animate-in fade-in-50 duration-200">
                     <div className="flex items-center justify-between gap-3 border-b border-[#f4f4f4] px-[15px] py-3">
                       <Label className="text-sm font-semibold leading-snug text-primary">
-                        Variation
+                        {t('variationLabel')}
                       </Label>
                       <span className={GROUP_REQUIRED_LABEL}>
                         {t('customizeRequired')}
@@ -1882,8 +1883,11 @@ export function ProductCustomizeDialog({
                         }
                       >
                         {selectedVariationId
-                          ? variations.find((v) => v.id === selectedVariationId)
-                              ?.name ?? t('customizeSelectPlaceholder')
+                          ? resolve(
+                              variations.find(
+                                (v) => v.id === selectedVariationId
+                              )?.name
+                            ) || t('customizeSelectPlaceholder')
                           : t('customizeSelectPlaceholder')}
                       </span>
                       <GroupSelectChevron alignTop={Boolean(selectedVariationId)} />
@@ -1949,7 +1953,7 @@ export function ProductCustomizeDialog({
                       </div>
                       {missing && attemptedConfirm && !isLoading ? (
                         <p className="px-[15px] pt-2 text-xs text-destructive">
-                          Please configure this recommendation
+                          {t('configureRecommendation')}
                         </p>
                       ) : null}
                       {needsSheet ? (
@@ -2029,7 +2033,8 @@ export function ProductCustomizeDialog({
                               ? t('customizeOptional')
                               : multiSelectionHint(
                                   limits.minItems,
-                                  limits.maxItems
+                                  limits.maxItems,
+                                  t
                                 )}
                           </p>
                         )}
@@ -2042,15 +2047,15 @@ export function ProductCustomizeDialog({
                           })}
                           {g.multipleMode === 'QUANTITY' &&
                           hasQuantityFreeTier(g.freeQuantity)
-                            ? ` · first ${g.freeQuantity} free`
+                            ? ` · ${t('firstNFree', { count: g.freeQuantity })}`
                             : ''}
                         </p>
                       ) : null}
                       {missing && attemptedConfirm && !isLoading ? (
                         <p className="px-[15px] pt-1 text-xs text-destructive">
                           {g.selectionType === 'SINGLE'
-                            ? 'Please select an option'
-                            : `Please select at least ${min} option${min === 1 ? '' : 's'}`}
+                            ? t('pleaseSelectOption')
+                            : t('pleaseSelectAtLeast', { count: min })}
                         </p>
                       ) : null}
 
@@ -2074,10 +2079,10 @@ export function ProductCustomizeDialog({
                                 {g.useVariationPricing &&
                                 variations.length > 0 &&
                                 !selectedVariationId
-                                  ? 'Select a product variation to see add-ons for this size.'
+                                  ? t('selectVariationToSeeAddons')
                                   : g.useVariationPricing
-                                    ? 'No add-ons available for this variation.'
-                                    : 'No options available in this category yet.'}
+                                    ? t('noAddonsForThisVariation')
+                                    : t('noOptionsInCategoryYet')}
                               </p>
                             );
                           }

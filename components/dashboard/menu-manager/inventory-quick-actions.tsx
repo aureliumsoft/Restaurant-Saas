@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { FolderPlus, Layers, PlusSquare } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { FolderPlus, PlusSquare } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { useDashboardPermissions } from '@/hooks/use-dashboard-permissions';
@@ -32,6 +33,7 @@ export function InventoryQuickActions({
   showVariation = true,
   className,
 }: Props) {
+  const { t } = useTranslation();
   const { canEdit } = useDashboardPermissions();
   const canEditCategories = canEdit('categories');
   const canEditVariations = canEdit('variations');
@@ -65,7 +67,7 @@ export function InventoryQuickActions({
             onClick={() => setCategoryOpen(true)}
           >
             <FolderPlus className="mr-2 h-4 w-4" />
-            Add category
+            {t('dashboard.menuManager.category.add')}
           </Button>
         ) : null}
         {showVar ? (
@@ -76,7 +78,7 @@ export function InventoryQuickActions({
             onClick={() => setVariationOpen(true)}
           >
             <PlusSquare className="mr-2 h-4 w-4" />
-            Add variation
+            {t('dashboard.menuManager.variation.add')}
           </Button>
         ) : null}
       </div>

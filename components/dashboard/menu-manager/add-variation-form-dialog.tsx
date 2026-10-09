@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Loader2, Plus } from 'lucide-react';
@@ -38,6 +39,7 @@ export function AddVariationFormDialog({
   onTemplatesReload,
   onCreated,
 }: Props) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [shortLabel, setShortLabel] = useState('');
   const [saving, setSaving] = useState(false);
@@ -52,7 +54,7 @@ export function AddVariationFormDialog({
   const save = async () => {
     if (!name.trim() || saving) return;
     if (!parseBilingualInput(name).en) {
-      toast.error('English name (before &&&&) is required.');
+      toast.error(t('dashboard.menuManager.variation.nameRequired'));
       return;
     }
     setSaving(true);
@@ -66,12 +68,14 @@ export function AddVariationFormDialog({
         }
       );
       const created = res.data.data;
-      toast.success('Variation created');
+      toast.success(t('dashboard.menuManager.variation.created'));
       await onTemplatesReload?.();
       onCreated?.(created);
       onOpenChange(false);
     } catch (e: unknown) {
-      toast.error(apiErrorMessage(e, 'Could not create variation'));
+      toast.error(
+        apiErrorMessage(e, t('dashboard.menuManager.variation.createFailed'))
+      );
     } finally {
       setSaving(false);
     }
@@ -81,18 +85,19 @@ export function AddVariationFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add variation</DialogTitle>
+          <DialogTitle>{t('dashboard.menuManager.variation.add')}</DialogTitle>
           <DialogDescription>
-            Create a variation template (e.g. Small, Medium, Large). Assign it to
-            products with individual prices.
+            {t('dashboard.menuManager.variation.addDescription')}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid gap-2">
-            <Label htmlFor="dialog-variation-name">Name</Label>
+            <Label htmlFor="dialog-variation-name">
+              {t('dashboard.common.name')}
+            </Label>
             <Input
               id="dialog-variation-name"
-              placeholder={`English name ${'&&&&'} Spanish name`}
+              placeholder={t('dashboard.menuManager.bilingual.namePlaceholder')}
               value={name}
               onChange={(e) => setName(filterNameTextInput(e.target.value))}
               disabled={saving}
@@ -101,12 +106,19 @@ export function AddVariationFormDialog({
                 if (e.key === 'Enter' && name.trim()) void save();
               }}
             />
+            <p className="text-xs text-muted-foreground">
+              {t('dashboard.menuManager.bilingual.hint')}
+            </p>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="dialog-variation-short">Short label (optional)</Label>
+            <Label htmlFor="dialog-variation-short">
+              {t('dashboard.menuManager.variation.shortLabelOptional')}
+            </Label>
             <Input
               id="dialog-variation-short"
-              placeholder="e.g. M"
+              placeholder={t(
+                'dashboard.menuManager.variation.shortLabelPlaceholder'
+              )}
               value={shortLabel}
               onChange={(e) => setShortLabel(e.target.value)}
               disabled={saving}
@@ -121,7 +133,7 @@ export function AddVariationFormDialog({
             onClick={() => onOpenChange(false)}
             disabled={saving}
           >
-            Cancel
+            {t('dashboard.common.cancel')}
           </Button>
           <Button
             type="button"
@@ -133,7 +145,9 @@ export function AddVariationFormDialog({
             ) : (
               <Plus className="mr-2 h-4 w-4" />
             )}
-            {saving ? 'Adding…' : 'Add variation'}
+            {saving
+              ? t('dashboard.menuManager.adding')
+              : t('dashboard.menuManager.variation.add')}
           </Button>
         </DialogFooter>
       </DialogContent>

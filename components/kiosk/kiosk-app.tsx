@@ -81,6 +81,7 @@ import { buildThemeCssVars } from '@/lib/restaurant-theme';
 import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
 import type { UiLanguage } from '@/lib/i18n/resources';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import { IconArrowBack } from '@tabler/icons-react';
 import {
   kioskBasePath,
@@ -321,9 +322,9 @@ const KioskProductCard = memo(function KioskProductCard({
   cardRef,
   onCaptureFlyOrigin,
 }: KioskProductCardProps) {
-  const unit = effectiveUnitPrice(p.price, p.salePrice);
-  const showStrike =
-    p.salePrice != null && p.salePrice > 0 && p.salePrice < p.price;
+  const { t } = useTranslation();
+  const priceDisplay = getMenuItemDisplayPrice(p);
+  const showStrike = priceDisplay.compareAt != null;
   const isCustomizable = productNeedsCustomizeDialog(p);
   const displayName = resolveBilingualText(p.name, uiLang);
 
@@ -361,12 +362,17 @@ const KioskProductCard = memo(function KioskProductCard({
           {displayName}
         </h3>
         <div className="mt-1 flex items-baseline gap-2">
+          {priceDisplay.hasFromPrefix ? (
+            <span className="text-xs font-normal text-[#94a3b8]">
+              {t('priceFromLabel')}
+            </span>
+          ) : null}
           <span className="text-sm font-bold text-primary">
-            {formatMoney(unit)}
+            {formatMoney(priceDisplay.amount)}
           </span>
-          {showStrike ? (
+          {showStrike && priceDisplay.compareAt != null ? (
             <span className="text-xs text-[#94a3b8] line-through">
-              {formatMoney(p.price)}
+              {formatMoney(priceDisplay.compareAt)}
             </span>
           ) : null}
         </div>
@@ -2046,13 +2052,13 @@ export function KioskApp({
         {qrCustomerReady && step === 'cart' && (
           <div className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 py-6">
             <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold">Cart</h1>
+              <h1 className="text-2xl font-bold">{t('yourCart')}</h1>
             </div>
             {cart.length === 0 ? (
               <>
               <div className="flex flex-col items-center justify-start gap-2">
                   <p className="text-[#64748b] w-full text-center">
-                    Your cart is empty.
+                    {t('cartEmpty')}
                   </p>
               <Button
                 type="button"
@@ -2098,7 +2104,9 @@ export function KioskApp({
                             lineClassName="text-xs text-[#64748b]"
                           />
                           <p className="mt-1 text-xs text-[#64748b]">
-                            {formatMoney(lineUnitTotal(line))} each
+                            {t('priceEach', {
+                              price: formatMoney(lineUnitTotal(line)),
+                            })}
                         </p>
                         <div className="mt-2 flex items-center gap-2">
                           <Button
@@ -2143,17 +2151,17 @@ export function KioskApp({
                   className="text-[#dc2626]"
                   onClick={clearCart}
                 >
-                  Clear cart
+                  {t('clearCart')}
                 </Button>
                 <div className="space-y-2 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-sm text-[#0f172a]">
                   <div className="flex justify-between">
-                    <span>Subtotal</span>
+                    <span>{t('subtotal')}</span>
                     <span className="font-medium tabular-nums">
                       {formatMoney(cartSubtotal)}
                     </span>
                   </div>
                   <div className="flex justify-between font-semibold">
-                    <span>Total</span>
+                    <span>{t('total')}</span>
                     <span className="tabular-nums">
                       {formatMoney(cartSubtotal)}
                     </span>
@@ -2176,7 +2184,9 @@ export function KioskApp({
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="kiosk-qr-customer-email">Email</Label>
+                      <Label htmlFor="kiosk-qr-customer-email">
+                        {t('emailLabel')}
+                      </Label>
                       <Input
                         id="kiosk-qr-customer-email"
                         value={customerEmail}
@@ -2238,7 +2248,7 @@ export function KioskApp({
                   </div>
                 ) : null}
                 <textarea
-                  placeholder="Cooking instructions (e.g. make it mild)"
+                  placeholder={t('cookingInstructionsPlaceholder')}
                   value={cookingNote}
                   readOnly
                   inputMode="none"
@@ -2297,7 +2307,7 @@ export function KioskApp({
                   }}
                 >
                   <CheckCircle className="mr-2 h-4 w-4" />
-                  Checkout
+                  {t('checkout')}
                 </Button>
 
                 <Button
@@ -2341,7 +2351,7 @@ export function KioskApp({
             </p>
             <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-sm text-[#0f172a]">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#64748b]">
-                Order summary
+                {t('orderSummary')}
               </p>
               <ul className="mb-3 max-h-48 space-y-2 overflow-y-auto text-sm">
                 {cart.map((line) => {
@@ -2374,17 +2384,17 @@ export function KioskApp({
               </ul>
               <div className="space-y-1 border-t border-[#e2e8f0] pt-2 text-sm">
                 <div className="flex justify-between text-[#64748b]">
-                  <span>Subtotal</span>
+                  <span>{t('subtotal')}</span>
                   <span>{formatMoney(cartSubtotal)}</span>
                 </div>
                 {serviceChargeAmount > 0 ? (
                   <div className="flex justify-between text-[#64748b]">
-                    <span>Service charge</span>
+                    <span>{t('serviceCharge')}</span>
                     <span>{formatMoney(serviceChargeAmount)}</span>
                   </div>
                 ) : null}
                 <div className="flex justify-between font-semibold text-[#0f172a]">
-                <span>Total due</span>
+                <span>{t('totalDue')}</span>
                   <span>{formatMoney(cartGrandTotal)}</span>
                 </div>
               </div>
@@ -2392,16 +2402,17 @@ export function KioskApp({
             <div className="space-y-3">
               <div className="rounded-xl border border-[#e2e8f0] bg-white p-4">
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#64748b]">
-                  Payment method
+                  {t('paymentMethodLabel')}
                 </p>
                 {fromTableQr ? (
                   <div className="flex items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3 py-3">
                     <Banknote className="h-5 w-5 shrink-0 text-primary" />
                     <div>
-                      <p className="text-sm font-semibold">Cash at counter</p>
+                      <p className="text-sm font-semibold">
+                        {t('cashAtCounter')}
+                      </p>
                       <p className="text-xs text-[#64748b]">
-                        Table QR orders are cash only. Pay staff when your order
-                        is ready.
+                        {t('tableQrCashOnlyHint')}
                       </p>
                     </div>
                   </div>
@@ -2422,7 +2433,7 @@ export function KioskApp({
                         onClick={() => handleSelectPaymentMode('cash')}
                       >
                         <Banknote className="h-4 w-4" />
-                        Cash
+                        {t('cash')}
                       </Button>
                       {fulfillmentSettings.cardPaymentsEnabled ? (
                       <Button
@@ -2432,7 +2443,7 @@ export function KioskApp({
                         onClick={() => handleSelectPaymentMode('card')}
                       >
                         <CreditCard className="h-4 w-4" />
-                        Card
+                        {t('card')}
                       </Button>
                       ) : null}
                     </div>
@@ -2458,37 +2469,39 @@ export function KioskApp({
                           {cardPayment.cardPaymentStatus === 'success' ? (
                             <>
                               <CheckCircle2 className="h-4 w-4" />
-                              Paid
+                              {t('paid')}
                             </>
                           ) : cardPayment.cardPaymentStatus === 'error' ||
                             cardPayment.cardPaymentStatus === 'cancelled' ? (
                             <>
                               <XCircle className="h-4 w-4" />
-                              Pay {formatMoney(cartGrandTotal)}
+                              {t('payAmount', {
+                                amount: formatMoney(cartGrandTotal),
+                              })}
                             </>
                           ) : cardPayment.cardPaymentStatus === 'processing' ? (
                             <>
                               <Loader2 className="h-4 w-4 animate-spin" />
-                              Processing…
+                              {t('processing')}
                             </>
                           ) : (
                             <>
                               <CreditCard className="h-4 w-4" />
-                              Pay {formatMoney(cartGrandTotal)}
+                              {t('payAmount', {
+                                amount: formatMoney(cartGrandTotal),
+                              })}
                             </>
                           )}
                         </Button>
                         <p className="text-xs text-[#64748b]">
                           {cardPayment.isCardPaymentComplete
-                            ? 'Payment complete — confirm your order below.'
-                            : 'Pay by card before confirming your order.'}
+                            ? t('paymentCompleteConfirmBelow')
+                            : t('payByCardBeforeConfirm')}
                         </p>
                       </div>
                     ) : (
                       <p className="mt-3 text-xs text-[#64748b]">
-                        Pay with cash at the counter. Your order will be created
-                        with payment pending until staff sends it to the
-                        kitchen.
+                        {t('cashAtCounterOrderHint')}
                       </p>
                     )}
                   </>
@@ -2511,12 +2524,12 @@ export function KioskApp({
                 {placing ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Placing order…
+                    {t('placingOrder')}
                   </>
                 ) : (
                   <>
                     <CheckCircle className="mr-2 h-4 w-4" />
-                    Confirm order
+                    {t('confirmOrder')}
                   </>
                 )}
               </Button>
@@ -2531,7 +2544,7 @@ export function KioskApp({
                   setStep('cart');
                 }}
               >
-                Back
+                {t('back')}
               </Button>
             </div>
 
@@ -2560,18 +2573,18 @@ export function KioskApp({
               <ShoppingBag className="h-12 w-12" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Thank you!</h1>
+              <h1 className="text-2xl font-bold">{t('thankYou')}</h1>
               <p className="mt-2 text-[#64748b]">
-                Your order was sent to the kitchen.
+                {t('orderSentToKitchen')}
                 {lastOrderId ? (
                   <>
                     {' '}
-                    Reference:{' '}
+                    {t('referenceLabel')}{' '}
                     <span className="font-mono text-xs">{lastOrderId}</span>
                     {lastTicketNumber != null ? (
                       <>
                         {' '}
-                        · Ticket:{' '}
+                        · {t('ticketLabel')}{' '}
                         <span className="font-mono text-xs">
                           #{lastTicketNumber}
                         </span>
@@ -2586,7 +2599,7 @@ export function KioskApp({
               className="bg-primary px-8 text-primary-foreground hover:brightness-95"
               onClick={startOver}
             >
-              New order
+              {t('newOrder')}
             </Button>
           </div>
         )}

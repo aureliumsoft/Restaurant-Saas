@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useRef, useState, type ChangeEvent, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ImageIcon, Upload, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -37,6 +38,7 @@ export function Base64ImageUploadField({
   maxMb = 8,
   maxEncodedMb = 1.5,
 }: Props) {
+  const { t } = useTranslation();
   const id = useId();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -153,7 +155,9 @@ export function Base64ImageUploadField({
           onClick={() => fileRef.current?.click()}
         >
           <Upload className="h-4 w-4" aria-hidden />
-          {busy ? 'Processing…' : 'Upload image'}
+          {busy
+            ? t('dashboard.common.processing')
+            : t('dashboard.common.uploadImage')}
         </Button>
         {value.trim() ? (
           <Button
@@ -165,13 +169,14 @@ export function Base64ImageUploadField({
             disabled={busy}
           >
             <X className="mr-1 h-4 w-4" />
-            Remove
+            {t('dashboard.common.remove')}
           </Button>
         ) : null}
         {isData && value.trim() ? (
           <span className="text-xs text-muted-foreground">
-            Image ready (
-            {Math.max(1, Math.round(estimateDataUrlBytes(value) / 1024))} KB)
+            {t('dashboard.common.imageReady', {
+              kb: Math.max(1, Math.round(estimateDataUrlBytes(value) / 1024)),
+            })}
           </span>
         ) : null}
       </div>
@@ -182,7 +187,7 @@ export function Base64ImageUploadField({
           value={isData ? '' : value.startsWith('http') ? value : urlDraft}
           placeholder={
             isData
-              ? 'Using uploaded image — or remove to set a URL'
+              ? t('dashboard.common.usingUploadedImage')
               : placeholder
           }
           onChange={(e) => {
@@ -221,13 +226,15 @@ export function Base64ImageUploadField({
             'bg-[length:16px_16px] bg-[linear-gradient(45deg,#d4d4d8_25%,transparent_25%),linear-gradient(-45deg,#d4d4d8_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#d4d4d8_75%),linear-gradient(-45deg,transparent_75%,#d4d4d8_75%)] bg-[position:0_0,0_8px,8px_-8px,-8px_0]'
           )}
           onError={() => {
-            setLocalError('Preview failed to load. Try another image.');
+            setLocalError(t('dashboard.common.previewFailed'));
           }}
         />
       ) : (
         <div className="mt-1 flex h-28 max-w-md flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border text-muted-foreground">
           <ImageIcon className="h-8 w-8 opacity-40" />
-          <span className="text-xs">No image selected</span>
+          <span className="text-xs">
+            {t('dashboard.common.noImageSelected')}
+          </span>
         </div>
       )}
     </div>

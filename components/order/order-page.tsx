@@ -479,6 +479,7 @@ function ProductCard({
   formatMoney: (amount: number) => string;
   showCustomizeIndicator?: boolean;
 }) {
+  const { t } = useTranslation();
   const { resolve } = useBilingualText();
   const displayName = resolve(product.name);
   const displayDescription = product.description
@@ -582,9 +583,9 @@ function ProductCard({
           <span className="mt-1 block flex-1" />
         )}
         <div className="mt-2.5 flex items-baseline gap-1 text-sm sm:text-base font-bold text-primary">
-          {priceDisplay.prefix ? (
+          {priceDisplay.hasFromPrefix ? (
             <span className="mr-0.5 text-xs font-normal text-[#8e8e9a]">
-              {priceDisplay.prefix}
+              {t('priceFromLabel')}
             </span>
           ) : null}
           {hasSale && priceDisplay.compareAt ? (

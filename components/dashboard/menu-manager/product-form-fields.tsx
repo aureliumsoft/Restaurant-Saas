@@ -279,7 +279,7 @@ export function ProductFormFields({
           />
         </div>
         <p className="text-xs text-muted-foreground">
-          Select one or more categories where this product should appear.
+          {tr('dashboard.menuManager.productsBasics.selectCategoriesHint')}
         </p>
         {categoriesLoading && categories.length === 0 ? (
           <CategoryPickerSkeleton />
@@ -302,12 +302,12 @@ export function ProductFormFields({
           autoComplete="off"
           value={form.name}
           onChange={(e) => onFormChange({ name: e.target.value })}
-          placeholder={`English name ${'&&&&'} Spanish name`}
+          placeholder={tr('dashboard.menuManager.bilingual.namePlaceholder')}
           required={showRequired}
           aria-required={showRequired || undefined}
         />
         <p className="text-xs text-muted-foreground">
-          First English, then separator &&&&, then Spanish.
+          {tr('dashboard.menuManager.bilingual.hint')}
         </p>
       </div>
 
@@ -317,10 +317,12 @@ export function ProductFormFields({
           className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           value={form.description}
           onChange={(e) => onFormChange({ description: e.target.value })}
-          placeholder={`English description ${'&&&&'} Spanish description`}
+          placeholder={tr(
+            'dashboard.menuManager.bilingual.descriptionPlaceholder'
+          )}
         />
         <p className="text-xs text-muted-foreground">
-          First English, then separator &&&&, then Spanish.
+          {tr('dashboard.menuManager.bilingual.hint')}
         </p>
       </div>
 
@@ -329,7 +331,7 @@ export function ProductFormFields({
           label={tr('dashboard.menuManager.productsBasics.photo')}
           value={form.imageUrl}
           onChange={(v) => onFormChange({ imageUrl: v })}
-          helperText="Upload image stores base64 directly in the database."
+          helperText={tr('dashboard.menuManager.productsBasics.photoHelper')}
         />
       </div>
 
@@ -367,14 +369,14 @@ export function ProductFormFields({
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
-          <p className="font-medium text-foreground">Variable product pricing</p>
+          <p className="font-medium text-foreground">
+            {tr('dashboard.menuManager.productsBasics.variablePricingTitle')}
+          </p>
           <p className="mt-1 text-muted-foreground">
-            Base price and sale price are hidden while variations exist. The menu
-            shows{' '}
-            <span className="font-medium text-foreground">
-              From {minVariation != null ? formatMoney(minVariation) : '—'}
-            </span>{' '}
-            (lowest variation price).
+            {tr('dashboard.menuManager.productsBasics.variablePricingHint', {
+              price:
+                minVariation != null ? formatMoney(minVariation) : '—',
+            })}
           </p>
         </div>
       )}
@@ -382,10 +384,11 @@ export function ProductFormFields({
       <div className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <Label className="text-base">Variations</Label>
+            <Label className="text-base">
+              {tr('dashboard.menuManager.productsBasics.variationsSection')}
+            </Label>
             <p className="mt-1 text-sm text-muted-foreground">
-              Select a variation template, then set its price and photo. Menu list
-              price uses the lowest variation price.
+              {tr('dashboard.menuManager.productsBasics.variationsHint')}
             </p>
           </div>
           <InventoryQuickActions
@@ -398,37 +401,37 @@ export function ProductFormFields({
 
         {variationTemplates.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No variation templates yet. Use &quot;Add variation&quot; above to
-            create one, then assign it to this product.
+            {tr('dashboard.menuManager.productsBasics.noTemplatesYet')}
           </p>
         ) : variationRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No variations on this product yet.
+            {tr('dashboard.menuManager.productsBasics.noVariationsOnProduct')}
           </p>
         ) : (
           <div className="space-y-3">
             {variationRows.map((row, index) => {
               const selectableTemplates = [
                 ...variationTemplates.filter(
-                  (t) =>
-                    t.id === row.restaurantVariationId ||
-                    !usedTemplateIds.has(t.id)
+                  (tpl) =>
+                    tpl.id === row.restaurantVariationId ||
+                    !usedTemplateIds.has(tpl.id)
                 ),
               ];
-              const selectedTemplate = variationTemplates.find(
-                (t) => t.id === row.restaurantVariationId
-              );
               return (
                 <div
                   key={`variation-${row.restaurantVariationId ?? index}`}
                   className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-[minmax(0,1fr),120px,1fr,auto]"
                 >
                   <div className="grid gap-1">
-                    <FieldLabel required={showRequired}>Variation</FieldLabel>
+                    <FieldLabel required={showRequired}>
+                      {tr(
+                        'dashboard.menuManager.productsBasics.variationLabel'
+                      )}
+                    </FieldLabel>
                     <Select
                       value={row.restaurantVariationId ?? ''}
                       onValueChange={(v) => {
-                        const tpl = variationTemplates.find((t) => t.id === v);
+                        const tpl = variationTemplates.find((x) => x.id === v);
                         updateVariation(index, {
                           restaurantVariationId: v,
                           name: tpl?.name ?? '',
@@ -436,13 +439,17 @@ export function ProductFormFields({
                       }}
                     >
                       <SelectTrigger aria-required={showRequired || undefined}>
-                        <SelectValue placeholder="Select variation" />
+                        <SelectValue
+                          placeholder={tr(
+                            'dashboard.menuManager.productsBasics.selectVariation'
+                          )}
+                        />
                       </SelectTrigger>
                       <SelectContent>
-                        {selectableTemplates.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {resolveBilingualText(t.name, uiLang)}
-                            {t.shortLabel ? ` (${t.shortLabel})` : ''}
+                        {selectableTemplates.map((tpl) => (
+                          <SelectItem key={tpl.id} value={tpl.id}>
+                            {resolveBilingualText(tpl.name, uiLang)}
+                            {tpl.shortLabel ? ` (${tpl.shortLabel})` : ''}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -467,7 +474,7 @@ export function ProductFormFields({
                     />
                   </div>
                   <Base64ImageUploadField
-                    label="Photo"
+                    label={tr('dashboard.menuManager.productsBasics.photo')}
                     value={row.imageUrl}
                     onChange={(v) => updateVariation(index, { imageUrl: v })}
                   />
@@ -481,7 +488,9 @@ export function ProductFormFields({
                           variationRows.filter((_, i) => i !== index)
                         )
                       }
-                      aria-label="Remove variation"
+                      aria-label={tr(
+                        'dashboard.menuManager.productsBasics.removeVariationAria'
+                      )}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -512,7 +521,7 @@ export function ProductFormFields({
           }}
         >
           <Plus className="mr-2 h-4 w-4" />
-          Add variation to product
+          {tr('dashboard.menuManager.productsBasics.addVariationToProduct')}
         </Button>
       </div>
 
@@ -685,12 +694,15 @@ export function buildProductPayload(
   };
 } | { ok: false; error: string } {
   if (!form.name.trim() || form.categoryIds.length === 0) {
-    return { ok: false, error: 'Name and at least one category are required.' };
+    return {
+      ok: false,
+      error: 'dashboard.menuManager.productsBasics.nameAndCategoryRequired',
+    };
   }
   if (!parseBilingualInput(form.name).en) {
     return {
       ok: false,
-      error: 'English name (before &&&&) is required.',
+      error: 'dashboard.menuManager.productsBasics.englishNameRequired',
     };
   }
 
@@ -713,7 +725,7 @@ export function buildProductPayload(
   if (variations.some((v) => Number.isNaN(v.priceDelta) || v.priceDelta <= 0)) {
     return {
       ok: false,
-      error: 'Every variation needs a valid price greater than zero.',
+      error: 'dashboard.menuManager.productsBasics.variationPriceRequired',
     };
   }
 
@@ -721,7 +733,7 @@ export function buildProductPayload(
   if (!isIngredientRowsValid(ingredientRows)) {
     return {
       ok: false,
-      error: 'Each recipe row needs an ingredient and a quantity greater than zero.',
+      error: 'dashboard.menuManager.productsBasics.recipeRowInvalid',
     };
   }
   const ingredients = serializeIngredientPayload(
@@ -748,14 +760,17 @@ export function buildProductPayload(
 
   const price = Number(form.price);
   if (Number.isNaN(price) || price <= 0) {
-    return { ok: false, error: 'Enter a valid price greater than zero.' };
+    return {
+      ok: false,
+      error: 'dashboard.menuManager.productsBasics.validPriceRequired',
+    };
   }
   const sale =
     form.salePrice.trim() === '' ? null : Number(form.salePrice);
   if (sale != null && (Number.isNaN(sale) || sale <= 0)) {
     return {
       ok: false,
-      error: 'Sale price must be empty or a positive number.',
+      error: 'dashboard.menuManager.productsBasics.salePriceInvalid',
     };
   }
 

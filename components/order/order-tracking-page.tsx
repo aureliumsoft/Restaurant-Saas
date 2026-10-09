@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -31,6 +32,7 @@ export function OrderTrackingPage({
   initialOrderId?: string;
   restaurantSlug?: string;
 }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { formatMoney } = useRestaurantRegional(
     restaurantSlug.trim() || undefined
@@ -43,7 +45,7 @@ export function OrderTrackingPage({
   const track = async () => {
     const id = orderId.trim();
     if (!id) {
-      setError('Enter a tracking ID.');
+      setError(t('enterTrackingIdError'));
       setResult(null);
       return;
     }
@@ -57,12 +59,12 @@ export function OrderTrackingPage({
         error?: string;
       };
       if (!res.ok || !body.data) {
-        setError(body.error || 'Order not found.');
+        setError(body.error || t('orderNotFound'));
         return;
       }
       setResult(body.data);
     } catch {
-      setError('Could not fetch order status right now.');
+      setError(t('couldNotFetchOrderStatus'));
     } finally {
       setLoading(false);
     }
@@ -74,18 +76,18 @@ export function OrderTrackingPage({
         <WebAppRestaurantTitle size="compact" />
         <Card>
           <CardHeader>
-            <CardTitle>Track Your Order</CardTitle>
+            <CardTitle>{t('trackYourOrderTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex gap-2">
               <Input
-                placeholder="Enter tracking ID"
+                placeholder={t('enterTrackingIdPlaceholder')}
                 value={orderId}
                 onChange={(e) => setOrderId(e.target.value)}
               />
               <Button type="button" onClick={() => void track()} disabled={loading}>
                 <Search className="mr-2 h-4 w-4" />
-                {loading ? 'Tracking…' : 'Track'}
+                {loading ? t('trackingInProgress') : t('track')}
               </Button>
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -95,7 +97,7 @@ export function OrderTrackingPage({
               onClick={() => router.push(restaurantStorefrontPath(restaurantSlug))}
               disabled={!restaurantSlug.trim()}
             >
-              Back to Home
+              {t('backToHome')}
             </Button>
           </CardContent>
         </Card>
@@ -104,25 +106,30 @@ export function OrderTrackingPage({
           <Card>
             <CardHeader>
               <CardTitle>
-                Ticket #{result.ticketNumber ?? '—'} · Tracking {result.shortOrderId ?? result.id}
+                {t('ticketTrackingTitle', {
+                  ticket: result.ticketNumber ?? '—',
+                  id: result.shortOrderId ?? result.id,
+                })}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p>
-                <strong>Order status:</strong> {result.status}
+                <strong>{t('orderStatusColon')}</strong> {result.status}
               </p>
               <p>
-                <strong>Payment status:</strong> {result.payment?.status ?? 'N/A'}
+                <strong>{t('paymentStatusColon')}</strong>{' '}
+                {result.payment?.status ?? t('na')}
               </p>
               <p>
-                <strong>Payment method:</strong> {result.payment?.method ?? 'N/A'}
+                <strong>{t('paymentMethodColon')}</strong>{' '}
+                {result.payment?.method ?? t('na')}
               </p>
               <p>
-                <strong>Total:</strong> {formatMoney(result.total)}
+                <strong>{t('totalColon')}</strong> {formatMoney(result.total)}
               </p>
               {result.customer ? (
                 <div className="rounded border p-3">
-                  <p className="font-medium">Customer</p>
+                  <p className="font-medium">{t('customer')}</p>
                   <p>{result.customer.name}</p>
                   <p>{result.customer.phone}</p>
                   {result.customer.email ? <p>{result.customer.email}</p> : null}

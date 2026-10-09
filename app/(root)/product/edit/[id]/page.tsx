@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import {
@@ -54,6 +55,7 @@ import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 
 export default function ProductEditPage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const params = useParams();
@@ -118,7 +120,7 @@ export default function ProductEditPage() {
         if (err.response?.status === 404) {
           setProductNotFound(true);
         } else {
-          toast.error('Could not load product.');
+          toast.error(t('dashboard.product.loadProductFailed'));
           setProductNotFound(true);
         }
         setItem(null);
@@ -231,7 +233,7 @@ export default function ProductEditPage() {
       ingredientRows
     );
     if (!payload.ok) {
-      toast.error(payload.error);
+      toast.error(t(payload.error));
       return;
     }
 
@@ -241,7 +243,7 @@ export default function ProductEditPage() {
         menuItemApiPath(productId, '', item?.urlId),
         payload.body
       );
-      toast.success('Product updated');
+      toast.success(t('dashboard.product.updated'));
       allowNextNavigation();
       router.push('/product');
     } catch (e: unknown) {
@@ -249,7 +251,7 @@ export default function ProductEditPage() {
       toast.error(
         typeof err.response?.data?.error === 'string'
           ? err.response.data.error
-          : 'Could not update product'
+          : t('dashboard.product.updateFailed')
       );
     } finally {
       setSaving(false);
@@ -267,18 +269,20 @@ export default function ProductEditPage() {
     <div className="w-full">
       <ErrorBoundary>
         <MenuPageShell
-          title="Edit product"
-          description="Update menu item details, pricing, and variations."
+          title={t('dashboard.product.editTitle')}
+          description={t('dashboard.product.editDescription')}
           loading={false}
         >
           {productNotFound ? (
             <Card>
               <CardContent className="flex flex-col gap-3 p-6">
                 <p className="text-sm text-muted-foreground">
-                  Product not found. It may have been deleted.
+                  {t('dashboard.product.notFound')}
                 </p>
                 <Button type="button" asChild className="w-fit">
-                  <Link href="/product">Back to products</Link>
+                  <Link href="/product">
+                    {t('dashboard.product.backToProducts')}
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
@@ -286,7 +290,7 @@ export default function ProductEditPage() {
             <Card>
               <CardContent className="flex flex-col gap-3 p-6">
                 <p className="text-sm text-muted-foreground">
-                  Create at least one category before editing products.
+                  {t('dashboard.product.needCategoryEdit')}
                 </p>
                 <InventoryQuickActions
                   variant="toolbar"
@@ -309,8 +313,9 @@ export default function ProductEditPage() {
                 <div className="flex flex-row flex-wrap items-center justify-between gap-2">
                   <CardTitle className="text-lg">
                     {item
-                      ? resolveBilingualText(item.name, uiLang) || 'Edit product'
-                      : 'Edit product'}
+                      ? resolveBilingualText(item.name, uiLang) ||
+                        t('dashboard.product.editTitle')
+                      : t('dashboard.product.editTitle')}
                   </CardTitle>
                   <Button
                     type="button"
@@ -318,7 +323,7 @@ export default function ProductEditPage() {
                     onClick={goToProducts}
                   >
                     <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back to products
+                    {t('dashboard.product.backToProducts')}
                   </Button>
                 </div>
                 <InventoryQuickActions
@@ -362,12 +367,12 @@ export default function ProductEditPage() {
                         {saving ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving…
+                            {t('dashboard.common.saving')}
                           </>
                         ) : (
                           <>
                             <Save className="h-4 w-4 mr-2" />
-                            <span>Save Changes</span>
+                            <span>{t('dashboard.menuManager.saveChanges')}</span>
                           </>
                         )}
                       </Button>
@@ -379,7 +384,7 @@ export default function ProductEditPage() {
                       >
                         <>
                           <X className="h-4 w-4 mr-2" />
-                          <span>Cancel</span>
+                          <span>{t('dashboard.common.cancel')}</span>
                         </>
                       </Button>
                     </div>
@@ -398,7 +403,9 @@ export default function ProductEditPage() {
         >
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+              <AlertDialogTitle>
+                {t('dashboard.common.discardUnsaved')}
+              </AlertDialogTitle>
               <AlertDialogDescription>{leaveMessage}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -408,7 +415,7 @@ export default function ProductEditPage() {
               >
                 <>
                   <X className="h-4 w-4 mr-2" />
-                  <span>Keep Editing</span>
+                  <span>{t('dashboard.common.keepEditing')}</span>
                 </>
               </AlertDialogCancel>
               <AlertDialogAction
@@ -418,7 +425,7 @@ export default function ProductEditPage() {
               >
                 <>
                   <Trash2 className="h-4 w-4 mr-2" />
-                  <span>Leave Without Saving</span>
+                  <span>{t('dashboard.common.leaveWithoutSaving')}</span>
                 </>
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -427,12 +434,12 @@ export default function ProductEditPage() {
 
         <SaveConfirmation
           open={saveConfirmOpen}
-          title="Update product"
-          description="Save changes to this product?"
+          title={t('dashboard.product.updateTitle')}
+          description={t('dashboard.product.updateDescription')}
           itemName={
             resolveBilingualText(form.name, uiLang) ||
             (item ? resolveBilingualText(item.name, uiLang) : '') ||
-            'Product'
+            t('dashboard.product.productFallback')
           }
           loading={saving}
           onConfirm={() => void save()}

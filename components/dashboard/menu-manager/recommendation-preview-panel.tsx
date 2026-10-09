@@ -19,6 +19,7 @@ import { effectiveMenuItemUnitPrice } from '@/lib/menu/recommendation-addon-pric
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { recommendationGroupDisplayLabel } from '@/lib/cart-line-display';
 import { useUiLanguage } from '@/hooks/use-ui-language';
+import { useTranslation } from 'react-i18next';
 import {
   isPreviewGroupVisibleForParentVariation,
   linkedItemsForPreviewGroup,
@@ -124,14 +125,15 @@ function previewDefaultListUnit(
 
 function multiSelectionHint(
   minItems: number | null,
-  maxItems: number | null
+  maxItems: number | null,
+  t: (key: string, opts?: Record<string, string | number>) => string
 ): string {
   if (minItems != null && maxItems != null) {
-    return `Choose ${minItems}–${maxItems} options`;
+    return t('chooseNtoM', { min: minItems, max: maxItems });
   }
-  if (minItems != null) return `Choose at least ${minItems}`;
-  if (maxItems != null) return `Choose up to ${maxItems}`;
-  return 'Choose one or more options';
+  if (minItems != null) return t('chooseAtLeast', { min: minItems });
+  if (maxItems != null) return t('chooseUpTo', { max: maxItems });
+  return t('chooseOneOrMore');
 }
 
 type OfferPreviewItem = {
@@ -190,6 +192,7 @@ export function RecommendationPreviewPanel({
   previewPersonalizeByGroup = {},
   onPersonalizePreviewChange,
 }: Props) {
+  const { t } = useTranslation();
   const uiLang = useUiLanguage();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const [previewVariationId, setPreviewVariationId] = useState('');
@@ -333,7 +336,9 @@ export function RecommendationPreviewPanel({
         </div>
           {(selected.variations?.length ?? 0) > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Size</p>
+              <p className="text-xs font-medium text-muted-foreground">
+                {t('variationLabel')}
+              </p>
               <div className="flex flex-wrap gap-1.5">
                 {selected.variations!.map((variation) => {
                   const active = previewVariationId === variation.id;
@@ -341,7 +346,7 @@ export function RecommendationPreviewPanel({
                     resolveBilingualText(
                       variation.title || variation.name,
                       uiLang
-                    ) || 'Variation';
+                    ) || t('variationLabel');
                   return (
                     <button
                       key={variation.id}
@@ -361,7 +366,7 @@ export function RecommendationPreviewPanel({
               </div>
               {hasVariationPricingGroups && !previewVariationContext.parent ? (
                 <p className="text-xs text-muted-foreground">
-                  Select a variation to preview variation-priced add-ons.
+                  {t('selectVariationToPreview')}
                 </p>
               ) : null}
             </div>
@@ -633,6 +638,7 @@ function PreviewGroupCard({
   onCancel?: () => void;
   deleting?: boolean;
 }) {
+  const { t } = useTranslation();
   const uiLang = useUiLanguage();
   const allItems = linkedItemsForPreviewGroup(
     group,
@@ -724,8 +730,16 @@ function PreviewGroupCard({
           </div>
           <p className="text-xs text-muted-foreground">
             {group.sourceType === 'PRODUCT'
-              ? `Product · ${resolveBilingualText(group.linkedProduct?.name, uiLang) || '—'}`
-              : `Category · ${resolveBilingualText(group.linkedCategory?.name, uiLang) || '—'}`}
+              ? t('productLinked', {
+                  name:
+                    resolveBilingualText(group.linkedProduct?.name, uiLang) ||
+                    '—',
+                })
+              : t('categoryLinked', {
+                  name:
+                    resolveBilingualText(group.linkedCategory?.name, uiLang) ||
+                    '—',
+                })}
           </p>
         </div>
         {onEdit || onDelete || onCancel ? (
@@ -823,7 +837,9 @@ function PreviewGroupCard({
                     categoryExtraCostPercent: group.categoryExtraCostPercent,
                   }
                 );
-                const priceLabel = isFreeOverride ? 'Free' : rawPriceLabel;
+                const priceLabel = isFreeOverride
+                  ? t('freeBadge')
+                  : rawPriceLabel;
 
                 if (radioMode) {
                   return (

@@ -277,6 +277,7 @@ function OptionNestedPanel({
   onRemoveTimelineKey,
 }: OptionNestedPanelProps) {
   const { resolve } = useBilingualText();
+  const { t } = useTranslation();
   const configurationParentVariation =
     parentVariationFromItemVariation(item.variations, variationId) ?? null;
 
@@ -291,7 +292,7 @@ function OptionNestedPanel({
   return (
     <div className="mt-3 border-l-2 border-primary/20 pl-4">
       <p className="mb-2 text-xs font-medium text-muted-foreground">
-        Options for {resolve(item.name)}
+        {t('optionsFor', { name: resolve(item.name) })}
       </p>
       <InlineRecommendationGroups
         groups={nestedGroups}
@@ -689,8 +690,8 @@ function InlineRecommendationGroups({
             {missing ? (
               <p className="border-b border-border px-4 py-1.5 text-xs text-destructive">
                 {radioMode
-                  ? 'Please select an option'
-                  : `Please select at least ${min} option${min === 1 ? '' : 's'}`}
+                  ? t('pleaseSelectOption')
+                  : t('pleaseSelectAtLeast', { count: min })}
               </p>
             ) : null}
 
@@ -706,12 +707,12 @@ function InlineRecommendationGroups({
                   return (
                     <p className="px-4 py-3 text-sm text-muted-foreground">
                       {g.useVariationPricing && !baseProductVariation
-                        ? 'Select the main product variation first.'
+                        ? t('selectVariationFirst')
                         : g.useVariationPricing
-                          ? 'No add-ons for this variation.'
+                          ? t('noAddonsForVariation')
                           : g.defaultLinkedRestaurantVariationId
-                            ? 'No add-ons for this size.'
-                            : 'No options available.'}
+                            ? t('noAddonsForSize')
+                            : t('noOptionsAvailable')}
                     </p>
                   );
                 }
@@ -809,7 +810,9 @@ function InlineRecommendationGroups({
                           <button
                             type="button"
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition hover:brightness-95 active:scale-90"
-                            aria-label={`Select ${resolve(it.name)}`}
+                            aria-label={t('selectNamed', {
+                              name: resolve(it.name),
+                            })}
                             onClick={() =>
                               selectRadio(g, it.menuItemId, limits)
                             }
@@ -1648,7 +1651,7 @@ export function NestedRecommendationSheet({
           size="icon"
           className="shrink-0 rounded-full"
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t('closeAria')}
         >
           <X className="h-5 w-5" />
         </Button>
@@ -1673,11 +1676,14 @@ export function NestedRecommendationSheet({
                   configurationParentVariation,
                   g
                 ) ?? preselectedProductVariationByGroup[g.id];
-            const selectedVariationLabel =
+            const selectedVariationRaw =
               item.variations?.find((v) => v.id === selectedVariationIdForGroup)
                 ?.name ??
               item.variations?.find((v) => v.id === selectedVariationIdForGroup)
                 ?.title;
+            const selectedVariationLabel = selectedVariationRaw
+              ? resolve(selectedVariationRaw)
+              : null;
 
             return (
               <section
@@ -1699,11 +1705,13 @@ export function NestedRecommendationSheet({
                   )}
                 </div>
                 {configured ? (
-                  <p className="mt-2 text-xs text-primary">Options selected</p>
+                  <p className="mt-2 text-xs text-primary">
+                    {t('optionsSelected')}
+                  </p>
                 ) : null}
                 {missing ? (
                   <p className="mt-1 text-xs text-destructive">
-                    Please configure this recommendation
+                    {t('configureRecommendation')}
                   </p>
                 ) : null}
                 {needsSheet ? (
@@ -1716,8 +1724,8 @@ export function NestedRecommendationSheet({
                       {configured
                         ? selectedVariationLabel
                           ? `${resolve(item.name)} (${selectedVariationLabel})`
-                          : `Selected ${resolve(item.name)}`
-                        : `Select ${resolve(item.name)}`}
+                          : t('selectedNamed', { name: resolve(item.name) })
+                        : t('selectNamed', { name: resolve(item.name) })}
                     </span>
                     <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </button>
@@ -1773,10 +1781,10 @@ export function NestedRecommendationSheet({
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <h3 className="text-base font-semibold text-foreground">
-                  Select {resolve(product.name)}
+                  {t('selectNamed', { name: resolve(product.name) })}
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Choose a variation
+                  {t('chooseVariation')}
                 </p>
               </div>
               <Button
@@ -1815,11 +1823,11 @@ export function NestedRecommendationSheet({
                   >
                     <OptionThumbnail
                       imageUrl={v.imageUrl ?? product.imageUrl}
-                      name={v.name ?? v.title ?? 'Variation'}
+                      name={resolve(v.name ?? v.title) || t('variationLabel')}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
-                        {v.name ?? v.title ?? 'Variation'}
+                        {resolve(v.name ?? v.title) || t('variationLabel')}
                       </p>
                       {variationPriceLabel ? (
                         <p className="text-xs text-muted-foreground">
@@ -1849,10 +1857,12 @@ export function NestedRecommendationSheet({
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <h3 className="text-base font-semibold text-foreground">
-                  Select {resolve(productRecVariationTarget.item.name)}
+                  {t('selectNamed', {
+                    name: resolve(productRecVariationTarget.item.name),
+                  })}
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Choose a variation
+                  {t('chooseVariation')}
                 </p>
               </div>
               <Button
@@ -1894,11 +1904,11 @@ export function NestedRecommendationSheet({
                       imageUrl={
                         v.imageUrl ?? productRecVariationTarget.item.imageUrl
                       }
-                      name={v.name ?? v.title ?? 'Variation'}
+                      name={resolve(v.name ?? v.title) || t('variationLabel')}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
-                        {v.name ?? v.title ?? 'Variation'}
+                        {resolve(v.name ?? v.title) || t('variationLabel')}
                       </p>
                       {variationPriceLabel ? (
                         <p className="text-xs text-muted-foreground">
@@ -1928,10 +1938,12 @@ export function NestedRecommendationSheet({
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <h3 className="text-base font-semibold text-foreground">
-                  Select {resolve(optionVariationTarget.item.name)}
+                  {t('selectNamed', {
+                    name: resolve(optionVariationTarget.item.name),
+                  })}
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Choose a variation
+                  {t('chooseVariation')}
                 </p>
               </div>
               <Button
@@ -2018,11 +2030,11 @@ export function NestedRecommendationSheet({
                       imageUrl={
                         v.imageUrl ?? optionVariationTarget.item.imageUrl
                       }
-                      name={v.name ?? v.title ?? 'Variation'}
+                      name={resolve(v.name ?? v.title) || t('variationLabel')}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
-                        {v.name ?? v.title ?? 'Variation'}
+                        {resolve(v.name ?? v.title) || t('variationLabel')}
                       </p>
                       {variationPriceLabel ? (
                         <p className="text-xs text-muted-foreground">

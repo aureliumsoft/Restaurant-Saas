@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { ArrowLeft, Loader2, Plus, Trash2, X } from 'lucide-react';
@@ -50,6 +51,7 @@ const EMPTY_PRODUCT_FORM: ProductFormState = {
 };
 
 export default function ProductCreatePage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const {
@@ -152,14 +154,14 @@ export default function ProductCreatePage() {
       ingredientRows
     );
     if (!payload.ok) {
-      toast.error(payload.error);
+      toast.error(t(payload.error));
       return;
     }
 
     setSaving(true);
     try {
       await axios.post('/api/restaurant/menu/items', payload.body);
-      toast.success('Product created');
+      toast.success(t('dashboard.product.created'));
 
       if (mode === 'close') {
         allowNextNavigation();
@@ -172,7 +174,7 @@ export default function ProductCreatePage() {
       toast.error(
         typeof err.response?.data?.error === 'string'
           ? err.response.data.error
-          : 'Could not create product'
+          : t('dashboard.product.createFailed')
       );
     } finally {
       setSaving(false);
@@ -184,21 +186,21 @@ export default function ProductCreatePage() {
     <div className="w-full">
       <ErrorBoundary>
         <MenuPageShell
-          title="Add product"
-          description="Create a menu item with photo, category, pricing, and optional variations."
+          title={t('dashboard.product.addTitle')}
+          description={t('dashboard.product.addDescription')}
           loading={false}
         >
           <Card>
             <CardHeader className="flex flex-col gap-4 space-y-0">
               <div className="flex flex-row flex-wrap items-center justify-between gap-2">
-                <CardTitle>Create product</CardTitle>
+                <CardTitle>{t('dashboard.product.createTitle')}</CardTitle>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={goToProducts}
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back to products
+                  {t('dashboard.product.backToProducts')}
                 </Button>
               </div>
             </CardHeader>
@@ -206,7 +208,7 @@ export default function ProductCreatePage() {
               {showEmptyCategories ? (
                 <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
                   <p className="text-sm text-muted-foreground">
-                    Create at least one category before adding products.
+                    {t('dashboard.product.needCategory')}
                   </p>
                   <InventoryQuickActions
                     variant="toolbar"
@@ -249,12 +251,12 @@ export default function ProductCreatePage() {
                       {saving ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          <span>Creating...</span>
+                          <span>{t('dashboard.product.creating')}</span>
                         </>
                       ) : (
                         <>
                           <Plus className="h-4 w-4 mr-2" />
-                          <span>Create product</span>
+                          <span>{t('dashboard.product.createTitle')}</span>
                         </>
                       )}
                     </Button>
@@ -263,7 +265,7 @@ export default function ProductCreatePage() {
                       variant="outline"
                       onClick={goToProducts}
                     >
-                      <span>Cancel</span>
+                      <span>{t('dashboard.common.cancel')}</span>
                     </Button>
                   </div>
                 </>
@@ -280,18 +282,20 @@ export default function ProductCreatePage() {
         >
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+              <AlertDialogTitle>
+                {t('dashboard.common.discardUnsaved')}
+              </AlertDialogTitle>
               <AlertDialogDescription>{leaveMessage}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel type="button">
                 <X className="h-4 w-4 mr-2" />
-                <span>Keep Editing</span>
+                <span>{t('dashboard.common.keepEditing')}</span>
               </AlertDialogCancel>
               <AlertDialogAction type="button" onClick={confirmLeave}>
                 <>
                   <Trash2 className="h-4 w-4 mr-2" />
-                  <span>Leave Without Saving</span>
+                  <span>{t('dashboard.common.leaveWithoutSaving')}</span>
                 </>
               </AlertDialogAction>
             </AlertDialogFooter>

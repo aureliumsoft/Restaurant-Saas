@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Loader2, Plus } from 'lucide-react';
@@ -44,6 +45,7 @@ export function AddCategoryFormDialog({
   onCreated,
   defaultShowInFront = true,
 }: Props) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [showInFront, setShowInFront] = useState(defaultShowInFront);
@@ -60,7 +62,7 @@ export function AddCategoryFormDialog({
   const save = async () => {
     if (!name.trim() || saving) return;
     if (!parseBilingualInput(name).en) {
-      toast.error('English name (before &&&&) is required.');
+      toast.error(t('dashboard.menuManager.category.nameRequired'));
       return;
     }
     setSaving(true);
@@ -75,12 +77,14 @@ export function AddCategoryFormDialog({
         }
       );
       const created = res.data.data;
-      toast.success('Category created');
+      toast.success(t('dashboard.menuManager.category.created'));
       await onMenuRefresh?.();
       onCreated?.(created);
       onOpenChange(false);
     } catch (e: unknown) {
-      toast.error(apiErrorMessage(e, 'Could not create category'));
+      toast.error(
+        apiErrorMessage(e, t('dashboard.menuManager.category.createFailed'))
+      );
     } finally {
       setSaving(false);
     }
@@ -90,18 +94,19 @@ export function AddCategoryFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add category</DialogTitle>
+          <DialogTitle>{t('dashboard.menuManager.category.add')}</DialogTitle>
           <DialogDescription>
-            Create a menu section. It appears on the website, kiosk, and POS when
-            &quot;Show in front&quot; is enabled.
+            {t('dashboard.menuManager.category.addDescription')}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid gap-2">
-            <Label htmlFor="dialog-category-name">Name</Label>
+            <Label htmlFor="dialog-category-name">
+              {t('dashboard.common.name')}
+            </Label>
             <Input
               id="dialog-category-name"
-              placeholder={`English name ${'&&&&'} Spanish name`}
+              placeholder={t('dashboard.menuManager.bilingual.namePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={saving}
@@ -111,14 +116,16 @@ export function AddCategoryFormDialog({
               }}
             />
             <p className="text-xs text-muted-foreground">
-              First English, then separator &&&&, then Spanish.
+              {t('dashboard.menuManager.bilingual.hint')}
             </p>
           </div>
           <Base64ImageUploadField
-            label="Category image"
+            label={t('dashboard.menuManager.category.categoryImage')}
             value={imageUrl}
             onChange={setImageUrl}
-            helperText="Shown on website, kiosk, and POS category strips."
+            helperText={t(
+              'dashboard.menuManager.category.categoryImageHelper'
+            )}
           />
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input
@@ -128,7 +135,7 @@ export function AddCategoryFormDialog({
               onChange={(e) => setShowInFront(e.target.checked)}
               disabled={saving}
             />
-            <span>Show in front (website, kiosk, POS)</span>
+            <span>{t('dashboard.menuManager.category.showInFront')}</span>
           </label>
         </div>
         <DialogFooter>
@@ -138,7 +145,7 @@ export function AddCategoryFormDialog({
             onClick={() => onOpenChange(false)}
             disabled={saving}
           >
-            Cancel
+            {t('dashboard.common.cancel')}
           </Button>
           <Button
             type="button"
@@ -150,7 +157,9 @@ export function AddCategoryFormDialog({
             ) : (
               <Plus className="mr-2 h-4 w-4" />
             )}
-            {saving ? 'Adding…' : 'Add category'}
+            {saving
+              ? t('dashboard.menuManager.adding')
+              : t('dashboard.menuManager.category.add')}
           </Button>
         </DialogFooter>
       </DialogContent>

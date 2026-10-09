@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,7 @@ export function KioskPaymentSuccess({
   initialPayStatus,
   isMobile = false,
 }: Props) {
+  const { t } = useTranslation();
   const router = useRouter();
   const [ticket, setTicket] = useState<number | null>(ticketFromQuery);
   const [paymentStatus, setPaymentStatus] = useState<string>(
@@ -143,22 +145,24 @@ export function KioskPaymentSuccess({
         <Card className="border border-[#e2e8f0] bg-white text-[#0f172a] shadow-sm dark:border-[#e2e8f0] dark:bg-white dark:text-[#0f172a] dark:shadow-sm">
           <CardHeader>
             <CardTitle className="text-2xl text-[#0f172a] dark:text-[#0f172a]">
-              Kiosk order confirmed
+              {t('kioskOrderConfirmed')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-lg border border-[#e2e8f0] bg-white p-4 text-center dark:border-[#e2e8f0] dark:bg-white">
-              <p className="text-xs text-[#64748b] dark:text-[#64748b]">Ticket Number</p>
+              <p className="text-xs text-[#64748b] dark:text-[#64748b]">
+                {t('ticketNumber')}
+              </p>
               <p className="text-4xl font-bold tabular-nums text-[#0f172a] dark:text-[#0f172a]">
                 {ticket != null ? `#${ticket}` : '—'}
               </p>
             </div>
             <div className="text-sm text-[#0f172a] dark:text-[#0f172a]">
               <p>
-                <strong>Tracking ID:</strong> {trackingId ?? '—'}
+                <strong>{t('trackingId')}:</strong> {trackingId ?? '—'}
               </p>
               <div className="mt-1 flex items-center gap-2">
-                <strong>Payment:</strong>
+                <strong>{t('paymentColon')}</strong>
                 <span
                   className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
                     isCashPending
@@ -167,15 +171,15 @@ export function KioskPaymentSuccess({
                   }`}
                 >
                   {isCashPending
-                    ? 'Cash at counter (Pending)'
-                    : 'Paid'}
+                    ? t('cashAtCounterPending')
+                    : t('paid')}
                 </span>
               </div>
               {isCashPending ? (
                 <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  <p className="font-semibold">Cash payment required</p>
+                  <p className="font-semibold">{t('cashPaymentRequired')}</p>
                   <p className="mt-0.5 text-amber-700">
-                    Please proceed to the counter to pay. Your order will be prepared as soon as payment is received.
+                    {t('cashPaymentRequiredHint')}
                   </p>
                 </div>
               ) : null}
@@ -188,7 +192,7 @@ export function KioskPaymentSuccess({
                   onClick={printTicket}
                 >
                   <IconPrinter className="w-4 h-4 mr-2" />
-                  Print Ticket
+                  {t('printTicket')}
                 </Button>
               )}
               <Button
@@ -207,7 +211,7 @@ export function KioskPaymentSuccess({
                 }
               >
                 <IconHome className="w-4 h-4 mr-2" />
-                Back to Home
+                {t('backToHome')}
               </Button>
             </div>
           </CardContent>

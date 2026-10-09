@@ -674,7 +674,6 @@ export default function DashboardAnalytics() {
   const paymentSlices = useMemo(() => {
     const mix = analytics?.paymentMix;
     return [
-      { name: 'Cash', value: Number(mix?.cash) || 0, color: PAY_COLORS.cash },
       {
         name: t('dashboard.analytics.payCash'),
         value: Number(mix?.cash) || 0,

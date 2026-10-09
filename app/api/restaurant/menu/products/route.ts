@@ -12,6 +12,11 @@ import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { encodeUrlId } from '@/lib/url-id';
 import { menuItemApiPath } from '@/lib/dashboard-paths';
 import { withImageCacheBust } from '@/lib/image-cache-bust';
+import {
+  looksLikeBilingualJson,
+  parseStoredBilingualText,
+  serializeBilingualText,
+} from '@/lib/menu/bilingual-text';
 
 /** Lazy image URL — browser loads photo after list JSON (does not bloat list payload). */
 function lazyProductImageUrl(
@@ -102,12 +107,34 @@ function categoryFilterWhere(
   };
 }
 
+function truncatePlain(value: string, max = 160): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, Math.max(0, max - 1))}…`;
+}
+
+/**
+ * Truncate list descriptions without slicing bilingual JSON mid-payload
+ * (that broke resolveBilingualText and showed `{"en":...}` in the UI).
+ */
 function truncateDescription(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  if (trimmed.length <= 160) return trimmed;
-  return `${trimmed.slice(0, 157)}…`;
+
+  const isBilingual =
+    looksLikeBilingualJson(trimmed) || trimmed.includes('&&&&');
+  if (!isBilingual) {
+    const plain = truncatePlain(trimmed);
+    return plain || null;
+  }
+
+  const parts = parseStoredBilingualText(trimmed);
+  const en = truncatePlain(parts.en || parts.es);
+  const es = truncatePlain(parts.es || parts.en);
+  if (!en && !es) return null;
+  return serializeBilingualText({ en, es });
 }
 
 export async function GET(req: NextRequest) {

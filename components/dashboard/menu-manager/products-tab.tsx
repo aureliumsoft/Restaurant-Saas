@@ -324,7 +324,9 @@ export function ProductsTab({
     } catch (e: unknown) {
       if (requestId !== requestIdRef.current) return;
       const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || 'Failed to load products');
+      toast.error(
+        err.response?.data?.error || t('dashboard.product.loadFailed')
+      );
       setProducts([]);
     } finally {
       if (requestId === requestIdRef.current) {
@@ -372,11 +374,11 @@ export function ProductsTab({
         const body = (await res.json().catch(() => ({}))) as {
           error?: string;
         };
-        throw new Error(body.error || 'Export failed');
+        throw new Error(body.error || t('dashboard.product.exportFailed'));
       }
       const blob = await res.blob();
       if (blob.size === 0) {
-        throw new Error('Export file was empty');
+        throw new Error(t('dashboard.product.exportEmpty'));
       }
       const disposition = res.headers.get('Content-Disposition') || '';
       const match = disposition.match(/filename="([^"]+)"/);
@@ -392,9 +394,11 @@ export function ProductsTab({
       a.remove();
       URL.revokeObjectURL(url);
       setShowExportConfirmation(false);
-      toast.success('Products exported to CSV');
+      toast.success(t('dashboard.product.exportSuccess'));
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Could not export products');
+      toast.error(
+        e instanceof Error ? e.message : t('dashboard.product.exportError')
+      );
     } finally {
       setExporting(false);
     }
@@ -407,13 +411,13 @@ export function ProductsTab({
       await axios.delete(
         menuItemApiPath(deletingProduct.id, '', deletingProduct.urlId)
       );
-      toast.success('Deleted');
+      toast.success(t('dashboard.product.deleted'));
       setDeleteConfirmOpen(false);
       setDeletingProduct(null);
       await refreshAll();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || 'Delete failed');
+      toast.error(err.response?.data?.error || t('dashboard.product.deleteFailed'));
     } finally {
       setDeleting(false);
     }
@@ -425,7 +429,9 @@ export function ProductsTab({
         <Button type="button" size="icon" variant="outline" asChild>
           <Link
             href={productEditPath(item.urlId ?? item.id)}
-            aria-label={`Edit ${resolveBilingualText(item.name, uiLang)}`}
+            aria-label={t('dashboard.product.editAria', {
+              name: resolveBilingualText(item.name, uiLang),
+            })}
           >
             <Pencil className="h-4 w-4" />
           </Link>
@@ -481,7 +487,7 @@ export function ProductsTab({
             disabled={exporting}
           >
             <Download className="mr-2 h-4 w-4" />
-            Import CSV
+            {t('dashboard.product.importCsv')}
           </Button>
           <Button
             type="button"
@@ -494,7 +500,7 @@ export function ProductsTab({
             ) : (
               <Upload className="mr-2 h-4 w-4" />
             )}
-            Export CSV
+            {t('dashboard.product.exportCsv')}
           </Button>
           <InventoryQuickActions
             onMenuRefresh={refreshAll}
@@ -506,7 +512,7 @@ export function ProductsTab({
         {noCategories ? (
           <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
             <p className="text-sm text-muted-foreground">
-              Create at least one category before you can add products.
+              {t('dashboard.product.needCategory')}
             </p>
             <InventoryQuickActions
               variant="toolbar"
@@ -520,11 +526,13 @@ export function ProductsTab({
               <Button type="button" asChild>
                 <Link href="/product/create">
                   <Plus className="mr-2 h-4 w-4" />
-                  Add product
+                  {t('dashboard.product.addProduct')}
                 </Link>
               </Button>
             ) : null}
-            <p className="text-sm text-muted-foreground">No products yet.</p>
+            <p className="text-sm text-muted-foreground">
+              {t('dashboard.product.empty')}
+            </p>
           </div>
         ) : showToolbarAndTable ? (
           <div className="space-y-4">
@@ -537,7 +545,7 @@ export function ProductsTab({
                 onSearch={applySearch}
                 onClear={clearSearch}
                 appliedValue={appliedSearch}
-                placeholder="Search by name, description, or category…"
+                placeholder={t('dashboard.product.searchPlaceholder')}
               />
               <div className="flex w-full items-center gap-2 sm:w-auto sm:min-w-[14rem]">
                 <ListFilter
@@ -551,15 +559,18 @@ export function ProductsTab({
                     setCategoryFilter(value || ALL_CATEGORIES);
                   }}
                   options={[
-                    { value: ALL_CATEGORIES, label: 'All categories' },
+                    {
+                      value: ALL_CATEGORIES,
+                      label: t('dashboard.product.allCategories'),
+                    },
                     ...categories.map((c) => ({
                       value: c.id,
                       label: resolveBilingualText(c.name, uiLang),
                     })),
                   ]}
-                  placeholder="Category"
-                  searchPlaceholder="Search categories…"
-                  emptyText="No categories match."
+                  placeholder={t('dashboard.product.categoryFilter')}
+                  searchPlaceholder={t('dashboard.product.searchCategories')}
+                  emptyText={t('dashboard.product.noCategoriesMatch')}
                 />
               </div>
               {canEditProducts ? (
@@ -570,7 +581,7 @@ export function ProductsTab({
                 >
                   <Link href="/product/create">
                     <Plus className="mr-2 h-4 w-4" />
-                    Add product
+                    {t('dashboard.product.addProduct')}
                   </Link>
                 </Button>
               ) : null}
@@ -581,7 +592,7 @@ export function ProductsTab({
                   size="icon"
                   className="h-9 w-9"
                   aria-pressed={view === 'list'}
-                  aria-label="List view"
+                  aria-label={t('dashboard.product.listView')}
                   onClick={() => changeView('list')}
                 >
                   <LayoutList className="h-4 w-4" />
@@ -592,7 +603,7 @@ export function ProductsTab({
                   size="icon"
                   className="h-9 w-9"
                   aria-pressed={view === 'grid'}
-                  aria-label="Grid view"
+                  aria-label={t('dashboard.product.gridView')}
                   onClick={() => changeView('grid')}
                 >
                   <LayoutGrid className="h-4 w-4" />
@@ -602,10 +613,15 @@ export function ProductsTab({
 
             <p className="text-xs text-muted-foreground">
               {loading
-                ? `Loading page ${page}…`
+                ? t('dashboard.product.loadingPage', { page })
                 : pagination.total === 0
-                  ? 'No products match your search or filter.'
-                  : `Showing ${products.length} of ${pagination.total} product${pagination.total === 1 ? '' : 's'} · page ${pagination.page} of ${pagination.totalPages} · sorted by newest or recently updated.`}
+                  ? t('dashboard.product.emptySearch')
+                  : t('dashboard.product.showingSummary', {
+                      shown: products.length,
+                      total: pagination.total,
+                      page: pagination.page,
+                      totalPages: pagination.totalPages,
+                    })}
             </p>
 
             {loading || pagination.total > 0 ? (
@@ -616,17 +632,25 @@ export function ProductsTab({
                       <DashboardTableHeader>
                         <DashboardTableRow>
                           <DashboardTableHead className="w-16">
-                            Photo
+                            {t('dashboard.product.colPhoto')}
                           </DashboardTableHead>
-                          <DashboardTableHead>Name</DashboardTableHead>
-                          <DashboardTableHead>Category</DashboardTableHead>
-                          <DashboardTableHead>Price</DashboardTableHead>
-                          <DashboardTableHead>Sale</DashboardTableHead>
+                          <DashboardTableHead>
+                            {t('dashboard.product.colName')}
+                          </DashboardTableHead>
+                          <DashboardTableHead>
+                            {t('dashboard.product.colCategory')}
+                          </DashboardTableHead>
+                          <DashboardTableHead>
+                            {t('dashboard.product.colPrice')}
+                          </DashboardTableHead>
+                          <DashboardTableHead>
+                            {t('dashboard.product.colSale')}
+                          </DashboardTableHead>
                           <DashboardTableHead className="hidden lg:table-cell">
-                            Created
+                            {t('dashboard.product.colCreated')}
                           </DashboardTableHead>
                           <DashboardTableHead className="hidden md:table-cell">
-                            Modified
+                            {t('dashboard.product.colModified')}
                           </DashboardTableHead>
                           <DashboardTableHead className="w-28" />
                         </DashboardTableRow>
@@ -645,6 +669,10 @@ export function ProductsTab({
                               const categoryNames = item.categoryNames ?? [
                                 item.categoryName,
                               ];
+                              const descriptionText = resolveBilingualText(
+                                item.description,
+                                uiLang
+                              );
                               return (
                                 <DashboardTableRow key={item.id}>
                                   <DashboardTableCell>
@@ -659,18 +687,16 @@ export function ProductsTab({
                                     <div className="font-medium">
                                       {resolveBilingualText(item.name, uiLang)}
                                     </div>
-                                    {item.description ? (
+                                    {descriptionText ? (
                                       <div className="line-clamp-2 text-wrap text-xs font-light text-muted-foreground">
-                                        {resolveBilingualText(
-                                          item.description,
-                                          uiLang
-                                        )}
+                                        {descriptionText}
                                       </div>
                                     ) : null}
                                     {variationCount > 0 ? (
                                       <div className="mt-0.5 text-[11px] text-muted-foreground">
-                                        {variationCount} variation
-                                        {variationCount === 1 ? '' : 's'}
+                                        {t('dashboard.product.variationCount', {
+                                          count: variationCount,
+                                        })}
                                       </div>
                                     ) : null}
                                   </DashboardTableCell>
@@ -701,7 +727,7 @@ export function ProductsTab({
                                     {display.hasVariations ? (
                                       <>
                                         <span className="text-xs text-muted-foreground">
-                                          From{' '}
+                                          {t('dashboard.product.priceFromLabel')}{' '}
                                         </span>
                                         <span className="font-medium">
                                           {formatMoney(display.amount)}
@@ -720,7 +746,7 @@ export function ProductsTab({
                                   <DashboardTableCell className="tabular-nums">
                                     {display.hasVariations ? (
                                       <span className="text-xs text-muted-foreground">
-                                        via variations
+                                        {t('dashboard.product.viaVariations')}
                                       </span>
                                     ) : display.compareAt != null ? (
                                       <span className="font-medium text-emerald-600 dark:text-emerald-400">
@@ -801,15 +827,18 @@ export function ProductsTab({
                                   </div>
                                   {variationCount > 0 ? (
                                     <p className="text-[11px] text-muted-foreground">
-                                      {variationCount} variation
-                                      {variationCount === 1 ? '' : 's'}
+                                      {t('dashboard.product.variationCount', {
+                                        count: variationCount,
+                                      })}
                                     </p>
                                   ) : null}
                                 </div>
                                 <div className="tabular-nums text-sm">
                                   {display.hasVariations ? (
                                     <span className="font-medium">
-                                      From {formatMoney(display.amount)}
+                                      {t('dashboard.product.priceFrom', {
+                                        price: formatMoney(display.amount),
+                                      })}
                                     </span>
                                   ) : display.compareAt != null ? (
                                     <span>
@@ -863,14 +892,14 @@ export function ProductsTab({
 
       <SaveConfirmation
         open={showExportConfirmation}
-        title="Export products"
+        title={t('dashboard.product.exportTitle')}
         description={
           appliedSearch || categoryFilter !== ALL_CATEGORIES
-            ? 'Download a CSV of products matching your current search and category filters? Images are not included.'
-            : 'Download a CSV of all products? Images are not included.'
+            ? t('dashboard.product.exportDescriptionFiltered')
+            : t('dashboard.product.exportDescriptionAll')
         }
         loading={exporting}
-        confirmText="Export CSV"
+        confirmText={t('dashboard.product.exportCsv')}
         onConfirm={() => void exportProductsCsv()}
         onCancel={() => {
           if (!exporting) setShowExportConfirmation(false);
@@ -879,9 +908,13 @@ export function ProductsTab({
 
       <DeleteConfirmation
         open={deleteConfirmOpen}
-        title="Delete product"
-        description="This product will be removed permanently."
-        itemName={deletingProduct?.name}
+        title={t('dashboard.product.deleteTitle')}
+        description={t('dashboard.product.deleteDescription')}
+        itemName={
+          deletingProduct
+            ? resolveBilingualText(deletingProduct.name, uiLang)
+            : undefined
+        }
         loading={deleting}
         onConfirm={() => void remove()}
         onCancel={() => {

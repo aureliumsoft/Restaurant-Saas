@@ -111,7 +111,7 @@ export function RestaurantVariationsPanel() {
   const add = async () => {
     if (!name.trim() || adding) return;
     if (!parseBilingualInput(name).en) {
-      toast.error('English name (before &&&&) is required.');
+      toast.error(t('dashboard.menuManager.variation.nameRequired'));
       return;
     }
     setAdding(true);
@@ -134,7 +134,7 @@ export function RestaurantVariationsPanel() {
   const save = async () => {
     if (!pendingSave) return;
     if (!parseBilingualInput(pendingSave.name).en) {
-      toast.error('English name (before &&&&) is required.');
+      toast.error(t('dashboard.menuManager.variation.nameRequired'));
       return;
     }
     setSaving(true);
@@ -159,10 +159,12 @@ export function RestaurantVariationsPanel() {
     setDeleting(true);
     try {
       await axios.delete(`/api/restaurant/variations/${deletingId}`);
-      toast.success('Deleted');
+      toast.success(t('dashboard.menuManager.variation.deleted'));
       await load();
     } catch (e: unknown) {
-      toast.error(apiErrorMessage(e, 'Could not delete variation'));
+      toast.error(
+        apiErrorMessage(e, t('dashboard.menuManager.variation.deleteFailed'))
+      );
     } finally {
       setDeleting(false);
       setConfirmDeleteOpen(false);
@@ -176,19 +178,25 @@ export function RestaurantVariationsPanel() {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Create Variation</CardTitle>
+          <CardTitle>
+            {t('dashboard.menuManager.variation.createTitle')}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
             <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 items-end justify-end">
               <div className="grid gap-1.5">
-                <Label htmlFor="new-variation-name">Name</Label>
+                <Label htmlFor="new-variation-name">
+                  {t('dashboard.common.name')}
+                </Label>
                 <p className="text-xs text-muted-foreground">
-                  First English, then separator &&&&, then Spanish.
+                  {t('dashboard.menuManager.bilingual.hint')}
                 </p>
                 <Input
                   id="new-variation-name"
-                  placeholder={`English name ${'&&&&'} Spanish name`}
+                  placeholder={t(
+                    'dashboard.menuManager.bilingual.namePlaceholder'
+                  )}
                   value={name}
                   onChange={(e) =>
                     setName(filterNameTextInput(e.target.value))
@@ -202,10 +210,14 @@ export function RestaurantVariationsPanel() {
                
               </div>
               <div className="grid gap-1.5 ">
-                <Label htmlFor="new-variation-short">Short label (optional)</Label>
+                <Label htmlFor="new-variation-short">
+                  {t('dashboard.menuManager.variation.shortLabelOptional')}
+                </Label>
                 <Input
                   id="new-variation-short"
-                  placeholder="e.g. M"
+                  placeholder={t(
+                    'dashboard.menuManager.variation.shortLabelPlaceholder'
+                  )}
                   value={shortLabel}
                   onChange={(e) => setShortLabel(e.target.value)}
                   className="bg-background"
@@ -223,7 +235,9 @@ export function RestaurantVariationsPanel() {
               ) : (
                 <Plus className="mr-2 h-4 w-4" aria-hidden />
               )}
-              {adding ? 'Adding…' : 'Add variation'}
+              {adding
+                ? t('dashboard.menuManager.adding')
+                : t('dashboard.menuManager.variation.add')}
             </Button>
             </div>
            
@@ -296,7 +310,7 @@ export function RestaurantVariationsPanel() {
       <SaveConfirmation
         open={confirmSaveOpen}
         title={t('dashboard.menuManager.variation.save')}
-        description="Update this variation template. Products and configuration rules that use it will reflect the new name and label."
+        description={t('dashboard.menuManager.variation.saveDescription')}
         itemName={
           pendingSave?.name
             ? resolveBilingualText(pendingSave.name, 'en')
@@ -314,7 +328,7 @@ export function RestaurantVariationsPanel() {
       <DeleteConfirmation
         open={confirmDeleteOpen}
         title={t('dashboard.menuManager.variation.delete')}
-        description="This removes the template. Products already using it may need to be updated."
+        description={t('dashboard.menuManager.variation.deleteDescription')}
         itemName={resolveBilingualText(deletingRow?.name, uiLang)}
         loading={deleting}
         onConfirm={() => {
@@ -400,7 +414,7 @@ function VariationCard({
             variant="ghost"
             className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
             onClick={() => onDelete(variation.id)}
-            aria-label="Delete variation"
+            aria-label={t('dashboard.menuManager.variation.deleteAria')}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -409,32 +423,38 @@ function VariationCard({
         {editing ? (
           <div className="space-y-3">
             <div className="grid gap-1.5">
-              <Label>Name</Label>
+              <Label>{t('dashboard.common.name')}</Label>
               <Input
                 value={editName}
-                placeholder={`English name ${'&&&&'} Spanish name`}
+                placeholder={t(
+                  'dashboard.menuManager.bilingual.namePlaceholder'
+                )}
                 onChange={(e) =>
                   setEditName(filterNameTextInput(e.target.value))
                 }
                 autoFocus
-                aria-label="Variation name"
+                aria-label={t('dashboard.menuManager.variation.nameAria')}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') requestSave();
                   if (e.key === 'Escape') cancelEdit();
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                First English, then separator &&&&, then Spanish.
+                {t('dashboard.menuManager.bilingual.hint')}
               </p>
             </div>
             <div className="grid gap-1.5">
-              <Label>Short label</Label>
+              <Label>
+                {t('dashboard.menuManager.variation.shortLabel')}
+              </Label>
               <Input
                 value={editShortLabel}
                 onChange={(e) => setEditShortLabel(e.target.value)}
-                placeholder="M"
+                placeholder={t(
+                  'dashboard.menuManager.variation.shortLabelPlaceholder'
+                )}
                 maxLength={20}
-                aria-label="Short label"
+                aria-label={t('dashboard.menuManager.variation.shortLabel')}
               />
             </div>
             <div className="flex gap-2">
@@ -444,7 +464,7 @@ function VariationCard({
                 disabled={!editName.trim()}
                 onClick={requestSave}
               >
-                Save
+                {t('dashboard.common.save')}
               </Button>
               <Button
                 type="button"
@@ -467,7 +487,7 @@ function VariationCard({
               variant="ghost"
               className="h-8 w-8 shrink-0"
               onClick={() => setEditing(true)}
-              aria-label="Edit variation"
+              aria-label={t('dashboard.menuManager.variation.editAria')}
             >
               <Pencil className="h-4 w-4" />
             </Button>
@@ -477,7 +497,7 @@ function VariationCard({
       {!editing && variation.shortLabel ? (
         <CardContent className="pt-0">
           <p className="text-xs text-muted-foreground">
-            Short label used in configuration headers
+            {t('dashboard.menuManager.variation.shortLabelHint')}
           </p>
         </CardContent>
       ) : null}

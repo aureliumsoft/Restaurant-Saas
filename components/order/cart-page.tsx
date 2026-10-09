@@ -505,12 +505,12 @@ export default function CartPageClient({
               </div>
               <div className="flex justify-between gap-3">
                 <span className="text-[#8e8e9a]">{t('name')}</span>
-                <span className="font-semibold">{resolvedCustomerName || 'N/A'}</span>
+                <span className="font-semibold">{resolvedCustomerName || t('na')}</span>
               </div>
               <div className="flex justify-between gap-3">
                 <span className="text-[#8e8e9a]">{t('phoneLabel')}</span>
                 <span className="font-semibold">
-                  {customerPhone.trim() || orderInfo.customerPhone || 'N/A'}
+                  {customerPhone.trim() || orderInfo.customerPhone || t('na')}
                 </span>
               </div>
               {orderInfo.mode === 'delivery' ? (
@@ -518,19 +518,19 @@ export default function CartPageClient({
                   <div className="flex justify-between gap-3">
                     <span className="shrink-0 text-[#8e8e9a]">{t('address')}</span>
                     <span className="break-words text-right font-semibold">
-                      {orderInfo.address || 'N/A'}
+                      {orderInfo.address || t('na')}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3">
                     <span className="text-[#8e8e9a]">{t('apartment')}</span>
                     <span className="font-semibold">
-                      {orderInfo.apartment || 'N/A'}
+                      {orderInfo.apartment || t('na')}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3">
                     <span className="text-[#8e8e9a]">{t('gateCode')}</span>
                     <span className="font-semibold">
-                      {orderInfo.gateCode || 'N/A'}
+                      {orderInfo.gateCode || t('na')}
                     </span>
                   </div>
                 </>
@@ -539,13 +539,13 @@ export default function CartPageClient({
                   <div className="flex justify-between gap-3">
                     <span className="text-[#8e8e9a]">{t('store')}</span>
                     <span className="break-words text-right font-semibold">
-                      {orderInfo.storeName || 'N/A'}
+                      {orderInfo.storeName || t('na')}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3">
                     <span className="shrink-0 text-[#8e8e9a]">{t('storeAddress')}</span>
                     <span className="break-words text-right font-semibold">
-                      {orderInfo.storeAddress || 'N/A'}
+                      {orderInfo.storeAddress || t('na')}
                     </span>
                   </div>
                 </>
@@ -623,7 +623,7 @@ export default function CartPageClient({
                           className="inline-flex h-10 w-10 items-center justify-center bg-primary text-primary-foreground transition hover:brightness-95 disabled:opacity-40"
                           onClick={() => adjustQuantity(line.lineId, -1)}
                           disabled={line.quantity <= 1}
-                          aria-label="Decrease quantity"
+                          aria-label={t('decreaseQuantity')}
                         >
                           <IconMinus className="h-4 w-4" strokeWidth={2.5} />
                         </button>
@@ -634,7 +634,7 @@ export default function CartPageClient({
                           type="button"
                           className="inline-flex h-10 w-10 items-center justify-center bg-primary text-primary-foreground transition hover:brightness-95"
                           onClick={() => adjustQuantity(line.lineId, 1)}
-                          aria-label="Increase quantity"
+                          aria-label={t('increaseQuantity')}
                         >
                           <IconPlus className="h-4 w-4" strokeWidth={2.5} />
                         </button>
@@ -647,7 +647,7 @@ export default function CartPageClient({
                           type="button"
                           className="inline-flex h-10 w-10 items-center justify-center bg-[#fee2e2] text-[#b91c1c] transition hover:bg-[#fecaca]"
                           onClick={() => removeFromCart(line.lineId)}
-                          aria-label="Remove item"
+                          aria-label={t('removeItem')}
                         >
                           <IconTrash className="h-4 w-4" />
                         </button>

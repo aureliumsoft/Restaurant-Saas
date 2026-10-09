@@ -11,6 +11,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** True when a string looks like our persisted `{ "en", "es" }` payload. */
+export function looksLikeBilingualJson(raw: string): boolean {
+  const t = raw.trim();
+  if (!t.startsWith('{') || !t.endsWith('}')) return false;
+  return /"en"\s*:/.test(t) || /"es"\s*:/.test(t);
+}
+
 function partsFromRecord(parsed: Record<string, unknown>): BilingualText | null {
   const en =
     typeof parsed.en === 'string'
@@ -30,12 +37,50 @@ function partsFromRecord(parsed: Record<string, unknown>): BilingualText | null 
   return null;
 }
 
+/**
+ * If en/es values were accidentally saved as nested bilingual JSON strings,
+ * unwrap them so the UI never shows `{"en":...}`.
+ */
+function unwrapNestedBilingualParts(
+  parts: BilingualText,
+  depth = 0
+): BilingualText {
+  if (depth > 4) return parts;
+  let { en, es } = parts;
+
+  const enIsJson = en ? looksLikeBilingualJson(en) : false;
+  const esIsJson = es ? looksLikeBilingualJson(es) : false;
+
+  if (enIsJson) {
+    const inner = parseStoredBilingualText(en);
+    // Outer was a mistaken wrap of a full bilingual payload
+    if (!es || esIsJson || es === en) {
+      return unwrapNestedBilingualParts(inner, depth + 1);
+    }
+    en = inner.en || inner.es || en;
+  }
+
+  if (esIsJson) {
+    const inner = parseStoredBilingualText(es);
+    if (!en) {
+      return unwrapNestedBilingualParts(inner, depth + 1);
+    }
+    es = inner.es || inner.en || es;
+  }
+
+  return { en, es };
+}
+
 /** Split editor input: "English &&&& Spanish". */
 export function parseBilingualInput(input: string): BilingualText {
   const raw = input ?? '';
   const idx = raw.indexOf(BILINGUAL_SEPARATOR);
   if (idx < 0) {
     const only = raw.trim();
+    // Form accidentally holds stored JSON — treat as stored payload, not plain EN.
+    if (looksLikeBilingualJson(only)) {
+      return parseStoredBilingualText(only);
+    }
     return { en: only, es: '' };
   }
   return {
@@ -46,19 +91,23 @@ export function parseBilingualInput(input: string): BilingualText {
 
 /** Build editor value from parts. */
 export function bilingualInputFromParts(parts: BilingualText): string {
-  const en = parts.en?.trim() ?? '';
-  const es = parts.es?.trim() ?? '';
+  const unwrapped = unwrapNestedBilingualParts(parts);
+  const en = unwrapped.en?.trim() ?? '';
+  const es = unwrapped.es?.trim() ?? '';
   if (!en && !es) return '';
   if (!es) return en;
   if (!en) return `${BILINGUAL_SEPARATOR} ${es}`.trim();
+  // Same text in both locales → show once (single-language content).
+  if (en === es) return en;
   return `${en} ${BILINGUAL_SEPARATOR} ${es}`;
 }
 
 /** Persist as stringified `{ en, es }`. */
 export function serializeBilingualText(parts: BilingualText): string {
+  const unwrapped = unwrapNestedBilingualParts(parts);
   return JSON.stringify({
-    en: parts.en?.trim() ?? '',
-    es: parts.es?.trim() ?? '',
+    en: unwrapped.en?.trim() ?? '',
+    es: unwrapped.es?.trim() ?? '',
   });
 }
 
@@ -71,50 +120,97 @@ export function parseStoredBilingualText(raw: unknown): BilingualText {
 
   if (isRecord(raw)) {
     const fromObj = partsFromRecord(raw);
-    if (fromObj) return fromObj;
+    if (fromObj) return unwrapNestedBilingualParts(fromObj);
     return { ...EMPTY };
   }
 
-  if (typeof raw !== 'string' && typeof raw !== 'number' && typeof raw !== 'boolean') {
+  if (
+    typeof raw !== 'string' &&
+    typeof raw !== 'number' &&
+    typeof raw !== 'boolean'
+  ) {
     return { ...EMPTY };
   }
 
   const trimmed = String(raw).trim();
   if (!trimmed) return { ...EMPTY };
 
-  if (trimmed.startsWith('{')) {
+  if (trimmed.startsWith('{') || trimmed.startsWith('"')) {
     try {
-      const parsed: unknown = JSON.parse(trimmed);
+      let parsed: unknown = JSON.parse(trimmed);
+      // Double-encoded string payload
+      if (typeof parsed === 'string') {
+        return parseStoredBilingualText(parsed);
+      }
       if (isRecord(parsed)) {
         const fromJson = partsFromRecord(parsed);
-        if (fromJson) return fromJson;
+        if (fromJson) return unwrapNestedBilingualParts(fromJson);
       }
     } catch {
-      // fall through to legacy
+      // fall through — try regex salvage for near-JSON blobs
+      const salvaged = salvageBilingualJson(trimmed);
+      if (salvaged) return unwrapNestedBilingualParts(salvaged);
     }
   }
 
   // Legacy: either plain text or still using &&&& in DB
   if (trimmed.includes(BILINGUAL_SEPARATOR)) {
-    return parseBilingualInput(trimmed);
+    return unwrapNestedBilingualParts(parseBilingualInput(trimmed));
   }
+
+  // Plain single-language string — available for both UI languages.
   return { en: trimmed, es: trimmed };
 }
 
-/** Pick locale for display; fall back to the other locale, then empty. */
+/** Best-effort extract en/es when JSON.parse fails (e.g. bad quotes inside). */
+function salvageBilingualJson(raw: string): BilingualText | null {
+  if (!looksLikeBilingualJson(raw)) return null;
+  const enMatch = raw.match(/"en"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  const esMatch = raw.match(/"es"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (!enMatch && !esMatch) return null;
+  const unescape = (s: string) => {
+    try {
+      return JSON.parse(`"${s}"`) as string;
+    } catch {
+      return s.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+    }
+  };
+  return {
+    en: enMatch ? unescape(enMatch[1]).trim() : '',
+    es: esMatch ? unescape(esMatch[1]).trim() : '',
+  };
+}
+
+/**
+ * Pick locale for display; fall back to the other locale.
+ * Never returns a raw `{"en":...}` blob — unwraps nested bilingual JSON.
+ */
 export function resolveBilingualText(
   raw: unknown,
   lang: UiLanguage
 ): string {
   const parts = parseStoredBilingualText(raw);
-  const primary = lang === 'en' ? parts.en : parts.es;
-  if (primary) return primary;
-  return lang === 'en' ? parts.es : parts.en;
+  let primary = (lang === 'en' ? parts.en : parts.es).trim();
+  if (!primary) {
+    primary = (lang === 'en' ? parts.es : parts.en).trim();
+  }
+  // Defensive: if something still looks like stored JSON, unwrap once more.
+  if (primary && looksLikeBilingualJson(primary)) {
+    return resolveBilingualText(primary, lang);
+  }
+  return primary;
 }
 
 /** Serialize editor input to DB string (empty → ""). */
 export function serializeBilingualInput(input: string): string {
-  const parts = parseBilingualInput(input);
+  const trimmed = (input ?? '').trim();
+  if (!trimmed) return '';
+  // Already a stored bilingual payload — normalize, do not nest again.
+  if (looksLikeBilingualJson(trimmed)) {
+    const parts = parseStoredBilingualText(trimmed);
+    if (parts.en || parts.es) return serializeBilingualText(parts);
+  }
+  const parts = parseBilingualInput(trimmed);
   if (!parts.en && !parts.es) return '';
   return serializeBilingualText(parts);
 }

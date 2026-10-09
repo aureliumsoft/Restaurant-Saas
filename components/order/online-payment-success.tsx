@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { ArrowRight, Check, Copy, Home } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -52,6 +53,7 @@ export function OnlinePaymentSuccess({
   orderInfo: initialOrderInfo,
   initialThemePrimaryColor = null,
 }: Props) {
+  const { t } = useTranslation();
   const orderInfo = useOrderInfo(flowOrderId, orderType, initialOrderInfo);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -97,12 +99,12 @@ export function OnlinePaymentSuccess({
     try {
       await navigator.clipboard.writeText(displayTrackingId);
       setCopied(true);
-      toast.success('Tracking ID copied');
+      toast.success(t('trackingIdCopied'));
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error('Could not copy tracking ID');
+      toast.error(t('couldNotCopyTrackingId'));
     }
-  }, [displayTrackingId]);
+  }, [displayTrackingId, t]);
 
   useEffect(() => {
     try {
@@ -254,13 +256,13 @@ export function OnlinePaymentSuccess({
           const msg =
             typeof body.error === 'string'
               ? body.error
-              : 'Could not confirm payment.';
+              : t('couldNotConfirmPayment');
           setSyncError(msg);
         }
       } catch {
         if (!cancelled) {
           setPaid(false);
-          setSyncError('Could not confirm payment. Please contact the restaurant.');
+          setSyncError(t('couldNotConfirmPaymentContact'));
         }
       } finally {
         if (!cancelled) setVerifying(false);
@@ -271,7 +273,7 @@ export function OnlinePaymentSuccess({
       cancelled = true;
       verifyStartedRef.current = false;
     };
-  }, [sessionId, token, slugForVerify]);
+  }, [sessionId, token, slugForVerify, t]);
 
   return (
     <div
@@ -286,39 +288,39 @@ export function OnlinePaymentSuccess({
         <Card className={cn(panelClass, 'text-[#1f1f2e] dark:text-[#1f1f2e]')}>
           <CardHeader>
             <CardTitle className="text-2xl text-[#1f1f2e] dark:text-[#1f1f2e]">
-              Payment successful
+              {t('paymentSuccessful')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-[#8e8e9a] dark:text-[#8e8e9a]">
               {verifying
-                ? 'Confirming your payment and placing your order…'
+                ? t('confirmingPayment')
                 : syncError
                   ? syncError
                   : paid === false
-                    ? 'Payment confirmation is still syncing. Please keep your order token and tracking ID.'
-                    : 'Your order is confirmed. Note your order token and tracking ID below.'}
+                    ? t('paymentSyncingKeepIds')
+                    : t('orderConfirmedNoteIds')}
             </p>
             <div className="rounded-lg border border-[#e8eaef] bg-white p-4 text-center dark:border-[#e8eaef] dark:bg-white">
               <p className="text-xs text-[#8e8e9a] dark:text-[#8e8e9a]">
-                Order token
+                {t('orderToken')}
               </p>
               <p className="mt-1 font-mono text-4xl font-bold tabular-nums text-[#1f1f2e] dark:text-[#1f1f2e]">
                 {formatTokenNumber(ticket)}
               </p>
               <p className="mt-2 text-xs text-[#8e8e9a] dark:text-[#8e8e9a]">
                 {orderType === 'pickUp'
-                  ? 'Show this number when you pick up your order.'
-                  : 'Your order number for today at this restaurant.'}
+                  ? t('showNumberOnPickup')
+                  : t('orderNumberForToday')}
               </p>
             </div>
             <div className="rounded-lg border border-[#e8eaef] bg-white p-4 dark:border-[#e8eaef] dark:bg-white">
               <p className="text-xs text-[#8e8e9a] dark:text-[#8e8e9a]">
-                Tracking ID
+                {t('trackingId')}
               </p>
               <div className="mt-1 flex items-center justify-between gap-3">
                 <p className="min-w-0 break-all font-mono text-lg font-semibold text-[#1f1f2e] dark:text-[#1f1f2e]">
-                  {displayTrackingId ?? 'Unavailable'}
+                  {displayTrackingId ?? t('notAvailable')}
                 </p>
                 <Button
                   type="button"
@@ -326,14 +328,16 @@ export function OnlinePaymentSuccess({
                   className="shrink-0 border-[#e8eaef] bg-white text-primary hover:bg-white dark:border-[#e8eaef] dark:bg-white dark:text-primary dark:hover:bg-white"
                   onClick={copyTrackingId}
                   disabled={!displayTrackingId}
-                  aria-label="Copy tracking ID"
+                  aria-label={t('copyTrackingIdAria')}
                 >
                   {copied ? (
                     <Check className="h-4 w-4" />
                   ) : (
                     <Copy className="h-4 w-4" />
                   )}
-                  <span className="ms-2">{copied ? 'Copied' : 'Copy'}</span>
+                  <span className="ms-2">
+                    {copied ? t('copied') : t('copy')}
+                  </span>
                 </Button>
               </div>
             </div>
@@ -345,7 +349,7 @@ export function OnlinePaymentSuccess({
                 onClick={() => router.push(storefrontHome)}
               >
                 <Home className="h-4 w-4 mr-2" />
-                Back to Home
+                {t('backToHome')}
               </Button>
               <Button
                 asChild
@@ -357,7 +361,7 @@ export function OnlinePaymentSuccess({
                     orderId: displayTrackingId ?? undefined,
                   })}
                 >
-                  Track your order
+                  {t('trackYourOrder')}
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Link>
               </Button>

@@ -159,6 +159,7 @@ import { useBilingualText } from '@/hooks/use-bilingual-text';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/main/language-switcher';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import { restaurantMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
@@ -3183,9 +3184,8 @@ export function PosScreen({
   }
 
   const renderPosProductButton = (p: PosMenuProduct) => {
-    const unit = effectiveUnitPrice(p.price, p.salePrice);
-    const onSale =
-      p.salePrice != null && p.salePrice > 0 && p.salePrice < p.price;
+    const priceDisplay = getMenuItemDisplayPrice(p);
+    const onSale = priceDisplay.compareAt != null;
     const isActive = activeProductId === p.id;
     const displayName = resolveProductText(p.name);
 
@@ -3233,9 +3233,15 @@ export function PosScreen({
               <UtensilsCrossed className="h-6 w-6 text-muted-foreground/35" />
           </div>
         )}
-          {onSale ? (
+          {onSale && priceDisplay.compareAt != null ? (
             <span className="absolute left-1.5 top-1.5 rounded-md bg-fire-500 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white">
-              −{Math.round(((p.price - unit) / p.price) * 100)}%
+              −
+              {Math.round(
+                ((priceDisplay.compareAt - priceDisplay.amount) /
+                  priceDisplay.compareAt) *
+                  100
+              )}
+              %
             </span>
           ) : null}
           <span
@@ -3256,13 +3262,18 @@ export function PosScreen({
           {displayName}
           </p>
           <div className="flex items-baseline gap-1">
+            {priceDisplay.hasFromPrefix ? (
+              <span className="text-[10px] font-normal text-muted-foreground">
+                {t('priceFromLabel')}
+              </span>
+            ) : null}
             <span className={cn('text-sm font-bold tabular-nums', POS_ACCENT_TEXT)}>
-              {formatMoney(unit)}
-        </span>
-            {onSale ? (
+              {formatMoney(priceDisplay.amount)}
+            </span>
+            {onSale && priceDisplay.compareAt != null ? (
               <span className="text-[10px] tabular-nums text-muted-foreground line-through">
-                {formatMoney(p.price)}
-        </span>
+                {formatMoney(priceDisplay.compareAt)}
+              </span>
             ) : null}
           </div>
       </div>

@@ -18,6 +18,7 @@ import {
 } from '@/lib/menu/bilingual-text';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 export type CategoryPickerItem = {
   id: string;
@@ -40,6 +41,7 @@ export function CategoryPickerStrip({
   onChange,
   emptyMessage = 'Add a category first, then assign this product.',
 }: Props) {
+  const { t } = useTranslation();
   const uiLang = useUiLanguage();
   const stripRef = useRef<HTMLDivElement>(null);
   const [stripScroll, setStripScroll] = useState({ back: false, forward: false });
@@ -203,11 +205,11 @@ export function CategoryPickerStrip({
                       </div>
                       <div className="space-y-0.5 p-2.5">
                         <p className="line-clamp-2 text-sm font-semibold leading-snug">
-                          {resolveBilingualText(category.name, 'en')}
+                          {resolveBilingualText(category.name, uiLang)}
                         </p>
                         {category.showInFront === false ? (
                           <p className="truncate text-[11px] text-muted-foreground">
-                            Configuration only
+                            {t('configurationOnly')}
                           </p>
                         ) : null}
                       </div>

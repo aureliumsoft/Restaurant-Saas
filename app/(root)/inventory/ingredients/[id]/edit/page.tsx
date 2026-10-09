@@ -3,9 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { useUiLanguage } from '@/hooks/use-ui-language';
 
 import {
   EMPTY_INGREDIENT_FORM,
@@ -34,13 +38,15 @@ type IngredientDetail = {
 };
 
 export default function EditIngredientPage() {
+  const { t } = useTranslation();
+  const uiLang = useUiLanguage();
   const params = useParams();
   const ingredientId = typeof params.id === 'string' ? params.id : '';
   const { activeBranchId, activeBranchUrlId } = useBranchContext();
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [initial, setInitial] = useState<IngredientFormState | null>(null);
-  const [name, setName] = useState('Edit ingredient');
+  const [name, setName] = useState('');
 
   useEffect(() => {
     if (!ingredientId) {
@@ -67,7 +73,7 @@ export default function EditIngredientPage() {
         const unit = INGREDIENT_UNIT_VALUES.includes(row.unit)
           ? row.unit
           : 'PCS';
-        setName(row.name);
+        setName(resolveBilingualText(row.name, uiLang) || row.name);
         setInitial({
           ...EMPTY_INGREDIENT_FORM,
           name: row.name,
@@ -87,7 +93,7 @@ export default function EditIngredientPage() {
         if (cancelled) return;
         const err = e as { response?: { status?: number } };
         if (err.response?.status !== 404) {
-          toast.error('Could not load ingredient.');
+          toast.error(t('dashboard.inventory.loadFailed'));
         }
         setNotFound(true);
       })
@@ -98,31 +104,35 @@ export default function EditIngredientPage() {
     return () => {
       cancelled = true;
     };
-  }, [ingredientId, activeBranchId, activeBranchUrlId]);
+  }, [ingredientId, activeBranchId, activeBranchUrlId, t, uiLang]);
 
   return (
     <div className="w-full">
       <ErrorBoundary>
         <MenuPageShell
-          title="Edit ingredient"
-          description="Update stock, unit, and whether this ingredient can block orders."
+          title={t('dashboard.inventory.editIngredientTitle')}
+          description={t('dashboard.inventory.editIngredientDescription')}
           loading={false}
         >
           {notFound ? (
             <Card>
               <CardContent className="flex flex-col gap-3 p-6">
                 <p className="text-sm text-muted-foreground">
-                  Ingredient not found. It may have been deleted.
+                  {t('dashboard.inventory.notFound')}
                 </p>
                 <Button type="button" asChild className="w-fit">
-                  <Link href="/inventory">Back to inventory</Link>
+                  <Link href="/inventory">
+                    {t('dashboard.inventory.backToInventory')}
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
           ) : (
             <Card>
               <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-                <CardTitle>{name}</CardTitle>
+                <CardTitle>
+                  {name || t('dashboard.inventory.editIngredientTitle')}
+                </CardTitle>
                
               </CardHeader>
               <CardContent>

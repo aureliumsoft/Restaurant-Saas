@@ -45,9 +45,12 @@ import {
 } from '@/lib/online-order-preferences';
 import { readOrderSchedule } from '@/lib/order-time-slots';
 
-function formatOrderApiError(body: unknown): string {
+function formatOrderApiError(
+  body: unknown,
+  t: (key: string) => string
+): string {
   if (!body || typeof body !== 'object') {
-    return 'Could not place order. Please try again.';
+    return t('couldNotPlaceOrder');
   }
   const err = (body as { error?: unknown }).error;
   if (typeof err === 'string') return err;
@@ -61,9 +64,9 @@ function formatOrderApiError(body: unknown): string {
       .find((m): m is string => typeof m === 'string' && m.length > 0);
     if (fieldMsg) return fieldMsg;
     if (flat.formErrors?.[0]) return flat.formErrors[0];
-    return 'Invalid order data';
+    return t('couldNotPlaceOrder');
   }
-  return 'Could not place order. Please try again.';
+  return t('couldNotPlaceOrder');
 }
 
 type CheckoutPageProps = {
@@ -452,8 +455,8 @@ export default function CheckoutPageClient({
       const placedId = result.data.shortOrderId ?? result.data.orderId;
       toast.success(
         placedId
-          ? `Order placed. Reference: ${placedId}`
-          : 'Order placed successfully.'
+          ? t('orderPlacedReference', { id: placedId })
+          : t('orderPlacedSuccessfully')
       );
       localStorage.removeItem(`cart-${orderId}`);
       clearOnlineOrderPreferences(orderId);
@@ -467,8 +470,8 @@ export default function CheckoutPageClient({
       const ex = e as { body?: unknown };
       toast.error(
         ex.body !== undefined
-          ? formatOrderApiError(ex.body)
-          : 'Could not place order. Please try again.'
+          ? formatOrderApiError(ex.body, t)
+          : t('couldNotPlaceOrder')
       );
     } finally {
       setSubmitting(false);
@@ -634,34 +637,40 @@ export default function CheckoutPageClient({
                         <span className="text-[#64748b]">{t('deliveryAddress')}:</span>
                         <span className="text-right font-semibold text-[#0f172a]">
                           {[
-                              orderInfo.apartment?.trim() && `Apt: ${orderInfo.apartment.trim()}`,
-                              orderInfo.gateCode?.trim() && `Gate: ${orderInfo.gateCode.trim()}`,
+                              orderInfo.apartment?.trim() &&
+                                t('aptPrefix', {
+                                  value: orderInfo.apartment.trim(),
+                                }),
+                              orderInfo.gateCode?.trim() &&
+                                t('gatePrefix', {
+                                  value: orderInfo.gateCode.trim(),
+                                }),
                               orderInfo.address?.trim()
-                            ].filter(Boolean).join(', ') || 'N/A'}
+                            ].filter(Boolean).join(', ') || t('na')}
                         </span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-[#64748b]">{t('name')}:</span>
                         <span className="font-semibold text-[#0f172a]">
-                          {orderInfo.addressName || 'N/A'}
+                          {orderInfo.addressName || t('na')}
                         </span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-[#64748b]">{t('phoneLabel')}:</span>
                         <span className="font-semibold text-[#0f172a]">
-                          {orderInfo.customerPhone || 'N/A'}
+                          {orderInfo.customerPhone || t('na')}
                         </span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-[#64748b]">{t('apartmentDoor')}:</span>
                         <span className="font-semibold text-[#0f172a]">
-                          {orderInfo.apartment || 'N/A'}
+                          {orderInfo.apartment || t('na')}
                         </span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-[#64748b]">{t('gateCode')}:</span>
                         <span className="font-semibold text-[#0f172a]">
-                          {orderInfo.gateCode || 'N/A'}
+                          {orderInfo.gateCode || t('na')}
                         </span>
                       </div>
                     </>
@@ -670,25 +679,27 @@ export default function CheckoutPageClient({
                       <div className="flex justify-between gap-3">
                         <span className="text-[#64748b]">{t('pickupLocation')}:</span>
                         <span className="text-right font-semibold text-[#0f172a]">
-                          {orderInfo?.storeName || brand?.restaurantName || 'N/A'}
+                          {orderInfo?.storeName ||
+                            brand?.restaurantName ||
+                            t('na')}
                         </span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-[#64748b]">{t('storeAddress')}:</span>
                         <span className="text-right font-semibold text-[#0f172a]">
-                          {orderInfo?.storeAddress || 'N/A'}
+                          {orderInfo?.storeAddress || t('na')}
                         </span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-[#64748b]">{t('name')}:</span>
                         <span className="font-semibold text-[#0f172a]">
-                          {orderInfo?.addressName || 'N/A'}
+                          {orderInfo?.addressName || t('na')}
                         </span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-[#64748b]">{t('phoneLabel')}:</span>
                         <span className="font-semibold text-[#0f172a]">
-                          {orderInfo?.customerPhone || 'N/A'}
+                          {orderInfo?.customerPhone || t('na')}
                         </span>
                       </div>
                     </>
@@ -822,7 +833,7 @@ export default function CheckoutPageClient({
                             );
                             return;
                           }
-                          toast.success('Payment received. Order placed.');
+                          toast.success(t('paymentReceivedOrderPlaced'));
                           const qs = new URLSearchParams({
                             orderId: ref,
                             ...(slug ? { restaurantSlug: slug } : {}),

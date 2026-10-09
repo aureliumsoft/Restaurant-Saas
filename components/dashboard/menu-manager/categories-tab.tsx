@@ -127,7 +127,7 @@ export function CategoriesTab({
   const rename = async (id: string, next: string) => {
     if (!next.trim()) return;
     if (!parseBilingualInput(next).en) {
-      toast.error('English name (before &&&&) is required.');
+      toast.error(t('dashboard.menuManager.category.nameRequired'));
       return;
     }
     try {
@@ -520,7 +520,7 @@ function CategoryCard({
               {t('dashboard.menuManager.category.edit')}
             </DialogTitle>
             <DialogDescription>
-              Update the category information.
+              {t('dashboard.menuManager.category.editDescription')}
             </DialogDescription>
           </DialogHeader>
 
@@ -529,7 +529,9 @@ function CategoryCard({
               <Label>{t('dashboard.common.name')}</Label>
               <Input
                 value={val}
-                placeholder={`English name ${'&&&&'} Spanish name`}
+                placeholder={t(
+                  'dashboard.menuManager.bilingual.namePlaceholder'
+                )}
                 onChange={(e) => setVal(e.target.value)}
                 disabled={saving}
                 onKeyDown={(e) => {
@@ -537,7 +539,7 @@ function CategoryCard({
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                First English, then separator &&&&, then Spanish.
+                {t('dashboard.menuManager.bilingual.hint')}
               </p>
             </div>
 
@@ -551,13 +553,20 @@ function CategoryCard({
             />
 
             <div className="space-y-2 rounded-md border p-3">
-              <Label>Show on selected branch</Label>
+              <Label>
+                {t('dashboard.menuManager.category.showOnBranch')}
+              </Label>
               <p className="text-sm text-muted-foreground">
                 {branchesLoading
-                  ? 'Loading branch...'
+                  ? t('dashboard.menuManager.category.loadingBranch')
                   : activeBranchName
-                    ? `Controls visibility for ${activeBranchName}.`
-                    : 'Select a branch to manage branch visibility.'}
+                    ? t(
+                        'dashboard.menuManager.category.controlsVisibility',
+                        { branch: activeBranchName }
+                      )
+                    : t(
+                        'dashboard.menuManager.category.selectBranchVisibility'
+                      )}
               </p>
               <Button
                 type="button"

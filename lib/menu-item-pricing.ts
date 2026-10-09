@@ -37,8 +37,8 @@ export function getMinVariationPrice(
 
 export type MenuItemDisplayPrice = {
   amount: number;
-  /** e.g. "From" when price comes from variations */
-  prefix: string | null;
+  /** True when amount is the min variation price (show localized “From”). */
+  hasFromPrefix: boolean;
   hasVariations: boolean;
   /** strikethrough list price when on sale (non-variable products) */
   compareAt: number | null;
@@ -51,7 +51,7 @@ export function getMenuItemDisplayPrice(
   if (minVariation != null) {
     return {
       amount: minVariation,
-      prefix: 'From',
+      hasFromPrefix: true,
       hasVariations: true,
       compareAt: null,
     };
@@ -64,7 +64,7 @@ export function getMenuItemDisplayPrice(
       : null;
   return {
     amount: effectiveUnitPrice(item.price, item.salePrice ?? null),
-    prefix: null,
+    hasFromPrefix: false,
     hasVariations: false,
     compareAt,
   };
@@ -72,11 +72,12 @@ export function getMenuItemDisplayPrice(
 
 export function formatMenuItemPrice(
   item: MenuItemPriceSource,
-  options?: { currency?: string }
+  options?: { currency?: string; fromLabel?: string }
 ): string {
   const currency = options?.currency ?? '€';
-  const { amount, prefix, compareAt } = getMenuItemDisplayPrice(item);
-  const main = `${prefix ? `${prefix} ` : ''}${currency}${amount.toFixed(2)}`;
+  const fromLabel = options?.fromLabel ?? 'From';
+  const { amount, hasFromPrefix, compareAt } = getMenuItemDisplayPrice(item);
+  const main = `${hasFromPrefix ? `${fromLabel} ` : ''}${currency}${amount.toFixed(2)}`;
   if (compareAt != null) {
     return `${currency}${compareAt.toFixed(2)} → ${main}`;
   }

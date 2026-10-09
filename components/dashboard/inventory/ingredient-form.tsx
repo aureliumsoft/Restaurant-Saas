@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Plus, Save, Trash2, X } from 'lucide-react';
@@ -94,6 +95,7 @@ export function IngredientForm({
   initial?: IngredientFormState;
   ingredientId?: string;
 }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const uiLang = useUiLanguage();
   const { activeBranchId, activeBranchUrlId } = useBranchContext();
@@ -175,7 +177,7 @@ export function IngredientForm({
           ),
           payload
         );
-        toast.success('Ingredient updated');
+        toast.success(t('dashboard.inventory.updated'));
         setConfirmOpen(false);
         allowNextNavigation();
         router.push('/inventory');
@@ -190,7 +192,7 @@ export function IngredientForm({
         ),
         payload
       );
-      toast.success('Ingredient created');
+      toast.success(t('dashboard.inventory.created'));
       setConfirmOpen(false);
 
       if (mode === 'new') {
@@ -203,7 +205,9 @@ export function IngredientForm({
         router.push('/inventory');
       }
     } catch (e) {
-      toast.error(extractApiErrorMessage(e, 'Could not save ingredient.'));
+      toast.error(
+        extractApiErrorMessage(e, t('dashboard.inventory.saveFailed'))
+      );
     } finally {
       setSaving(null);
     }
@@ -213,35 +217,37 @@ export function IngredientForm({
     <div className="grid w-full gap-4">
       <div className="grid gap-2">
         <Label>
-          Name <span className="text-destructive">*</span>
+          {t('dashboard.common.name')}{' '}
+          <span className="text-destructive">*</span>
         </Label>
         <Input
           value={form.name}
           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          placeholder={`English name ${'&&&&'} Spanish name`}
+          placeholder={t('dashboard.menuManager.bilingual.namePlaceholder')}
         />
         <p className="text-xs text-muted-foreground">
-          First English, then separator &&&&, then Spanish.
+          {t('dashboard.menuManager.bilingual.hint')}
         </p>
       </div>
       <div className="grid gap-2">
-        <Label>Description</Label>
+        <Label>{t('dashboard.common.description')}</Label>
         <Textarea
           value={form.description}
           rows={3}
           onChange={(e) =>
             setForm((f) => ({ ...f, description: e.target.value }))
           }
-          placeholder={`English notes ${'&&&&'} Spanish notes`}
+          placeholder={t('dashboard.menuManager.bilingual.notesPlaceholder')}
         />
         <p className="text-xs text-muted-foreground">
-          First English, then separator &&&&, then Spanish.
+          {t('dashboard.menuManager.bilingual.hint')}
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label>
-            Quantity <span className="text-destructive">*</span>
+            {t('dashboard.inventory.quantity')}{' '}
+            <span className="text-destructive">*</span>
           </Label>
           <Input
             value={form.quantity}
@@ -255,7 +261,7 @@ export function IngredientForm({
           />
         </div>
         <div className="grid gap-2">
-          <Label>Unit</Label>
+          <Label>{t('dashboard.inventory.unit')}</Label>
           <Select
             value={form.unit}
             onValueChange={(v) =>
@@ -280,15 +286,15 @@ export function IngredientForm({
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
-          <Label>SKU</Label>
+          <Label>{t('dashboard.inventory.sku')}</Label>
           <Input
             value={form.sku}
             onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
-            placeholder="Optional"
+            placeholder={t('dashboard.common.optional')}
           />
         </div>
         <div className="grid gap-2">
-          <Label>Low-stock alert quantity</Label>
+          <Label>{t('dashboard.inventory.minQuantity')}</Label>
           <Input
             value={form.minQuantity}
             onChange={(e) =>
@@ -298,12 +304,12 @@ export function IngredientForm({
               }))
             }
             inputMode="decimal"
-            placeholder="Optional"
+            placeholder={t('dashboard.common.optional')}
           />
         </div>
       </div>
       <div className="grid gap-2">
-        <Label>Unit cost</Label>
+        <Label>{t('dashboard.inventory.unitCost')}</Label>
         <Input
           value={form.unitCost}
           onChange={(e) =>
@@ -313,10 +319,12 @@ export function IngredientForm({
             }))
           }
           inputMode="decimal"
-          placeholder={`Cost per ${formatIngredientUnit(form.unit)}`}
+          placeholder={t('dashboard.inventory.unitCostPlaceholder', {
+            unit: formatIngredientUnit(form.unit),
+          })}
         />
         <p className="text-xs text-muted-foreground">
-          Used to calculate inventory value and usage expenses.
+          {t('dashboard.inventory.unitCostHint')}
         </p>
       </div>
       <label className="flex items-center gap-2 text-sm">
@@ -328,7 +336,7 @@ export function IngredientForm({
             setForm((f) => ({ ...f, isMajor: e.target.checked }))
           }
         />
-        Major ingredient (highlighted on inventory)
+        {t('dashboard.inventory.majorIngredient')}
       </label>
       {isEdit ? (
         <label className="flex items-center gap-2 text-sm">
@@ -340,12 +348,12 @@ export function IngredientForm({
               setForm((f) => ({ ...f, isActive: e.target.checked }))
             }
           />
-          Active (available on product recipes)
+          {t('dashboard.inventory.activeIngredient')}
         </label>
       ) : null}
       <Base64ImageUploadField
         key={imageFileKey}
-        label="Photo"
+        label={t('dashboard.inventory.photo')}
         value={form.imageUrl}
         onChange={(imageUrl) => setForm((f) => ({ ...f, imageUrl }))}
       />
@@ -358,7 +366,7 @@ export function IngredientForm({
             onClick={() => setConfirmOpen(true)}
           >
             <Save className="mr-2 h-4 w-4" />
-            Save ingredient
+            {t('dashboard.inventory.saveIngredient')}
           </Button>
         ) : (
           <Button
@@ -367,7 +375,7 @@ export function IngredientForm({
             onClick={() => setConfirmOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" />
-            Create ingredient
+            {t('dashboard.inventory.createIngredient')}
           </Button>
         )}
         <Button
@@ -377,16 +385,18 @@ export function IngredientForm({
           onClick={() => requestLeave(() => router.push('/inventory'))}
         >
           <X className="mr-2 h-4 w-4" />
-          Cancel
+          {t('dashboard.common.cancel')}
         </Button>
       </div>
 
       {isEdit ? (
         <SaveConfirmation
           open={confirmOpen}
-          title="Update ingredient"
-          description="Save changes to this ingredient?"
-          itemName={displayName || 'Ingredient'}
+          title={t('dashboard.inventory.updateIngredientTitle')}
+          description={t('dashboard.inventory.updateIngredientDescription')}
+          itemName={
+            displayName || t('dashboard.inventory.createIngredientTitle')
+          }
           loading={Boolean(saving)}
           onConfirm={() => void save('close')}
           onCancel={() => setConfirmOpen(false)}
@@ -397,12 +407,14 @@ export function IngredientForm({
           itemName={displayName || undefined}
           title={
             displayName
-              ? `Create "${displayName}"?`
-              : 'Create ingredient?'
+              ? t('dashboard.inventory.createIngredientConfirmNamed', {
+                  name: displayName,
+                })
+              : t('dashboard.inventory.createIngredientConfirm')
           }
-          description="Choose how you want to save this ingredient."
-          saveAndAddNewText="Create & add new"
-          saveAndCloseText="Create & Close"
+          description={t('dashboard.inventory.createIngredientConfirmHint')}
+          saveAndAddNewText={t('dashboard.inventory.createAndAddNew')}
+          saveAndCloseText={t('dashboard.inventory.createAndClose')}
           loading={Boolean(saving)}
           onCancel={() => setConfirmOpen(false)}
           onSaveAndClose={() => void save('close')}
@@ -418,17 +430,19 @@ export function IngredientForm({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('dashboard.common.discardUnsaved')}
+            </AlertDialogTitle>
             <AlertDialogDescription>{leaveMessage}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel type="button">
               <X className="h-4 w-4 mr-2" />
-              <span>Keep editing</span>
+              <span>{t('dashboard.common.keepEditing')}</span>
             </AlertDialogCancel>
             <AlertDialogAction type="button" onClick={confirmLeave}>
               <Trash2 className="h-4 w-4 mr-2" />
-              <span>Leave without saving</span>
+              <span>{t('dashboard.common.leaveWithoutSaving')}</span>
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

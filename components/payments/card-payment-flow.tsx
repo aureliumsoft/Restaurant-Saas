@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { CreditCard, CheckCircle2, XCircle } from 'lucide-react';
 
@@ -228,8 +229,11 @@ export function   CardPaymentDialogs({
   // onBypass,
   onCancel,
   formatMoney = defaultFormatMoney,
-  successContinueLabel = 'Continue',
+  successContinueLabel,
 }: CardPaymentDialogsProps) {
+  const { t } = useTranslation();
+  const continueLabel = successContinueLabel ?? t('continue');
+
   return (
     <>
       <Dialog
@@ -246,7 +250,7 @@ export function   CardPaymentDialogs({
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
           <DialogHeader className="text-center sm:text-center">
-            <DialogTitle>Payment processing</DialogTitle>
+            <DialogTitle>{t('paymentProcessingTitle')}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-2">
             <div className="relative flex h-28 w-36 flex-col items-center justify-end rounded-xl border-2 border-primary/40 bg-muted/50 p-3 shadow-inner">
@@ -262,7 +266,7 @@ export function   CardPaymentDialogs({
               </div>
             </div>
             <p className="text-center text-sm text-muted-foreground">
-              Insert or tap card on the terminal…
+              {t('insertOrTapCard')}
             </p>
             <p className="text-lg font-semibold tabular-nums">
               {formatMoney(amount)}
@@ -283,7 +287,7 @@ export function   CardPaymentDialogs({
               className="w-full"
               onClick={onCancel}
             >
-              Cancel
+              {t('cancel')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -299,19 +303,20 @@ export function   CardPaymentDialogs({
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              Payment successful
+              {t('paymentSuccessful')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Card payment of {formatMoney(amount)} was approved
-              {cardTransactionId ? ` (${cardTransactionId})` : ''}. You can now
-              confirm your order.
+              {t('cardPaymentApproved', {
+                amount: formatMoney(amount),
+                ref: cardTransactionId ? ` (${cardTransactionId})` : '',
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogAction
               onClick={() => setCardPaymentOutcomeOpen(null)}
             >
-              {successContinueLabel}
+              {continueLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -327,19 +332,19 @@ export function   CardPaymentDialogs({
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <XCircle className="h-5 w-5 text-destructive" />
-              Payment failed
+              {t('paymentFailed')}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {cardPaymentStatus === 'cancelled'
-                ? 'Card payment was cancelled. Tap Pay to try again.'
-                : 'Card payment could not be completed. Tap Pay to try again.'}
+                ? t('cardPaymentCancelledRetry')
+                : t('cardPaymentFailedRetry')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogAction
               onClick={() => setCardPaymentOutcomeOpen(null)}
             >
-              OK
+              {t('ok')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -121,7 +121,7 @@ export function StorefrontFeatured({ slug }: { slug: string }) {
                   {onSale ? (
                     <span className="absolute left-1 top-1 inline-flex items-center gap-0.5 rounded-md bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground">
                       <Tag className="h-2.5 w-2.5" />
-                      Sale
+                      {t('saleBadge')}
                     </span>
                   ) : null}
                 </div>
