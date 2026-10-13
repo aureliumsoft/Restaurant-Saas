@@ -65,7 +65,8 @@ function imageResponse(
   if (etag && options?.ifNoneMatch === etag) {
     return new NextResponse(null, { status: 304 });
   }
-  return new NextResponse(buffer, {
+  // NextResponse BodyInit rejects Node Buffer<ArrayBufferLike>; Uint8Array is accepted.
+  return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {
       'Content-Type': type,

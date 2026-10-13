@@ -170,7 +170,11 @@ export async function parseProductsExcelImport(
   fileBuffer: Buffer
 ): Promise<ParsedProductsImport> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(fileBuffer);
+  // ExcelJS declares `interface Buffer extends ArrayBuffer`, which conflicts with Node's Buffer.
+  // Runtime accepts Node Buffer; double-cast avoids the broken ambient typing.
+  await workbook.xlsx.load(
+    fileBuffer as unknown as Parameters<ExcelJS.Xlsx['load']>[0]
+  );
 
   const productsRows = readSheetRows(workbook, 'Products');
   const categoryRows = readSheetRows(workbook, 'Category links');

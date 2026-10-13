@@ -1,17 +1,14 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import Script from 'next/script';
 import './globals.css';
 import 'react-toastify/dist/ReactToastify.css';
 const inter = Inter({ subsets: ['latin'] });
 import Providers from './providers';
 import { RESTAURANT_THEME_BOOT_SCRIPT } from '@/lib/restaurant-theme-persist';
-import { PlatformGoogleAnalytics } from '@/components/analytics/platform-google-analytics';
-import {
-  PlatformGoogleTagManager,
-  PlatformGoogleTagManagerNoscript,
-} from '@/components/analytics/platform-google-tag-manager';
+import { PlatformAnalyticsScripts } from '@/components/analytics/platform-analytics-scripts';
+import { PlatformGoogleTagManagerNoscript } from '@/components/analytics/platform-google-tag-manager';
 import { parseUiLanguage } from '@/lib/i18n/language-cookie';
 import { UI_LANG_STORAGE_KEY } from '@/lib/i18n/resources';
 import { getAppSession } from '@/lib/auth/app-session';
@@ -44,19 +41,24 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const cookieStore = await cookies();
+  const headerStore = await headers();
+  const pathname = headerStore.get('x-pathname') ?? '/';
   const initialLanguage = parseUiLanguage(
     cookieStore.get(UI_LANG_STORAGE_KEY)?.value
   );
   const session = await getAppSession();
   const gtmId = normalizeGtmContainerId(
-    await getPlatformSetting('seo_gtm_container_id')
+    (await getPlatformSetting('seo_gtm_container_id')) ||
+      process.env.NEXT_PUBLIC_GTM_CONTAINER_ID ||
+      ''
   );
   const gaId = normalizeGa4MeasurementId(
-    await getPlatformSetting('seo_ga4_measurement_id')
+    (await getPlatformSetting('seo_ga4_measurement_id')) ||
+      process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID ||
+      ''
   );
-  // Prefer GTM when set so GA4 is configured inside the container (no double-count).
-  const useGtm = Boolean(gtmId);
-  const useDirectGa4 = !useGtm && Boolean(gaId);
+  // Noscript GTM iframe only when GTM is the active browser tag (no direct GA4).
+  const useGtmNoscript = Boolean(gtmId) && !gaId;
 
   return (
     <html lang={initialLanguage} suppressHydrationWarning>
@@ -64,15 +66,16 @@ export default async function RootLayout({
         <Script id="restaurant-theme-boot" strategy="beforeInteractive">
           {RESTAURANT_THEME_BOOT_SCRIPT}
         </Script>
-        {useGtm ? (
+        <PlatformAnalyticsScripts
+          pathname={pathname}
+          gaMeasurementId={gaId}
+          gtmContainerId={gtmId}
+        />
+        {useGtmNoscript ? (
           <PlatformGoogleTagManagerNoscript containerId={gtmId} />
         ) : null}
         <Providers initialLanguage={initialLanguage} session={session}>
           {children}
-          {useGtm ? <PlatformGoogleTagManager containerId={gtmId} /> : null}
-          {useDirectGa4 ? (
-            <PlatformGoogleAnalytics measurementId={gaId} />
-          ) : null}
         </Providers>
       </body>
     </html>

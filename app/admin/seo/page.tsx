@@ -70,7 +70,7 @@ export default function AdminSeoPage() {
       map.seo_google_client_secret?.trim() &&
       map.seo_google_reporting_refresh_token?.trim()
   );
-  const analyticsViaGtm = gtmReady;
+  const analyticsViaGtm = gtmReady && !gaReady;
 
   const sitemapUrl = useMemo(() => {
     if (typeof window === 'undefined') return '/sitemap.xml';
@@ -161,11 +161,11 @@ export default function AdminSeoPage() {
           label="Google Analytics"
           ready={analyticsViaGtm || gaReady}
           hint={
-            analyticsViaGtm
-              ? 'Configure GA4 inside GTM (direct G- tag is skipped)'
-              : gaReady
-                ? 'Direct GA4 gtag loads on marketing & auth pages'
-                : 'Add GTM or a G- Measurement ID'
+            gaReady
+              ? 'Direct GA4 gtag loads on marketing pages (homepage, pricing, auth)'
+              : analyticsViaGtm
+                ? 'GTM loads on marketing pages — configure GA4 inside GTM'
+                : 'Add a G- Measurement ID (or GTM if you manage tags there)'
           }
         />
         <StatusCard
@@ -206,7 +206,7 @@ export default function AdminSeoPage() {
             id="seo_gtm_container_id"
             label="Google Tag Manager container ID"
             icon={Tags}
-            description="Web container (GTM-XXXXXXX). When set, GTM is installed and the direct GA4 gtag below is skipped."
+            description="Web container (GTM-XXXXXXX). Used only when GA4 Measurement ID below is empty (avoids double-counting)."
             placeholder="GTM-XXXXXXX"
             value={map.seo_gtm_container_id ?? ''}
             onChange={(v) => setField('seo_gtm_container_id', v)}
@@ -215,7 +215,7 @@ export default function AdminSeoPage() {
             id="seo_ga4_measurement_id"
             label="GA4 Measurement ID"
             icon={BarChart3}
-            description="Used only when GTM is empty (browser tag: G-…)."
+            description="Browser Google tag (G-…). Prefer this for GA “Test your website”. Test the public homepage URL, not /dashboard."
             placeholder="G-XXXXXXXX"
             value={map.seo_ga4_measurement_id ?? ''}
             onChange={(v) => setField('seo_ga4_measurement_id', v)}

@@ -241,7 +241,9 @@ export const initialChartThreeOptions: ApexOptions = {
     fontSize: '14px',
 
     markers: {
-      radius: 99,
+      width: 12,
+      height: 12,
+      radius: 12,
     },
   },
   fill: {

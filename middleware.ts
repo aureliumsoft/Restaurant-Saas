@@ -85,8 +85,21 @@ export async function middleware(req: NextRequest) {
     urlIdsDecoded = true;
   }
 
+  const pathnameHeaders = (pathForAnalytics: string = pathname) => {
+    const h = new Headers(req.headers);
+    h.set("x-pathname", pathForAnalytics);
+    return h;
+  };
+
   const finish = () =>
-    urlIdsDecoded ? NextResponse.rewrite(url) : NextResponse.next();
+    urlIdsDecoded
+      ? NextResponse.rewrite(url, { request: { headers: pathnameHeaders() } })
+      : NextResponse.next({ request: { headers: pathnameHeaders() } });
+
+  const rewriteWithPath = (target: URL) =>
+    NextResponse.rewrite(target, {
+      request: { headers: pathnameHeaders(target.pathname) },
+    });
 
   // Kiosk / customer Google login reuses NextAuth's registered redirect URI
   // (`/api/auth/callback/google`) to avoid Google Error 400 redirect_uri_mismatch.
@@ -94,7 +107,7 @@ export async function middleware(req: NextRequest) {
     const state = url.searchParams.get("state");
     if (looksLikeCustomerGoogleOAuthState(state)) {
       url.pathname = "/api/customer-auth/google/callback";
-      return NextResponse.rewrite(url);
+      return rewriteWithPath(url);
     }
   }
 
@@ -159,11 +172,11 @@ export async function middleware(req: NextRequest) {
 
   if (pathname === "/") {
     url.pathname = tenantPrefix;
-    return NextResponse.rewrite(url);
+    return rewriteWithPath(url);
   }
 
   url.pathname = `${tenantPrefix}${pathname}`;
-  return NextResponse.rewrite(url);
+  return rewriteWithPath(url);
 }
 
 export const config = {
