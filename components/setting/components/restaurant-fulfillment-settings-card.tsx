@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -27,81 +27,76 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { PremiumCrown } from '@/components/premium/premium-crown';
 import { cn } from '@/lib/utils';
 import type { RestaurantFulfillmentSettings } from '@/lib/restaurant-fulfillment-settings';
 import { DEFAULT_RESTAURANT_FULFILLMENT_SETTINGS } from '@/lib/restaurant-fulfillment-settings';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { revalidateStaffBootstrap } from '@/hooks/use-staff-bootstrap-swr';
 
-const CHANNELS: {
+const CHANNEL_META: {
   key: keyof RestaurantFulfillmentSettings;
-  label: string;
-  description: string;
+  i18nKey: string;
   icon: typeof Truck;
   iconColor: string;
   iconBg: string;
+  /** basicSettings limit flag that must be true to toggle this channel. */
+  limitFlagKey?: string;
 }[] = [
     {
       key: 'deliveryEnabled',
-      label: 'Delivery',
-      description:
-        'Delivery orders in POS, online store, and sales. When off, delivery options are hidden.',
+      i18nKey: 'delivery',
       icon: Truck,
       iconColor: 'text-emerald-600 dark:text-emerald-400',
       iconBg: 'bg-emerald-500/10 border-emerald-500/20',
+      limitFlagKey: 'deliveryChannel',
     },
     {
       key: 'dineInEnabled',
-      label: 'Dine in',
-      description:
-        'Table and dine-in orders in POS, kiosk, and the Tables page. When off, dine-in options are hidden.',
+      i18nKey: 'dineIn',
       icon: UtensilsCrossed,
       iconColor: 'text-amber-600 dark:text-amber-400',
       iconBg: 'bg-amber-500/10 border-amber-500/20',
+      limitFlagKey: 'dineInChannel',
     },
     {
       key: 'cardPaymentsEnabled',
-      label: 'Card payments',
-      description:
-        'Card terminal payments in POS and kiosk. Does not affect online store or subscription billing.',
+      i18nKey: 'cardPayments',
       icon: CreditCard,
       iconColor: 'text-blue-600 dark:text-blue-400',
       iconBg: 'bg-blue-500/10 border-blue-500/20',
+      limitFlagKey: 'cardPaymentChannel',
     },
     {
       key: 'websiteEnabled',
-      label: 'Website',
-      description:
-        'Customer ordering website. When off, website links are hidden and website access is blocked.',
+      i18nKey: 'website',
       icon: Globe,
       iconColor: 'text-sky-600 dark:text-sky-400',
       iconBg: 'bg-sky-500/10 border-sky-500/20',
+      limitFlagKey: 'websiteChannel',
     },
     {
       key: 'kioskEnabled',
-      label: 'Kiosk',
-      description:
-        'In-store self-service ordering kiosk. When off, kiosk links are hidden and kiosk access is blocked.',
+      i18nKey: 'kiosk',
       icon: Monitor,
       iconColor: 'text-purple-600 dark:text-purple-400',
       iconBg: 'bg-purple-500/10 border-purple-500/20',
     },
     {
       key: 'kdsEnabled',
-      label: 'KDS (Kitchen Screen)',
-      description:
-        'Kitchen Display System & live ticket screen. When off, KDS modules are hidden, POS checkout directly completes orders, and working orders are managed via POS.',
+      i18nKey: 'kds',
       icon: ChefHat,
       iconColor: 'text-orange-600 dark:text-orange-400',
       iconBg: 'bg-orange-500/10 border-orange-500/20',
+      limitFlagKey: 'kdsChannel',
     },
     {
       key: 'orderDisplayEnabled',
-      label: 'Order Display Screen',
-      description:
-        'Customer-facing live order queue status screen. When off, the order display module and public screen are blocked.',
+      i18nKey: 'orderDisplay',
       icon: Tv,
       iconColor: 'text-rose-600 dark:text-rose-400',
       iconBg: 'bg-rose-500/10 border-rose-500/20',
+      limitFlagKey: 'orderDisplayChannel',
     },
   ];
 
@@ -113,6 +108,7 @@ function ChannelToggleCard({
   iconBg,
   enabled,
   saving,
+  locked,
   onToggle,
 }: {
   label: string;
@@ -122,6 +118,7 @@ function ChannelToggleCard({
   iconBg: string;
   enabled: boolean;
   saving: boolean;
+  locked: boolean;
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
@@ -150,6 +147,7 @@ function ChannelToggleCard({
                 <p className="font-semibold text-sm tracking-tight text-foreground truncate">
                   {label}
                 </p>
+                {locked ? <PremiumCrown /> : null}
                 {enabled ? (
                   <Badge
                     variant="outline"
@@ -162,7 +160,7 @@ function ChannelToggleCard({
                     variant="outline"
                     className="border-muted-foreground/30 bg-muted/40 text-muted-foreground text-[10px] px-1.5 py-0 font-medium"
                   >
-                    Off
+                    {t('settings.cards.fulfillment.off')}
                   </Badge>
                 )}
               </div>
@@ -173,8 +171,8 @@ function ChannelToggleCard({
             type="button"
             role="switch"
             aria-checked={enabled}
-            aria-label={`${label} enabled`}
-            disabled={saving}
+            aria-label={t('settings.cards.fulfillment.toggleAria', { label })}
+            disabled={saving || locked}
             onClick={onToggle}
             className={cn(
               'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
@@ -206,6 +204,12 @@ function ChannelToggleCard({
 
 export function RestaurantFulfillmentSettingsCard() {
   const { t } = useTranslation();
+  const { limitFlag } = useEntitlements();
+  const orderChannelsLocked = limitFlag(
+    'basicSettings',
+    'orderChannelsLocked',
+    false
+  );
   const [settings, setSettings] = useState<RestaurantFulfillmentSettings>(
     DEFAULT_RESTAURANT_FULFILLMENT_SETTINGS
   );
@@ -213,6 +217,18 @@ export function RestaurantFulfillmentSettingsCard() {
   const [savingKey, setSavingKey] = useState<
     keyof RestaurantFulfillmentSettings | null
   >(null);
+
+  const channels = useMemo(
+    () =>
+      CHANNEL_META.map((meta) => ({
+        ...meta,
+        label: t(`settings.cards.fulfillment.channels.${meta.i18nKey}.label`),
+        description: t(
+          `settings.cards.fulfillment.channels.${meta.i18nKey}.description`
+        ),
+      })),
+    [t]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -222,11 +238,11 @@ export function RestaurantFulfillmentSettingsCard() {
       );
       setSettings(res.data.data ?? DEFAULT_RESTAURANT_FULFILLMENT_SETTINGS);
     } catch {
-      toast.error('Could not load channel settings.');
+      toast.error(t('settings.cards.fulfillment.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -242,18 +258,22 @@ export function RestaurantFulfillmentSettingsCard() {
       );
       setSettings(res.data.data ?? next);
       void revalidateStaffBootstrap();
+      const label =
+        channels.find((c) => c.key === key)?.label ??
+        t('settings.cards.fulfillment.settingFallback');
       toast.success(
-        `${CHANNELS.find((c) => c.key === key)?.label ?? 'Setting'} ${next[key] ? 'enabled' : 'disabled'
-        }.`
+        next[key]
+          ? t('settings.cards.fulfillment.channelEnabled', { label })
+          : t('settings.cards.fulfillment.channelDisabled', { label })
       );
     } catch {
-      toast.error('Could not update setting.');
+      toast.error(t('settings.cards.fulfillment.updateFailed'));
     } finally {
       setSavingKey(null);
     }
   };
 
-  const activeCount = CHANNELS.filter((c) => settings[c.key]).length;
+  const activeCount = channels.filter((c) => settings[c.key]).length;
 
   return (
     <Card>
@@ -265,7 +285,10 @@ export function RestaurantFulfillmentSettingsCard() {
               <span>{t('settings.cards.fulfillment.title')}</span>
               {!loading ? (
                 <Badge variant="secondary" className="ml-1 text-[11px] font-medium">
-                  {activeCount} of {CHANNELS.length} active
+                  {t('settings.cards.fulfillment.activeOf', {
+                    count: activeCount,
+                    total: channels.length,
+                  })}
                 </Badge>
 
                 
@@ -312,19 +335,26 @@ export function RestaurantFulfillmentSettingsCard() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {CHANNELS.map((channel) => (
-              <ChannelToggleCard
-                key={channel.key}
-                label={channel.label}
-                description={channel.description}
-                icon={channel.icon}
-                iconColor={channel.iconColor}
-                iconBg={channel.iconBg}
-                enabled={settings[channel.key]}
-                saving={savingKey === channel.key}
-                onToggle={() => void toggle(channel.key)}
-              />
-            ))}
+            {channels.map((channel) => {
+              const channelAllowed = channel.limitFlagKey
+                ? limitFlag('basicSettings', channel.limitFlagKey, true)
+                : true;
+              const locked = orderChannelsLocked || !channelAllowed;
+              return (
+                <ChannelToggleCard
+                  key={channel.key}
+                  label={channel.label}
+                  description={channel.description}
+                  icon={channel.icon}
+                  iconColor={channel.iconColor}
+                  iconBg={channel.iconBg}
+                  enabled={settings[channel.key]}
+                  saving={savingKey === channel.key}
+                  locked={locked}
+                  onToggle={() => void toggle(channel.key)}
+                />
+              );
+            })}
           </div>
         )}
       </CardContent>

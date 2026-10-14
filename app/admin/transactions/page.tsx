@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Loader2, RefreshCcw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { adminCardClass } from '@/components/admin/admin-surface';
@@ -54,6 +55,7 @@ const PAGE_SIZE = 20;
 const ADMIN_TZ = getClientSubscriptionAdminTimezone();
 
 export default function AdminTransactionsPage() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<AdminTxnRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
@@ -95,16 +97,16 @@ export default function AdminTransactionsPage() {
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="SaaS transactions"
-        description="Subscription and registration billing payments across restaurants. Restaurant order and inventory transactions stay in each restaurant dashboard."
+        title={t('admin.transactions.title')}
+        description={t('admin.transactions.description')}
       />
 
       <Card className={cn(adminCardClass)}>
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <CardTitle>Subscription payments</CardTitle>
+            <CardTitle>{t('admin.transactions.paymentsTitle')}</CardTitle>
             <CardDescription>
-              {total.toLocaleString()} payment{total === 1 ? '' : 's'}
+              {t('admin.transactions.paymentCount', { count: total })}
             </CardDescription>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
@@ -122,7 +124,7 @@ export default function AdminTransactionsPage() {
                 setPage(1);
               }}
               appliedValue={appliedQ}
-              placeholder="Search restaurant, notes, currency…"
+              placeholder={t('admin.transactions.searchPlaceholder')}
             />
             <Button
               type="button"
@@ -144,19 +146,19 @@ export default function AdminTransactionsPage() {
               <Loader2 className="mx-auto h-5 w-5 animate-spin" />
             </AdminTableEmpty>
           ) : rows.length === 0 ? (
-            <AdminTableEmpty>No subscription payments found.</AdminTableEmpty>
+            <AdminTableEmpty>{t('admin.transactions.empty')}</AdminTableEmpty>
           ) : (
             <AdminTableWrapper>
               <AdminTable>
                 <AdminTableHeader>
                   <AdminTableRow>
-                    <AdminTableHead>Paid at</AdminTableHead>
-                    <AdminTableHead>Restaurant</AdminTableHead>
-                    <AdminTableHead>Type</AdminTableHead>
-                    <AdminTableHead>Plan</AdminTableHead>
-                    <AdminTableHead>Period</AdminTableHead>
-                    <AdminTableHead className="text-right">Amount</AdminTableHead>
-                    <AdminTableHead>Notes</AdminTableHead>
+                    <AdminTableHead>{t('admin.transactions.colPaidAt')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.transactions.colRestaurant')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.transactions.colType')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.transactions.colPlan')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.transactions.colPeriod')}</AdminTableHead>
+                    <AdminTableHead className="text-right">{t('admin.transactions.colAmount')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.transactions.colNotes')}</AdminTableHead>
                   </AdminTableRow>
                 </AdminTableHeader>
                 <AdminTableBody>
@@ -174,7 +176,7 @@ export default function AdminTransactionsPage() {
                         ) : null}
                       </AdminTableCell>
                       <AdminTableCell>
-                        <Badge variant="secondary">Subscription</Badge>
+                        <Badge variant="secondary">{t('admin.transactions.typeSubscription')}</Badge>
                       </AdminTableCell>
                       <AdminTableCell>
                         {row.plan ?? '—'}

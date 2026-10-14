@@ -78,9 +78,12 @@ const ADMIN_TZ = getClientSubscriptionAdminTimezone();
 const PAYPAL_TZ = getClientPayPalBillingTimezone();
 
 const PLAN_LABELS: Record<string, string> = {
-  STARTER: 'Starter',
+  FREE: 'Free',
+  BASIC: 'Basic',
   GROWTH: 'Growth',
   SCALE: 'Scale',
+  PRO: 'Pro',
+  CUSTOM: 'Custom',
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -173,7 +176,7 @@ export function SubscriptionEditDialog({
   subscription,
   onSaved,
 }: Props) {
-  const [plan, setPlan] = useState('STARTER');
+  const [plan, setPlan] = useState('FREE');
   const [status, setStatus] = useState('TRIAL');
   const [trialEndsAt, setTrialEndsAt] = useState('');
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState('');
@@ -189,7 +192,7 @@ export function SubscriptionEditDialog({
 
   useEffect(() => {
     if (!open) return;
-    setPlan(subscription?.plan ?? 'STARTER');
+    setPlan(subscription?.plan ?? 'FREE');
     setStatus(subscription?.status ?? 'TRIAL');
     setTrialEndsAt(utcToDatetimeLocalInTimezone(subscription?.trialEndsAt ?? null, ADMIN_TZ));
     setCurrentPeriodEnd(
@@ -381,9 +384,12 @@ export function SubscriptionEditDialog({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="STARTER">Starter</SelectItem>
+                      <SelectItem value="FREE">Free</SelectItem>
+                      <SelectItem value="BASIC">Basic</SelectItem>
                       <SelectItem value="GROWTH">Growth</SelectItem>
                       <SelectItem value="SCALE">Scale</SelectItem>
+                      <SelectItem value="PRO">Pro</SelectItem>
+                      <SelectItem value="CUSTOM">Custom</SelectItem>
                     </SelectContent>
                   </Select>
                 </FormField>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { Loader2, Mail } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { DemoRequestEmailDialog } from '@/components/admin/demo-request-email-dialog';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
@@ -37,25 +38,26 @@ type RequestRow = {
 };
 
 function DemoCredentialsNotice() {
+  const { t } = useTranslation();
   return (
     <Card className={cn(adminCardClass, 'border-sky-200/80 bg-sky-50/50 dark:border-sky-500/30 dark:bg-sky-950/20')}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Demo restaurant credentials</CardTitle>
+        <CardTitle className="text-base">{t('admin.requests.demoCredsTitle')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <p className="text-muted-foreground">
-          Included automatically in reply emails to demo requesters.
+          {t('admin.requests.demoCredsDescription')}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Email
+              {t('admin.requests.emailLabel')}
             </p>
             <p className="font-mono font-medium">{DEMO_OWNER_EMAIL}</p>
           </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Password
+              {t('admin.requests.passwordLabel')}
             </p>
             <p className="font-mono font-medium">{DEMO_OWNER_PASSWORD}</p>
           </div>
@@ -66,6 +68,7 @@ function DemoCredentialsNotice() {
 }
 
 export default function AdminRequestsPage() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,7 +83,7 @@ export default function AdminRequestsPage() {
         if (mounted) setRows(r.data.data ?? []);
       })
       .catch(() => {
-        if (mounted) setError('Could not load demo requests.');
+        if (mounted) setError(t('admin.requests.loadError'));
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -98,16 +101,16 @@ export default function AdminRequestsPage() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        eyebrow="Management"
-        title="Demo requests"
-        description="All demo requests submitted from the public marketing site."
+        eyebrow={t('admin.requests.eyebrow')}
+        title={t('admin.requests.title')}
+        description={t('admin.requests.description')}
       />
 
       <DemoCredentialsNotice />
 
       <Card className={cn(adminCardClass, 'min-w-0 max-w-full')}>
         <CardHeader>
-          <CardTitle>Demo requests</CardTitle>
+          <CardTitle>{t('admin.requests.listTitle')}</CardTitle>
         </CardHeader>
         <CardContent className="min-w-0 p-0">
           <AdminTableWrapper>
@@ -116,15 +119,15 @@ export default function AdminRequestsPage() {
             ) : error ? (
               <p className="px-4 text-sm text-destructive">{error}</p>
             ) : rows.length === 0 ? (
-              <AdminTableEmpty>No requests yet.</AdminTableEmpty>
+              <AdminTableEmpty>{t('admin.requests.empty')}</AdminTableEmpty>
             ) : (
               <AdminTable minWidth={720}>
                 <AdminTableHeader>
                   <AdminTableRow>
-                    <AdminTableHead>Contact</AdminTableHead>
-                    <AdminTableHead>Restaurant</AdminTableHead>
-                    <AdminTableHead>Requested</AdminTableHead>
-                    <AdminTableHead className="text-right">Actions</AdminTableHead>
+                    <AdminTableHead>{t('admin.requests.colContact')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.requests.colRestaurant')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.requests.colRequested')}</AdminTableHead>
+                    <AdminTableHead className="text-right">{t('admin.requests.colActions')}</AdminTableHead>
                   </AdminTableRow>
                 </AdminTableHeader>
                 <AdminTableBody>
@@ -151,11 +154,11 @@ export default function AdminRequestsPage() {
                           size="icon"
                           variant="ghost"
                           className="rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                          title="Preview and send demo access email"
+                          title={t('admin.requests.previewSendTitle')}
                           onClick={() => openEmailDialog(r)}
                         >
                           <Mail className="h-4 w-4" />
-                          <span className="sr-only">Email requester</span>
+                          <span className="sr-only">{t('admin.requests.emailRequesterSr')}</span>
                         </Button>
                       </AdminTableCell>
                     </AdminTableRow>

@@ -13,6 +13,7 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
 
 import { AdminStatCard } from '@/components/admin/admin-stat-card';
 import {
@@ -45,6 +46,7 @@ function formatPos(n: number): string {
 }
 
 export function AdminTrafficMetrics() {
+  const { t } = useTranslation();
   const [report, setReport] = useState<TrafficMetricsReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(28);
@@ -79,11 +81,16 @@ export function AdminTrafficMetrics() {
   return (
     <AdminSection>
       <AdminSectionHeader
-        title="Search & traffic"
+        title={t('admin.traffic.title')}
         description={
           report
-            ? `Google Search Console + Analytics · last ${report.days} days (${report.startDate} → ${report.endDate})${report.cacheHit ? ' · cached' : ''}`
-            : 'Platform marketing metrics from Google APIs'
+            ? t('admin.traffic.descriptionWithRange', {
+                days: report.days,
+                startDate: report.startDate,
+                endDate: report.endDate,
+                cached: report.cacheHit ? t('admin.traffic.cachedSuffix') : '',
+              })
+            : t('admin.traffic.descriptionDefault')
         }
         action={
           <div className="flex flex-wrap items-center gap-2">
@@ -97,12 +104,12 @@ export function AdminTrafficMetrics() {
               }}
             >
               <SelectTrigger className="h-9 w-[100px] rounded-xl">
-                <SelectValue placeholder="Range" />
+                <SelectValue placeholder={t('admin.traffic.range')} />
               </SelectTrigger>
               <SelectContent>
                 {[7, 28, 90].map((d) => (
                   <SelectItem key={d} value={String(d)}>
-                    {d} Days
+                    {t('admin.traffic.daysOption', { count: d })}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -132,9 +139,9 @@ export function AdminTrafficMetrics() {
 
         {!loading && report && !report.authConfigured ? (
           <p className="text-sm text-muted-foreground">
-            Connect APIs: add service account JSON or OAuth credentials under{' '}
+            {t('admin.traffic.connectApisPrefix')}{' '}
             <Link href="/admin/seo" className="underline underline-offset-2">
-              SEO & analytics
+              {t('admin.nav.seo')}
             </Link>
             .
           </p>
@@ -142,7 +149,7 @@ export function AdminTrafficMetrics() {
 
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Search Console
+            {t('admin.traffic.searchConsole')}
             {gsc && !gsc.configured && gsc.reason ? (
               <span className="ml-2 font-normal normal-case tracking-normal">
                 — {gsc.reason}
@@ -151,29 +158,29 @@ export function AdminTrafficMetrics() {
           </p>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <AdminStatCard
-              title="Clicks"
-              subtitle="Organic search clicks"
+              title={t('admin.traffic.clicks')}
+              subtitle={t('admin.traffic.clicksSubtitle')}
               value={gsc?.configured ? formatInt(gsc.clicks ?? 0) : '—'}
               accentColor="#0ea5e9"
               icon={MousePointerClick}
             />
             <AdminStatCard
-              title="Impressions"
-              subtitle="Times shown in search"
+              title={t('admin.traffic.impressions')}
+              subtitle={t('admin.traffic.impressionsSubtitle')}
               value={gsc?.configured ? formatInt(gsc.impressions ?? 0) : '—'}
               accentColor="#6366f1"
               icon={Eye}
             />
             <AdminStatCard
-              title="CTR"
-              subtitle="Click-through rate"
+              title={t('admin.traffic.ctr')}
+              subtitle={t('admin.traffic.ctrSubtitle')}
               value={gsc?.configured ? formatPct(gsc.ctr ?? 0) : '—'}
               accentColor="#10b981"
               icon={Target}
             />
             <AdminStatCard
-              title="Avg. position"
-              subtitle="Search ranking"
+              title={t('admin.traffic.avgPosition')}
+              subtitle={t('admin.traffic.avgPositionSubtitle')}
               value={gsc?.configured ? formatPos(gsc.position ?? 0) : '—'}
               accentColor="#f59e0b"
               icon={Search}
@@ -183,7 +190,7 @@ export function AdminTrafficMetrics() {
 
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Google Analytics 4
+            {t('admin.traffic.googleAnalytics')}
             {ga4 && !ga4.configured && ga4.reason ? (
               <span className="ml-2 font-normal normal-case tracking-normal">
                 — {ga4.reason}
@@ -192,22 +199,22 @@ export function AdminTrafficMetrics() {
           </p>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <AdminStatCard
-              title="Users"
-              subtitle="Total users"
+              title={t('admin.traffic.users')}
+              subtitle={t('admin.traffic.usersSubtitle')}
               value={ga4?.configured ? formatInt(ga4.users ?? 0) : '—'}
               accentColor="#ed6e40"
               icon={Users}
             />
             <AdminStatCard
-              title="Sessions"
-              subtitle="Total sessions"
+              title={t('admin.traffic.sessions')}
+              subtitle={t('admin.traffic.sessionsSubtitle')}
               value={ga4?.configured ? formatInt(ga4.sessions ?? 0) : '—'}
               accentColor="#8b5cf6"
               icon={BarChart3}
             />
             <AdminStatCard
-              title="Page views"
-              subtitle="Screen / page views"
+              title={t('admin.traffic.pageViews')}
+              subtitle={t('admin.traffic.pageViewsSubtitle')}
               value={ga4?.configured ? formatInt(ga4.pageViews ?? 0) : '—'}
               accentColor="#14b8a6"
               icon={Eye}

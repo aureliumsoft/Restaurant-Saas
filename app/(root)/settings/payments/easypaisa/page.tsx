@@ -5,6 +5,7 @@ import axios from 'axios';
 import Link from 'next/link';
 import { ArrowLeft, Check, Loader2, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import {
   extractApiErrorFromBody,
@@ -43,6 +44,7 @@ type EasypaisaFormState = {
 };
 
 export default function EasypaisaCredentialsPage() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
   const [testStatus, setTestStatus] = useState<TestStatus>('idle');
@@ -86,7 +88,7 @@ export default function EasypaisaCredentialsPage() {
           if (data.verified === true) setTestStatus('passed');
         }
       } catch {
-        if (!cancelled) toast.error('Could not load Easypaisa settings.');
+        if (!cancelled) toast.error(t('settings.paymentCredentials.loadFailed', { provider: 'Easypaisa' }));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -113,19 +115,22 @@ export default function EasypaisaCredentialsPage() {
       if (res.status >= 200 && res.status < 300) {
         setTestStatus('passed');
         setForm((prev) => ({ ...prev, verified: true }));
-        toast.success('Easypaisa credentials look valid.');
+        toast.success(t('settings.paymentCredentials.testSuccessCredentials', { provider: 'Easypaisa' }));
         return;
       }
       setTestStatus('failed');
       setForm((prev) => ({ ...prev, verified: false }));
       toast.error(
-        extractApiErrorFromBody(res.data, 'Easypaisa credential test failed.')
+        extractApiErrorFromBody(
+          res.data,
+          t('settings.paymentCredentials.testFailedCredentials', { provider: 'Easypaisa' })
+        )
       );
     } catch (e: unknown) {
       setTestStatus('failed');
       setForm((prev) => ({ ...prev, verified: false }));
       toast.error(
-        extractApiErrorMessage(e, 'Easypaisa credential test failed.')
+        extractApiErrorMessage(e, t('settings.paymentCredentials.testFailedCredentials', { provider: 'Easypaisa' }))
       );
     } finally {
       setTesting(false);
@@ -152,12 +157,12 @@ export default function EasypaisaCredentialsPage() {
         verified: data?.verified === true,
       }));
       setTestStatus('passed');
-      toast.success('Easypaisa credentials saved.');
+      toast.success(t('settings.paymentCredentials.saveSuccess', { provider: 'Easypaisa' }));
     } catch (e: unknown) {
       setTestStatus('failed');
       setForm((prev) => ({ ...prev, verified: false }));
       toast.error(
-        extractApiErrorMessage(e, 'Could not save Easypaisa credentials.')
+        extractApiErrorMessage(e, t('settings.paymentCredentials.saveFailed', { provider: 'Easypaisa' }))
       );
     } finally {
       setSaving(false);
@@ -165,7 +170,7 @@ export default function EasypaisaCredentialsPage() {
   }
 
   async function handleDisconnect() {
-    if (!window.confirm('Remove Easypaisa credentials for this restaurant?')) {
+    if (!window.confirm(t('settings.paymentCredentials.disconnectConfirm', { provider: 'Easypaisa' }))) {
       return;
     }
     try {
@@ -181,9 +186,9 @@ export default function EasypaisaCredentialsPage() {
         verified: false,
       });
       setTestStatus('idle');
-      toast.success('Easypaisa credentials removed.');
+      toast.success(t('settings.paymentCredentials.disconnectSuccess', { provider: 'Easypaisa' }));
     } catch {
-      toast.error('Could not remove Easypaisa credentials.');
+      toast.error(t('settings.paymentCredentials.disconnectFailed', { provider: 'Easypaisa' }));
     }
   }
 
@@ -200,7 +205,7 @@ export default function EasypaisaCredentialsPage() {
       <Button type="button" variant="ghost" className="gap-2" asChild>
         <Link href="/settings?section=payments">
           <ArrowLeft className="h-4 w-4" />
-          Back to payment methods
+          {t('settings.paymentCredentials.backToPaymentMethods')}
         </Link>
       </Button>
 
@@ -215,7 +220,7 @@ export default function EasypaisaCredentialsPage() {
         <CardContent className="space-y-4">
           {form.verified && testStatus !== 'failed' ? (
             <p className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
-              Credentials verified and saved.
+              {t('settings.paymentCredentials.credentialsVerifiedSaved')}
             </p>
           ) : null}
 
@@ -297,7 +302,7 @@ export default function EasypaisaCredentialsPage() {
           </div>
 
           <div className="space-y-2">
-            <Label>Mode</Label>
+            <Label>{t('settings.paymentCredentials.mode')}</Label>
             <Select
               value={form.mode}
               onValueChange={(value: 'sandbox' | 'live') => {
@@ -344,7 +349,7 @@ export default function EasypaisaCredentialsPage() {
           </Button>
           <Button type="button" onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Save credentials
+            {t('settings.paymentCredentials.saveCredentials')}
           </Button>
           {form.hasHashKey ? (
             <Button
@@ -353,7 +358,7 @@ export default function EasypaisaCredentialsPage() {
               onClick={handleDisconnect}
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Disconnect
+              {t('settings.paymentCredentials.disconnect')}
             </Button>
           ) : null}
         </CardFooter>

@@ -2,6 +2,7 @@
 
 import { useMemo, Children } from 'react';
 import { Loader2, Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -137,6 +138,7 @@ export type ConfigurationWizardConfigureStepProps = {
 export function ConfigurationWizardConfigureStep(
   props: ConfigurationWizardConfigureStepProps
 ) {
+  const { t } = useTranslation();
   const {
     kind,
     isSaving,
@@ -176,23 +178,22 @@ export function ConfigurationWizardConfigureStep(
   } = props;
 
   const uiLang = useUiLanguage();
+  const wc = 'dashboard.menuManager.wizardConfig';
 
   const title = useMemo(() => {
     switch (kind) {
       case 'cat-one':
-        return 'Which category is the option from?';
+        return t(`${wc}.titleCatOne`);
       case 'cat-many':
-        return 'Which categories are the extras from?';
+        return t(`${wc}.titleCatMany`);
       case 'prod-one':
-        return 'Which product options can they pick (exactly one)?';
+        return t(`${wc}.titleProdOne`);
       case 'prod-many':
-        return 'Which specific products can they add?';
+        return t(`${wc}.titleProdMany`);
     }
-  }, [kind]);
+  }, [kind, t]);
 
-  const hint = isCategoryKind(kind)
-    ? 'You can select more than one category. Guests see every product in those categories.'
-    : 'Filter by categories, then hand-pick menu items instead of a whole category.';
+  const hint = isCategoryKind(kind) ? t(`${wc}.hintCategory`) : t(`${wc}.hintProduct`);
 
   const selectedCategories = useMemo(
     () =>
@@ -267,15 +268,14 @@ export function ConfigurationWizardConfigureStep(
       {isCategoryKind(kind) ? (
         filteredEligibleCategories.length === 0 && !categorySearch ? (
           <p className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-            No eligible categories left. Create a toppings/sauce category under
-            Categories, add products to it, then come back.
+            {t(`${wc}.noEligibleCategories`)}
           </p>
         ) : (
           <SelectableList
             search={categorySearch}
             onSearchChange={setCategorySearch}
-            searchPlaceholder="Search categories…"
-            emptyMessage="No categories match your search."
+            searchPlaceholder={t(`${wc}.searchCategoriesPlaceholder`)}
+            emptyMessage={t(`${wc}.noCategoriesMatch`)}
           >
             {filteredEligibleCategories.map((cat) => (
               <SelectableRow
@@ -286,8 +286,8 @@ export function ConfigurationWizardConfigureStep(
                 imageUrl={cat.imageUrl}
                 subtitle={
                   isMenuCategoryShownInFront(cat)
-                    ? 'On customer menu'
-                    : 'Add-on only (hidden from browse)'
+                    ? t(`${wc}.onCustomerMenu`)
+                    : t(`${wc}.addonOnlyHidden`)
                 }
                 onClick={() => toggleCategoryId(cat.id)}
               />
@@ -301,7 +301,7 @@ export function ConfigurationWizardConfigureStep(
       categoryProducts.length > 0 ? (
         <div>
           <p className="mb-2 text-xs font-medium text-muted-foreground">
-            Category products and pricing overrides
+            {t(`${wc}.categoryProductsOverridesLabel`)}
           </p>
           <div className="max-h-80 space-y-3 overflow-y-auto rounded-xl border border-border p-2 overscroll-contain">
             {selectedCategoryIds.map((categoryId) => {
@@ -313,7 +313,7 @@ export function ConfigurationWizardConfigureStep(
                   <div className="border-b border-border bg-muted/30 px-3 py-2 text-xs font-medium">
                     {category
                       ? resolveBilingualText(category.name, uiLang)
-                      : 'Category'}
+                      : t(`${wc}.categoryFallback`)}
                   </div>
                   <ul className="divide-y divide-border">
                     {products.map((product) => {
@@ -345,7 +345,7 @@ export function ConfigurationWizardConfigureStep(
                                 })
                               }
                             />
-                            Free
+                            {t(`${wc}.free`)}
                           </label>
                           <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
                             <input
@@ -358,7 +358,7 @@ export function ConfigurationWizardConfigureStep(
                                 })
                               }
                             />
-                            Remove
+                            {t(`${wc}.remove`)}
                           </label>
                         </li>
                       );
@@ -374,13 +374,13 @@ export function ConfigurationWizardConfigureStep(
       {isProductKind(kind) ? (
         <div className="space-y-3">
           <p className="text-xs font-medium text-muted-foreground">
-            Filter by product categories
+            {t(`${wc}.filterByProductCategories`)}
           </p>
           <SelectableList
             search={productFilterSearch}
             onSearchChange={setProductFilterSearch}
-            searchPlaceholder="Search categories…"
-            emptyMessage="No categories match."
+            searchPlaceholder={t(`${wc}.searchCategoriesPlaceholder`)}
+            emptyMessage={t(`${wc}.noCategoriesMatchDot`)}
           >
             {filteredProductPickerCategories.map((cat) => (
               <SelectableRow
@@ -391,8 +391,8 @@ export function ConfigurationWizardConfigureStep(
                 imageUrl={cat.imageUrl}
                 subtitle={
                   isMenuCategoryShownInFront(cat)
-                    ? 'On customer menu'
-                    : 'Add-on only'
+                    ? t(`${wc}.onCustomerMenu`)
+                    : t(`${wc}.addonOnly`)
                 }
                 onClick={() => toggleProductCategoryId(cat.id)}
               />
@@ -401,18 +401,18 @@ export function ConfigurationWizardConfigureStep(
 
           {productCategoryIds.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Select at least one category to load products.
+              {t(`${wc}.selectAtLeastOneCategory`)}
             </p>
           ) : (
             <>
               <p className="text-xs font-medium text-muted-foreground">
-                Linked products
+                {t(`${wc}.linkedProducts`)}
               </p>
               <SelectableList
                 search={productSearch}
                 onSearchChange={setProductSearch}
-                searchPlaceholder="Search products…"
-                emptyMessage="No products match (or already assigned)."
+                searchPlaceholder={t(`${wc}.searchProductsPlaceholder`)}
+                emptyMessage={t(`${wc}.noProductsMatch`)}
               >
                 {filteredLinkedProducts.map((p) => (
                   <SelectableRow
@@ -434,7 +434,7 @@ export function ConfigurationWizardConfigureStep(
       {isManyKind(kind) ? (
         <div className="space-y-3">
           <div>
-            <p className="mb-2 text-xs text-muted-foreground">How guests pick</p>
+            <p className="mb-2 text-xs text-muted-foreground">{t(`${wc}.howGuestsPick`)}</p>
             <div className="inline-flex overflow-hidden rounded-lg border border-border">
               <button
                 type="button"
@@ -446,7 +446,7 @@ export function ConfigurationWizardConfigureStep(
                 )}
                 onClick={() => setMultipleMode('CHECKBOX')}
               >
-                Checkboxes (1 each)
+                {t(`${wc}.checkboxesOption`)}
               </button>
               <button
                 type="button"
@@ -458,17 +458,17 @@ export function ConfigurationWizardConfigureStep(
                 )}
                 onClick={() => setMultipleMode('QUANTITY')}
               >
-                Plus / minus quantities
+                {t(`${wc}.quantityOption`)}
               </button>
             </div>
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm">Must choose before adding to cart?</span>
+            <span className="text-sm">{t(`${wc}.mustChooseBeforeCart`)}</span>
             <SwitchControl
               on={required}
               onToggle={() => setRequired(!required)}
-              aria-label="Required"
+              aria-label={t(`${wc}.requiredAria`)}
             />
           </div>
 
@@ -477,10 +477,10 @@ export function ConfigurationWizardConfigureStep(
               <div className="space-y-3">
                 <div className="space-y-0.5">
                   <p className="text-xs font-semibold text-foreground">
-                    Min / max per product variation
+                    {t(`${wc}.minMaxPerVariation`)}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    Set how many add-ons customers can choose for each size/variation of this product.
+                    {t(`${wc}.minMaxPerVariationHint`)}
                   </p>
                 </div>
                 {selectedCategories.map((cat) => {
@@ -502,7 +502,7 @@ export function ConfigurationWizardConfigureStep(
                       <div className="space-y-2">
                         {limits.map((row) => {
                           const v = baseVariations.find((x) => x.id === row.variationId);
-                          const label = v ? variationLabel(v) : 'Variation';
+                          const label = v ? variationLabel(v) : t(`${wc}.variationFallback`);
                           return (
                             <div
                               key={`${cat.id}-${row.variationId}`}
@@ -515,7 +515,7 @@ export function ConfigurationWizardConfigureStep(
                                 type="number"
                                 min={0}
                                 className="h-9"
-                                aria-label={`${catDisplayName} ${label} minimum`}
+                                aria-label={`${catDisplayName} ${label} ${t(`${wc}.minAria`)}`}
                                 value={row.minItems}
                                 onChange={(e) => {
                                   const val = Math.max(0, Number.parseInt(e.target.value, 10) || 0);
@@ -534,7 +534,7 @@ export function ConfigurationWizardConfigureStep(
                                 type="number"
                                 min={1}
                                 className="h-9"
-                                aria-label={`${catDisplayName} ${label} maximum`}
+                                aria-label={`${catDisplayName} ${label} ${t(`${wc}.maxAria`)}`}
                                 value={row.maxItems}
                                 onChange={(e) => {
                                   const val = Math.max(1, Number.parseInt(e.target.value, 10) || 1);
@@ -560,7 +560,7 @@ export function ConfigurationWizardConfigureStep(
             ) : (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Min / max per category
+                  {t(`${wc}.minMaxPerCategory`)}
                 </p>
                 {selectedCategories.map((cat, index) => {
                   const settings =
@@ -578,7 +578,7 @@ export function ConfigurationWizardConfigureStep(
                       <Input
                         type="number"
                         min={0}
-                        aria-label={`${catDisplayName} minimum`}
+                        aria-label={`${catDisplayName} ${t(`${wc}.minAria`)}`}
                         value={settings.minItems}
                         onChange={(e) => {
                           const val = Math.max(
@@ -593,7 +593,7 @@ export function ConfigurationWizardConfigureStep(
                       <Input
                         type="number"
                         min={1}
-                        aria-label={`${catDisplayName} maximum`}
+                        aria-label={`${catDisplayName} ${t(`${wc}.maxAria`)}`}
                         value={settings.maxItems}
                         onChange={(e) => {
                           const val = Math.max(
@@ -615,7 +615,7 @@ export function ConfigurationWizardConfigureStep(
           {kind === 'prod-many' && linkedProductIds.length > 0 ? (
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">
-                Min / max per linked product
+                {t(`${wc}.minMaxPerLinkedProduct`)}
               </p>
               <ul className="space-y-2">
                 {linkedProductIds.map((pid) => {
@@ -630,12 +630,12 @@ export function ConfigurationWizardConfigureStep(
                       className="grid gap-2 rounded-xl border border-border px-3 py-2 sm:grid-cols-[1fr_5rem_5rem]"
                     >
                       <span className="self-center truncate text-sm font-medium">
-                        {linkedNameById.get(pid) ?? 'Product'}
+                        {linkedNameById.get(pid) ?? t(`${wc}.productFallback`)}
                       </span>
                       <Input
                         type="number"
                         min={0}
-                        aria-label="Min"
+                        aria-label={t(`${wc}.minAria`)}
                         value={settings.minItems}
                         onChange={(e) => {
                           const val = Math.max(
@@ -651,7 +651,7 @@ export function ConfigurationWizardConfigureStep(
                       <Input
                         type="number"
                         min={1}
-                        aria-label="Max"
+                        aria-label={t(`${wc}.maxAria`)}
                         value={settings.maxItems}
                         onChange={(e) => {
                           const val = Math.max(
@@ -673,7 +673,7 @@ export function ConfigurationWizardConfigureStep(
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          Guests must pick exactly one option before adding to cart.
+          {t(`${wc}.mustPickExactlyOne`)}
         </p>
       )}
 
@@ -683,17 +683,16 @@ export function ConfigurationWizardConfigureStep(
           className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm font-medium"
           onClick={() => setShowAdvanced(!showAdvanced)}
         >
-          <span>More pricing &amp; limits</span>
+          <span>{t(`${wc}.morePricingLimits`)}</span>
           <span className="text-xs font-normal text-muted-foreground">
-            {showAdvanced ? 'Hide' : 'Show'}
+            {showAdvanced ? t(`${wc}.hide`) : t(`${wc}.show`)}
           </span>
         </button>
 
         {showAdvanced ? (
           <div className="space-y-4 border-t border-border px-3 py-3">
             <p className="text-xs text-muted-foreground">
-              Same advanced options as the classic editor. Configure each
-              selected category or product separately.
+              {t(`${wc}.advancedSameOptionsHint`)}
             </p>
 
             {isCategoryKind(kind) && selectedCategoryIds.length > 0
@@ -713,12 +712,12 @@ export function ConfigurationWizardConfigureStep(
 
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
-                          <Label>Category discount (%)</Label>
+                          <Label>{t(`${wc}.categoryDiscountLabel`)}</Label>
                           <Input
                             type="number"
                             min={0}
                             max={100}
-                            placeholder="No discount"
+                            placeholder={t(`${wc}.noDiscountPlaceholder`)}
                             value={
                               settings.discountPercent != null
                                 ? String(settings.discountPercent)
@@ -744,12 +743,12 @@ export function ConfigurationWizardConfigureStep(
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label>Category extra cost (%)</Label>
+                          <Label>{t(`${wc}.categoryExtraCostLabel`)}</Label>
                           <Input
                             type="number"
                             min={0}
                             max={500}
-                            placeholder="No extra cost"
+                            placeholder={t(`${wc}.noExtraCostPlaceholder`)}
                             value={
                               settings.extraCostPercent != null
                                 ? String(settings.extraCostPercent)
@@ -777,7 +776,7 @@ export function ConfigurationWizardConfigureStep(
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label>Recommended size</Label>
+                        <Label>{t(`${wc}.recommendedSize`)}</Label>
                         <Select
                             value={
                               settings.recommendedVariationId || '__none__'
@@ -796,10 +795,10 @@ export function ConfigurationWizardConfigureStep(
                             }}
                           >
                             <SelectTrigger className="h-10">
-                              <SelectValue placeholder="None" />
+                              <SelectValue placeholder={t(`${wc}.none`)} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="__none__">None</SelectItem>
+                              <SelectItem value="__none__">{t(`${wc}.none`)}</SelectItem>
                               {defaultVariationOptions.map((opt) => (
                                 <SelectItem
                                   key={opt.restaurantVariationId}
@@ -815,9 +814,9 @@ export function ConfigurationWizardConfigureStep(
                       {settings.recommendedVariationId ? (
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-sm">
-                            Show recommended size price
+                            {t(`${wc}.showRecommendedSizePrice`)}
                             <span className="mt-0.5 block text-xs text-muted-foreground">
-                              Off = that size looks free for guests
+                              {t(`${wc}.showRecommendedSizePriceHint`)}
                             </span>
                           </span>
                           <SwitchControl
@@ -835,7 +834,7 @@ export function ConfigurationWizardConfigureStep(
                       ) : null}
 
                       <div className="space-y-1.5">
-                        <Label>Default item (baseline price)</Label>
+                        <Label>{t(`${wc}.defaultItemBaseline`)}</Label>
                         <Select
                           value={settings.defaultItemId || '__none__'}
                           onValueChange={(value) =>
@@ -848,11 +847,11 @@ export function ConfigurationWizardConfigureStep(
                           }
                         >
                           <SelectTrigger className="h-10">
-                            <SelectValue placeholder="None" />
+                            <SelectValue placeholder={t(`${wc}.none`)} />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__">
-                              None — charge full price for each pick
+                              {t(`${wc}.noneChargeFullPrice`)}
                             </SelectItem>
                             {catItems.map((item) => (
                               <SelectItem key={item.id} value={item.id}>
@@ -866,9 +865,9 @@ export function ConfigurationWizardConfigureStep(
                       {baseVariations.length > 0 ? (
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-sm">
-                            Price add-ons by product size
+                            {t(`${wc}.priceAddonsBySize`)}
                             <span className="mt-0.5 block text-xs text-muted-foreground">
-                              Different add-on prices for each size
+                              {t(`${wc}.priceAddonsBySizeHint`)}
                             </span>
                           </span>
                           <SwitchControl
@@ -888,10 +887,9 @@ export function ConfigurationWizardConfigureStep(
 
                       {kind === 'cat-many' && multipleMode === 'QUANTITY' ? (
                         <div className="space-y-2 rounded-lg border border-border/60 p-2">
-                          <Label>Free quantity</Label>
+                          <Label>{t(`${wc}.freeQuantity`)}</Label>
                           <p className="text-xs text-muted-foreground">
-                            First N units free for this category; extra units
-                            are charged.
+                            {t(`${wc}.freeQuantityHintCategory`)}
                           </p>
                           {!noFree ? (
                             <Input
@@ -929,7 +927,7 @@ export function ConfigurationWizardConfigureStep(
                                 )
                               }
                             />
-                            <span>No free items for this category</span>
+                            <span>{t(`${wc}.noFreeItemsCategory`)}</span>
                           </label>
                         </div>
                       ) : null}
@@ -943,7 +941,7 @@ export function ConfigurationWizardConfigureStep(
             linkedProductIds.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Free quantity per linked product
+                  {t(`${wc}.freeQuantityPerLinkedProduct`)}
                 </p>
                 {linkedProductIds.map((pid) => {
                   const settings = productSettings[pid] ?? {
@@ -958,7 +956,7 @@ export function ConfigurationWizardConfigureStep(
                       className="space-y-2 rounded-xl border border-border bg-background p-3"
                     >
                       <p className="text-sm font-medium">
-                        {linkedNameById.get(pid) ?? 'Product'}
+                        {linkedNameById.get(pid) ?? t(`${wc}.productFallback`)}
                       </p>
                       {!noFree ? (
                         <Input
@@ -997,7 +995,7 @@ export function ConfigurationWizardConfigureStep(
                             }))
                           }
                         />
-                        <span>No free items for this product</span>
+                        <span>{t(`${wc}.noFreeItemsProduct`)}</span>
                       </label>
                     </div>
                   );
@@ -1007,22 +1005,20 @@ export function ConfigurationWizardConfigureStep(
 
             {isCategoryKind(kind) && selectedCategoryIds.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Select a category above to configure pricing options.
+                {t(`${wc}.selectCategoryAboveHint`)}
               </p>
             ) : null}
 
             {kind === 'prod-many' &&
             !(multipleMode === 'QUANTITY' && linkedProductIds.length > 0) ? (
               <p className="text-sm text-muted-foreground">
-                Switch to plus/minus quantities and select products to set free
-                quantity. Min/max are above.
+                {t(`${wc}.switchToQuantityHint`)}
               </p>
             ) : null}
 
             {kind === 'prod-one' ? (
               <p className="text-sm text-muted-foreground">
-                Product · single has no extra pricing fields in classic either —
-                guests pick exactly one linked product.
+                {t(`${wc}.productOneNoExtraFieldsHint`)}
               </p>
             ) : null}
           </div>
@@ -1031,16 +1027,16 @@ export function ConfigurationWizardConfigureStep(
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
         <Button type="button" variant="outline" onClick={onBack}>
-          Back
+          {t(`${wc}.back`)}
         </Button>
         <Button type="button" disabled={!canSave || isSaving} onClick={onSave}>
           {savingRules ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving…
+              {t(`${wc}.savingEllipsis`)}
             </>
           ) : (
-            'Save this choice'
+            t(`${wc}.saveThisChoice`)
           )}
         </Button>
       </div>

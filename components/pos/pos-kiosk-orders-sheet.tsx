@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Loader2, Monitor, Pencil, Printer } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -59,6 +60,7 @@ export function PosKioskOrdersSheet({
   onEditOrder,
   onOrdersChanged,
 }: Props) {
+  const { t } = useTranslation();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const { orders, loading, removeOrder, confirmInBackground, refresh } =
     useKioskPendingCash(branchId);
@@ -109,7 +111,7 @@ export function PosKioskOrdersSheet({
         branchName,
         logoUrl,
         orderMode: 'pos',
-        paymentMethodLabel: detail.paymentMethod ?? 'Cash',
+        paymentMethodLabel: detail.paymentMethod ?? t('pos.cash'),
         tableLabel: detail.tableLabel,
         customerName: detail.customerName,
         customerPhone: detail.customerPhone,
@@ -129,9 +131,9 @@ export function PosKioskOrdersSheet({
         currencyCode: regional.currencyCode,
         countryCode: regional.countryCode,
       });
-      if (!ok) toast.error('Could not open print preview.');
+      if (!ok) toast.error(t('pos.toasts.couldNotOpenPrintPreview'));
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not print receipt.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotPrintReceipt')));
     } finally {
       setPrintBusyId(null);
     }
@@ -144,7 +146,7 @@ export function PosKioskOrdersSheet({
       onEditOrder(detail);
       onOpenChange(false);
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not load order for editing.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotLoadOrderForEditing')));
     } finally {
       setEditBusyId(null);
     }
@@ -153,7 +155,7 @@ export function PosKioskOrdersSheet({
   const handleCancel = async (order: KioskPendingOrderRow) => {
     if (
       !window.confirm(
-        'Cancel this kiosk order? Kitchen tickets will be canceled.'
+        t('pos.dialogs.cancelKioskOrder.confirm')
       )
     ) {
       return;
@@ -161,10 +163,10 @@ export function PosKioskOrdersSheet({
     setCancelBusyId(order.id);
     try {
       await axios.patch(kioskOrderApiPath(order.id, 'cancel', order.urlId));
-      toast.success('Kiosk order canceled.');
+      toast.success(t('pos.toasts.kioskOrderCanceled'));
       notifyChanged(order.id);
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not cancel order.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotCancelOrder')));
       confirmInBackground();
     } finally {
       setCancelBusyId(null);
@@ -191,7 +193,7 @@ export function PosKioskOrdersSheet({
     if (!payOrder) return;
     const paid = Number(paidInput);
     if (!Number.isFinite(paid) || paid < payOrder.total) {
-      toast.warn('Paid amount must be at least the order total.');
+      toast.warn(t('pos.toasts.paidAmountAtLeastTotal'));
       return;
     }
     setPaying(true);
@@ -208,7 +210,7 @@ export function PosKioskOrdersSheet({
       setPayOrder(null);
       setPaidInput('');
       toast.success(
-        `Payment completed — change ${formatMoney(change)}`
+        t('pos.toasts.paymentCompletedChange', { change: formatMoney(change) })
       );
       confirmInBackground();
       window.setTimeout(() => {
@@ -220,7 +222,7 @@ export function PosKioskOrdersSheet({
         onOrdersChanged?.();
       }, 0);
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not record payment.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotRecordPayment')));
       confirmInBackground();
     } finally {
       setPaying(false);
@@ -234,7 +236,7 @@ export function PosKioskOrdersSheet({
           <SheetHeader className="shrink-0 border-b px-6 py-4 text-left">
             <SheetTitle className="flex items-center gap-2">
               <Monitor className="h-5 w-5" />
-              Kiosk orders
+              {t('pos.sheets.kioskOrders.title')}
               {orders.length > 0 ? (
                 <span className="ml-1 rounded-full bg-fire-500 px-2 py-0.5 text-xs font-bold text-white">
                   {orders.length}
@@ -242,8 +244,7 @@ export function PosKioskOrdersSheet({
               ) : null}
             </SheetTitle>
             <SheetDescription>
-              Cash kiosk orders awaiting payment. Collect cash, print, edit, or
-              cancel.
+              {t('pos.sheets.kioskOrders.description')}
             </SheetDescription>
           </SheetHeader>
 
@@ -254,7 +255,7 @@ export function PosKioskOrdersSheet({
               </div>
             ) : orders.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                No pending cash kiosk orders.
+                {t('pos.sheets.kioskOrders.noPendingOrders')}
               </p>
             ) : (
               <ul className="divide-y rounded-xl border">
@@ -265,7 +266,7 @@ export function PosKioskOrdersSheet({
                   const busy = printBusy || editBusy || cancelBusy || paying;
                   const label =
                     order.ticketNumber != null
-                      ? `Ticket #${String(order.ticketNumber).padStart(2, '0')}`
+                      ? t('pos.sheets.shift.ticketNumber', { number: String(order.ticketNumber).padStart(2, '0') })
                       : order.shortOrderId;
                   return (
                     <li
@@ -280,14 +281,13 @@ export function PosKioskOrdersSheet({
                               hour: '2-digit',
                               minute: '2-digit',
                             })}
-                            {' · Cash · Pending'}
+                            {` · ${t('pos.cash')} · ${t('pos.sheets.kioskOrders.pending')}`}
                             {order.customerName
                               ? ` · ${order.customerName}`
                               : ''}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {order.itemCount} item
-                            {order.itemCount === 1 ? '' : 's'}
+                            {t('pos.itemCount', { count: order.itemCount })}
                           </p>
                         </div>
                         <p className="shrink-0 font-semibold tabular-nums">
@@ -302,7 +302,7 @@ export function PosKioskOrdersSheet({
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            title="Print receipt"
+                            title={t('pos.sheets.recentOrders.printReceipt')}
                             disabled={busy}
                             onClick={() => void handlePrint(order)}
                           >
@@ -317,7 +317,7 @@ export function PosKioskOrdersSheet({
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            title="Edit order"
+                            title={t('pos.sheets.recentOrders.editOrder')}
                             disabled={busy}
                             onClick={() => void handleEdit(order)}
                           >
@@ -335,7 +335,7 @@ export function PosKioskOrdersSheet({
                             disabled={busy}
                             onClick={() => openPayDialog(order)}
                           >
-                            Pay
+                            {t('pos.sheets.kioskOrders.pay')}
                           </Button>
                           <Button
                             type="button"
@@ -347,7 +347,7 @@ export function PosKioskOrdersSheet({
                             {cancelBusy ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              'Cancel'
+                              t('pos.sheets.kioskOrders.cancel')
                             )}
                           </Button>
                         </div>
@@ -367,7 +367,7 @@ export function PosKioskOrdersSheet({
               disabled={loading}
               onClick={() => void refresh()}
             >
-              Refresh
+              {t('pos.sheets.recentOrders.refresh')}
             </Button>
           </div>
         </SheetContent>
@@ -381,18 +381,18 @@ export function PosKioskOrdersSheet({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Pay with cash</DialogTitle>
+            <DialogTitle>{t('pos.dialogs.payWithCash.title')}</DialogTitle>
           </DialogHeader>
           {payOrder ? (
             <div className="space-y-4">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Order total</span>
+                <span className="text-muted-foreground">{t('pos.dialogs.payWithCash.orderTotal')}</span>
                 <span className="font-semibold tabular-nums">
                   {formatMoney(payOrder.total)}
                 </span>
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Paid</label>
+                <label className="text-xs text-muted-foreground">{t('pos.dialogs.payWithCash.paid')}</label>
                 <Input
                   className="h-9 bg-background"
                   inputMode="decimal"
@@ -404,7 +404,7 @@ export function PosKioskOrdersSheet({
               </div>
               <div className="flex items-end justify-between gap-3 pt-1">
                 <span className="pb-1 text-sm font-medium text-muted-foreground">
-                  Change
+                  {t('pos.change')}
                 </span>
                 <span className="text-3xl font-bold tabular-nums tracking-tight">
                   {formatMoney(payChange)}
@@ -419,7 +419,7 @@ export function PosKioskOrdersSheet({
               disabled={paying}
               onClick={closePayDialog}
             >
-              Close
+              {t('pos.dialogs.payWithCash.close')}
             </Button>
             <Button
               type="button"
@@ -433,10 +433,10 @@ export function PosKioskOrdersSheet({
               {paying ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing…
+                  {t('pos.dialogs.payWithCash.processing')}
                 </>
               ) : (
-                'Complete payment'
+                t('pos.dialogs.payWithCash.completePayment')
               )}
             </Button>
           </DialogFooter>

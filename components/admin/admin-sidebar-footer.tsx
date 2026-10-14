@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { signOut, useSession } from 'next-auth/react';
 import { Loader2, LogOut } from 'lucide-react';
-
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { LogoutConfirmation } from '@/components/ui/confirmation-dialogs';
 import { cn } from '@/lib/utils';
 
 export function AdminSidebarFooter({ className }: { className?: string }) {
+  const { t } = useTranslation();
   const { data: session, status } = useSession();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -50,7 +51,7 @@ export function AdminSidebarFooter({ className }: { className?: string }) {
         onClick={() => setLogoutOpen(true)}
       >
         <LogOut className="mr-2 h-4 w-4" />
-        Logout
+        {t('admin.subscriptions.logout', { defaultValue: 'Logout' })}
       </Button>
 
       <LogoutConfirmation

@@ -8,6 +8,9 @@ import { Loader2, Plus, Save, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
+import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
+import { PremiumGate } from '@/components/premium/premium-gate';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import {
   Card,
   CardContent,
@@ -39,6 +42,7 @@ export function RestaurantBrandingCard({
   brandingAllowed = true,
 }: RestaurantBrandingCardProps) {
   const { t } = useTranslation();
+  const { caps, canCreateMore } = useEntitlements();
   const [loading, setLoading] = useState(true);
   const [hasRestaurant, setHasRestaurant] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -70,7 +74,7 @@ export function RestaurantBrandingCard({
         setMenuBanners(urls.length > 0 ? urls : ['']);
         setThemePrimaryColor(d.themePrimaryColor ?? '#ea580c');
       } catch {
-        if (!cancelled) toast.error('Could not load restaurant branding.');
+        if (!cancelled) toast.error(t('settings.cards.branding.loadFailed'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -101,11 +105,11 @@ export function RestaurantBrandingCard({
 
   async function handleSave() {
     if (!brandingAllowed) {
-      toast.error('Your plan does not include custom branding.');
+      toast.error(t('settings.cards.branding.planRestricted'));
       return;
     }
     if (!navigator.onLine) {
-      toast.error('You are offline. Please check your internet connection.');
+      toast.error(t('settings.cards.shopName.offline'));
       return;
     }
 
@@ -132,7 +136,7 @@ export function RestaurantBrandingCard({
         setMenuBanners(urls.length > 0 ? urls : ['']);
         setThemePrimaryColor(d.themePrimaryColor ?? '#ea580c');
       }
-      toast.success('Branding saved.');
+      toast.success(t('settings.cards.branding.saved'));
       eventBus.emit('fetchStoreData');
       eventBus.emit('realtime:config.branding');
       void revalidateStaffBootstrap();
@@ -145,9 +149,9 @@ export function RestaurantBrandingCard({
         const msg = fe
           ? Object.values(fe).flat().filter(Boolean).join(' ')
           : '';
-        toast.error(msg || 'Validation failed.');
+        toast.error(msg || t('settings.cards.branding.validationFailed'));
       } else {
-        toast.error('Failed to save branding.');
+        toast.error(t('settings.cards.branding.saveFailed'));
       }
     } finally {
       setSaving(false);
@@ -158,7 +162,7 @@ export function RestaurantBrandingCard({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Logo & banners</CardTitle>
+          <CardTitle>{t('settings.cards.branding.title')}</CardTitle>
           <CardDescription>
             <Loader2 className="mx-auto animate-spin text-primary" />
           </CardDescription>
@@ -171,10 +175,9 @@ export function RestaurantBrandingCard({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Logo & banners</CardTitle>
+          <CardTitle>{t('settings.cards.branding.title')}</CardTitle>
           <CardDescription>
-            No restaurant is linked to your account yet, so branding cannot be
-            edited here.
+            {t('settings.cards.branding.noRestaurant')}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -205,7 +208,7 @@ export function RestaurantBrandingCard({
         />
         <div className="space-y-2">
           <Label htmlFor="restaurant-theme-primary-color">
-            Theme primary color
+            {t('settings.cards.branding.themeColorLabel')}
           </Label>
           <div className="flex flex-wrap items-center gap-3">
             <Input
@@ -225,39 +228,46 @@ export function RestaurantBrandingCard({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Primary brand color on website and kiosk.
+            {t('settings.cards.branding.themeColorHint')}
           </p>
         </div>
-        <div className="space-y-2">
+        <PremiumGate locked={!caps?.mainBanner} className="space-y-2">
           <Base64ImageUploadField
-            label="Main banner"
+            label={t('settings.cards.branding.mainBannerLabel')}
             value={mainBannerUrl}
             onChange={setMainBannerUrl}
-            helperText="Large background on the web ordering page."
+            helperText={t('settings.cards.branding.mainBannerHelper')}
           />
-        </div>
+        </PremiumGate>
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <Label>Menu banners</Label>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addMenuBannerRow}
+            <Label>{t('settings.cards.branding.menuBannersLabel')}</Label>
+            <PremiumDisabledControl
+              locked={!canCreateMore('menuBanners', menuBanners.length)}
+              label={t('settings.cards.branding.addBanner')}
+              className="h-9"
             >
-              <Plus className="mr-2 h-4 w-4" />
-              Add banner
-            </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addMenuBannerRow}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {t('settings.cards.branding.addBanner')}
+              </Button>
+            </PremiumDisabledControl>
           </div>
           <p className="text-xs text-muted-foreground">
-            Carousel images on the customer menu (optional). Upload or paste a
-            URL for each.
+            {t('settings.cards.branding.menuBannersHint')}
           </p>
           {menuBanners.map((url, i) => (
             <div key={i} className="flex items-end gap-2">
               <div className="min-w-0 flex-1">
                 <Base64ImageUploadField
-                  label={`Menu banner ${i + 1}`}
+                  label={t('settings.cards.branding.menuBannerItemLabel', {
+                    n: i + 1,
+                  })}
                   value={url}
                   onChange={(v) => setMenuBanner(i, v)}
                 />
@@ -269,7 +279,10 @@ export function RestaurantBrandingCard({
                   size="icon"
                   className="shrink-0 text-destructive hover:bg-destructive/10"
                   onClick={() => removeMenuBanner(i)}
-                  aria-label={`Remove menu banner ${i + 1}`}
+                  aria-label={t(
+                    'settings.cards.branding.removeMenuBannerAria',
+                    { n: i + 1 }
+                  )}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -287,12 +300,12 @@ export function RestaurantBrandingCard({
           {saving ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              <span>Saving...</span>
+              <span>{t('settings.cards.branding.saving')}</span>
             </>
           ) : (
             <>
               <Save className="mr-2 h-4 w-4" />
-              <span>Save branding</span>
+              <span>{t('settings.cards.branding.saveBranding')}</span>
             </>
           )}
         </Button>

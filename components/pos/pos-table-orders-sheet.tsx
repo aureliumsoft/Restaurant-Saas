@@ -14,6 +14,8 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 import {
   useOpenTableOrders,
@@ -67,31 +69,31 @@ function ticketLabel(order: OpenTableOrderRow): string {
     : order.shortOrderId.slice(0, 6).toUpperCase();
 }
 
-function kitchenTone(order: OpenTableOrderRow): {
+function kitchenTone(order: OpenTableOrderRow, t: TFunction): {
   label: string;
   className: string;
 } {
   if (!order.kitchenSent) {
     return {
-      label: 'Held',
+      label: t('pos.sheets.tableOrders.held'),
       className: 'bg-amber-500/15 text-amber-800 dark:text-amber-300',
     };
   }
   const s = String(order.kitchenStatus ?? 'making').toLowerCase();
   if (s === 'ready') {
     return {
-      label: 'Ready',
+      label: t('pos.sheets.tableOrders.ready'),
       className: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300',
     };
   }
   if (s === 'completed' || s === 'done' || s === 'served') {
     return {
-      label: 'Done',
+      label: t('pos.sheets.tableOrders.done'),
       className: 'bg-muted text-muted-foreground',
     };
   }
   return {
-    label: 'Kitchen',
+    label: t('pos.sheets.tableOrders.kitchen'),
     className: 'bg-sky-500/15 text-sky-800 dark:text-sky-300',
   };
 }
@@ -132,6 +134,7 @@ export function PosTableOrdersSheet({
   branchId,
   onOrdersChanged,
 }: Props) {
+  const { t } = useTranslation();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const { cards, loading, removeTable, confirmInBackground, refresh } =
@@ -194,7 +197,7 @@ export function PosTableOrdersSheet({
 
   const cancelOrderLabel = (order: OpenTableOrderRow) =>
     order.ticketNumber != null
-      ? `Ticket #${String(order.ticketNumber).padStart(2, '0')}`
+      ? t('pos.sheets.shift.ticketNumber', { number: String(order.ticketNumber).padStart(2, '0') })
       : order.shortOrderId;
 
   const confirmCancelOrder = async () => {
@@ -209,7 +212,7 @@ export function PosTableOrdersSheet({
       }>('/api/restaurant/table-orders/cancel', {
         orderIds: [order.id],
       });
-      toast.success(`${label} canceled.`);
+      toast.success(t('pos.toasts.ticketCanceled', { label }));
       setCancelOrder(null);
       const remainingOnTable = cards
         .find((c) => c.diningTableId === order.diningTableId)
@@ -224,7 +227,7 @@ export function PosTableOrdersSheet({
       );
       refresh();
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not cancel order.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotCancelOrder')));
       confirmInBackground();
     } finally {
       setCancellingOrder(false);
@@ -235,7 +238,7 @@ export function PosTableOrdersSheet({
   const openKitchenDialog = (orders: OpenTableOrderRow[]) => {
     const held = orders.filter((o) => !o.kitchenSent);
     if (held.length === 0) {
-      toast.info('All tickets are already in the kitchen.');
+      toast.info(t('pos.toasts.allTicketsAlreadyInKitchen'));
       return;
     }
     setKitchenOrders(held);
@@ -260,7 +263,7 @@ export function PosTableOrdersSheet({
         n > KITCHEN_PREP_MAX
       ) {
         toast.warn(
-          `Prep time must be between ${KITCHEN_PREP_MIN} and ${KITCHEN_PREP_MAX} minutes.`
+          t('pos.toasts.prepTimeRange', { min: KITCHEN_PREP_MIN, max: KITCHEN_PREP_MAX })
         );
         return null;
       }
@@ -283,8 +286,8 @@ export function PosTableOrdersSheet({
         );
         toast.success(
           kitchenOrders.length === 1
-            ? 'Order completed.'
-            : `${kitchenOrders.length} orders completed.`
+            ? t('pos.toasts.orderCompleted')
+            : t('pos.toasts.ordersCompletedCount', { count: kitchenOrders.length })
         );
         for (const order of kitchenOrders) {
           markOpenTableOrderKitchenSent(branchId, order.id);
@@ -297,7 +300,7 @@ export function PosTableOrdersSheet({
         eventBus.emit('refreshTableOrders');
         onOrdersChanged?.();
       } catch (error) {
-        toast.error(apiErrorMessage(error, 'Could not complete order.'));
+        toast.error(apiErrorMessage(error, t('pos.toasts.couldNotCompleteOrder')));
         confirmInBackground();
       } finally {
         setSendingToKitchen(false);
@@ -315,12 +318,14 @@ export function PosTableOrdersSheet({
       });
       toast.success(
         kitchenOrders.length === 1
-          ? `Sent to kitchen · ${minutes} min · ${
-              kitchenOrders[0].ticketNumber != null
-                ? `ticket #${String(kitchenOrders[0].ticketNumber).padStart(2, '0')}`
-                : kitchenOrders[0].shortOrderId
-            }`
-          : `Sent ${kitchenOrders.length} tickets to kitchen · ${minutes} min`
+          ? t('pos.toasts.sentToKitchenSingle', {
+              minutes,
+              ticket:
+                kitchenOrders[0].ticketNumber != null
+                  ? `ticket #${String(kitchenOrders[0].ticketNumber).padStart(2, '0')}`
+                  : kitchenOrders[0].shortOrderId,
+            })
+          : t('pos.toasts.sentToKitchenMultiple', { count: kitchenOrders.length, minutes })
       );
       for (const order of kitchenOrders) {
         markOpenTableOrderKitchenSent(branchId, order.id);
@@ -333,7 +338,7 @@ export function PosTableOrdersSheet({
       eventBus.emit('refreshTableOrders');
       onOrdersChanged?.();
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not send to kitchen.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotSendToKitchen')));
       confirmInBackground();
     } finally {
       setSendingToKitchen(false);
@@ -342,12 +347,12 @@ export function PosTableOrdersSheet({
 
   const openPay = (card: OpenTableCard) => {
     if (card.totalDue <= 0 || card.unpaidCount <= 0) {
-      toast.info('This table has no unpaid tickets.');
+      toast.info(t('pos.toasts.tableNoUnpaidTickets'));
       return;
     }
     if (card.kitchenPendingCount > 0) {
       toast.warn(
-        `Send all tickets to kitchen first (${card.kitchenPendingCount} still held).`
+        t('pos.toasts.sendAllTicketsFirst', { count: card.kitchenPendingCount })
       );
       return;
     }
@@ -357,7 +362,7 @@ export function PosTableOrdersSheet({
     });
     const due = unpaid.reduce((s, o) => s + o.total, 0);
     if (unpaid.length === 0 || due <= 0) {
-      toast.info('This table has no unpaid tickets.');
+      toast.info(t('pos.toasts.tableNoUnpaidTickets'));
       return;
     }
 
@@ -379,13 +384,13 @@ export function PosTableOrdersSheet({
       if (!freshCards) return;
       const latest = freshCards.find((c) => c.diningTableId === tableId);
       if (!latest) {
-        toast.info('This table is no longer open.');
+        toast.info(t('pos.toasts.tableNoLongerOpen'));
         setPayCard(null);
         return;
       }
       if (latest.kitchenPendingCount > 0) {
         toast.warn(
-          `Send all tickets to kitchen first (${latest.kitchenPendingCount} still held).`
+          t('pos.toasts.sendAllTicketsFirst', { count: latest.kitchenPendingCount })
         );
         setPayCard(null);
         return;
@@ -396,7 +401,7 @@ export function PosTableOrdersSheet({
       });
       const nextDue = nextUnpaid.reduce((s, o) => s + o.total, 0);
       if (nextUnpaid.length === 0 || nextDue <= 0) {
-        toast.info('This table has no unpaid tickets.');
+        toast.info(t('pos.toasts.tableNoUnpaidTickets'));
         setPayCard(null);
         return;
       }
@@ -439,7 +444,7 @@ export function PosTableOrdersSheet({
     if (!payCard) return;
     if (payCard.kitchenPendingCount > 0) {
       toast.warn(
-        `Send all tickets to kitchen first (${payCard.kitchenPendingCount} still held).`
+        t('pos.toasts.sendAllTicketsFirst', { count: payCard.kitchenPendingCount })
       );
       setPayCard(null);
       return;
@@ -451,7 +456,7 @@ export function PosTableOrdersSheet({
       })
       .map((o) => o.id);
     if (unpaidIds.length === 0) {
-      toast.info('This table has no unpaid tickets.');
+      toast.info(t('pos.toasts.tableNoUnpaidTickets'));
       setPayCard(null);
       return;
     }
@@ -460,8 +465,8 @@ export function PosTableOrdersSheet({
     if (!Number.isFinite(paid) || paid < payCard.totalDue) {
       toast.warn(
         payMethod === 'card'
-          ? 'Card payment must cover the table total.'
-          : 'Paid amount must be at least the table total.'
+          ? t('pos.toasts.cardPaymentMustCoverTotal')
+          : t('pos.toasts.paidAmountAtLeastTableTotal')
       );
       return;
     }
@@ -470,7 +475,7 @@ export function PosTableOrdersSheet({
 
     if (payMethod === 'card') {
       if (cardPayment.cardPaymentStatus !== 'success') {
-        toast.warn('Please complete the card payment first.');
+        toast.warn(t('pos.toasts.completeCardPaymentFirst'));
         return;
       }
     }
@@ -499,12 +504,12 @@ export function PosTableOrdersSheet({
       cardPayment.resetCardPayment();
       toast.success(
         payMethod === 'card'
-          ? `Table ${payCard.tableLabel} · ${ticketCount} ticket${ticketCount === 1 ? '' : 's'} paid by card`
-          : `Table ${payCard.tableLabel} · ${ticketCount} ticket${ticketCount === 1 ? '' : 's'} paid — change ${formatMoney(change)}`
+          ? t('pos.toasts.tablePaidByCard', { table: payCard.tableLabel, count: ticketCount })
+          : t('pos.toasts.tablePaidChange', { table: payCard.tableLabel, count: ticketCount, change: formatMoney(change) })
       );
       notifyChanged(tableId, tableCleared);
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not complete payment.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotCompletePayment')));
       confirmInBackground();
     } finally {
       setPaying(false);
@@ -518,7 +523,7 @@ export function PosTableOrdersSheet({
           <SheetHeader className="shrink-0 border-b px-5 py-3.5 text-left">
             <SheetTitle className="flex items-center gap-2">
               <Table2 className="h-5 w-5" />
-              Table orders
+              {t('pos.sheets.tableOrders.title')}
               {cards.length > 0 ? (
                 <span className="ml-0.5 rounded-full bg-fire-500 px-2 py-0.5 text-xs font-bold text-white">
                   {cards.length}
@@ -526,7 +531,7 @@ export function PosTableOrdersSheet({
               ) : null}
             </SheetTitle>
             <SheetDescription>
-              Send held tickets, then collect payment for the whole table.
+              {t('pos.sheets.tableOrders.description')}
             </SheetDescription>
           </SheetHeader>
 
@@ -551,10 +556,10 @@ export function PosTableOrdersSheet({
               <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
                 <Table2 className="mb-2 h-8 w-8 text-muted-foreground/40" />
                 <p className="text-sm font-medium text-muted-foreground">
-                  No open tables
+                  {t('pos.sheets.tableOrders.noOpenTables')}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground/80">
-                  New table tickets will show up here.
+                  {t('pos.sheets.tableOrders.newTicketsWillShow')}
                 </p>
               </div>
             ) : (
@@ -577,23 +582,23 @@ export function PosTableOrdersSheet({
                           </p>
                           <div className="mt-1 flex flex-wrap gap-1">
                             <StatusChip
-                              label={`${card.orderCount} ticket${card.orderCount === 1 ? '' : 's'}`}
+                              label={t('pos.sheets.tableOrders.ticketCount', { count: card.orderCount })}
                               className="bg-muted text-muted-foreground"
                             />
                             {card.unpaidCount > 0 ? (
                               <StatusChip
-                                label={`${card.unpaidCount} unpaid`}
+                                label={t('pos.sheets.tableOrders.unpaidCount', { count: card.unpaidCount })}
                                 className="bg-amber-500/15 text-amber-800 dark:text-amber-300"
                               />
                             ) : (
                               <StatusChip
-                                label="Paid"
+                                label={t('pos.sheets.tableOrders.paid')}
                                 className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
                               />
                             )}
                             {card.kitchenPendingCount > 0 ? (
                               <StatusChip
-                                label={`${card.kitchenPendingCount} held`}
+                                label={t('pos.sheets.tableOrders.heldCount', { count: card.kitchenPendingCount })}
                                 className="bg-amber-500/15 text-amber-800 dark:text-amber-300"
                               />
                             ) : null}
@@ -606,7 +611,7 @@ export function PosTableOrdersSheet({
                             </p>
                           ) : (
                             <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                              Settled
+                              {t('pos.sheets.tableOrders.settled')}
                             </p>
                           )}
                         </div>
@@ -620,7 +625,7 @@ export function PosTableOrdersSheet({
                               Boolean(
                                 kitchenOrders?.some((o) => o.id === order.id)
                               ));
-                          const kitchen = kitchenTone(order);
+                          const kitchen = kitchenTone(order, t);
                           const unpaid = isUnpaid(order);
                           const expanded = expandedTicketIds.has(order.id);
                           const preview = itemsPreview(order);
@@ -655,7 +660,7 @@ export function PosTableOrdersSheet({
                                       className={kitchen.className}
                                     />
                                     <StatusChip
-                                      label={unpaid ? 'Unpaid' : 'Paid'}
+                                      label={unpaid ? t('pos.sheets.tableOrders.unpaid') : t('pos.sheets.tableOrders.paid')}
                                       className={
                                         unpaid
                                           ? 'bg-amber-500/10 text-amber-800 dark:text-amber-300'
@@ -664,14 +669,14 @@ export function PosTableOrdersSheet({
                                     />
                                     {order.sourceType === 'KIOSK' ? (
                                       <StatusChip
-                                        label="Kiosk"
+                                        label={t('pos.sheets.tableOrders.kiosk')}
                                         className="bg-muted text-muted-foreground"
                                       />
                                     ) : null}
                                   </div>
                                   {!expanded ? (
                                     <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
-                                      {preview || 'No items'}
+                                      {preview || t('pos.sheets.tableOrders.noItems')}
                                     </p>
                                   ) : null}
                                 </button>
@@ -682,7 +687,7 @@ export function PosTableOrdersSheet({
                                     size="icon"
                                     variant="ghost"
                                     className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                    title="Cancel ticket"
+                                    title={t('pos.sheets.tableOrders.cancelTicket')}
                                     disabled={anyBusy || orderBusy}
                                     onClick={() => setCancelOrder(order)}
                                   >
@@ -728,16 +733,11 @@ export function PosTableOrdersSheet({
                           <div className="space-y-1.5">
                             {card.totalDue > 0 ? (
                               <p className="text-center text-[11px] text-amber-700 dark:text-amber-300">
-                                Send {card.kitchenPendingCount} held ticket
-                                {card.kitchenPendingCount === 1 ? '' : 's'} before
-                                paying
+                                {t('pos.sheets.tableOrders.sendHeldBeforePaying', { count: card.kitchenPendingCount })}
                               </p>
                             ) : (
                               <p className="text-center text-[11px] text-muted-foreground">
-                                Paid — send {card.kitchenPendingCount} held
-                                ticket
-                                {card.kitchenPendingCount === 1 ? '' : 's'} when
-                                ready
+                                {t('pos.sheets.tableOrders.paidSendHeldWhenReady', { count: card.kitchenPendingCount })}
                               </p>
                             )}
                             <Button
@@ -748,16 +748,12 @@ export function PosTableOrdersSheet({
                             >
                               <ChefHat className="mr-2 h-4 w-4" />
                               {fulfillmentSettings.kdsEnabled
-                                ? `Send to kitchen${
-                                    card.kitchenPendingCount > 1
-                                      ? ` (${card.kitchenPendingCount})`
-                                      : ''
-                                  }`
-                                : `Complete order${
-                                    card.kitchenPendingCount > 1
-                                      ? ` (${card.kitchenPendingCount})`
-                                      : ''
-                                  }`}
+                                ? (card.kitchenPendingCount > 1
+                                    ? t('pos.sheets.tableOrders.sendToKitchenCount', { count: card.kitchenPendingCount })
+                                    : t('pos.sheets.tableOrders.sendToKitchen'))
+                                : (card.kitchenPendingCount > 1
+                                    ? t('pos.sheets.tableOrders.completeOrderCount', { count: card.kitchenPendingCount })
+                                    : t('pos.sheets.tableOrders.completeOrder'))}
                             </Button>
                           </div>
                         ) : card.totalDue > 0 ? (
@@ -768,11 +764,11 @@ export function PosTableOrdersSheet({
                             onClick={() => openPay(card)}
                           >
                             <Banknote className="mr-2 h-4 w-4" />
-                            Pay {formatMoney(card.totalDue)}
+                            {t('pos.sheets.tableOrders.payAmount', { amount: formatMoney(card.totalDue) })}
                           </Button>
                         ) : (
                           <p className="text-center text-xs text-emerald-700 dark:text-emerald-300">
-                            All tickets paid and in kitchen
+                            {t('pos.sheets.tableOrders.allTicketsPaidAndInKitchen')}
                           </p>
                         )}
                       </div>
@@ -796,7 +792,7 @@ export function PosTableOrdersSheet({
               ) : (
                 <RefreshCw className="mr-2 h-4 w-4" />
               )}
-              Refresh
+              {t('pos.sheets.tableOrders.refresh')}
             </Button>
           </div>
         </SheetContent>
@@ -804,11 +800,11 @@ export function PosTableOrdersSheet({
 
       <DeleteConfirmation
         open={cancelOrder != null}
-        title="Cancel order?"
+        title={t('pos.dialogs.cancelTicket.title')}
         description={
           cancelOrder
-            ? `This cancels the ticket for table ${cancelOrder.tableLabel ?? ''}. Kitchen tickets for this order will also be canceled. Other rounds on the table stay open.`
-            : 'This order will be canceled.'
+            ? t('pos.dialogs.cancelTicket.descriptionWithTable', { table: cancelOrder.tableLabel ?? '' })
+            : t('pos.dialogs.cancelTicket.descriptionGeneric')
         }
         itemName={
           cancelOrder
@@ -816,8 +812,8 @@ export function PosTableOrdersSheet({
             : undefined
         }
         loading={cancellingOrder}
-        confirmText="Cancel order"
-        cancelText="Keep order"
+        confirmText={t('pos.dialogs.cancelTicket.confirmText')}
+        cancelText={t('pos.dialogs.cancelTicket.cancelText')}
         onConfirm={() => void confirmCancelOrder()}
         onCancel={() => {
           if (!cancellingOrder) setCancelOrder(null);
@@ -840,30 +836,28 @@ export function PosTableOrdersSheet({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Send to kitchen</DialogTitle>
+            <DialogTitle>{t('pos.dialogs.sendToKitchen.title')}</DialogTitle>
           </DialogHeader>
           {kitchenOrders?.length ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Choose prep time to show{' '}
                 {kitchenOrders.length === 1
-                  ? 'this ticket'
-                  : `these ${kitchenOrders.length} tickets`}{' '}
-                on the kitchen display. Payment stays pending until the table is
-                paid.
+                  ? t('pos.dialogs.sendToKitchen.choosePrepTimeSingle')
+                  : t('pos.dialogs.sendToKitchen.choosePrepTimeMultiple', { count: kitchenOrders.length })}
               </p>
               <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
                 <p className="font-medium">
                   {kitchenOrders.length === 1
-                    ? `Order ${
-                        kitchenOrders[0].ticketNumber != null
-                          ? `#${String(kitchenOrders[0].ticketNumber).padStart(2, '0')}`
-                          : kitchenOrders[0].shortOrderId
-                      }`
-                    : `${kitchenOrders.length} held tickets`}
+                    ? t('pos.dialogs.sendToKitchen.orderLabel', {
+                        label:
+                          kitchenOrders[0].ticketNumber != null
+                            ? `#${String(kitchenOrders[0].ticketNumber).padStart(2, '0')}`
+                            : kitchenOrders[0].shortOrderId,
+                      })
+                    : t('pos.dialogs.sendToKitchen.heldTicketsLabel', { count: kitchenOrders.length })}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Table {kitchenOrders[0].tableLabel ?? '—'}
+                  {t('pos.dialogs.sendToKitchen.tableLabel', { table: kitchenOrders[0].tableLabel ?? '—' })}
                   {kitchenOrders.length === 1
                     ? ` · ${kitchenOrders[0].shortOrderId}`
                     : null}
@@ -871,7 +865,7 @@ export function PosTableOrdersSheet({
               </div>
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Prep time (minutes)
+                  {t('pos.dialogs.sendToKitchen.prepTimeMinutes')}
                 </p>
                 <div className="grid grid-cols-3 gap-2">
                   {KITCHEN_PREP_PRESETS.map((m) => (
@@ -889,7 +883,7 @@ export function PosTableOrdersSheet({
                         setKitchenCustomMinutes('');
                       }}
                     >
-                      {m} min
+                      {t('pos.dialogs.sendToKitchen.minSuffix', { count: m })}
                     </Button>
                   ))}
                 </div>
@@ -897,7 +891,7 @@ export function PosTableOrdersSheet({
                   type="number"
                   min={KITCHEN_PREP_MIN}
                   max={KITCHEN_PREP_MAX}
-                  placeholder={`Custom (${KITCHEN_PREP_MIN}–${KITCHEN_PREP_MAX})`}
+                  placeholder={t('pos.dialogs.sendToKitchen.customPlaceholder', { min: KITCHEN_PREP_MIN, max: KITCHEN_PREP_MAX })}
                   value={kitchenCustomMinutes}
                   disabled={sendingToKitchen}
                   onChange={(e) => setKitchenCustomMinutes(e.target.value)}
@@ -913,7 +907,7 @@ export function PosTableOrdersSheet({
               onClick={closeKitchenDialog}
             >
               <X className="mr-2 h-4 w-4" />
-              Cancel
+              {t('pos.dialogs.sendToKitchen.cancel')}
             </Button>
             <Button
               type="button"
@@ -923,14 +917,14 @@ export function PosTableOrdersSheet({
               {sendingToKitchen ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {fulfillmentSettings.kdsEnabled ? 'Sending…' : 'Completing…'}
+                  {fulfillmentSettings.kdsEnabled ? t('pos.dialogs.sendToKitchen.sending') : t('pos.dialogs.sendToKitchen.completing')}
                 </>
               ) : (
                 <>
                   <Check className="mr-2 h-4 w-4" />
                   {fulfillmentSettings.kdsEnabled
-                    ? 'Proceed to kitchen'
-                    : 'Complete order'}
+                    ? t('pos.dialogs.sendToKitchen.proceedToKitchen')
+                    : t('pos.dialogs.sendToKitchen.completeOrder')}
                 </>
               )}
             </Button>
@@ -952,14 +946,13 @@ export function PosTableOrdersSheet({
           onFocusOutside={(e) => e.preventDefault()}
         >
           <DialogHeader>
-            <DialogTitle>Pay table {payCard?.tableLabel ?? ''}</DialogTitle>
+            <DialogTitle>{t('pos.dialogs.payTable.title', { table: payCard?.tableLabel ?? '' })}</DialogTitle>
           </DialogHeader>
           {payCard ? (
             <div className="space-y-4">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
-                  Open tab ({payCard.unpaidCount} unpaid ticket
-                  {payCard.unpaidCount === 1 ? '' : 's'})
+                  {t('pos.dialogs.payTable.openTab', { count: payCard.unpaidCount })}
                 </span>
                 <span className="font-semibold tabular-nums">
                   {formatMoney(payCard.totalDue)}
@@ -967,7 +960,7 @@ export function PosTableOrdersSheet({
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs text-muted-foreground">
-                  Payment method
+                  {t('pos.dialogs.payTable.paymentMethod')}
                 </label>
                 <div
                   className={
@@ -987,7 +980,7 @@ export function PosTableOrdersSheet({
                     }}
                   >
                     <Banknote className="h-4 w-4" />
-                    Cash
+                    {t('pos.cash')}
                   </Button>
                   {fulfillmentSettings.cardPaymentsEnabled ? (
                   <Button
@@ -1002,7 +995,7 @@ export function PosTableOrdersSheet({
                     }}
                   >
                     <CreditCard className="h-4 w-4" />
-                    Card
+                    {t('pos.card')}
                   </Button>
                   ) : null}
                 </div>
@@ -1011,7 +1004,7 @@ export function PosTableOrdersSheet({
                 <>
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">
-                      Cash paid
+                      {t('pos.dialogs.payTable.cashPaid')}
                     </label>
                     <Input
                       className="h-9 cursor-pointer bg-background tabular-nums"
@@ -1027,7 +1020,7 @@ export function PosTableOrdersSheet({
                   </div>
                   <div className="flex items-end justify-between gap-3 pt-1">
                     <span className="pb-1 text-sm font-medium text-muted-foreground">
-                      Change
+                      {t('pos.change')}
                     </span>
                     <span className="text-3xl font-bold tabular-nums tracking-tight">
                       {formatMoney(payChange)}
@@ -1065,38 +1058,38 @@ export function PosTableOrdersSheet({
                     {cardPayment.cardPaymentStatus === 'success' ? (
                       <>
                         <Check className="h-4 w-4" />
-                        Paid
+                        {t('pos.dialogs.payTable.paid')}
                       </>
                     ) : cardPayment.cardPaymentStatus === 'error' ||
                       cardPayment.cardPaymentStatus === 'cancelled' ? (
                       <>
                         <X className="h-4 w-4" />
-                        Pay again
+                        {t('pos.dialogs.payTable.payAgain')}
                       </>
                     ) : cardPayment.cardPaymentStatus === 'processing' ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Processing...
+                        {t('pos.dialogs.payTable.processing')}
                       </>
                     ) : (
                       <>
                         <CreditCard className="h-4 w-4" />
-                        Pay {formatMoney(payCard.totalDue)}
+                        {t('pos.sheets.tableOrders.payAmount', { amount: formatMoney(payCard.totalDue) })}
                       </>
                     )}
                   </Button>
                   <div className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                     {cardPayment.isCardPaymentComplete ? (
                       <span className="text-emerald-700 dark:text-emerald-400">
-                        Card paid — please complete payment below.
+                        {t('pos.dialogs.payTable.cardPaidCompleteBelow')}
                       </span>
                     ) : cardPayment.cardPaymentStatus === 'error' ||
                       cardPayment.cardPaymentStatus === 'cancelled' ? (
                       <span className="text-destructive">
-                        Terminal payment failed or was canceled.
+                        {t('pos.dialogs.payTable.terminalPaymentFailed')}
                       </span>
                     ) : (
-                      `Click above to send ${formatMoney(payCard.totalDue)} to the card terminal.`
+                      t('pos.dialogs.payTable.clickAboveToSend', { amount: formatMoney(payCard.totalDue) })
                     )}
                   </div>
                 </div>
@@ -1110,7 +1103,7 @@ export function PosTableOrdersSheet({
               disabled={paying}
               onClick={closePay}
             >
-              Close
+              {t('pos.dialogs.payTable.close')}
             </Button>
             <Button
               type="button"
@@ -1126,10 +1119,10 @@ export function PosTableOrdersSheet({
               {paying ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing…
+                  {t('pos.dialogs.payTable.processingEllipsis')}
                 </>
               ) : (
-                'Complete payment'
+                t('pos.dialogs.payTable.completePayment')
               )}
             </Button>
           </DialogFooter>

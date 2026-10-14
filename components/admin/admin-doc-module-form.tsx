@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { AdminCmsLocaleTabs } from '@/components/admin/admin-cms-locale-tabs';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
@@ -95,7 +96,7 @@ function plainFromHtml(html: string): string {
     .trim();
 }
 
-function flattenApiError(err: unknown): string {
+function flattenApiError(err: unknown, t: (key: string) => string): string {
   const e = err as {
     response?: { data?: { error?: unknown } };
     message?: string;
@@ -107,10 +108,11 @@ function flattenApiError(err: unknown): string {
     const msg = fe ? Object.values(fe).flat().filter(Boolean).join(' ') : '';
     if (msg) return msg;
   }
-  return e.message || 'Request failed';
+  return e.message || t('admin.docsForm.requestFailed');
 }
 
 export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
+  const { t } = useTranslation();
   const router = useRouter();
   const [form, setForm] = useState<DocModuleFormValues>(initial ?? empty);
   const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>(
@@ -145,8 +147,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
     cancelLeave,
     allowNextNavigation,
   } = useUnsavedChangesGuard(isDirty, {
-    message:
-      'You have unsaved documentation changes. Leave this page without saving?',
+    message: t('admin.docsForm.unsavedGuardMessage'),
   });
 
   const loadHeadings = useCallback(async () => {
@@ -162,7 +163,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
       try {
         await loadHeadings();
       } catch {
-        if (!cancelled) toast.error('Could not load headings.');
+        if (!cancelled) toast.error(t('admin.docsForm.loadHeadingsError'));
       } finally {
         if (!cancelled) setLoadingTaxonomy(false);
       }
@@ -217,19 +218,19 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
 
   function validate(): boolean {
     if (!form.headingId) {
-      toast.error('Select a heading.');
+      toast.error(t('admin.docsForm.validateHeadingRequired'));
       return false;
     }
     if (!form.name.trim()) {
-      toast.error('Name is required.');
+      toast.error(t('admin.docsForm.validateNameRequired'));
       return false;
     }
     if (!form.shortDescription.trim()) {
-      toast.error('Short description is required.');
+      toast.error(t('admin.docsForm.validateShortRequired'));
       return false;
     }
     if (!plainFromHtml(form.contentHtml)) {
-      toast.error('Detail content is required.');
+      toast.error(t('admin.docsForm.validateDetailRequired'));
       return false;
     }
     return true;
@@ -238,7 +239,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
   async function createHeading() {
     const name = newHeadingName.trim();
     if (!name) {
-      toast.error('Heading name is required.');
+      toast.error(t('admin.docsForm.validateHeadingNameRequired'));
       return;
     }
     setCreatingHeading(true);
@@ -256,9 +257,9 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
       setNewHeadingName('');
       setNewHeadingNameEs('');
       setHeadingDialogOpen(false);
-      toast.success('Heading created.');
+      toast.success(t('admin.docsForm.headingCreated'));
     } catch (e) {
-      toast.error(flattenApiError(e));
+      toast.error(flattenApiError(e, t));
     } finally {
       setCreatingHeading(false);
     }
@@ -291,13 +292,15 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
         await axios.patch(`/api/admin/documentation/${moduleId}`, body);
       }
       toast.success(
-        nextStatus === 'PUBLISHED' ? 'Page published.' : 'Draft saved.'
+        nextStatus === 'PUBLISHED'
+          ? t('admin.docsForm.publishedToast')
+          : t('admin.docsForm.draftSavedToast')
       );
       allowNextNavigation();
       router.push('/admin/documentation');
       router.refresh();
     } catch (e) {
-      toast.error(flattenApiError(e));
+      toast.error(flattenApiError(e, t));
     } finally {
       setSaving(false);
     }
@@ -312,13 +315,13 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        eyebrow="Content"
-        title={mode === 'create' ? 'Add documentation page' : 'Edit page'}
-        description="Assign a heading (required) and an optional sub heading, then write the page. Leave sub heading empty to publish under /documentation/[heading] only."
+        eyebrow={t('admin.docsPage.eyebrow')}
+        title={mode === 'create' ? t('admin.docsForm.createTitle') : t('admin.docsForm.editTitle')}
+        description={t('admin.docsForm.description')}
         actions={
           <Button type="button" variant="ghost" onClick={goBack}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Documentation
+            {t('admin.docsForm.backToDocs')}
           </Button>
         }
       />
@@ -333,7 +336,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
             <>
               <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
                 <div className="grid gap-2">
-                  <Label htmlFor="doc-heading">Heading</Label>
+                  <Label htmlFor="doc-heading">{t('admin.docsForm.headingLabel')}</Label>
                   <select
                     id="doc-heading"
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
@@ -341,7 +344,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
                     onChange={(e) => setField('headingId', e.target.value)}
                   >
                     <option className="text-black" value="">
-                      Select heading…
+                      {t('admin.docsForm.selectHeadingPlaceholder')}
                     </option>
                     {headings.map((h) => (
                       <option className="text-black" key={h.id} value={h.id}>
@@ -360,15 +363,15 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
                   }}
                 >
                   <Plus className="mr-2 h-4 w-4" />
-                  New heading
+                  {t('admin.docsForm.newHeading')}
                 </Button>
               </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="doc-sub-heading">
-                  Sub heading{' '}
+                  {t('admin.docsForm.subHeadingLabel')}{' '}
                   <span className="font-normal text-muted-foreground">
-                    (optional)
+                    {t('admin.docsForm.optional')}
                   </span>
                 </Label>
                 <Input
@@ -378,8 +381,8 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
                   onChange={(e) => setField('subHeadingName', e.target.value)}
                   placeholder={
                     form.headingId
-                      ? 'e.g. Install app — leave empty for heading-only page'
-                      : 'Select a heading first'
+                      ? t('admin.docsForm.subHeadingPlaceholder')
+                      : t('admin.docsForm.subHeadingPlaceholderDisabled')
                   }
                   maxLength={200}
                 />
@@ -392,34 +395,34 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
             english={
               <>
                 <div className="grid gap-2">
-                  <Label htmlFor="doc-name">Title</Label>
+                  <Label htmlFor="doc-name">{t('admin.docsForm.titleLabel')}</Label>
                   <Input
                     id="doc-name"
                     value={form.name}
                     onChange={(e) => setField('name', e.target.value)}
-                    placeholder="e.g. Getting started with POS"
+                    placeholder={t('admin.docsForm.titlePlaceholder')}
                     maxLength={200}
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="doc-short">Short description</Label>
+                  <Label htmlFor="doc-short">{t('admin.docsForm.shortDescLabel')}</Label>
                   <Textarea
                     id="doc-short"
                     value={form.shortDescription}
                     onChange={(e) =>
                       setField('shortDescription', e.target.value)
                     }
-                    placeholder="One or two lines under the title"
+                    placeholder={t('admin.docsForm.shortDescPlaceholder')}
                     className="min-h-[88px]"
                     maxLength={1000}
                   />
                 </div>
                 <RichTextEditor
                   id="doc-detail"
-                  label="Detail"
+                  label={t('admin.docsForm.detailLabel')}
                   value={form.contentHtml}
                   onChange={(html) => setField('contentHtml', html)}
-                  helperText="Full page body shown on the public documentation site."
+                  helperText={t('admin.docsForm.detailHelper')}
                 />
               </>
             }
@@ -460,7 +463,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
           />
 
           <div className="grid gap-2">
-            <Label htmlFor="doc-status">Status (for next save)</Label>
+            <Label htmlFor="doc-status">{t('admin.docsForm.statusLabel')}</Label>
             <select
               id="doc-status"
               className="flex h-9 w-full max-w-xs rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
@@ -470,10 +473,10 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
               }
             >
               <option className="text-black" value="PUBLISHED">
-                Published
+                {t('admin.docsPage.statusPublished')}
               </option>
               <option className="text-black" value="DRAFT">
-                Draft
+                {t('admin.docsPage.statusDraft')}
               </option>
             </select>
           </div>
@@ -488,12 +491,12 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
                 {saving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving…
+                    {t('admin.docsForm.saving')}
                   </>
                 ) : (
                   <>
                     <Send className="mr-2 h-4 w-4" />
-                    Publish
+                    {t('admin.docsPage.publish')}
                   </>
                 )}
               </Button>
@@ -504,7 +507,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
                 onClick={() => void save('DRAFT')}
               >
                 <Save className="mr-2 h-4 w-4" />
-                Save draft
+                {t('admin.docsForm.saveDraft')}
               </Button>
             </div>
             <Button
@@ -514,7 +517,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
               onClick={goBack}
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Discard changes
+              {t('admin.docsForm.discardChanges')}
             </Button>
           </div>
         </CardContent>
@@ -523,15 +526,15 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
       <Dialog open={headingDialogOpen} onOpenChange={setHeadingDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Create heading</DialogTitle>
+            <DialogTitle>{t('admin.docsForm.createHeadingTitle')}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 py-2">
-            <Label htmlFor="new-heading-name">Name</Label>
+            <Label htmlFor="new-heading-name">{t('admin.docsForm.nameLabel')}</Label>
             <Input
               id="new-heading-name"
               value={newHeadingName}
               onChange={(e) => setNewHeadingName(e.target.value)}
-              placeholder="e.g. Getting Started"
+              placeholder={t('admin.docsForm.newHeadingPlaceholder')}
               maxLength={200}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -540,7 +543,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
                 }
               }}
             />
-            <Label htmlFor="new-heading-name-es">Name (Spanish, optional)</Label>
+            <Label htmlFor="new-heading-name-es">{t('admin.docsForm.nameEsLabel')}</Label>
             <Input
               id="new-heading-name-es"
               value={newHeadingNameEs}
@@ -549,7 +552,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
               maxLength={200}
             />
             <p className="text-xs text-muted-foreground">
-              Appears as a top-level item in the public docs sidebar.
+              {t('admin.docsForm.newHeadingHelper')}
             </p>
           </div>
           <DialogFooter>
@@ -558,7 +561,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
               variant="outline"
               onClick={() => setHeadingDialogOpen(false)}
             >
-              Cancel
+              {t('cancel')}
             </Button>
             <Button
               type="button"
@@ -570,7 +573,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
               ) : (
                 <Plus className="mr-2 h-4 w-4" />
               )}
-              Create
+              {t('admin.docsForm.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -584,16 +587,16 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+            <AlertDialogTitle>{t('admin.blogForm.unsavedChangesTitle')}</AlertDialogTitle>
             <AlertDialogDescription>{leaveMessage}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel type="button">
               <X className="mr-2 h-4 w-4" />
-              Keep editing
+              {t('admin.blogForm.keepEditing')}
             </AlertDialogCancel>
             <AlertDialogAction type="button" onClick={confirmLeave}>
-              Leave without saving
+              {t('admin.blogForm.leaveWithoutSaving')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

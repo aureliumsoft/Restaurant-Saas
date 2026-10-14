@@ -1,6 +1,7 @@
 'use client';
 
 import { Loader2, PlayCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import {
   AlertDialog,
@@ -28,6 +29,7 @@ export function PosStartShiftDialog({
   onStart,
   onDismiss,
 }: Props) {
+  const { t } = useTranslation();
   return (
     <AlertDialog
       open={open}
@@ -39,26 +41,26 @@ export function PosStartShiftDialog({
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <PlayCircle className="h-5 w-5 text-primary" />
-            Start your shift?
+            {t('pos.dialogs.startShift.title')}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {branchName
-              ? `Start a shift at ${branchName} before taking orders.`
-              : 'Start a shift before taking orders at this branch.'}
+              ? t('pos.dialogs.startShift.descriptionWithBranch', { branchName })
+              : t('pos.dialogs.startShift.description')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={loading} onClick={onDismiss}>
-            Not now
+            {t('pos.dialogs.startShift.notNow')}
           </AlertDialogCancel>
           <Button disabled={loading} onClick={onStart}>
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Starting…
+                {t('pos.dialogs.startShift.starting')}
               </>
             ) : (
-              'Start shift'
+              t('pos.dialogs.startShift.startShift')
             )}
           </Button>
         </AlertDialogFooter>

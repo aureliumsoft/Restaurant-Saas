@@ -1,4 +1,7 @@
+'use client';
+
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/lib/utils';
 
@@ -8,37 +11,40 @@ type AdminTableProps = React.HTMLAttributes<HTMLTableElement> & {
 };
 
 const AdminTable = React.forwardRef<HTMLTableElement, AdminTableProps>(
-  ({ className, minWidth, ...props }, ref) => (
-    <div className="relative w-full min-w-0 max-w-full">
-      <div
-        className={cn(
-          'admin-table-scroll overflow-x-auto overscroll-x-contain',
-          'scroll-smooth [-webkit-overflow-scrolling:touch]',
-          'rounded-xl pb-1'
-        )}
-        tabIndex={0}
-        role="region"
-        aria-label="Scrollable table"
-      >
-        <table
-          ref={ref}
-          style={
-            minWidth
-              ? { width: '100%', minWidth: `max(100%, ${minWidth}px)` }
-              : { width: '100%' }
-          }
+  ({ className, minWidth, ...props }, ref) => {
+    const { t } = useTranslation();
+    return (
+      <div className="relative w-full min-w-0 max-w-full">
+        <div
           className={cn(
-            'w-full border-separate border-spacing-y-2 text-sm',
-            className
+            'admin-table-scroll overflow-x-auto overscroll-x-contain',
+            'scroll-smooth [-webkit-overflow-scrolling:touch]',
+            'rounded-xl pb-1'
           )}
-          {...props}
-        />
+          tabIndex={0}
+          role="region"
+          aria-label={t('admin.table.scrollableRegion')}
+        >
+          <table
+            ref={ref}
+            style={
+              minWidth
+                ? { width: '100%', minWidth: `max(100%, ${minWidth}px)` }
+                : { width: '100%' }
+            }
+            className={cn(
+              'w-full border-separate border-spacing-y-2 text-sm',
+              className
+            )}
+            {...props}
+          />
+        </div>
+        <p className="mt-2 text-center text-[10px] text-muted-foreground lg:hidden">
+          {t('admin.table.swipeHint')}
+        </p>
       </div>
-      <p className="mt-2 text-center text-[10px] text-muted-foreground lg:hidden">
-        Swipe sideways to view all columns
-      </p>
-    </div>
-  )
+    );
+  }
 );
 AdminTable.displayName = 'AdminTable';
 

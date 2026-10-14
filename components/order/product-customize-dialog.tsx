@@ -1787,7 +1787,7 @@ export function ProductCustomizeDialog({
               />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center bg-[#f7f7f9] text-sm text-muted-foreground">
-                No image
+                {t('noImage')}
               </div>
             )}
           </div>
@@ -1802,7 +1802,7 @@ export function ProductCustomizeDialog({
               />
             ) : (
               <div className="flex h-full items-center justify-center bg-[#f7f7f9] text-sm text-muted-foreground">
-                No image
+                {t('noImage')}
               </div>
             )}
             <SheetClose asChild>
@@ -1811,7 +1811,7 @@ export function ProductCustomizeDialog({
                 variant="ghost"
                 size="icon"
                 className="absolute right-3 top-3 h-9 w-9 rounded-full bg-white/95 text-muted-foreground shadow-sm hover:bg-white hover:text-foreground"
-                aria-label="Close"
+                aria-label={t('closeAria')}
               >
                 <X className="h-5 w-5" />
               </Button>
@@ -1831,7 +1831,7 @@ export function ProductCustomizeDialog({
                       variant="ghost"
                       size="icon"
                       className="hidden h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground lg:inline-flex"
-                      aria-label="Close"
+                      aria-label={t('closeAria')}
                     >
                       <X className="h-5 w-5" />
                     </Button>
@@ -2156,7 +2156,7 @@ export function ProductCustomizeDialog({
                     type="button"
                     className="flex h-6 w-6 items-center justify-center rounded-[3px] bg-white text-base font-semibold text-[#1f1f2e] shadow-sm ring-1 ring-[#ececec] transition hover:bg-[#fafafa] active:scale-90"
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                    aria-label="Decrease quantity"
+                    aria-label={t('decreaseQuantity')}
                   >
                     −
                   </button>
@@ -2168,7 +2168,7 @@ export function ProductCustomizeDialog({
                     className="flex h-6 w-6 items-center justify-center rounded-[3px] text-base font-semibold text-[#333] shadow-sm transition hover:brightness-95 active:scale-90"
                     style={{ backgroundColor: ORDER_ACCENT_GOLD }}
                     onClick={() => setQuantity((q) => Math.min(99, q + 1))}
-                    aria-label="Increase quantity"
+                    aria-label={t('increaseQuantity')}
                   >
                     +
                   </button>
@@ -2221,7 +2221,7 @@ export function ProductCustomizeDialog({
                         size="icon"
                         className="shrink-0"
                         onClick={() => setPicker(null)}
-                        aria-label="Close picker"
+                        aria-label={t('closePicker')}
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -2278,7 +2278,7 @@ export function ProductCustomizeDialog({
                                     className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-base font-semibold"
                                     disabled={!entry.quantity}
                                     onClick={entry.onDecrease}
-                                    aria-label={`Decrease ${entry.name}`}
+                                    aria-label={t('decreaseNamed', { name: entry.name })}
                                   >
                                     <Minus className="h-4 w-4" />
                                   </button>
@@ -2291,7 +2291,7 @@ export function ProductCustomizeDialog({
                                 type="button"
                                 className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition hover:brightness-95 active:scale-90"
                                 onClick={entry.onIncrease ?? entry.onChoose}
-                                aria-label={`Add ${entry.name}`}
+                                aria-label={t('addNamed', { name: entry.name })}
                               >
                                 <Plus className="h-4 w-4" strokeWidth={2.75} />
                               </button>

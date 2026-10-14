@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import type { RestaurantMenuData } from './types';
 
 export function useRestaurantMenu() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<RestaurantMenuData | null>(null);
 
@@ -26,12 +28,12 @@ export function useRestaurantMenu() {
       );
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || 'Failed to load menu');
+      toast.error(err.response?.data?.error || t('dashboard.menuManager.loadFailed'));
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();

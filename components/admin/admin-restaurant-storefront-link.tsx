@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
@@ -18,6 +19,7 @@ export function AdminRestaurantStorefrontLink({
   slug: string;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const trimmed = slug?.trim();
   if (!trimmed) return null;
 
@@ -35,8 +37,8 @@ export function AdminRestaurantStorefrontLink({
         href={restaurantWebAppHref(trimmed)}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label={`Open ${trimmed} storefront`}
-        title="Open restaurant website"
+        aria-label={t('admin.storefront.openAriaLabel', { slug: trimmed })}
+        title={t('admin.storefront.openTitle')}
       >
         <ExternalLink className="h-4 w-4" />
       </Link>

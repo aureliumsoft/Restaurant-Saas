@@ -85,7 +85,7 @@ export function RestaurantRegionalSettingsCard() {
         setCurrencyCode(d.currencyCode);
         setCountryCode(d.countryCode);
       }
-      toast.success('Currency and country saved.');
+      toast.success(t('settings.cards.regional.saved'));
       regionalContext?.refresh();
       void revalidateStaffBootstrap();
     } catch (e: unknown) {
@@ -100,9 +100,9 @@ export function RestaurantRegionalSettingsCard() {
               .filter(Boolean)
               .join(' ')
           : '';
-        toast.error(msg || 'Could not save regional settings.');
+        toast.error(msg || t('settings.cards.regional.saveFailed'));
       } else {
-        toast.error('Could not save regional settings.');
+        toast.error(t('settings.cards.regional.saveFailed'));
       }
     } finally {
       setSaving(false);
@@ -135,7 +135,9 @@ export function RestaurantRegionalSettingsCard() {
       </CardHeader>
       <CardContent className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="restaurant-currency">Currency</Label>
+          <Label htmlFor="restaurant-currency">
+            {t('settings.cards.regional.currencyLabel')}
+          </Label>
           <Select
             value={currencyCode}
             onValueChange={(v) =>
@@ -143,7 +145,9 @@ export function RestaurantRegionalSettingsCard() {
             }
           >
             <SelectTrigger id="restaurant-currency">
-              <SelectValue placeholder="Select currency" />
+              <SelectValue
+                placeholder={t('settings.cards.regional.selectCurrency')}
+              />
             </SelectTrigger>
             <SelectContent>
               {RESTAURANT_CURRENCY_OPTIONS.map((opt) => (
@@ -155,7 +159,9 @@ export function RestaurantRegionalSettingsCard() {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="restaurant-country">Country</Label>
+          <Label htmlFor="restaurant-country">
+            {t('settings.cards.regional.countryLabel')}
+          </Label>
           <Select
             value={countryCode}
             onValueChange={(v) =>
@@ -163,7 +169,9 @@ export function RestaurantRegionalSettingsCard() {
             }
           >
             <SelectTrigger id="restaurant-country">
-              <SelectValue placeholder="Select country" />
+              <SelectValue
+                placeholder={t('settings.cards.regional.selectCountry')}
+              />
             </SelectTrigger>
             <SelectContent>
               {RESTAURANT_COUNTRY_OPTIONS.map((opt) => (
@@ -175,7 +183,8 @@ export function RestaurantRegionalSettingsCard() {
           </Select>
         </div>
         <p className="text-sm text-muted-foreground sm:col-span-2">
-          Preview: <span className="font-medium text-foreground">{preview}</span>
+          {t('settings.cards.regional.preview')}{' '}
+          <span className="font-medium text-foreground">{preview}</span>
         </p>
       </CardContent>
       <CardFooter>

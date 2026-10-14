@@ -53,10 +53,16 @@ function AutoRenewToggle({
   value,
   disabled,
   onChange,
+  onLabel,
+  offLabel,
+  ariaLabel,
 }: {
   value: boolean;
   disabled?: boolean;
   onChange: (next: boolean) => void;
+  onLabel: string;
+  offLabel: string;
+  ariaLabel: string;
 }) {
   return (
     <div className="flex shrink-0 items-center gap-2">
@@ -66,13 +72,13 @@ function AutoRenewToggle({
           value ? 'text-primary' : 'text-muted-foreground'
         )}
       >
-        {value ? 'On' : 'Off'}
+        {value ? onLabel : offLabel}
       </span>
       <button
         type="button"
         role="switch"
         aria-checked={value}
-        aria-label="Auto-renew subscription"
+        aria-label={ariaLabel}
         disabled={disabled}
         onClick={() => onChange(!value)}
         className={cn(
@@ -111,7 +117,9 @@ export function RestaurantBillingCard() {
       try {
         await loadBilling();
       } catch {
-        if (!cancelled) toast.error('Could not load billing information.');
+        if (!cancelled) {
+          toast.error(t('settings.cards.billing.loadFailed'));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -119,15 +127,15 @@ export function RestaurantBillingCard() {
     return () => {
       cancelled = true;
     };
-  }, [loadBilling]);
+  }, [loadBilling, t]);
 
   async function handleRefresh() {
     setRefreshing(true);
     try {
       await loadBilling(true);
-      toast.success('Billing information updated.');
+      toast.success(t('settings.cards.billing.refreshed'));
     } catch {
-      toast.error('Could not refresh billing.');
+      toast.error(t('settings.cards.billing.refreshFailed'));
     } finally {
       setRefreshing(false);
     }
@@ -149,14 +157,16 @@ export function RestaurantBillingCard() {
         toast.info(res.data.data.message);
       } else {
         toast.success(
-          next ? 'Auto-renew enabled.' : 'Auto-renew disabled.'
+          next
+            ? t('settings.cards.billing.autoRenewEnabled')
+            : t('settings.cards.billing.autoRenewDisabled')
         );
       }
     } catch {
       setBilling((prev) =>
         prev ? { ...prev, autoRenew: previous } : prev
       );
-      toast.error('Could not update auto-renew.');
+      toast.error(t('settings.cards.billing.autoRenewUpdateFailed'));
     } finally {
       setSavingAutoRenew(false);
     }
@@ -173,7 +183,7 @@ export function RestaurantBillingCard() {
   }
 
   const hasSubscription = Boolean(billing?.paypalSubscriptionId);
-  const statusLabel = billing?.status ?? 'NONE';
+  const statusLabel = billing?.status ?? t('settings.cards.billing.statusNone');
 
   return (
     <Card>
@@ -189,59 +199,74 @@ export function RestaurantBillingCard() {
       <CardContent className="space-y-4 text-sm">
         {!hasSubscription ? (
           <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-muted-foreground">
-            No active PayPal subscription.{' '}
+            {t('settings.cards.billing.noActiveSubscription')}{' '}
             <Link href="/pricing" className="font-medium text-primary underline">
-              Choose a plan
+              {t('settings.cards.billing.choosePlan')}
             </Link>{' '}
-            to subscribe.
+            {t('settings.cards.billing.subscribeSuffix')}
           </div>
         ) : (
           <>
             <dl className="grid gap-2">
               <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">Plan</dt>
+                <dt className="text-muted-foreground">
+                  {t('settings.cards.billing.planLabel')}
+                </dt>
                 <dd className="font-medium">
                   {billing?.planName ?? billing?.plan ?? '—'}
                   {billing?.priceLabel ? ` · ${billing.priceLabel}` : ''}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">Status</dt>
+                <dt className="text-muted-foreground">
+                  {t('settings.cards.billing.statusLabel')}
+                </dt>
                 <dd className="font-medium">{statusLabel}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">Period ends</dt>
+                <dt className="text-muted-foreground">
+                  {t('settings.cards.billing.periodEndsLabel')}
+                </dt>
                 <dd>{formatDate(billing?.currentPeriodEnd ?? null)}</dd>
               </div>
             </dl>
 
             <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-muted/30 px-3 py-3">
               <div className="min-w-0">
-                <p className="font-medium">Auto-renew</p>
+                <p className="font-medium">
+                  {t('settings.cards.billing.autoRenewLabel')}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   {billing?.autoRenew
-                    ? 'PayPal charges your saved payment method when the period renews.'
-                    : 'Subscription expires on the period end date. No further charges.'}
+                    ? t('settings.cards.billing.autoRenewOnHint')
+                    : t('settings.cards.billing.autoRenewOffHint')}
                 </p>
               </div>
               <AutoRenewToggle
                 value={billing?.autoRenew ?? true}
                 disabled={savingAutoRenew}
                 onChange={handleAutoRenewChange}
+                onLabel={t('settings.cards.billing.toggleOnLabel')}
+                offLabel={t('settings.cards.billing.toggleOffLabel')}
+                ariaLabel={t('settings.cards.billing.toggleAriaLabel')}
               />
             </div>
 
             {billing?.recentPayments?.length ? (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Recent payments
+                  {t('settings.cards.billing.recentPaymentsLabel')}
                 </p>
                 <ul className="space-y-1 text-xs text-muted-foreground">
                   {billing.recentPayments.map((p) => (
                     <li key={p.id} className="flex justify-between gap-2">
                       <span>
                         {formatDate(p.paidAt)}
-                        {p.periodEnd ? ` · until ${formatDate(p.periodEnd)}` : ''}
+                        {p.periodEnd
+                          ? ` · ${t('settings.cards.billing.untilDate', {
+                              date: formatDate(p.periodEnd),
+                            })}`
+                          : ''}
                       </span>
                       <span>
                         {p.currency} {p.amount.toFixed(2)}
@@ -265,7 +290,7 @@ export function RestaurantBillingCard() {
             <RefreshCw
               className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
             />
-            Refresh from PayPal
+            {t('settings.cards.billing.refreshButton')}
           </Button>
         </CardFooter>
       ) : null}

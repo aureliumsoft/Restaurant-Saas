@@ -437,7 +437,7 @@ function OfferSlider({
               type="button"
               className="absolute left-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105 sm:left-3"
               onClick={onPrev}
-              aria-label="Previous offer"
+              aria-label={t('previousOffer')}
             >
               <IconChevronLeft className="h-5 w-5 stroke-[2.5]" />
             </button>
@@ -445,7 +445,7 @@ function OfferSlider({
               type="button"
               className="absolute right-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary shadow-md transition hover:scale-105 sm:right-3"
               onClick={onNext}
-              aria-label="Next offer"
+              aria-label={t('nextOffer')}
             >
               <IconChevronRight className="h-5 w-5 stroke-[2.5]" />
             </button>
@@ -542,7 +542,7 @@ function ProductCard({
                 e.stopPropagation();
                 onDecrease?.();
               }}
-              aria-label={`Decrease ${displayName} quantity`}
+              aria-label={t('decreaseProductQuantity', { name: displayName })}
               className="flex h-7 w-7 items-center justify-center rounded bg-white text-[#1f1f2e] shadow-sm transition hover:bg-white/90 active:scale-90"
             >
               <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
@@ -556,7 +556,7 @@ function ProductCard({
                 e.stopPropagation();
                 onIncrease?.();
               }}
-              aria-label={`Increase ${displayName} quantity`}
+              aria-label={t('increaseProductQuantity', { name: displayName })}
               className="flex h-7 w-7 items-center justify-center rounded bg-primary text-primary-foreground shadow-sm transition hover:brightness-95 active:scale-90"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
@@ -1486,7 +1486,7 @@ export default function OrderPageClient({
                       type="button"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#e5e7eb] bg-white text-sm font-bold text-[#1f1f2e] transition hover:bg-[#fafafa] disabled:opacity-40"
                       onClick={() => adjustQuantity(line.lineId, -1)}
-                      aria-label="Decrease quantity"
+                      aria-label={t('decreaseQuantity')}
                     >
                       <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
                     </button>
@@ -1497,7 +1497,7 @@ export default function OrderPageClient({
                       type="button"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground transition hover:brightness-95"
                       onClick={() => adjustQuantity(line.lineId, 1)}
-                      aria-label="Increase quantity"
+                      aria-label={t('increaseQuantity')}
                     >
                       <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                     </button>
@@ -1527,7 +1527,7 @@ export default function OrderPageClient({
         type="button"
         className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d8dce6] bg-white text-primary transition hover:bg-[#fafafa] disabled:opacity-35"
         disabled={!categoryStripScroll.back}
-        aria-label="Scroll categories back"
+        aria-label={t('scrollCategoriesBack')}
         onClick={() => scrollCategoryStrip('back')}
       >
         <IconChevronLeft className="h-4 w-4" strokeWidth={2} />
@@ -1602,7 +1602,7 @@ export default function OrderPageClient({
         type="button"
         className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d8dce6] bg-white text-primary transition hover:bg-[#fafafa] disabled:opacity-35"
         disabled={!categoryStripScroll.forward}
-        aria-label="Scroll categories forward"
+        aria-label={t('scrollCategoriesForward')}
         onClick={() => scrollCategoryStrip('forward')}
       >
         <IconChevronRight className="h-4 w-4" strokeWidth={2} />
@@ -1982,7 +1982,7 @@ export default function OrderPageClient({
             cart.length > 0 ? 'bottom-20 lg:bottom-6' : 'bottom-6'
           )}
           onClick={scrollToTop}
-          aria-label="Scroll to top"
+          aria-label={t('scrollToTop')}
         >
           <ArrowUp className="h-5 w-5" />
         </Button>

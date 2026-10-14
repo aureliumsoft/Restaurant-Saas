@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { roleApiPath } from '@/lib/dashboard-paths';
 import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
+import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import {
   Collapsible,
   CollapsibleContent,
@@ -68,6 +70,8 @@ type RolesCardProps = {
 export default function RolesCard({
   roleBasedSettingsAllowed = true,
 }: RolesCardProps) {
+  const { t } = useTranslation();
+  const { canCreateMore } = useEntitlements();
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState<Record<string, RoleRow>>({});
@@ -80,7 +84,7 @@ export default function RolesCard({
 
   const fetchRoles = useCallback(async () => {
     if (!navigator.onLine) {
-      toast.error('You are offline.');
+      toast.error(t('settings.cards.roles.offline'));
       return;
     }
     setLoading(true);
@@ -97,14 +101,14 @@ export default function RolesCard({
       setDrafts(nextDrafts);
     } catch (e: any) {
       toast.error(
-        e.response?.data?.error ?? e.message ?? 'Failed to load roles.'
+        e.response?.data?.error ?? e.message ?? t('settings.cards.roles.loadFailed')
       );
       setRoles([]);
       setDrafts({});
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void fetchRoles();
@@ -133,7 +137,7 @@ export default function RolesCard({
     const cur = drafts[id];
     if (!cur) return;
     if (!navigator.onLine) {
-      toast.error('You are offline.');
+      toast.error(t('settings.cards.roles.offline'));
       return;
     }
     setSavingId(id);
@@ -142,7 +146,7 @@ export default function RolesCard({
         name: cur.name.trim(),
         permissions: cur.permissions,
       });
-      toast.success('Role saved.');
+      toast.success(t('settings.cards.roles.saved'));
       setConfirmSaveId(null);
       await fetchRoles();
     } catch (e: any) {
@@ -151,7 +155,7 @@ export default function RolesCard({
           ? e.response.data.error
           : e.response?.data?.error?.message ??
               e.message ??
-              'Failed to save role.'
+              t('settings.cards.roles.saveFailed')
       );
     } finally {
       setSavingId(null);
@@ -162,11 +166,11 @@ export default function RolesCard({
     if (!roleBasedSettingsAllowed) return;
     const name = newName.trim();
     if (!name) {
-      toast.error('Enter a role name.');
+      toast.error(t('settings.cards.roles.nameRequired'));
       return;
     }
     if (!navigator.onLine) {
-      toast.error('You are offline.');
+      toast.error(t('settings.cards.roles.offline'));
       return;
     }
     setCreating(true);
@@ -175,14 +179,14 @@ export default function RolesCard({
         name,
         permissions: [],
       });
-      toast.success('Role created.');
+      toast.success(t('settings.cards.roles.created'));
       setNewName('');
       await fetchRoles();
     } catch (e: any) {
       toast.error(
         typeof e.response?.data?.error === 'string'
           ? e.response.data.error
-          : e.message ?? 'Failed to create role.'
+          : e.message ?? t('settings.cards.roles.createFailed')
       );
     } finally {
       setCreating(false);
@@ -193,21 +197,21 @@ export default function RolesCard({
     if (!roleBasedSettingsAllowed) return;
     if (!deleteId) return;
     if (!navigator.onLine) {
-      toast.error('You are offline.');
+      toast.error(t('settings.cards.roles.offline'));
       return;
     }
     setDeleting(true);
     try {
       const role = roles.find((r) => r.id === deleteId);
       await axios.delete(roleApiPath(deleteId, '', role?.urlId));
-      toast.success('Role deleted.');
+      toast.success(t('settings.cards.roles.deleted'));
       setDeleteId(null);
       await fetchRoles();
     } catch (e: any) {
       toast.error(
         typeof e.response?.data?.error === 'string'
           ? e.response.data.error
-          : e.message ?? 'Failed to delete role.'
+          : e.message ?? t('settings.cards.roles.deleteFailed')
       );
     } finally {
       setDeleting(false);
@@ -243,17 +247,15 @@ export default function RolesCard({
     <>
       <Card className={settingsCardClass}>
         <CardHeader className="min-w-0">
-          <CardTitle>Roles &amp; module access</CardTitle>
+          <CardTitle>{t('settings.cards.roles.title')}</CardTitle>
           <CardDescription>
-            Add roles below for staff, assign them under Employees when that
-            flow is connected.
+            {t('settings.cards.roles.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="min-w-0 space-y-6">
           {!roleBasedSettingsAllowed ? (
             <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-              Custom roles and per-module permissions are included on Growth and
-              Scale. Starter keeps the built-in Owner and Admin roles.
+              {t('settings.cards.roles.premiumNote')}
             </p>
           ) : (
             <>
@@ -263,33 +265,39 @@ export default function RolesCard({
                     htmlFor="new-role-name"
                     className="text-sm font-medium"
                   >
-                    New role name
+                    {t('settings.cards.roles.newRoleNameLabel')}
                   </label>
                   <Input
                     id="new-role-name"
-                    placeholder="e.g. Shift manager"
+                    placeholder={t('settings.cards.roles.newRoleNamePlaceholder')}
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
                   />
                 </div>
-                <Button
-                  type="button"
-                  className="text-white sm:mb-0"
-                  onClick={() => void handleCreate()}
-                  disabled={creating}
+                <PremiumDisabledControl
+                  locked={!canCreateMore('roles', editableRoles.length)}
+                  label={t('settings.cards.roles.createRole')}
+                  className="sm:mb-0"
                 >
-                  {creating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      <span>Creating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create role
-                    </>
-                  )}
-                </Button>
+                  <Button
+                    type="button"
+                    className="text-white sm:mb-0"
+                    onClick={() => void handleCreate()}
+                    disabled={creating}
+                  >
+                    {creating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        <span>{t('settings.cards.roles.creating')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="mr-2 h-4 w-4" />
+                        {t('settings.cards.roles.createRole')}
+                      </>
+                    )}
+                  </Button>
+                </PremiumDisabledControl>
               </div>
 
               {loading ? (
@@ -298,11 +306,11 @@ export default function RolesCard({
                 </p>
               ) : roles.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No roles yet. Add one to assign to employees later.
+                  {t('settings.cards.roles.emptyRoles')}
                 </p>
               ) : editableRoles.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Create a custom role above to configure staff access.
+                  {t('settings.cards.roles.emptyEditableRoles')}
                 </p>
               ) : (
                 <div className="min-w-0 space-y-3">
@@ -317,16 +325,16 @@ export default function RolesCard({
                             <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left font-medium hover:underline [&[data-state=open]_svg]:rotate-180">
                               <ChevronDown className="h-4 w-4 shrink-0 transition-transform" />
                               <span className="min-w-0 truncate">
-                                {draft.name || 'Untitled role'}
+                                {draft.name || t('settings.cards.roles.untitledRole')}
                               </span>
                               {r.slug ? (
                                 <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
-                                  Preset
+                                  {t('settings.cards.roles.preset')}
                                 </span>
                               ) : null}
                               {dirty ? (
                                 <span className="text-xs font-normal text-amber-600 dark:text-amber-400">
-                                  Unsaved changes
+                                  {t('settings.cards.roles.unsavedChanges')}
                                 </span>
                               ) : null}
                             </CollapsibleTrigger>
@@ -339,7 +347,7 @@ export default function RolesCard({
                                   onClick={() => setDeleteId(r.id)}
                                 >
                                   <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                  Delete
+                                  {t('settings.cards.roles.delete')}
                                 </Button>
                               ) : null}
                               <Button
@@ -351,12 +359,12 @@ export default function RolesCard({
                                 {savingId === r.id ? (
                                   <>
                                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                                    <span>Saving...</span>
+                                    <span>{t('settings.cards.roles.saving')}</span>
                                   </>
                                 ) : (
                                   <>
                                     <Save className="h-4 w-4 mr-2" />
-                                    <span>Save</span>
+                                    <span>{t('settings.cards.roles.save')}</span>
                                   </>
                                 )}
                               </Button>
@@ -366,7 +374,7 @@ export default function RolesCard({
                             <div className="min-w-0 border-t px-4 pb-4 pt-2">
                               <div className="mb-4 min-w-0 space-y-2 sm:max-w-md">
                                 <label className="text-sm font-medium">
-                                  Role name
+                                  {t('settings.cards.roles.roleNameLabel')}
                                 </label>
                                 <Input
                                   value={draft.name}
@@ -380,16 +388,16 @@ export default function RolesCard({
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead className="min-w-[8rem]">
-                                        Module
+                                        {t('settings.cards.roles.colModule')}
                                       </TableHead>
                                       <TableHead className="text-center">
-                                        Access
+                                        {t('settings.cards.roles.colAccess')}
                                       </TableHead>
                                       <TableHead className="text-center">
-                                        Edit
+                                        {t('settings.cards.roles.colEdit')}
                                       </TableHead>
                                       <TableHead className="text-center">
-                                        Delete
+                                        {t('settings.cards.roles.delete')}
                                       </TableHead>
                                     </TableRow>
                                   </TableHeader>
@@ -445,9 +453,7 @@ export default function RolesCard({
                                 </Table>
                               </TableWrapper>
                               <p className="mt-2 text-xs text-muted-foreground">
-                                Access lets the role open the module. Edit and
-                                delete are enforced when you wire employee
-                                sessions to these roles.
+                                {t('settings.cards.roles.permissionsHint')}
                               </p>
                             </div>
                           </CollapsibleContent>
@@ -479,8 +485,8 @@ export default function RolesCard({
 
       <SaveConfirmation
         open={confirmSaveId !== null}
-        title="Save Role Changes"
-        description="Are you sure you want to save these changes to this role?"
+        title={t('settings.cards.roles.saveDialogTitle')}
+        description={t('settings.cards.roles.saveDialogDescription')}
         itemName={confirmSaveId ? drafts[confirmSaveId]?.name : undefined}
         loading={savingId !== null}
         onConfirm={async () => {
@@ -493,8 +499,8 @@ export default function RolesCard({
 
       <DeleteConfirmation
         open={deleteId !== null}
-        title="Delete Role"
-        description="This cannot be undone. Roles that are still assigned to employees cannot be removed."
+        title={t('settings.cards.roles.deleteDialogTitle')}
+        description={t('settings.cards.roles.deleteDialogDescription')}
         itemName={
           deleteId ? roles.find((r) => r.id === deleteId)?.name : undefined
         }

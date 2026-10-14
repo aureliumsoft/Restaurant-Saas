@@ -14,8 +14,10 @@ import {
 } from 'lucide-react';
 
 import { AddCategoryFormDialog } from '@/components/dashboard/menu-manager/add-category-form-dialog';
+import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   bilingualInputFromStored,
@@ -87,6 +89,7 @@ export function CategoriesTab({
 }: Props) {
   const { t } = useTranslation();
   const uiLang = useUiLanguage();
+  const { canCreateMore } = useEntitlements();
   const {
     activeBranchId,
     branches,
@@ -120,7 +123,7 @@ export function CategoriesTab({
       toast.success(t('dashboard.menuManager.wizard.saved'));
       await onRefresh(appliedSearch);
     } catch {
-      toast.error('Could not update image');
+      toast.error(t('dashboard.categories.imageUpdateFailed'));
     }
   };
 
@@ -134,10 +137,10 @@ export function CategoriesTab({
       await axios.patch(`/api/restaurant/menu/categories/${id}`, {
         name: serializeBilingualInput(next),
       });
-      toast.success('Saved');
+      toast.success(t('dashboard.menuManager.wizard.saved'));
       await onRefresh(appliedSearch);
     } catch {
-      toast.error('Could not update');
+      toast.error(t('dashboard.categories.updateFailed'));
     }
   };
 
@@ -149,12 +152,12 @@ export function CategoriesTab({
       });
       toast.success(
         next
-          ? 'Category visible on website, kiosk, and POS'
-          : 'Category hidden from storefront and available for recommendations'
+          ? t('dashboard.categories.visibleOnWebsite')
+          : t('dashboard.categories.hiddenFromStorefront')
       );
       await onRefresh(appliedSearch);
     } catch {
-      toast.error('Could not update storefront visibility');
+      toast.error(t('dashboard.categories.visibilityUpdateFailed'));
     } finally {
       setTogglingId(null);
     }
@@ -162,7 +165,7 @@ export function CategoriesTab({
 
   const setCategoryBranchVisibility = async (id: string, visible: boolean) => {
     if (!activeBranchId) {
-      toast.error('Select a branch first');
+      toast.error(t('dashboard.categories.selectBranchFirst'));
       return;
     }
 
@@ -176,14 +179,17 @@ export function CategoriesTab({
       await axios.patch(`/api/restaurant/menu/categories/${id}`, {
         hiddenBranchIds: [...hiddenBranchIds],
       });
+      const branchLabel =
+        branches.find((branch) => branch.id === activeBranchId)?.name ??
+        t('dashboard.categories.selectedBranchFallback');
       toast.success(
         visible
-          ? `Category visible on ${branches.find((branch) => branch.id === activeBranchId)?.name ?? 'selected branch'}`
-          : `Category hidden on ${branches.find((branch) => branch.id === activeBranchId)?.name ?? 'selected branch'}`
+          ? t('dashboard.categories.visibleOnBranch', { branch: branchLabel })
+          : t('dashboard.categories.hiddenOnBranch', { branch: branchLabel })
       );
       await onRefresh(appliedSearch);
     } catch {
-      toast.error('Could not update branch visibility');
+      toast.error(t('dashboard.categories.branchVisibilityUpdateFailed'));
     } finally {
       setTogglingId(null);
     }
@@ -193,10 +199,10 @@ export function CategoriesTab({
     if (!deletingId) return;
     try {
       await axios.delete(`/api/restaurant/menu/categories/${deletingId}`);
-      toast.success('Deleted');
+      toast.success(t('dashboard.menuManager.category.deleted'));
       await onRefresh(appliedSearch);
     } catch (e: unknown) {
-      toast.error(apiErrorMessage(e, 'Could not delete'));
+      toast.error(apiErrorMessage(e, t('dashboard.categories.deleteFailedFallback')));
     } finally {
       setDeleting(false);
       setConfirmDeleteOpen(false);
@@ -270,10 +276,15 @@ export function CategoriesTab({
                 {t('dashboard.categories.cardDescription')}
               </CardDescription>
             </div>
-            <Button type="button" onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" aria-hidden />
-              {t('dashboard.categories.newCategory')}
-            </Button>
+            <PremiumDisabledControl
+              locked={!canCreateMore('categories', categories.length)}
+              label={t('dashboard.categories.newCategory')}
+            >
+              <Button type="button" onClick={() => setCreateOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" aria-hidden />
+                {t('dashboard.categories.newCategory')}
+              </Button>
+            </PremiumDisabledControl>
           </div>
 
           <SearchField
@@ -298,8 +309,8 @@ export function CategoriesTab({
 
       <DeleteConfirmation
         open={confirmDeleteOpen}
-        title="Delete category"
-        description="This category will be removed. Products in this category may need reassignment."
+        title={t('dashboard.menuManager.category.deleteTitle')}
+        description={t('dashboard.menuManager.category.deleteDescription')}
         itemName={resolveBilingualText(
           categories.find((c) => c.id === deletingId)?.name,
           uiLang
@@ -422,7 +433,7 @@ function CategoryCard({
             />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-              No Image
+              {t('dashboard.categories.noImage')}
             </div>
           )}
           <div className="absolute right-2 top-2 flex gap-1">
@@ -453,13 +464,21 @@ function CategoryCard({
               {displayName}
             </h3>
             <p className="text-xs text-muted-foreground">
-              {productCount} {productCount === 1 ? 'product' : 'products'}
+              {productCount === 1
+                ? t('dashboard.categories.productCount_one', {
+                    count: productCount,
+                  })
+                : t('dashboard.categories.productCount_other', {
+                    count: productCount,
+                  })}
             </p>
           </div>
 
           <div>
             {!hasProducts ? (
-              <Badge variant="outline">Empty</Badge>
+              <Badge variant="outline">
+                {t('dashboard.categories.emptyBadge')}
+              </Badge>
             ) : (
               <Badge variant={visible ? 'default' : 'secondary'}>
                 {visible

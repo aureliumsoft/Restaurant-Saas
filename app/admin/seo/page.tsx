@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 import {
   ExternalLink,
   Loader2,
@@ -45,6 +46,7 @@ function gaOpenUrl(measurementId: string): string {
 }
 
 export default function AdminSeoPage() {
+  const { t } = useTranslation();
   const [map, setMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -54,9 +56,9 @@ export default function AdminSeoPage() {
     axios
       .get('/api/admin/settings')
       .then((r) => setMap(r.data.data ?? {}))
-      .catch(() => toast.error('Could not load SEO settings'))
+      .catch(() => toast.error(t('admin.seoPage.loadError')))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   const verificationReady = Boolean(map.seo_google_site_verification?.trim());
   const gtmReady = Boolean(map.seo_gtm_container_id?.trim());
@@ -91,9 +93,9 @@ export default function AdminSeoPage() {
       const res = await axios.put('/api/admin/settings', { entries });
       setMap(res.data.data ?? {});
       setShowSaveConfirmation(false);
-      toast.success('SEO settings saved');
+      toast.success(t('admin.seoPage.savedToast'));
     } catch {
-      toast.error('Save failed');
+      toast.error(t('admin.seoPage.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -106,9 +108,9 @@ export default function AdminSeoPage() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        eyebrow="System"
-        title="SEO & analytics"
-        description="Public tracking tags, dashboard property IDs, and Google API credentials for reporting."
+        eyebrow={t('admin.seoPage.eyebrow')}
+        title={t('admin.seoPage.title')}
+        description={t('admin.seoPage.description')}
         actions={
           <div className="flex flex-wrap gap-2">
             
@@ -119,7 +121,7 @@ export default function AdminSeoPage() {
                 rel="noopener noreferrer"
               >
                 <ExternalLink className="mr-2 h-4 w-4" />
-                Search Console
+                {t('admin.traffic.searchConsole')}
               </a>
             </Button>
             <Button variant="outline" asChild>
@@ -129,7 +131,7 @@ export default function AdminSeoPage() {
                 rel="noopener noreferrer"
               >
                 <ExternalLink className="mr-2 h-4 w-4" />
-                Analytics
+                {t('admin.seoPage.analytics')}
               </a>
             </Button>
           </div>
@@ -140,43 +142,51 @@ export default function AdminSeoPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatusCard
-          label="Site verification"
+          label={t('admin.seoPage.statusVerification')}
           ready={verificationReady}
+          readyLabel={t('admin.seoPage.statusConfigured')}
+          notReadyLabel={t('admin.seoPage.statusNotSet')}
           hint={
             verificationReady
-              ? 'Meta tag will render in the site head'
-              : 'Add the verification token below'
+              ? t('admin.seoPage.hintVerificationReady')
+              : t('admin.seoPage.hintVerificationMissing')
           }
         />
         <StatusCard
-          label="Google Tag Manager"
+          label={t('admin.seoPage.statusGtm')}
           ready={gtmReady}
+          readyLabel={t('admin.seoPage.statusConfigured')}
+          notReadyLabel={t('admin.seoPage.statusNotSet')}
           hint={
             gtmReady
-              ? 'Official GTM snippet on marketing & auth pages'
-              : 'Add a GTM- container ID'
+              ? t('admin.seoPage.hintGtmReady')
+              : t('admin.seoPage.hintGtmMissing')
           }
         />
         <StatusCard
-          label="Google Analytics"
+          label={t('admin.seoPage.statusGa')}
           ready={analyticsViaGtm || gaReady}
+          readyLabel={t('admin.seoPage.statusConfigured')}
+          notReadyLabel={t('admin.seoPage.statusNotSet')}
           hint={
             gaReady
-              ? 'Direct GA4 gtag loads on marketing pages (homepage, pricing, auth)'
+              ? t('admin.seoPage.hintGaDirect')
               : analyticsViaGtm
-                ? 'GTM loads on marketing pages — configure GA4 inside GTM'
-                : 'Add a G- Measurement ID (or GTM if you manage tags there)'
+                ? t('admin.seoPage.hintGaViaGtm')
+                : t('admin.seoPage.hintGaMissing')
           }
         />
         <StatusCard
-          label="Reporting API auth"
+          label={t('admin.seoPage.statusReportingAuth')}
           ready={reportingSaReady || reportingOauthReady}
+          readyLabel={t('admin.seoPage.statusConfigured')}
+          notReadyLabel={t('admin.seoPage.statusNotSet')}
           hint={
             reportingSaReady
-              ? 'Service account JSON configured'
+              ? t('admin.seoPage.hintReportingSa')
               : reportingOauthReady
-                ? 'OAuth client + refresh token configured'
-                : 'Add service account or OAuth credentials below'
+                ? t('admin.seoPage.hintReportingOauth')
+                : t('admin.seoPage.hintReportingMissing')
           }
         />
       </div>
@@ -186,36 +196,36 @@ export default function AdminSeoPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Tags className="h-5 w-5 text-muted-foreground" />
-            Site tracking
+            {t('admin.seoPage.siteTrackingTitle')}
           </CardTitle>
           <CardDescription>
-            Public tags for Foodluk marketing pages (saved to PlatformSetting).
+            {t('admin.seoPage.siteTrackingDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <Field
             id="seo_google_site_verification"
-            label="Google site verification"
+            label={t('admin.seoPage.verificationLabel')}
             icon={ShieldCheck}
-            description="Paste the content value from Search Console HTML-tag verification (not the full meta tag)."
+            description={t('admin.seoPage.verificationDescription')}
             placeholder="e.g. AbCdEf123…"
             value={map.seo_google_site_verification ?? ''}
             onChange={(v) => setField('seo_google_site_verification', v)}
           />
           <Field
             id="seo_gtm_container_id"
-            label="Google Tag Manager container ID"
+            label={t('admin.seoPage.gtmLabel')}
             icon={Tags}
-            description="Web container (GTM-XXXXXXX). Used only when GA4 Measurement ID below is empty (avoids double-counting)."
+            description={t('admin.seoPage.gtmDescription')}
             placeholder="GTM-XXXXXXX"
             value={map.seo_gtm_container_id ?? ''}
             onChange={(v) => setField('seo_gtm_container_id', v)}
           />
           <Field
             id="seo_ga4_measurement_id"
-            label="GA4 Measurement ID"
+            label={t('admin.seoPage.gaMeasurementLabel')}
             icon={BarChart3}
-            description="Browser Google tag (G-…). Prefer this for GA “Test your website”. Test the public homepage URL, not /dashboard."
+            description={t('admin.seoPage.gaMeasurementDescription')}
             placeholder="G-XXXXXXXX"
             value={map.seo_ga4_measurement_id ?? ''}
             onChange={(v) => setField('seo_ga4_measurement_id', v)}
@@ -228,27 +238,27 @@ export default function AdminSeoPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5 text-muted-foreground" />
-            Dashboard properties
+            {t('admin.seoPage.dashboardPropertiesTitle')}
           </CardTitle>
           <CardDescription>
-            Which Search Console / GA4 properties to pull for admin metrics.
+            {t('admin.seoPage.dashboardPropertiesDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <Field
             id="seo_gsc_property_url"
-            label="Search Console property URL"
+            label={t('admin.seoPage.gscUrlLabel')}
             icon={Search}
-            description="Exact property as in GSC (e.g. https://foodluk.com/ or sc-domain:foodluk.com)."
+            description={t('admin.seoPage.gscUrlDescription')}
             placeholder="https://foodluk.com/"
             value={map.seo_gsc_property_url ?? ''}
             onChange={(v) => setField('seo_gsc_property_url', v)}
           />
           <Field
             id="seo_ga4_property_id"
-            label="GA4 property ID (reporting)"
+            label={t('admin.seoPage.gaPropertyIdLabel')}
             icon={BarChart3}
-            description="Numeric ID under Analytics Admin → Property settings. Not the G- Measurement ID."
+            description={t('admin.seoPage.gaPropertyIdDescription')}
             placeholder="123456789"
             value={map.seo_ga4_property_id ?? ''}
             onChange={(v) => setField('seo_ga4_property_id', v)}
@@ -261,18 +271,17 @@ export default function AdminSeoPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileJson className="h-5 w-5 text-muted-foreground" />
-            Google service account
+            {t('admin.seoPage.serviceAccountTitle')}
           </CardTitle>
           <CardDescription>
-            Preferred for dashboard metrics. Paste the full JSON key. Grant this
-            account access on Search Console and Viewer on GA4. Env{' '}
+            {t('admin.seoPage.serviceAccountDescriptionPrefix')}{' '}
             <code className="text-foreground">GOOGLE_REPORTING_SERVICE_ACCOUNT_JSON</code>{' '}
-            is still used if this field is empty.
+            {t('admin.seoPage.serviceAccountDescriptionSuffix')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Label htmlFor="seo_google_reporting_service_account_json">
-            Service account JSON
+            {t('admin.seoPage.serviceAccountJsonLabel')}
           </Label>
           <Textarea
             id="seo_google_reporting_service_account_json"
@@ -286,7 +295,7 @@ export default function AdminSeoPage() {
             spellCheck={false}
           />
           <p className="text-xs text-muted-foreground">
-            If set, OAuth credentials below are ignored for API calls.
+            {t('admin.seoPage.serviceAccountOauthNote')}
           </p>
         </CardContent>
       </Card>
@@ -296,28 +305,27 @@ export default function AdminSeoPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-muted-foreground" />
-            Google OAuth (reporting)
+            {t('admin.seoPage.oauthTitle')}
           </CardTitle>
           <CardDescription>
-            Used only when service account JSON is empty. Separate from next-auth
-            Google login env unless you intentionally reuse the same client.
+            {t('admin.seoPage.oauthDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <Field
             id="seo_google_client_id"
-            label="Client ID"
+            label={t('admin.seoPage.clientIdLabel')}
             icon={KeyRound}
-            description="OAuth 2.0 Client ID from Google Cloud Console."
+            description={t('admin.seoPage.clientIdDescription')}
             placeholder="….apps.googleusercontent.com"
             value={map.seo_google_client_id ?? ''}
             onChange={(v) => setField('seo_google_client_id', v)}
           />
           <Field
             id="seo_google_client_secret"
-            label="Client secret"
+            label={t('admin.seoPage.clientSecretLabel')}
             icon={KeyRound}
-            description="OAuth client secret. Falls back to GOOGLE_CLIENT_SECRET if empty."
+            description={t('admin.seoPage.clientSecretDescription')}
             placeholder="GOCSPX-…"
             value={map.seo_google_client_secret ?? ''}
             onChange={(v) => setField('seo_google_client_secret', v)}
@@ -325,9 +333,9 @@ export default function AdminSeoPage() {
           />
           <Field
             id="seo_google_reporting_refresh_token"
-            label="Refresh token"
+            label={t('admin.seoPage.refreshTokenLabel')}
             icon={KeyRound}
-            description="Offline refresh token with webmasters.readonly + analytics.readonly scopes."
+            description={t('admin.seoPage.refreshTokenDescription')}
             placeholder="1//0…"
             value={map.seo_google_reporting_refresh_token ?? ''}
             onChange={(v) => setField('seo_google_reporting_refresh_token', v)}
@@ -345,33 +353,33 @@ export default function AdminSeoPage() {
           {saving ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              <span>Saving…</span>
+              <span>{t('admin.docsForm.saving')}</span>
             </>
           ) : (
             <>
               <Save className="mr-2 h-4 w-4" />
-              <span>Save SEO settings</span>
+              <span>{t('admin.seoPage.saveSeoSettings')}</span>
             </>
           )}
         </Button>
         <p className="text-xs text-muted-foreground">
-          Credentials are stored server-side and never exposed to the public site.
+          {t('admin.seoPage.credentialsStoredNote')}
         </p>
       </div>
 
       <Card className={adminCardClass}>
         <CardHeader>
-          <CardTitle>Setup checklist</CardTitle>
+          <CardTitle>{t('admin.seoPage.checklistTitle')}</CardTitle>
           <CardDescription>
-            One-time steps in Google after saving tokens here.
+            {t('admin.seoPage.checklistDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <ol className="list-decimal space-y-3 pl-5 text-sm text-muted-foreground">
             <li>
-              In Search Console, verify the site with the HTML tag token from{' '}
-              <strong className="text-foreground">Site tracking</strong>, then
-              submit the sitemap:{' '}
+              {t('admin.seoPage.checklistStep1Prefix')}{' '}
+              <strong className="text-foreground">{t('admin.seoPage.siteTrackingTitle')}</strong>
+              {t('admin.seoPage.checklistStep1Middle')}{' '}
               <a
                 className="font-medium text-foreground underline-offset-4 hover:underline"
                 href={sitemapUrl}
@@ -382,17 +390,16 @@ export default function AdminSeoPage() {
               </a>
             </li>
             <li>
-              Add GTM or a Measurement ID under Site tracking for browser analytics.
+              {t('admin.seoPage.checklistStep2')}
             </li>
             <li>
-              Under <strong className="text-foreground">Dashboard properties</strong>
-              , set GSC URL and numeric GA4 property ID.
+              {t('admin.seoPage.checklistStep3Prefix')} <strong className="text-foreground">{t('admin.seoPage.dashboardPropertiesTitle')}</strong>
+              {t('admin.seoPage.checklistStep3Suffix')}
             </li>
             <li>
-              Prefer a service account JSON under{' '}
-              <strong className="text-foreground">Google service account</strong>
-              ; invite that email to GSC + GA4, enable Search Console API and
-              Analytics Data API. Or use OAuth client + refresh token instead.
+              {t('admin.seoPage.checklistStep4Prefix')}{' '}
+              <strong className="text-foreground">{t('admin.seoPage.serviceAccountTitle')}</strong>
+              {t('admin.seoPage.checklistStep4Suffix')}
             </li>
           </ol>
         </CardContent>
@@ -400,8 +407,8 @@ export default function AdminSeoPage() {
 
       <SaveConfirmation
         open={showSaveConfirmation}
-        title="Save SEO settings"
-        description="Tracking tags, property IDs, and API credentials will be updated. Save now?"
+        title={t('admin.seoPage.saveDialogTitle')}
+        description={t('admin.seoPage.saveDialogDescription')}
         loading={saving}
         onConfirm={() => void save()}
         onCancel={() => setShowSaveConfirmation(false)}
@@ -453,10 +460,14 @@ function StatusCard({
   label,
   ready,
   hint,
+  readyLabel,
+  notReadyLabel,
 }: {
   label: string;
   ready: boolean;
   hint: string;
+  readyLabel: string;
+  notReadyLabel: string;
 }) {
   return (
     <Card className={adminCardClass}>
@@ -465,10 +476,10 @@ function StatusCard({
         <CardTitle className="text-base">
           {ready ? (
             <span className="text-emerald-600 dark:text-emerald-400">
-              Configured
+              {readyLabel}
             </span>
           ) : (
-            <span className="text-muted-foreground">Not set</span>
+            <span className="text-muted-foreground">{notReadyLabel}</span>
           )}
         </CardTitle>
       </CardHeader>

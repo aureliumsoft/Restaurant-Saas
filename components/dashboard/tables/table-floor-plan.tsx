@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/lib/utils';
 import type {
@@ -66,6 +67,7 @@ export function TableFloorPlan({
   allowOccupiedSelect = false,
   className,
 }: Props) {
+  const { t } = useTranslation();
   const occupancy = buildOccupancyMap(tables);
   const rendered = new Set<string>();
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -191,10 +193,10 @@ export function TableFloorPlan({
                   }}
                   title={
                     table.occupied
-                      ? `${table.name} · Occupied`
+                      ? t('dashboard.tables.floorTitleOccupied', { name: table.name })
                       : editorDnd
-                        ? `${table.name} · Drag to move`
-                        : `${table.name} · Available`
+                        ? t('dashboard.tables.floorTitleDrag', { name: table.name })
+                        : t('dashboard.tables.floorTitleAvailable', { name: table.name })
                   }
                 >
                   <span className="mt-1.5 line-clamp-1 max-w-full px-1 text-center text-xl font-bold text-white">
@@ -202,7 +204,7 @@ export function TableFloorPlan({
                   </span>
                   {table.occupied ? (
                     <span className="mt-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase text-red-600">
-                      Occupied
+                      {t('dashboard.tables.floorOccupied')}
                     </span>
                   ) : null}
                 </button>
@@ -262,8 +264,14 @@ export function TableFloorPlan({
                 }}
                 aria-label={
                   mode === 'editor'
-                    ? `Add table at row ${row + 1} column ${col + 1}`
-                    : `Empty cell row ${row + 1} column ${col + 1}`
+                    ? t('dashboard.tables.floorAddTableAt', {
+                        row: row + 1,
+                        col: col + 1,
+                      })
+                    : t('dashboard.tables.floorEmptyCellAt', {
+                        row: row + 1,
+                        col: col + 1,
+                      })
                 }
               >
                 {/* Plus icon removed as requested */}
@@ -275,15 +283,15 @@ export function TableFloorPlan({
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-          Available
+          {t('dashboard.tables.floorAvailable')}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-          Occupied
+          {t('dashboard.tables.floorOccupied')}
         </span>
         {editorDnd ? (
           <span className="text-muted-foreground/80">
-            Drag a table onto an empty cell to move it
+            {t('dashboard.tables.floorDragHint')}
           </span>
         ) : null}
       </div>

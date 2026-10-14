@@ -154,7 +154,7 @@ export function OrderMenuHeader({
     return `/login?callbackUrl=${encodeURIComponent(callback)}`;
   }, [pathname]);
 
-  const brandLabel = restaurantName?.trim() || 'Restaurant';
+  const brandLabel = restaurantName?.trim() || t('restaurantFallback');
   const locationLine =
     orderType === 'delivery'
       ? deliveryAddress?.trim() || storeAddress?.trim() || ''

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Copy, Download } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -85,6 +86,7 @@ function QrCanvas({
   size?: number;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -98,7 +100,7 @@ function QrCanvas({
   return (
     <canvas
       ref={canvasRef}
-      aria-label="Table QR code"
+      aria-label={t('dashboard.tables.qrAriaCanvas')}
       className={cn('rounded-lg border border-border bg-white p-2', className)}
     />
   );
@@ -151,6 +153,7 @@ export function TableQrDialog({
   slug: string;
   branchId: string;
 }) {
+  const { t } = useTranslation();
   const [mobile, setMobile] = useState(true);
   const tableId = table?.id ?? '';
   const tableName = table?.name ?? '';
@@ -164,27 +167,31 @@ export function TableQrDialog({
   const copyLink = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(absoluteUrl);
-      toast.success('QR link copied');
+      toast.success(t('dashboard.tables.qrCopied'));
     } catch {
-      toast.error('Could not copy link');
+      toast.error(t('dashboard.tables.qrCopyFailed'));
     }
-  }, [absoluteUrl]);
+  }, [absoluteUrl, t]);
 
   const download = useCallback(async () => {
     if (!tableName) return;
     try {
       await downloadTableQrPng(absoluteUrl, tableName);
-      toast.success('QR downloaded');
+      toast.success(t('dashboard.tables.qrDownloaded'));
     } catch {
-      toast.error('Could not download QR');
+      toast.error(t('dashboard.tables.qrDownloadFailed'));
     }
-  }, [absoluteUrl, tableName]);
+  }, [absoluteUrl, tableName, t]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>{table ? `QR — ${table.name}` : 'Table QR'}</DialogTitle>
+          <DialogTitle>
+            {table
+              ? t('dashboard.tables.qrDialogWithName', { name: table.name })
+              : t('dashboard.tables.qrDialogFallback')}
+          </DialogTitle>
         </DialogHeader>
 
         {table ? (
@@ -194,17 +201,17 @@ export function TableQrDialog({
               onValueChange={(v) => setMobile(v === 'mobile')}
             >
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="mobile">Mobile scan</TabsTrigger>
-                <TabsTrigger value="kiosk">Fixed kiosk</TabsTrigger>
+                <TabsTrigger value="mobile">{t('dashboard.tables.qrMobileScan')}</TabsTrigger>
+                <TabsTrigger value="kiosk">{t('dashboard.tables.qrFixedKiosk')}</TabsTrigger>
               </TabsList>
               <TabsContent value="mobile" className="mt-4 space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Opens the kiosk optimized for phones ({'`Mobile=true`'}).
+                  {t('dashboard.tables.qrMobileHint')}
                 </p>
               </TabsContent>
               <TabsContent value="kiosk" className="mt-4 space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Full-screen kiosk layout ({'`Mobile=false`'}).
+                  {t('dashboard.tables.qrKioskHint')}
                 </p>
               </TabsContent>
             </Tabs>
@@ -221,11 +228,11 @@ export function TableQrDialog({
         <DialogFooter className="gap-2 sm:gap-0">
           <Button type="button" variant="outline" onClick={() => void copyLink()}>
             <Copy className="mr-2 h-4 w-4" />
-            Copy link
+            {t('dashboard.tables.qrCopyLink')}
           </Button>
           <Button type="button" onClick={() => void download()}>
             <Download className="mr-2 h-4 w-4" />
-            Download QR
+            {t('dashboard.tables.qrDownloadButton')}
           </Button>
         </DialogFooter>
       </DialogContent>

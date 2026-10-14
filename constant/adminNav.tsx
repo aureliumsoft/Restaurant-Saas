@@ -27,10 +27,10 @@ export type AdminNavGroup = {
 
 export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   {
-    label: 'Overview',
+    label: 'admin.nav.groupOverview',
     items: [
       {
-        title: 'Dashboard',
+        title: 'admin.nav.dashboard',
         path: '/admin/dashboard',
         icon: <LayoutDashboard className="h-4 w-4" />,
         description: 'Platform metrics',
@@ -38,52 +38,52 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     ],
   },
   {
-    label: 'Management',
+    label: 'admin.nav.groupManagement',
     items: [
       {
-        title: 'Restaurants',
+        title: 'admin.nav.restaurants',
         path: '/admin/restaurants',
         icon: <Building2 className="h-4 w-4" />,
         description: 'Tenant directory',
       },
       {
-        title: 'Subscriptions',
+        title: 'admin.nav.subscriptions',
         path: '/admin/subscriptions',
         icon: <CreditCard className="h-4 w-4" />,
-        description: 'Plans & billing',
+        description: 'Plans, billing & custom requests',
       },
       {
-        title: 'Transactions',
+        title: 'admin.nav.transactions',
         path: '/admin/transactions',
         icon: <Receipt className="h-4 w-4" />,
         description: 'Subscription payments',
       },
       {
-        title: 'Requests',
+        title: 'admin.nav.requests',
         path: '/admin/requests',
         icon: <Inbox className="h-4 w-4" />,
         description: 'Demo leads',
       },
       {
-        title: 'Newsletter',
+        title: 'admin.nav.newsletter',
         path: '/admin/newsletter',
         icon: <Mail className="h-4 w-4" />,
         description: 'Subscribers & broadcasts',
       },
       {
-        title: 'Blog posts',
+        title: 'admin.nav.blog',
         path: '/admin/blog',
         icon: <FileText className="h-4 w-4" />,
         description: 'Marketing blog content',
       },
       {
-        title: 'FAQs',
+        title: 'admin.nav.faqs',
         path: '/admin/faqs',
         icon: <HelpCircle className="h-4 w-4" />,
         description: 'Landing page questions',
       },
       {
-        title: 'Documentation',
+        title: 'admin.nav.docs',
         path: '/admin/documentation',
         icon: <BookOpen className="h-4 w-4" />,
         description: 'Public docs modules',
@@ -91,16 +91,16 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     ],
   },
   {
-    label: 'System',
+    label: 'admin.nav.groupSystem',
     items: [
       {
-        title: 'SEO & analytics',
+        title: 'admin.nav.seo',
         path: '/admin/seo',
         icon: <Search className="h-4 w-4" />,
         description: 'GSC, GA4 & verification',
       },
       {
-        title: 'Platform settings',
+        title: 'admin.nav.settings',
         path: '/admin/settings',
         icon: <Settings className="h-4 w-4" />,
         description: 'Global config',

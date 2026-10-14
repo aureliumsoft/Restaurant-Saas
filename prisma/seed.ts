@@ -7,6 +7,7 @@ import {
   refreshAllRestaurantOwnerRoles,
 } from './seed-restaurant-roles';
 import { seedDefaultGlobalRoles } from './seed-roles';
+import { seedSubscriptionPlans } from './seed-subscription-plans';
 
 const prisma = new PrismaClient();
 
@@ -27,15 +28,7 @@ async function main() {
   await ensureAllRestaurantsOwnerRoles(prisma);
   await refreshAllRestaurantOwnerRoles(prisma);
   await seedDemoRestaurant(prisma);
-
-  await prisma.$executeRaw`
-    INSERT INTO "SubscriptionCatalog" ("id","plan","name","price","priceLabel","description","features","createdAt","updatedAt")
-    VALUES
-      ('subcat_starter','STARTER','Starter',29,'$29/mo','Perfect for one small location getting online.',ARRAY['1 branch maximum','Menu & order tools','Basic dashboard metrics','No recommendations module','No custom roles or branding changes'],now(),now()),
-      ('subcat_growth','GROWTH','Growth',79,'$79/mo','For growing restaurants and multiple teams.',ARRAY['Up to 5 branches','Role-based users & permissions','Advanced analytics & 7-day charts','Logo, banners & theme','Recommendations & add-ons','Everything in Starter'],now(),now()),
-      ('subcat_scale','SCALE','Scale',0,'Custom','Enterprise setup for multi-brand operations.',ARRAY['Unlimited branches','All Growth features','Priority support','Custom integrations','Dedicated onboarding'],now(),now())
-    ON CONFLICT ("plan") DO NOTHING
-  `;
+  await seedSubscriptionPlans(prisma);
 
   if (process.env.SEED_LEGACY_PRODUCT_STOCK === 'true') {
     await prisma.productStock.deleteMany({});

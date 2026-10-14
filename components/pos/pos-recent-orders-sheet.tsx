@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { History, Loader2, Pencil, Printer } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import {
   kioskOrderApiPath,
@@ -112,6 +113,7 @@ export function PosRecentOrdersSheet({
   logoUrl,
   onEditOrder,
 }: Props) {
+  const { t } = useTranslation();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const [orders, setOrders] = useState<PosRecentOrderRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -163,7 +165,7 @@ export function PosRecentOrdersSheet({
           setOrders([]);
           setHasMore(false);
           setNextOffset(null);
-          toast.error(apiErrorMessage(error, 'Could not load recent orders.'));
+          toast.error(apiErrorMessage(error, t('pos.toasts.couldNotLoadRecentOrders')));
         }
       } finally {
         if (requestId === loadRequestRef.current) {
@@ -248,7 +250,7 @@ export function PosRecentOrdersSheet({
           : detail.address
             ? 'delivery'
             : 'pos',
-        paymentMethodLabel: detail.paymentMethod ?? 'Cash',
+        paymentMethodLabel: detail.paymentMethod ?? t('pos.cash'),
         tableLabel: detail.tableLabel,
         customerName: detail.customerName,
         customerPhone: detail.customerPhone,
@@ -268,9 +270,9 @@ export function PosRecentOrdersSheet({
         currencyCode: regional.currencyCode,
         countryCode: regional.countryCode,
       });
-      if (!ok) toast.error('Could not open print preview.');
+      if (!ok) toast.error(t('pos.toasts.couldNotOpenPrintPreview'));
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not print receipt.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotPrintReceipt')));
     } finally {
       setPrintBusyId(null);
     }
@@ -285,7 +287,7 @@ export function PosRecentOrdersSheet({
       onEditOrder(detail, 'pos');
       onOpenChange(false);
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not load order for editing.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotLoadOrderForEditing')));
     } finally {
       setEditBusyId(null);
     }
@@ -297,11 +299,10 @@ export function PosRecentOrdersSheet({
         <SheetHeader className="shrink-0 border-b px-6 py-4 text-left">
           <SheetTitle className="flex items-center gap-2">
             <History className="h-5 w-5" />
-            Today&apos;s orders
+            {t('pos.sheets.recentOrders.title')}
           </SheetTitle>
           <SheetDescription>
-            POS and kiosk orders paid at the counter today. Print a receipt or
-            edit a POS order in the cart.
+            {t('pos.sheets.recentOrders.description')}
           </SheetDescription>
         </SheetHeader>
 
@@ -317,7 +318,7 @@ export function PosRecentOrdersSheet({
             </ul>
           ) : orders.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No orders today yet.
+              {t('pos.sheets.recentOrders.noOrdersYet')}
             </p>
           ) : (
             <ul className="divide-y rounded-xl border">
@@ -328,7 +329,7 @@ export function PosRecentOrdersSheet({
                 const canceled = isCanceledOrderStatus(order.status);
                 const label =
                   order.ticketNumber != null
-                    ? `Ticket #${String(order.ticketNumber).padStart(2, '0')}`
+                    ? t('pos.sheets.shift.ticketNumber', { number: String(order.ticketNumber).padStart(2, '0') })
                     : order.shortOrderId;
                 return (
                   <li
@@ -353,7 +354,7 @@ export function PosRecentOrdersSheet({
                             variant="destructive"
                             className="h-5 px-1.5 text-[10px] uppercase"
                           >
-                            Canceled
+                            {t('pos.sheets.shift.canceled')}
                           </Badge>
                         ) : null}
                       </div>
@@ -363,11 +364,11 @@ export function PosRecentOrdersSheet({
                           minute: '2-digit',
                         })}
                         {order.paymentMethod ? ` · ${order.paymentMethod}` : ''}
-                        {isKiosk ? ' · Kiosk' : ''}
+                        {isKiosk ? ` · ${t('pos.sheets.recentOrders.kiosk')}` : ''}
                         {order.customerName ? ` · ${order.customerName}` : ''}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {order.itemCount} item{order.itemCount === 1 ? '' : 's'}
+                        {t('pos.itemCount', { count: order.itemCount })}
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-2">
@@ -387,7 +388,7 @@ export function PosRecentOrdersSheet({
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              title="Print receipt"
+                              title={t('pos.sheets.recentOrders.printReceipt')}
                               disabled={printBusy || editBusy}
                               onClick={() => void handlePrint(order)}
                             >
@@ -403,7 +404,7 @@ export function PosRecentOrdersSheet({
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8"
-                                title="Edit order"
+                                title={t('pos.sheets.recentOrders.editOrder')}
                                 disabled={printBusy || editBusy}
                                 onClick={() => void handleEdit(order)}
                               >
@@ -437,7 +438,7 @@ export function PosRecentOrdersSheet({
                 className="w-full"
                 onClick={loadMore}
               >
-                Load more
+                {t('pos.sheets.recentOrders.loadMore')}
               </Button>
             </div>
           ) : null}
@@ -456,7 +457,7 @@ export function PosRecentOrdersSheet({
               void loadOrders({ offset: 0 });
             }}
           >
-            Refresh
+            {t('pos.sheets.recentOrders.refresh')}
           </Button>
         </div>
       </SheetContent>

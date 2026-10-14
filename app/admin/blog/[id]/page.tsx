@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import {
   AdminBlogPostForm,
@@ -25,6 +26,7 @@ type PostDto = {
 };
 
 export default function AdminBlogEditPage() {
+  const { t } = useTranslation();
   const params = useParams();
   const id = typeof params?.id === 'string' ? params.id : '';
   const [post, setPost] = useState<PostDto | null>(null);
@@ -38,7 +40,7 @@ export default function AdminBlogEditPage() {
         const res = await axios.get<{ data: PostDto }>(`/api/admin/blog/${id}`);
         if (!cancelled) setPost(res.data.data);
       } catch {
-        if (!cancelled) toast.error('Could not load blog post.');
+        if (!cancelled) toast.error(t('admin.blogPage.loadPostError'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -46,7 +48,7 @@ export default function AdminBlogEditPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, t]);
 
   if (loading) {
     return (
@@ -58,7 +60,7 @@ export default function AdminBlogEditPage() {
 
   if (!post) {
     return (
-      <p className="text-sm text-muted-foreground">Blog post not found.</p>
+      <p className="text-sm text-muted-foreground">{t('admin.blogPage.postNotFound')}</p>
     );
   }
 

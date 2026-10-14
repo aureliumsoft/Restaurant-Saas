@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 import { Loader2, Save } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -139,7 +140,7 @@ export function RecommendationRuleForm({
   localCategories,
   allProducts,
   saving,
-  saveLabel = 'Save section',
+  saveLabel,
   onSave,
   onDraftChange,
   resetKey = 0,
@@ -148,6 +149,9 @@ export function RecommendationRuleForm({
   editingGroupId = null,
   onCancelEdit,
 }: Props) {
+  const { t } = useTranslation();
+  const rf = 'dashboard.menuManager.ruleForm';
+  const resolvedSaveLabel = saveLabel ?? t(`${rf}.saveSectionDefault`);
   const uiLang = useUiLanguage();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
@@ -730,12 +734,12 @@ export function RecommendationRuleForm({
     <div className="space-y-4">
       {selectionType === 'MULTIPLE' ? (
         <div className="grid gap-2">
-          <Label>Multiple style</Label>
+          <Label>{t(`${rf}.multipleStyle`)}</Label>
           <div className="flex flex-col gap-2 sm:flex-row">
             {(
               [
-                ['CHECKBOX', 'Checkboxes (1 each)'],
-                ['QUANTITY', 'Plus / minus quantities'],
+                ['CHECKBOX', t(`${rf}.checkboxesOption`)],
+                ['QUANTITY', t(`${rf}.quantityOption`)],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -758,9 +762,9 @@ export function RecommendationRuleForm({
           selectedCategories.length > 0 ? (
             <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
               <div>
-                <Label>Free quantity</Label>
+                <Label>{t(`${rf}.freeQuantity`)}</Label>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  First N units free per category; extra units are charged.
+                  {t(`${rf}.freeQuantityHintCategory`)}
                 </p>
               </div>
               <div className="space-y-2">
@@ -817,7 +821,7 @@ export function RecommendationRuleForm({
                             }));
                           }}
                         />
-                        <span>No free items for this category</span>
+                        <span>{t(`${rf}.noFreeItemsCategory`)}</span>
                       </label>
                     </div>
                   );
@@ -837,7 +841,7 @@ export function RecommendationRuleForm({
           checked={required}
           onChange={(e) => setRequired(e.target.checked)}
         />
-        <span className="text-sm">Required before add to cart</span>
+        <span className="text-sm">{t(`${rf}.requiredBeforeCart`)}</span>
       </label>
 
       {sourceType === 'CATEGORY' ? (
@@ -845,34 +849,30 @@ export function RecommendationRuleForm({
           <div className="flex flex-col gap-2">
             <p className="text-xs text-muted-foreground">
               {recommendationCategories.length === 0
-                ? 'Add products to a category first, or link categories other than this product’s own.'
-                : 'All available categories are already used in another recommendation section for this product.'}
+                ? t(`${rf}.noCategoriesFirstHint`)
+                : t(`${rf}.allCategoriesUsedHint`)}
             </p>
             <Button type="button" asChild size="sm" variant="secondary" className="w-fit">
-              <Link href="/categories">Go to Categories</Link>
+              <Link href="/categories">{t(`${rf}.goToCategories`)}</Link>
             </Button>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="space-y-1">
             <p className="text-xs text-muted-foreground">
-              For each category, optionally choose a recommended variation
-              (e.g. Medium) and/or a default item. A recommended variation
-              filters add-ons to that size and applies it automatically at
-              checkout. When a default item is set, guests only see an extra
-              charge (+{currencySymbol}) for options priced above that default.
+              {t(`${rf}.recommendedVariationExplainer`, { symbol: currencySymbol })}
             </p>
             </div>
 
             <div>
               <p className="mb-2 text-xs font-medium text-muted-foreground">
-                Add-on categories (scrollable list)
+                {t(`${rf}.addonCategoriesLabel`)}
               </p>
               <SelectableList
                 search={categorySearch}
                 onSearchChange={setCategorySearch}
-                searchPlaceholder="Search categories…"
-                emptyMessage="No categories match your search."
+                searchPlaceholder={t(`${rf}.searchCategoriesPlaceholder`)}
+                emptyMessage={t(`${rf}.noCategoriesMatchSearch`)}
               >
                 {filteredAssignableCategories.map((cat) => {
                 const checked = ruleCategoryIds.includes(cat.id);
@@ -887,8 +887,8 @@ export function RecommendationRuleForm({
                       imageUrl={cat.imageUrl}
                       subtitle={
                         onMenu
-                          ? 'On customer menu'
-                          : 'Add-on only (hidden from browse)'
+                          ? t(`${rf}.onCustomerMenu`)
+                          : t(`${rf}.addonOnlyHidden`)
                       }
                       badge={
                         checked ? (
@@ -903,7 +903,7 @@ export function RecommendationRuleForm({
                         variant="outline"
                         className="shrink-0 text-[10px] font-normal"
                       >
-                        {onMenu ? 'On menu' : 'Add-on only'}
+                        {onMenu ? t(`${rf}.onMenuBadge`) : t(`${rf}.addonOnlyBadge`)}
                       </Badge>
                           </div>
                         ) : (
@@ -911,7 +911,7 @@ export function RecommendationRuleForm({
                             variant="outline"
                             className="shrink-0 text-[10px] font-normal"
                           >
-                            {onMenu ? 'On menu' : 'Add-on only'}
+                            {onMenu ? t(`${rf}.onMenuBadge`) : t(`${rf}.addonOnlyBadge`)}
                           </Badge>
                         )
                       }
@@ -924,12 +924,12 @@ export function RecommendationRuleForm({
 
             {ruleCategoryIds.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-center text-xs text-muted-foreground">
-                Select one or more categories from the scrollable list above to configure options, discounts, and variation settings.
+                {t(`${rf}.selectCategoriesHint`)}
               </div>
             ) : (
               <div className="space-y-3 pt-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Configuring Selected Categories ({ruleCategoryIds.length})
+                  {t(`${rf}.configuringSelectedCategories`, { count: ruleCategoryIds.length })}
                 </p>
                 <div className="space-y-4">
                   {ruleCategoryIds.map((catId, index) => {
@@ -964,7 +964,7 @@ export function RecommendationRuleForm({
                               {resolveBilingualText(cat.name, uiLang)}
                             </span>
                             <Badge variant="outline" className="text-[10px] shrink-0 font-normal">
-                              {onMenu ? 'On menu' : 'Add-on only'}
+                              {onMenu ? t(`${rf}.onMenuBadge`) : t(`${rf}.addonOnlyBadge`)}
                             </Badge>
                           </div>
                           <Button
@@ -974,7 +974,7 @@ export function RecommendationRuleForm({
                             className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
                             onClick={() => toggleCategory(cat.id)}
                           >
-                            Remove
+                            {t(`${rf}.remove`)}
                           </Button>
                         </div>
 
@@ -985,10 +985,10 @@ export function RecommendationRuleForm({
                               htmlFor={`category-discount-${cat.id}`}
                               className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
                             >
-                              Category discount (%)
+                              {t(`${rf}.categoryDiscountLabel`)}
                             </Label>
                             <p className="text-[11px] text-muted-foreground">
-                              Percent off every item in this category when guests add it.
+                              {t(`${rf}.categoryDiscountHint`)}
                             </p>
                             <Input
                               id={`category-discount-${cat.id}`}
@@ -997,7 +997,7 @@ export function RecommendationRuleForm({
                               max={100}
                               step={1}
                               className="h-10 bg-background text-sm"
-                              placeholder="No discount"
+                              placeholder={t(`${rf}.noDiscountPlaceholder`)}
                               value={
                                 categoryDiscountPercent[cat.id] != null
                                   ? String(categoryDiscountPercent[cat.id])
@@ -1030,10 +1030,10 @@ export function RecommendationRuleForm({
                               htmlFor={`category-extra-cost-${cat.id}`}
                               className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
                             >
-                              Category extra cost (%)
+                              {t(`${rf}.categoryExtraCostLabel`)}
                             </Label>
                             <p className="text-[11px] text-muted-foreground">
-                              Percentage markup added to items in this category (+).
+                              {t(`${rf}.categoryExtraCostHint`)}
                             </p>
                             <Input
                               id={`category-extra-cost-${cat.id}`}
@@ -1042,7 +1042,7 @@ export function RecommendationRuleForm({
                               max={500}
                               step={1}
                               className="h-10 bg-background text-sm"
-                              placeholder="No extra cost"
+                              placeholder={t(`${rf}.noExtraCostPlaceholder`)}
                               value={
                                 categoryExtraCostPercent[cat.id] != null
                                   ? String(categoryExtraCostPercent[cat.id])
@@ -1075,7 +1075,7 @@ export function RecommendationRuleForm({
                         {variationTemplatesLoading ? (
                           <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Loading variation options...
+                        {t(`${rf}.loadingVariationOptions`)}
                       </div>
                         ) : defaultVariationOptions.length > 0 ? (
                           <div className="space-y-2 border-t border-border pt-3">
@@ -1083,10 +1083,10 @@ export function RecommendationRuleForm({
                           htmlFor={`recommended-variation-${cat.id}`}
                           className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
                         >
-                          Recommended variation (optional)
+                          {t(`${rf}.recommendedVariationLabel`)}
                         </Label>
                         <p className="text-[11px] text-muted-foreground">
-                              Pick a size for this category (e.g. Medium). Only add-ons with that variation are shown, and it is applied automatically when the guest selects one.
+                              {t(`${rf}.recommendedVariationHint`)}
                         </p>
                         <Select
                           value={defaultVariationId || '__none__'}
@@ -1102,10 +1102,10 @@ export function RecommendationRuleForm({
                             id={`recommended-variation-${cat.id}`}
                             className="h-10 bg-background text-sm"
                           >
-                            <SelectValue placeholder="Select variation" />
+                            <SelectValue placeholder={t(`${rf}.selectVariationPlaceholder`)} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="__none__">None</SelectItem>
+                            <SelectItem value="__none__">{t(`${rf}.none`)}</SelectItem>
                             {defaultVariationOptions.map((option) => (
                               <SelectItem
                                 key={`${cat.id}-${option.restaurantVariationId}`}
@@ -1130,21 +1130,21 @@ export function RecommendationRuleForm({
                           />
                           <span className="text-xs">
                             <span className="font-medium text-foreground">
-                              Show recommended variation price
+                              {t(`${rf}.showRecommendedVariationPrice`)}
                             </span>
                             <span className="mt-0.5 block text-muted-foreground">
-                                  When unchecked, guests see base product prices only (the recommended size is free).
+                                  {t(`${rf}.showRecommendedVariationPriceHint`)}
                             </span>
                           </span>
                         </label>
                       </div>
                         ) : (
                           <p className="border-t border-border pt-3 text-[11px] text-muted-foreground">
-                        No variation templates yet. Add sizes on the{' '}
+                        {t(`${rf}.noVariationTemplatesHint`)}{' '}
                         <Link href="/variations" className="underline">
-                          Variations
+                          {t(`${rf}.variationsLinkLabel`)}
                         </Link>{' '}
-                            page, then pick a recommended variation for this category.
+                            {t(`${rf}.noVariationTemplatesHintSuffix`)}
                           </p>
                         )}
 
@@ -1152,12 +1152,12 @@ export function RecommendationRuleForm({
                         {categoryItemsLoading ? (
                           <div className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Loading category products...
+                        {t(`${rf}.loadingCategoryProducts`)}
                       </div>
                         ) : categoryItems.length > 0 ? (
                           <div className="max-h-40 space-y-1 overflow-y-auto border-t border-border pt-3">
                         <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Default item (optional)
+                          {t(`${rf}.defaultItemOptional`)}
                         </p>
                         <label
                           className={cn(
@@ -1175,7 +1175,7 @@ export function RecommendationRuleForm({
                             onChange={() => clearCategoryDefault(cat.id)}
                           />
                           <span className="italic text-muted-foreground">
-                            None
+                            {t(`${rf}.none`)}
                           </span>
                         </label>
                         {categoryItems.map((it) => (
@@ -1214,7 +1214,7 @@ export function RecommendationRuleForm({
                       </div>
                         ) : (
                       <p className="mt-2 text-xs text-destructive">
-                        Add products to this category first.
+                        {t(`${rf}.addProductsToCategoryFirst`)}
                       </p>
                         )}
 
@@ -1235,10 +1235,10 @@ export function RecommendationRuleForm({
                         />
                         <span className="text-xs">
                           <span className="font-medium text-foreground">
-                            Price add-ons by product variation
+                            {t(`${rf}.priceAddonsByVariation`)}
                           </span>
                           <span className="mt-0.5 block text-muted-foreground">
-                                Use each add-on&apos;s variation rate when the guest picks Small, Medium, or Large on this product.
+                                {t(`${rf}.priceAddonsByVariationHint`)}
                           </span>
                         </span>
                       </label>
@@ -1253,20 +1253,18 @@ export function RecommendationRuleForm({
         )
       ) : productPickerCategories.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No categories with products available.
+          {t(`${rf}.noCategoriesWithProducts`)}
         </p>
       ) : (
         <div className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Choose categories (including this product&apos;s category or
-            others), then pick one anchor product. Guests can choose from all
-            products in those categories except the item they are ordering.
+            {t(`${rf}.chooseCategoriesExplainer`)}
           </p>
           <SelectableList
             search={productFilterSearch}
             onSearchChange={setProductFilterSearch}
-            searchPlaceholder="Search categories to filter…"
-            emptyMessage="No categories match your search."
+            searchPlaceholder={t(`${rf}.searchCategoriesToFilter`)}
+            emptyMessage={t(`${rf}.noCategoriesMatchSearch`)}
           >
             {filteredProductPickerCategories.map((cat) => {
               const checked = productCategoryIds.includes(cat.id);
@@ -1278,7 +1276,7 @@ export function RecommendationRuleForm({
                   active={checked}
                   title={resolveBilingualText(cat.name, uiLang)}
                   imageUrl={cat.imageUrl}
-                  subtitle={onMenu ? 'On customer menu' : 'Add-on only'}
+                  subtitle={onMenu ? t(`${rf}.onCustomerMenu`) : t(`${rf}.addonOnlyShort`)}
                     onClick={() => toggleProductCategory(cat.id)}
                 />
               );
@@ -1287,11 +1285,11 @@ export function RecommendationRuleForm({
 
           {productCategoryIds.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Select at least one category to load products.
+              {t(`${rf}.selectAtLeastOneCategory`)}
             </p>
           ) : productsFromSelectedCategories.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No products in the selected categories (or already assigned).
+              {t(`${rf}.noProductsInSelectedCategories`)}
             </p>
           ) : variant === 'product-multiple' ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1328,7 +1326,7 @@ export function RecommendationRuleForm({
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                            No photo
+                            {t(`${rf}.noPhoto`)}
                           </div>
                         )}
                         {checked ? (
@@ -1396,7 +1394,7 @@ export function RecommendationRuleForm({
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                            No photo
+                            {t(`${rf}.noPhoto`)}
                           </div>
                         )}
                         <span
@@ -1434,9 +1432,9 @@ export function RecommendationRuleForm({
       !useVariationLimits ? (
         <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
           <div>
-            <p className="text-sm font-medium">Min / max</p>
+            <p className="text-sm font-medium">{t(`${rf}.minMax`)}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Minimum and maximum selections per category.
+              {t(`${rf}.minMaxHintCategory`)}
             </p>
           </div>
           <div className="space-y-2">
@@ -1456,7 +1454,7 @@ export function RecommendationRuleForm({
                     type="number"
                     min={0}
                     className="h-9"
-                    aria-label={`${catDisplayName} minimum`}
+                    aria-label={t(`${rf}.minimumAria`, { name: catDisplayName })}
                     maxLength={limits.maxItems.toString().length}
                     disabled={limits.minItems >= limits.maxItems}
                     value={limits.minItems}
@@ -1478,7 +1476,7 @@ export function RecommendationRuleForm({
                     type="number"
                     min={1}
                     className="h-9"
-                    aria-label={`${catDisplayName} maximum`}
+                    aria-label={t(`${rf}.maximumAria`, { name: catDisplayName })}
                     // minLength={limits.maxItems.toString().length}
                     disabled={limits.minItems >= limits.maxItems}
                     value={limits.maxItems}
@@ -1508,9 +1506,9 @@ export function RecommendationRuleForm({
           linkedProductIds.length > 0 ? (
             <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
               <div>
-                <Label>Free quantity</Label>
+                <Label>{t(`${rf}.freeQuantity`)}</Label>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  First N units free per linked product.
+                  {t(`${rf}.freeQuantityHintProduct`)}
                 </p>
               </div>
               <div className="space-y-2">
@@ -1540,7 +1538,7 @@ export function RecommendationRuleForm({
                             }));
                           }}
                         />
-                        <span>No free items for this product</span>
+                        <span>{t(`${rf}.noFreeItemsProduct`)}</span>
                       </label>
                       {!noFreeItems ? (
                         <Input
@@ -1576,9 +1574,9 @@ export function RecommendationRuleForm({
       linkedProductIds.length > 0 ? (
         <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
           <div>
-            <p className="text-sm font-medium">Min / max</p>
+            <p className="text-sm font-medium">{t(`${rf}.minMax`)}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Minimum and maximum selections per linked product.
+              {t(`${rf}.minMaxHintProduct`)}
             </p>
           </div>
           <div className="space-y-2">
@@ -1603,7 +1601,7 @@ export function RecommendationRuleForm({
                     type="number"
                     min={0}
                     className="h-9"
-                    aria-label={`${productDisplayName} minimum`}
+                    aria-label={t(`${rf}.minimumAria`, { name: productDisplayName })}
                     value={limits.minItems}
                     onChange={(e) => {
                       const val = Math.max(
@@ -1623,7 +1621,7 @@ export function RecommendationRuleForm({
                     type="number"
                     min={1}
                     className="h-9"
-                    aria-label={`${productDisplayName} maximum`}
+                    aria-label={t(`${rf}.maximumAria`, { name: productDisplayName })}
                     value={limits.maxItems}
                     onChange={(e) => {
                       const val = Math.max(
@@ -1650,10 +1648,10 @@ export function RecommendationRuleForm({
         <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
           <div>
             <p className="text-sm font-semibold text-foreground">
-              Category products: Free and Remove options
+              {t(`${rf}.freeAndRemoveTitle`)}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Checked "Remove" products will not show to customers in this recommendation. Checked "Free" products will show with zero price and add zero to cart.
+              {t(`${rf}.freeAndRemoveHint`)}
             </p>
           </div>
 
@@ -1667,13 +1665,13 @@ export function RecommendationRuleForm({
                     <span>{resolveBilingualText(cat.name, uiLang)}</span>
                     {loading && (
                       <span className="flex items-center gap-1 text-[11px] font-normal text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" /> Loading products…
+                        <Loader2 className="h-3 w-3 animate-spin" /> {t(`${rf}.loadingProducts`)}
                       </span>
                     )}
                   </div>
                   {products.length === 0 && !loading ? (
                     <p className="px-3 py-2 text-xs text-muted-foreground">
-                      No products found in this category.
+                      {t(`${rf}.noProductsInCategory`)}
                     </p>
                   ) : (
                     <ul className="divide-y divide-border">
@@ -1715,7 +1713,7 @@ export function RecommendationRuleForm({
                                   })
                                 }
                               />
-                              Free
+                              {t(`${rf}.free`)}
                             </label>
                             <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-foreground cursor-pointer">
                               <input
@@ -1729,7 +1727,7 @@ export function RecommendationRuleForm({
                                   })
                                 }
                               />
-                              Remove
+                              {t(`${rf}.remove`)}
                             </label>
                           </li>
                         );
@@ -1746,9 +1744,9 @@ export function RecommendationRuleForm({
       {useVariationLimits && selectedCategories.length > 0 ? (
         <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
           <div>
-            <p className="text-sm font-medium">Min / max</p>
+            <p className="text-sm font-medium">{t(`${rf}.minMax`)}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Per category and base-product variation.
+              {t(`${rf}.minMaxHintVariation`)}
             </p>
           </div>
           <div className="space-y-4">
@@ -1766,7 +1764,7 @@ export function RecommendationRuleForm({
                     const v = baseVariations.find(
                       (x) => x.id === row.variationId
                     );
-                    const label = v ? variationLabel(v) : 'Variation';
+                    const label = v ? variationLabel(v) : t(`${rf}.variationFallback`);
                     return (
                       <div
                         key={`${cat.id}-${row.variationId}`}
@@ -1779,7 +1777,7 @@ export function RecommendationRuleForm({
                           type="number"
                           min={0}
                           className="h-9"
-                          aria-label={`${catDisplayName} ${label} minimum`}
+                          aria-label={`${catDisplayName} ${label} ${t(`${rf}.minimumAria`, { name: '' }).trim()}`}
                           value={row.minItems}
                           onChange={(e) => {
                             const val = Math.max(
@@ -1805,7 +1803,7 @@ export function RecommendationRuleForm({
                           type="number"
                           min={1}
                           className="h-9"
-                          aria-label={`${catDisplayName} ${label} maximum`}
+                          aria-label={`${catDisplayName} ${label} ${t(`${rf}.maximumAria`, { name: '' }).trim()}`}
                           value={row.maxItems}
                           onChange={(e) => {
                             const val = Math.max(
@@ -1846,7 +1844,7 @@ export function RecommendationRuleForm({
             disabled={saving}
             onClick={onCancelEdit}
           >
-            Cancel edit
+            {t(`${rf}.cancelEdit`)}
           </Button>
         ) : null}
         <Button
@@ -1858,12 +1856,12 @@ export function RecommendationRuleForm({
         {saving ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Saving…
+            {t(`${rf}.saving`)}
           </>
         ) : (
           <>
             <Save className="mr-2 h-4 w-4" />
-            {saveLabel}
+            {resolvedSaveLabel}
           </>
         )}
       </Button>

@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/confirmation-dialogs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
 import { SearchField } from '@/components/ui/search-field';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { apiErrorMessage } from '@/lib/api-error-message';
@@ -32,6 +33,7 @@ import {
   serializeBilingualInput,
 } from '@/lib/menu/bilingual-text';
 import { filterNameTextInput } from '@/lib/validation/fields';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 
 import type { RestaurantVariationRow } from './types';
@@ -41,6 +43,7 @@ const PAGE_SIZE = 12;
 export function RestaurantVariationsPanel() {
   const { t } = useTranslation();
   const uiLang = useUiLanguage();
+  const { canCreateMore } = useEntitlements();
   const [rows, setRows] = useState<RestaurantVariationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -96,7 +99,7 @@ export function RestaurantVariationsPanel() {
       setRows(res.data.data ?? []);
       if (res.data.pagination) setPagination(res.data.pagination);
     } catch {
-      toast.error('Could not load variations.');
+      toast.error(t('dashboard.variations.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -120,12 +123,14 @@ export function RestaurantVariationsPanel() {
         name: serializeBilingualInput(name),
         shortLabel: shortLabel.trim() || null,
       });
-      toast.success('Variation created');
+      toast.success(t('dashboard.menuManager.variation.created'));
       setName('');
       setShortLabel('');
       await load();
     } catch (e: unknown) {
-      toast.error(apiErrorMessage(e, 'Could not create variation'));
+      toast.error(
+        apiErrorMessage(e, t('dashboard.menuManager.variation.createFailed'))
+      );
     } finally {
       setAdding(false);
     }
@@ -143,10 +148,10 @@ export function RestaurantVariationsPanel() {
         name: serializeBilingualInput(pendingSave.name),
         shortLabel: pendingSave.shortLabel.trim() || null,
       });
-      toast.success('Saved');
+      toast.success(t('dashboard.menuManager.saved'));
       await load();
     } catch {
-      toast.error('Could not save variation');
+      toast.error(t('dashboard.menuManager.variation.saveFailed'));
     } finally {
       setSaving(false);
       setConfirmSaveOpen(false);
@@ -225,20 +230,25 @@ export function RestaurantVariationsPanel() {
                   maxLength={20}
                 />
               </div>
-              <Button
-              type="button"
-              disabled={!canAdd}
-              onClick={() => setConfirmAddOpen(true)}
+              <PremiumDisabledControl
+              locked={!canCreateMore('variations', pagination.total)}
+              label={t('dashboard.menuManager.variation.add')}
             >
-              {adding ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" aria-hidden />
-              )}
-              {adding
-                ? t('dashboard.menuManager.adding')
-                : t('dashboard.menuManager.variation.add')}
-            </Button>
+              <Button
+                type="button"
+                disabled={!canAdd}
+                onClick={() => setConfirmAddOpen(true)}
+              >
+                {adding ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" aria-hidden />
+                )}
+                {adding
+                  ? t('dashboard.menuManager.adding')
+                  : t('dashboard.menuManager.variation.add')}
+              </Button>
+            </PremiumDisabledControl>
             </div>
            
           </div>

@@ -78,6 +78,61 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    const { getRestaurantEntitlements, moduleLimitFlag } = await import(
+      '@/lib/entitlements'
+    );
+    const { subscriptionPlanDeniedResponse } = await import(
+      '@/lib/subscription-plan-enforcement'
+    );
+    const entitlements = await getRestaurantEntitlements(auth.restaurant.id);
+    if (moduleLimitFlag(entitlements, 'basicSettings', 'orderChannelsLocked')) {
+      const turningOn = Object.values(parsed.data).some((v) => v === true);
+      if (turningOn) {
+        return subscriptionPlanDeniedResponse('Order channels');
+      }
+    }
+    const channelChecks: Array<{
+      enabled: boolean | undefined;
+      flag: string;
+      label: string;
+    }> = [
+      { enabled: parsed.data.dineInEnabled, flag: 'dineInChannel', label: 'Dine-in' },
+      {
+        enabled: parsed.data.deliveryEnabled,
+        flag: 'deliveryChannel',
+        label: 'Delivery',
+      },
+      { enabled: parsed.data.kdsEnabled, flag: 'kdsChannel', label: 'KDS' },
+      {
+        enabled: parsed.data.websiteEnabled,
+        flag: 'websiteChannel',
+        label: 'Website',
+      },
+      {
+        enabled: parsed.data.orderDisplayEnabled,
+        flag: 'orderDisplayChannel',
+        label: 'Order display',
+      },
+      {
+        enabled: parsed.data.cardPaymentsEnabled,
+        flag: 'cardPaymentChannel',
+        label: 'Card payments',
+      },
+      {
+        enabled: parsed.data.kioskEnabled,
+        flag: 'kioskUrl',
+        label: 'Kiosk',
+      },
+    ];
+    for (const check of channelChecks) {
+      if (check.enabled !== true) continue;
+      const flagValue =
+        entitlements.modules.basicSettings.limits?.[check.flag];
+      if (typeof flagValue === 'boolean' && !flagValue) {
+        return subscriptionPlanDeniedResponse(check.label);
+      }
+    }
+
     const updated = await db.restaurant.update({
       where: { id: auth.restaurant.id },
       data: parsed.data,

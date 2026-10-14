@@ -257,7 +257,7 @@ export function Header() {
                     <button
                       type="button"
                       className="inline-flex h-8 w-8 items-center justify-center text-primary-foreground transition hover:opacity-80"
-                      aria-label="Close"
+                      aria-label={t('closeAria')}
                     >
                       <X className="h-5 w-5" strokeWidth={2.5} />
                     </button>

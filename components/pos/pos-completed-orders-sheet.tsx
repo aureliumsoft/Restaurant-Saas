@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { CheckCircle2, Loader2, PackageCheck, Printer } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -51,12 +53,12 @@ function OrderSkeletonRow() {
   );
 }
 
-function sourceLabel(sourceType?: string): string {
+function sourceLabel(sourceType: string | undefined, t: TFunction): string {
   const s = String(sourceType ?? '').toUpperCase();
-  if (s === 'KIOSK') return 'Kiosk';
-  if (s === 'ONLINE') return 'Website';
-  if (s === 'POS') return 'POS';
-  return s || 'Order';
+  if (s === 'KIOSK') return t('pos.sheets.workingOrders.filterKiosk');
+  if (s === 'ONLINE') return t('pos.sheets.workingOrders.filterWebsite');
+  if (s === 'POS') return t('pos.sheets.workingOrders.filterPos');
+  return s || t('pos.sheets.completedOrders.order');
 }
 
 export function PosCompletedOrdersSheet({
@@ -67,6 +69,7 @@ export function PosCompletedOrdersSheet({
   branchName,
   logoUrl,
 }: Props) {
+  const { t } = useTranslation();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const { orders, loading, refreshing, refresh, removeOrder } =
     usePosCompletedOrders(branchId);
@@ -165,7 +168,7 @@ export function PosCompletedOrdersSheet({
           : detail.address
             ? 'delivery'
             : 'pos',
-        paymentMethodLabel: detail.paymentMethod ?? 'Cash',
+        paymentMethodLabel: detail.paymentMethod ?? t('pos.cash'),
         tableLabel: detail.tableLabel,
         customerName: detail.customerName,
         customerPhone: detail.customerPhone,
@@ -185,9 +188,9 @@ export function PosCompletedOrdersSheet({
         currencyCode: regional.currencyCode,
         countryCode: regional.countryCode,
       });
-      if (!ok) toast.error('Could not open print preview.');
+      if (!ok) toast.error(t('pos.toasts.couldNotOpenPrintPreview'));
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not print receipt.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotPrintReceipt')));
     } finally {
       setPrintBusyId(null);
     }
@@ -201,10 +204,10 @@ export function PosCompletedOrdersSheet({
       );
       removeOrder(order.id);
       setExtraOrders((prev) => prev.filter((o) => o.id !== order.id));
-      toast.success('Order marked as delivered.');
+      toast.success(t('pos.toasts.orderMarkedDelivered'));
       eventBus.emit('refreshRecentOrders');
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not mark order as delivered.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotMarkDelivered')));
     } finally {
       setDeliverBusyId(null);
     }
@@ -216,11 +219,10 @@ export function PosCompletedOrdersSheet({
         <SheetHeader className="shrink-0 border-b px-6 py-4 text-left">
           <SheetTitle className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5" />
-            Completed orders
+            {t('pos.sheets.completedOrders.title')}
           </SheetTitle>
           <SheetDescription>
-            Kitchen-finished orders ready to hand off. Mark delivered when the
-            customer receives their order.
+            {t('pos.sheets.completedOrders.description')}
           </SheetDescription>
         </SheetHeader>
 
@@ -236,14 +238,14 @@ export function PosCompletedOrdersSheet({
             </ul>
           ) : displayOrders.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No completed orders waiting for delivery.
+              {t('pos.sheets.completedOrders.noCompletedOrders')}
             </p>
           ) : (
             <ul className="divide-y rounded-xl border">
               {displayOrders.map((order) => {
                 const label =
                   order.ticketNumber != null
-                    ? `Token #${String(order.ticketNumber).padStart(2, '0')}`
+                    ? t('pos.sheets.completedOrders.tokenNumber', { number: String(order.ticketNumber).padStart(2, '0') })
                     : order.shortOrderId;
                 const printBusy = printBusyId === order.id;
                 const deliverBusy = deliverBusyId === order.id;
@@ -256,7 +258,7 @@ export function PosCompletedOrdersSheet({
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium">{label}</p>
                         <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                          {sourceLabel(order.sourceType)}
+                          {sourceLabel(order.sourceType, t)}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">
@@ -268,7 +270,7 @@ export function PosCompletedOrdersSheet({
                         {order.customerName ? ` · ${order.customerName}` : ''}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {order.itemCount} item{order.itemCount === 1 ? '' : 's'}
+                        {t('pos.itemCount', { count: order.itemCount })}
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-2">
@@ -281,7 +283,7 @@ export function PosCompletedOrdersSheet({
                           variant="outline"
                           size="icon"
                           className="h-8 w-8"
-                          title="Print receipt"
+                          title={t('pos.sheets.recentOrders.printReceipt')}
                           disabled={printBusy || deliverBusy}
                           onClick={() => void handlePrint(order)}
                         >
@@ -303,7 +305,7 @@ export function PosCompletedOrdersSheet({
                           ) : (
                             <PackageCheck className="h-4 w-4" />
                           )}
-                          Delivered
+                          {t('pos.sheets.completedOrders.delivered')}
                         </Button>
                       </div>
                     </div>
@@ -314,12 +316,12 @@ export function PosCompletedOrdersSheet({
           )}
           {loadingMore ? (
             <p className="py-3 text-center text-xs text-muted-foreground">
-              Loading more…
+              {t('pos.sheets.completedOrders.loadingMore')}
             </p>
           ) : null}
           {refreshing && displayOrders.length > 0 ? (
             <p className="py-2 text-center text-[10px] text-muted-foreground">
-              Updating…
+              {t('pos.sheets.completedOrders.updating')}
             </p>
           ) : null}
         </div>

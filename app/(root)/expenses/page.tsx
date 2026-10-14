@@ -198,7 +198,9 @@ export default function ExpensesPage() {
         setTotalPages(res.data.meta?.totalPages ?? 1);
         setPage(res.data.meta?.page ?? p);
       } catch (e) {
-        toast.error(extractApiErrorMessage(e, 'Could not load expenses.'));
+        toast.error(
+          extractApiErrorMessage(e, t('dashboard.expenses.loadFailed'))
+        );
       } finally {
         if (!opts?.silent) setLoading(false);
       }
@@ -235,11 +237,11 @@ export default function ExpensesPage() {
     const trimmedTitle = title.trim();
     const amt = Number(amount);
     if (!trimmedTitle) {
-      toast.error('Title is required.');
+      toast.error(t('dashboard.expenses.titleRequired'));
       return;
     }
     if (!Number.isFinite(amt) || amt < 0) {
-      toast.error('Enter a valid amount.');
+      toast.error(t('dashboard.expenses.invalidAmount'));
       return;
     }
     setSaving(true);
@@ -259,12 +261,14 @@ export default function ExpensesPage() {
             : undefined,
         }
       );
-      toast.success('Expense added.');
+      toast.success(t('dashboard.expenses.added'));
       setAddOpen(false);
       resetAddForm();
       void loadExpenses(1, { silent: true });
     } catch (e) {
-      toast.error(extractApiErrorMessage(e, 'Could not add expense.'));
+      toast.error(
+        extractApiErrorMessage(e, t('dashboard.expenses.addFailed'))
+      );
     } finally {
       setSaving(false);
     }
@@ -275,11 +279,13 @@ export default function ExpensesPage() {
     setDeleting(true);
     try {
       await axios.delete(`/api/restaurant/expenses/${deleteId}`);
-      toast.success('Expense deleted.');
+      toast.success(t('dashboard.expenses.deleted'));
       setDeleteId(null);
       void loadExpenses(page, { silent: true });
     } catch (e) {
-      toast.error(extractApiErrorMessage(e, 'Could not delete expense.'));
+      toast.error(
+        extractApiErrorMessage(e, t('dashboard.expenses.deleteFailed'))
+      );
     } finally {
       setDeleting(false);
     }
@@ -288,20 +294,28 @@ export default function ExpensesPage() {
   const filterHint = useMemo(() => {
     const parts: string[] = [];
     if (typeFilter !== 'all')
-      parts.push(typeFilter === 'INVENTORY' ? 'Inventory' : 'Manual');
-    if (fromDate || toDate) parts.push('date range');
+      parts.push(
+        typeFilter === 'INVENTORY'
+          ? t('dashboard.expenses.inventory')
+          : t('dashboard.expenses.manual')
+      );
+    if (fromDate || toDate) parts.push(t('dashboard.expenses.dateRange'));
     if (appliedSearch) parts.push(`“${appliedSearch}”`);
     if (activeBranchName) parts.push(activeBranchName);
-    return parts.length > 0 ? parts.join(' · ') : 'All expenses';
-  }, [typeFilter, fromDate, toDate, appliedSearch, activeBranchName]);
+    return parts.length > 0
+      ? parts.join(' · ')
+      : t('dashboard.expenses.allExpenses');
+  }, [typeFilter, fromDate, toDate, appliedSearch, activeBranchName, t]);
 
   return (
     <MenuPageShell
-      title="Expenses"
+      title={t('dashboard.expenses.title')}
       description={
         activeBranchName
-          ? `Track spending for ${activeBranchName}. Inventory restocks and manual costs.`
-          : 'Track inventory restock costs and manual expenses.'
+          ? t('dashboard.expenses.descriptionBranch', {
+              branch: activeBranchName,
+            })
+          : t('dashboard.expenses.description')
       }
       loading={branchLoading}
     >

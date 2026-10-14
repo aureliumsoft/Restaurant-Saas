@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ArrowRight, BookOpen, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -48,6 +49,7 @@ export function DocumentationModulesSection({
   modules = [],
   fallbackModules = [],
 }: Props) {
+  const { t } = useTranslation();
   const usingDynamic = modules.length > 0;
   const rows: (PublicDocModuleListItem | FallbackModule)[] = usingDynamic
     ? modules
@@ -92,7 +94,7 @@ export function DocumentationModulesSection({
         id: item.id,
         name: item.name,
         shortDescription: item.shortDescription,
-        contentHtml: '<p>Could not load details. Please try again.</p>',
+        contentHtml: `<p>${t('marketingExtras.documentation.modulesSection.loadDetailFailed')}</p>`,
       });
     } finally {
       setDetailLoading(false);
@@ -102,19 +104,17 @@ export function DocumentationModulesSection({
   return (
     <section id="modules" className="mt-16 scroll-mt-24">
       <h2 className="border-b border-zinc-200 pb-2 text-2xl font-semibold dark:border-zinc-800">
-        Dashboard modules
+        {t('marketingExtras.documentation.modulesSection.heading')}
       </h2>
       <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-        After you sign in and open the operator workspace, the sidebar lists
-        modules. Access depends on your role and your restaurant&apos;s
-        subscription tier. Open Read more for full detail.
+        {t('marketingExtras.documentation.modulesSection.intro')}
       </p>
 
       {rows.length === 0 ? (
         <div className="mt-10 rounded-2xl border border-dashed border-zinc-300 px-6 py-12 text-center dark:border-zinc-700">
           <BookOpen className="mx-auto h-10 w-10 text-zinc-400" />
           <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-            Documentation modules will appear here once published.
+            {t('marketingExtras.documentation.modulesSection.empty')}
           </p>
         </div>
       ) : (
@@ -143,7 +143,7 @@ export function DocumentationModulesSection({
                       variant="default"
                       onClick={() => void openReadMore(m)}
                     >
-                      Read more
+                      {t('marketingExtras.documentation.modulesSection.readMore')}
                       <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -174,7 +174,7 @@ export function DocumentationModulesSection({
               <div className="space-y-6 pt-1">
                 <section>
                   <p className="text-xs font-semibold uppercase tracking-wider text-fire-500">
-                    Overview
+                    {t('marketingExtras.documentation.modulesSection.overview')}
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                     {active.shortDescription}
@@ -182,7 +182,7 @@ export function DocumentationModulesSection({
                 </section>
                 <section className="border-t border-zinc-200 pt-5 dark:border-zinc-800">
                   <p className="text-xs font-semibold uppercase tracking-wider text-fire-500">
-                    Details
+                    {t('marketingExtras.documentation.modulesSection.details')}
                   </p>
                   {detailLoading ? (
                     <div className="mt-6 flex justify-center py-8">

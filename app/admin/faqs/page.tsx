@@ -50,6 +50,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
 type FaqItem = {
@@ -79,6 +80,7 @@ function reorderList(list: FaqItem[], fromId: string, toId: string): FaqItem[] {
 }
 
 export default function AdminFaqsPage() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<FaqItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -99,11 +101,11 @@ export default function AdminFaqsPage() {
       );
       setItems(rows);
     } catch {
-      toast.error('Could not load FAQs.');
+      toast.error(t('admin.faqsPage.loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -124,7 +126,7 @@ export default function AdminFaqsPage() {
       setItems(rows);
     } catch {
       setItems(prev);
-      toast.error('Could not reorder FAQs.');
+      toast.error(t('admin.faqsPage.reorderError'));
     } finally {
       setReordering(false);
       setDraggingId(null);
@@ -167,7 +169,7 @@ export default function AdminFaqsPage() {
 
   async function save() {
     if (!form.question.trim() || !form.answer.trim()) {
-      toast.error('Question and answer are required.');
+      toast.error(t('admin.faqsPage.validateRequired'));
       return;
     }
     setSaving(true);
@@ -180,7 +182,7 @@ export default function AdminFaqsPage() {
           sortOrder: existing?.sortOrder ?? 0,
           status: form.status,
         });
-        toast.success('FAQ updated.');
+        toast.success(t('admin.faqsPage.updatedToast'));
       } else {
         await axios.post('/api/admin/faqs', {
           question: form.question.trim(),
@@ -188,13 +190,13 @@ export default function AdminFaqsPage() {
           sortOrder: items.length,
           status: form.status,
         });
-        toast.success('FAQ created.');
+        toast.success(t('admin.faqsPage.createdToast'));
       }
       setDialogOpen(false);
       setLoading(true);
       await load();
     } catch {
-      toast.error('Could not save FAQ.');
+      toast.error(t('admin.faqsPage.saveError'));
     } finally {
       setSaving(false);
     }
@@ -206,11 +208,13 @@ export default function AdminFaqsPage() {
     try {
       await axios.patch(`/api/admin/faqs/${item.id}`, { status: next });
       toast.success(
-        next === 'PUBLISHED' ? 'FAQ published.' : 'FAQ set to draft.'
+        next === 'PUBLISHED'
+          ? t('admin.faqsPage.publishedToast')
+          : t('admin.faqsPage.draftedToast')
       );
       await load();
     } catch {
-      toast.error('Could not update status.');
+      toast.error(t('admin.docsPage.statusUpdateError'));
     } finally {
       setBusyId(null);
     }
@@ -221,11 +225,11 @@ export default function AdminFaqsPage() {
     setBusyId(deleteId);
     try {
       await axios.delete(`/api/admin/faqs/${deleteId}`);
-      toast.success('FAQ deleted.');
+      toast.success(t('admin.faqsPage.deletedToast'));
       setDeleteId(null);
       await load();
     } catch {
-      toast.error('Could not delete FAQ.');
+      toast.error(t('admin.faqsPage.deleteError'));
     } finally {
       setBusyId(null);
     }
@@ -234,9 +238,9 @@ export default function AdminFaqsPage() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        eyebrow="Content"
-        title="FAQs"
-        description="Drag items up or down to set the order on the landing page."
+        eyebrow={t('admin.faqsPage.eyebrow')}
+        title={t('admin.faqsPage.title')}
+        description={t('admin.faqsPage.description')}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -253,7 +257,7 @@ export default function AdminFaqsPage() {
             </Button>
             <Button type="button" variant="default" onClick={openCreate}>
               <Plus className="mr-2 h-4 w-4" />
-              Add FAQ
+              {t('admin.faqsPage.addFaq')}
             </Button>
           </div>
         }
@@ -268,17 +272,16 @@ export default function AdminFaqsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <HelpCircle className="h-5 w-5 text-muted-foreground" />
-              No FAQs yet
+              {t('admin.faqsPage.emptyTitle')}
             </CardTitle>
             <CardDescription>
-              Add FAQs here to replace the default marketing copy on the landing
-              page.
+              {t('admin.faqsPage.emptyDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button type="button" onClick={openCreate}>
               <Plus className="mr-2 h-4 w-4" />
-              Add FAQ
+              {t('admin.faqsPage.addFaq')}
             </Button>
           </CardContent>
         </Card>
@@ -310,7 +313,7 @@ export default function AdminFaqsPage() {
                   <div className="flex min-w-0 flex-1 items-start gap-2">
                     <div
                       className="mt-0.5 flex shrink-0 cursor-grab items-center gap-1 text-muted-foreground active:cursor-grabbing"
-                      title="Drag to reorder"
+                      title={t('admin.faqsPage.dragReorder')}
                     >
                       <div className="flex flex-col items-center">
                         <div className="flex flex-wrap items-center">
@@ -325,7 +328,7 @@ export default function AdminFaqsPage() {
                             size="sm"
                             variant="ghost"
                             disabled={reordering || index === 0}
-                            title="Move up"
+                            title={t('admin.docsHeadings.moveUp')}
                             onClick={() => moveBy(item.id, -1)}
                             className="p-0 w-7 h-7"
                           >
@@ -336,7 +339,7 @@ export default function AdminFaqsPage() {
                             size="sm"
                             variant="ghost"
                             disabled={reordering || index === items.length - 1}
-                            title="Move down"
+                            title={t('admin.docsHeadings.moveDown')}
                             onClick={() => moveBy(item.id, 1)}
                             className="p-0 w-7 h-7"
                           >
@@ -354,7 +357,9 @@ export default function AdminFaqsPage() {
                               : 'secondary'
                           }
                         >
-                          {item.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                          {item.status === 'PUBLISHED'
+                            ? t('admin.docsPage.statusPublished')
+                            : t('admin.docsPage.statusDraft')}
                         </Badge>
                       </div>
                       <CardTitle className="text-base leading-snug">
@@ -382,7 +387,9 @@ export default function AdminFaqsPage() {
                       ) : (
                         <Send className="mr-1.5 h-3.5 w-3.5" />
                       )}
-                      {item.status === 'PUBLISHED' ? 'Make draft' : 'Publish'}
+                      {item.status === 'PUBLISHED'
+                        ? t('admin.docsPage.makeDraft')
+                        : t('admin.docsPage.publish')}
                     </Button>
                     <Button
                       type="button"
@@ -411,7 +418,7 @@ export default function AdminFaqsPage() {
           {reordering ? (
             <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Saving order…
+              {t('admin.docsHeadings.savingOrder')}
             </p>
           ) : null}
         </div>
@@ -420,36 +427,36 @@ export default function AdminFaqsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingId ? 'Edit FAQ' : 'Add FAQ'}</DialogTitle>
+            <DialogTitle>{editingId ? t('admin.faqsPage.editFaq') : t('admin.faqsPage.addFaq')}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
-              <Label htmlFor="faq-question">Question</Label>
+              <Label htmlFor="faq-question">{t('admin.faqsPage.questionLabel')}</Label>
               <Input
                 id="faq-question"
                 value={form.question}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, question: e.target.value }))
                 }
-                placeholder="How long does it take to go live?"
+                placeholder={t('admin.faqsPage.questionPlaceholder')}
                 maxLength={500}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="faq-answer">Answer</Label>
+              <Label htmlFor="faq-answer">{t('admin.faqsPage.answerLabel')}</Label>
               <Textarea
                 id="faq-answer"
                 value={form.answer}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, answer: e.target.value }))
                 }
-                placeholder="Most restaurants launch in under 15 minutes…"
+                placeholder={t('admin.faqsPage.answerPlaceholder')}
                 className="min-h-[140px]"
                 maxLength={10_000}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="faq-status">Status</Label>
+              <Label htmlFor="faq-status">{t('admin.dashboard.colStatus')}</Label>
               <select
                 id="faq-status"
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
@@ -462,14 +469,14 @@ export default function AdminFaqsPage() {
                 }
               >
                 <option className="text-black" value="PUBLISHED">
-                  Published
+                  {t('admin.docsPage.statusPublished')}
                 </option>
                 <option className="text-black" value="DRAFT">
-                  Draft
+                  {t('admin.docsPage.statusDraft')}
                 </option>
               </select>
               <p className="text-xs text-muted-foreground">
-                Order is set by dragging cards on the list (up / down).
+                {t('admin.faqsPage.orderHint')}
               </p>
             </div>
           </div>
@@ -481,18 +488,18 @@ export default function AdminFaqsPage() {
               disabled={saving}
             >
               <X className="mr-2 h-4 w-4" />
-              Cancel
+              {t('cancel')}
             </Button>
             <Button type="button" disabled={saving} onClick={() => void save()}>
               {saving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving…
+                  {t('admin.docsForm.saving')}
                 </>
               ) : (
                 <>
                   <Save className="mr-2 h-4 w-4" />
-                  Save FAQ
+                  {t('admin.faqsPage.saveFaq')}
                 </>
               )}
             </Button>
@@ -508,13 +515,13 @@ export default function AdminFaqsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete FAQ?</AlertDialogTitle>
+            <AlertDialogTitle>{t('admin.faqsPage.deleteConfirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes the FAQ from the landing page.
+              {t('admin.faqsPage.deleteConfirmDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <AlertDialogCancel type="button">{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               type="button"
               onClick={(e) => {
@@ -522,7 +529,7 @@ export default function AdminFaqsPage() {
                 void confirmDelete();
               }}
             >
-              Delete
+              {t('admin.docsPage.deleteAction')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

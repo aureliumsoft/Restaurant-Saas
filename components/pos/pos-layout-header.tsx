@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LayoutDashboard } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { ModeToggle } from '@/components/darkmode/darkmode';
 import UserMenu from '@/components/dashboard/UserMenu';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ import { OperationalHeaderRestaurantBrand } from '@/components/layout/operationa
 import { usePosCartGuard } from '@/components/pos/pos-cart-guard-context';
 
 export function PosLayoutHeader() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { posCartHasItems } = usePosCartGuard();
   const [leaveOpen, setLeaveOpen] = useState(false);
@@ -40,21 +42,20 @@ export function PosLayoutHeader() {
   return (
     <header
       className="flex h-14 shrink-0 items-center gap-3 border-b bg-card/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-card/60"
-      aria-label="Point of sale"
+      aria-label={t('pos.toolbar.pointOfSale')}
     >
       <AlertDialog open={leaveOpen} onOpenChange={setLeaveOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard POS cart?</AlertDialogTitle>
+            <AlertDialogTitle>{t('pos.dialogs.discardCart.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              You have items in the cart that are not saved yet. Going to the dashboard will clear this sale from the
-              screen. Save the order first if you need to keep it.
+              {t('pos.dialogs.discardCart.description')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel type="button">Stay on POS</AlertDialogCancel>
+            <AlertDialogCancel type="button">{t('pos.dialogs.discardCart.stayOnPos')}</AlertDialogCancel>
             <AlertDialogAction type="button" onClick={confirmLeaveToDashboard}>
-              Leave and lose cart
+              {t('pos.dialogs.discardCart.leaveAndLoseCart')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -66,18 +67,18 @@ export function PosLayoutHeader() {
           type="button"
           variant="ghost"
           className="hidden gap-1.5 text-muted-foreground sm:inline-flex"
-          title="Back to dashboard"
+          title={t('pos.backToDashboard')}
           onClick={requestDashboard}
         >
           <LayoutDashboard className="h-4 w-4" />
-          Dashboard
+          {t('pos.toolbar.dashboard')}
         </Button>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="sm:hidden"
-          aria-label="Dashboard"
+          aria-label={t('pos.toolbar.dashboard')}
           onClick={requestDashboard}
         >
           <LayoutDashboard className="h-4 w-4" />

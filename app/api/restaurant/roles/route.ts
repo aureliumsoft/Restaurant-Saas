@@ -69,6 +69,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const existingRoleCount = await db.role.count({
+    where: { restaurantId: auth.restaurantId },
+  });
+  const { assertCreateCap } = await import(
+    '@/lib/subscription-plan-enforcement'
+  );
+  const limitDenied = await assertCreateCap(
+    auth.restaurantId,
+    'roles',
+    existingRoleCount,
+    'Roles'
+  );
+  if (limitDenied) return limitDenied;
+
   const permissionNames = normalizeDashboardPermissions(
     parsed.data.permissions ?? []
   );

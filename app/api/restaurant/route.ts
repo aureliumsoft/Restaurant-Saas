@@ -9,7 +9,7 @@ import { ensurePresetRolesAndOwnerEmployee } from "@/lib/restaurant-roles";
 import { getRestaurantForOwnerRequest } from "@/lib/restaurant/ownerRestaurant";
 import { normalizeThemePrimaryColor } from "@/lib/restaurant-theme";
 import { RESTAURANT_THEME_CACHE_TAG } from "@/lib/load-restaurant-theme-primary";
-import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from "@/lib/subscription-plan-enforcement";
+import { getRestaurantPlanFeatures, subscriptionLimitDeniedResponse, subscriptionPlanDeniedResponse } from "@/lib/subscription-plan-enforcement";
 import {
   parseRestaurantRegionalSettings,
   RESTAURANT_REGIONAL_DB_SELECT,
@@ -128,6 +128,10 @@ export async function PATCH(req: NextRequest) {
     }
 
     const planFeatures = await getRestaurantPlanFeatures(auth.restaurant.id);
+    const { getRestaurantEntitlements, canCreateCap } = await import(
+      "@/lib/entitlements"
+    );
+    const entitlements = await getRestaurantEntitlements(auth.restaurant.id);
 
     const json = await req.json().catch(() => null);
     const parsed = brandingPatchSchema.safeParse(json);
@@ -172,13 +176,24 @@ export async function PATCH(req: NextRequest) {
       data.logoUrl = logoUrl.trim() === "" ? null : logoUrl.trim();
     }
     if (mainBannerUrl !== undefined) {
-      data.mainBannerUrl =
+      const trimmed =
         mainBannerUrl.trim() === "" ? null : mainBannerUrl.trim();
+      if (trimmed && !entitlements.caps.mainBanner) {
+        return subscriptionPlanDeniedResponse("Main banner");
+      }
+      data.mainBannerUrl = trimmed;
     }
     if (menuBannerUrls !== undefined) {
-      data.menuBannerUrls = menuBannerUrls
+      const cleaned = menuBannerUrls
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
+      if (
+        cleaned.length > 0 &&
+        !canCreateCap(entitlements, "menuBanners", cleaned.length - 1)
+      ) {
+        return subscriptionLimitDeniedResponse("Menu banners");
+      }
+      data.menuBannerUrls = cleaned;
     }
     if (themePrimaryColor !== undefined) {
       const normalized = normalizeThemePrimaryColor(themePrimaryColor);

@@ -189,6 +189,20 @@ export async function POST(req: NextRequest) {
       : null;
 
   try {
+    const { getRestaurantEntitlements, canCreateCap } = await import(
+      '@/lib/entitlements'
+    );
+    const {
+      subscriptionLimitDeniedResponse,
+    } = await import('@/lib/subscription-plan-enforcement');
+    const entitlements = await getRestaurantEntitlements(auth.restaurant.id);
+    const existingCount = await db.menuCategory.count({
+      where: { restaurantId: auth.restaurant.id },
+    });
+    if (!canCreateCap(entitlements, 'categories', existingCount)) {
+      return subscriptionLimitDeniedResponse('Categories');
+    }
+
     const lastCategory = await db.menuCategory.findFirst({
       where: { restaurantId: auth.restaurant.id },
       orderBy: { sortOrder: 'desc' },

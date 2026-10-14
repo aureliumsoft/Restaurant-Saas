@@ -151,7 +151,7 @@ export default function Footer() {
             {t('marketing.footer.rights', { year: new Date().getFullYear() })}
           </p>
           <div className="flex items-center gap-2 text-xs">
-            <span>Launched by</span>
+            <span>{t('marketing.footer.launchedBy')}</span>
             <Link
               href="https://aureliumsoft.com"
               target="_blank"

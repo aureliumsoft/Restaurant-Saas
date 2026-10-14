@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Loader2, Shield } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { isPlatformAdminSession } from '@/lib/auth/admin';
 
 export function AdminGate({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const { data: session, status } = useSession();
 
   if (status === 'loading') {
@@ -24,9 +26,9 @@ export function AdminGate({ children }: { children: React.ReactNode }) {
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-fire-500/10">
           <Shield className="h-7 w-7 text-fire-600 dark:text-fire-400" />
         </div>
-        <p className="text-muted-foreground">Sign in to access Foodluk admin.</p>
+        <p className="text-muted-foreground">{t('admin.gate.signInPrompt')}</p>
         <Button asChild>
-          <Link href="/login?callbackUrl=/admin/dashboard">Sign in</Link>
+          <Link href="/login?callbackUrl=/admin/dashboard">{t('admin.gate.signIn')}</Link>
         </Button>
       </div>
     );
@@ -39,17 +41,18 @@ export function AdminGate({ children }: { children: React.ReactNode }) {
           <Shield className="h-7 w-7 text-fire-600 dark:text-fire-400" />
         </div>
         <div className="space-y-2">
-          <p className="text-lg font-semibold">Access denied</p>
+          <p className="text-lg font-semibold">{t('admin.gate.accessDenied')}</p>
           <p className="max-w-md text-sm text-muted-foreground">
-            This area is for platform administrators only. Use account role{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ADMIN</code> or set{' '}
+            {t('admin.gate.accessDeniedHintPrefix')}{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ADMIN</code>{' '}
+            {t('admin.gate.accessDeniedHintOr')}{' '}
             <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ADMIN_EMAIL</code> /{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ADMIN_EMAILS</code> in the
-            environment.
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ADMIN_EMAILS</code>{' '}
+            {t('admin.gate.accessDeniedHintSuffix')}
           </p>
         </div>
         <Button variant="outline" asChild>
-          <Link href="/">Back to home</Link>
+          <Link href="/">{t('admin.gate.backToHome')}</Link>
         </Button>
       </div>
     );

@@ -106,6 +106,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
   }
 
+  const existingCount = await db.menuItem.count({
+    where: { restaurantId: auth.restaurant.id },
+  });
+  const { assertCreateCap } = await import(
+    "@/lib/subscription-plan-enforcement"
+  );
+  const limitDenied = await assertCreateCap(
+    auth.restaurant.id,
+    "products",
+    existingCount,
+    "Products"
+  );
+  if (limitDenied) return limitDenied;
+
   const imageUrl =
     parsed.data.imageUrl && parsed.data.imageUrl.length > 0 ? parsed.data.imageUrl : null;
   const description =

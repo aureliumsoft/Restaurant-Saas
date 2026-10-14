@@ -47,6 +47,47 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const {
+    assertModuleNotPaid,
+    assertCanConfigureOnlinePayment,
+  } = await import('@/lib/subscription-plan-enforcement');
+
+  const terminalIp =
+    typeof parsed.data.paymentTerminalIp === 'string'
+      ? parsed.data.paymentTerminalIp.trim()
+      : parsed.data.paymentTerminalIp;
+  if (terminalIp) {
+    const terminalDenied = await assertModuleNotPaid(
+      session.ctx.restaurant.id,
+      'terminalPayment',
+      'Terminal payment'
+    );
+    if (terminalDenied) return terminalDenied;
+  }
+
+  if (parsed.data.provider !== CustomerPaymentProvider.NONE) {
+    const onlinePaid = await assertModuleNotPaid(
+      session.ctx.restaurant.id,
+      'onlinePayments',
+      'Online payments'
+    );
+    if (onlinePaid) return onlinePaid;
+  }
+
+  const providerKey =
+    parsed.data.provider === CustomerPaymentProvider.STRIPE
+      ? 'stripe'
+      : parsed.data.provider === CustomerPaymentProvider.PAYPAL
+        ? 'paypal'
+        : null;
+  if (providerKey) {
+    const onlineDenied = await assertCanConfigureOnlinePayment(
+      session.ctx.restaurant.id,
+      providerKey
+    );
+    if (onlineDenied) return onlineDenied;
+  }
+
   try {
     await setRestaurantPaymentProvider(
       session.ctx.restaurant.id,

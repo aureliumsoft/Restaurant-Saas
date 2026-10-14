@@ -141,7 +141,7 @@ export function KdsManagerBoard() {
       setOrders(json.data ?? []);
     } catch {
       setOrders([]);
-      toast.error('Could not load pending orders.');
+      toast.error(t('kds.errorLoadPendingOrders'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -183,15 +183,16 @@ export function KdsManagerBoard() {
   async function proceed(orderId: string): Promise<boolean> {
     const order = orders.find((o) => o.id === orderId);
     if (order && isPendingPaymentStatus(order.paymentStatus)) {
-      toast.warn(
-        'Payment is still pending. Complete payment in POS before proceeding.'
-      );
+      toast.warn(t('kds.paymentPendingWarning'));
       return false;
     }
     const minutes = resolveMinutesForOrder(orderId);
     if (minutes === null) {
       toast.warn(
-        `Enter a valid prep time (${MIN_CUSTOM_MINUTES}–${MAX_CUSTOM_MINUTES} minutes), or use a preset.`
+        t('kds.invalidPrepTime', {
+          min: MIN_CUSTOM_MINUTES,
+          max: MAX_CUSTOM_MINUTES,
+        })
       );
       return false;
     }
@@ -210,11 +211,11 @@ export function KdsManagerBoard() {
         toast.error(await kdsFetchErrorMessage(res, 'proceed'));
         return false;
       }
-      toast.success('Order sent to kitchen');
+      toast.success(t('kds.orderSentToKitchen'));
       await load();
       return true;
     } catch {
-      toast.error('Could not proceed order.');
+      toast.error(t('kds.errorProceedOrder'));
       return false;
     } finally {
       setActiveSubmitCount((prev) => {
@@ -241,11 +242,11 @@ export function KdsManagerBoard() {
         toast.error(await kdsFetchErrorMessage(res, 'cancel'));
         return false;
       }
-      toast.success('Order canceled');
+      toast.success(t('kds.orderCanceled'));
       await load();
       return true;
     } catch {
-      toast.error('Could not cancel order.');
+      toast.error(t('kds.errorCancelOrder'));
       return false;
     } finally {
       setActiveCancelCount((prev) => {
@@ -501,15 +502,16 @@ export function KdsManagerBoard() {
                           }
                           onClick={() => {
                             if (paymentPending) {
-                              toast.warn(
-                                'Payment is still pending. Complete payment in POS before proceeding.'
-                              );
+                              toast.warn(t('kds.paymentPendingWarning'));
                               return;
                             }
                             const minutes = resolveMinutesForOrder(o.id);
                             if (minutes === null) {
                               toast.warn(
-                                `Enter a valid prep time (${MIN_CUSTOM_MINUTES}–${MAX_CUSTOM_MINUTES} minutes), or use a preset.`
+                                t('kds.invalidPrepTime', {
+                                  min: MIN_CUSTOM_MINUTES,
+                                  max: MAX_CUSTOM_MINUTES,
+                                })
                               );
                               return;
                             }
@@ -590,7 +592,7 @@ export function KdsManagerBoard() {
         itemName={pendingAction?.label}
         detail={
           pendingAction?.kind === 'proceed' && pendingAction.minutes != null
-            ? `Prep time: ${pendingAction.minutes} minutes`
+            ? t('kds.prepTimeDetail', { minutes: pendingAction.minutes })
             : undefined
         }
         loading={

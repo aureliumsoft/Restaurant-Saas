@@ -32,7 +32,9 @@ import {
 import { useStaffPermissions } from '@/hooks/use-staff-permissions';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
+import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
 import { TablesModule } from '@/components/dashboard/tables/tables-module';
 import { timezoneForRestaurantCountry } from '@/lib/restaurant-regional';
 import {
@@ -112,6 +114,7 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation();
   const weekdayLabels = useMemo(() => weekdayLabelsFor(t), [t]);
   const { plan } = useStaffPermissions();
+  const { canCreateMore } = useEntitlements();
   const { regional } = useOwnerRestaurantRegional();
   const { branches: scopedBranches } = useBranchContext();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
@@ -362,14 +365,19 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <CardTitle>{t('dashboard.branches.management')}</CardTitle>
-          <Button
-            type="button"
-            onClick={openAddForm}
-            disabled={loading || atBranchLimit}
+          <PremiumDisabledControl
+            locked={!canCreateMore('branches', branches.length)}
+            label={t('dashboard.branches.addNew')}
           >
-            <Plus className="mr-2 h-4 w-4" />
-            {t('dashboard.branches.addNew')}
-          </Button>
+            <Button
+              type="button"
+              onClick={openAddForm}
+              disabled={loading || atBranchLimit}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              {t('dashboard.branches.addNew')}
+            </Button>
+          </PremiumDisabledControl>
         </CardHeader>
         <CardContent className="space-y-4">
           {!loading && atBranchLimit ? (

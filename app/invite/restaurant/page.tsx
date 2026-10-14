@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Check, Loader2, LogOut } from 'lucide-react';
@@ -16,6 +17,7 @@ type VerifyPayload = {
 };
 
 function InviteRestaurantContent() {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const router = useRouter();
@@ -28,7 +30,7 @@ function InviteRestaurantContent() {
 
   useEffect(() => {
     if (!token) {
-      setVerifyError('Missing invitation link. Open the link from your email.');
+      setVerifyError(t('inviteRestaurant.missingLink'));
       setLoading(false);
       return;
     }
@@ -44,7 +46,7 @@ function InviteRestaurantContent() {
             setVerifyError(
               typeof data?.error === 'string'
                 ? data.error
-                : 'This invitation is not valid.'
+                : t('inviteRestaurant.invalidInvitation')
             );
           }
           return;
@@ -58,7 +60,7 @@ function InviteRestaurantContent() {
         }
       } catch {
         if (!cancelled) {
-          setVerifyError('Could not load invitation.');
+          setVerifyError(t('inviteRestaurant.loadFailed'));
         }
       } finally {
         if (!cancelled) {
@@ -69,7 +71,7 @@ function InviteRestaurantContent() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, t]);
 
   async function accept() {
     if (!token) return;
@@ -85,14 +87,14 @@ function InviteRestaurantContent() {
         toast.error(
           typeof data?.error === 'string'
             ? data.error
-            : 'Could not accept invitation.'
+            : t('inviteRestaurant.acceptFailed')
         );
         return;
       }
-      toast.success('You have joined the restaurant.');
+      toast.success(t('inviteRestaurant.joined'));
       router.push('/dashboard');
     } catch {
-      toast.error('Could not accept invitation.');
+      toast.error(t('inviteRestaurant.acceptFailed'));
     } finally {
       setAccepting(false);
     }
@@ -120,15 +122,15 @@ function InviteRestaurantContent() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-muted/40 p-6">
         <div className="max-w-md rounded-lg border bg-card p-6 shadow-sm">
-          <h1 className="text-lg font-semibold">Invitation unavailable</h1>
+          <h1 className="text-lg font-semibold">{t('inviteRestaurant.unavailableTitle')}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {verifyError ??
               (!token
-                ? 'Open the link from your invitation email.'
-                : 'This invitation could not be loaded.')}
+                ? t('inviteRestaurant.openFromEmail')
+                : t('inviteRestaurant.couldNotLoad'))}
           </p>
           <Button asChild className="mt-4" variant="outline">
-            <Link href="/login">Back to sign in</Link>
+            <Link href="/login">{t('inviteRestaurant.backToSignIn')}</Link>
           </Button>
         </div>
       </main>
@@ -138,10 +140,14 @@ function InviteRestaurantContent() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/40 p-6">
       <div className="max-w-md rounded-lg border bg-card p-6 shadow-sm">
-        <h1 className="text-lg font-semibold">Join {verify.restaurantName}</h1>
+        <h1 className="text-lg font-semibold">
+          {t('inviteRestaurant.joinTitle', { restaurantName: verify.restaurantName })}
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          You have been invited as <strong>{verify.roleName}</strong>. This
-          invite is for <strong>{verify.email}</strong>.
+          {t('inviteRestaurant.invitedAs', {
+            roleName: verify.roleName,
+            email: verify.email,
+          })}
         </p>
 
         {status === 'loading' ? (
@@ -149,7 +155,7 @@ function InviteRestaurantContent() {
         ) : status === 'unauthenticated' ? (
           <div className="mt-4 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Sign in with the invited email to accept.
+              {t('inviteRestaurant.signInToAccept')}
             </p>
             <Button asChild className="w-full">
               <Link
@@ -157,15 +163,17 @@ function InviteRestaurantContent() {
                   `/invite/restaurant?token=${encodeURIComponent(token)}`
                 )}`}
               >
-                Sign in
+                {t('inviteRestaurant.signIn')}
               </Link>
             </Button>
           </div>
         ) : !emailMatches ? (
           <div className="mt-4 space-y-3">
             <p className="text-sm text-amber-700 dark:text-amber-400">
-              You are signed in as {sessionEmail}. Sign out and sign in as{' '}
-              {verify.email}, or open this link in a private window.
+              {t('inviteRestaurant.signedInAs', {
+                sessionEmail,
+                email: verify.email,
+              })}
             </p>
             <Button
               variant="outline"
@@ -174,7 +182,7 @@ function InviteRestaurantContent() {
             >
               <>
                 <LogOut className="h-4 w-4 mr-2" />
-                <span>Sign out</span>
+                <span>{t('inviteRestaurant.signOut')}</span>
               </>
             </Button>
           </div>
@@ -187,12 +195,12 @@ function InviteRestaurantContent() {
             {accepting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Accepting…
+                {t('inviteRestaurant.accepting')}
               </>
             ) : (
               <>
                 <Check className="h-4 w-4 mr-2" />
-                <span>Accept invitation</span>
+                <span>{t('inviteRestaurant.acceptInvitation')}</span>
               </>
             )}
           </Button>

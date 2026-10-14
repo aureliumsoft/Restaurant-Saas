@@ -1,13 +1,16 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { SubscriptionPlan } from '@prisma/client';
 
 import { getAppSession } from '@/lib/auth/app-session';
 import { db } from '@/lib/db';
-import { SubscriptionPlan } from '@prisma/client';
-
+import {
+  entitlementsToClientPayload,
+  getRestaurantEntitlements,
+  resolveEntitlements,
+} from '@/lib/entitlements';
 import { getEffectiveDashboardPermissionNames } from '@/lib/restaurant-roles';
 import { getRestaurantForUser } from '@/lib/restaurant-owner';
-import { getPlanFeatures } from '@/lib/subscription-plan-features';
 
 export async function GET(_req: NextRequest) {
   try {
@@ -27,40 +30,22 @@ export async function GET(_req: NextRequest) {
 
     const restaurant = await getRestaurantForUser(user.id);
     if (!restaurant) {
-      const f0 = getPlanFeatures(SubscriptionPlan.STARTER);
       return NextResponse.json({
         permissions: [],
-        plan: {
-          maxBranches: f0.maxBranches,
-          recommendations: f0.recommendations,
-          roleBasedSettings: f0.roleBasedSettings,
-          branding: f0.branding,
-          advancedAnalytics: f0.advancedAnalytics,
-          mobileApp: f0.mobileApp,
-        },
+        plan: entitlementsToClientPayload(
+          resolveEntitlements(SubscriptionPlan.FREE)
+        ),
       });
     }
 
-    const [permissions, sub] = await Promise.all([
+    const [permissions, entitlements] = await Promise.all([
       getEffectiveDashboardPermissionNames(user.id, restaurant.id),
-      db.restaurantSubscription.findUnique({
-        where: { restaurantId: restaurant.id },
-        select: { plan: true },
-      }),
+      getRestaurantEntitlements(restaurant.id),
     ]);
-
-    const f = getPlanFeatures(sub?.plan ?? SubscriptionPlan.STARTER);
 
     return NextResponse.json({
       permissions,
-      plan: {
-        maxBranches: Number.isFinite(f.maxBranches) ? f.maxBranches : null,
-        recommendations: f.recommendations,
-        roleBasedSettings: f.roleBasedSettings,
-        branding: f.branding,
-        advancedAnalytics: f.advancedAnalytics,
-        mobileApp: f.mobileApp,
-      },
+      plan: entitlementsToClientPayload(entitlements),
     });
   } catch (e) {
     console.error(e);

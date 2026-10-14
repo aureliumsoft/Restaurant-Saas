@@ -3,6 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
+import { useTranslation } from 'react-i18next';
 import { Loader2, LogIn, LogOut, User } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ export default function UserMenu({
   onLogout?: () => void;
   logoutLoading?: boolean;
 }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { data: session, status } = useSession();
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -37,7 +39,7 @@ export default function UserMenu({
   const [loggingOut, setLoggingOut] = React.useState(false);
 
   const user = session?.user as any | undefined;
-  const name = user?.name ?? user?.email ?? 'User';
+  const name = user?.name ?? user?.email ?? t('dashboard.userMenu.nameFallback');
   const role = user?.role ?? 'UNKNOW';
   const email = user?.email ?? '';
 
@@ -48,7 +50,7 @@ export default function UserMenu({
         variant="secondary"
         size={iconOnly ? 'icon' : 'default'}
         className={className}
-        aria-label="Loading user"
+        aria-label={t('dashboard.userMenu.loadingUser')}
       >
         <Loader2
           className={cn('h-4 w-4 animate-spin text-primary', !iconOnly && 'mr-2')}
@@ -64,10 +66,10 @@ export default function UserMenu({
         size={iconOnly ? 'icon' : 'default'}
         className={className}
         onClick={() => router.push('/login')}
-        aria-label="Sign in"
+        aria-label={t('dashboard.userMenu.signIn')}
       >
         <LogIn className={cn('h-4 w-4', !iconOnly && 'mr-2')} />
-        {iconOnly ? null : <span>Sign in</span>}
+        {iconOnly ? null : <span>{t('dashboard.userMenu.signIn')}</span>}
       </Button>
     );
   }
@@ -117,7 +119,9 @@ export default function UserMenu({
         </div>
         <div className="-mx-1 my-1 h-px bg-muted" />
         <div className="relative flex items-center rounded-sm px-2 py-1.5 text-sm opacity-80">
-          <span className="mr-2 text-xs opacity-60">Role</span>
+          <span className="mr-2 text-xs opacity-60">
+            {t('dashboard.userMenu.roleLabel')}
+          </span>
           <span className="text-sm">{role}</span>
         </div>
         <div className="-mx-1 my-1 h-px bg-muted" />
@@ -133,7 +137,7 @@ export default function UserMenu({
             ) : (
               <LogOut className="mr-2 h-4 w-4" />
             )}
-            <span>Logout</span>
+            <span>{t('dashboard.userMenu.logout')}</span>
           </>
         </button>
       </DropdownMenuContent>
@@ -143,8 +147,8 @@ export default function UserMenu({
       <LogoutConfirmation
         open={logoutOpen}
         loading={loggingOut}
-        title="Sign out of admin?"
-        description="You will be signed out of the platform admin area and returned to the home page."
+        title={t('dashboard.userMenu.signOutAdminTitle')}
+        description={t('dashboard.userMenu.signOutAdminDescription')}
         onCancel={() => setLogoutOpen(false)}
         onConfirm={handleLogout}
       />

@@ -130,8 +130,7 @@ export function IngredientForm({
     cancelLeave,
     allowNextNavigation,
   } = useUnsavedChangesGuard(isDirty, {
-    message:
-      'You have unsaved ingredient changes. Leave this page without saving?',
+    message: t('dashboard.inventory.unsavedLeaveMessage'),
   });
 
   const canSave = useMemo(() => {

@@ -36,6 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
 type DocModule = {
@@ -57,6 +58,7 @@ type DocModule = {
 };
 
 export default function AdminDocumentationPage() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<DocModule[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -73,11 +75,11 @@ export default function AdminDocumentationPage() {
       );
       setItems(rows);
     } catch {
-      toast.error('Could not load documentation modules.');
+      toast.error(t('admin.docsPage.loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -91,11 +93,13 @@ export default function AdminDocumentationPage() {
         status: next,
       });
       toast.success(
-        next === 'PUBLISHED' ? 'Module published.' : 'Module set to draft.'
+        next === 'PUBLISHED'
+          ? t('admin.docsPage.publishedToast')
+          : t('admin.docsPage.draftedToast')
       );
       await load();
     } catch {
-      toast.error('Could not update status.');
+      toast.error(t('admin.docsPage.statusUpdateError'));
     } finally {
       setBusyId(null);
     }
@@ -106,11 +110,11 @@ export default function AdminDocumentationPage() {
     setBusyId(deleteId);
     try {
       await axios.delete(`/api/admin/documentation/${deleteId}`);
-      toast.success('Module deleted.');
+      toast.success(t('admin.docsPage.deletedToast'));
       setDeleteId(null);
       await load();
     } catch {
-      toast.error('Could not delete module.');
+      toast.error(t('admin.docsPage.deleteError'));
     } finally {
       setBusyId(null);
     }
@@ -119,9 +123,9 @@ export default function AdminDocumentationPage() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        eyebrow="Content"
-        title="Documentation"
-        description="Pages for the public documentation site. Order of headings and sub headings is managed under Headings."
+        eyebrow={t('admin.docsPage.eyebrow')}
+        title={t('admin.docsPage.title')}
+        description={t('admin.docsPage.description')}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -139,13 +143,13 @@ export default function AdminDocumentationPage() {
             <Button type="button" variant="secondary" asChild>
               <Link href="/admin/documentation/headings">
                 <BookOpen className="mr-2 h-4 w-4" />
-                Headings
+                {t('admin.docsPage.headings')}
               </Link>
             </Button>
             <Button type="button" asChild>
               <Link href="/admin/documentation/new">
                 <Plus className="mr-2 h-4 w-4" />
-                Add page
+                {t('admin.docsPage.addPage')}
               </Link>
             </Button>
           </div>
@@ -161,18 +165,17 @@ export default function AdminDocumentationPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <BookOpen className="h-5 w-5 text-muted-foreground" />
-              No modules yet
+              {t('admin.docsPage.emptyTitle')}
             </CardTitle>
             <CardDescription>
-              Create documentation pages with a heading and optional sub heading
-              for the public sidebar.
+              {t('admin.docsPage.emptyDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button type="button" asChild>
               <Link href="/admin/documentation/new">
                 <Plus className="mr-2 h-4 w-4" />
-                Add page
+                {t('admin.docsPage.addPage')}
               </Link>
             </Button>
           </CardContent>
@@ -189,7 +192,9 @@ export default function AdminDocumentationPage() {
                         item.status === 'PUBLISHED' ? 'default' : 'secondary'
                       }
                     >
-                      {item.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                      {item.status === 'PUBLISHED'
+                        ? t('admin.docsPage.statusPublished')
+                        : t('admin.docsPage.statusDraft')}
                     </Badge>
                     <CardTitle className="text-base leading-snug">
                       {item.name}
@@ -221,7 +226,9 @@ export default function AdminDocumentationPage() {
                       ) : (
                         <Send className="mr-1.5 h-3.5 w-3.5" />
                       )}
-                      {item.status === 'PUBLISHED' ? 'Make draft' : 'Publish'}
+                      {item.status === 'PUBLISHED'
+                        ? t('admin.docsPage.makeDraft')
+                        : t('admin.docsPage.publish')}
                     </Button>
                     <Button type="button" size="icon" variant="ghost" asChild>
                       <Link href={`/admin/documentation/${item.id}`}>
@@ -254,13 +261,13 @@ export default function AdminDocumentationPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete page?</AlertDialogTitle>
+            <AlertDialogTitle>{t('admin.docsPage.deleteConfirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the page from the public documentation site.
+              {t('admin.docsPage.deleteConfirmDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <AlertDialogCancel type="button">{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               type="button"
               onClick={(e) => {
@@ -268,7 +275,7 @@ export default function AdminDocumentationPage() {
                 void confirmDelete();
               }}
             >
-              Delete
+              {t('admin.docsPage.deleteAction')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

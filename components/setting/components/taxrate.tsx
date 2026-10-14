@@ -66,7 +66,7 @@ const TaxrateCard: React.FC<TaxrateCardProps> = ({ tax, storeId }) => {
 
       await axios.patch(`/api/shopdata/${storeId}`, validatedData);
 
-      toast.success('Tax updated successfully.');
+      toast.success(t('settings.cards.tax.updated'));
       setShowConfirmation(false);
       eventBus.emit('fetchStoreData');
     } catch (error) {
@@ -75,7 +75,7 @@ const TaxrateCard: React.FC<TaxrateCardProps> = ({ tax, storeId }) => {
         const fieldErrors = error.errors.map((err) => err.message);
         toast.error(`${fieldErrors.join(', ')}`);
       } else {
-        toast.error('Failed to update store tax.');
+        toast.error(t('settings.cards.tax.updateFailed'));
       }
     } finally {
       setIsLoading(false);

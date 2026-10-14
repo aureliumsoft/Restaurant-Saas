@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { AdminDocModuleForm } from '@/components/admin/admin-doc-module-form';
 
@@ -24,6 +25,7 @@ type ModuleDto = {
 };
 
 export default function AdminDocumentationEditPage() {
+  const { t } = useTranslation();
   const params = useParams();
   const id = typeof params?.id === 'string' ? params.id : '';
   const [mod, setMod] = useState<ModuleDto | null>(null);
@@ -39,7 +41,7 @@ export default function AdminDocumentationEditPage() {
         );
         if (!cancelled) setMod(res.data.data);
       } catch {
-        if (!cancelled) toast.error('Could not load page.');
+        if (!cancelled) toast.error(t('admin.docsPage.loadPageError'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -47,7 +49,7 @@ export default function AdminDocumentationEditPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, t]);
 
   if (loading) {
     return (
@@ -59,7 +61,7 @@ export default function AdminDocumentationEditPage() {
 
   if (!mod) {
     return (
-      <p className="text-sm text-muted-foreground">Documentation page not found.</p>
+      <p className="text-sm text-muted-foreground">{t('admin.docsPage.pageNotFound')}</p>
     );
   }
 

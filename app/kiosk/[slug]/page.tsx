@@ -1,9 +1,11 @@
 import Link from 'next/link';
 
 import { db } from '@/lib/db';
+import { getPublicModuleGate } from '@/lib/entitlements';
 import { kioskBasePath } from '@/lib/kiosk-path';
 
 import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
+import { PlanUpgradeScreen } from '@/components/premium/plan-upgrade-screen';
 
 import '../kiosk-light.css';
 
@@ -14,6 +16,16 @@ type Props = {
 export default async function KioskBranchPickerPage({ params }: Props) {
   const { slug: rawSlug } = await params;
   const slug = decodeURIComponent(rawSlug);
+
+  const planGate = await getPublicModuleGate(slug, 'kiosk');
+  if (planGate.found && planGate.paid) {
+    return (
+      <PlanUpgradeScreen
+        featureLabel="Kiosk"
+        restaurantName={planGate.restaurantName ?? undefined}
+      />
+    );
+  }
 
   const restaurant = await db.restaurant.findUnique({
     where: { slug },

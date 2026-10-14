@@ -45,6 +45,15 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const { assertCanConfigureOnlinePayment } = await import(
+    '@/lib/subscription-plan-enforcement'
+  );
+  const denied = await assertCanConfigureOnlinePayment(
+    session.ctx.restaurant.id,
+    'stripe'
+  );
+  if (denied) return denied;
+
   try {
     const runtime = toRestaurantStripeRuntimeConfig({
       publishableKey: parsed.data.publishableKey,

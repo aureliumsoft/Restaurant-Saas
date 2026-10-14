@@ -110,7 +110,7 @@ export async function POST(
         where: { restaurantId },
         create: {
           restaurantId,
-          plan: 'STARTER',
+          plan: 'FREE',
           status: setActive ? 'ACTIVE' : 'TRIAL',
           currentPeriodEnd: periodEnd,
         },

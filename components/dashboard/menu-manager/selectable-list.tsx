@@ -2,6 +2,7 @@
 
 import { Children, type ReactNode } from 'react';
 import { Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { LazyProductImage } from './lazy-product-image';
@@ -69,7 +70,7 @@ export function SelectableList({
   className,
   search,
   onSearchChange,
-  searchPlaceholder = 'Search…',
+  searchPlaceholder,
   emptyMessage,
   maxHeightClass = 'max-h-56',
 }: {
@@ -81,6 +82,7 @@ export function SelectableList({
   emptyMessage?: string;
   maxHeightClass?: string;
 }) {
+  const { t } = useTranslation();
   const hasSearch = typeof onSearchChange === 'function';
   const isEmpty = Children.count(children) === 0;
 
@@ -96,7 +98,9 @@ export function SelectableList({
             type="search"
             value={search ?? ''}
             onChange={(e) => onSearchChange?.(e.target.value)}
-            placeholder={searchPlaceholder}
+            placeholder={
+              searchPlaceholder ?? t('dashboard.menuManager.selectable.searchPlaceholder')
+            }
             className="h-10 rounded-none border-0 bg-transparent pl-9 shadow-none focus-visible:ring-0"
           />
         </div>
@@ -104,7 +108,7 @@ export function SelectableList({
       <div className={cn('divide-y divide-border overflow-y-auto overscroll-contain', maxHeightClass)}>
         {isEmpty ? (
           <p className="px-3 py-4 text-sm text-muted-foreground">
-            {emptyMessage ?? 'No matches.'}
+            {emptyMessage ?? t('dashboard.menuManager.selectable.emptyMessage')}
           </p>
         ) : (
           children

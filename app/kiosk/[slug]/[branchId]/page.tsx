@@ -1,7 +1,9 @@
 import { KioskBranchClient } from '@/components/kiosk/kiosk-branch-client';
+import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
+import { PlanUpgradeScreen } from '@/components/premium/plan-upgrade-screen';
+import { getPublicModuleGate } from '@/lib/entitlements';
 import { resolveRouteId } from '@/lib/resolve-route-id';
 import { db } from '@/lib/db';
-import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
 
 import '../../kiosk-light.css';
 
@@ -14,6 +16,16 @@ export default async function KioskBranchPage({ params }: Props) {
   const decodedSlug = decodeURIComponent(slug);
   const branchUrlId = decodeURIComponent(rawBranchId);
   const branchId = resolveRouteId(branchUrlId);
+
+  const planGate = await getPublicModuleGate(decodedSlug, 'kiosk');
+  if (planGate.found && planGate.paid) {
+    return (
+      <PlanUpgradeScreen
+        featureLabel="Kiosk"
+        restaurantName={planGate.restaurantName ?? undefined}
+      />
+    );
+  }
 
   const restaurant = await db.restaurant.findUnique({
     where: { slug: decodedSlug },

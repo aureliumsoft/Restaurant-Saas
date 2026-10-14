@@ -26,24 +26,25 @@ export function KdsLayoutHeader() {
           type="button"
           variant="ghost"
           className="hidden gap-1.5 text-muted-foreground sm:inline-flex"
-          title="Back to dashboard"
+          title={t('kds.backToDashboard')}
           onClick={() => router.push('/dashboard')}
         >
           <LayoutDashboard className="h-4 w-4" />
-          Dashboard
+          {t('kds.dashboard')}
         </Button>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="sm:hidden"
-          aria-label="Dashboard"
+          aria-label={t('kds.dashboard')}
           onClick={() => router.push('/dashboard')}
         >
           <LayoutDashboard className="h-4 w-4" />
         </Button>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        <LanguageSwitcher variant="inline" />
         <BranchSwitcher />
         <ModeToggle />
         <UserMenu />

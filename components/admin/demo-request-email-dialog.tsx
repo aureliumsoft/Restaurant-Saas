@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import axios from 'axios';
 import { Loader2, Mail, Send } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -41,6 +42,7 @@ export function DemoRequestEmailDialog({
   onOpenChange,
   onSent,
 }: Props) {
+  const { t } = useTranslation();
   const [sending, setSending] = useState(false);
 
   const emailHtml = useMemo(() => {
@@ -60,13 +62,13 @@ export function DemoRequestEmailDialog({
     setSending(true);
     try {
       await axios.post(`/api/admin/requests/${request.id}/email`);
-      toast.success(`Email sent to ${request.email}.`);
+      toast.success(t('admin.demoEmail.sentSuccess', { email: request.email }));
       onOpenChange(false);
       onSent?.();
     } catch (error) {
       const msg = apiErrorMessage(
         error,
-        'Could not send email. Check SMTP settings in .env.'
+        t('admin.demoEmail.sendError')
       );
       toast.error(msg);
     } finally {
@@ -80,10 +82,10 @@ export function DemoRequestEmailDialog({
         <DialogHeader className="space-y-2 border-b px-6 py-4 text-left">
           <DialogTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5 text-muted-foreground" />
-            Send demo access email
+            {t('admin.demoEmail.title')}
           </DialogTitle>
           <DialogDescription>
-            Review the email below, then send it via SMTP to the requester.
+            {t('admin.demoEmail.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -92,19 +94,19 @@ export function DemoRequestEmailDialog({
             <dl className="grid gap-3 rounded-xl border bg-muted/20 p-4 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  To
+                  {t('admin.demoEmail.to')}
                 </dt>
                 <dd className="mt-0.5 font-medium">{request.email}</dd>
               </div>
               <div>
                 <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Subject
+                  {t('admin.demoEmail.subject')}
                 </dt>
                 <dd className="mt-0.5 font-medium">{DEMO_REPLY_EMAIL_SUBJECT}</dd>
               </div>
               <div className="sm:col-span-2">
                 <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Recipient
+                  {t('admin.demoEmail.recipient')}
                 </dt>
                 <dd className="mt-0.5">
                   {request.name} · {request.restaurantName}
@@ -114,11 +116,11 @@ export function DemoRequestEmailDialog({
 
             <div className="space-y-2">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Email preview
+                {t('admin.demoEmail.preview')}
               </p>
               <div className="overflow-hidden rounded-xl border bg-white shadow-sm dark:bg-zinc-950">
                 <iframe
-                  title="Demo request email preview"
+                  title={t('admin.demoEmail.previewIframeTitle')}
                   srcDoc={emailHtml}
                   className="h-[min(420px,50vh)] w-full border-0 bg-white"
                   sandbox=""
@@ -135,7 +137,7 @@ export function DemoRequestEmailDialog({
             disabled={sending}
             onClick={() => onOpenChange(false)}
           >
-            Cancel
+            {t('cancel')}
           </Button>
           <Button
             type="button"
@@ -145,12 +147,12 @@ export function DemoRequestEmailDialog({
             {sending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending…
+                {t('admin.demoEmail.sending')}
               </>
             ) : (
               <>
                 <Send className="mr-2 h-4 w-4" />
-                Send
+                {t('admin.demoEmail.send')}
               </>
             )}
           </Button>

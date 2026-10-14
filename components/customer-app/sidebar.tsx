@@ -237,8 +237,8 @@ export function Sidebar({
               openingHours?: BranchOpeningHours | null;
             }) => ({
               id: String(b.id),
-              name: String(b.name || 'Branch'),
-              address: String(b.address || 'No address'),
+              name: String(b.name || t('branchFallbackName')),
+              address: String(b.address || t('noAddressFallback')),
               phone: b.phone ? String(b.phone) : undefined,
               latitude: b.latitude,
               longitude: b.longitude,
@@ -383,7 +383,7 @@ export function Sidebar({
         <div className="relative overflow-hidden rounded-xl bg-[#f8fafc]">
           <img
             src={menuBanners[bannerIndex]}
-            alt={`Promotion ${bannerIndex + 1}`}
+            alt={t('promotionAlt', { index: bannerIndex + 1 })}
             className="h-36 w-full object-cover sm:h-40"
           />
           {menuBanners.length > 1 && (
@@ -425,7 +425,7 @@ export function Sidebar({
               className={`h-1.5 rounded-full transition-all ${idx === bannerIndex ? 'w-5 bg-primary' : 'w-1.5 bg-[#cbd5e1]'
                 }`}
               onClick={() => setBannerIndex(idx)}
-              aria-label={`Go to promotion ${idx + 1}`}
+              aria-label={t('goToPromotion', { index: idx + 1 })}
             />
           ))}
         </div>
@@ -586,16 +586,16 @@ export function Sidebar({
               htmlFor="apartmentDoorNumber"
               className="text-sm font-medium text-[#0f172a]"
             >
-              {t('pos.apartment', { defaultValue: 'Apartment / Suite' })}
+              {t('apartmentSuiteLabel')}
             </Label>
             <Label
               htmlFor="gateCode"
               className="text-sm font-medium text-[#0f172a]"
             >
-              {t('pos.doorNumber', { defaultValue: 'Door / Gate' })}
+              {t('doorGateLabel')}
             </Label>
             <Input
-              placeholder={t('pos.apartment', { defaultValue: 'Apartment / Suite' })}
+              placeholder={t('apartmentSuiteLabel')}
               name='apartmentDoorNumber'
               id='apartmentDoorNumber'
               value={apartmentDoorNumber}
@@ -603,7 +603,7 @@ export function Sidebar({
               className="rounded-xl border-[#e2e8f0]"
             />
             <Input
-              placeholder={t('pos.doorNumber', { defaultValue: 'Door / Gate' })}
+              placeholder={t('doorGateLabel')}
               name='gateCode'
               id='gateCode'
               value={gateCode}
@@ -615,8 +615,8 @@ export function Sidebar({
 
             <AddressMapPicker
               id="deliveryAddress"
-              label={t('yourAddressRequired', { defaultValue: 'Complete Address' })}
-              placeholder={t('yourAddressRequired', { defaultValue: 'Complete Address' })}
+              label={t('yourAddressRequired')}
+              placeholder={t('yourAddressRequired')}
               value={deliveryAddress}
               onChange={setDeliveryAddress}
               onCoordsChange={(coords) => {
@@ -639,7 +639,9 @@ export function Sidebar({
           </div>
           {outOfRange ? (
             <p className="text-xs text-rose-500 font-medium">
-              Address is outside the delivery radius ({selectedStore?.deliveryRadiusKm} km).
+              {t('deliveryOutOfRadiusHint', {
+                radius: selectedStore?.deliveryRadiusKm,
+              })}
             </p>
           ) : null}
           {!canProceedDelivery ? (
@@ -692,7 +694,7 @@ export function Sidebar({
                     <div key={url + idx} className="w-[88%] shrink-0">
                       <img
                         src={url}
-                        alt={`Promotion ${idx + 1}`}
+                        alt={t('promotionAlt', { index: idx + 1 })}
                         className="h-[168px] w-full rounded-2xl object-cover sm:h-48"
                       />
                     </div>
@@ -709,7 +711,7 @@ export function Sidebar({
                         prev === 0 ? menuBanners.length - 1 : prev - 1
                       )
                     }
-                    aria-label="Previous promotion"
+                    aria-label={t('previousPromotion')}
                   >
                     <IconChevronLeft className="h-5 w-5" />
                   </button>
@@ -719,7 +721,7 @@ export function Sidebar({
                     onClick={() =>
                       setBannerIndex((prev) => (prev + 1) % menuBanners.length)
                     }
-                    aria-label="Next promotion"
+                    aria-label={t('nextPromotion')}
                   >
                     <IconChevronRight className="h-5 w-5" />
                   </button>

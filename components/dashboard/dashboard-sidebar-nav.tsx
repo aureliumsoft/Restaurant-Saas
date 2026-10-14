@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { IconExternalLink } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 
+import { PremiumCrown } from '@/components/premium/premium-crown';
 import { isDashboardNavItemActive } from '@/lib/dashboard-nav';
 import { dashboardNavGroupLabelKey } from '@/lib/dashboard-nav-i18n';
 import { cn } from '@/lib/utils';
@@ -78,6 +79,13 @@ export function DashboardSidebarNav({ onNavigate }: DashboardSidebarNavProps) {
                   <span className="min-w-0 flex-1 truncate tracking-tight">
                     {item.title}
                   </span>
+                  {item.premium ? (
+                    <PremiumCrown
+                      size="sm"
+                      className="shrink-0"
+                      title="Premium — upgrade to unlock"
+                    />
+                  ) : null}
                   {newTab ? (
                     <IconExternalLink
                       className={cn(

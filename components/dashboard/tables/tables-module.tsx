@@ -193,12 +193,12 @@ export function TablesModule({
       );
       setSelectedId(null);
     } catch {
-      toast.error('Could not load tables');
+      toast.error(t('dashboard.tables.loadFailed'));
       setTables([]);
     } finally {
       setLoading(false);
     }
-  }, [scopedBranchId, scopedBranchUrlId]);
+  }, [scopedBranchId, scopedBranchUrlId, t]);
 
   useEffect(() => {
     if (branchLoading && branchIdProp === undefined) return;
@@ -228,7 +228,7 @@ export function TablesModule({
       if (foundRow !== -1) break;
     }
     if (foundRow === -1) {
-      toast.error('No empty space left on the floor. Please add rows or columns.');
+      toast.error(t('dashboard.tables.noEmptySpace'));
       return;
     }
     openAddAt(foundRow, foundCol);
@@ -259,7 +259,7 @@ export function TablesModule({
         ...spans,
       };
       if (!canPlaceTable(tables, probe, floor)) {
-        toast.error('That cell is not free for this shape.');
+        toast.error(t('dashboard.tables.cellNotFreeForShape'));
         return;
       }
       const draft: FloorTable = {
@@ -282,7 +282,7 @@ export function TablesModule({
         ...spans,
       };
       if (!canPlaceTable(tables, next, floor)) {
-        toast.error('Shape does not fit in the current cell.');
+        toast.error(t('dashboard.tables.shapeDoesNotFit'));
         return;
       }
       setTables((prev) => prev.map((t) => (t.id === selected.id ? next : t)));
@@ -358,13 +358,13 @@ export function TablesModule({
         })
       );
       setSelectedId(null);
-      toast.success('Floor plan saved');
+      toast.success(t('dashboard.tables.floorPlanSaved'));
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: unknown } } };
       const msg =
         typeof err.response?.data?.error === 'string'
           ? err.response.data.error
-          : 'Failed to save floor plan';
+          : t('dashboard.tables.floorPlanSaveFailed');
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -501,7 +501,7 @@ export function TablesModule({
                   gridCol: col,
                 };
                 if (!canPlaceTable(tables, next, floor)) {
-                  toast.error('That cell is not free for this table.');
+                  toast.error(t('dashboard.tables.cellNotFreeForTable'));
                   return;
                 }
                 setTables((prev) =>

@@ -832,7 +832,7 @@ function InlineRecommendationGroups({
                                   variant="outline"
                                   size="icon"
                                   className="h-9 w-9 rounded-lg border-primary/30"
-                                  aria-label={`Decrease ${resolve(it.name)}`}
+                                  aria-label={t('decreaseNamed', { name: resolve(it.name) })}
                                   onClick={() =>
                                     decreaseMultiQty(g.id, it.menuItemId)
                                   }
@@ -848,7 +848,7 @@ function InlineRecommendationGroups({
                               type="button"
                               size="icon"
                               className="h-9 w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-                              aria-label={`Add ${resolve(it.name)}`}
+                              aria-label={t('addNamed', { name: resolve(it.name) })}
                               disabled={qty === 0 && atMax}
                               onClick={() => increaseMultiQty(g, it.menuItemId)}
                             >
@@ -859,7 +859,7 @@ function InlineRecommendationGroups({
                           <button
                             type="button"
                             className="shrink-0 p-1"
-                            aria-label={`Toggle ${resolve(it.name)}`}
+                            aria-label={t('toggleNamed', { name: resolve(it.name) })}
                             disabled={!checkboxSelected && atMax}
                             onClick={() =>
                               toggleMultiCheckbox(g, it.menuItemId)
@@ -1628,7 +1628,7 @@ export function NestedRecommendationSheet({
       style={{ zIndex: stackZIndex ?? (stackClassName ? 120 : 90) }}
       role="dialog"
       aria-modal="true"
-      aria-label={`${resolve(product.name)} configuration`}
+      aria-label={t('productConfigurationAria', { name: resolve(product.name) })}
       onClick={onClose}
     >
       <div

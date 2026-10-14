@@ -1,6 +1,7 @@
 'use client';
 
 import type { ComponentProps } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import UserMenu from '@/components/dashboard/UserMenu';
 import { PosLogoutShiftDialog } from '@/components/pos/pos-logout-shift-dialog';
@@ -9,6 +10,7 @@ import { useShiftAwareLogout } from '@/hooks/use-shift-aware-logout';
 type UserMenuProps = ComponentProps<typeof UserMenu>;
 
 export function ShiftAwareUserMenu(props: UserMenuProps) {
+  const { t } = useTranslation();
   const {
     logoutChoiceOpen,
     setLogoutChoiceOpen,
@@ -28,8 +30,8 @@ export function ShiftAwareUserMenu(props: UserMenuProps) {
       <PosLogoutShiftDialog
         open={logoutChoiceOpen}
         onOpenChange={setLogoutChoiceOpen}
-        title="Sign out?"
-        description="You have an active POS shift. Log out without ending your shift, or go to POS to end your shift (cash reconciliation and print) and then sign out."
+        title={t('dashboard.userMenu.shiftSignOutTitle')}
+        description={t('dashboard.userMenu.shiftSignOutDescription')}
         onLogoutOnly={handleLogoutOnly}
         onEndShiftAndLogout={handleLogoutEndShift}
       />

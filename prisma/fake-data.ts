@@ -1,4 +1,4 @@
-import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, IngredientUnit, IngredientStockEntrySource, OrderSourceType, PosShiftStatus, CustomerPaymentProvider, DineInPaymentTiming, DiningTableShape, DiningTableStatus, ExpenseType } from '@prisma/client';
+import { AttributeSelectionType, RecommendationSourceType, RecommendationMultipleMode, SubscriptionPlan, SubscriptionStatus, EmployeeInviteStatus, CatProduct, IngredientUnit, IngredientStockEntrySource, OrderSourceType, PosShiftStatus, CustomerPaymentProvider, DineInPaymentTiming, DiningTableShape, DiningTableStatus, CustomPlanRequestStatus, ExpenseType } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import Decimal from 'decimal.js';
 
@@ -328,11 +328,12 @@ export function fakeRestaurantSubscriptionComplete() {
   return {
     id: faker.string.uuid(),
     restaurantId: faker.string.uuid(),
-    plan: SubscriptionPlan.STARTER,
+    plan: SubscriptionPlan.FREE,
     status: SubscriptionStatus.TRIAL,
     trialEndsAt: undefined,
     currentPeriodEnd: undefined,
     notes: undefined,
+    customSelectedModules: [],
     paypalSubscriptionId: undefined,
     paypalPlanId: undefined,
     autoRenew: true,
@@ -343,7 +344,7 @@ export function fakeRestaurantSubscriptionComplete() {
 }
 export function fakeSubscriptionCatalog() {
   return {
-    plan: faker.helpers.arrayElement([SubscriptionPlan.STARTER, SubscriptionPlan.GROWTH, SubscriptionPlan.SCALE] as const),
+    plan: faker.helpers.arrayElement([SubscriptionPlan.FREE, SubscriptionPlan.BASIC, SubscriptionPlan.GROWTH, SubscriptionPlan.SCALE, SubscriptionPlan.PRO, SubscriptionPlan.CUSTOM] as const),
     name: faker.person.fullName(),
     price: faker.number.int(),
     priceLabel: faker.lorem.words(5),
@@ -356,7 +357,7 @@ export function fakeSubscriptionCatalog() {
 export function fakeSubscriptionCatalogComplete() {
   return {
     id: faker.string.uuid(),
-    plan: faker.helpers.arrayElement([SubscriptionPlan.STARTER, SubscriptionPlan.GROWTH, SubscriptionPlan.SCALE] as const),
+    plan: faker.helpers.arrayElement([SubscriptionPlan.FREE, SubscriptionPlan.BASIC, SubscriptionPlan.GROWTH, SubscriptionPlan.SCALE, SubscriptionPlan.PRO, SubscriptionPlan.CUSTOM] as const),
     name: faker.person.fullName(),
     price: faker.number.int(),
     priceLabel: faker.lorem.words(5),
@@ -423,6 +424,33 @@ export function fakeDemoRequestComplete() {
     name: faker.person.fullName(),
     email: faker.internet.email(),
     restaurantName: faker.lorem.words(5),
+    createdAt: new Date(),
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeCustomPlanRequest() {
+  return {
+    name: faker.person.fullName(),
+    email: faker.internet.email(),
+    restaurantName: faker.lorem.words(5),
+    reviewedAt: undefined,
+    reviewedByUserId: undefined,
+    notes: undefined,
+    updatedAt: faker.date.anytime(),
+  };
+}
+export function fakeCustomPlanRequestComplete() {
+  return {
+    id: faker.string.uuid(),
+    name: faker.person.fullName(),
+    email: faker.internet.email(),
+    restaurantName: faker.lorem.words(5),
+    restaurantId: undefined,
+    selectedModules: [],
+    status: CustomPlanRequestStatus.PENDING,
+    reviewedAt: undefined,
+    reviewedByUserId: undefined,
+    notes: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };

@@ -27,26 +27,13 @@ import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
 
 type ChannelKey = keyof RestaurantServiceCharges;
 
-const CHANNELS: {
+const CHANNEL_META: {
   key: ChannelKey;
-  label: string;
-  description: string;
+  i18nKey: string;
 }[] = [
-  {
-    key: 'pos',
-    label: 'POS',
-    description: 'Added at POS checkout and on printed receipts.',
-  },
-  {
-    key: 'kiosk',
-    label: 'Kiosk',
-    description: 'Shown at kiosk checkout before payment.',
-  },
-  {
-    key: 'online',
-    label: 'Website',
-    description: 'Shown on website cart and checkout pages.',
-  },
+  { key: 'pos', i18nKey: 'pos' },
+  { key: 'kiosk', i18nKey: 'kiosk' },
+  { key: 'online', i18nKey: 'online' },
 ];
 
 function emptyCharges(): RestaurantServiceCharges {
@@ -63,12 +50,14 @@ function ChannelToggle({
   value,
   onChange,
   chargeAmountLabel,
+  serviceChargeAria,
 }: {
   label: string;
   description: string;
   value: ServiceChargeChannelConfig;
   onChange: (next: ServiceChargeChannelConfig) => void;
   chargeAmountLabel: string;
+  serviceChargeAria: string;
 }) {
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-4">
@@ -81,7 +70,7 @@ function ChannelToggle({
           type="button"
           role="switch"
           aria-checked={value.enabled}
-          aria-label={`${label} service charge`}
+          aria-label={serviceChargeAria}
           onClick={() => onChange({ ...value, enabled: !value.enabled })}
           className={cn(
             'relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
@@ -124,7 +113,16 @@ function ChannelToggle({
 export function RestaurantServiceChargesCard() {
   const { t } = useTranslation();
   const { regional } = useOwnerRestaurantRegional();
-  const chargeAmountLabel = `Charge amount (${getRestaurantCurrencySymbol(regional.currencyCode)})`;
+  const chargeAmountLabel = t('settings.cards.serviceCharges.chargeAmount', {
+    symbol: getRestaurantCurrencySymbol(regional.currencyCode),
+  });
+  const channels = CHANNEL_META.map((meta) => ({
+    ...meta,
+    label: t(`settings.cards.serviceCharges.channels.${meta.i18nKey}.label`),
+    description: t(
+      `settings.cards.serviceCharges.channels.${meta.i18nKey}.description`
+    ),
+  }));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [charges, setCharges] = useState<RestaurantServiceCharges>(emptyCharges);
@@ -142,7 +140,9 @@ export function RestaurantServiceChargesCard() {
       try {
         await loadCharges();
       } catch {
-        if (!cancelled) toast.error('Could not load service charges.');
+        if (!cancelled) {
+          toast.error(t('settings.cards.serviceCharges.loadFailed'));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -150,7 +150,7 @@ export function RestaurantServiceChargesCard() {
     return () => {
       cancelled = true;
     };
-  }, [loadCharges]);
+  }, [loadCharges, t]);
 
   async function handleSave() {
     setSaving(true);
@@ -160,9 +160,9 @@ export function RestaurantServiceChargesCard() {
         charges
       );
       setCharges(res.data?.data ?? charges);
-      toast.success('Service charges saved.');
+      toast.success(t('settings.cards.serviceCharges.saved'));
     } catch {
-      toast.error('Could not save service charges.');
+      toast.error(t('settings.cards.serviceCharges.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -190,13 +190,17 @@ export function RestaurantServiceChargesCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-3">
-        {CHANNELS.map((channel) => (
+        {channels.map((channel) => (
           <ChannelToggle
             key={channel.key}
             label={channel.label}
             description={channel.description}
             value={charges[channel.key]}
             chargeAmountLabel={chargeAmountLabel}
+            serviceChargeAria={t(
+              'settings.cards.serviceCharges.toggleAria',
+              { label: channel.label }
+            )}
             onChange={(next) =>
               setCharges((prev) => ({ ...prev, [channel.key]: next }))
             }

@@ -55,6 +55,15 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const { assertCanConfigureOnlinePayment } = await import(
+    '@/lib/subscription-plan-enforcement'
+  );
+  const denied = await assertCanConfigureOnlinePayment(
+    session.ctx.restaurant.id,
+    'jazzcash'
+  );
+  if (denied) return denied;
+
   try {
     const existing = await db.restaurantJazzCashCredentials.findUnique({
       where: { restaurantId: session.ctx.restaurant.id },

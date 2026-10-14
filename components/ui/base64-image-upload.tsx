@@ -64,13 +64,13 @@ export function Base64ImageUploadField({
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('Please choose an image file (PNG, JPEG, WebP, GIF).');
+      toast.error(t('dashboard.common.chooseImageFileError'));
       return;
     }
 
     const limitBytes = Math.floor(maxMb * 1024 * 1024);
     if (file.size > limitBytes) {
-      toast.error(`Image too large. Max file size is ${maxMb} MB.`);
+      toast.error(t('dashboard.common.imageTooLargeMax', { maxMb }));
       return;
     }
 
@@ -84,7 +84,7 @@ export function Base64ImageUploadField({
       });
 
       if (!dataUrl.startsWith('data:image/')) {
-        toast.error('Could not encode image.');
+        toast.error(t('dashboard.common.imageEncodeFailed'));
         setLocalError('Encode failed');
         return;
       }
@@ -92,7 +92,7 @@ export function Base64ImageUploadField({
       const bytes = estimateDataUrlBytes(dataUrl);
       if (bytes > Math.floor(maxEncodedMb * 1024 * 1024) * 1.05) {
         toast.error(
-          `Image is still too large after compression (max ~${maxEncodedMb} MB). Try a smaller photo.`
+          t('dashboard.common.imageTooLargeAfterCompression', { maxEncodedMb })
         );
         setLocalError('Image too large');
         return;
@@ -100,11 +100,11 @@ export function Base64ImageUploadField({
 
       onChange(dataUrl);
       setUrlDraft('');
-      toast.success('Image uploaded');
+      toast.success(t('dashboard.common.imageUploaded'));
     } catch (err) {
       console.error('image upload', err);
       toast.error(
-        'Could not process image. Try a different file or paste an image URL.'
+        t('dashboard.common.imageProcessFailed')
       );
       setLocalError('Process failed');
     } finally {
@@ -113,18 +113,18 @@ export function Base64ImageUploadField({
   }
 
   function applyUrl() {
-    const t = urlDraft.trim();
-    if (!t) {
-      toast.error('Paste an image URL first.');
+    const trimmedUrl = urlDraft.trim();
+    if (!trimmedUrl) {
+      toast.error(t('dashboard.common.pasteImageUrlFirst'));
       return;
     }
-    if (!isHttpImageUrl(t)) {
-      toast.error('Use an http(s) image URL.');
+    if (!isHttpImageUrl(trimmedUrl)) {
+      toast.error(t('dashboard.common.useHttpImageUrl'));
       return;
     }
-    onChange(t);
+    onChange(trimmedUrl);
     setLocalError(null);
-    toast.success('Image URL set');
+    toast.success(t('dashboard.common.imageUrlSet'));
   }
 
   function clearImage() {

@@ -399,9 +399,7 @@ export default function CheckoutPageClient({
   const placeOrder = async () => {
     const slug = effectiveSlug.trim();
     if (!slug) {
-      toast.error(
-        'Missing store link. Open the menu from your restaurant page, then checkout again.'
-      );
+      toast.error(t('missingStoreLinkCheckout'));
       return;
     }
 
@@ -446,9 +444,7 @@ export default function CheckoutPageClient({
       });
 
       if (result.status === 'queued') {
-        toast.info(
-          'You appear to be offline. This order is saved on this device and will be sent automatically when you are back online.'
-        );
+        toast.info(t('orderQueuedOffline'));
         return;
       }
 
@@ -809,7 +805,7 @@ export default function CheckoutPageClient({
                         currency={paymentConfig.currencyCode ?? regional.currencyCode}
                         restaurantSlug={effectiveSlug}
                         title={`Website order (${
-                          orderType === 'delivery' ? 'Delivery' : 'Pick-up'
+                          orderType === 'delivery' ? t('delivery') : t('orderPickUpLabel')
                         })`}
                         source="online"
                         endpoint="/api/customer/orders"
@@ -828,9 +824,7 @@ export default function CheckoutPageClient({
                           localStorage.removeItem(`cart-${orderId}`);
                           clearOnlineOrderPreferences(orderId);
                           if (!ref) {
-                            toast.warn(
-                              'Payment captured but order reference missing. Contact support.'
-                            );
+                            toast.warn(t('paymentCapturedRefMissing'));
                             return;
                           }
                           toast.success(t('paymentReceivedOrderPlaced'));
@@ -848,7 +842,7 @@ export default function CheckoutPageClient({
                           );
                         }}
                         onError={(msg) => toast.error(msg)}
-                        onCancel={() => toast.info('Payment cancelled.')}
+                        onCancel={() => toast.info(t('paymentCancelled'))}
                       />
                     ) : paymentConfig?.ready &&
                       paymentConfig.provider === 'STRIPE' ? (
@@ -857,7 +851,7 @@ export default function CheckoutPageClient({
                         currency={paymentConfig.currencyCode ?? regional.currencyCode}
                         restaurantSlug={effectiveSlug}
                         title={`Website order (${
-                          orderType === 'delivery' ? 'Delivery' : 'Pick-up'
+                          orderType === 'delivery' ? t('delivery') : t('orderPickUpLabel')
                         })`}
                         source="online"
                         endpoint="/api/customer/orders"
@@ -892,7 +886,7 @@ export default function CheckoutPageClient({
                             }
                             restaurantSlug={effectiveSlug}
                             title={`Website order (${
-                              orderType === 'delivery' ? 'Delivery' : 'Pick-up'
+                              orderType === 'delivery' ? t('delivery') : t('orderPickUpLabel')
                             })`}
                             source="online"
                             endpoint="/api/customer/orders"
@@ -927,7 +921,7 @@ export default function CheckoutPageClient({
                             }
                             restaurantSlug={effectiveSlug}
                             title={`Website order (${
-                              orderType === 'delivery' ? 'Delivery' : 'Pick-up'
+                              orderType === 'delivery' ? t('delivery') : t('orderPickUpLabel')
                             })`}
                             source="online"
                             endpoint="/api/customer/orders"
@@ -956,15 +950,12 @@ export default function CheckoutPageClient({
                       </div>
                     ) : (
                       <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                        Website payments are not available for this restaurant
-                        yet. The owner must configure PayPal, Stripe, or
-                        JazzCash / Easypaisa in settings.
+                        {t('websitePaymentsNotConfigured')}
                       </p>
                     )
                   ) : (
                     <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                      Missing store link. Reopen the menu from your restaurant
-                      page.
+                      {t('missingStoreLinkReopenMenu')}
                     </p>
                   )}
                 </div>

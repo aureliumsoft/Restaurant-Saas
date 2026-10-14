@@ -1,6 +1,7 @@
 'use client';
 
 import { LogOut, DoorOpen } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import {
   AlertDialog,
@@ -25,20 +26,23 @@ type Props = {
 export function PosLogoutShiftDialog({
   open,
   onOpenChange,
-  title = 'Leave POS?',
-  description = 'You have an active shift. Log out without ending your shift, or end your shift first (cash reconciliation and print) and then sign out.',
+  title,
+  description,
   onLogoutOnly,
   onEndShiftAndLogout,
 }: Props) {
+  const { t } = useTranslation();
+  const resolvedTitle = title ?? t('pos.dialogs.leavePos.title');
+  const resolvedDescription = description ?? t('pos.dialogs.leavePos.description');
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <LogOut className="h-5 w-5 text-muted-foreground" />
-            {title}
+            {resolvedTitle}
           </AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
+          <AlertDialogDescription>{resolvedDescription}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
           <Button
@@ -51,7 +55,7 @@ export function PosLogoutShiftDialog({
             }}
           >
             <LogOut className="mr-2 h-4 w-4" />
-            Logout only
+            {t('pos.dialogs.leavePos.logoutOnly')}
           </Button>
           <Button
             type="button"
@@ -62,9 +66,9 @@ export function PosLogoutShiftDialog({
             }}
           >
             <DoorOpen className="mr-2 h-4 w-4" />
-            End shift &amp; logout
+            {t('pos.dialogs.leavePos.endShiftAndLogout')}
           </Button>
-          <AlertDialogCancel className="mt-0 w-full">Cancel</AlertDialogCancel>
+          <AlertDialogCancel className="mt-0 w-full">{t('pos.dialogs.leavePos.cancel')}</AlertDialogCancel>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

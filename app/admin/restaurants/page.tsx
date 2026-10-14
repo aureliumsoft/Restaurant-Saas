@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminRestaurantStorefrontLink } from '@/components/admin/admin-restaurant-storefront-link';
@@ -42,6 +43,7 @@ type Row = {
 };
 
 export default function AdminRestaurantsPage() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -60,33 +62,33 @@ export default function AdminRestaurantsPage() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        eyebrow="Management"
-        title="Restaurants"
-        description="All tenant restaurants, owners, and catalog activity."
+        eyebrow={t('admin.restaurants.eyebrow')}
+        title={t('admin.restaurants.title')}
+        description={t('admin.restaurants.description')}
       />
 
       <Card className={cn(adminCardClass, 'min-w-0 max-w-full')}>
         <CardHeader>
-          <CardTitle>Directory</CardTitle>
-          <CardDescription>Subdomain, owner, and catalog size.</CardDescription>
+          <CardTitle>{t('admin.restaurants.directoryTitle')}</CardTitle>
+          <CardDescription>{t('admin.restaurants.directoryDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="min-w-0 p-0">
           <AdminTableWrapper>
           {rows.length === 0 ? (
-            <AdminTableEmpty>No restaurants yet.</AdminTableEmpty>
+            <AdminTableEmpty>{t('admin.restaurants.empty')}</AdminTableEmpty>
           ) : (
             <AdminTable minWidth={920}>
               <AdminTableHeader>
                 <AdminTableRow>
-                  <AdminTableHead>Restaurant</AdminTableHead>
-                  <AdminTableHead>Subdomain</AdminTableHead>
-                  <AdminTableHead>Owner</AdminTableHead>
-                  <AdminTableHead>Plan</AdminTableHead>
-                  <AdminTableHead className="text-right">Menu items</AdminTableHead>
-                  <AdminTableHead className="text-right">Orders</AdminTableHead>
-                  <AdminTableHead>Created</AdminTableHead>
+                  <AdminTableHead>{t('admin.restaurants.colRestaurant')}</AdminTableHead>
+                  <AdminTableHead>{t('admin.restaurants.colSubdomain')}</AdminTableHead>
+                  <AdminTableHead>{t('admin.restaurants.colOwner')}</AdminTableHead>
+                  <AdminTableHead>{t('admin.restaurants.colPlan')}</AdminTableHead>
+                  <AdminTableHead className="text-right">{t('admin.restaurants.colMenuItems')}</AdminTableHead>
+                  <AdminTableHead className="text-right">{t('admin.restaurants.colOrders')}</AdminTableHead>
+                  <AdminTableHead>{t('admin.restaurants.colCreated')}</AdminTableHead>
                   <AdminTableHead className="w-12">
-                    <span className="sr-only">Storefront</span>
+                    <span className="sr-only">{t('admin.restaurants.colStorefront')}</span>
                   </AdminTableHead>
                 </AdminTableRow>
               </AdminTableHeader>

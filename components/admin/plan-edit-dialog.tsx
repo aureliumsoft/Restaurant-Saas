@@ -31,7 +31,7 @@ import { cn } from '@/lib/utils';
 
 export type CatalogPlan = {
   id: string;
-  plan: 'STARTER' | 'GROWTH' | 'SCALE';
+  plan: 'FREE' | 'BASIC' | 'GROWTH' | 'SCALE' | 'PRO' | 'CUSTOM';
   name: string;
   price: number;
   priceLabel: string;
@@ -47,9 +47,12 @@ type Props = {
 };
 
 const PLAN_ACCENTS: Record<CatalogPlan['plan'], string> = {
-  STARTER: '#64748b',
+  FREE: '#64748b',
+  BASIC: '#0ea5e9',
   GROWTH: '#7c3aed',
   SCALE: '#ed6e40',
+  PRO: '#059669',
+  CUSTOM: '#a16207',
 };
 
 const fieldInputClass =

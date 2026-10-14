@@ -12,11 +12,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { PremiumCrown } from '@/components/premium/premium-crown';
+import { PremiumGate } from '@/components/premium/premium-gate';
 import { Button } from '@/components/ui/button';
 import {
   useBranchContext,
   withBranchQuery,
 } from '@/hooks/use-branch-context';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { useStaffRestaurantBranding } from '@/hooks/use-staff-permissions';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
@@ -109,6 +112,7 @@ function formatCompact(n: number): string {
 }
 
 function AnalyticsChartLoader({ className }: { className?: string }) {
+  const { t } = useTranslation();
   return (
     <div
       className={cn(
@@ -117,7 +121,7 @@ function AnalyticsChartLoader({ className }: { className?: string }) {
       )}
     >
       <Loader2 className="h-8 w-8 animate-spin text-fire-500" aria-hidden />
-      <span className="sr-only">Loading chart…</span>
+      <span className="sr-only">{t('dashboard.analytics.loadingChartSr')}</span>
     </div>
   );
 }
@@ -157,7 +161,6 @@ function normalizeSeries(series: SeriesPoint[] | undefined): SeriesPoint[] {
 }
 
 function ChannelLegend({ advanced }: { advanced: boolean }) {
-  if (!advanced) return null;
   const { t } = useTranslation();
   if (!advanced) return null;
   return (
@@ -553,6 +556,15 @@ export default function DashboardAnalytics() {
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const { t } = useTranslation();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
+  const { limitFlag } = useEntitlements();
+  const allow14 = limitFlag('dashboard', 'days14', true);
+  const allow30 = limitFlag('dashboard', 'days30', true);
+  const allowWebsiteBtn = limitFlag('dashboard', 'websiteButton', true);
+  const allowKioskBtn = limitFlag('dashboard', 'kioskButton', true);
+  const allowTopSelling = limitFlag('dashboard', 'topSelling', true);
+  const allowPeakHours = limitFlag('dashboard', 'peakHours', true);
+  const allowFloorNow = limitFlag('dashboard', 'floorNow', true);
+  const allowPaymentMix = limitFlag('dashboard', 'paymentMix', true);
   const currencySymbol = getRestaurantCurrencySymbol(regional.currencyCode);
   const { activeBranchId, activeBranchUrlId, loading: branchLoading, isOwnerOrAdmin } =
     useBranchContext();
@@ -577,7 +589,6 @@ export default function DashboardAnalytics() {
       );
       setAnalytics(dashRes.data);
     } catch {
-      setError('Could not load dashboard analytics.');
       setError(t('dashboard.analytics.loadFailed'));
       setAnalytics(null);
     } finally {
@@ -712,28 +723,42 @@ export default function DashboardAnalytics() {
   const showAdvanced = (analytics?.analyticsTier ?? 'advanced') === 'advanced';
   const todayOnly = !isOwnerOrAdmin || analytics?.dataScope === 'today';
   const chartDaysLabel = todayOnly
-    ? 'today'
-    : `${analytics?.days ?? selectedDays} days`;
+    ? t('dashboard.analytics.periodToday')
+    : t('dashboard.analytics.periodDays', {
+        count: analytics?.days ?? selectedDays,
+      });
 
   const daySwitcher =
     isOwnerOrAdmin && !todayOnly ? (
       <div className="inline-flex rounded-2xl bg-muted/40 p-1 dark:bg-white/5">
-        {DAY_OPTIONS.map((d) => (
-          <button
-            key={d}
-            type="button"
-            disabled={isLoading}
-            className={cn(
-              'rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all disabled:opacity-50',
-              selectedDays === d
-                ? 'bg-fire-500 text-white shadow-md shadow-fire-500/30'
-                : 'text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-white/10'
-            )}
-            onClick={() => setSelectedDays(d)}
-          >
-            {d}D
-          </button>
-        ))}
+        {DAY_OPTIONS.map((d) => {
+          const locked =
+            (d === 14 && !allow14) || (d === 30 && !allow30);
+          return (
+            <button
+              key={d}
+              type="button"
+              disabled={isLoading && !locked}
+              aria-disabled={locked || isLoading}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all',
+                locked
+                  ? 'cursor-not-allowed text-muted-foreground'
+                  : 'disabled:opacity-50',
+                selectedDays === d && !locked
+                  ? 'bg-fire-500 text-white shadow-md shadow-fire-500/30'
+                  : !locked &&
+                      'text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-white/10'
+              )}
+              onClick={() => {
+                if (!locked && !isLoading) setSelectedDays(d);
+              }}
+            >
+              <span className={cn(locked && 'opacity-70')}>{d}D</span>
+              {locked ? <PremiumCrown size="sm" /> : null}
+            </button>
+          );
+        })}
       </div>
     ) : null;
 
@@ -761,45 +786,78 @@ export default function DashboardAnalytics() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {daySwitcher}
-        {slug ? (
+          {slug ? (
             <>
               {fulfillmentSettings.websiteEnabled ? (
-                <Button
-                  asChild
-                  className="rounded-2xl bg-fire-500 shadow-md shadow-fire-500/30 hover:bg-fire-600"
-                >
-                  <a
-                    href={restaurantStorefrontPath(slug)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                    {t('dashboard.analytics.openWebsite')}
-                    <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
-              </a>
-            </Button>
+                allowWebsiteBtn ? (
+                  <Button
+                    asChild
+                    className="rounded-2xl bg-fire-500 shadow-md shadow-fire-500/30 hover:bg-fire-600"
+                  >
+                    <a
+                      href={restaurantStorefrontPath(slug)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {t('dashboard.analytics.openWebsite')}
+                      <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
+                    </a>
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    aria-disabled
+                    tabIndex={-1}
+                    className="pointer-events-none gap-2 rounded-2xl bg-fire-500/40 text-white"
+                  >
+                    <PremiumCrown />
+                    <span className="opacity-90">
+                      {t('dashboard.analytics.openWebsite')}
+                    </span>
+                  </Button>
+                )
               ) : null}
               {fulfillmentSettings.kioskEnabled ? (
-                <Button
-                  asChild
-                  variant="outline"
-                  className="rounded-2xl bg-white/70 shadow-sm dark:bg-white/10"
-                >
-                  <a
-                    href={
-                      activeBranchId
-                        ? kioskBasePath(slug, activeBranchId, activeBranchUrlId)
-                        : `/kiosk/${encodeURIComponent(slug)}`
-                    }
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                    {t('dashboard.analytics.openKiosk')}
-                    <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
-              </a>
-            </Button>
+                allowKioskBtn ? (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="rounded-2xl bg-white/70 shadow-sm dark:bg-white/10"
+                  >
+                    <a
+                      href={
+                        activeBranchId
+                          ? kioskBasePath(
+                              slug,
+                              activeBranchId,
+                              activeBranchUrlId
+                            )
+                          : `/kiosk/${encodeURIComponent(slug)}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {t('dashboard.analytics.openKiosk')}
+                      <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
+                    </a>
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-disabled
+                    tabIndex={-1}
+                    className="pointer-events-none gap-2 rounded-2xl border-amber-300/60 bg-amber-50/40"
+                  >
+                    <PremiumCrown />
+                    <span className="opacity-80">
+                      {t('dashboard.analytics.openKiosk')}
+                    </span>
+                  </Button>
+                )
               ) : null}
             </>
-        ) : null}
+          ) : null}
         </div>
       </div>
 
@@ -977,58 +1035,63 @@ export default function DashboardAnalytics() {
 
       {/* 3. Top items + peak hours */}
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-        <Card className={cn('min-w-0', CHART_CARD)}>
-                  <CardHeader>
-            <CardTitle>{t('dashboard.analytics.topSelling')}</CardTitle>
-            <CardDescription>
-              {t('dashboard.analytics.topSellingDesc', {
-                period: chartDaysLabel,
-              })}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {isLoading || !analytics ? (
-              <AnalyticsChartLoader className="h-[220px]" />
-            ) : topItems.length === 0 ? (
-              <ChartEmpty
-                className="h-[220px]"
-                message={t('dashboard.analytics.noPaidItems')}
-              />
-            ) : (
-              <TopItemsList items={topItems} formatMoney={formatMoney} />
-            )}
-          </CardContent>
-        </Card>
+        <PremiumGate locked={!allowTopSelling}>
+          <Card className={cn('min-w-0', CHART_CARD)}>
+            <CardHeader>
+              <CardTitle>{t('dashboard.analytics.topSelling')}</CardTitle>
+              <CardDescription>
+                {t('dashboard.analytics.topSellingDesc', {
+                  period: chartDaysLabel,
+                })}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {isLoading || !analytics ? (
+                <AnalyticsChartLoader className="h-[220px]" />
+              ) : topItems.length === 0 ? (
+                <ChartEmpty
+                  className="h-[220px]"
+                  message={t('dashboard.analytics.noPaidItems')}
+                />
+              ) : (
+                <TopItemsList items={topItems} formatMoney={formatMoney} />
+              )}
+            </CardContent>
+          </Card>
+        </PremiumGate>
 
-        <Card className={cn('min-w-0', CHART_CARD)}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock3 className="h-4 w-4 text-fire-500" aria-hidden />
-              {t('dashboard.analytics.peakHours')}
-                    </CardTitle>
-                    <CardDescription>
-              {t('dashboard.analytics.peakHoursDesc', {
-                period: chartDaysLabel,
-              })}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-            {isLoading || !analytics ? (
-              <AnalyticsChartLoader className="h-[220px]" />
-            ) : hourlyOrders.every((h) => h.orders === 0) ? (
-              <ChartEmpty
-                className="h-[220px]"
-                message={t('dashboard.analytics.noTimingData')}
-              />
-            ) : (
-              <PeakHoursBars data={hourlyOrders} />
-            )}
-          </CardContent>
-        </Card>
+        <PremiumGate locked={!allowPeakHours}>
+          <Card className={cn('min-w-0', CHART_CARD)}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock3 className="h-4 w-4 text-fire-500" aria-hidden />
+                {t('dashboard.analytics.peakHours')}
+              </CardTitle>
+              <CardDescription>
+                {t('dashboard.analytics.peakHoursDesc', {
+                  period: chartDaysLabel,
+                })}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {isLoading || !analytics ? (
+                <AnalyticsChartLoader className="h-[220px]" />
+              ) : hourlyOrders.every((h) => h.orders === 0) ? (
+                <ChartEmpty
+                  className="h-[220px]"
+                  message={t('dashboard.analytics.noTimingData')}
+                />
+              ) : (
+                <PeakHoursBars data={hourlyOrders} />
+              )}
+            </CardContent>
+          </Card>
+        </PremiumGate>
       </div>
 
       {/* 4. Floor ops + payment mix */}
       <div className="grid min-w-0 gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <PremiumGate locked={!allowFloorNow}>
         <Card className={cn('min-w-0', CHART_CARD)}>
           <CardHeader>
             <CardTitle>{t('dashboard.analytics.floorNow')}</CardTitle>
@@ -1091,7 +1154,9 @@ export default function DashboardAnalytics() {
             )}
                   </CardContent>
                 </Card>
+        </PremiumGate>
 
+        <PremiumGate locked={!allowPaymentMix}>
         <Card className={cn('min-w-0', CHART_CARD)}>
                   <CardHeader>
             <CardTitle>{t('dashboard.analytics.paymentMix')}</CardTitle>
@@ -1167,6 +1232,7 @@ export default function DashboardAnalytics() {
             )}
                 </CardContent>
               </Card>
+        </PremiumGate>
       </div>
     </div>
   );

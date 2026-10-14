@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Upload } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -35,13 +36,6 @@ import {
   type ProductImportFieldKey,
 } from '@/lib/menu/import-products-csv';
 
-const STEPS = [
-  { id: 1, title: 'Upload' },
-  { id: 2, title: 'Map columns' },
-  { id: 3, title: 'Preview' },
-  { id: 4, title: 'Finish' },
-] as const;
-
 const SKIP_MAP = '__skip__';
 
 type ImportResult = {
@@ -70,6 +64,13 @@ export function ProductCsvImportWizard({
   onOpenChange,
   onImported,
 }: ProductCsvImportWizardProps) {
+  const { t } = useTranslation();
+  const STEPS = [
+    { id: 1, title: t('dashboard.menuManager.csvImport.stepUpload') },
+    { id: 2, title: t('dashboard.menuManager.csvImport.stepMap') },
+    { id: 3, title: t('dashboard.menuManager.csvImport.stepPreview') },
+    { id: 4, title: t('dashboard.menuManager.csvImport.stepFinish') },
+  ] as const;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [step, setStep] = useState(1);
   const [file, setFile] = useState<File | null>(null);
@@ -133,7 +134,7 @@ export function ProductCsvImportWizard({
   const onPickFile = async (picked: File | null) => {
     if (!picked) return;
     if (!picked.name.toLowerCase().endsWith('.csv')) {
-      toast.error('Please choose a .csv file');
+      toast.error(t('dashboard.menuManager.csvImport.pleaseChooseCsv'));
       return;
     }
     try {
@@ -144,7 +145,7 @@ export function ProductCsvImportWizard({
         totalDataRows: total,
       } = parseCsvHeadersAndSample(text, 8);
       if (hdrs.length === 0 || total === 0) {
-        toast.error('CSV has no data rows');
+        toast.error(t('dashboard.menuManager.csvImport.csvNoDataRows'));
         return;
       }
       setFile(picked);
@@ -155,7 +156,7 @@ export function ProductCsvImportWizard({
       setMapping(guessColumnMapping(hdrs));
       setResult(null);
     } catch {
-      toast.error('Could not read the CSV file');
+      toast.error(t('dashboard.menuManager.csvImport.couldNotReadCsv'));
     }
   };
 
@@ -172,15 +173,15 @@ export function ProductCsvImportWizard({
 
   const goNext = () => {
     if (step === 1 && !canNextFrom1) {
-      toast.error('Select a CSV file first');
+      toast.error(t('dashboard.menuManager.csvImport.selectCsvFirst'));
       return;
     }
     if (step === 2 && !canNextFrom2) {
-      toast.error('Map the Product name column before continuing');
+      toast.error(t('dashboard.menuManager.csvImport.mapNameColumnFirst'));
       return;
     }
     if (step === 3 && !canNextFrom3) {
-      toast.error('No valid product rows to import with current mapping');
+      toast.error(t('dashboard.menuManager.csvImport.noValidRows'));
       return;
     }
     setStep((s) => Math.min(4, s + 1));
@@ -212,17 +213,19 @@ export function ProductCsvImportWizard({
         const detail = body.details?.slice(0, 5).join(' | ');
         throw new Error(
           detail
-            ? `${body.error ?? 'Import failed'}: ${detail}`
-            : body.error ?? 'Import failed'
+            ? `${body.error ?? t('dashboard.menuManager.csvImport.importFailed')}: ${detail}`
+            : body.error ?? t('dashboard.menuManager.csvImport.importFailed')
         );
       }
       setImportProgress(100);
       setResult(body.data ?? null);
-      toast.success('Import finished');
+      toast.success(t('dashboard.menuManager.csvImport.importFinished'));
       await onImported();
     } catch (e: unknown) {
       setImportProgress(0);
-      toast.error(e instanceof Error ? e.message : 'Import failed');
+      toast.error(
+        e instanceof Error ? e.message : t('dashboard.menuManager.csvImport.importFailed')
+      );
     } finally {
       setImporting(false);
     }
@@ -245,6 +248,9 @@ export function ProductCsvImportWizard({
     if (idx == null || idx < 0) return '';
     return (sampleRow[idx] ?? '').trim();
   };
+
+  const columnLabel = (h: string, i: number) =>
+    h || t('dashboard.menuManager.csvImport.columnFallback', { n: i + 1 });
 
   return (
     <>
@@ -269,11 +275,9 @@ export function ProductCsvImportWizard({
           }}
         >
           <DialogHeader className="border-b px-6 py-4 text-left">
-            <DialogTitle>Import products</DialogTitle>
+            <DialogTitle>{t('dashboard.menuManager.csvImport.title')}</DialogTitle>
             <DialogDescription>
-              WordPress-style CSV import — choose a file, map columns, preview,
-              then import into the product catalog. For bilingual name/description,
-              use English &&&& Spanish (same as the product form).
+              {t('dashboard.menuManager.csvImport.description')}
             </DialogDescription>
           </DialogHeader>
 
@@ -299,7 +303,7 @@ export function ProductCsvImportWizard({
             {step === 1 ? (
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <Label>CSV file</Label>
+                  <Label>{t('dashboard.menuManager.csvImport.csvFileLabel')}</Label>
                   <div className="flex flex-wrap items-center gap-3">
                     <input
                       ref={fileInputRef}
@@ -316,16 +320,18 @@ export function ProductCsvImportWizard({
                       onClick={() => fileInputRef.current?.click()}
                     >
                       <Upload className="mr-2 h-4 w-4" />
-                      Choose file
+                      {t('dashboard.menuManager.csvImport.chooseFile')}
                     </Button>
                     <span className="text-sm text-muted-foreground">
-                      {file ? file.name : 'No file selected'}
+                      {file ? file.name : t('dashboard.menuManager.csvImport.noFileSelected')}
                     </span>
                   </div>
                   {totalDataRows > 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      {totalDataRows} data row(s) detected · {headers.length}{' '}
-                      column(s)
+                      {t('dashboard.menuManager.csvImport.rowsDetected', {
+                        count: totalDataRows,
+                        columns: headers.length,
+                      })}
                     </p>
                   ) : null}
                 </div>
@@ -339,13 +345,10 @@ export function ProductCsvImportWizard({
                   />
                   <span>
                     <span className="block text-sm font-medium">
-                      Skip existing products
+                      {t('dashboard.menuManager.csvImport.skipExisting')}
                     </span>
                     <span className="mt-0.5 block text-xs text-muted-foreground">
-                      When checked, products with the same name already in the
-                      database are not recreated. Extra categories from the file
-                      are still assigned to that one product. Uncheck to also
-                      update name, price, and description on matches.
+                      {t('dashboard.menuManager.csvImport.skipExistingHint')}
                     </span>
                   </span>
                 </label>
@@ -355,19 +358,17 @@ export function ProductCsvImportWizard({
             {step === 2 ? (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Match each file column to a product field / table. Product
-                  name is required. A sample from the first row is shown under
-                  each mapping.
+                  {t('dashboard.menuManager.csvImport.mapColumnsHint')}
                 </p>
                 {headers.length > 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    File columns:{' '}
+                    {t('dashboard.menuManager.csvImport.fileColumnsLabel')}{' '}
                     {headers.map((h, i) => (
                       <span
                         key={`${i}-${h}`}
                         className="mr-1 inline-block rounded border bg-muted/50 px-1.5 py-0.5 font-medium text-foreground"
                       >
-                        {h || `(Column ${i + 1})`}
+                        {columnLabel(h, i)}
                       </span>
                     ))}
                   </p>
@@ -397,18 +398,18 @@ export function ProductCsvImportWizard({
                         onValueChange={(v) => setFieldMapping(field.key, v)}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Do not import" />
+                          <SelectValue placeholder={t('dashboard.menuManager.csvImport.doNotImportShort')} />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value={SKIP_MAP}>
-                            — Do not import —
+                            {t('dashboard.menuManager.csvImport.doNotImport')}
                           </SelectItem>
                           {headers.map((h, i) => (
                             <SelectItem
                               key={`${i}-${h}`}
                               value={h || `__col_${i}`}
                             >
-                              {h || `(Column ${i + 1})`}
+                              {columnLabel(h, i)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -418,11 +419,11 @@ export function ProductCsvImportWizard({
                           className="line-clamp-2 text-xs text-muted-foreground"
                           title={sample || undefined}
                         >
-                          {sample || 'Mapped — first row is empty'}
+                          {sample || t('dashboard.menuManager.csvImport.mappedEmptyRow')}
                         </p>
                       ) : (
                         <p className="text-xs text-muted-foreground">
-                          Do not import
+                          {t('dashboard.menuManager.csvImport.doNotImportShort')}
                         </p>
                       )}
                       </div>
@@ -436,24 +437,21 @@ export function ProductCsvImportWizard({
             {step === 3 ? (
               <div className="flex min-h-0 flex-col space-y-3">
                 <p className="shrink-0 text-sm text-muted-foreground">
-                  Preview of all{' '}
-                  <strong className="text-foreground">
-                    {previewParsed?.products.length ?? 0}
-                  </strong>{' '}
-                  mapped product(s) — scroll the table to view every row.
+                  {t('dashboard.menuManager.csvImport.previewLine', {
+                    count: previewParsed?.products.length ?? 0,
+                  })}{' '}
                   {skipDuplicates
-                    ? ' Same names in the file become one product with every listed category. Existing catalog products are reused and extra categories are added.'
-                    : ' Same names in the file become one product with every listed category. Existing catalog products are updated.'}{' '}
-                  Ingredients:{' '}
-                  <strong className="text-foreground">
-                    {mapping.ingredients || 'not mapped'}
-                  </strong>
+                    ? t('dashboard.menuManager.csvImport.skipDuplicatesNote')
+                    : t('dashboard.menuManager.csvImport.updateDuplicatesNote')}{' '}
+                  {t('dashboard.menuManager.csvImport.ingredientsMappedLine', {
+                    value: mapping.ingredients || t('dashboard.menuManager.csvImport.notMapped'),
+                  })}
                   {previewParsed
-                    ? ` · ${
-                        previewParsed.products.filter(
+                    ? t('dashboard.menuManager.csvImport.withRecipesSuffix', {
+                        count: previewParsed.products.filter(
                           (p) => p.ingredients.length > 0
-                        ).length
-                      } with recipes`
+                        ).length,
+                      })
                     : ''}
                   .
                 </p>
@@ -469,37 +467,37 @@ export function ProductCsvImportWizard({
                     <thead className="sticky top-0 z-10 bg-muted shadow-sm">
                       <tr>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
-                          #
+                          {t('dashboard.menuManager.csvImport.colIndex')}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
-                          Name
+                          {t('dashboard.menuManager.csvImport.colName')}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
-                          Ingredients
+                          {t('dashboard.menuManager.csvImport.colIngredients')}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
-                          Description
+                          {t('dashboard.menuManager.csvImport.colDescription')}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
-                          Price
+                          {t('dashboard.menuManager.csvImport.colPrice')}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
-                          Sale
+                          {t('dashboard.menuManager.csvImport.colSale')}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
-                          Categories
+                          {t('dashboard.menuManager.csvImport.colCategories')}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
-                          Variations
+                          {t('dashboard.menuManager.csvImport.colVariations')}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
-                          Recommendations
+                          {t('dashboard.menuManager.csvImport.colRecommendations')}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
-                          Offers
+                          {t('dashboard.menuManager.csvImport.colOffers')}
                         </th>
                         <th className="whitespace-nowrap px-3 py-2 font-medium">
-                          Personalize
+                          {t('dashboard.menuManager.csvImport.colPersonalize')}
                         </th>
                       </tr>
                     </thead>
@@ -557,7 +555,7 @@ export function ProductCsvImportWizard({
                             colSpan={11}
                             className="px-3 py-6 text-center text-muted-foreground"
                           >
-                            No rows to preview. Go back and fix mapping.
+                            {t('dashboard.menuManager.csvImport.noRowsToPreview')}
                           </td>
                         </tr>
                       ) : null}
@@ -573,7 +571,7 @@ export function ProductCsvImportWizard({
                   <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
                     <div className="flex items-center justify-between gap-3 text-sm">
                       <p className="font-medium">
-                        Importing products…
+                        {t('dashboard.menuManager.csvImport.importingProducts')}
                       </p>
                       <span className="tabular-nums text-muted-foreground">
                         {importProgress}%
@@ -581,65 +579,65 @@ export function ProductCsvImportWizard({
                     </div>
                     <Progress value={importProgress} className="h-2.5" />
                     <p className="text-xs text-muted-foreground">
-                      Writing{' '}
-                      <strong className="text-foreground">
-                        {previewParsed?.products.length ?? totalDataRows}
-                      </strong>{' '}
-                      product(s) from{' '}
-                      <strong className="text-foreground">
-                        {file?.name ?? 'CSV'}
-                      </strong>
-                      . Keep this window open until it finishes.
+                      {t('dashboard.menuManager.csvImport.writingProductsLine', {
+                        count: previewParsed?.products.length ?? totalDataRows,
+                        file: file?.name ?? 'CSV',
+                      })}
                     </p>
                   </div>
                 ) : null}
                 {!result && !importing ? (
                   <>
                     <p className="text-sm">
-                      Ready to import{' '}
-                      <strong>
-                        {previewParsed?.products.length ?? totalDataRows}
-                      </strong>{' '}
-                      product row(s) from{' '}
-                      <strong>{file?.name ?? 'CSV'}</strong>.
+                      {t('dashboard.menuManager.csvImport.readyToImportLine', {
+                        count: previewParsed?.products.length ?? totalDataRows,
+                        file: file?.name ?? 'CSV',
+                      })}
                     </p>
                     <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                       <li>
-                        Duplicates:{' '}
                         {skipDuplicates
-                          ? 'reuse existing names and add extra categories'
-                          : 'update existing core fields and set categories from the file'}
+                          ? t('dashboard.menuManager.csvImport.duplicatesReuse')
+                          : t('dashboard.menuManager.csvImport.duplicatesUpdate')}
                       </li>
                       <li>
-                        Name column: {mapping.name || '(not mapped)'}
+                        {t('dashboard.menuManager.csvImport.nameColumnLine', {
+                          value:
+                            mapping.name ||
+                            t('dashboard.menuManager.csvImport.notMappedParen'),
+                        })}
                       </li>
                       <li>
-                        Ingredients column:{' '}
-                        {mapping.ingredients || '(not mapped)'}
+                        {t('dashboard.menuManager.csvImport.ingredientsColumnLine', {
+                          value:
+                            mapping.ingredients ||
+                            t('dashboard.menuManager.csvImport.notMappedParen'),
+                        })}
                       </li>
                     </ul>
                     <p className="text-xs text-muted-foreground">
-                      Click <strong>Run import</strong> to write to the
-                      database. You will be asked to confirm.
+                      {t('dashboard.menuManager.csvImport.runImportHint')}
                     </p>
                   </>
                 ) : null}
                 {result ? (
                   <div className="space-y-2 rounded-lg border border-emerald-600/30 bg-emerald-500/10 p-4 text-sm">
                     <p className="font-medium text-emerald-800 dark:text-emerald-200">
-                      Import complete
+                      {t('dashboard.menuManager.csvImport.importComplete')}
                     </p>
                     <ul className="space-y-1 text-muted-foreground">
-                      <li>Created: {result.createdProducts}</li>
-                      <li>Updated: {result.updatedProducts}</li>
-                      <li>Skipped: {result.skippedProducts}</li>
-                      <li>Variations: {result.variations}</li>
-                      <li>Recommendations: {result.recommendations}</li>
-                      <li>Offers: {result.offers}</li>
+                      <li>{t('dashboard.menuManager.csvImport.created', { count: result.createdProducts })}</li>
+                      <li>{t('dashboard.menuManager.csvImport.updated', { count: result.updatedProducts })}</li>
+                      <li>{t('dashboard.menuManager.csvImport.skipped', { count: result.skippedProducts })}</li>
+                      <li>{t('dashboard.menuManager.csvImport.variationsCount', { count: result.variations })}</li>
+                      <li>{t('dashboard.menuManager.csvImport.recommendationsCount', { count: result.recommendations })}</li>
+                      <li>{t('dashboard.menuManager.csvImport.offersCount', { count: result.offers })}</li>
                       <li>
-                        Ingredients created: {result.createdIngredients ?? 0}
+                        {t('dashboard.menuManager.csvImport.ingredientsCreated', {
+                          count: result.createdIngredients ?? 0,
+                        })}
                       </li>
-                      <li>Recipe lines: {result.ingredients ?? 0}</li>
+                      <li>{t('dashboard.menuManager.csvImport.recipeLines', { count: result.ingredients ?? 0 })}</li>
                     </ul>
                   </div>
                 ) : null}
@@ -654,7 +652,9 @@ export function ProductCsvImportWizard({
               disabled={importing}
               onClick={requestCancel}
             >
-              {result ? 'Close' : 'Cancel'}
+              {result
+                ? t('dashboard.menuManager.csvImport.close')
+                : t('dashboard.menuManager.csvImport.cancel')}
             </Button>
             <div className="flex flex-wrap gap-2">
               {step > 1 && !result ? (
@@ -664,12 +664,12 @@ export function ProductCsvImportWizard({
                   disabled={importing}
                   onClick={goBack}
                 >
-                  Back
+                  {t('dashboard.menuManager.csvImport.back')}
                 </Button>
               ) : null}
               {step < 4 ? (
                 <Button type="button" onClick={goNext}>
-                  Next
+                  {t('dashboard.menuManager.csvImport.next')}
                 </Button>
               ) : null}
               {step === 4 && !result ? (
@@ -681,16 +681,16 @@ export function ProductCsvImportWizard({
                   {importing ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Importing…
+                      {t('dashboard.menuManager.csvImport.importingEllipsis')}
                     </>
                   ) : (
-                    'Run import'
+                    t('dashboard.menuManager.csvImport.runImportButton')
                   )}
                 </Button>
               ) : null}
               {step === 4 && result ? (
                 <Button type="button" onClick={closeWizard}>
-                  Done
+                  {t('dashboard.menuManager.csvImport.done')}
                 </Button>
               ) : null}
             </div>
@@ -700,9 +700,9 @@ export function ProductCsvImportWizard({
 
       <SaveConfirmation
         open={showCancelConfirm}
-        title="Cancel import"
-        description="Leave the import wizard? Your selected file and column mapping will be discarded."
-        confirmText="Leave wizard"
+        title={t('dashboard.menuManager.csvImport.cancelImportTitle')}
+        description={t('dashboard.menuManager.csvImport.cancelImportDescription')}
+        confirmText={t('dashboard.menuManager.csvImport.leaveWizard')}
         loading={false}
         onConfirm={() => {
           setShowCancelConfirm(false);
@@ -713,13 +713,17 @@ export function ProductCsvImportWizard({
 
       <SaveConfirmation
         open={showFinishConfirm}
-        title="Finish import"
+        title={t('dashboard.menuManager.csvImport.finishImportTitle')}
         description={
           skipDuplicates
-            ? `Import products from "${file?.name ?? 'CSV'}"? Existing products with the same name will not be duplicated. Extra categories from the file will still be assigned.`
-            : `Import products from "${file?.name ?? 'CSV'}"? Existing products with the same name will be updated, including categories from the file.`
+            ? t('dashboard.menuManager.csvImport.finishImportSkipDesc', {
+                file: file?.name ?? 'CSV',
+              })
+            : t('dashboard.menuManager.csvImport.finishImportUpdateDesc', {
+                file: file?.name ?? 'CSV',
+              })
         }
-        confirmText="Import now"
+        confirmText={t('dashboard.menuManager.csvImport.importNow')}
         loading={importing}
         onConfirm={() => void runImport()}
         onCancel={() => {

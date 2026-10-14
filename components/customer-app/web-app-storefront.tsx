@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Sidebar } from '@/components/customer-app/sidebar';
 import { StorefrontBrandHero } from '@/components/customer-app/storefront/storefront-brand-hero';
@@ -28,6 +29,7 @@ export function WebAppStorefront({
   slug: string;
   initialThemePrimaryColor?: string | null;
 }) {
+  const { t } = useTranslation();
   const [brand, setBrand] = useState<RestaurantBrand | null>(() =>
     initialThemePrimaryColor
       ? {
@@ -167,7 +169,7 @@ export function WebAppStorefront({
         <div className="flex min-h-[60vh] flex-1 items-center justify-center">
           <Loader2
             className="h-8 w-8 animate-spin text-primary"
-            aria-label="Loading"
+            aria-label={t('loadingAria')}
           />
         </div>
       ) : (
@@ -181,7 +183,7 @@ export function WebAppStorefront({
             {bannerUrl ? (
               <img
                 src={bannerUrl}
-                alt={`${displayName} banner`}
+                alt={t('restaurantBannerAlt', { name: displayName })}
                 className="absolute inset-0 h-full w-full object-cover object-center"
                 decoding="async"
                 referrerPolicy="no-referrer"

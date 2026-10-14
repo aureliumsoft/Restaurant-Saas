@@ -45,6 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
@@ -69,6 +70,7 @@ type BlogDetail = BlogListItem & {
 };
 
 export default function AdminBlogListPage() {
+  const { t } = useTranslation();
   const lang = useUiLanguage();
   const [posts, setPosts] = useState<BlogListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,12 +86,12 @@ export default function AdminBlogListPage() {
       const res = await axios.get<{ data: BlogListItem[] }>('/api/admin/blog');
       setPosts(res.data.data ?? []);
     } catch {
-      setError('Could not load blog posts.');
-      toast.error('Could not load blog posts.');
+      setError(t('admin.blogPage.loadError'));
+      toast.error(t('admin.blogPage.loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -104,7 +106,7 @@ export default function AdminBlogListPage() {
       );
       setPreview(res.data.data);
     } catch {
-      toast.error('Could not load post preview.');
+      toast.error(t('admin.blogPage.previewLoadError'));
     } finally {
       setPreviewLoading(false);
     }
@@ -130,7 +132,9 @@ export default function AdminBlogListPage() {
         status: next,
       });
       toast.success(
-        next === 'PUBLISHED' ? 'Post published.' : 'Moved to draft.'
+        next === 'PUBLISHED'
+          ? t('admin.blogPage.publishedToast')
+          : t('admin.blogPage.draftedToast')
       );
       await load();
       if (preview?.id === post.id) {
@@ -148,7 +152,7 @@ export default function AdminBlogListPage() {
         );
       }
     } catch {
-      toast.error('Could not update status.');
+      toast.error(t('admin.blogPage.statusUpdateError'));
     } finally {
       setBusyId(null);
     }
@@ -159,12 +163,12 @@ export default function AdminBlogListPage() {
     setBusyId(deleteId);
     try {
       await axios.delete(`/api/admin/blog/${deleteId}`);
-      toast.success('Post deleted.');
+      toast.success(t('admin.blogPage.deletedToast'));
       if (preview?.id === deleteId) setPreview(null);
       setDeleteId(null);
       await load();
     } catch {
-      toast.error('Could not delete post.');
+      toast.error(t('admin.blogPage.deleteError'));
     } finally {
       setBusyId(null);
     }
@@ -173,9 +177,9 @@ export default function AdminBlogListPage() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        eyebrow="Content"
-        title="Blog posts"
-        description="Create and publish articles for the public Foodluk blog."
+        eyebrow={t('admin.blogPage.eyebrow')}
+        title={t('admin.blogPage.title')}
+        description={t('admin.blogPage.description')}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -193,7 +197,7 @@ export default function AdminBlogListPage() {
             <Button type="button" asChild>
               <Link href="/admin/blog/new">
                 <Plus className="mr-2 h-4 w-4" />
-                Add blog
+                {t('admin.blogPage.addBlog')}
               </Link>
             </Button>
           </div>
@@ -211,17 +215,17 @@ export default function AdminBlogListPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="h-5 w-5 text-muted-foreground" />
-              No posts yet
+              {t('admin.blogPage.emptyTitle')}
             </CardTitle>
             <CardDescription>
-              Create your first blog post for the SaaS marketing site.
+              {t('admin.blogPage.emptyDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button type="button" asChild>
               <Link href="/admin/blog/new">
                 <Plus className="mr-2 h-4 w-4" />
-                Add blog
+                {t('admin.blogPage.addBlog')}
               </Link>
             </Button>
           </CardContent>
@@ -263,10 +267,12 @@ export default function AdminBlogListPage() {
                           post.status === 'PUBLISHED' ? 'default' : 'secondary'
                         }
                       >
-                        {post.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                        {post.status === 'PUBLISHED'
+                          ? t('admin.blogPage.statusPublished')
+                          : t('admin.blogPage.statusDraft')}
                       </Badge>
                       {post.featured ? (
-                        <Badge variant="outline">Featured</Badge>
+                        <Badge variant="outline">{t('admin.blogPage.featured')}</Badge>
                       ) : null}
                     </div>
                     <span className="text-xs text-muted-foreground">
@@ -305,7 +311,9 @@ export default function AdminBlogListPage() {
                   ) : (
                     <Send className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  {post.status === 'PUBLISHED' ? 'Make Draft' : 'Publish'}
+                  {post.status === 'PUBLISHED'
+                    ? t('admin.blogPage.makeDraft')
+                    : t('admin.blogPage.publish')}
                 </Button>
 
                 <div className="flex items-center">
@@ -378,7 +386,9 @@ export default function AdminBlogListPage() {
                       preview.status === 'PUBLISHED' ? 'default' : 'secondary'
                     }
                   >
-                    {preview.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                    {preview.status === 'PUBLISHED'
+                      ? t('admin.blogPage.statusPublished')
+                      : t('admin.blogPage.statusDraft')}
                   </Badge>
                 </div>
                 <h2 className="text-2xl font-semibold tracking-tight">
@@ -397,13 +407,13 @@ export default function AdminBlogListPage() {
                   }}
                 />
                 <p className="border-t border-border/60 pt-4 text-sm text-muted-foreground">
-                  Publish date:{' '}
+                  {t('admin.blogPage.publishDateLabel')}{' '}
                   {preview.publishedAt
                     ? format(
                         new Date(preview.publishedAt),
                         'MMMM d, yyyy · HH:mm'
                       )
-                    : 'Not published yet'}
+                    : t('admin.blogPage.notPublishedYet')}
                 </p>
               </div>
             </>
@@ -419,13 +429,13 @@ export default function AdminBlogListPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete blog post?</AlertDialogTitle>
+            <AlertDialogTitle>{t('admin.blogPage.deleteConfirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes the post. This cannot be undone.
+              {t('admin.blogPage.deleteConfirmDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <AlertDialogCancel type="button">{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               type="button"
               onClick={(e) => {
@@ -433,7 +443,7 @@ export default function AdminBlogListPage() {
                 void confirmDelete();
               }}
             >
-              Delete
+              {t('admin.blogPage.deleteAction')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -15,6 +15,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import { useTranslation } from 'react-i18next';
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminStatCard } from '@/components/admin/admin-stat-card';
@@ -86,38 +87,38 @@ type Overview = {
 type RangePreset = 'monthly' | '3m' | '6m' | '1y' | 'custom';
 
 const SUBSCRIPTION_SEGMENTS = [
-  { key: 'active' as const, label: 'Active', color: '#10b981' },
-  { key: 'trial' as const, label: 'Trial', color: '#3b82f6' },
-  { key: 'pastDue' as const, label: 'Past due', color: '#f59e0b' },
-  { key: 'canceled' as const, label: 'Canceled', color: '#94a3b8' },
-  { key: 'noSubscription' as const, label: 'No plan', color: '#cbd5e1' },
+  { key: 'active' as const, labelKey: 'admin.dashboard.segActive', color: '#10b981' },
+  { key: 'trial' as const, labelKey: 'admin.dashboard.segTrial', color: '#3b82f6' },
+  { key: 'pastDue' as const, labelKey: 'admin.dashboard.segPastDue', color: '#f59e0b' },
+  { key: 'canceled' as const, labelKey: 'admin.dashboard.segCanceled', color: '#94a3b8' },
+  { key: 'noSubscription' as const, labelKey: 'admin.dashboard.segNoPlan', color: '#cbd5e1' },
 ];
 
 const QUICK_ACTIONS = [
   {
-    title: 'Restaurants',
-    description: 'Browse tenants and owners',
+    titleKey: 'admin.dashboard.qaRestaurantsTitle',
+    descriptionKey: 'admin.dashboard.qaRestaurantsDesc',
     href: '/admin/restaurants',
     icon: Building2,
     color: '#ed6e40',
   },
   {
-    title: 'Subscriptions',
-    description: 'Plans, billing, and renewals',
+    titleKey: 'admin.dashboard.qaSubscriptionsTitle',
+    descriptionKey: 'admin.dashboard.qaSubscriptionsDesc',
     href: '/admin/subscriptions',
     icon: CreditCard,
     color: '#7c3aed',
   },
   {
-    title: 'Demo requests',
-    description: 'Leads from the marketing site',
+    titleKey: 'admin.dashboard.qaRequestsTitle',
+    descriptionKey: 'admin.dashboard.qaRequestsDesc',
     href: '/admin/requests',
     icon: Inbox,
     color: '#0ea5e9',
   },
   {
-    title: 'Platform settings',
-    description: 'Pricing and global config',
+    titleKey: 'admin.dashboard.qaSettingsTitle',
+    descriptionKey: 'admin.dashboard.qaSettingsDesc',
     href: '/admin/settings',
     icon: Settings,
     color: '#64748b',
@@ -158,6 +159,7 @@ function DashboardSkeleton() {
 }
 
 export function AdminDashboardOverview() {
+  const { t } = useTranslation();
   const { data: session } = useSession();
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -187,12 +189,12 @@ export function AdminDashboardOverview() {
       const r = await axios.get(`/api/admin/overview?${queryString}`);
       setData(r.data.data);
     } catch {
-      setError('Could not load platform overview. Please try again.');
+      setError(t('admin.dashboard.loadError'));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [queryString]);
+  }, [queryString, t]);
 
   useEffect(() => {
     load();
@@ -223,19 +225,19 @@ export function AdminDashboardOverview() {
   const rangeLabel = useMemo(() => {
     switch (preset) {
       case 'monthly':
-        return 'This month';
+        return t('admin.dashboard.rangeMonthly');
       case '3m':
-        return 'Last 3 months';
+        return t('admin.dashboard.range3m');
       case '6m':
-        return 'Last 6 months';
+        return t('admin.dashboard.range6m');
       case '1y':
-        return 'Last year';
+        return t('admin.dashboard.range1y');
       case 'custom':
-        return 'Custom range';
+        return t('admin.dashboard.rangeCustom');
       default:
-        return 'This month';
+        return t('admin.dashboard.rangeMonthly');
     }
-  }, [preset]);
+  }, [preset, t]);
 
   if (loading) {
     return <DashboardSkeleton />;
@@ -244,10 +246,10 @@ export function AdminDashboardOverview() {
   if (error || !data) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border/80 bg-card/50 p-8 text-center">
-        <p className="text-sm text-destructive">{error ?? 'Something went wrong.'}</p>
+        <p className="text-sm text-destructive">{error ?? t('admin.dashboard.unknownError')}</p>
         <Button type="button" variant="outline" onClick={() => load()}>
           <RefreshCw className="mr-2 h-4 w-4" />
-          Retry
+          {t('admin.dashboard.retry')}
         </Button>
       </div>
     );
@@ -256,22 +258,25 @@ export function AdminDashboardOverview() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        eyebrow="Overview"
-        title={`Welcome Back, ${firstName}`}
-        description={`Showing ${rangeLabel} — updated ${format(new Date(), 'EEEE, MMM d')}`}
+        eyebrow={t('admin.dashboard.eyebrow')}
+        title={t('admin.dashboard.welcomeBack', { name: firstName })}
+        description={t('admin.dashboard.showingRange', {
+          range: rangeLabel,
+          date: format(new Date(), 'EEEE, MMM d'),
+        })}
         actions={
           <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2">
               <Select value={preset} onValueChange={(v) => setPreset(v as RangePreset)}>
                 <SelectTrigger className="h-9 w-[170px] rounded-xl">
-                  <SelectValue placeholder="Date range" />
+                  <SelectValue placeholder={t('admin.dashboard.dateRangePlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="3m">3 months</SelectItem>
-                  <SelectItem value="6m">6 months</SelectItem>
-                  <SelectItem value="1y">1 year</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
+                  <SelectItem value="monthly">{t('admin.dashboard.monthly')}</SelectItem>
+                  <SelectItem value="3m">{t('admin.dashboard.threeMonths')}</SelectItem>
+                  <SelectItem value="6m">{t('admin.dashboard.sixMonths')}</SelectItem>
+                  <SelectItem value="1y">{t('admin.dashboard.oneYear')}</SelectItem>
+                  <SelectItem value="custom">{t('admin.dashboard.customOption')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -307,7 +312,7 @@ export function AdminDashboardOverview() {
                   disabled={!customFrom || !customTo || refreshing}
                   onClick={() => load(true)}
                 >
-                  Apply
+                  {t('admin.dashboard.apply')}
                 </Button>
               </div>
             ) : null}
@@ -317,33 +322,33 @@ export function AdminDashboardOverview() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <AdminStatCard
-          title="Restaurants"
-          subtitle="Total onboarded tenants"
+          title={t('admin.dashboard.statRestaurants')}
+          subtitle={t('admin.dashboard.statRestaurantsSub')}
           value={data.restaurantCount}
           accentColor="#ed6e40"
           icon={Building2}
           href="/admin/restaurants"
         />
         <AdminStatCard
-          title="Active subscriptions"
-          subtitle="Paying or active plans"
+          title={t('admin.dashboard.statActiveSubs')}
+          subtitle={t('admin.dashboard.statActiveSubsSub')}
           value={data.activeSubscriptions}
           accentColor="#10b981"
           icon={CreditCard}
           href="/admin/subscriptions"
-          badge={`${conversionRate}% conversion`}
+          badge={t('admin.dashboard.conversionBadge', { percent: conversionRate })}
         />
         <AdminStatCard
-          title="Trials"
-          subtitle="Restaurants in trial period"
+          title={t('admin.dashboard.statTrials')}
+          subtitle={t('admin.dashboard.statTrialsSub')}
           value={data.trialSubscriptions}
           accentColor="#3b82f6"
           icon={FlaskConical}
           href="/admin/subscriptions"
         />
         <AdminStatCard
-          title="Demo requests"
-          subtitle="Leads from marketing site"
+          title={t('admin.dashboard.statDemoRequests')}
+          subtitle={t('admin.dashboard.statDemoRequestsSub')}
           value={data.demoRequestCount}
           accentColor="#0ea5e9"
           icon={Inbox}
@@ -355,12 +360,12 @@ export function AdminDashboardOverview() {
       <div className="grid gap-5 lg:grid-cols-5">
         <AdminSection className="lg:col-span-3">
           <AdminSectionHeader
-            title="Subscription health"
-            description={`Distribution across all ${data.restaurantCount} restaurants`}
+            title={t('admin.dashboard.subHealthTitle')}
+            description={t('admin.dashboard.subHealthDesc', { count: data.restaurantCount })}
             action={
               <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
                 <TrendingUp className="h-3.5 w-3.5" />
-                {conversionRate}% active
+                {t('admin.dashboard.activeBadge', { percent: conversionRate })}
               </div>
             }
           />
@@ -374,7 +379,7 @@ export function AdminDashboardOverview() {
                     width: `${(seg.count / data.restaurantCount) * 100}%`,
                     backgroundColor: seg.color,
                   }}
-                  title={`${seg.label}: ${seg.count}`}
+                  title={t('admin.dashboard.segmentTooltip', { label: t(seg.labelKey), count: seg.count })}
                 />
               ))}
             </div>
@@ -393,7 +398,7 @@ export function AdminDashboardOverview() {
                       className="h-2 w-2 shrink-0 rounded-full"
                       style={{ backgroundColor: seg.color }}
                     />
-                    <span className="text-sm font-medium">{seg.label}</span>
+                    <span className="text-sm font-medium">{t(seg.labelKey)}</span>
                   </div>
                   <div className="text-right">
                     <span className="text-sm font-semibold tabular-nums">{seg.count}</span>
@@ -405,7 +410,7 @@ export function AdminDashboardOverview() {
 
             <div className={cn('space-y-2 rounded-xl p-4', adminInsetClass)}>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Trial → active conversion</span>
+                <span className="text-muted-foreground">{t('admin.dashboard.trialConversionLabel')}</span>
                 <span className="font-semibold tabular-nums">{conversionRate}%</span>
               </div>
               <Progress value={conversionRate} className="h-1.5 bg-white/80 dark:bg-zinc-900/50" />
@@ -415,8 +420,8 @@ export function AdminDashboardOverview() {
 
         <AdminSection className="lg:col-span-2">
           <AdminSectionHeader
-            title="Quick actions"
-            description="Jump to common admin tasks"
+            title={t('admin.dashboard.quickActionsTitle')}
+            description={t('admin.dashboard.quickActionsDesc')}
           />
           <AdminSectionBody className="grid gap-1.5 pt-0">
             {QUICK_ACTIONS.map((action) => (
@@ -432,8 +437,8 @@ export function AdminDashboardOverview() {
                   <action.icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{action.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">{action.description}</p>
+                  <p className="text-sm font-medium">{t(action.titleKey)}</p>
+                  <p className="truncate text-xs text-muted-foreground">{t(action.descriptionKey)}</p>
                 </div>
                 <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
               </Link>
@@ -445,12 +450,12 @@ export function AdminDashboardOverview() {
       <div className="grid min-w-0 gap-5 xl:grid-cols-2">
         <AdminSection>
           <AdminSectionHeader
-            title="Recent restaurants"
-            description="Latest tenants onboarded"
+            title={t('admin.dashboard.recentRestaurantsTitle')}
+            description={t('admin.dashboard.recentRestaurantsDesc')}
             action={
               <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
                 <Link href="/admin/restaurants">
-                  View all
+                  {t('admin.dashboard.viewAll')}
                   <ArrowRight className="ml-1 h-3.5 w-3.5" />
                 </Link>
               </Button>
@@ -459,15 +464,15 @@ export function AdminDashboardOverview() {
           <AdminSectionBody className="min-w-0 px-0 pb-4 pt-0">
             <AdminTableWrapper>
             {data.recentRestaurants.length === 0 ? (
-              <AdminTableEmpty>No restaurants yet.</AdminTableEmpty>
+              <AdminTableEmpty>{t('admin.restaurants.empty')}</AdminTableEmpty>
             ) : (
               <AdminTable minWidth={560}>
                 <AdminTableHeader>
                   <AdminTableRow>
-                    <AdminTableHead>Restaurant</AdminTableHead>
-                    <AdminTableHead>Owner</AdminTableHead>
-                    <AdminTableHead>Status</AdminTableHead>
-                    <AdminTableHead className="text-right">Joined</AdminTableHead>
+                    <AdminTableHead>{t('admin.restaurants.colRestaurant')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.restaurants.colOwner')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.dashboard.colStatus')}</AdminTableHead>
+                    <AdminTableHead className="text-right">{t('admin.dashboard.colJoined')}</AdminTableHead>
                   </AdminTableRow>
                 </AdminTableHeader>
                 <AdminTableBody>
@@ -485,7 +490,7 @@ export function AdminDashboardOverview() {
                             {r.subscription.status}
                           </Badge>
                         ) : (
-                          <Badge variant="secondary" className="rounded-md">None</Badge>
+                          <Badge variant="secondary" className="rounded-md">{t('admin.dashboard.noneBadge')}</Badge>
                         )}
                       </AdminTableCell>
                       <AdminTableCell className="text-right">
@@ -504,12 +509,12 @@ export function AdminDashboardOverview() {
 
         <AdminSection>
           <AdminSectionHeader
-            title="Recent demo requests"
-            description="Latest inbound leads"
+            title={t('admin.dashboard.recentRequestsTitle')}
+            description={t('admin.dashboard.recentRequestsDesc')}
             action={
               <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
                 <Link href="/admin/requests">
-                  View all
+                  {t('admin.dashboard.viewAll')}
                   <ArrowRight className="ml-1 h-3.5 w-3.5" />
                 </Link>
               </Button>
@@ -518,14 +523,14 @@ export function AdminDashboardOverview() {
           <AdminSectionBody className="min-w-0 px-0 pb-4 pt-0">
             <AdminTableWrapper>
             {data.recentRequests.length === 0 ? (
-              <AdminTableEmpty>No demo requests yet.</AdminTableEmpty>
+              <AdminTableEmpty>{t('admin.dashboard.emptyRequests')}</AdminTableEmpty>
             ) : (
               <AdminTable minWidth={560}>
                 <AdminTableHeader>
                   <AdminTableRow>
-                    <AdminTableHead>Contact</AdminTableHead>
-                    <AdminTableHead>Restaurant</AdminTableHead>
-                    <AdminTableHead className="text-right">Requested</AdminTableHead>
+                    <AdminTableHead>{t('admin.requests.colContact')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.requests.colRestaurant')}</AdminTableHead>
+                    <AdminTableHead className="text-right">{t('admin.requests.colRequested')}</AdminTableHead>
                   </AdminTableRow>
                 </AdminTableHeader>
                 <AdminTableBody>

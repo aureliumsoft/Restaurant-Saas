@@ -218,6 +218,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const [employeeCount, pendingInviteCount] = await Promise.all([
+    db.employee.count({ where: { restaurantId: auth.restaurantId } }),
+    db.employeeInvite.count({
+      where: { restaurantId: auth.restaurantId, status: 'PENDING' },
+    }),
+  ]);
+  const { assertCreateCap } = await import(
+    '@/lib/subscription-plan-enforcement'
+  );
+  const limitDenied = await assertCreateCap(
+    auth.restaurantId,
+    'users',
+    employeeCount + pendingInviteCount,
+    'Users'
+  );
+  if (limitDenied) return limitDenied;
+
   const restaurant = await db.restaurant.findUnique({
     where: { id: auth.restaurantId },
     select: { name: true },

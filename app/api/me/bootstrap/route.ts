@@ -21,8 +21,12 @@ import {
   parseRestaurantFulfillmentSettings,
   RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
 } from '@/lib/restaurant-fulfillment-settings';
+import {
+  entitlementsToClientPayload,
+  getRestaurantEntitlements,
+  resolveEntitlements,
+} from '@/lib/entitlements';
 import { evaluateSubscriptionAccess } from '@/lib/subscription-access';
-import { getPlanFeatures } from '@/lib/subscription-plan-features';
 import type { StaffBootstrapData } from '@/types/staff-bootstrap';
 import {
   publicRestaurantImageUrls,
@@ -132,17 +136,11 @@ export async function GET(req: NextRequest) {
     });
 
     if (!restaurant) {
-      const f0 = getPlanFeatures(SubscriptionPlan.STARTER);
       const payload: StaffBootstrapData = {
         permissions: [],
-        plan: {
-          maxBranches: f0.maxBranches,
-          recommendations: f0.recommendations,
-          roleBasedSettings: f0.roleBasedSettings,
-          branding: f0.branding,
-          advancedAnalytics: f0.advancedAnalytics,
-          mobileApp: f0.mobileApp,
-        },
+        plan: entitlementsToClientPayload(
+          resolveEntitlements(SubscriptionPlan.FREE)
+        ),
         regional: parseRestaurantRegionalSettings(null),
         restaurant: null,
         serviceCharges: null,
@@ -157,26 +155,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data: payload });
     }
 
-    const [branchScope, restaurantPayload, permissions, subscription] =
+    const [branchScope, restaurantPayload, permissions, subscription, entitlements] =
       await Promise.all([
         getBranchScopeFromRequest(req, user.id, restaurant.id),
         loadRestaurantBootstrapPayload(restaurant.id),
         getEffectiveDashboardPermissionNames(user.id, restaurant.id),
         loadSubscriptionAccess(restaurant.id),
+        getRestaurantEntitlements(restaurant.id),
       ]);
-
-    const f = getPlanFeatures(subscription.plan ?? SubscriptionPlan.STARTER);
 
     const payload: StaffBootstrapData = {
       permissions,
-      plan: {
-        maxBranches: Number.isFinite(f.maxBranches) ? f.maxBranches : null,
-        recommendations: f.recommendations,
-        roleBasedSettings: f.roleBasedSettings,
-        branding: f.branding,
-        advancedAnalytics: f.advancedAnalytics,
-        mobileApp: f.mobileApp,
-      },
+      plan: entitlementsToClientPayload(entitlements),
       regional: parseRestaurantRegionalSettings(
         restaurantPayload as {
           currencyCode?: string;

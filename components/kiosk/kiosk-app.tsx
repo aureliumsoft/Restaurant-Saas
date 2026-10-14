@@ -134,13 +134,16 @@ const KIOSK_PRODUCT_GRID =
 
 type KioskKeyboardField = 'name' | 'phone' | 'instructions';
 
-function formatKioskOrderApiError(body: unknown): string {
+function formatKioskOrderApiError(
+  body: unknown,
+  t: (key: string) => string
+): string {
   if (!body || typeof body !== 'object') {
-    return 'Could not place order.';
+    return t('couldNotPlaceOrder');
   }
   const err = (body as { error?: unknown }).error;
   if (typeof err === 'string') return err;
-  return 'Could not place order.';
+  return t('couldNotPlaceOrder');
 }
 
 type CartModifierSelection = {
@@ -392,6 +395,7 @@ const KioskProductCard = memo(function KioskProductCard({
                 variant="outline"
                 className="h-9 w-9 shrink-0"
                 onClick={() => onBumpQty(p.id, -1)}
+                aria-label={t('decreaseProductQuantity', { name: displayName })}
               >
                 <Minus className="h-4 w-4" />
               </Button>
@@ -404,6 +408,7 @@ const KioskProductCard = memo(function KioskProductCard({
                 variant="outline"
                 className="h-9 w-9 shrink-0"
                 onClick={() => onTap(p)}
+                aria-label={t('increaseProductQuantity', { name: displayName })}
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -738,7 +743,7 @@ export function KioskApp({
   useEffect(() => {
     if (!restaurantMeta || !fromTableQr) return;
     if (!fulfillmentSettings.dineInEnabled) {
-      toast.error('Dine-in is not available at this restaurant.');
+      toast.error(t('dineInNotAvailable'));
       setFromTableQr(false);
       setSelectedTableId('');
       setFulfillment('take_away');
@@ -786,11 +791,9 @@ export function KioskApp({
           }
           setCart([]);
           setStep('menu');
-          toast.success(
-            'Payment received. Your order was sent to the kitchen.'
-          );
+          toast.success(t('paymentReceivedOrderSent'));
         } else {
-          toast.info('Payment is processing. Your order will sync shortly.');
+          toast.info(t('paymentProcessingSyncSoon'));
         }
         router.replace(kioskPath);
       })();
@@ -919,7 +922,7 @@ export function KioskApp({
         router.replace(kioskPath);
         return;
       }
-      toast.warn('Table from this QR link is not available.');
+      toast.warn(t('tableQrNotAvailable'));
     }
 
     deepLinkAppliedRef.current = true;
@@ -999,7 +1002,7 @@ export function KioskApp({
     formatMoney,
     currency: regional.currencyCode,
     beforeCharge: async () => {
-      if (cart.length === 0) return 'Cart is empty.';
+      if (cart.length === 0) return t('cartEmpty');
       try {
         const res = await fetch('/api/kiosk/orders/check-stock', {
           method: 'POST',
@@ -1017,9 +1020,9 @@ export function KioskApp({
         });
         if (res.ok) return null;
         const body: unknown = await res.json().catch(() => null);
-        return formatKioskOrderApiError(body);
+        return formatKioskOrderApiError(body, t);
       } catch {
-        return 'Could not check ingredient stock.';
+        return t('couldNotCheckIngredientStock');
       }
     },
     onChargeBlocked: (msg) => toast.error(msg),
@@ -1490,8 +1493,8 @@ export function KioskApp({
       const ex = e as { body?: unknown };
       toast.error(
         ex.body !== undefined
-          ? formatKioskOrderApiError(ex.body)
-          : 'Could not place order.'
+          ? formatKioskOrderApiError(ex.body, t)
+          : t('couldNotPlaceOrder')
       );
     } finally {
       setPlacing(false);
@@ -1500,12 +1503,12 @@ export function KioskApp({
 
   const confirmCheckoutOrder = () => {
     if (requiresMobileQrSignIn && !customerAccount?.account) {
-      toast.warn('Sign in with Google before placing your order.');
+      toast.warn(t('signInGoogleBeforeOrder'));
       return;
     }
     if (!fromTableQr && paymentMode === 'card') {
       if (!cardPayment.isCardPaymentComplete) {
-        toast.warn('Complete card payment before confirming your order.');
+        toast.warn(t('completeCardPaymentBeforeConfirm'));
         return;
       }
       void placeOrder({ paymentStatus: 'completed', paymentMethod: 'Card' });
@@ -2115,6 +2118,7 @@ export function KioskApp({
                             variant="outline"
                             className="h-8 w-8"
                             onClick={() => adjustLine(line.lineId, -1)}
+                            aria-label={t('decreaseQuantity')}
                           >
                             <Minus className="h-3.5 w-3.5" />
                           </Button>
@@ -2127,6 +2131,7 @@ export function KioskApp({
                             variant="outline"
                             className="h-8 w-8"
                             onClick={() => adjustLine(line.lineId, 1)}
+                            aria-label={t('increaseQuantity')}
                           >
                             <Plus className="h-3.5 w-3.5" />
                           </Button>
@@ -2136,6 +2141,7 @@ export function KioskApp({
                             variant="ghost"
                             className="ml-auto h-8 w-8 text-[#dc2626]"
                             onClick={() => removeLine(line.lineId)}
+                            aria-label={t('removeItem')}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

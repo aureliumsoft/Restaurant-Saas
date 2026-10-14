@@ -77,6 +77,7 @@ import {
   parseDineInPaymentTiming,
   type DineInPaymentTiming,
 } from '@/lib/restaurant-dine-in-payment';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import {
   parseRestaurantFulfillmentSettings,
@@ -815,6 +816,10 @@ export function PosScreen({
   >();
 
   const { settings: bootstrapFulfillment } = useRestaurantFulfillmentSettings();
+  const { limitFlag } = useEntitlements();
+  const allowDeliveryChrome = limitFlag('pos', 'delivery', true);
+  const allowKioskChrome = limitFlag('pos', 'kioskButton', true);
+  const allowKdsChrome = limitFlag('pos', 'kdsButton', true);
   const [apiFulfillment, setApiFulfillment] =
     useState<RestaurantFulfillmentSettings | null>(null);
 
@@ -967,7 +972,7 @@ export function PosScreen({
 
   useEffect(() => {
     if (menuLoadError) {
-      toast.error('Failed to load menu products for POS.');
+      toast.error(t('pos.toasts.failedToLoadMenuProducts'));
     }
   }, [menuLoadError]);
 
@@ -1086,7 +1091,7 @@ export function PosScreen({
           setDiningTables([]);
           setTableId('');
           setSelectedTableLabel('');
-          toast.error('Could not load dining tables for POS.');
+          toast.error(t('pos.toasts.couldNotLoadDiningTables'));
         }
       } finally {
         if (!cancelled) setTablesLoading(false);
@@ -1430,7 +1435,7 @@ export function PosScreen({
   const posBranches = scopedBranches.length > 0 ? scopedBranches : branches;
   const selectedBranchName =
     posBranches.find((b) => b.id === selectedBranchId)?.name ??
-    'No branch selected';
+    t('pos.toolbar.noBranchSelected');
   const hasPendingPosData = cart.length > 0 || archivedOrders.length > 0;
 
   const {
@@ -1440,8 +1445,7 @@ export function PosScreen({
     confirmLeave,
     cancelLeave,
   } = useUnsavedChangesGuard(hasPendingPosData, {
-    message:
-      'You have unsaved POS data (cart or archived holds). If you leave now, current POS progress will be lost.',
+    message: t('pos.dialogs.leavePosGuard.unsavedDataMessage'),
   });
 
   const applyShiftSummary = useCallback(
@@ -1503,7 +1507,7 @@ export function PosScreen({
 
   const requireActiveShift = useCallback((): boolean => {
     if (hasActiveShift) return true;
-    toast.error('Start a new shift before creating orders.');
+    toast.error(t('pos.toasts.startShiftBeforeOrders'));
     promptStartShift();
     return false;
   }, [hasActiveShift, promptStartShift]);
@@ -1511,7 +1515,7 @@ export function PosScreen({
   const handleStartShift = useCallback(async () => {
     const branchId = selectedBranchId || activeBranchId || '';
     if (!branchId) {
-      toast.warn('Select a branch before starting a shift.');
+      toast.warn(t('pos.toasts.selectBranchBeforeShift'));
       return;
     }
     setStartingShift(true);
@@ -1524,11 +1528,11 @@ export function PosScreen({
       setActiveShiftId(shift.id);
       setShiftOrderCount(shift.orderCount);
       setStartShiftDialogOpen(false);
-      toast.success('Shift started.');
+      toast.success(t('pos.toasts.shiftStarted'));
       void refreshShiftSummary(branchId);
     } catch (error) {
       toast.error(
-        extractApiErrorMessage(error, 'Could not start shift. Please try again.')
+        extractApiErrorMessage(error, t('pos.toasts.couldNotStartShift'))
       );
     } finally {
       setStartingShift(false);
@@ -1641,11 +1645,11 @@ export function PosScreen({
         : Math.max(0, Number(payment) || 0));
     const paymentMethodLabel =
       receiptMode === 'card_terminal'
-        ? 'Card Terminal'
+        ? t('pos.cart.paymentMethodCardTerminal')
         : receiptMode === 'card'
-          ? 'Card'
+          ? t('pos.card')
           : receiptMode === 'split'
-            ? 'Split'
+            ? t('pos.cart.paymentMethodSplit')
             : receiptMode.charAt(0).toUpperCase() + receiptMode.slice(1);
 
     const ok = printPosOrderReceipt({
@@ -1681,7 +1685,7 @@ export function PosScreen({
       currencyCode: regional.currencyCode,
       countryCode: regional.countryCode,
     });
-    if (!ok) toast.error('Could not open print preview.');
+    if (!ok) toast.error(t('pos.toasts.couldNotOpenPrintPreview'));
   }
 
   const spawnFlyToCart = useCallback(
@@ -1929,7 +1933,7 @@ export function PosScreen({
           setCustomizeOpen(false);
           setCustomizeProduct(null);
           setCustomizeLoading(false);
-          toast.error('Could not load product configuration.');
+          toast.error(t('pos.toasts.couldNotLoadProductConfig'));
           return;
         }
         setCustomizeProduct({
@@ -2019,7 +2023,7 @@ export function PosScreen({
     setOrderApartment('');
     setOrderDoorNumber('');
     setCheckoutOpen(false);
-    toast.info('Order edit canceled.');
+    toast.info(t('pos.toasts.orderEditCanceled'));
   }
 
   function loadOrderForEdit(
@@ -2033,7 +2037,7 @@ export function PosScreen({
       if (personalize.length > 0) {
         modifiers.push({
           attributeGroupId: 'personalize',
-          groupName: 'Personalize',
+          groupName: t('pos.cart.groupPersonalize'),
           selections: personalize.map((m) => ({
             menuItemId: `personalize:${m.name}`,
             name: m.name,
@@ -2044,7 +2048,7 @@ export function PosScreen({
       if (addons.length > 0) {
         modifiers.push({
           attributeGroupId: 'addons',
-          groupName: 'Add-ons',
+          groupName: t('pos.cart.groupAddons'),
           selections: addons.map((m) => ({
             menuItemId: m.menuItemId!,
             name: m.name,
@@ -2107,8 +2111,8 @@ export function PosScreen({
     setAmountPaid(String(detail.paymentAmount || detail.total));
     toast.success(
       source === 'kiosk'
-        ? `Editing kiosk order ${editLabel}`
-        : `Editing order ${editLabel}`
+        ? t('pos.toasts.editingKioskOrder', { label: editLabel })
+        : t('pos.toasts.editingOrder', { label: editLabel })
     );
   }
 
@@ -2118,7 +2122,7 @@ export function PosScreen({
 
   function holdCurrentOrder() {
     if (cart.length === 0) {
-      toast.info('Add products to cart before holding an order.');
+      toast.info(t('pos.toasts.addProductsBeforeHolding'));
       return;
     }
     const archived: ArchivedOrder = {
@@ -2136,7 +2140,7 @@ export function PosScreen({
     setArchivedOrders((prev) => [archived, ...prev]);
     clearCart();
     setCheckoutOpen(false);
-    toast.success('Order archived to hold list.');
+    toast.success(t('pos.toasts.orderArchivedToHoldList'));
   }
 
   function restoreArchivedOrder(order: ArchivedOrder) {
@@ -2146,7 +2150,7 @@ export function PosScreen({
     setDisPct(order.discountPct || '0');
     setArchivedOrders((prev) => prev.filter((o) => o.id !== order.id));
     setArchivedOrdersOpen(false);
-    toast.success('Archived order added to cart.');
+    toast.success(t('pos.toasts.archivedOrderAddedToCart'));
   }
 
   function deleteArchivedOrder(orderId: string) {
@@ -2278,7 +2282,7 @@ export function PosScreen({
         await axios.post(
           `/api/restaurant/pos-order/${encodeURIComponent(kitchenSendOrder.id)}/complete`
         );
-        toast.success('Order completed.');
+        toast.success(t('pos.toasts.orderCompleted'));
         resetKitchenSendDialog();
         void loadPendingKitchenOrders();
         const branchId = selectedBranchId || activeBranchId || '';
@@ -2287,7 +2291,7 @@ export function PosScreen({
           revalidateOpenTableOrders(branchId, 1_200);
         }
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Could not complete order.';
+        const msg = e instanceof Error ? e.message : t('pos.toasts.couldNotCompleteOrder');
         toast.error(msg);
       } finally {
         setSendingToKitchen(false);
@@ -2297,7 +2301,7 @@ export function PosScreen({
     const minutes = resolveKitchenPrepMinutes();
     if (minutes === null) {
       toast.warn(
-        `Select a preset or enter prep time (${KITCHEN_PREP_MIN}–${KITCHEN_PREP_MAX} minutes).`
+        t('pos.toasts.selectPresetOrEnterPrepTime', { min: KITCHEN_PREP_MIN, max: KITCHEN_PREP_MAX })
       );
       return;
     }
@@ -2309,10 +2313,10 @@ export function PosScreen({
       });
       if (status === 'queued') {
         toast.success(
-          `Kitchen ticket saved offline · ${minutes} min (will sync when online)`
+          t('pos.toasts.kitchenTicketSavedOffline', { minutes })
         );
       } else {
-        toast.success(`Order sent to kitchen · ${minutes} min prep`);
+        toast.success(t('pos.toasts.orderSentToKitchenPrep', { minutes }));
       }
       resetKitchenSendDialog();
       void loadPendingKitchenOrders();
@@ -2322,7 +2326,7 @@ export function PosScreen({
         revalidateOpenTableOrders(branchId, 1_200);
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Could not send to kitchen.';
+      const msg = e instanceof Error ? e.message : t('pos.toasts.couldNotSendToKitchen');
       toast.error(msg);
     } finally {
       setSendingToKitchen(false);
@@ -2345,7 +2349,7 @@ export function PosScreen({
       if (!res.ok) {
         throw new Error(body.error || 'Could not cancel order.');
       }
-      toast.success('Order canceled');
+      toast.success(t('pos.toasts.orderCanceled'));
       setCancelKitchenOrder(null);
       void loadPendingKitchenOrders();
       eventBus.emit('refreshSalesOrders');
@@ -2357,7 +2361,7 @@ export function PosScreen({
         void refreshShiftSummary(branchId);
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Could not cancel order.';
+      const msg = e instanceof Error ? e.message : t('pos.toasts.couldNotCancelOrder');
       toast.error(msg);
     } finally {
       setCancellingKitchenOrder(false);
@@ -2494,7 +2498,7 @@ export function PosScreen({
     const terminalBase =
       process.env.NEXT_PUBLIC_POS_TERMINAL_API?.trim().replace(/\/$/, '') || '';
     if (!terminalBase) {
-      return { ok: false, message: 'Terminal API not configured' };
+      return { ok: false, message: t('pos.toasts.terminalApiNotConfiguredShort') };
     }
     try {
       const terminalRes = await axios.post<{
@@ -2535,11 +2539,10 @@ export function PosScreen({
       if (code === 'ERR_NETWORK' || code === 'ECONNREFUSED') {
         return {
           ok: false,
-          message:
-            'Terminal bridge not reachable at NEXT_PUBLIC_POS_TERMINAL_API. Start pos-terminal-bridge (port 5055).',
+          message: t('pos.toasts.terminalBridgeNotReachable'),
         };
       }
-      return { ok: false, message: 'Card terminal request failed' };
+      return { ok: false, message: t('pos.toasts.cardTerminalRequestFailed') };
     }
   }
 
@@ -2553,7 +2556,7 @@ export function PosScreen({
   }
 
   async function assertPosIngredientsAvailable(): Promise<string | null> {
-    if (cart.length === 0) return 'Add at least one product to the cart.';
+    if (cart.length === 0) return t('pos.toasts.addAtLeastOneProduct');
     try {
       await axios.post('/api/restaurant/pos-order/check-stock', {
         branchId: selectedBranchId || activeBranchId || undefined,
@@ -2561,7 +2564,7 @@ export function PosScreen({
       });
       return null;
     } catch (e) {
-      return extractApiErrorMessage(e, 'Could not check ingredient stock.');
+      return extractApiErrorMessage(e, t('pos.toasts.couldNotCheckIngredientStock'));
     }
   }
 
@@ -2620,7 +2623,7 @@ export function PosScreen({
     const isEditingKiosk =
       Boolean(editingOrderId) && editingOrderSource === 'kiosk';
     if (cart.length === 0) {
-      toast.warn('Add at least one product to the cart.');
+      toast.warn(t('pos.toasts.addAtLeastOneProduct'));
       return;
     }
     const nameTrim = customerName.trim();
@@ -2643,7 +2646,7 @@ export function PosScreen({
       !isTableOpenCheck &&
       !effectivePayment.trim()
     ) {
-      toast.warn('Enter the payment amount before saving.');
+      toast.warn(t('pos.toasts.enterPaymentAmount'));
       return;
     }
     if (
@@ -2654,7 +2657,7 @@ export function PosScreen({
       !(Number(effectivePayment) > 0)
     ) {
       toast.warn(
-        'This restaurant requires payment before kitchen. Enter amount paid, or change Settings → Payments to “Pay when guest leaves”.'
+        t('pos.toasts.paymentBeforeKitchenRequired')
       );
       return;
     }
@@ -2665,7 +2668,7 @@ export function PosScreen({
       effectivePaymentMode !== 'card_terminal' &&
       Number(effectivePayment) + 1e-9 < grandTotal
     ) {
-      toast.warn('Amount paid must be at least the order total.');
+      toast.warn(t('pos.toasts.amountPaidAtLeastTotal'));
       return;
     }
     const tableKitchenMinutes = isTableOpenCheck
@@ -2673,23 +2676,23 @@ export function PosScreen({
       : null;
     if (isTableOpenCheck && tableKitchenMinutes === null) {
       toast.warn(
-        `Select a prep time (${KITCHEN_PREP_MIN}–${KITCHEN_PREP_MAX} minutes) before sending to kitchen.`
+        t('pos.toasts.selectPrepTimeBeforeSending', { min: KITCHEN_PREP_MIN, max: KITCHEN_PREP_MAX })
       );
       return;
     }
     if (!isEditingKiosk) {
       if (nameTrim && !phoneTrim) {
         toast.warn(
-          'Enter customer phone to save customer details, or clear the name.'
+          t('pos.toasts.enterPhoneToSaveDetails')
         );
         return;
       }
       if (isTableMode && !tableTrim) {
-        toast.warn('Select a table for table orders.');
+        toast.warn(t('pos.toasts.selectTableForTableOrders'));
         return;
       }
       if (isDeliveryMode && (!addressTrim || !phoneTrim)) {
-        toast.warn('Delivery requires customer phone and address.');
+        toast.warn(t('pos.toasts.deliveryRequiresPhoneAndAddress'));
         return;
       }
     }
@@ -2757,7 +2760,7 @@ export function PosScreen({
         );
         savedOrder = patchRes.data.data;
         toast.success(
-          `Kiosk order updated — ${itemsCount} items · ${formatMoney(grandTotal)}`
+          t('pos.toasts.kioskOrderUpdated', { items: itemsCount, total: formatMoney(grandTotal) })
         );
         clearCart();
         setPayment('');
@@ -2794,7 +2797,7 @@ export function PosScreen({
         }
         if (effectivePaymentMode === 'card_terminal' && isBrowserOffline()) {
           toast.error(
-            'Card terminal payments require an internet connection.'
+            t('pos.toasts.cardTerminalRequiresInternet')
           );
           return;
         }
@@ -2807,7 +2810,7 @@ export function PosScreen({
         if (createResult.status === 'queued') {
           const localId = createResult.localOrderId;
           toast.success(
-            `Order saved offline — will sync when online · ${itemsCount} items · ${formatMoney(grandTotal)}`
+            t('pos.toasts.orderSavedOffline', { items: itemsCount, total: formatMoney(grandTotal) })
           );
           printOrderReceipt(localId.slice(0, 8).toUpperCase(), null, {
             mode: effectivePaymentMode,
@@ -2840,11 +2843,11 @@ export function PosScreen({
                 minutes: tableKitchenMinutes,
               });
               toast.success(
-                `Table tab · kitchen ${tableKitchenMinutes} min (syncs when online)`
+                t('pos.toasts.tableTabKitchenSyncs', { minutes: tableKitchenMinutes })
               );
             } catch {
               toast.info(
-                'Table tab saved offline — kitchen will sync when online.'
+                t('pos.toasts.tableTabSavedOfflineKitchenSync')
               );
             }
             eventBus.emit('refreshTableOrders');
@@ -2853,7 +2856,7 @@ export function PosScreen({
             }
             void loadPendingKitchenOrders();
           } else if (isTableOpenCheck) {
-            toast.info('Table tab saved offline — send to kitchen when online.');
+            toast.info(t('pos.toasts.tableTabSavedOfflineSendKitchen'));
             eventBus.emit('refreshTableOrders');
             if (selectedBranchId || activeBranchId) {
               revalidateOpenTableOrders(selectedBranchId || activeBranchId);
@@ -2897,7 +2900,7 @@ export function PosScreen({
           '';
         if (!terminalBase) {
           toast.error(
-            'POS terminal API is not configured. Set NEXT_PUBLIC_POS_TERMINAL_API.'
+            t('pos.toasts.posTerminalApiNotConfigured')
           );
           return;
         }
@@ -2957,19 +2960,19 @@ export function PosScreen({
         if (finalStatus !== 'completed') {
           toast.error(
             terminalMessage ||
-            'Card terminal payment was not approved. Order remains pending.'
+            t('pos.toasts.cardTerminalNotApproved')
           );
           return;
         }
       }
       toast.success(
         isEditing
-          ? `Order updated — ${itemsCount} items · ${formatMoney(grandTotal)}`
+          ? t('pos.toasts.orderUpdatedItemsTotal', { items: itemsCount, total: formatMoney(grandTotal) })
           : isTableOpenCheck && tableKitchenMinutes != null
-            ? `Table · sent to kitchen · ${tableKitchenMinutes} min · pay when guest leaves`
+            ? t('pos.toasts.tableSentToKitchenPayLater', { minutes: tableKitchenMinutes })
           : isTableOpenCheck
-            ? `Table tab opened — ${itemsCount} items · ${formatMoney(grandTotal)} · pay later`
-            : `Order saved — ${itemsCount} items · ${formatMoney(grandTotal)} · ${effectivePaymentMode}`
+            ? t('pos.toasts.tableTabOpened', { items: itemsCount, total: formatMoney(grandTotal) })
+            : t('pos.toasts.orderSaved', { items: itemsCount, total: formatMoney(grandTotal), mode: effectivePaymentMode })
       );
       if (!isTableOpenCheck) {
         printOrderReceipt(trackingId, ticketNumber, {
@@ -3057,7 +3060,7 @@ export function PosScreen({
           const msg =
             e instanceof Error
               ? e.message
-              : 'Order saved but kitchen send failed.';
+              : t('pos.toasts.orderSavedKitchenSendFailed');
           toast.error(msg);
           resetAfterPlace();
       openKitchenSendDialog({
@@ -3085,7 +3088,7 @@ export function PosScreen({
         });
         void loadPendingKitchenOrders();
           } else {
-            toast.success('Order placed successfully.');
+            toast.success(t('pos.toasts.orderPlacedSuccessfully'));
           }
         }
         if (branchId) {
@@ -3101,7 +3104,7 @@ export function PosScreen({
       const msg =
         axios.isAxiosError(e) && e.response?.data?.error
           ? String(e.response.data.error)
-          : fromBody || 'Could not save POS order.';
+          : fromBody || t('pos.toasts.couldNotSavePosOrder');
       toast.error(msg);
       if (status === 409) {
         promptStartShift();
@@ -3344,7 +3347,7 @@ export function PosScreen({
                           : 'bg-amber-400 animate-pulse'
                       )}
                     />
-                    <SelectValue placeholder="Select branch" />
+                    <SelectValue placeholder={t('pos.toolbar.selectBranch')} />
                   </SelectTrigger>
                   <SelectContent>
                     {posBranches.map((b) => (
@@ -3393,7 +3396,7 @@ export function PosScreen({
             disabled={posBusy}
             title={
               search.trim()
-                ? 'Use arrow keys to navigate search results and press Enter to add to cart'
+                ? t('pos.toolbar.searchHint')
                 : ''
             }
           />
@@ -3403,7 +3406,7 @@ export function PosScreen({
           {cashInLocker != null ? (
             <span
               className="mr-1 inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400"
-              title="Expected cash in locker (opening float + cash sales)"
+              title={t('pos.toolbar.expectedCashInLocker')}
             >
               <Banknote className="h-3 w-3 shrink-0" />
               <span className="tabular-nums">{formatMoney(cashInLocker)}</span>
@@ -3421,18 +3424,18 @@ export function PosScreen({
             variant="ghost"
             size="icon"
             className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
-            title="Recent orders"
+            title={t('pos.toolbar.recentOrders')}
             onClick={() => setRecentOrdersOpen(true)}
           >
             <History className="h-4 w-4" />
           </Button>
-          {fulfillmentSettings.deliveryEnabled ? (
+          {fulfillmentSettings.deliveryEnabled && allowDeliveryChrome ? (
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
-            title="Completed orders"
+            title={t('pos.toolbar.completedOrders')}
             onClick={() => setCompletedOrdersOpen(true)}
           >
             <PackageCheck className="h-4 w-4" />
@@ -3443,13 +3446,13 @@ export function PosScreen({
             ) : null}
           </Button>
           ) : null}
-          {fulfillmentSettings.kioskEnabled ? (
+          {fulfillmentSettings.kioskEnabled && allowKioskChrome ? (
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
-            title="Kiosk orders"
+            title={t('pos.toolbar.kioskOrders')}
             onClick={() => setKioskOrdersOpen(true)}
           >
             <Monitor className="h-4 w-4" />
@@ -3466,7 +3469,7 @@ export function PosScreen({
             variant="ghost"
             size="icon"
             className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
-            title="Table orders"
+            title={t('pos.toolbar.tableOrders')}
             onClick={() => setTableOrdersOpen(true)}
           >
             <UtensilsCrossed className="h-4 w-4" />
@@ -3483,7 +3486,7 @@ export function PosScreen({
             variant="ghost"
             size="icon"
               className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
-              title="Working orders"
+              title={t('pos.toolbar.workingOrders')}
               onClick={() => setWorkingOrdersOpen(true)}
             >
               <Activity className="h-4 w-4 text-fire-600 dark:text-fire-400" />
@@ -3494,13 +3497,15 @@ export function PosScreen({
               ) : null}
           </Button>
           ) : null}
-          {fulfillmentSettings.kdsEnabled && (pendingKitchenOrders.length > 0) ? (
+          {fulfillmentSettings.kdsEnabled &&
+          allowKdsChrome &&
+          pendingKitchenOrders.length > 0 ? (
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
-              title="Kitchen queue"
+              title={t('pos.toolbar.kitchenQueue')}
               onClick={() => {
                 setPendingKitchenOpen(true);
                 void loadPendingKitchenOrders();
@@ -3520,7 +3525,7 @@ export function PosScreen({
               'relative h-9 w-9',
               hasActiveShift ? POS_GHOST_ICON_BTN : 'text-emerald-600 hover:bg-emerald-500/10'
             )}
-            title={hasActiveShift ? 'End shift' : 'Start shift'}
+            title={hasActiveShift ? t('pos.toolbar.endShift') : t('pos.toolbar.startShift')}
             onClick={() => {
               if (hasActiveShift) {
                 setLogoutEndShiftFlow(false);
@@ -3559,7 +3564,7 @@ export function PosScreen({
               size="icon"
               className="absolute left-0 top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 rounded-full  shadow-sm sm:flex"
               onClick={() => scrollCategories('left')}
-              aria-label="Scroll categories left"
+              aria-label={t('pos.toolbar.scrollCategoriesLeft')}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -3569,7 +3574,7 @@ export function PosScreen({
               size="icon"
               className="absolute right-0 top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 rounded-full shadow-sm sm:flex"
               onClick={() => scrollCategories('right')}
-              aria-label="Scroll categories right"
+              aria-label={t('pos.toolbar.scrollCategoriesRight')}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -3747,23 +3752,23 @@ export function PosScreen({
                 className="h-8 w-8 shrink-0 rounded-xl"
                 onClick={() => handleCheckoutOpenChange(false)}
                 disabled={posBusy}
-                title="Back to cart"
+                title={t('pos.toolbar.backToCart')}
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div className="min-w-0">
                 <h3 className="text-base font-semibold tracking-tight">
                   {isEditingKioskOrder
-                    ? 'Update kiosk order'
+                    ? t('pos.dialogs.checkout.updateKioskOrder')
                     : editingOrderId
                       ? t('pos.update')
                       : tablePayOnLeave
-                        ? 'Confirm'
+                        ? t('pos.dialogs.checkout.confirm')
                         : t('pos.paymentTitle')}
                 </h3>
                 <p className="text-xs text-muted-foreground">
                   {tablePayOnLeave
-                    ? 'Review order · send to kitchen'
+                    ? t('pos.dialogs.checkout.reviewSendKitchen')
                     : `${orderModeLabel} · ${formatMoney(grandTotal)}`}
                 </p>
                 </div>
@@ -3799,7 +3804,7 @@ export function PosScreen({
                 </span>
                   {editingOrderId ? (
                     <span className={POS_ACCENT_TEXT}>
-                      Editing {editingOrderLabel}
+                      {t('pos.cart.editingLabel', { label: editingOrderLabel })}
                 </span>
                   ) : cartItemCount > 0 ? (
                     t('pos.itemCount', { count: cartItemCount })
@@ -3815,7 +3820,7 @@ export function PosScreen({
                     className="h-7 shrink-0 rounded-lg px-2 text-xs text-muted-foreground"
                     onClick={cancelEditingOrder}
                   >
-                    Cancel
+                    {t('pos.cart.cancel')}
                   </Button>
                 ) : null}
               </div>
@@ -3884,11 +3889,11 @@ export function PosScreen({
                     <div className="shrink-0 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Order
+                          {t('pos.cart.order')}
                         </p>
                         <span className="inline-flex items-center gap-1 rounded-lg bg-fire-500/10 px-2 py-0.5 text-[11px] font-semibold text-fire-600 dark:text-fire-400">
                           <Utensils className="h-3 w-3" />
-                          {selectedTableName || 'Select table'}
+                          {selectedTableName || t('pos.selectTableShort')}
                         </span>
             </div>
                       <div className="space-y-2">
@@ -3936,7 +3941,7 @@ export function PosScreen({
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Table
+                        {t('pos.table')}
                       </label>
                       <Button
                         type="button"
@@ -3950,8 +3955,8 @@ export function PosScreen({
                       >
                         <Utensils className="mr-2 h-4 w-4" />
                         {tablesLoading
-                          ? 'Loading tables…'
-                          : selectedTableName || 'Select table'}
+                          ? t('pos.loadingTables')
+                          : selectedTableName || t('pos.selectTableShort')}
                       </Button>
                     </div>
 
@@ -3972,12 +3977,12 @@ export function PosScreen({
                         </span>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold">
-                            {posBusy ? 'Sending to kitchen…' : 'Prep time'}
+                            {posBusy ? t('pos.cart.sendingToKitchen') : t('pos.cart.prepTime')}
                           </p>
                           <p className="text-[11px] leading-snug text-muted-foreground">
                             {posBusy
-                              ? 'Please wait — prep time is locked for this ticket.'
-                              : 'Shown on the kitchen display. Guest pays later from Table orders.'}
+                              ? t('pos.cart.prepTimeLockedWait')
+                              : t('pos.cart.shownOnKitchenDisplayPayLater')}
                           </p>
                         </div>
                       </div>
@@ -4006,7 +4011,7 @@ export function PosScreen({
                             >
                               {m}
                               <span className="ml-1 text-[11px] font-medium opacity-80">
-                                min
+                                {t('pos.cart.minSuffix')}
                               </span>
                             </Button>
                           );
@@ -4021,7 +4026,7 @@ export function PosScreen({
                         )}
                         inputMode="none"
                         autoComplete="off"
-                        placeholder={`Custom (${KITCHEN_PREP_MIN}–${KITCHEN_PREP_MAX} min)`}
+                        placeholder={t('pos.cart.customPrepPlaceholder', { min: KITCHEN_PREP_MIN, max: KITCHEN_PREP_MAX })}
                         value={tableCheckoutCustomMinutes}
                         disabled={posBusy}
                         onChange={(e) =>
@@ -4091,8 +4096,8 @@ export function PosScreen({
                     >
                       <Utensils className="mr-2 h-4 w-4" />
                       {tablesLoading
-                        ? 'Loading tables…'
-                        : selectedTableName || 'Select table'}
+                        ? t('pos.loadingTables')
+                        : selectedTableName || t('pos.selectTableShort')}
                     </Button>
                   </div>
                 ) : null}
@@ -4142,7 +4147,7 @@ export function PosScreen({
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
                             <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                              {t('pos.apartment', { defaultValue: 'Apartment / Suite' })}
+                              {t('pos.apartment')}
                             </label>
                             <Input
                               className={cn(
@@ -4153,7 +4158,7 @@ export function PosScreen({
                               value={orderApartment}
                               inputMode="none"
                               autoComplete="off"
-                              placeholder={t('pos.apartmentHint', { defaultValue: 'e.g. 12B' })}
+                              placeholder={t('pos.apartmentHint')}
                               onChange={(e) => setOrderApartment(e.target.value)}
                               onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('apartment'); }}
                               onFocus={() => setKeyboardField('apartment')}
@@ -4161,7 +4166,7 @@ export function PosScreen({
                           </div>
                           <div className="space-y-1">
                             <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                              {t('pos.doorNumber', { defaultValue: 'Door / Gate' })}
+                              {t('pos.doorNumber')}
                             </label>
                             <Input
                               className={cn(
@@ -4172,7 +4177,7 @@ export function PosScreen({
                               value={orderDoorNumber}
                               inputMode="none"
                               autoComplete="off"
-                              placeholder={t('pos.doorNumberHint', { defaultValue: 'e.g. 4' })}
+                              placeholder={t('pos.doorNumberHint')}
                               onChange={(e) => setOrderDoorNumber(e.target.value)}
                               onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('doorNumber'); }}
                               onFocus={() => setKeyboardField('doorNumber')}
@@ -4181,7 +4186,7 @@ export function PosScreen({
                         </div>
                         <div className="space-y-1">
                           <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                            {t('pos.deliveryAddress', { defaultValue: 'Complete Address' })}
+                            {t('pos.deliveryAddress')}
                           </label>
                           <textarea
                             className={cn(
@@ -4190,7 +4195,7 @@ export function PosScreen({
                               keyboardField === 'address' &&
                                 'ring-2 ring-fire-500/40'
                             )}
-                            placeholder={t('pos.enterDeliveryAddress', { defaultValue: 'Street name, city, zip code...' })}
+                            placeholder={t('pos.enterDeliveryAddress')}
                             value={orderAddress}
                             inputMode="none"
                             autoComplete="off"
@@ -4207,8 +4212,7 @@ export function PosScreen({
 
                 {isEditingKioskOrder ? (
                   <div className="rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300">
-                    Cash payment stays pending until you collect payment from
-                    Kiosk orders.
+                    {t('pos.cart.cashPaymentPendingKiosk')}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -4268,23 +4272,23 @@ export function PosScreen({
                           {cardPaymentStatus === 'success' ? (
                             <>
                               <CheckCircle2 className="h-4 w-4" />
-                              Paid
+                              {t('pos.dialogs.payTable.paid')}
                             </>
                           ) : cardPaymentStatus === 'error' ||
                             cardPaymentStatus === 'cancelled' ? (
                             <>
                               <XCircle className="h-4 w-4" />
-                              Pay again
+                              {t('pos.dialogs.payTable.payAgain')}
                             </>
                           ) : cardPaymentStatus === 'processing' ? (
                             <>
                               <Loader2 className="h-4 w-4 animate-spin" />
-                              Processing…
+                              {t('pos.dialogs.payTable.processingEllipsis')}
                             </>
                           ) : (
                             <>
                               <CreditCard className="h-4 w-4" />
-                              Pay {formatMoney(grandTotal)}
+                              {t('pos.sheets.tableOrders.payAmount', { amount: formatMoney(grandTotal) })}
                             </>
                           )}
                         </Button>
@@ -4292,18 +4296,18 @@ export function PosScreen({
                           {isCardPaymentComplete ? (
                             <span className="text-emerald-700 dark:text-emerald-400">
                               {savingOrder
-                                ? 'Card paid — placing order…'
-                                : 'Card paid — order placed.'}
+                                ? t('pos.dialogs.checkout.cardPaidPlacingOrder')
+                                : t('pos.dialogs.checkout.cardPaidOrderPlaced')}
                             </span>
                           ) : cardPaymentStatus === 'error' ||
                             cardPaymentStatus === 'cancelled' ? (
                             <span className="text-destructive">
                               {cardPaymentStatus === 'cancelled'
-                                ? 'Cancelled. Tap Pay again.'
-                                : 'Failed. Tap Pay again.'}
+                                ? t('pos.dialogs.checkout.cancelledTapPayAgain')
+                                : t('pos.dialogs.checkout.failedTapPayAgain')}
                             </span>
                           ) : (
-                            <span>Complete card payment before placing.</span>
+                            <span>{t('pos.dialogs.checkout.completeCardPaymentBeforePlacing')}</span>
                           )}
                         </div>
                       </div>
@@ -4314,7 +4318,7 @@ export function PosScreen({
                         </label>
                         {tablePayBeforeKitchen ? (
                           <p className="text-[11px] text-muted-foreground">
-                            Pay before kitchen is on — collect payment now.
+                            {t('pos.dialogs.checkout.payBeforeKitchenOn')}
                           </p>
                         ) : null}
                         <Input
@@ -4357,7 +4361,7 @@ export function PosScreen({
                     <div className="flex flex-col items-center gap-3 py-1">
                       <CreditCard className="h-8 w-8 animate-bounce text-fire-500" />
                   <p className="text-center text-sm text-muted-foreground">
-                        Insert or tap card…
+                        {t('pos.cart.insertOrTapCard')}
                       </p>
                       <p className="text-lg font-semibold tabular-nums">
                         {formatMoney(grandTotal)}
@@ -4377,7 +4381,7 @@ export function PosScreen({
                           className="h-10 w-full rounded-xl"
                           onClick={handleCardPaymentCancel}
                         >
-                          Cancel
+                          {t('pos.cart.cancel')}
                         </Button>
                       </div>
                     </div>
@@ -4637,7 +4641,7 @@ export function PosScreen({
                         className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
                         onClick={() => setAdjustOpen((v) => !v)}
                       >
-                        Adjust
+                        {t('pos.cart.adjust')}
                         <ChevronDown
                           className={cn(
                             'h-3.5 w-3.5 transition-transform',
@@ -4647,7 +4651,7 @@ export function PosScreen({
                       </button>
                       <div className="text-right">
                         <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                          Total
+                          {t('pos.total')}
                         </p>
                         <p
                           className={cn(
@@ -4663,7 +4667,7 @@ export function PosScreen({
                       <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/40 p-2">
               <div className="space-y-1">
                           <label className="text-[10px] text-muted-foreground">
-                  Tax %
+                  {t('pos.cart.taxPercent')}
                 </label>
                 <Input
                             className={cn(
@@ -4676,7 +4680,7 @@ export function PosScreen({
               </div>
               <div className="space-y-1">
                           <label className="text-[10px] text-muted-foreground">
-                  Discount %
+                  {t('pos.cart.discountPercent')}
                 </label>
                 <Input
                             className={cn(
@@ -4692,14 +4696,14 @@ export function PosScreen({
                           activeServiceChargeAmount > 0) && (
                           <div className="col-span-2 space-y-0.5 pt-1.5 text-[11px] text-muted-foreground">
                             <div className="flex justify-between">
-                              <span>Subtotal</span>
+                              <span>{t('pos.cart.subtotal')}</span>
                               <span className="tabular-nums">
                                 {formatMoney(subtotal)}
                               </span>
             </div>
                             {taxAmount > 0 ? (
                               <div className="flex justify-between">
-                                <span>Tax</span>
+                                <span>{t('pos.cart.tax')}</span>
                                 <span className="tabular-nums">
                                   {formatMoney(taxAmount)}
                                 </span>
@@ -4707,7 +4711,7 @@ export function PosScreen({
                             ) : null}
                             {disAmount > 0 ? (
                               <div className="flex justify-between">
-                                <span>Discount</span>
+                                <span>{t('pos.cart.discount')}</span>
                                 <span className="tabular-nums">
                                   {formatMoney(disAmount)}
                                 </span>
@@ -4715,7 +4719,7 @@ export function PosScreen({
                             ) : null}
                             {activeServiceChargeAmount > 0 ? (
                               <div className="flex justify-between">
-                                <span>Service</span>
+                                <span>{t('pos.cart.service')}</span>
                                 <span className="tabular-nums">
                                   {formatMoney(activeServiceChargeAmount)}
                                 </span>
@@ -4737,7 +4741,7 @@ export function PosScreen({
                 disabled={
                   cart.length === 0 || savingOrder || terminalProcessing
                 }
-                    title="Clear cart"
+                    title={t('pos.toolbar.clearCart')}
                 onClick={clearCart}
               >
                     <Trash2 className="h-4 w-4" />
@@ -4750,7 +4754,7 @@ export function PosScreen({
                 disabled={
                   cart.length === 0 || savingOrder || terminalProcessing
                 }
-                    title="Hold order"
+                    title={t('pos.toolbar.holdOrder')}
                 onClick={holdCurrentOrder}
               >
                     <Clock className="h-4 w-4" />
@@ -4760,7 +4764,7 @@ export function PosScreen({
                   variant="ghost"
                   size="icon"
                     className="relative h-11 w-11 shrink-0 rounded-xl"
-                    title="Held orders"
+                    title={t('pos.toolbar.heldOrders')}
                   onClick={() => setArchivedOrdersOpen(true)}
                 >
                   <Archive className="h-4 w-4" />
@@ -4830,13 +4834,13 @@ export function PosScreen({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Leave POS?</AlertDialogTitle>
+            <AlertDialogTitle>{t('pos.dialogs.leavePos.title')}</AlertDialogTitle>
             <AlertDialogDescription>{posLeaveMessage}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel type="button">
               <X className="mr-2 inline h-4 w-4 align-middle" />
-              Stay on POS
+              {t('pos.dialogs.leavePosGuard.stayOnPos')}
             </AlertDialogCancel>
             <AlertDialogAction
               type="button"
@@ -4845,7 +4849,7 @@ export function PosScreen({
               }}
             >
               <ArrowLeft className="mr-2 inline h-4 w-4 align-middle" />
-              Leave POS
+              {t('pos.dialogs.leavePosGuard.leavePos')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -4860,9 +4864,9 @@ export function PosScreen({
       >
         <SheetContent className="flex w-full flex-col sm:max-w-lg">
           <SheetHeader>
-            <SheetTitle>Not sent to kitchen</SheetTitle>
+            <SheetTitle>{t('pos.sheets.pendingKitchen.title')}</SheetTitle>
             <SheetDescription>
-              Paid POS orders waiting for prep time and kitchen display
+              {t('pos.sheets.pendingKitchen.description')}
               {selectedBranchName !== 'No branch selected'
                 ? ` · ${selectedBranchName}`
                 : ''}
@@ -4876,7 +4880,7 @@ export function PosScreen({
               </p>
             ) : pendingKitchenOrders.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No POS orders waiting for the kitchen.
+                {t('pos.sheets.pendingKitchen.noOrdersWaiting')}
               </p>
             ) : (
               pendingKitchenOrders.map((order) => (
@@ -4888,7 +4892,7 @@ export function PosScreen({
                     <div>
                       <p className="font-semibold">
                         {order.ticketNumber != null
-                          ? `Ticket #${String(order.ticketNumber).padStart(2, '0')}`
+                          ? t('pos.sheets.shift.ticketNumber', { number: String(order.ticketNumber).padStart(2, '0') })
                           : order.shortOrderId}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -4897,7 +4901,7 @@ export function PosScreen({
                       </p>
                       {order.tableLabel ? (
                         <p className="text-xs text-muted-foreground">
-                          Table: {order.tableLabel}
+                          {t('pos.sheets.pendingKitchen.tableLabel', { table: order.tableLabel })}
                         </p>
                       ) : null}
                       {order.customerName ? (
@@ -4927,7 +4931,7 @@ export function PosScreen({
                       onClick={() => setCancelKitchenOrder(order)}
                     >
                       <Cross2Icon className="h-4 w-4 mr-2" />
-                      Cancel order
+                      {t('pos.sheets.pendingKitchen.cancelOrderButton')}
                     </Button>
 
                     <Button
@@ -4943,7 +4947,7 @@ export function PosScreen({
                       }}
                     >
                       <ChefHatIcon className="h-4 w-4 mr-2" />
-                      Send to kitchen
+                      {t('pos.sheets.tableOrders.sendToKitchen')}
                     </Button>
                   </div>
                 </div>
@@ -4957,25 +4961,25 @@ export function PosScreen({
             disabled={loadingPendingKitchen}
             onClick={() => void loadPendingKitchenOrders()}
           >
-            Refresh list
+            {t('pos.sheets.pendingKitchen.refreshList')}
           </Button>
         </SheetContent>
       </Sheet>
 
       <DeleteConfirmation
         open={cancelKitchenOrder != null}
-        title="Cancel order?"
-        description="This paid POS order has not been sent to the kitchen. Canceling marks it as canceled and removes it from this list."
+        title={t('pos.dialogs.cancelPendingKitchenOrder.title')}
+        description={t('pos.dialogs.cancelPendingKitchenOrder.description')}
         itemName={
           cancelKitchenOrder
             ? cancelKitchenOrder.ticketNumber != null
-              ? `Ticket #${String(cancelKitchenOrder.ticketNumber).padStart(2, '0')}`
+              ? t('pos.sheets.shift.ticketNumber', { number: String(cancelKitchenOrder.ticketNumber).padStart(2, '0') })
               : cancelKitchenOrder.shortOrderId
             : undefined
         }
         loading={cancellingKitchenOrder}
-        confirmText="Cancel order"
-        cancelText="Keep order"
+        confirmText={t('pos.dialogs.cancelPendingKitchenOrder.confirmText')}
+        cancelText={t('pos.dialogs.cancelPendingKitchenOrder.cancelText')}
         onConfirm={() => void confirmCancelPendingKitchenOrder()}
         onCancel={() => setCancelKitchenOrder(null)}
       />
@@ -4983,15 +4987,15 @@ export function PosScreen({
       <Sheet open={archivedOrdersOpen} onOpenChange={setArchivedOrdersOpen}>
         <SheetContent className="w-full sm:max-w-lg">
           <SheetHeader>
-            <SheetTitle>Archived orders</SheetTitle>
+            <SheetTitle>{t('pos.sheets.archivedOrders.title')}</SheetTitle>
             <SheetDescription>
-              Held orders can be restored into the POS cart.
+              {t('pos.sheets.archivedOrders.description')}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-3">
             {archivedOrders.length === 0 ? (
               <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-                No archived orders yet.
+                {t('pos.sheets.archivedOrders.noArchivedOrders')}
               </div>
             ) : (
               <ScrollArea className="h-[70vh] pr-2">
@@ -5005,11 +5009,12 @@ export function PosScreen({
                             {new Date(order.createdAt).toLocaleString()}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {order.lines.reduce(
-                              (sum, line) => sum + line.qty,
-                              0
-                            )}{' '}
-                            items
+                            {t('pos.itemCount', {
+                              count: order.lines.reduce(
+                                (sum, line) => sum + line.qty,
+                                0
+                              ),
+                            })}
                           </p>
                         </div>
                         <p className="text-sm font-semibold tabular-nums">
@@ -5059,14 +5064,14 @@ export function PosScreen({
                           type="button"
                           onClick={() => restoreArchivedOrder(order)}
                         >
-                          Add to cart
+                          {t('pos.sheets.archivedOrders.addToCart')}
                         </Button>
                         <Button
                           type="button"
                           variant="outline"
                           onClick={() => deleteArchivedOrder(order.id)}
                         >
-                          Delete
+                          {t('pos.sheets.archivedOrders.delete')}
                         </Button>
                       </div>
                     </div>
@@ -5091,28 +5096,29 @@ export function PosScreen({
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
           <DialogHeader>
-            <DialogTitle>Send to kitchen</DialogTitle>
+            <DialogTitle>{t('pos.dialogs.sendToKitchen.title')}</DialogTitle>
           </DialogHeader>
           {kitchenSendOrder ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Payment recorded. Choose prep time to show this order on the
-                kitchen display (not the KDS manager queue).
+                {t('pos.dialogs.sendToKitchenOrder.description')}
               </p>
               <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
                 <p className="font-medium">
-                  Order{' '}
-                  {kitchenSendOrder.ticketNumber != null
-                    ? `#${String(kitchenSendOrder.ticketNumber).padStart(2, '0')}`
-                    : kitchenSendOrder.shortOrderId}
+                  {t('pos.dialogs.sendToKitchen.orderLabel', {
+                    label:
+                      kitchenSendOrder.ticketNumber != null
+                        ? `#${String(kitchenSendOrder.ticketNumber).padStart(2, '0')}`
+                        : kitchenSendOrder.shortOrderId,
+                  })}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Tracking: {kitchenSendOrder.shortOrderId}
+                  {t('pos.dialogs.sendToKitchenOrder.tracking', { id: kitchenSendOrder.shortOrderId })}
                 </p>
               </div>
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Prep time (minutes)
+                  {t('pos.dialogs.sendToKitchen.prepTimeMinutes')}
                 </p>
                 <div className="grid grid-cols-3 gap-2">
                   {KITCHEN_PREP_PRESETS.map((m) => (
@@ -5135,7 +5141,7 @@ export function PosScreen({
                         setKitchenPrepKeyboardOpen(false);
                       }}
                     >
-                      {m} min
+                      {t('pos.dialogs.sendToKitchen.minSuffix', { count: m })}
                     </Button>
                   ))}
                 </div>
@@ -5143,7 +5149,7 @@ export function PosScreen({
                   className="cursor-pointer"
                   inputMode="none"
                   autoComplete="off"
-                  placeholder={`Custom (${KITCHEN_PREP_MIN}–${KITCHEN_PREP_MAX})`}
+                  placeholder={t('pos.dialogs.sendToKitchen.customPlaceholder', { min: KITCHEN_PREP_MIN, max: KITCHEN_PREP_MAX })}
                   value={kitchenCustomMinutes}
                   disabled={sendingToKitchen}
                   onChange={(e) =>
@@ -5175,7 +5181,7 @@ export function PosScreen({
               onClick={() => resetKitchenSendDialog()}
             >
               <>
-                <X className="mr-2 h-4 w-4" /> <span>Cancel</span>
+                <X className="mr-2 h-4 w-4" /> <span>{t('pos.dialogs.sendToKitchen.cancel')}</span>
               </>
             </Button>
             <Button
@@ -5186,12 +5192,12 @@ export function PosScreen({
               {sendingToKitchen ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
-                  <span>{fulfillmentSettings.kdsEnabled ? 'Sending...' : 'Completing...'}</span>
+                  <span>{fulfillmentSettings.kdsEnabled ? t('pos.dialogs.sendToKitchen.sending') : t('pos.dialogs.sendToKitchen.completing')}</span>
                 </>
               ) : (
                 <>
                   <Check className="h-4 w-4 mr-2" />{' '}
-                  <span>{fulfillmentSettings.kdsEnabled ? 'Proceed to kitchen' : 'Complete order'}</span>
+                  <span>{fulfillmentSettings.kdsEnabled ? t('pos.dialogs.sendToKitchen.proceedToKitchen') : t('pos.dialogs.sendToKitchen.completeOrder')}</span>
                 </>
               )}
             </Button>

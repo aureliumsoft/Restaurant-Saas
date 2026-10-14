@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import RolesCard from './components/roles';
@@ -14,6 +14,8 @@ import { RestaurantServiceChargesCard } from './components/restaurant-service-ch
 import { RestaurantFulfillmentSettingsCard } from './components/restaurant-fulfillment-settings-card';
 import { RestaurantDineInPaymentCard } from './components/restaurant-dine-in-payment-card';
 import { BranchedPage } from '@/components/branched/branched-page';
+import { PremiumGate } from '@/components/premium/premium-gate';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import { SettingsSectionNav } from './settings-section-nav';
 import {
@@ -28,19 +30,18 @@ export function Setting() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { plan } = useStaffPermissions();
+  const { isPaid } = useEntitlements();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const brandingAllowed = plan?.branding !== false;
   const roleBasedSettingsAllowed = plan?.roleBasedSettings !== false;
+  const usersRolesPaid = isPaid('usersRoles');
+  const onlinePaymentsPaid = isPaid('onlinePayments');
+  const terminalPaymentPaid = isPaid('terminalPayment');
 
-  const section = useMemo(
+  const activeSection = useMemo(
     () => parseSettingsSection(searchParams.get('section')),
     [searchParams]
   );
-
-  const activeSection = useMemo(() => {
-    if (section === 'access' && !roleBasedSettingsAllowed) return 'basic';
-    return section;
-  }, [roleBasedSettingsAllowed, section]);
 
   const sectionCopy = useMemo(() => {
     const id = activeSection;
@@ -49,12 +50,6 @@ export function Setting() {
       description: t(`settings.sections.${id}.description`),
     };
   }, [activeSection, t]);
-
-  useEffect(() => {
-    if (section === 'access' && !roleBasedSettingsAllowed) {
-      router.replace('/settings?section=basic');
-    }
-  }, [roleBasedSettingsAllowed, router, section]);
 
   const selectSection = (id: SettingsSectionId) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -78,7 +73,7 @@ export function Setting() {
             <SettingsSectionNav
               active={activeSection}
               onSelect={selectSection}
-              accessAllowed={roleBasedSettingsAllowed}
+              accessLocked={usersRolesPaid}
             />
           </aside>
 
@@ -105,15 +100,15 @@ export function Setting() {
                 <BranchedPage embedded />
               ) : null}
 
-              {activeSection === 'access' && roleBasedSettingsAllowed ? (
-                <>
+              {activeSection === 'access' ? (
+                <PremiumGate locked={usersRolesPaid}>
                   <RestaurantUsersCard
                     roleBasedSettingsAllowed={roleBasedSettingsAllowed}
                   />
                   <RolesCard
                     roleBasedSettingsAllowed={roleBasedSettingsAllowed}
                   />
-                </>
+                </PremiumGate>
               ) : null}
 
               {activeSection === 'payments' ? (
@@ -125,6 +120,8 @@ export function Setting() {
                   <RestaurantServiceChargesCard />
                   <RestaurantPaymentProviderCard
                     cardPaymentsEnabled={fulfillmentSettings.cardPaymentsEnabled}
+                    onlinePaymentsLocked={onlinePaymentsPaid}
+                    terminalPaymentLocked={terminalPaymentPaid}
                   />
                 </>
               ) : null}

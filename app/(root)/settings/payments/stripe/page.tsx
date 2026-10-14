@@ -5,6 +5,7 @@ import axios from 'axios';
 import Link from 'next/link';
 import { ArrowLeft, Check, Loader2, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { extractApiErrorFromBody, extractApiErrorMessage } from '@/lib/extract-api-error';
 import {
@@ -39,6 +40,7 @@ type StripeFormState = {
 };
 
 export default function StripeCredentialsPage() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
   const [testStatus, setTestStatus] = useState<TestStatus>('idle');
@@ -90,7 +92,7 @@ export default function StripeCredentialsPage() {
           }
         }
       } catch {
-        if (!cancelled) toast.error('Could not load Stripe settings.');
+        if (!cancelled) toast.error(t('settings.paymentCredentials.loadFailed', { provider: 'Stripe' }));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -116,18 +118,23 @@ export default function StripeCredentialsPage() {
       if (res.status >= 200 && res.status < 300) {
         setTestStatus('passed');
         setForm((prev) => ({ ...prev, verified: true }));
-        toast.success('Stripe connection successful.');
+        toast.success(t('settings.paymentCredentials.testSuccessConnection', { provider: 'Stripe' }));
         return;
       }
       setTestStatus('failed');
       setForm((prev) => ({ ...prev, verified: false }));
       toast.error(
-        extractApiErrorFromBody(res.data, 'Stripe connection test failed.')
+        extractApiErrorFromBody(
+          res.data,
+          t('settings.paymentCredentials.testFailedConnection', { provider: 'Stripe' })
+        )
       );
     } catch (e: unknown) {
       setTestStatus('failed');
       setForm((prev) => ({ ...prev, verified: false }));
-      toast.error(extractApiErrorMessage(e, 'Stripe connection test failed.'));
+      toast.error(
+        extractApiErrorMessage(e, t('settings.paymentCredentials.testFailedConnection', { provider: 'Stripe' }))
+      );
     } finally {
       setTesting(false);
     }
@@ -152,18 +159,20 @@ export default function StripeCredentialsPage() {
         verified: data?.verified === true,
       }));
       setTestStatus('passed');
-      toast.success('Stripe credentials saved.');
+      toast.success(t('settings.paymentCredentials.saveSuccess', { provider: 'Stripe' }));
     } catch (e: unknown) {
       setTestStatus('failed');
       setForm((prev) => ({ ...prev, verified: false }));
-      toast.error(extractApiErrorMessage(e, 'Could not save Stripe credentials.'));
+      toast.error(
+        extractApiErrorMessage(e, t('settings.paymentCredentials.saveFailed', { provider: 'Stripe' }))
+      );
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDisconnect() {
-    if (!window.confirm('Remove Stripe credentials for this restaurant?')) return;
+    if (!window.confirm(t('settings.paymentCredentials.disconnectConfirm', { provider: 'Stripe' }))) return;
     try {
       await axios.delete('/api/restaurant/payments/stripe');
       setForm({
@@ -176,9 +185,9 @@ export default function StripeCredentialsPage() {
         verified: false,
       });
       setTestStatus('idle');
-      toast.success('Stripe credentials removed.');
+      toast.success(t('settings.paymentCredentials.disconnectSuccess', { provider: 'Stripe' }));
     } catch {
-      toast.error('Could not remove Stripe credentials.');
+      toast.error(t('settings.paymentCredentials.disconnectFailed', { provider: 'Stripe' }));
     }
   }
 
@@ -200,7 +209,7 @@ export default function StripeCredentialsPage() {
       <Button type="button" variant="ghost" className="gap-2" asChild>
         <Link href="/settings?section=payments">
           <ArrowLeft className="h-4 w-4" />
-          Back to payment methods
+          {t('settings.paymentCredentials.backToPaymentMethods')}
         </Link>
       </Button>
 
@@ -215,7 +224,7 @@ export default function StripeCredentialsPage() {
         <CardContent className="space-y-4">
           {form.verified && testStatus !== 'failed' ? (
             <p className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
-              Credentials verified and saved.
+              {t('settings.paymentCredentials.credentialsVerifiedSaved')}
             </p>
           ) : null}
 
@@ -259,7 +268,7 @@ export default function StripeCredentialsPage() {
           </div>
 
           <div className="space-y-2">
-            <Label>Mode</Label>
+            <Label>{t('settings.paymentCredentials.mode')}</Label>
             <Select
               value={form.mode}
               onValueChange={(value: 'test' | 'live') => {
@@ -330,7 +339,7 @@ export default function StripeCredentialsPage() {
           </Button>
           <Button type="button" onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Save credentials
+            {t('settings.paymentCredentials.saveCredentials')}
           </Button>
           {form.hasSecretKey ? (
             <Button
@@ -339,7 +348,7 @@ export default function StripeCredentialsPage() {
               onClick={handleDisconnect}
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Disconnect
+              {t('settings.paymentCredentials.disconnect')}
             </Button>
           ) : null}
         </CardFooter>

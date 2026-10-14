@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import axios from 'axios';
 import { Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import type { MenuCategoryRow } from './types';
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
@@ -30,6 +31,7 @@ type Props = {
 };
 
 export function SwatchesModule({ categories, onRefresh }: Props) {
+  const { t } = useTranslation();
   const uiLang = useUiLanguage();
   const products = useMemo(
     () =>
@@ -84,7 +86,7 @@ export function SwatchesModule({ categories, onRefresh }: Props) {
 
   async function save() {
     if (!selectedProduct) {
-      toast.error('Select a product first.');
+      toast.error(t('dashboard.menuManager.swatches.selectProductFirst'));
       return;
     }
     const variations = rows
@@ -97,11 +99,11 @@ export function SwatchesModule({ categories, onRefresh }: Props) {
       .filter((r) => r.name.length > 0);
 
     if (variations.some((v) => Number.isNaN(v.priceDelta))) {
-      toast.error('Every swatch price must be a valid number.');
+      toast.error(t('dashboard.menuManager.swatches.invalidPrice'));
       return;
     }
     if (variations.some((v) => v.imageUrl && !isAcceptedImageValue(v.imageUrl))) {
-      toast.error('Swatch image must be a valid URL or base64 image.');
+      toast.error(t('dashboard.menuManager.swatches.invalidImage'));
       return;
     }
 
@@ -110,12 +112,16 @@ export function SwatchesModule({ categories, onRefresh }: Props) {
       await axios.patch(`/api/restaurant/menu/items/${selectedProduct.id}`, {
         variations,
       });
-      toast.success('Swatches saved');
+      toast.success(t('dashboard.menuManager.swatches.saved'));
       await onRefresh();
       loadRows(selectedProduct.id);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: unknown } } };
-      toast.error(typeof err.response?.data?.error === 'string' ? err.response.data.error : 'Save failed');
+      toast.error(
+        typeof err.response?.data?.error === 'string'
+          ? err.response.data.error
+          : t('dashboard.menuManager.swatches.saveFailed')
+      );
     } finally {
       setSaving(false);
     }
@@ -124,14 +130,14 @@ export function SwatchesModule({ categories, onRefresh }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Swatches</CardTitle>
+        <CardTitle>{t('dashboard.menuManager.swatches.title')}</CardTitle>
         <CardDescription>
-          Select a product, then add swatches with name, title, final price, and image.
+          {t('dashboard.menuManager.swatches.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-2">
-          <Label>Select product</Label>
+          <Label>{t('dashboard.menuManager.swatches.selectProductLabel')}</Label>
           <Select
             value={selectedProductId}
             onValueChange={(v) => {
@@ -140,7 +146,7 @@ export function SwatchesModule({ categories, onRefresh }: Props) {
             }}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Choose product" />
+              <SelectValue placeholder={t('dashboard.menuManager.swatches.choosePlaceholder')} />
             </SelectTrigger>
             <SelectContent>
               {products.map((p) => (
@@ -154,26 +160,30 @@ export function SwatchesModule({ categories, onRefresh }: Props) {
         </div>
 
         {!selectedProduct ? (
-          <p className="text-sm text-muted-foreground">Choose a product to manage swatches.</p>
+          <p className="text-sm text-muted-foreground">
+            {t('dashboard.menuManager.swatches.chooseProductHint')}
+          </p>
         ) : (
           <>
             <div className="space-y-3">
               {rows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No swatches yet. Add your first one below.</p>
+                <p className="text-sm text-muted-foreground">
+                  {t('dashboard.menuManager.swatches.empty')}
+                </p>
               ) : (
                 rows.map((row, index) => (
                   <div key={`${row.id ?? 'new'}-${index}`} className="grid gap-2 rounded-md border border-border p-3 md:grid-cols-[1.1fr,0.8fr,1.6fr,auto]">
                     <div className="grid gap-1">
-                      <Label>Name</Label>
+                      <Label>{t('dashboard.menuManager.swatches.nameLabel')}</Label>
                       <Input
                         value={row.name}
                         onChange={(e) => updateRow(index, { name: e.target.value })}
-                        placeholder="Small / Red / 500ml"
+                        placeholder={t('dashboard.menuManager.swatches.namePlaceholder')}
                       />
                     </div>
                   
                     <div className="grid gap-1">
-                      <Label>Price</Label>
+                      <Label>{t('dashboard.menuManager.swatches.priceLabel')}</Label>
                       <Input
                         type="number"
                         step="0.01"
@@ -183,7 +193,7 @@ export function SwatchesModule({ categories, onRefresh }: Props) {
                       />
                     </div>
                     <Base64ImageUploadField
-                      label="Image"
+                      label={t('dashboard.menuManager.swatches.imageLabel')}
                       value={row.imageUrl}
                       onChange={(v) => updateRow(index, { imageUrl: v })}
                     />
@@ -194,7 +204,7 @@ export function SwatchesModule({ categories, onRefresh }: Props) {
                         size="icon"
                         className="text-destructive"
                         onClick={() => removeRow(index)}
-                        aria-label="Remove swatch"
+                        aria-label={t('dashboard.menuManager.swatches.removeAria')}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -207,10 +217,20 @@ export function SwatchesModule({ categories, onRefresh }: Props) {
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={addRow}>
                 <Plus className="mr-2 h-4 w-4" />
-                Add swatch
+                {t('dashboard.menuManager.swatches.addSwatch')}
               </Button>
               <Button type="button" disabled={saving} onClick={() => void save()}>
-                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> <span>Saving...</span></> : <><Save className="h-4 w-4 mr-2" /> <span>Save swatches</span></>}
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />{' '}
+                    <span>{t('dashboard.menuManager.swatches.saving')}</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />{' '}
+                    <span>{t('dashboard.menuManager.swatches.saveSwatches')}</span>
+                  </>
+                )}
               </Button>
             </div>
           </>

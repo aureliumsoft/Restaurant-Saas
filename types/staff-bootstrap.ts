@@ -1,7 +1,13 @@
 import type { BranchOption } from '@/lib/branch/branch-scope';
+import type { PlanCaps } from '@/lib/entitlements';
 import type { RestaurantRegionalSettings } from '@/lib/restaurant-regional';
 import type { RestaurantServiceCharges } from '@/lib/restaurant-service-charge';
 import type { RestaurantFulfillmentSettings } from '@/lib/restaurant-fulfillment-settings';
+
+export type StaffBootstrapModuleEntitlement = {
+  access: 'full' | 'limited' | 'paid';
+  limits?: Record<string, number | boolean | string>;
+};
 
 export type StaffBootstrapPlan = {
   maxBranches: number | null;
@@ -10,6 +16,10 @@ export type StaffBootstrapPlan = {
   branding: boolean;
   advancedAnalytics: boolean;
   mobileApp: boolean;
+  planId?: string;
+  modules?: Record<string, StaffBootstrapModuleEntitlement>;
+  caps?: PlanCaps;
+  customSelectedModules?: string[];
 };
 
 export type StaffBootstrapBranchScope = {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -62,9 +63,10 @@ export function TableFloorPickerDialog({
   restaurantSlug = null,
   selectedTableId = null,
   onConfirm,
-  title = 'Select a table',
-  confirmLabel = 'Confirm table',
+  title,
 }: Props) {
+  const { t } = useTranslation();
+  const resolvedTitle = title ?? t('dashboard.tables.pickerDefaultTitle');
   const [loading, setLoading] = useState(false);
   const [floor, setFloor] = useState<FloorSize>({ ...DEFAULT_FLOOR_SIZE });
   const [tables, setTables] = useState<FloorTable[]>([]);
@@ -151,7 +153,7 @@ export function TableFloorPickerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-[95vw] w-fit overflow-hidden flex flex-col p-0">
         <DialogHeader className="p-6 pb-2 shrink-0">
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>{resolvedTitle}</DialogTitle>
         </DialogHeader>
         {loading ? (
           <div className="flex min-h-[12rem] items-center justify-center">
@@ -159,7 +161,7 @@ export function TableFloorPickerDialog({
           </div>
         ) : tables.length === 0 ? (
           <p className="py-8 px-6 text-center text-sm text-muted-foreground">
-            No tables available for this branch.
+            {t('dashboard.tables.pickerNoTables')}
           </p>
         ) : (
           <div className="flex-1 flex flex-col overflow-hidden p-6 pt-0 min-h-0 min-w-0">

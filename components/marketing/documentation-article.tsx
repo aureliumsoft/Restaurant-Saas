@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
 
 import type { PublicDocArticle } from '@/lib/documentation/public';
 import { docHeadingPath } from '@/lib/documentation/public';
@@ -8,20 +11,21 @@ export function DocumentationArticleView({
 }: {
   article: PublicDocArticle;
 }) {
+  const { t } = useTranslation();
   const primary = article.pages[0];
   const extraPages = article.pages.slice(1);
 
   return (
     <article className="w-full">
       <nav
-        aria-label="Breadcrumb"
+        aria-label={t('marketingExtras.documentation.article.breadcrumbAria')}
         className="flex flex-wrap items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400"
       >
         <Link
           href="/documentation"
           className="hover:text-fire-600 dark:hover:text-fire-400"
         >
-          Documentation
+          {t('marketingExtras.documentation.title')}
         </Link>
         <span aria-hidden>/</span>
         {article.subHeading ? (

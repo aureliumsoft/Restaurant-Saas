@@ -2,6 +2,7 @@
 
 import { useTranslation } from 'react-i18next';
 
+import { PremiumCrown } from '@/components/premium/premium-crown';
 import { cn } from '@/lib/utils';
 import {
   SETTINGS_SECTIONS,
@@ -11,18 +12,16 @@ import {
 type Props = {
   active: SettingsSectionId;
   onSelect: (id: SettingsSectionId) => void;
-  accessAllowed?: boolean;
+  accessLocked?: boolean;
 };
 
 export function SettingsSectionNav({
   active,
   onSelect,
-  accessAllowed = true,
+  accessLocked = false,
 }: Props) {
   const { t } = useTranslation();
-  const sections = SETTINGS_SECTIONS.filter(
-    (section) => section.id !== 'access' || accessAllowed
-  );
+  const sections = SETTINGS_SECTIONS;
 
   return (
     <nav
@@ -52,8 +51,11 @@ export function SettingsSectionNav({
               aria-hidden
             />
             <span className="min-w-0">
-              <span className="block text-sm font-medium leading-snug">
+              <span className="flex items-center gap-1.5 text-sm font-medium leading-snug">
                 {t(`settings.sections.${section.id}.title`)}
+                {section.id === 'access' && accessLocked ? (
+                  <PremiumCrown />
+                ) : null}
               </span>
               <span className="mt-0.5 hidden text-xs leading-snug text-muted-foreground lg:block">
                 {t(`settings.sections.${section.id}.description`)}

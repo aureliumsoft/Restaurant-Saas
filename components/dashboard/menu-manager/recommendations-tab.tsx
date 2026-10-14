@@ -475,7 +475,7 @@ export function RecommendationsTab(_props?: Props) {
           if (page > 20) break;
         }
       } catch {
-        toast.error('Could not load products for picker.');
+        toast.error(t('dashboard.menuManager.recommendations.loadPickerFailed'));
       } finally {
         setPickerProductsLoading(false);
       }
@@ -589,7 +589,7 @@ export function RecommendationsTab(_props?: Props) {
       })
       .catch(() => {
         if (cancelled) return;
-        toast.error('Could not load product configuration.');
+        toast.error(t('dashboard.menuManager.recommendations.loadConfigFailed'));
         setSelectedDetail(null);
       })
       .finally(() => {
@@ -666,7 +666,7 @@ export function RecommendationsTab(_props?: Props) {
           setStripTotal(0);
           stripHasMoreRef.current = false;
         }
-        toast.error('Could not load products.');
+        toast.error(t('dashboard.menuManager.recommendations.loadProductsFailed'));
         return false;
       }
     },
@@ -1297,7 +1297,7 @@ export function RecommendationsTab(_props?: Props) {
     options?: { resetAfter?: boolean }
   ) => {
     if (!selected) {
-      toast.error('Select a product first.');
+      toast.error(t('dashboard.menuManager.recommendations.selectProductFirst'));
       return false;
     }
 
@@ -1345,7 +1345,7 @@ export function RecommendationsTab(_props?: Props) {
             group.id === editingGroupId && updated ? updated : group
           ),
         }));
-        toast.success('Recommendation updated');
+        toast.success(t('dashboard.menuManager.recommendations.recommendationUpdated'));
       } else {
         updateSelectedItem((item) => ({
           ...item,
@@ -1357,7 +1357,7 @@ export function RecommendationsTab(_props?: Props) {
             ),
           ],
         }));
-        toast.success('Recommendation saved');
+        toast.success(t('dashboard.menuManager.recommendations.recommendationSaved'));
       }
       if (options?.resetAfter !== false) {
         const variant = variantFromDraft(draft);
@@ -1373,7 +1373,7 @@ export function RecommendationsTab(_props?: Props) {
       return true;
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || 'Could not save');
+      toast.error(err.response?.data?.error || t('dashboard.menuManager.recommendations.saveFailedGeneric'));
       return false;
     } finally {
       setSavingRules(false);
@@ -1382,11 +1382,11 @@ export function RecommendationsTab(_props?: Props) {
 
   const saveDealProducts = async (options?: { resetAfter?: boolean }) => {
     if (!selected) {
-      toast.error('Select a product first.');
+      toast.error(t('dashboard.menuManager.recommendations.selectProductFirst'));
       return false;
     }
     if (selectedDealProductIds.length === 0) {
-      toast.error('Select deal products first.');
+      toast.error(t('dashboard.menuManager.recommendations.selectDealProductsFirst'));
       return false;
     }
     setSavingDeals(true);
@@ -1417,14 +1417,14 @@ export function RecommendationsTab(_props?: Props) {
       if (options?.resetAfter !== false) {
         setDealCategoryIds([]);
         setSelectedDealProductIds([]);
-        toast.success('Recommended deals added');
+        toast.success(t('dashboard.menuManager.recommendations.recommendedDealsAdded'));
         allowNextNavigation();
       }
       return true;
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(
-        err.response?.data?.error || 'Could not add recommended deals'
+        err.response?.data?.error || t('dashboard.menuManager.recommendations.addDealsFailed')
       );
       return false;
     } finally {
@@ -1434,11 +1434,11 @@ export function RecommendationsTab(_props?: Props) {
 
   const saveOfferedProducts = async (options?: { resetAfter?: boolean }) => {
     if (!selected) {
-      toast.error('Select a product first.');
+      toast.error(t('dashboard.menuManager.recommendations.selectProductFirst'));
       return false;
     }
     if (selectedOfferProductIds.length === 0) {
-      toast.error('Select offered products first.');
+      toast.error(t('dashboard.menuManager.recommendations.selectOfferedProductsFirst'));
       return false;
     }
     setSavingOffers(true);
@@ -1469,14 +1469,14 @@ export function RecommendationsTab(_props?: Props) {
       if (options?.resetAfter !== false) {
         setOfferCategoryIds([]);
         setSelectedOfferProductIds([]);
-      toast.success('Offered products added');
+      toast.success(t('dashboard.menuManager.recommendations.offeredProductsAdded'));
       allowNextNavigation();
       }
       return true;
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(
-        err.response?.data?.error || 'Could not add offered products'
+        err.response?.data?.error || t('dashboard.menuManager.recommendations.addOffersFailed')
       );
       return false;
     } finally {
@@ -1489,14 +1489,16 @@ export function RecommendationsTab(_props?: Props) {
   ): string | null => {
     for (const group of draft) {
       if (!group.parentName.trim()) {
-        return 'Each personalize group needs a parent name';
+        return t('dashboard.menuManager.recommendations.personalizeGroupNameRequired');
       }
       const namedOptions = group.options.filter((o) => o.name.trim());
       if (namedOptions.length === 0) {
-        return `Group "${group.parentName}" needs at least one option with a name`;
+        return t('dashboard.menuManager.recommendations.personalizeOptionNameRequired', {
+          name: group.parentName,
+        });
       }
       if (group.maxItems < 1) {
-        return 'Max items must be at least 1';
+        return t('dashboard.menuManager.recommendations.personalizeMaxItemsMin');
       }
     }
     return null;
@@ -1507,7 +1509,7 @@ export function RecommendationsTab(_props?: Props) {
     groups?: PersonalizeGroupDraft[];
   }) => {
     if (!selected) {
-      toast.error('Select a product first.');
+      toast.error(t('dashboard.menuManager.recommendations.selectProductFirst'));
       return false;
     }
 
@@ -1544,13 +1546,13 @@ export function RecommendationsTab(_props?: Props) {
       setPersonalizeDraft(personalizeGroupsToDraft(saved));
       setPersonalizeDirty(false);
       if (options?.resetAfter !== false) {
-        toast.success('Personalize items saved');
+        toast.success(t('dashboard.menuManager.recommendations.personalizeSaved'));
         allowNextNavigation();
       }
       return true;
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
-      toast.error(err.response?.data?.error || 'Could not save personalize items');
+      toast.error(err.response?.data?.error || t('dashboard.menuManager.recommendations.personalizeSaveFailed'));
       return false;
     } finally {
       setSavingPersonalize(false);
@@ -1605,11 +1607,11 @@ export function RecommendationsTab(_props?: Props) {
         delete next[removedId];
         return next;
       });
-      toast.success('Removed');
+      toast.success(t('dashboard.menuManager.recommendations.ruleRemoved'));
       setDeleteRuleConfirmOpen(false);
       setDeletingRuleId(null);
     } catch {
-      toast.error('Could not remove');
+      toast.error(t('dashboard.menuManager.recommendations.ruleRemoveFailed'));
     } finally {
       setDeletingRule(false);
     }
@@ -1626,9 +1628,9 @@ export function RecommendationsTab(_props?: Props) {
           (d) => d.id !== deletingDealId
         ),
       }));
-      toast.success('Removed recommended deal');
+      toast.success(t('dashboard.menuManager.recommendations.dealRemoved'));
     } catch {
-      toast.error('Could not remove recommended deal');
+      toast.error(t('dashboard.menuManager.recommendations.dealRemoveFailed'));
     } finally {
       setDeletingDealId(null);
       setDeleteDealConfirmOpen(false);
@@ -1647,9 +1649,9 @@ export function RecommendationsTab(_props?: Props) {
           (o) => o.id !== deletingOfferId
         ),
       }));
-      toast.success('Removed offered product');
+      toast.success(t('dashboard.menuManager.recommendations.offerRemoved'));
     } catch {
-      toast.error('Could not remove offered product');
+      toast.error(t('dashboard.menuManager.recommendations.offerRemoveFailed'));
     } finally {
       setDeletingOfferId(null);
       setDeleteOfferConfirmOpen(false);

@@ -493,7 +493,7 @@ export function FinalViewScreen() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={cancelLeave}>
-              {t('cancel')}
+              {t('dashboard.common.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction onClick={confirmLeave}>
               {t('dashboard.finalView.leaveWithoutSaving')}

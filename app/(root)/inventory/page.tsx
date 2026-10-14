@@ -268,7 +268,7 @@ export default function InventoryPage() {
         setPage(res.data.meta?.page ?? p);
       } catch {
         if (requestId !== ingredientLoadId.current) return;
-        toast.error('Could not load ingredients.');
+        toast.error(t('dashboard.inventory.loadIngredientsFailed'));
       } finally {
         if (requestId === ingredientLoadId.current) {
           setLoading(false);
@@ -309,7 +309,7 @@ export default function InventoryPage() {
         setEntryPage(res.data.meta?.page ?? p);
       } catch {
         if (requestId !== entryLoadId.current) return;
-        toast.error('Could not load stock entries.');
+        toast.error(t('dashboard.inventory.loadEntriesFailed'));
       } finally {
         if (requestId === entryLoadId.current) {
           setEntriesLoading(false);
@@ -482,14 +482,17 @@ export default function InventoryPage() {
       entryProductId &&
       !opts.some((o) => o.value === entryProductId)
     ) {
-      opts.unshift({ value: entryProductId, label: 'Selected product' });
+      opts.unshift({
+        value: entryProductId,
+        label: t('dashboard.inventory.selectedProductFallback'),
+      });
     }
     return opts;
   }, [products, entryProductId, uiLang]);
 
   const submitEntry = async () => {
     if (!entryIngredientId || !entryQty.trim() || !entryReason.trim()) {
-      toast.error('Ingredient, quantity, and reason are required.');
+      toast.error(t('dashboard.inventory.entryFieldsRequired'));
       return;
     }
     setSavingEntry(true);
@@ -507,7 +510,7 @@ export default function InventoryPage() {
         menuItemId: entryProductId || null,
         }
       );
-      toast.success('Stock entry saved.');
+      toast.success(t('dashboard.inventory.entrySaved'));
       resetEntryForm();
       setEntryDialogOpen(false);
       setEntryPage(1);
@@ -516,7 +519,9 @@ export default function InventoryPage() {
       void loadEntries(1, appliedEntrySearch, { silent: true });
       void loadSummary({ silent: true });
     } catch (e) {
-      toast.error(extractApiErrorMessage(e, 'Could not save stock entry.'));
+      toast.error(
+        extractApiErrorMessage(e, t('dashboard.inventory.entrySaveFailed'))
+      );
     } finally {
       setSavingEntry(false);
     }
@@ -527,12 +532,14 @@ export default function InventoryPage() {
     setDeleting(true);
     try {
       await axios.delete(ingredientApiPath(deleteId));
-      toast.success('Ingredient removed.');
+      toast.success(t('dashboard.inventory.ingredientRemoved'));
       setDeleteId(null);
       void loadIngredients(page, appliedSearch, { silent: true });
       void loadActiveIngredients();
     } catch (e) {
-      toast.error(extractApiErrorMessage(e, 'Could not delete ingredient.'));
+      toast.error(
+        extractApiErrorMessage(e, t('dashboard.inventory.deleteFailed'))
+      );
     } finally {
       setDeleting(false);
     }
@@ -580,11 +587,11 @@ export default function InventoryPage() {
   const saveStock = async () => {
     if (!stockRow) return;
     if (stockAddAmount <= 0) {
-      toast.error('Enter a quantity to add greater than 0.');
+      toast.error(t('dashboard.inventory.qtyMustBePositive'));
       return;
     }
     if (!Number.isFinite(Number(stockUnitRate)) || Number(stockUnitRate) < 0) {
-      toast.error('Enter a unit rate of 0 or more.');
+      toast.error(t('dashboard.inventory.unitRateInvalid'));
       return;
     }
     const nextQty = stockTotals.totalQtyAfter;
@@ -603,7 +610,7 @@ export default function InventoryPage() {
           expenseAmount,
         }
       );
-      toast.success('Stock updated and inventory expense recorded.');
+      toast.success(t('dashboard.inventory.stockUpdated'));
       setRows((prev) =>
         prev.map((r) =>
           r.id === stockRow.id
@@ -623,7 +630,9 @@ export default function InventoryPage() {
       void loadActiveIngredients();
       void loadSummary({ silent: true });
     } catch (e) {
-      toast.error(extractApiErrorMessage(e, 'Could not update stock.'));
+      toast.error(
+        extractApiErrorMessage(e, t('dashboard.inventory.stockUpdateFailed'))
+      );
     } finally {
       setSavingStock(false);
     }
@@ -631,11 +640,13 @@ export default function InventoryPage() {
 
   return (
     <MenuPageShell
-      title="Inventory"
+      title={t('dashboard.inventory.title')}
       description={
         activeBranchName
-          ? `Track ingredients and stock for ${activeBranchName}. Quantities are per branch.`
-          : 'Track ingredients, recipes on products, and manual stock usage.'
+          ? t('dashboard.inventory.descriptionBranch', {
+              branch: activeBranchName,
+            })
+          : t('dashboard.inventory.description')
       }
       loading={branchLoading}
     >
@@ -801,7 +812,7 @@ export default function InventoryPage() {
                                   </p>
                                   {!row.isActive ? (
                                     <p className="mt-0.5 text-[11px] font-medium text-destructive">
-                                      Inactive
+                                      {t('dashboard.inventory.inactive')}
                                     </p>
                                   ) : null}
                                   <p className="text-xs text-muted-foreground">
@@ -825,7 +836,9 @@ export default function InventoryPage() {
                                 : '—'}
                               {row.unitCost != null ? (
                                 <p className="text-[11px] text-muted-foreground">
-                                  per {formatIngredientUnit(row.unit)}
+                                  {t('dashboard.inventory.perUnit', {
+                                    unit: formatIngredientUnit(row.unit),
+                                  })}
                                 </p>
                               ) : null}
                             </DashboardTableCell>
@@ -835,7 +848,9 @@ export default function InventoryPage() {
                               </span>
                             </DashboardTableCell>
                             <DashboardTableCell>
-                              {row.isMajor ? 'Yes' : 'No'}
+                              {row.isMajor
+                                ? t('dashboard.common.yes')
+                                : t('dashboard.common.no')}
                             </DashboardTableCell>
                             <DashboardTableCell>
                               <div className="flex justify-end gap-1">
@@ -845,7 +860,15 @@ export default function InventoryPage() {
                                       type="button"
                                       variant="ghost"
                                       size="icon"
-                                      aria-label={`Update ${resolveBilingualText(row.name, uiLang)} quantity`}
+                                      aria-label={t(
+                                        'dashboard.inventory.updateQuantityAria',
+                                        {
+                                          name: resolveBilingualText(
+                                            row.name,
+                                            uiLang
+                                          ),
+                                        }
+                                      )}
                                       onClick={() => openStockDialog(row)}
                                     >
                                       <PackagePlus className="h-4 w-4" />
@@ -890,7 +913,9 @@ export default function InventoryPage() {
                   hideWhenSinglePage={false}
                 />
                 <p className="text-xs text-muted-foreground">
-                  {total} ingredient{total === 1 ? '' : 's'}
+                  {total === 1
+                    ? t('dashboard.inventory.ingredientCount_one', { count: total })
+                    : t('dashboard.inventory.ingredientCount_other', { count: total })}
                 </p>
               </>
             )}
@@ -913,7 +938,7 @@ export default function InventoryPage() {
               {canEditInv ? (
                 <Button type="button" onClick={openEntryDialog}>
                   <Plus className="mr-2 h-4 w-4" />
-                  Deduct stock
+                  {t('dashboard.inventory.deductStock')}
                 </Button>
               ) : null}
             </DashboardCardHeader>
@@ -1020,40 +1045,41 @@ export default function InventoryPage() {
       >
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Deduct stock</DialogTitle>
+            <DialogTitle>{t('dashboard.inventory.deductStock')}</DialogTitle>
             <DialogDescription>
-              Record manual stock usage. Quantity is subtracted from branch
-              inventory.
+              {t('dashboard.inventory.deductStockDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
-              <Label>Product (optional)</Label>
+              <Label>{t('dashboard.inventory.productOptional')}</Label>
               <SearchableSelect
                 value={entryProductId}
                 onChange={setEntryProductId}
                 options={productOptions}
-                placeholder="Select product"
-                searchPlaceholder="Search product…"
+                placeholder={t('dashboard.inventory.selectProduct')}
+                searchPlaceholder={t('dashboard.inventory.searchProduct')}
                 allowClear
                 onSearchChange={setProductSearch}
               />
             </div>
             <div className="grid gap-2">
               <Label>
-                Ingredient <span className="text-destructive">*</span>
+                {t('dashboard.reports.colIngredient')}{' '}
+                <span className="text-destructive">*</span>
               </Label>
               <SearchableSelect
                 value={entryIngredientId}
                 onChange={setEntryIngredientId}
                 options={ingredientOptions}
-                placeholder="Select ingredient"
-                searchPlaceholder="Search ingredient…"
+                placeholder={t('dashboard.inventory.selectIngredient')}
+                searchPlaceholder={t('dashboard.inventory.searchIngredient')}
               />
             </div>
             <div className="grid gap-2">
               <Label>
-                Quantity <span className="text-destructive">*</span>
+                {t('dashboard.reports.colQty')}{' '}
+                <span className="text-destructive">*</span>
               </Label>
               <Input
                 value={entryQty}
@@ -1061,17 +1087,18 @@ export default function InventoryPage() {
                   setEntryQty(filterDecimalInput(e.target.value))
                 }
                 inputMode="decimal"
-                placeholder="Amount to deduct"
+                placeholder={t('dashboard.inventory.amountToDeduct')}
               />
             </div>
             <div className="grid gap-2">
               <Label>
-                Reason <span className="text-destructive">*</span>
+                {t('dashboard.inventory.colReason')}{' '}
+                <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 value={entryReason}
                 onChange={(e) => setEntryReason(e.target.value)}
-                placeholder="Why is this stock being used?"
+                placeholder={t('dashboard.inventory.reasonPlaceholder')}
                 rows={3}
               />
             </div>
@@ -1086,7 +1113,7 @@ export default function InventoryPage() {
                 resetEntryForm();
               }}
             >
-              Cancel
+              {t('dashboard.common.cancel')}
             </Button>
             <Button
               type="button"
@@ -1098,7 +1125,7 @@ export default function InventoryPage() {
               ) : (
                 <Save className="mr-2 h-4 w-4" />
               )}
-              Save entry
+              {t('dashboard.inventory.saveEntry')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1118,19 +1145,24 @@ export default function InventoryPage() {
           <DialogHeader>
             <DialogTitle>
               {stockRow
-                ? `Add stock for "${resolveBilingualText(stockRow.name, uiLang)}"`
-                : 'Add ingredient stock'}
+                ? t('dashboard.inventory.addStockFor', {
+                    name: resolveBilingualText(stockRow.name, uiLang),
+                  })
+                : t('dashboard.inventory.addIngredientStock')}
             </DialogTitle>
             <DialogDescription>
-              Enter the quantity to add
               {stockRow
-                ? ` in ${formatIngredientUnit(stockRow.unit)}. Unit rate defaults to the current cost.`
-                : '.'}
+                ? t('dashboard.inventory.enterQuantityToAddWithUnit', {
+                    unit: formatIngredientUnit(stockRow.unit),
+                  })
+                : t('dashboard.inventory.enterQuantityToAdd')}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div className="grid gap-2">
-              <Label htmlFor="ingredient-stock-previous">Previous quantity</Label>
+              <Label htmlFor="ingredient-stock-previous">
+                {t('dashboard.inventory.previousQuantity')}
+              </Label>
               <Input
                 id="ingredient-stock-previous"
                 value={
@@ -1144,8 +1176,11 @@ export default function InventoryPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ingredient-stock-add">
-                Add quantity
-                {stockRow ? ` (${stockTotals.unitLabel})` : ''}
+                {stockRow
+                  ? t('dashboard.inventory.addQuantityWithUnit', {
+                      unit: stockTotals.unitLabel,
+                    })
+                  : t('dashboard.inventory.addQuantity')}
               </Label>
               <Input
                 id="ingredient-stock-add"
@@ -1165,7 +1200,9 @@ export default function InventoryPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="ingredient-stock-rate">Unit rate</Label>
+              <Label htmlFor="ingredient-stock-rate">
+                {t('dashboard.inventory.unitRate')}
+              </Label>
               <Input
                 id="ingredient-stock-rate"
                 value={stockUnitRate}
@@ -1176,17 +1213,17 @@ export default function InventoryPage() {
                 placeholder="0"
               />
               <p className="text-xs text-muted-foreground">
-                Defaults to the previous unit cost
                 {stockRow?.unitCost != null
-                  ? ` (${formatMoney(stockRow.unitCost)})`
-                  : ''}
-                .
+                  ? t('dashboard.inventory.unitRateHintWithCost', {
+                      cost: formatMoney(stockRow.unitCost),
+                    })
+                  : t('dashboard.inventory.unitRateHint')}
               </p>
             </div>
             <div className="grid gap-2 rounded-xl border bg-muted/30 p-3 sm:grid-cols-3">
               <div>
                 <p className="text-xs text-muted-foreground">
-                  Total quantity after update
+                  {t('dashboard.inventory.totalQtyAfterUpdate')}
                 </p>
                 <p className="font-medium tabular-nums">
                   {stockTotals.totalQtyAfter} {stockTotals.unitLabel}
@@ -1194,7 +1231,7 @@ export default function InventoryPage() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">
-                  Total cost of new quantity
+                  {t('dashboard.inventory.totalCostOfNewQuantity')}
                 </p>
                 <p className="font-medium tabular-nums">
                   {formatMoney(stockTotals.totalCostNew)}
@@ -1202,7 +1239,7 @@ export default function InventoryPage() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">
-                  Total value of total stock
+                  {t('dashboard.inventory.totalValueOfTotalStock')}
                 </p>
                 <p className="font-medium tabular-nums">
                   {formatMoney(stockTotals.totalStockValue)}
@@ -1211,8 +1248,9 @@ export default function InventoryPage() {
             </div>
             {stockAddAmount > 0 ? (
               <p className="text-xs text-muted-foreground">
-                Saving records an Inventory expense for{' '}
-                {formatMoney(stockTotals.totalCostNew)}.
+                {t('dashboard.inventory.savingRecordsExpense', {
+                  amount: formatMoney(stockTotals.totalCostNew),
+                })}
               </p>
             ) : null}
           </div>
@@ -1227,7 +1265,7 @@ export default function InventoryPage() {
                 setStockUnitRate('');
               }}
             >
-              Cancel
+              {t('dashboard.common.cancel')}
             </Button>
             <Button
               type="button"
@@ -1243,7 +1281,7 @@ export default function InventoryPage() {
               ) : (
                 <PackagePlus className="mr-2 h-4 w-4" />
               )}
-              Add stock
+              {t('dashboard.inventory.addStock')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1256,7 +1294,7 @@ export default function InventoryPage() {
         }}
         onConfirm={() => void confirmDelete()}
         title={t('dashboard.inventory.deleteIngredientTitle')}
-        description="This removes the ingredient and its recipe links."
+        description={t('dashboard.inventory.deleteIngredientDescription')}
         itemName={
           deleteId
             ? resolveBilingualText(

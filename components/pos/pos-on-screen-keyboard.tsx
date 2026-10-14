@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Delete, GripVertical, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -104,6 +105,7 @@ export function PosOnScreenKeyboard({
   maxLength = 120,
   portal = true,
 }: PosOnScreenKeyboardProps) {
+  const { t } = useTranslation();
   const [mounted, setMounted] = useState(!portal);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(
     portal ? null : { x: 0, y: 0 }
@@ -252,13 +254,13 @@ export function PosOnScreenKeyboard({
         ) : null}
         <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {mode === 'phone'
-            ? 'Phone keypad'
+            ? t('pos.keyboard.phoneKeypad')
             : mode === 'numeric'
-              ? 'Amount keypad'
-              : 'Keyboard'}
+              ? t('pos.keyboard.amountKeypad')
+              : t('pos.keyboard.keyboard')}
           {portal ? (
             <span className="ml-1.5 font-normal normal-case tracking-normal opacity-70">
-              · drag to move
+              · {t('pos.keyboard.dragToMove')}
             </span>
           ) : null}
         </p>
@@ -275,7 +277,7 @@ export function PosOnScreenKeyboard({
             clear();
           }}
         >
-          Clear
+          {t('pos.keyboard.clear')}
         </Button>
         {onClose ? (
           <Button
@@ -288,7 +290,7 @@ export function PosOnScreenKeyboard({
               e.stopPropagation();
               onClose();
             }}
-            aria-label="Close keyboard"
+            aria-label={t('pos.keyboard.closeKeyboard')}
           >
             <X className="h-3.5 w-3.5" />
           </Button>
@@ -345,7 +347,7 @@ export function PosOnScreenKeyboard({
             onPress={backspace}
           />
           <KeyButton
-            label="Space"
+            label={t('pos.keyboard.space')}
             wide
             className="min-w-0 flex-[3] text-xs"
             onPress={() => append(' ')}
@@ -371,7 +373,7 @@ export function PosOnScreenKeyboard({
       ref={panelRef}
       data-pos-osk=""
       role="group"
-      aria-label="On-screen keyboard"
+      aria-label={t('pos.keyboard.onScreenKeyboard')}
       className={cn(
         'rounded-2xl border border-border/50 bg-card p-2 shadow-2xl ring-1 ring-border/40',
         portal

@@ -10,7 +10,7 @@ import { parseSubscriptionDateInput } from '@/lib/subscription-timezone';
 import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const patchSchema = z.object({
-  plan: z.enum(['STARTER', 'GROWTH', 'SCALE']),
+  plan: z.enum(['FREE', 'BASIC', 'GROWTH', 'SCALE', 'PRO', 'CUSTOM']),
   status: z.enum(['ACTIVE', 'TRIAL', 'PAST_DUE', 'CANCELED']),
   trialEndsAt: z.string().max(40).nullable().optional(),
   currentPeriodEnd: z.string().max(40).nullable().optional(),

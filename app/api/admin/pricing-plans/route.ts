@@ -7,7 +7,7 @@ import { requirePlatformAdmin } from "@/lib/auth/adminRequest";
 import { db } from "@/lib/db";
 
 const patchSchema = z.object({
-  plan: z.enum(["STARTER", "GROWTH", "SCALE"]),
+  plan: z.enum(["FREE", "BASIC", "GROWTH", "SCALE", "PRO", "CUSTOM"]),
   name: z.string().trim().min(1).max(120),
   price: z.number().int().min(0),
   priceLabel: z.string().trim().min(1).max(120),
@@ -34,9 +34,12 @@ export async function GET(req: NextRequest) {
       SELECT "id","plan"::text AS "plan","name","price","priceLabel","description","features"
       FROM "SubscriptionCatalog"
       ORDER BY CASE "plan"
-        WHEN 'STARTER' THEN 1
-        WHEN 'GROWTH' THEN 2
-        WHEN 'SCALE' THEN 3
+        WHEN 'FREE' THEN 1
+        WHEN 'BASIC' THEN 2
+        WHEN 'GROWTH' THEN 3
+        WHEN 'SCALE' THEN 4
+        WHEN 'PRO' THEN 5
+        WHEN 'CUSTOM' THEN 6
         ELSE 99
       END
     `);

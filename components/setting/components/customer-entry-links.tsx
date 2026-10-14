@@ -19,6 +19,8 @@ import { Loader2 } from 'lucide-react';
 import { kioskBasePath } from '@/lib/kiosk-path';
 import { restaurantStorefrontPath } from '@/lib/customer-storefront-paths';
 import { publicId } from '@/lib/public-id';
+import { PremiumCrown } from '@/components/premium/premium-crown';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import { UiLanguagePreferenceCard } from './ui-language-preference-card';
 
@@ -27,6 +29,9 @@ type BranchRow = { id: string; urlId?: string; name: string };
 export function CustomerEntryLinks() {
   const { t } = useTranslation();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
+  const { limitFlag } = useEntitlements();
+  const showWebsiteUrl = limitFlag('basicSettings', 'websiteUrl', true);
+  const showKioskUrl = limitFlag('basicSettings', 'kioskUrl', true);
   const [slug, setSlug] = useState<string | null>(null);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,9 +76,9 @@ export function CustomerEntryLinks() {
   async function copyText(label: string, text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(`${label} copied`);
+      toast.success(t('settings.cards.customerEntry.copied', { label }));
     } catch {
-      toast.error('Could not copy to clipboard');
+      toast.error(t('settings.cards.customerEntry.copyFailed'));
     }
   }
 
@@ -119,20 +124,33 @@ export function CustomerEntryLinks() {
               {fulfillmentSettings.websiteEnabled ? (
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-foreground">
-                    Customer website
+                    {t('settings.cards.customerEntry.customerWebsite')}
                   </p>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <code className="block flex-1 break-all rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                      {webAppUrl}
-                    </code>
+                    {showWebsiteUrl ? (
+                      <code className="block flex-1 break-all rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                        {webAppUrl}
+                      </code>
+                    ) : (
+                      <span className="flex flex-1 items-center gap-2 rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                        <PremiumCrown />
+                        {t('settings.cards.customerEntry.upgradeToViewWebsiteUrl')}
+                      </span>
+                    )}
                     <Button
                       type="button"
                       variant="outline"
                       className="shrink-0 gap-1"
-                      onClick={() => void copyText('Website URL', webAppUrl)}
+                      disabled={!showWebsiteUrl}
+                      onClick={() =>
+                        void copyText(
+                          t('settings.cards.customerEntry.websiteUrlLabel'),
+                          webAppUrl
+                        )
+                      }
                     >
                       <IconCopy className="h-4 w-4" aria-hidden />
-                      Copy
+                      {t('settings.cards.customerEntry.copy')}
                     </Button>
                     <Button asChild className="gap-2">
                       <Link
@@ -140,7 +158,7 @@ export function CustomerEntryLinks() {
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        Open website
+                        {t('settings.cards.customerEntry.openWebsite')}
                         <IconExternalLink className="h-4 w-4" aria-hidden />
                       </Link>
                     </Button>
@@ -150,10 +168,12 @@ export function CustomerEntryLinks() {
 
               {fulfillmentSettings.kioskEnabled ? (
                 <div className="space-y-3">
-                  <p className="text-sm font-medium text-foreground">Kiosk UI</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {t('settings.cards.customerEntry.kioskUi')}
+                  </p>
                   {branches.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                      Add at least one branch to generate kiosk URLs.
+                      {t('settings.cards.customerEntry.addBranchHint')}
                     </p>
                   ) : (
                     branches.map((branch) => {
@@ -167,19 +187,33 @@ export function CustomerEntryLinks() {
                         >
                           <p className="text-sm font-medium">{branch.name}</p>
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                            <code className="block flex-1 break-all rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                              {url}
-                            </code>
+                            {showKioskUrl ? (
+                              <code className="block flex-1 break-all rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                                {url}
+                              </code>
+                            ) : (
+                              <span className="flex flex-1 items-center gap-2 rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                                <PremiumCrown />
+                                {t('settings.cards.customerEntry.upgradeToViewKioskUrl')}
+                              </span>
+                            )}
                             <Button
                               type="button"
                               variant="outline"
                               className="shrink-0 gap-1"
+                              disabled={!showKioskUrl}
                               onClick={() =>
-                                void copyText(`${branch.name} kiosk URL`, url)
+                                void copyText(
+                                  t(
+                                    'settings.cards.customerEntry.kioskUrlLabel',
+                                    { branch: branch.name }
+                                  ),
+                                  url
+                                )
                               }
                             >
                               <IconCopy className="h-4 w-4" aria-hidden />
-                              Copy
+                              {t('settings.cards.customerEntry.copy')}
                             </Button>
                             <Button asChild className="gap-2">
                               <Link
@@ -187,7 +221,7 @@ export function CustomerEntryLinks() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
-                                Open kiosk
+                                {t('settings.cards.customerEntry.openKiosk')}
                                 <IconExternalLink className="h-4 w-4" aria-hidden />
                               </Link>
                             </Button>

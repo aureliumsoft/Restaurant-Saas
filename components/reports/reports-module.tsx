@@ -65,7 +65,9 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { PremiumCrown } from '@/components/premium/premium-crown';
 import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 import { extractApiErrorMessage } from '@/lib/extract-api-error';
@@ -394,6 +396,13 @@ export function ReportsModule() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { formatMoney } = useOwnerRestaurantRegional();
+  const { limitFlag } = useEntitlements();
+  const allowInventoryTab = limitFlag('reports', 'inventoryTab', true);
+  const allowExpensesTab = limitFlag('reports', 'expensesTab', true);
+  const allowCustomDateRange = limitFlag('reports', 'customDateRange', true);
+  const allowWebsiteFilter = limitFlag('reports', 'websiteFilter', true);
+  const allowPosFilter = limitFlag('reports', 'posFilter', true);
+  const allowKioskFilter = limitFlag('reports', 'kioskFilter', true);
   const {
     loading: branchLoading,
     activeBranchId,
@@ -944,23 +953,35 @@ export function ReportsModule() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {reportTypes.map(({ id, label, icon: Icon }) => {
               const selected = reportType === id;
+              const locked =
+                (id === 'inventory' && !allowInventoryTab) ||
+                (id === 'expenses' && !allowExpensesTab);
               return (
                 <button
                   key={id}
                   type="button"
+                  aria-disabled={locked}
                   onClick={() => {
+                    if (locked) return;
                     setReportType(id);
                     router.replace(`/reports?type=${id}`, { scroll: false });
                   }}
                   className={cn(
                     'flex flex-col items-center gap-2 rounded-xl border-2 bg-card px-4 py-5 text-center transition',
-                    selected
+                    locked && 'cursor-not-allowed border-amber-300/50 bg-amber-50/30',
+                    selected && !locked
                       ? 'border-primary bg-primary/5 text-primary'
-                      : 'border-border text-foreground hover:border-primary/40 hover:bg-muted/40'
+                      : !locked &&
+                          'border-border text-foreground hover:border-primary/40 hover:bg-muted/40'
                   )}
                 >
-                  <Icon className="h-7 w-7" />
-                  <span className="text-sm font-semibold">{label}</span>
+                  <Icon
+                    className={cn('h-7 w-7', locked && 'opacity-50')}
+                  />
+                  <span className="flex items-center gap-1.5 text-sm font-semibold">
+                    <span className={cn(locked && 'opacity-70')}>{label}</span>
+                    {locked ? <PremiumCrown /> : null}
+                  </span>
                 </button>
               );
             })}
@@ -1008,7 +1029,7 @@ export function ReportsModule() {
               className="w-full sm:w-[150px]"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              disabled={historicalLocked}
+              disabled={historicalLocked || !allowCustomDateRange}
               aria-label={t('dashboard.common.fromDate')}
             />
             <Input
@@ -1016,14 +1037,16 @@ export function ReportsModule() {
               className="w-full sm:w-[150px]"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              disabled={historicalLocked}
+              disabled={historicalLocked || !allowCustomDateRange}
               aria-label={t('dashboard.common.toDate')}
             />
             <Button
               type="button"
-              disabled={historicalLocked}
+              disabled={historicalLocked || !allowCustomDateRange}
+              className="gap-1.5"
               onClick={() => applyDates(fromDate, toDate)}
             >
+              {!allowCustomDateRange ? <PremiumCrown /> : null}
               {t('dashboard.common.apply')}
             </Button>
           </div>
@@ -1077,21 +1100,27 @@ export function ReportsModule() {
                   </TabsTrigger>
                   <TabsTrigger
                     value="online"
-                    className="rounded-lg text-muted-foreground data-[state=active]:bg-[#ed6e40] data-[state=active]:text-white"
+                    disabled={!allowWebsiteFilter}
+                    className="gap-1 rounded-lg text-muted-foreground data-[state=active]:bg-[#ed6e40] data-[state=active]:text-white"
                   >
                     {t('dashboard.analytics.channelOnline')}
+                    {!allowWebsiteFilter ? <PremiumCrown /> : null}
                   </TabsTrigger>
                   <TabsTrigger
                     value="pos"
-                    className="rounded-lg text-muted-foreground data-[state=active]:bg-[#7c3aed] data-[state=active]:text-white"
+                    disabled={!allowPosFilter}
+                    className="gap-1 rounded-lg text-muted-foreground data-[state=active]:bg-[#7c3aed] data-[state=active]:text-white"
                   >
                     {t('dashboard.analytics.channelPos')}
+                    {!allowPosFilter ? <PremiumCrown /> : null}
                   </TabsTrigger>
                   <TabsTrigger
                     value="kiosk"
-                    className="rounded-lg text-muted-foreground data-[state=active]:bg-[#e11d48] data-[state=active]:text-white"
+                    disabled={!allowKioskFilter}
+                    className="gap-1 rounded-lg text-muted-foreground data-[state=active]:bg-[#e11d48] data-[state=active]:text-white"
                   >
                     {t('dashboard.analytics.channelKiosk')}
+                    {!allowKioskFilter ? <PremiumCrown /> : null}
                   </TabsTrigger>
                 </TabsList>
               </Tabs>

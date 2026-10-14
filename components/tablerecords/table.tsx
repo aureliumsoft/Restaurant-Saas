@@ -32,6 +32,7 @@ import {
 } from '@/components/dashboard/dashboard-table';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { formatCurrency } from '@/lib/format-money';
 import { normalizeRestaurantCurrencyCode } from '@/lib/restaurant-regional';
@@ -117,7 +118,9 @@ function sourceLabel(row: TransactionHistoryRow, t: (key: string) => string) {
   if (upper === 'POS') return t('dashboard.analytics.channelPos');
   if (upper === 'KIOSK') return t('dashboard.analytics.channelKiosk');
   if (upper === 'INVENTORY') return t('dashboard.records.kindInventory');
-  if (upper === 'WALK_IN' || upper === 'WALK-IN') return 'Walk-in';
+  if (upper === 'WALK_IN' || upper === 'WALK-IN') {
+    return t('dashboard.records.walkIn');
+  }
   return raw;
 }
 
@@ -140,6 +143,8 @@ export function Records() {
   };
   const { activeBranchId, loading: branchLoading, isOwnerOrAdmin } =
     useBranchContext();
+  const { limitFlag } = useEntitlements();
+  const ordersOnly = limitFlag('transactions', 'ordersOnly', false);
   const [rows, setRows] = useState<TransactionHistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -211,6 +216,12 @@ export function Records() {
     setPage(1);
   }, [kind, status, source, payment]);
 
+  useEffect(() => {
+    if (!ordersOnly) return;
+    if (kind === 'INVENTORY') setKind('ALL');
+    if (source === 'INVENTORY') setSource('all');
+  }, [ordersOnly, kind, source]);
+
   const stats = useMemo(() => {
     const orderCount = rows.filter((r) => r.kind === 'ORDER').length;
     const inventoryCount = rows.filter((r) => r.kind === 'INVENTORY').length;
@@ -279,9 +290,11 @@ export function Records() {
                 <SelectItem value="ORDER">
                   {t('dashboard.records.typeOrders')}
                 </SelectItem>
-                <SelectItem value="INVENTORY">
-                  {t('dashboard.records.typeInventory')}
-                </SelectItem>
+                {!ordersOnly ? (
+                  <SelectItem value="INVENTORY">
+                    {t('dashboard.records.typeInventory')}
+                  </SelectItem>
+                ) : null}
               </SelectContent>
             </Select>
             <Select value={status} onValueChange={setStatus}>
@@ -324,9 +337,11 @@ export function Records() {
                 <SelectItem value="KIOSK">
                   {t('dashboard.analytics.channelKiosk')}
                 </SelectItem>
-                <SelectItem value="INVENTORY">
-                  {t('dashboard.records.kindInventory')}
-                </SelectItem>
+                {!ordersOnly ? (
+                  <SelectItem value="INVENTORY">
+                    {t('dashboard.records.kindInventory')}
+                  </SelectItem>
+                ) : null}
               </SelectContent>
             </Select>
             <Select value={payment} onValueChange={setPayment}>

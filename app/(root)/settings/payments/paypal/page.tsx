@@ -5,6 +5,7 @@ import axios from 'axios';
 import Link from 'next/link';
 import { ArrowLeft, Check, Loader2, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -44,6 +45,7 @@ type PayPalFormState = {
 };
 
 export default function PayPalCredentialsPage() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
   const [testStatus, setTestStatus] = useState<TestStatus>('idle');
@@ -100,7 +102,7 @@ export default function PayPalCredentialsPage() {
           }
         }
       } catch {
-        if (!cancelled) toast.error('Could not load PayPal settings.');
+        if (!cancelled) toast.error(t('settings.paymentCredentials.loadFailed', { provider: 'PayPal' }));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -128,18 +130,23 @@ export default function PayPalCredentialsPage() {
       if (res.status >= 200 && res.status < 300) {
         setTestStatus('passed');
         setForm((prev) => ({ ...prev, verified: true }));
-        toast.success('PayPal connection successful.');
+        toast.success(t('settings.paymentCredentials.testSuccessConnection', { provider: 'PayPal' }));
         return;
       }
       setTestStatus('failed');
       setForm((prev) => ({ ...prev, verified: false }));
       toast.error(
-        extractApiErrorFromBody(res.data, 'PayPal connection test failed.')
+        extractApiErrorFromBody(
+          res.data,
+          t('settings.paymentCredentials.testFailedConnection', { provider: 'PayPal' })
+        )
       );
     } catch (e: unknown) {
       setTestStatus('failed');
       setForm((prev) => ({ ...prev, verified: false }));
-      toast.error(extractApiErrorMessage(e, 'PayPal connection test failed.'));
+      toast.error(
+        extractApiErrorMessage(e, t('settings.paymentCredentials.testFailedConnection', { provider: 'PayPal' }))
+      );
     } finally {
       setTesting(false);
     }
@@ -164,18 +171,20 @@ export default function PayPalCredentialsPage() {
         verified: data?.verified === true,
       }));
       setTestStatus('passed');
-      toast.success('PayPal credentials saved.');
+      toast.success(t('settings.paymentCredentials.saveSuccess', { provider: 'PayPal' }));
     } catch (e: unknown) {
       setTestStatus('failed');
       setForm((prev) => ({ ...prev, verified: false }));
-      toast.error(extractApiErrorMessage(e, 'Could not save PayPal credentials.'));
+      toast.error(
+        extractApiErrorMessage(e, t('settings.paymentCredentials.saveFailed', { provider: 'PayPal' }))
+      );
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDisconnect() {
-    if (!window.confirm('Remove PayPal credentials for this restaurant?')) return;
+    if (!window.confirm(t('settings.paymentCredentials.disconnectConfirm', { provider: 'PayPal' }))) return;
     try {
       await axios.delete('/api/restaurant/payments/paypal');
       setForm({
@@ -189,9 +198,9 @@ export default function PayPalCredentialsPage() {
         verified: false,
       });
       setTestStatus('idle');
-      toast.success('PayPal credentials removed.');
+      toast.success(t('settings.paymentCredentials.disconnectSuccess', { provider: 'PayPal' }));
     } catch {
-      toast.error('Could not remove PayPal credentials.');
+      toast.error(t('settings.paymentCredentials.disconnectFailed', { provider: 'PayPal' }));
     }
   }
 
@@ -213,7 +222,7 @@ export default function PayPalCredentialsPage() {
       <Button type="button" variant="ghost" className="gap-2" asChild>
         <Link href="/settings?section=payments">
           <ArrowLeft className="h-4 w-4" />
-          Back to payment methods
+          {t('settings.paymentCredentials.backToPaymentMethods')}
         </Link>
       </Button>
 
@@ -228,7 +237,7 @@ export default function PayPalCredentialsPage() {
         <CardContent className="space-y-4">
           {form.verified && testStatus !== 'failed' ? (
             <p className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
-              Credentials verified and saved.
+              {t('settings.paymentCredentials.credentialsVerifiedSaved')}
             </p>
           ) : null}
 
@@ -273,7 +282,7 @@ export default function PayPalCredentialsPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Mode</Label>
+              <Label>{t('settings.paymentCredentials.mode')}</Label>
               <Select
                 value={form.mode}
                 onValueChange={(value: 'sandbox' | 'live') => {
@@ -382,7 +391,7 @@ export default function PayPalCredentialsPage() {
           </Button>
           <Button type="button" onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Save credentials
+            {t('settings.paymentCredentials.saveCredentials')}
           </Button>
           {form.hasClientSecret ? (
             <Button
@@ -391,7 +400,7 @@ export default function PayPalCredentialsPage() {
               onClick={handleDisconnect}
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Disconnect
+              {t('settings.paymentCredentials.disconnect')}
             </Button>
           ) : null}
         </CardFooter>

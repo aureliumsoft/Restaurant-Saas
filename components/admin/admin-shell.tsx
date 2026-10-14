@@ -12,6 +12,7 @@ import {
   Shield,
 } from 'lucide-react';
 import Image from 'next/image';
+import { useTranslation } from 'react-i18next';
 
 import { AdminBreadcrumb } from '@/components/admin/admin-breadcrumb';
 import { AdminSidebarFooter } from '@/components/admin/admin-sidebar-footer';
@@ -23,6 +24,7 @@ import { ModeToggle } from '@/components/darkmode/darkmode';
 import UserMenu from '@/components/dashboard/UserMenu';
 import { cn } from '@/lib/utils';
 import { isPlatformAdminSession } from '@/lib/auth/admin';
+import { LanguageSwitcher } from '../main/language-switcher';
 
 const ADMIN_SIDEBAR_KEY = 'saas-admin-sidebar-open';
 
@@ -64,6 +66,7 @@ function AdminMobileNav({
 }
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const { data: session, status } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -103,7 +106,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <div className="fire-mesh-bg flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-10 w-10 animate-spin text-fire-500" />
-          <p className="text-sm text-muted-foreground">Loading admin panel…</p>
+          <p className="text-sm text-muted-foreground">{t('admin.shell.loading')}</p>
         </div>
       </div>
     );
@@ -116,16 +119,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <Shield className="h-7 w-7 text-fire-600 dark:text-fire-400" />
         </div>
         <div className="space-y-2">
-          <p className="text-lg font-semibold">Access denied</p>
+          <p className="text-lg font-semibold">{t('admin.shell.accessDenied')}</p>
           <p className="max-w-md text-sm text-muted-foreground">
-            Sign in with an email listed in{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ADMIN_EMAIL</code> or{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ADMIN_EMAILS</code> in your
-            environment file.
+            {t('admin.shell.accessDeniedHintPrefix')}{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ADMIN_EMAIL</code>{' '}
+            {t('admin.shell.accessDeniedHintOr')}{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ADMIN_EMAILS</code>{' '}
+            {t('admin.shell.accessDeniedHintSuffix')}
           </p>
         </div>
         <Button variant="outline" asChild>
-          <Link href="/">Back to home</Link>
+          <Link href="/">{t('admin.shell.backToHome')}</Link>
         </Button>
       </div>
     );
@@ -156,7 +160,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             variant="ghost"
             size="icon"
             className="h-9 w-9 shrink-0 rounded-xl bg-white/70 text-muted-foreground shadow-sm hover:bg-white hover:text-foreground dark:bg-white/10 dark:hover:bg-white/15"
-            aria-label="Toggle navigation"
+            aria-label={t('admin.shell.toggleNav')}
             onClick={toggleDesktop}
           >
             <span className="hidden md:inline-flex" aria-hidden>
@@ -186,10 +190,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             >
               <Link href="/" target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                Site
+                {t('admin.shell.site')}
               </Link>
             </Button>
             <ModeToggle />
+            <LanguageSwitcher variant="inline" />
             <div className={cn('hidden items-center', !sidebarOpen && 'md:flex')}>
               <UserMenu
                 confirmLogout

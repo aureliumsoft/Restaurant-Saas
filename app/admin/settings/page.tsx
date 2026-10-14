@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { adminCardClass } from '@/components/admin/admin-surface';
@@ -16,8 +17,8 @@ import { Loader2, Save } from 'lucide-react';
 const KEYS = [
   {
     key: 'default_trial_days',
-    label: 'Default trial length (days)',
-    description: 'Shown to operators as guidance; enforce in billing when integrated.',
+    labelKey: 'admin.settingsPage.trialDaysLabel',
+    descriptionKey: 'admin.settingsPage.trialDaysDescription',
   },
   // {
   //   key: 'support_email',
@@ -32,6 +33,7 @@ const KEYS = [
 ] as const;
 
 export default function AdminSettingsPage() {
+  const { t } = useTranslation();
   const [map, setMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -41,9 +43,9 @@ export default function AdminSettingsPage() {
     axios
       .get('/api/admin/settings')
       .then((r) => setMap(r.data.data ?? {}))
-      .catch(() => toast.error('Could not load settings'))
+      .catch(() => toast.error(t('admin.settingsPage.loadError')))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   const save = async () => {
     setSaving(true);
@@ -52,9 +54,9 @@ export default function AdminSettingsPage() {
       const res = await axios.put('/api/admin/settings', { entries });
       setMap(res.data.data ?? {});
       setShowSaveConfirmation(false);
-      toast.success('Settings saved');
+      toast.success(t('admin.settingsPage.saveSuccess'));
     } catch {
-      toast.error('Save failed');
+      toast.error(t('admin.settingsPage.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -67,21 +69,21 @@ export default function AdminSettingsPage() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        eyebrow="System"
-        title="Platform settings"
-        description="Key–value configuration for the whole SaaS product."
+        eyebrow={t('admin.settingsPage.eyebrow')}
+        title={t('admin.settingsPage.title')}
+        description={t('admin.settingsPage.description')}
       />
 
       <Card className={adminCardClass}>
         <CardHeader>
-          <CardTitle>Globals</CardTitle>
-          <CardDescription>Stored in the database; safe to change anytime.</CardDescription>
+          <CardTitle>{t('admin.settingsPage.globalsTitle')}</CardTitle>
+          <CardDescription>{t('admin.settingsPage.globalsDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {KEYS.map(({ key, label, description }) => (
+          {KEYS.map(({ key, labelKey, descriptionKey }) => (
             <div key={key} className="grid gap-2">
-              <Label htmlFor={key}>{label}</Label>
-              <p className="text-xs text-muted-foreground">{description}</p>
+              <Label htmlFor={key}>{t(labelKey)}</Label>
+              <p className="text-xs text-muted-foreground">{t(descriptionKey)}</p>
               <Input
                 id={key}
                 value={map[key] ?? ''}
@@ -92,10 +94,10 @@ export default function AdminSettingsPage() {
           <Button type="button" disabled={saving} onClick={() => setShowSaveConfirmation(true)}>
             {saving ? <>
             <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            <span>Saving...</span>
+            <span>{t('admin.settingsPage.saving')}</span>
               </> : <>
               <Save className="h-4 w-4 mr-2" />
-              <span>Save changes</span>
+              <span>{t('admin.settingsPage.saveChanges')}</span>
               </>}
           </Button>
         </CardContent>
@@ -103,8 +105,8 @@ export default function AdminSettingsPage() {
 
       <SaveConfirmation
         open={showSaveConfirmation}
-        title="Save platform settings"
-        description="These values apply across the whole product. Save now?"
+        title={t('admin.settingsPage.saveDialogTitle')}
+        description={t('admin.settingsPage.saveDialogDescription')}
         loading={saving}
         onConfirm={() => void save()}
         onCancel={() => setShowSaveConfirmation(false)}

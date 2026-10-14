@@ -2,6 +2,7 @@
 
 import { IconBrandGoogleFilled } from '@tabler/icons-react';
 import { Loader2, QrCode, ShieldCheck, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +24,8 @@ export function KioskQrSignInDialog({
   branchId: string;
   loading?: boolean;
 }) {
+  const { t } = useTranslation();
+
   function startGoogleSignIn() {
     const returnTo = `${window.location.pathname}${window.location.search}`;
     const params = new URLSearchParams({
@@ -66,11 +69,10 @@ export function KioskQrSignInDialog({
 
             <div className="space-y-2 text-center">
               <DialogTitle className="text-2xl font-bold tracking-tight text-[#0f172a]">
-                Sign in to order
+                {t('kioskSignInTitle')}
               </DialogTitle>
               <DialogDescription className="mx-auto max-w-[18rem] text-sm leading-relaxed text-[#64748b]">
-                Table QR ordering needs your Google account so we can attach your
-                name and email before you browse the menu.
+                {t('kioskSignInDescription')}
               </DialogDescription>
             </div>
 
@@ -78,13 +80,13 @@ export function KioskQrSignInDialog({
               {[
                 {
                   icon: ShieldCheck,
-                  title: 'Secure checkout',
-                  text: 'Your details stay linked to this table order.',
+                  title: t('kioskSignInSecureTitle'),
+                  text: t('kioskSignInSecureText'),
                 },
                 {
                   icon: Sparkles,
-                  title: 'One tap to start',
-                  text: 'Sign in once, then add items and pay at the counter.',
+                  title: t('kioskSignInOneTapTitle'),
+                  text: t('kioskSignInOneTapText'),
                 },
               ].map(({ icon: Icon, title, text }) => (
                 <li
@@ -121,21 +123,20 @@ export function KioskQrSignInDialog({
                 {loading ? (
                   <>
                     <Loader2 className="mr-3 h-5 w-5 animate-spin text-primary" />
-                    Checking session…
+                    {t('kioskSignInCheckingSession')}
                   </>
                 ) : (
                   <>
                     <span className="mr-3 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-[#e8eaed] transition group-hover:shadow">
                       <IconBrandGoogleFilled className="h-5 w-5 text-[#ea4335]" />
                     </span>
-                    Continue with Google
+                    {t('customerAuthContinueWithGoogle')}
                   </>
                 )}
               </Button>
 
               <p className="text-center text-xs leading-relaxed text-[#94a3b8]">
-                Required for mobile table orders. We only use your name and email
-                for this visit.
+                {t('kioskSignInFooterHint')}
               </p>
             </div>
           </div>

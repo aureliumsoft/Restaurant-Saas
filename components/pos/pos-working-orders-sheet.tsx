@@ -19,6 +19,8 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -58,22 +60,22 @@ type Props = {
   onOrderCountChange?: (count: number) => void;
 };
 
-function formatElapsedTime(isoString: string): string {
+function formatElapsedTime(isoString: string, t: TFunction): string {
   try {
     const elapsedSec = Math.floor(
       (Date.now() - new Date(isoString).getTime()) / 1000
     );
-    if (elapsedSec < 60) return `${Math.max(1, elapsedSec)}s ago`;
+    if (elapsedSec < 60) return t('pos.sheets.workingOrders.secondsAgo', { count: Math.max(1, elapsedSec) });
     const mins = Math.floor(elapsedSec / 60);
-    if (mins < 60) return `${mins}m ago`;
+    if (mins < 60) return t('pos.sheets.workingOrders.minutesAgo', { count: mins });
     const hours = Math.floor(mins / 60);
-    return `${hours}h ${mins % 60}m ago`;
+    return t('pos.sheets.workingOrders.hoursMinutesAgo', { hours, minutes: mins % 60 });
   } catch {
     return '';
   }
 }
 
-function channelMeta(sourceType: string): {
+function channelMeta(sourceType: string, t: TFunction): {
   label: string;
   icon: typeof Globe;
   badgeClass: string;
@@ -81,7 +83,7 @@ function channelMeta(sourceType: string): {
   const norm = String(sourceType ?? '').toUpperCase();
   if (norm === 'ONLINE') {
     return {
-      label: 'Website',
+      label: t('pos.sheets.workingOrders.filterWebsite'),
       icon: Globe,
       badgeClass:
         'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
@@ -89,14 +91,14 @@ function channelMeta(sourceType: string): {
   }
   if (norm === 'KIOSK') {
     return {
-      label: 'Kiosk',
+      label: t('pos.sheets.workingOrders.filterKiosk'),
       icon: Monitor,
       badgeClass:
         'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30',
     };
   }
   return {
-    label: 'POS',
+    label: t('pos.sheets.workingOrders.filterPos'),
     icon: Store,
     badgeClass:
       'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
@@ -109,6 +111,7 @@ export function PosWorkingOrdersSheet({
   branchId,
   onOrderCountChange,
 }: Props) {
+  const { t } = useTranslation();
   const { formatMoney } = useOwnerRestaurantRegional();
   const {
     orders,
@@ -142,7 +145,7 @@ export function PosWorkingOrdersSheet({
     try {
       await axios.post(`/api/restaurant/pos-order/${encodeURIComponent(order.id)}/complete`);
       const token = order.ticketNumber ? `#${order.ticketNumber}` : (order.shortOrderId ?? order.id.slice(0, 6));
-      toast.success(`Order ${token} marked as completed.`);
+      toast.success(t('pos.toasts.orderMarkedCompleted', { token }));
       removeOrder(order.id);
       confirmInBackground();
       window.setTimeout(() => {
@@ -154,7 +157,7 @@ export function PosWorkingOrdersSheet({
         eventBus.emit('refreshKioskOrders');
       }, 0);
     } catch (e) {
-      toast.error(apiErrorMessage(e, 'Could not complete order.'));
+      toast.error(apiErrorMessage(e, t('pos.toasts.couldNotCompleteOrder')));
       refresh();
     } finally {
       setCompletingId(null);
@@ -170,7 +173,7 @@ export function PosWorkingOrdersSheet({
       const token = target.ticketNumber
         ? `#${target.ticketNumber}`
         : (target.shortOrderId ?? target.id.slice(0, 6));
-      toast.success(`Order ${token} has been canceled.`);
+      toast.success(t('pos.toasts.orderHasBeenCanceled', { token }));
       removeOrder(target.id);
       setCancelTarget(null);
       confirmInBackground();
@@ -183,7 +186,7 @@ export function PosWorkingOrdersSheet({
         eventBus.emit('refreshKioskOrders');
       }, 0);
     } catch (e) {
-      toast.error(apiErrorMessage(e, 'Could not cancel order.'));
+      toast.error(apiErrorMessage(e, t('pos.toasts.couldNotCancelOrder')));
       setCancelTarget(null);
       refresh();
     } finally {
@@ -231,7 +234,7 @@ export function PosWorkingOrdersSheet({
                 <div>
                   <div className="flex items-center gap-2">
                     <SheetTitle className="text-lg font-bold">
-                      Working Orders
+                      {t('pos.sheets.workingOrders.title')}
                     </SheetTitle>
                     <Badge
                       variant="secondary"
@@ -241,7 +244,7 @@ export function PosWorkingOrdersSheet({
                     </Badge>
                   </div>
                   <SheetDescription className="text-xs text-muted-foreground">
-                    Active incoming orders across Website, Kiosk, and POS
+                    {t('pos.sheets.workingOrders.description')}
                   </SheetDescription>
                 </div>
               </div>
@@ -264,7 +267,7 @@ export function PosWorkingOrdersSheet({
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search ticket #, order ID, customer…"
+                  placeholder={t('pos.sheets.workingOrders.searchPlaceholder')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="h-8 pl-8 text-xs"
@@ -284,12 +287,12 @@ export function PosWorkingOrdersSheet({
                     )}
                   >
                     {ch === 'ALL'
-                      ? 'All'
+                      ? t('pos.sheets.workingOrders.filterAll')
                       : ch === 'ONLINE'
-                        ? 'Website'
+                        ? t('pos.sheets.workingOrders.filterWebsite')
                         : ch === 'KIOSK'
-                          ? 'Kiosk'
-                          : 'POS'}
+                          ? t('pos.sheets.workingOrders.filterKiosk')
+                          : t('pos.sheets.workingOrders.filterPos')}
                   </Button>
                 ))}
               </div>
@@ -315,23 +318,23 @@ export function PosWorkingOrdersSheet({
               <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-border p-6 text-center">
                 <Package className="h-10 w-10 text-muted-foreground/50" />
                 <p className="mt-3 text-sm font-semibold text-foreground">
-                  {search ? 'No matching working orders' : 'No active working orders'}
+                  {search ? t('pos.sheets.workingOrders.noMatchingOrders') : t('pos.sheets.workingOrders.noActiveOrders')}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {search
-                    ? 'Try adjusting your search or channel filter.'
-                    : 'New online, kiosk, or in-progress POS orders will appear here in real time.'}
+                    ? t('pos.sheets.workingOrders.tryAdjustingSearch')
+                    : t('pos.sheets.workingOrders.newOrdersWillAppear')}
                 </p>
               </div>
             ) : (
               filteredOrders.map((order) => {
-                const ch = channelMeta(order.sourceType);
+                const ch = channelMeta(order.sourceType, t);
                 const ChannelIcon = ch.icon;
                 const tokenDisplay =
                   typeof order.ticketNumber === 'number'
                     ? `#${order.ticketNumber}`
                     : (order.shortOrderId ?? order.id.slice(0, 6)).toUpperCase();
-                const elapsed = formatElapsedTime(order.createdAt);
+                const elapsed = formatElapsedTime(order.createdAt, t);
                 const methodLabel = salesOrderMethodLabel({
                   address: order.address,
                   sourceType: order.sourceType,
@@ -386,13 +389,13 @@ export function PosWorkingOrdersSheet({
                         ) : null}
 
                         {order.customer?.phone && order.customer.phone !== 'N/A' ? (
-                          <span>Tel: {order.customer.phone}</span>
+                          <span>{t('pos.sheets.workingOrders.tel', { phone: order.customer.phone })}</span>
                         ) : null}
 
                         {order.tableLabel ? (
                           <div className="flex items-center gap-1 font-medium text-fire-600 dark:text-fire-400">
                             <UtensilsCrossed className="h-3.5 w-3.5" />
-                            <span>Table {order.tableLabel}</span>
+                            <span>{t('pos.sheets.workingOrders.tableLabel', { label: order.tableLabel })}</span>
                           </div>
                         ) : methodLabel ? (
                           <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
@@ -402,7 +405,7 @@ export function PosWorkingOrdersSheet({
 
                         {order.orderScheduleSlot ? (
                           <span className="text-amber-600 dark:text-amber-400 font-medium">
-                            Slot: {order.orderScheduleSlot}
+                            {t('pos.sheets.workingOrders.slot', { slot: order.orderScheduleSlot })}
                           </span>
                         ) : null}
                       </div>
@@ -411,7 +414,7 @@ export function PosWorkingOrdersSheet({
                       <div className="space-y-1.5 rounded-xl bg-muted/20 p-2.5">
                         {order.items.map((item, idx) => {
                           const itemName =
-                            item.productName || item.menuItem?.name || 'Item';
+                            item.productName || item.menuItem?.name || t('pos.sheets.workingOrders.item');
                           return (
                             <div
                               key={item.id || idx}
@@ -452,7 +455,7 @@ export function PosWorkingOrdersSheet({
                       <div className="flex items-center justify-between pt-1">
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground">
-                            Total:
+                            {t('pos.sheets.workingOrders.totalLabel')}
                           </span>
                           <span className="text-sm font-bold text-foreground">
                             {formatMoney(order.total)}
@@ -467,8 +470,8 @@ export function PosWorkingOrdersSheet({
                             )}
                           >
                             {order.paymentStatus === 'completed' || order.paymentStatus === 'paid'
-                              ? 'Paid'
-                              : 'Pending Pay'}
+                              ? t('pos.sheets.workingOrders.paid')
+                              : t('pos.sheets.workingOrders.pendingPay')}
                           </Badge>
                         </div>
                       </div>
@@ -485,12 +488,12 @@ export function PosWorkingOrdersSheet({
                           {isCompleting ? (
                             <>
                               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                              <span>Completing…</span>
+                              <span>{t('pos.sheets.workingOrders.completing')}</span>
                             </>
                           ) : (
                             <>
                               <Check className="mr-1.5 h-4 w-4" />
-                              <span>Complete</span>
+                              <span>{t('pos.sheets.workingOrders.complete')}</span>
                             </>
                           )}
                         </Button>
@@ -502,7 +505,7 @@ export function PosWorkingOrdersSheet({
                           onClick={() => setCancelTarget(order)}
                         >
                           <X className="mr-1 h-3.5 w-3.5" />
-                          <span>Cancel</span>
+                          <span>{t('pos.sheets.workingOrders.cancel')}</span>
                         </Button>
                       </div>
                     </div>
@@ -525,16 +528,16 @@ export function PosWorkingOrdersSheet({
           <DialogHeader>
             <div className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
-              <DialogTitle>Cancel Order</DialogTitle>
+              <DialogTitle>{t('pos.dialogs.cancelOrder.title')}</DialogTitle>
             </div>
             <DialogDescription>
-              Are you sure you want to cancel order{' '}
+              {t('pos.dialogs.cancelOrder.confirmPrefix')}{' '}
               <strong className="text-foreground">
                 {cancelTarget?.ticketNumber
                   ? `#${cancelTarget.ticketNumber}`
                   : cancelTarget?.shortOrderId ?? cancelTarget?.id.slice(0, 6)}
               </strong>
-              ? This action cannot be undone.
+              {t('pos.dialogs.cancelOrder.confirmSuffix')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -544,7 +547,7 @@ export function PosWorkingOrdersSheet({
               disabled={cancelling}
               onClick={() => setCancelTarget(null)}
             >
-              Keep Order
+              {t('pos.dialogs.cancelOrder.keepOrder')}
             </Button>
             <Button
               type="button"
@@ -555,10 +558,10 @@ export function PosWorkingOrdersSheet({
               {cancelling ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Canceling…
+                  {t('pos.dialogs.cancelOrder.canceling')}
                 </>
               ) : (
-                'Yes, Cancel Order'
+                t('pos.dialogs.cancelOrder.yesCancelOrder')
               )}
             </Button>
           </DialogFooter>

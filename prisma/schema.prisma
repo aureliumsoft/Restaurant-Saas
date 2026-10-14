@@ -43,9 +43,12 @@ enum RecommendationMultipleMode {
 }
 
 enum SubscriptionPlan {
-  STARTER
+  FREE
+  BASIC
   GROWTH
   SCALE
+  PRO
+  CUSTOM
 }
 
 enum SubscriptionStatus {
@@ -208,6 +211,7 @@ model Restaurant {
   branches             Branch[]
   subscription         RestaurantSubscription?
   subscriptionPayments SubscriptionPayment[]
+  customPlanRequests   CustomPlanRequest[]
   saleTransactions     Transaction[]
   kitchenTickets       KitchenTicket[]
   diningTables         DiningTable[]
@@ -438,11 +442,14 @@ model PosShift {
 model RestaurantSubscription {
   id                   String             @id @default(uuid())
   restaurantId         String             @unique
-  plan                 SubscriptionPlan   @default(STARTER)
+  /// Default matches SubscriptionPlan enum (FREE…CUSTOM; STARTER removed).
+  plan                 SubscriptionPlan   @default(FREE)
   status               SubscriptionStatus @default(TRIAL)
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
   notes                String?
+  /// Custom plan: module ids granted when plan is CUSTOM (from accepted request).
+  customSelectedModules String[]          @default([])
   /// PayPal Billing Subscriptions API id (I-…)
   paypalSubscriptionId String?            @unique
   paypalPlanId         String?
@@ -511,6 +518,34 @@ model DemoRequest {
   updatedAt      DateTime @updatedAt
 
   @@index([createdAt])
+}
+
+enum CustomPlanRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+/// Custom plan quote requests from /payment?plan=CUSTOM (admin accept → CUSTOM, reject → FREE).
+model CustomPlanRequest {
+  id               String                   @id @default(cuid())
+  name             String
+  email            String
+  restaurantName   String
+  restaurantId     String?
+  selectedModules  String[]                 @default([])
+  status           CustomPlanRequestStatus  @default(PENDING)
+  reviewedAt       DateTime?
+  reviewedByUserId String?
+  notes            String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([restaurantId])
 }
 
 /// Marketing-site newsletter opt-in (platform-wide, not per restaurant).

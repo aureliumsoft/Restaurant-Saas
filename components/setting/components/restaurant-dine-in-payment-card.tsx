@@ -21,30 +21,32 @@ import {
   type DineInPaymentTiming,
 } from '@/lib/restaurant-dine-in-payment';
 
-const OPTIONS: {
+const OPTION_META: {
   value: DineInPaymentTiming;
-  title: string;
-  description: string;
+  i18nKey: string;
   icon: typeof Wallet;
 }[] = [
   {
     value: 'BEFORE_KITCHEN',
-    title: 'Pay before kitchen',
-    description:
-      'Collect cash or card at the POS before the order is sent to the kitchen.',
+    i18nKey: 'beforeKitchen',
     icon: Wallet,
   },
   {
     value: 'ON_LEAVE',
-    title: 'Pay when guest leaves',
-    description:
-      'Open a table tab, send food to the kitchen, and collect payment at the end.',
+    i18nKey: 'onLeave',
     icon: ChefHat,
   },
 ];
 
 export function RestaurantDineInPaymentCard() {
   const { t } = useTranslation();
+  const options = OPTION_META.map((meta) => ({
+    ...meta,
+    title: t(`settings.cards.dineInPayments.options.${meta.i18nKey}.title`),
+    description: t(
+      `settings.cards.dineInPayments.options.${meta.i18nKey}.description`
+    ),
+  }));
   const [timing, setTiming] = useState<DineInPaymentTiming>(
     DEFAULT_DINE_IN_PAYMENT_TIMING
   );
@@ -65,11 +67,11 @@ export function RestaurantDineInPaymentCard() {
       setTiming(next);
       setSavedTiming(next);
     } catch {
-      toast.error('Could not load dine-in payment setting.');
+      toast.error(t('settings.cards.dineInPayments.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -89,9 +91,9 @@ export function RestaurantDineInPaymentCard() {
         data.data?.dineInPaymentTiming ?? timing;
       setTiming(next);
       setSavedTiming(next);
-      toast.success('Dine-in payment setting saved.');
+      toast.success(t('settings.cards.dineInPayments.saved'));
     } catch {
-      toast.error('Could not save dine-in payment setting.');
+      toast.error(t('settings.cards.dineInPayments.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -112,7 +114,7 @@ export function RestaurantDineInPaymentCard() {
             {t('dashboard.common.loading')}
           </div>
         ) : (
-          OPTIONS.map((option) => {
+          options.map((option) => {
             const selected = timing === option.value;
             const Icon = option.icon;
             return (
@@ -168,7 +170,7 @@ export function RestaurantDineInPaymentCard() {
           ) : (
             <Save className="mr-2 h-4 w-4" />
           )}
-          Save
+          {t('dashboard.common.save')}
         </Button>
       </CardFooter>
     </Card>

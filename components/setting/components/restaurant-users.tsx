@@ -7,6 +7,8 @@ import { toast } from 'react-toastify';
 import { Loader2, Pencil, RefreshCcw, Trash2, UserPlus, X } from 'lucide-react';
 
 import { RESTAURANT_ROLE_SLUG } from '@/lib/restaurant-roles';
+import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import {
   Card,
   CardContent,
@@ -83,6 +85,7 @@ export default function RestaurantUsersCard({
 }: RestaurantUsersCardProps) {
   const { t } = useTranslation();
   const { isOwnerOrAdmin } = useBranchContext();
+  const { canCreateMore } = useEntitlements();
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
@@ -136,7 +139,7 @@ export default function RestaurantUsersCard({
 
   const fetchAll = useCallback(async () => {
     if (!navigator.onLine) {
-      toast.error('You are offline.');
+      toast.error(t('settings.cards.users.offline'));
       return;
     }
     setLoading(true);
@@ -163,14 +166,16 @@ export default function RestaurantUsersCard({
       setBranchOptions(branchRes.data.data ?? []);
     } catch (e: any) {
       toast.error(
-        e.response?.data?.error ?? e.message ?? 'Failed to load team members.'
+        e.response?.data?.error ??
+          e.message ??
+          t('settings.cards.users.loadFailed')
       );
       setEmployees([]);
       setPendingInvites([]);
     } finally {
       setLoading(false);
     }
-  }, [loadAssignableRoles, page]);
+  }, [loadAssignableRoles, page, t]);
 
   useEffect(() => {
     void fetchAll();
@@ -192,10 +197,10 @@ export default function RestaurantUsersCard({
       emp.role.slug === RESTAURANT_ROLE_SLUG.ADMIN ||
       emp.role.slug === RESTAURANT_ROLE_SLUG.OWNER
     ) {
-      return 'All branches';
+      return t('settings.cards.users.allBranches');
     }
     const ids = emp.branchIds ?? [];
-    if (ids.length === 0) return 'No branch assigned';
+    if (ids.length === 0) return t('settings.cards.users.noBranchAssigned');
     const names = ids
       .map((id) => branchOptions.find((b) => b.id === id)?.name)
       .filter((name): name is string => Boolean(name));
@@ -203,7 +208,9 @@ export default function RestaurantUsersCard({
   }
 
   function pendingInviteBranchLabel(invite: PendingInvite) {
-    if (invite.branchIds.length === 0) return 'All branches';
+    if (invite.branchIds.length === 0) {
+      return t('settings.cards.users.allBranches');
+    }
     const names = invite.branchIds
       .map((id) => branchOptions.find((b) => b.id === id)?.name)
       .filter((name): name is string => Boolean(name));
@@ -227,29 +234,27 @@ export default function RestaurantUsersCard({
   async function handleAdd() {
     const e = email.trim().toLowerCase();
     if (!e) {
-      toast.error('Enter an email address.');
+      toast.error(t('settings.cards.users.enterEmail'));
       return;
     }
     if (!roleId) {
-      toast.error('Select a role.');
+      toast.error(t('settings.cards.users.selectRole'));
       return;
     }
     if (password.length < 8) {
-      toast.error(
-        'Password must be at least 8 characters (used for new accounts).'
-      );
+      toast.error(t('settings.cards.users.passwordTooShort'));
       return;
     }
     if (password !== confirmPassword) {
-      toast.error('Password and confirmation do not match.');
+      toast.error(t('settings.cards.users.passwordMismatch'));
       return;
     }
     if (inviteRequiresBranch && !inviteBranchId) {
-      toast.error('Select a branch for this team member.');
+      toast.error(t('settings.cards.users.selectBranchForMember'));
       return;
     }
     if (!navigator.onLine) {
-      toast.error('You are offline.');
+      toast.error(t('settings.cards.users.offline'));
       return;
     }
     setSubmitting(true);
@@ -275,8 +280,8 @@ export default function RestaurantUsersCard({
         typeof res.data?.message === 'string'
           ? res.data.message
           : res.data?.flow === 'invite_sent'
-            ? 'Invitation email sent.'
-            : 'Team member added.';
+            ? t('settings.cards.users.invitationEmailSent')
+            : t('settings.cards.users.teamMemberAdded');
       if (res.data?.emailDelivered === false) {
         toast.warning(msg);
         if (
@@ -284,7 +289,9 @@ export default function RestaurantUsersCard({
           res.data.manualInviteUrl.length > 0
         ) {
           toast.info(
-            `Invite link (copy to user): ${res.data.manualInviteUrl}`,
+            t('settings.cards.users.inviteLinkCopy', {
+              url: res.data.manualInviteUrl,
+            }),
             { autoClose: 20000 }
           );
         }
@@ -305,7 +312,9 @@ export default function RestaurantUsersCard({
       toast.error(
         typeof d?.error === 'string'
           ? d.error
-          : d?.error?.formErrors?.[0] ?? err.message ?? 'Request failed.'
+          : d?.error?.formErrors?.[0] ??
+            err.message ??
+            t('settings.cards.users.requestFailed')
       );
     } finally {
       setSubmitting(false);
@@ -315,11 +324,11 @@ export default function RestaurantUsersCard({
   async function saveEmployeeBranchEdit() {
     if (!branchEditEmployee) return;
     if (!editBranchId) {
-      toast.error('Select a branch.');
+      toast.error(t('settings.cards.users.selectBranch'));
       return;
     }
     if (!navigator.onLine) {
-      toast.error('You are offline.');
+      toast.error(t('settings.cards.users.offline'));
       return;
     }
     setSavingEmployeeId(branchEditEmployee.id);
@@ -327,7 +336,7 @@ export default function RestaurantUsersCard({
       await axios.patch(`/api/restaurant/employees/${branchEditEmployee.id}`, {
         branchIds: [editBranchId],
       });
-      toast.success('Branch assignment updated.');
+      toast.success(t('settings.cards.users.branchAssignmentUpdated'));
       setBranchEditEmployee(null);
       setEditBranchId('');
       await fetchAll();
@@ -335,7 +344,7 @@ export default function RestaurantUsersCard({
       toast.error(
         typeof err.response?.data?.error === 'string'
           ? err.response.data.error
-          : err.message ?? 'Could not update branch.'
+          : err.message ?? t('settings.cards.users.couldNotUpdateBranch')
       );
     } finally {
       setSavingEmployeeId(null);
@@ -344,7 +353,7 @@ export default function RestaurantUsersCard({
 
   async function updateEmployeeRole(employeeId: string, newRoleId: string) {
     if (!navigator.onLine) {
-      toast.error('You are offline.');
+      toast.error(t('settings.cards.users.offline'));
       return;
     }
     setSavingEmployeeId(employeeId);
@@ -352,13 +361,13 @@ export default function RestaurantUsersCard({
       await axios.patch(`/api/restaurant/employees/${employeeId}`, {
         roleId: newRoleId,
       });
-      toast.success('Role updated.');
+      toast.success(t('settings.cards.users.roleUpdated'));
       await fetchAll();
     } catch (err: any) {
       toast.error(
         typeof err.response?.data?.error === 'string'
           ? err.response.data.error
-          : err.message ?? 'Could not update role.'
+          : err.message ?? t('settings.cards.users.couldNotUpdateRole')
       );
     } finally {
       setSavingEmployeeId(null);
@@ -367,20 +376,20 @@ export default function RestaurantUsersCard({
 
   async function removeEmployee(employeeId: string) {
     if (!navigator.onLine) {
-      toast.error('You are offline.');
+      toast.error(t('settings.cards.users.offline'));
       return;
     }
     setRemovingEmployeeId(employeeId);
     try {
       await axios.delete(`/api/restaurant/employees/${employeeId}`);
-      toast.success('Removed from team.');
+      toast.success(t('settings.cards.users.removedFromTeam'));
       setConfirmAction(null);
       await fetchAll();
     } catch (err: any) {
       toast.error(
         typeof err.response?.data?.error === 'string'
           ? err.response.data.error
-          : err.message ?? 'Could not remove.'
+          : err.message ?? t('settings.cards.users.couldNotRemove')
       );
     } finally {
       setRemovingEmployeeId(null);
@@ -390,20 +399,20 @@ export default function RestaurantUsersCard({
 
   async function cancelInvite(inviteId: string) {
     if (!navigator.onLine) {
-      toast.error('You are offline.');
+      toast.error(t('settings.cards.users.offline'));
       return;
     }
     setCancellingInviteId(inviteId);
     try {
       await axios.delete(`/api/restaurant/invites/${inviteId}`);
-      toast.success('Invitation cancelled.');
+      toast.success(t('settings.cards.users.invitationCancelled'));
       setConfirmAction(null);
       await fetchAll();
     } catch (err: any) {
       toast.error(
         typeof err.response?.data?.error === 'string'
           ? err.response.data.error
-          : err.message ?? 'Could not cancel invite.'
+          : err.message ?? t('settings.cards.users.couldNotCancelInvite')
       );
     } finally {
       setCancellingInviteId(null);
@@ -414,7 +423,7 @@ export default function RestaurantUsersCard({
   async function handleConfirmAction() {
     if (!confirmAction || confirmLoading) return;
     if (!navigator.onLine) {
-      toast.error('You are offline.');
+      toast.error(t('settings.cards.users.offline'));
       return;
     }
     setConfirmLoading(true);
@@ -440,7 +449,7 @@ export default function RestaurantUsersCard({
         <div className="grid min-w-0 gap-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
           <div className="space-y-2 sm:col-span-2">
             <label className="text-sm font-medium" htmlFor="member-email">
-              Email
+              {t('settings.cards.users.emailLabel')}
             </label>
             <Input
               id="member-email"
@@ -453,44 +462,44 @@ export default function RestaurantUsersCard({
           </div>
           <div className="space-y-2 sm:col-span-2">
             <label className="text-sm font-medium" htmlFor="member-name">
-              Name (required only for new accounts)
+              {t('settings.cards.users.nameLabel')}
             </label>
             <Input
               id="member-name"
-              placeholder="e.g. Sam Lee"
+              placeholder={t('settings.cards.users.namePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
             <label className="text-sm font-medium" htmlFor="member-password">
-              Password (for new accounts)
+              {t('settings.cards.users.passwordLabel')}
             </label>
             <Input
               id="member-password"
               type="password"
               autoComplete="new-password"
-              placeholder="At least 8 characters"
+              placeholder={t('settings.cards.users.passwordPlaceholder')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
             <label className="text-sm font-medium" htmlFor="member-password2">
-              Confirm password
+              {t('settings.cards.users.confirmPasswordLabel')}
             </label>
             <Input
               id="member-password2"
               type="password"
               autoComplete="new-password"
-              placeholder="Repeat password"
+              placeholder={t('settings.cards.users.confirmPasswordPlaceholder')}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium" htmlFor="member-role">
-              Role
+              {t('settings.cards.users.roleLabel')}
             </label>
             <select
               id="member-role"
@@ -502,7 +511,9 @@ export default function RestaurantUsersCard({
               {roles.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
-                  {r.slug === RESTAURANT_ROLE_SLUG.ADMIN ? ' (preset)' : ''}
+                  {r.slug === RESTAURANT_ROLE_SLUG.ADMIN
+                    ? ` ${t('settings.cards.users.presetSuffix')}`
+                    : ''}
                 </option>
               ))}
             </select>
@@ -510,7 +521,7 @@ export default function RestaurantUsersCard({
           {branchOptions.length > 0 && inviteRequiresBranch ? (
             <div className="space-y-2 sm:col-span-2">
               <label className="text-sm font-medium" htmlFor="member-branch">
-                Branch
+                {t('settings.cards.users.branchLabel')}
               </label>
               <select
                 id="member-branch"
@@ -518,7 +529,9 @@ export default function RestaurantUsersCard({
                 value={inviteBranchId}
                 onChange={(e) => setInviteBranchId(e.target.value)}
               >
-                <option value="">Select branch…</option>
+                <option value="">
+                  {t('settings.cards.users.selectBranchPlaceholder')}
+                </option>
                 {branchOptions.map((branch) => (
                   <option key={branch.id} value={branch.id}>
                     {branch.name}
@@ -529,21 +542,33 @@ export default function RestaurantUsersCard({
           ) : null}
 
           <div className="sm:col-span-2 lg:col-span-1">
-            <Button
-              type="button"
-              className="w-full text-white"
-              disabled={submitting || roles.length === 0}
-              onClick={() => void handleAdd()}
+            <PremiumDisabledControl
+              locked={
+                !canCreateMore(
+                  'users',
+                  employees.filter((e) => !e.isOwner).length +
+                    pendingInvites.length
+                )
+              }
+              label={t('settings.cards.users.addInvite')}
+              className="w-full"
             >
-              {submitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Add / invite
-                </>
-              )}
-            </Button>
+              <Button
+                type="button"
+                className="w-full text-white"
+                disabled={submitting || roles.length === 0}
+                onClick={() => void handleAdd()}
+              >
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    {t('settings.cards.users.addInvite')}
+                  </>
+                )}
+              </Button>
+            </PremiumDisabledControl>
           </div>
         </div>
 
@@ -555,15 +580,21 @@ export default function RestaurantUsersCard({
           <>
             {pendingInvites.length > 0 ? (
               <div className="space-y-2">
-                <h3 className="text-sm font-medium">Pending invitations</h3>
+                <h3 className="text-sm font-medium">
+                  {t('settings.cards.users.pendingInvitations')}
+                </h3>
                 <TableWrapper>
                   <Table minWidth={640}>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead className="hidden sm:table-cell">Branches</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead>{t('settings.cards.users.colEmail')}</TableHead>
+                        <TableHead>{t('settings.cards.users.colRole')}</TableHead>
+                        <TableHead className="hidden sm:table-cell">
+                          {t('settings.cards.users.colBranches')}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t('settings.cards.users.colActions')}
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -597,7 +628,9 @@ export default function RestaurantUsersCard({
                               ) : (
                                 <Trash2 className="h-4 w-4" />
                               )}
-                              <span className="sr-only">Cancel invitation</span>
+                              <span className="sr-only">
+                                {t('settings.cards.users.cancelInvitationButton')}
+                              </span>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -609,10 +642,12 @@ export default function RestaurantUsersCard({
             ) : null}
 
             <div className="space-y-2">
-              <h3 className="text-sm font-medium">People</h3>
+              <h3 className="text-sm font-medium">
+                {t('settings.cards.users.peopleTitle')}
+              </h3>
               {employees.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No employees loaded.
+                  {t('settings.cards.users.noEmployeesLoaded')}
                 </p>
               ) : (
                 <div className="space-y-4">
@@ -620,11 +655,17 @@ export default function RestaurantUsersCard({
                   <Table minWidth={720}>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead className="hidden md:table-cell">Email</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead className="hidden sm:table-cell">Branches</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead>{t('settings.cards.users.colName')}</TableHead>
+                        <TableHead className="hidden md:table-cell">
+                          {t('settings.cards.users.colEmail')}
+                        </TableHead>
+                        <TableHead>{t('settings.cards.users.colRole')}</TableHead>
+                        <TableHead className="hidden sm:table-cell">
+                          {t('settings.cards.users.colBranches')}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {t('settings.cards.users.colActions')}
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -638,7 +679,7 @@ export default function RestaurantUsersCard({
                               </div>
                               {emp.isOwner ? (
                                 <span className="text-xs text-muted-foreground">
-                                  (owner)
+                                  {t('settings.cards.users.ownerTag')}
                                 </span>
                               ) : null}
                             </div>
@@ -695,7 +736,7 @@ export default function RestaurantUsersCard({
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 shrink-0"
-                                  title="Change branch"
+                                  title={t('settings.cards.users.changeBranchTitle')}
                                   disabled={savingEmployeeId === emp.id}
                                   onClick={() => openBranchEdit(emp)}
                                 >
@@ -731,7 +772,9 @@ export default function RestaurantUsersCard({
                                 ) : (
                                   <Trash2 className="h-4 w-4" />
                                 )}
-                                <span className="sr-only">Remove team member</span>
+                                <span className="sr-only">
+                                  {t('settings.cards.users.removeTeamMemberSr')}
+                                </span>
                               </Button>
                             )}
                           </TableCell>
@@ -780,13 +823,16 @@ export default function RestaurantUsersCard({
       >
         <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Change branch assignment</DialogTitle>
+            <DialogTitle>
+              {t('settings.cards.users.changeBranchAssignment')}
+            </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {branchEditEmployee ? (
               <>
-                Assign <strong>{branchEditEmployee.name}</strong> to a branch.
-                They will only see data for that branch.
+                {t('settings.cards.users.assignBranchPrefix')}{' '}
+                <strong>{branchEditEmployee.name}</strong>{' '}
+                {t('settings.cards.users.assignBranchSuffix')}
               </>
             ) : null}
           </p>
@@ -796,7 +842,9 @@ export default function RestaurantUsersCard({
             onChange={(e) => setEditBranchId(e.target.value)}
             disabled={Boolean(savingEmployeeId)}
           >
-            <option value="">Select branch…</option>
+            <option value="">
+              {t('settings.cards.users.selectBranchPlaceholder')}
+            </option>
             {branchOptions.map((branch) => (
               <option key={branch.id} value={branch.id}>
                 {branch.name}
@@ -813,7 +861,7 @@ export default function RestaurantUsersCard({
                 setEditBranchId('');
               }}
             >
-              Cancel
+              {t('dashboard.common.cancel')}
             </Button>
             <Button
               type="button"
@@ -823,7 +871,7 @@ export default function RestaurantUsersCard({
               {savingEmployeeId ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                'Save'
+                t('dashboard.common.save')
               )}
             </Button>
           </DialogFooter>
@@ -840,23 +888,24 @@ export default function RestaurantUsersCard({
           <AlertDialogHeader>
             <AlertDialogTitle>
               {confirmAction?.kind === 'remove'
-                ? 'Remove team member?'
-                : 'Cancel invitation?'}
+                ? t('settings.cards.users.removeTeamMemberTitle')
+                : t('settings.cards.users.cancelInvitationTitle')}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmAction?.kind === 'remove' ? (
                 <>
-                  Remove <strong>{confirmAction.employee.name}</strong>
+                  {t('settings.cards.users.removeConfirmPrefix')}{' '}
+                  <strong>{confirmAction.employee.name}</strong>
                   {confirmAction.employee.email ? (
                     <> ({confirmAction.employee.email})</>
                   ) : null}{' '}
-                  from this restaurant? They will lose access immediately.
+                  {t('settings.cards.users.removeConfirmSuffix')}
                 </>
               ) : confirmAction?.kind === 'cancel_invite' ? (
                 <>
-                  Cancel the pending invitation for{' '}
-                  <strong>{confirmAction.invite.email}</strong>? They will not
-                  be able to join using the current invite link.
+                  {t('settings.cards.users.cancelInviteConfirmPrefix')}{' '}
+                  <strong>{confirmAction.invite.email}</strong>
+                  {t('settings.cards.users.cancelInviteConfirmSuffix')}
                 </>
               ) : null}
             </AlertDialogDescription>
@@ -864,7 +913,7 @@ export default function RestaurantUsersCard({
           <AlertDialogFooter>
             <AlertDialogCancel disabled={confirmLoading}>
               <X className="h-4 w-4 mr-2" />
-              Keep
+              {t('settings.cards.users.keepButton')}
             </AlertDialogCancel>
             <AlertDialogAction
               disabled={confirmLoading}
@@ -878,18 +927,18 @@ export default function RestaurantUsersCard({
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {confirmAction?.kind === 'remove'
-                    ? 'Removing…'
-                    : 'Cancelling…'}
+                    ? t('settings.cards.users.removingEllipsis')
+                    : t('settings.cards.users.cancellingEllipsis')}
                 </>
               ) : confirmAction?.kind === 'remove' ? (
                 <>
                   <Trash2 className="h-4 w-4 mr-2" />
-                  <span>Remove</span>
+                  <span>{t('settings.cards.users.removeButton')}</span>
                 </>
               ) : (
                 <>
                   <Trash2 className="h-4 w-4 mr-2" />
-                  <span>Cancel invitation</span>
+                  <span>{t('settings.cards.users.cancelInvitationButton')}</span>
                 </>
               )}
             </AlertDialogAction>

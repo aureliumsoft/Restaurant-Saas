@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Send, Star, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { AdminCmsLocaleTabs } from '@/components/admin/admin-cms-locale-tabs';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
@@ -83,7 +84,10 @@ function snapshot(v: BlogPostFormValues) {
   });
 }
 
-function flattenApiError(err: unknown): string {
+function flattenApiError(
+  err: unknown,
+  t: (key: string) => string
+): string {
   const e = err as {
     response?: { data?: { error?: unknown }; status?: number };
     message?: string;
@@ -101,9 +105,9 @@ function flattenApiError(err: unknown): string {
     if (msg) return msg;
   }
   if (e.response?.status === 413) {
-    return 'Image is too large for the server. Try a smaller photo.';
+    return t('admin.blogForm.imageTooLargeError');
   }
-  return e.message || 'Request failed';
+  return e.message || t('admin.blogForm.requestFailed');
 }
 
 /** Hydrate form from DB row (bilingual JSON / &&&& in primary columns). */
@@ -138,6 +142,7 @@ export function AdminBlogPostForm({
   postId,
   initial,
 }: BlogPostFormProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const [form, setForm] = useState<BlogPostFormValues>(initial ?? empty);
   const [baseline] = useState(() => snapshot(initial ?? empty));
@@ -154,7 +159,7 @@ export function AdminBlogPostForm({
     cancelLeave,
     allowNextNavigation,
   } = useUnsavedChangesGuard(isDirty, {
-    message: 'You have unsaved blog changes. Leave this page without saving?',
+    message: t('admin.blogForm.unsavedGuardMessage'),
   });
 
   useEffect(() => {
@@ -194,17 +199,17 @@ export function AdminBlogPostForm({
   function validate(): boolean {
     const titleEn = parseBilingualInput(form.title).en;
     if (!titleEn) {
-      toast.error('English title (before &&&&) is required.');
+      toast.error(t('admin.blogForm.validateTitleRequired'));
       return false;
     }
     const shortEn = parseBilingualInput(form.shortDescription).en;
     if (!shortEn) {
-      toast.error('English short description (before &&&&) is required.');
+      toast.error(t('admin.blogForm.validateShortRequired'));
       return false;
     }
     const detail = plainTextFromHtml(form.contentHtml);
     if (detail.length < 1) {
-      toast.error('English blog detail is required.');
+      toast.error(t('admin.blogForm.validateDetailRequired'));
       return false;
     }
     return true;
@@ -238,7 +243,9 @@ export function AdminBlogPostForm({
           axiosOpts
         );
         toast.success(
-          status === 'PUBLISHED' ? 'Blog published.' : 'Draft saved.'
+          status === 'PUBLISHED'
+            ? t('admin.blogForm.toastPublished')
+            : t('admin.blogForm.toastDraftSaved')
         );
         allowNextNavigation();
         if (status === 'PUBLISHED') {
@@ -249,14 +256,16 @@ export function AdminBlogPostForm({
       } else if (postId) {
         await axios.patch(`/api/admin/blog/${postId}`, body, axiosOpts);
         toast.success(
-          status === 'PUBLISHED' ? 'Blog published.' : 'Draft saved.'
+          status === 'PUBLISHED'
+            ? t('admin.blogForm.toastPublished')
+            : t('admin.blogForm.toastDraftSaved')
         );
         allowNextNavigation();
         router.push('/admin/blog');
       }
       router.refresh();
     } catch (e) {
-      toast.error(flattenApiError(e));
+      toast.error(flattenApiError(e, t));
     } finally {
       setSaving(false);
     }
@@ -268,15 +277,15 @@ export function AdminBlogPostForm({
       const status = initial?.status ?? 'DRAFT';
       if (mode === 'edit' && postId && status === 'DRAFT') {
         await axios.delete(`/api/admin/blog/${postId}`);
-        toast.success('Draft discarded.');
+        toast.success(t('admin.blogForm.toastDiscarded'));
       } else if (mode === 'edit' && postId && status === 'PUBLISHED') {
-        toast.info('Changes discarded. Post was not deleted.');
+        toast.info(t('admin.blogForm.toastDiscardedNoDelete'));
       }
       allowNextNavigation();
       router.push('/admin/blog');
       router.refresh();
     } catch (e) {
-      toast.error(flattenApiError(e));
+      toast.error(flattenApiError(e, t));
     } finally {
       setSaving(false);
       setDiscardOpen(false);
@@ -292,13 +301,13 @@ export function AdminBlogPostForm({
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        eyebrow="Content"
-        title={mode === 'create' ? 'Create blog post' : 'Edit blog post'}
-        description="Write content for the public SaaS marketing blog. Use English &&&& Spanish in text fields (same as products)."
+        eyebrow={t('admin.blogPage.eyebrow')}
+        title={mode === 'create' ? t('admin.blogForm.createTitle') : t('admin.blogForm.editTitle')}
+        description={t('admin.blogForm.description')}
         actions={
           <Button type="button" variant="ghost" onClick={goBack}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Blogs
+            {t('admin.blogForm.backToBlogs')}
           </Button>
         }
       />
@@ -306,31 +315,31 @@ export function AdminBlogPostForm({
       <Card className={cn(adminCardClass)}>
         <CardContent className="space-y-5 pt-6">
           <div className="grid gap-2">
-            <Label htmlFor="blog-title">Title</Label>
+            <Label htmlFor="blog-title">{t('admin.blogForm.titleLabel')}</Label>
             <Input
               id="blog-title"
               value={form.title}
               onChange={(e) => setField('title', e.target.value)}
-              placeholder={`English title ${'&&&&'} Spanish title`}
+              placeholder={t('admin.blogForm.titlePlaceholder')}
               maxLength={500}
             />
             <p className="text-xs text-muted-foreground">
-              First English, then separator &&&&, then Spanish.
+              {t('admin.blogForm.bilingualHint')}
             </p>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="blog-short">Short description</Label>
+            <Label htmlFor="blog-short">{t('admin.blogForm.shortDescLabel')}</Label>
             <Textarea
               id="blog-short"
               value={form.shortDescription}
               onChange={(e) => setField('shortDescription', e.target.value)}
-              placeholder={`English description ${'&&&&'} Spanish description`}
+              placeholder={t('admin.blogForm.shortDescPlaceholder')}
               maxLength={1200}
               className="min-h-[88px]"
             />
             <p className="text-xs text-muted-foreground">
-              First English, then separator &&&&, then Spanish.
+              {t('admin.blogForm.bilingualHint')}
             </p>
           </div>
 
@@ -339,28 +348,28 @@ export function AdminBlogPostForm({
             english={
               <RichTextEditor
                 id="blog-detail"
-                label="Blog detail (English)"
+                label={t('admin.blogForm.detailEnglishLabel')}
                 value={form.contentHtml}
                 onChange={(html) => setField('contentHtml', html)}
-                helperText="Full English article (rich text)."
+                helperText={t('admin.blogForm.detailEnglishHelper')}
               />
             }
             spanish={
               <RichTextEditor
                 id="blog-detail-es"
-                label="Blog detail (Spanish)"
+                label={t('admin.blogForm.detailSpanishLabel')}
                 value={form.contentHtmlEs}
                 onChange={(html) => setField('contentHtmlEs', html)}
-                helperText="Spanish article body. Both languages are stored together like products."
+                helperText={t('admin.blogForm.detailSpanishHelper')}
               />
             }
           />
 
           <Base64ImageUploadField
-            label="Image"
+            label={t('admin.blogForm.imageLabel')}
             value={form.imageUrl}
             onChange={(v) => setField('imageUrl', v)}
-            helperText="Cover image for cards and the public blog (upload or paste an image URL)."
+            helperText={t('admin.blogForm.imageHelper')}
             maxMb={8}
             maxEncodedMb={1.8}
           />
@@ -375,55 +384,53 @@ export function AdminBlogPostForm({
             <span className="space-y-0.5">
               <span className="flex items-center gap-1.5 text-sm font-medium">
                 <Star className="h-4 w-4 text-fire-500" />
-                Featured blog
+                {t('admin.blogForm.featuredLabel')}
               </span>
               <span className="block text-xs text-muted-foreground">
-                Show this post in the left featured sidebar on the public blog.
+                {t('admin.blogForm.featuredHelper')}
               </span>
             </span>
           </label>
 
           <div className="space-y-4 rounded-xl border border-border/70 bg-muted/15 p-4">
             <div>
-              <p className="text-sm font-semibold">Google snippet tags</p>
+              <p className="text-sm font-semibold">{t('admin.blogForm.seoTagsTitle')}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                How this post appears in Google search and social previews.
-                Use English &&&& Spanish. Leave blank to fall back to title /
-                short description / cover image.
+                {t('admin.blogForm.seoTagsHelper')}
               </p>
             </div>
 
             <div className="grid gap-2">
               <Label htmlFor="blog-seo-title">
-                Paragraph / title (search title)
+                {t('admin.blogForm.seoTitleLabel')}
               </Label>
               <Input
                 id="blog-seo-title"
                 value={form.seoTitle}
                 onChange={(e) => setField('seoTitle', e.target.value)}
-                placeholder={`English SEO title ${'&&&&'} Spanish SEO title`}
+                placeholder={t('admin.blogForm.seoTitlePlaceholder')}
                 maxLength={500}
               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="blog-seo-desc">
-                Description (search detail)
+                {t('admin.blogForm.seoDescLabel')}
               </Label>
               <Textarea
                 id="blog-seo-desc"
                 value={form.seoDescription}
                 onChange={(e) => setField('seoDescription', e.target.value)}
-                placeholder={`English SEO description ${'&&&&'} Spanish SEO description`}
+                placeholder={t('admin.blogForm.seoDescPlaceholder')}
                 maxLength={1200}
                 className="min-h-[88px]"
               />
             </div>
 
             <Base64ImageUploadField
-              label="Photo (Google / social image)"
+              label={t('admin.blogForm.seoImageLabel')}
               value={form.seoImageUrl}
               onChange={(v) => setField('seoImageUrl', v)}
-              helperText="Preferred: public image URL (https). Used as og:image for indexing cards. Falls back to cover image."
+              helperText={t('admin.blogForm.seoImageHelper')}
               maxMb={8}
               maxEncodedMb={1.8}
             />
@@ -439,12 +446,12 @@ export function AdminBlogPostForm({
                 {saving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving…
+                    {t('admin.blogForm.saving')}
                   </>
                 ) : (
                   <>
                     <Send className="mr-2 h-4 w-4" />
-                    Publish
+                    {t('admin.blogForm.publish')}
                   </>
                 )}
               </Button>
@@ -458,7 +465,7 @@ export function AdminBlogPostForm({
                 {saving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
-                Save draft
+                {t('admin.blogForm.saveDraft')}
               </Button>
             </div>
 
@@ -469,7 +476,7 @@ export function AdminBlogPostForm({
               onClick={() => setDiscardOpen(true)}
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Discard draft
+              {t('admin.blogForm.discardDraft')}
             </Button>
           </div>
         </CardContent>
@@ -478,18 +485,18 @@ export function AdminBlogPostForm({
       <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard draft?</AlertDialogTitle>
+            <AlertDialogTitle>{t('admin.blogForm.discardDialogTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
               {mode === 'edit' && initial?.status === 'DRAFT'
-                ? 'This deletes the draft and cannot be undone.'
+                ? t('admin.blogForm.discardDialogDescDraft')
                 : mode === 'edit'
-                  ? 'Leave without saving. The published post will keep its last saved version.'
-                  : 'Any unsaved content will be lost and you will return to the blog list.'}
+                  ? t('admin.blogForm.discardDialogDescEditPublished')
+                  : t('admin.blogForm.discardDialogDescCreate')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel type="button" disabled={saving}>
-              Keep editing
+              {t('admin.blogForm.keepEditing')}
             </AlertDialogCancel>
             <AlertDialogAction
               type="button"
@@ -502,7 +509,7 @@ export function AdminBlogPostForm({
               {saving ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
-              Discard draft
+              {t('admin.blogForm.discardDraft')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -516,16 +523,16 @@ export function AdminBlogPostForm({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+            <AlertDialogTitle>{t('admin.blogForm.unsavedChangesTitle')}</AlertDialogTitle>
             <AlertDialogDescription>{leaveMessage}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel type="button">
               <X className="mr-2 h-4 w-4" />
-              Keep editing
+              {t('admin.blogForm.keepEditing')}
             </AlertDialogCancel>
             <AlertDialogAction type="button" onClick={confirmLeave}>
-              Leave without saving
+              {t('admin.blogForm.leaveWithoutSaving')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

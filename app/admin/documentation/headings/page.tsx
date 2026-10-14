@@ -49,6 +49,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import {
   bilingualInputFromStored,
@@ -85,14 +86,14 @@ type DeleteTarget =
   | { kind: 'sub'; id: string; name: string }
   | null;
 
-function flattenApiError(err: unknown): string {
+function flattenApiError(err: unknown, t: (key: string) => string): string {
   const e = err as {
     response?: { data?: { error?: unknown } };
     message?: string;
   };
   const flat = e.response?.data?.error;
   if (typeof flat === 'string') return flat;
-  return e.message || 'Request failed';
+  return e.message || t('admin.docsForm.requestFailed');
 }
 
 function reorderByIds<T extends { id: string; sortOrder: number }>(
@@ -110,6 +111,7 @@ function reorderByIds<T extends { id: string; sortOrder: number }>(
 }
 
 export default function AdminDocumentationHeadingsPage() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<HeadingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -142,11 +144,11 @@ export default function AdminDocumentationHeadingsPage() {
       );
       setItems(res.data.data ?? []);
     } catch {
-      toast.error('Could not load headings.');
+      toast.error(t('admin.docsForm.loadHeadingsError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -164,7 +166,7 @@ export default function AdminDocumentationHeadingsPage() {
       setItems(res.data.data ?? next);
     } catch {
       setItems(prev);
-      toast.error('Could not reorder headings.');
+      toast.error(t('admin.docsHeadings.reorderHeadingsError'));
     } finally {
       setReordering(false);
       setDraggingHeadingId(null);
@@ -199,7 +201,7 @@ export default function AdminDocumentationHeadingsPage() {
       );
     } catch {
       setItems(prev);
-      toast.error('Could not reorder sub headings.');
+      toast.error(t('admin.docsHeadings.reorderSubHeadingsError'));
     } finally {
       setReordering(false);
       setDraggingSub(null);
@@ -268,18 +270,18 @@ export default function AdminDocumentationHeadingsPage() {
   async function createHeading() {
     const name = newName.trim();
     if (!parseBilingualInput(name).en) {
-      toast.error('English name (before &&&&) is required.');
+      toast.error(t('admin.docsHeadings.englishNameRequired'));
       return;
     }
     setCreating(true);
     try {
       await axios.post('/api/admin/documentation-headings', { name });
-      toast.success('Heading created.');
+      toast.success(t('admin.docsHeadings.headingCreatedToast'));
       setCreateHeadingOpen(false);
       setNewName('');
       await load();
     } catch (e) {
-      toast.error(flattenApiError(e));
+      toast.error(flattenApiError(e, t));
     } finally {
       setCreating(false);
     }
@@ -288,11 +290,11 @@ export default function AdminDocumentationHeadingsPage() {
   async function createSubHeading() {
     const name = newName.trim();
     if (!createSubHeadingId) {
-      toast.error('Select a heading.');
+      toast.error(t('admin.docsForm.validateHeadingRequired'));
       return;
     }
     if (!parseBilingualInput(name).en) {
-      toast.error('English name (before &&&&) is required.');
+      toast.error(t('admin.docsHeadings.englishNameRequired'));
       return;
     }
     setCreating(true);
@@ -301,13 +303,13 @@ export default function AdminDocumentationHeadingsPage() {
         headingId: createSubHeadingId,
         name,
       });
-      toast.success('Sub heading created.');
+      toast.success(t('admin.docsHeadings.subHeadingCreatedToast'));
       setCreateSubOpen(false);
       setNewName('');
       setCreateSubHeadingId('');
       await load();
     } catch (e) {
-      toast.error(flattenApiError(e));
+      toast.error(flattenApiError(e, t));
     } finally {
       setCreating(false);
     }
@@ -333,7 +335,7 @@ export default function AdminDocumentationHeadingsPage() {
     if (!editTarget) return;
     const name = editName.trim();
     if (!parseBilingualInput(name).en) {
-      toast.error('English name (before &&&&) is required.');
+      toast.error(t('admin.docsHeadings.englishNameRequired'));
       return;
     }
     setSavingEdit(true);
@@ -346,18 +348,18 @@ export default function AdminDocumentationHeadingsPage() {
           `/api/admin/documentation-headings/${editTarget.item.id}`,
           body
         );
-        toast.success('Heading updated.');
+        toast.success(t('admin.docsHeadings.headingUpdatedToast'));
       } else {
         await axios.patch(
           `/api/admin/documentation-sub-headings/${editTarget.item.id}`,
           body
         );
-        toast.success('Sub heading updated.');
+        toast.success(t('admin.docsHeadings.subHeadingUpdatedToast'));
       }
       setEditTarget(null);
       await load();
     } catch (e) {
-      toast.error(flattenApiError(e));
+      toast.error(flattenApiError(e, t));
     } finally {
       setSavingEdit(false);
     }
@@ -371,11 +373,13 @@ export default function AdminDocumentationHeadingsPage() {
         status: next,
       });
       toast.success(
-        next === 'PUBLISHED' ? 'Heading published.' : 'Heading set to draft.'
+        next === 'PUBLISHED'
+          ? t('admin.docsHeadings.headingPublishedToast')
+          : t('admin.docsHeadings.headingDraftedToast')
       );
       await load();
     } catch {
-      toast.error('Could not update status.');
+      toast.error(t('admin.docsPage.statusUpdateError'));
     } finally {
       setBusyId(null);
     }
@@ -390,12 +394,12 @@ export default function AdminDocumentationHeadingsPage() {
       });
       toast.success(
         next === 'PUBLISHED'
-          ? 'Sub heading published.'
-          : 'Sub heading set to draft.'
+          ? t('admin.docsHeadings.subHeadingPublishedToast')
+          : t('admin.docsHeadings.subHeadingDraftedToast')
       );
       await load();
     } catch {
-      toast.error('Could not update status.');
+      toast.error(t('admin.docsPage.statusUpdateError'));
     } finally {
       setBusyId(null);
     }
@@ -409,17 +413,17 @@ export default function AdminDocumentationHeadingsPage() {
         await axios.delete(
           `/api/admin/documentation-headings/${deleteTarget.id}`
         );
-        toast.success('Heading deleted.');
+        toast.success(t('admin.docsHeadings.headingDeletedToast'));
       } else {
         await axios.delete(
           `/api/admin/documentation-sub-headings/${deleteTarget.id}`
         );
-        toast.success('Sub heading deleted.');
+        toast.success(t('admin.docsHeadings.subHeadingDeletedToast'));
       }
       setDeleteTarget(null);
       await load();
     } catch {
-      toast.error('Could not delete.');
+      toast.error(t('admin.docsHeadings.deleteError'));
     } finally {
       setBusyId(null);
     }
@@ -428,15 +432,15 @@ export default function AdminDocumentationHeadingsPage() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        eyebrow="Content"
-        title="Documentation headings"
-        description="Manage sidebar headings and sub headings. Drag or use arrows to set the order shown on the public documentation site."
+        eyebrow={t('admin.docsPage.eyebrow')}
+        title={t('admin.docsHeadings.title')}
+        description={t('admin.docsHeadings.description')}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="ghost" asChild>
               <Link href="/admin/documentation">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to pages
+                {t('admin.docsHeadings.backToPages')}
               </Link>
             </Button>
             <Button
@@ -460,7 +464,7 @@ export default function AdminDocumentationHeadingsPage() {
               }}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add heading
+              {t('admin.docsHeadings.addHeading')}
             </Button>
           </div>
         }
@@ -475,11 +479,10 @@ export default function AdminDocumentationHeadingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <FolderTree className="h-5 w-5 text-muted-foreground" />
-              No headings yet
+              {t('admin.docsHeadings.emptyTitle')}
             </CardTitle>
             <CardDescription>
-              Create a heading first, then attach documentation pages to it (and
-              optionally a sub heading).
+              {t('admin.docsHeadings.emptyDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -491,7 +494,7 @@ export default function AdminDocumentationHeadingsPage() {
               }}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add heading
+              {t('admin.docsHeadings.addHeading')}
             </Button>
           </CardContent>
         </Card>
@@ -524,7 +527,7 @@ export default function AdminDocumentationHeadingsPage() {
                   <div className="flex min-w-0 flex-1 items-start gap-2">
                     <div
                       className="mt-0.5 flex shrink-0 cursor-grab flex-col items-center gap-1 text-muted-foreground active:cursor-grabbing"
-                      title="Drag to reorder heading"
+                      title={t('admin.docsHeadings.dragReorderHeading')}
                     >
                       <div className="flex items-center gap-1">
                         <GripVertical className="h-5 w-5" />
@@ -538,7 +541,7 @@ export default function AdminDocumentationHeadingsPage() {
                         variant="ghost"
                         className="h-7 w-7 p-0"
                         disabled={reordering || headingIndex === 0}
-                        title="Move up"
+                        title={t('admin.docsHeadings.moveUp')}
                         onClick={() => moveHeadingBy(heading.id, -1)}
                       >
                         <ChevronUp className="h-4 w-4" />
@@ -551,7 +554,7 @@ export default function AdminDocumentationHeadingsPage() {
                         disabled={
                           reordering || headingIndex === items.length - 1
                         }
-                        title="Move down"
+                        title={t('admin.docsHeadings.moveDown')}
                         onClick={() => moveHeadingBy(heading.id, 1)}
                       >
                         <ChevronDown className="h-4 w-4" />
@@ -570,17 +573,16 @@ export default function AdminDocumentationHeadingsPage() {
                           }
                         >
                           {heading.status === 'PUBLISHED'
-                            ? 'Published'
-                            : 'Draft'}
+                            ? t('admin.docsPage.statusPublished')
+                            : t('admin.docsPage.statusDraft')}
                         </Badge>
                       </div>
                       <CardDescription className="font-mono text-xs">
                         {heading._count ? (
                           <>
                             {' '}
-                            · {heading._count.subHeadings} sub ·{' '}
-                            {heading._count.pages} page
-                            {heading._count.pages === 1 ? '' : 's'}
+                            · {t('admin.docsHeadings.subCount', { count: heading._count.subHeadings })} ·{' '}
+                            {t('admin.docsHeadings.pageCount', { count: heading._count.pages })}
                           </>
                         ) : null}
                       </CardDescription>
@@ -598,7 +600,7 @@ export default function AdminDocumentationHeadingsPage() {
                       }}
                     >
                       <Plus className="mr-1.5 h-3.5 w-3.5" />
-                      Add Subheading
+                      {t('admin.docsHeadings.addSubheading')}
                     </Button>
 
                     <Button
@@ -612,12 +614,12 @@ export default function AdminDocumentationHeadingsPage() {
                       {heading.status === 'PUBLISHED' ? (
                         <>
                           <Undo2 className="mr-1.5 h-3.5 w-3.5" />
-                          Draft
+                          {t('admin.docsPage.statusDraft')}
                         </>
                       ) : (
                         <>
                           <Send className="mr-1.5 h-3.5 w-3.5" />
-                          Publish
+                          {t('admin.docsPage.publish')}
                         </>
                       )}
                     </Button>
@@ -652,8 +654,7 @@ export default function AdminDocumentationHeadingsPage() {
               <CardContent className="pt-0">
                 {heading.subHeadings.length === 0 ? (
                   <p className="rounded-md border border-dashed border-border/70 px-3 py-4 text-sm text-muted-foreground">
-                    No sub headings. Pages can use this heading alone, or add a
-                    nested sub heading.
+                    {t('admin.docsHeadings.noSubHeadings')}
                   </p>
                 ) : (
                   <ul className="divide-y divide-border/60 rounded-md border border-border/70">
@@ -693,7 +694,7 @@ export default function AdminDocumentationHeadingsPage() {
                         <div className="flex min-w-0 items-start gap-2">
                           <div
                             className="flex shrink-0 cursor-grab flex-col items-center gap-0.5 text-muted-foreground active:cursor-grabbing"
-                            title="Drag to reorder sub heading"
+                            title={t('admin.docsHeadings.dragReorderSubHeading')}
                           >
                             <div className="flex items-center gap-1">
                               <GripVertical className="h-4 w-4" />
@@ -707,7 +708,7 @@ export default function AdminDocumentationHeadingsPage() {
                               variant="ghost"
                               className="h-6 w-6 p-0"
                               disabled={reordering || subIndex === 0}
-                              title="Move up"
+                              title={t('admin.docsHeadings.moveUp')}
                               onClick={() =>
                                 moveSubBy(heading.id, sub.id, -1)
                               }
@@ -723,7 +724,7 @@ export default function AdminDocumentationHeadingsPage() {
                                 reordering ||
                                 subIndex === heading.subHeadings.length - 1
                               }
-                              title="Move down"
+                              title={t('admin.docsHeadings.moveDown')}
                               onClick={() =>
                                 moveSubBy(heading.id, sub.id, 1)
                               }
@@ -745,13 +746,13 @@ export default function AdminDocumentationHeadingsPage() {
                                 className="text-[10px]"
                               >
                                 {sub.status === 'PUBLISHED'
-                                  ? 'Published'
-                                  : 'Draft'}
+                                  ? t('admin.docsPage.statusPublished')
+                                  : t('admin.docsPage.statusDraft')}
                               </Badge>
                             </div>
                             <p className="mt-0.5 font-mono text-xs text-muted-foreground">
                               {typeof sub._count?.pages === 'number'
-                                ? ` · ${sub._count.pages} page${sub._count.pages === 1 ? '' : 's'}`
+                                ? ` · ${t('admin.docsHeadings.pageCount', { count: sub._count.pages })}`
                                 : null}
                             </p>
                           </div>
@@ -770,12 +771,12 @@ export default function AdminDocumentationHeadingsPage() {
                             {sub.status === 'PUBLISHED' ? (
                               <>
                                 <Undo2 className="mr-1.5 h-3.5 w-3.5" />
-                                Draft
+                                {t('admin.docsPage.statusDraft')}
                               </>
                             ) : (
                               <>
                                 <Send className="mr-1.5 h-3.5 w-3.5" />
-                                Publish
+                                {t('admin.docsPage.publish')}
                               </>
                             )}
                           </Button>
@@ -816,7 +817,7 @@ export default function AdminDocumentationHeadingsPage() {
           {reordering ? (
             <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Saving order…
+              {t('admin.docsHeadings.savingOrder')}
             </p>
           ) : null}
         </div>
@@ -825,15 +826,15 @@ export default function AdminDocumentationHeadingsPage() {
       <Dialog open={createHeadingOpen} onOpenChange={setCreateHeadingOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add heading</DialogTitle>
+            <DialogTitle>{t('admin.docsHeadings.addHeading')}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 py-2">
-            <Label htmlFor="new-heading-name">Name</Label>
+            <Label htmlFor="new-heading-name">{t('admin.docsForm.nameLabel')}</Label>
             <Input
               id="new-heading-name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder={`English name ${'&&&&'} Spanish name`}
+              placeholder={t('admin.docsHeadings.bilingualNamePlaceholder')}
               maxLength={500}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -843,7 +844,7 @@ export default function AdminDocumentationHeadingsPage() {
               }}
             />
             <p className="text-xs text-muted-foreground">
-              First English, then separator &&&&, then Spanish.
+              {t('admin.blogForm.bilingualHint')}
             </p>
           </div>
           <DialogFooter>
@@ -852,7 +853,7 @@ export default function AdminDocumentationHeadingsPage() {
               variant="outline"
               onClick={() => setCreateHeadingOpen(false)}
             >
-              Cancel
+              {t('cancel')}
             </Button>
             <Button
               type="button"
@@ -864,7 +865,7 @@ export default function AdminDocumentationHeadingsPage() {
               ) : (
                 <Plus className="mr-2 h-4 w-4" />
               )}
-              Create
+              {t('admin.docsForm.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -873,11 +874,11 @@ export default function AdminDocumentationHeadingsPage() {
       <Dialog open={createSubOpen} onOpenChange={setCreateSubOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add sub heading</DialogTitle>
+            <DialogTitle>{t('admin.docsHeadings.addSubheadingDialogTitle')}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div className="grid gap-2">
-              <Label>Under heading</Label>
+              <Label>{t('admin.docsHeadings.underHeading')}</Label>
               <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
                 {bilingualInputFromStored(
                   items.find((h) => h.id === createSubHeadingId)?.name ?? ''
@@ -885,12 +886,12 @@ export default function AdminDocumentationHeadingsPage() {
               </p>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="new-sub-name">Name</Label>
+              <Label htmlFor="new-sub-name">{t('admin.docsForm.nameLabel')}</Label>
               <Input
                 id="new-sub-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder={`English name ${'&&&&'} Spanish name`}
+                placeholder={t('admin.docsHeadings.bilingualNamePlaceholder')}
                 maxLength={500}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -900,7 +901,7 @@ export default function AdminDocumentationHeadingsPage() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                First English, then separator &&&&, then Spanish.
+                {t('admin.blogForm.bilingualHint')}
               </p>
             </div>
           </div>
@@ -910,7 +911,7 @@ export default function AdminDocumentationHeadingsPage() {
               variant="outline"
               onClick={() => setCreateSubOpen(false)}
             >
-              Cancel
+              {t('cancel')}
             </Button>
             <Button
               type="button"
@@ -922,7 +923,7 @@ export default function AdminDocumentationHeadingsPage() {
               ) : (
                 <Plus className="mr-2 h-4 w-4" />
               )}
-              Create
+              {t('admin.docsForm.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -938,31 +939,31 @@ export default function AdminDocumentationHeadingsPage() {
           <DialogHeader>
             <DialogTitle>
               {editTarget?.kind === 'sub'
-                ? 'Edit sub heading'
-                : 'Edit heading'}
+                ? t('admin.docsHeadings.editSubHeading')
+                : t('admin.docsHeadings.editHeading')}
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             {editTarget?.kind === 'sub' ? (
               <p className="text-xs text-muted-foreground">
-                Under {editTarget.headingName}
+                {t('admin.docsHeadings.underHeadingName', { name: editTarget.headingName })}
               </p>
             ) : null}
             <div className="grid gap-2">
-              <Label htmlFor="edit-name">Name</Label>
+              <Label htmlFor="edit-name">{t('admin.docsForm.nameLabel')}</Label>
               <Input
                 id="edit-name"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                placeholder={`English name ${'&&&&'} Spanish name`}
+                placeholder={t('admin.docsHeadings.bilingualNamePlaceholder')}
                 maxLength={500}
               />
               <p className="text-xs text-muted-foreground">
-                First English, then separator &&&&, then Spanish.
+                {t('admin.blogForm.bilingualHint')}
               </p>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="edit-slug">Slug</Label>
+              <Label htmlFor="edit-slug">{t('admin.docsHeadings.slugLabel')}</Label>
               <Input
                 id="edit-slug"
                 value={editSlug}
@@ -971,7 +972,7 @@ export default function AdminDocumentationHeadingsPage() {
                 className="font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
-                Used in public URLs. Leave as-is unless you need a custom path.
+                {t('admin.docsHeadings.slugHelper')}
               </p>
             </div>
           </div>
@@ -981,7 +982,7 @@ export default function AdminDocumentationHeadingsPage() {
               variant="outline"
               onClick={() => setEditTarget(null)}
             >
-              Cancel
+              {t('cancel')}
             </Button>
             <Button
               type="button"
@@ -991,7 +992,7 @@ export default function AdminDocumentationHeadingsPage() {
               {savingEdit ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
-              Save
+              {t('admin.docsHeadings.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1006,22 +1007,24 @@ export default function AdminDocumentationHeadingsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete {deleteTarget?.kind === 'sub' ? 'sub heading' : 'heading'}?
+              {deleteTarget?.kind === 'sub'
+                ? t('admin.docsHeadings.deleteSubHeadingTitle')
+                : t('admin.docsHeadings.deleteHeadingTitle')}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget?.kind === 'heading'
-                ? `“${deleteTarget.name}” and its sub headings will be removed. Pages under them will lose that grouping.`
-                : `“${deleteTarget?.name ?? ''}” will be removed. Pages under it will lose that sub heading.`}
+                ? t('admin.docsHeadings.deleteHeadingDescription', { name: deleteTarget.name })
+                : t('admin.docsHeadings.deleteSubHeadingDescription', { name: deleteTarget?.name ?? '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <AlertDialogCancel type="button">{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               type="button"
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => void confirmDelete()}
             >
-              Delete
+              {t('admin.docsPage.deleteAction')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

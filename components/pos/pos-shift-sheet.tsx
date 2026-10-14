@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { Banknote, Loader2, Printer, Receipt } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -55,6 +56,7 @@ export function PosShiftSheet({
   onShiftUpdated,
   onShiftClosed,
 }: Props) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
   const formatSignedMoney = (n: number) => {
@@ -104,7 +106,7 @@ export function PosShiftSheet({
       if (requestId !== loadRequestRef.current) return;
       setShift(null);
       onShiftUpdatedRef.current?.(null);
-      toast.error(apiErrorMessage(error, 'Could not load shift.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotLoadShift')));
     } finally {
       if (requestId === loadRequestRef.current) {
         setLoading(false);
@@ -139,7 +141,7 @@ export function PosShiftSheet({
   const requestEndShift = () => {
     if (!shift || ending) return;
     if (cashLeftInLocker == null) {
-      toast.warn('Enter the cash left in the money locker for this shift.');
+      toast.warn(t('pos.toasts.enterCashLeftInLocker'));
       return;
     }
     setEndConfirmOpen(true);
@@ -157,14 +159,14 @@ export function PosShiftSheet({
       countryCode: regional.countryCode,
     });
     if (!ok) {
-      toast.error('Could not open print preview.');
+      toast.error(t('pos.toasts.couldNotOpenPrintPreview'));
     }
   };
 
   const endShift = async () => {
     if (!shift || ending) return;
     if (cashLeftInLocker == null) {
-      toast.warn('Enter the cash left in the money locker for this shift.');
+      toast.warn(t('pos.toasts.enterCashLeftInLocker'));
       return;
     }
 
@@ -180,10 +182,10 @@ export function PosShiftSheet({
       const { closedShift } = res.data.data;
       toast.success(
         logoutAfterEnd
-          ? 'Shift ended. Signing you out.'
+          ? t('pos.toasts.shiftEndedSigningOut')
           : isOwnerOrAdmin
-            ? 'Shift ended. Returning to dashboard.'
-            : 'Shift ended. Signing you out.'
+            ? t('pos.toasts.shiftEndedReturningToDashboard')
+            : t('pos.toasts.shiftEndedSigningOut')
       );
       setCashInLocker('');
       setShift(null);
@@ -201,7 +203,7 @@ export function PosShiftSheet({
       onOpenChange(false);
       await handleAfterShiftEnded();
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Could not end shift.'));
+      toast.error(apiErrorMessage(error, t('pos.toasts.couldNotEndShift')));
     } finally {
       setEnding(false);
     }
@@ -211,10 +213,9 @@ export function PosShiftSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex h-full max-h-dvh w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
         <SheetHeader className="shrink-0 border-b px-6 py-4 text-left">
-          <SheetTitle>End shift</SheetTitle>
+          <SheetTitle>{t('pos.sheets.shift.title')}</SheetTitle>
           <SheetDescription>
-            Review this shift&apos;s orders, then enter the cash you leave in
-            the locker when ending your shift.
+            {t('pos.sheets.shift.description')}
           </SheetDescription>
         </SheetHeader>
 
@@ -227,21 +228,21 @@ export function PosShiftSheet({
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-6 py-4">
               <div className="grid shrink-0 grid-cols-2 gap-3 rounded-xl border bg-muted/20 p-3 text-sm">
                 <div>
-                  <p className="text-xs text-muted-foreground">Started</p>
+                  <p className="text-xs text-muted-foreground">{t('pos.sheets.shift.started')}</p>
                   <p className="font-medium">
                     {new Date(shift.startedAt).toLocaleString()}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Opened by</p>
+                  <p className="text-xs text-muted-foreground">{t('pos.sheets.shift.openedBy')}</p>
                   <p className="font-medium">{shift.openedByName ?? '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Completed orders</p>
+                  <p className="text-xs text-muted-foreground">{t('pos.sheets.shift.completedOrders')}</p>
                   <p className="font-semibold tabular-nums">{shift.orderCount}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Total sales</p>
+                  <p className="text-xs text-muted-foreground">{t('pos.sheets.shift.totalSales')}</p>
                   <p className="font-semibold tabular-nums">
                     {formatMoney(shift.totalSales)}
                   </p>
@@ -251,12 +252,12 @@ export function PosShiftSheet({
               <div className="flex min-h-0 flex-1 flex-col gap-2">
                 <div className="flex shrink-0 items-center gap-2 text-sm font-semibold">
                   <Receipt className="h-4 w-4" />
-                  Shift orders ({shift.orders.length})
+                  {t('pos.sheets.shift.shiftOrders', { count: shift.orders.length })}
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl border">
                   {shift.orders.length === 0 ? (
                     <p className="p-4 text-sm text-muted-foreground">
-                      No orders in this shift yet.
+                      {t('pos.sheets.shift.noOrdersYet')}
                     </p>
                   ) : (
                     <ul className="divide-y">
@@ -279,7 +280,7 @@ export function PosShiftSheet({
                                 )}
                               >
                                 {order.ticketNumber != null
-                                  ? `Ticket #${String(order.ticketNumber).padStart(2, '0')}`
+                                  ? t('pos.sheets.shift.ticketNumber', { number: String(order.ticketNumber).padStart(2, '0') })
                                   : order.shortOrderId}
                               </p>
                               {canceled ? (
@@ -287,7 +288,7 @@ export function PosShiftSheet({
                                   variant="destructive"
                                   className="h-5 px-1.5 text-[10px] uppercase"
                                 >
-                                  Canceled
+                                  {t('pos.sheets.shift.canceled')}
                                 </Badge>
                               ) : null}
                             </div>
@@ -318,10 +319,10 @@ export function PosShiftSheet({
               </div>
 
               <div className="shrink-0 space-y-3 rounded-xl border bg-background p-4 text-sm">
-                <p className="text-sm font-semibold">Cash reconciliation</p>
+                <p className="text-sm font-semibold">{t('pos.sheets.shift.cashReconciliation')}</p>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">Previous cash left</span>
+                    <span className="text-muted-foreground">{t('pos.sheets.shift.previousCashLeft')}</span>
                     <span className="font-medium tabular-nums">
                       {shift.previousClosingCashInLocker != null
                         ? formatMoney(shift.previousClosingCashInLocker)
@@ -330,24 +331,25 @@ export function PosShiftSheet({
                   </div>
                   {shift.previousShiftEndedAt ? (
                     <p className="text-xs text-muted-foreground">
-                      Last shift ended{' '}
-                      {new Date(shift.previousShiftEndedAt).toLocaleString()}
+                      {t('pos.sheets.shift.lastShiftEnded', {
+                        time: new Date(shift.previousShiftEndedAt).toLocaleString(),
+                      })}
                     </p>
                   ) : null}
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">Cash sales (shift)</span>
+                    <span className="text-muted-foreground">{t('pos.sheets.shift.cashSalesShift')}</span>
                     <span className="font-medium tabular-nums">
                       {formatMoney(shift.cashSalesTotal)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">Card / other sales</span>
+                    <span className="text-muted-foreground">{t('pos.sheets.shift.cardOtherSales')}</span>
                     <span className="font-medium tabular-nums">
                       {formatMoney(shift.nonCashSalesTotal)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 border-t pt-2 font-semibold">
-                    <span>Expected in locker</span>
+                    <span>{t('pos.sheets.shift.expectedInLocker')}</span>
                     <span className="tabular-nums">
                       {formatMoney(shift.expectedCashInLocker)}
                     </span>
@@ -356,7 +358,7 @@ export function PosShiftSheet({
 
                 <div className="space-y-2 border-t pt-3">
                   <Label htmlFor="pos-shift-cash-locker">
-                    Cash left in money locker
+                    {t('pos.sheets.shift.cashLeftInLocker')}
                   </Label>
                   <div className="relative">
                     <Banknote className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -384,7 +386,7 @@ export function PosShiftSheet({
                             : 'border-muted bg-muted/20'
                       )}
                     >
-                      <span className="font-medium">Difference</span>
+                      <span className="font-medium">{t('pos.sheets.shift.difference')}</span>
                       <span className="font-semibold tabular-nums">
                         {cashDifference != null
                           ? formatSignedMoney(cashDifference)
@@ -393,9 +395,7 @@ export function PosShiftSheet({
                     </div>
                   ) : null}
                   <p className="text-xs text-muted-foreground">
-                    Total cash you leave in the locker for the next shift.
-                    Difference compares this to expected (previous cash left +
-                    cash sales).
+                    {t('pos.sheets.shift.cashLeftHint')}
                   </p>
                 </div>
               </div>
@@ -411,7 +411,7 @@ export function PosShiftSheet({
                   onClick={handlePrint}
                 >
                   <Printer className="h-4 w-4" />
-                  Print
+                  {t('pos.sheets.shift.print')}
                 </Button>
                 <Button
                   type="button"
@@ -422,7 +422,7 @@ export function PosShiftSheet({
                   {ending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : null}
-                  End shift
+                  {t('pos.sheets.shift.endShift')}
                 </Button>
               </div>
             </div>
@@ -430,7 +430,7 @@ export function PosShiftSheet({
         ) : (
           <div className="flex-1 overflow-y-auto px-6 py-4">
             <p className="text-sm text-muted-foreground">
-              No active shift could be loaded.
+              {t('pos.sheets.shift.noActiveShift')}
             </p>
           </div>
         )}
@@ -439,14 +439,14 @@ export function PosShiftSheet({
       <LogoutConfirmation
         open={endConfirmOpen}
         loading={ending}
-        title="End shift?"
+        title={t('pos.dialogs.endShift.title')}
         description={
           isOwnerOrAdmin
-            ? 'This will close your current shift and return you to the dashboard.'
-            : 'This will close your current shift and sign you out of POS.'
+            ? t('pos.dialogs.endShift.descriptionOwner')
+            : t('pos.dialogs.endShift.descriptionStaff')
         }
-        confirmText="End shift"
-        cancelText="Cancel"
+        confirmText={t('pos.dialogs.endShift.confirm')}
+        cancelText={t('pos.dialogs.endShift.cancel')}
         onCancel={() => setEndConfirmOpen(false)}
         onConfirm={() => void endShift()}
       />

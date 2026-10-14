@@ -48,7 +48,9 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import { cn } from '@/lib/utils';
 import { useDashboardPermissions } from '@/hooks/use-dashboard-permissions';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
 
 import { InventoryQuickActions } from './inventory-quick-actions';
 import { LazyProductImage } from './lazy-product-image';
@@ -166,6 +168,7 @@ export function ProductsTab({
   const uiLang = useUiLanguage();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { canEdit, canDelete } = useDashboardPermissions();
+  const { canCreateMore } = useEntitlements();
   const canEditProducts = canEdit('product');
   const canDeleteProducts = canDelete('product');
 
@@ -523,12 +526,17 @@ export function ProductsTab({
         ) : showEmptyInventory ? (
           <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
             {canEditProducts ? (
-              <Button type="button" asChild>
-                <Link href="/product/create">
-                  <Plus className="mr-2 h-4 w-4" />
-                  {t('dashboard.product.addProduct')}
-                </Link>
-              </Button>
+              <PremiumDisabledControl
+                locked={!canCreateMore('products', pagination.total)}
+                label={t('dashboard.product.addProduct')}
+              >
+                <Button type="button" asChild>
+                  <Link href="/product/create">
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('dashboard.product.addProduct')}
+                  </Link>
+                </Button>
+              </PremiumDisabledControl>
             ) : null}
             <p className="text-sm text-muted-foreground">
               {t('dashboard.product.empty')}
@@ -574,16 +582,21 @@ export function ProductsTab({
                 />
               </div>
               {canEditProducts ? (
-                <Button
-                  type="button"
-                  asChild
-                  disabled={categories.length === 0}
+                <PremiumDisabledControl
+                  locked={!canCreateMore('products', pagination.total)}
+                  label={t('dashboard.product.addProduct')}
                 >
-                  <Link href="/product/create">
-                    <Plus className="mr-2 h-4 w-4" />
-                    {t('dashboard.product.addProduct')}
-                  </Link>
-                </Button>
+                  <Button
+                    type="button"
+                    asChild
+                    disabled={categories.length === 0}
+                  >
+                    <Link href="/product/create">
+                      <Plus className="mr-2 h-4 w-4" />
+                      {t('dashboard.product.addProduct')}
+                    </Link>
+                  </Button>
+                </PremiumDisabledControl>
               ) : null}
               <div className="flex shrink-0 rounded-md border border-border p-0.5">
                 <Button

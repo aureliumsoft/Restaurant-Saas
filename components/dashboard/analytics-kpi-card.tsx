@@ -2,6 +2,7 @@
 
 import type { ComponentType } from 'react';
 import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
 
 import { Sparkline, sparklineTrendPercent } from '@/components/ui/sparkline';
 import { cn } from '@/lib/utils';
@@ -25,8 +26,10 @@ export function AnalyticsKpiCard({
   accentColor,
   icon: Icon,
   href,
-  daysLabel = '30 days',
+  daysLabel,
 }: AnalyticsKpiCardProps) {
+  const { t } = useTranslation();
+  const resolvedDaysLabel = daysLabel ?? t('dashboard.analytics.last30Days');
   const trend = sparklineTrendPercent(sparklineData);
   const trendUp = trend >= 0;
 
@@ -63,7 +66,8 @@ export function AnalyticsKpiCard({
             trendUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
           )}
         >
-          {trendUp ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}% vs last {daysLabel}
+          {trendUp ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}%{' '}
+          {t('dashboard.analytics.vsLastDays', { daysLabel: resolvedDaysLabel })}
         </p>
       </div>
     </Link>

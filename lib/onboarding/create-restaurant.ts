@@ -26,7 +26,7 @@ export async function createRestaurantWithDefaults(opts: {
     where: { restaurantId: restaurant.id },
     create: {
       restaurantId: restaurant.id,
-      plan: 'STARTER',
+      plan: 'FREE',
       status: 'TRIAL',
       trialEndsAt,
       currentPeriodEnd: trialEndsAt,

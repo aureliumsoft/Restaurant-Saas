@@ -99,23 +99,23 @@ function getLocalizedName(val: string, lang: string) {
 
 function getOrderMethodLabel(t: Ticket, tr: any) {
   if (t.tableLabel) {
-    return `${tr('kds.table', { defaultValue: 'Table' })} ${t.tableLabel}`;
+    return `${tr('kds.table')} ${t.tableLabel}`;
   }
 
   const addr = (t.address || '').trim();
   const addrLower = addr.toLowerCase().replace(/\s+/g, '');
 
   if (addrLower === 'takeaway' || t.sourceType === 'takeaway') {
-    return tr('kds.takeaway', { defaultValue: 'Takeaway' });
+    return tr('kds.takeaway');
   }
 
   // If there's an address that isn't 'takeaway', it's a delivery
   if (addr || t.sourceType === 'delivery') {
-    return tr('kds.delivery', { defaultValue: 'Delivery' });
+    return tr('kds.delivery');
   }
 
   // Default to Takeaway for POS, Kiosk, or QR Code orders without a table/address
-  return tr('kds.takeaway', { defaultValue: 'Takeaway' });
+  return tr('kds.takeaway');
 }
 
 type MenuItemRow = {
@@ -255,7 +255,7 @@ export function KdsKitchenScreen() {
         const merged = [...localAsTickets, ...(cached ?? [])];
         if (merged.length > 0) {
           setTickets(merged);
-          toast.warn('Showing offline / cached kitchen tickets.');
+          toast.warn(tr('kds.showingOfflineCached'));
           return;
         }
       } catch {
@@ -263,7 +263,7 @@ export function KdsKitchenScreen() {
       }
       setTickets([]);
       toast.error(
-        kdsAxiosErrorMessage(err, 'load', 'Could not load kitchen tickets.')
+        kdsAxiosErrorMessage(err, 'load', tr('kds.errorLoadTickets'))
       );
     } finally {
       setLoading(false);
@@ -337,8 +337,8 @@ export function KdsKitchenScreen() {
         setTickets((prev) => prev.filter((t) => t.id !== ticketId && t.id !== localTicket?.id));
         toast.success(
           status === 'completed'
-            ? 'Ticket completed offline (will sync when online)'
-            : 'Ticket canceled offline (will sync when online)'
+            ? tr('kds.ticketCompletedOffline')
+            : tr('kds.ticketCanceledOffline')
         );
         await load();
         return true;
@@ -369,8 +369,8 @@ export function KdsKitchenScreen() {
         setTickets((prev) => prev.filter((t) => t.id !== ticketId));
         toast.success(
           status === 'completed'
-            ? 'Ticket completed offline (will sync when online)'
-            : 'Ticket canceled offline (will sync when online)'
+            ? tr('kds.ticketCompletedOffline')
+            : tr('kds.ticketCanceledOffline')
         );
         return true;
       }
@@ -379,7 +379,9 @@ export function KdsKitchenScreen() {
 
       await axios.patch(kdsTicketApiPath(ticketId, '', ticketUrlId), { status });
       toast.success(
-        status === 'completed' ? 'Order marked complete' : 'Order canceled'
+        status === 'completed'
+          ? tr('kds.orderMarkedComplete')
+          : tr('kds.orderCanceled')
       );
       if (status === 'completed') {
         eventBus.emit('refreshCompletedOrders');

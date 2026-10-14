@@ -4,8 +4,7 @@ import { z } from 'zod';
 
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
-import { branchCapacityAllows } from '@/lib/subscription-plan-features';
-import { getRestaurantPlanFeatures, subscriptionPlanDeniedResponse } from '@/lib/subscription-plan-enforcement';
+import { assertCreateCap } from '@/lib/subscription-plan-enforcement';
 import { normalizeOpeningHours } from '@/lib/order-time-slots';
 import { Prisma } from '@prisma/client';
 
@@ -93,12 +92,13 @@ export async function POST(req: NextRequest) {
     const existingCount = await db.branch.count({
       where: { restaurantId: auth.restaurantId },
     });
-    const planFeatures = await getRestaurantPlanFeatures(auth.restaurantId);
-    if (!branchCapacityAllows(existingCount, 1, planFeatures)) {
-      return subscriptionPlanDeniedResponse(
-        `Your plan allows up to ${Number.isFinite(planFeatures.maxBranches) ? planFeatures.maxBranches : 'unlimited'} branch(es).`
-      );
-    }
+    const limitDenied = await assertCreateCap(
+      auth.restaurantId,
+      'branches',
+      existingCount,
+      'Branches'
+    );
+    if (limitDenied) return limitDenied;
 
     const branch = await db.branch.create({
       data: {

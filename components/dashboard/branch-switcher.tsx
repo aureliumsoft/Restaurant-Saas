@@ -1,6 +1,7 @@
 'use client';
 
 import { Building2, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { useBranchContext } from '@/hooks/use-branch-context';
 import {
@@ -16,6 +17,7 @@ const branchChipClass =
   'inline-flex h-9 max-w-[12rem] items-center gap-2 rounded-xl bg-white/70 px-3 text-sm font-medium text-foreground shadow-sm dark:bg-white/10';
 
 export function BranchSwitcher() {
+  const { t } = useTranslation();
   const {
     loading,
     branches,
@@ -37,7 +39,8 @@ export function BranchSwitcher() {
 
   if (!isOwnerOrAdmin) {
     const label =
-      branches.map((b) => b.name).join(', ') || 'No branch assigned';
+      branches.map((b) => b.name).join(', ') ||
+      t('dashboard.branches.unassignedFallback');
     return (
       <div className={branchChipClass} title={label}>
         <Building2 className="h-4 w-4 shrink-0 text-fire-500" />
@@ -47,7 +50,9 @@ export function BranchSwitcher() {
   }
 
   if (!canSwitchBranch && activeBranchId) {
-    const name = branches.find((b) => b.id === activeBranchId)?.name ?? 'Branch';
+    const name =
+      branches.find((b) => b.id === activeBranchId)?.name ??
+      t('dashboard.branches.branchFallback');
     return (
       <div className={branchChipClass} title={name}>
         <Building2 className="h-4 w-4 shrink-0 text-fire-500" />
@@ -65,7 +70,7 @@ export function BranchSwitcher() {
     >
       <SelectTrigger className="h-9 w-[min(100%,12rem)] gap-2 rounded-xl border-0 bg-white/70 shadow-sm dark:bg-white/10">
         <Building2 className="h-4 w-4 shrink-0 text-fire-500" />
-        <SelectValue placeholder="Select branch" />
+        <SelectValue placeholder={t('dashboard.branches.selectBranchPlaceholder')} />
       </SelectTrigger>
       <SelectContent>
         {branches.map((b) => (

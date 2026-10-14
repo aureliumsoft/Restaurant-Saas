@@ -503,11 +503,7 @@ export function OrderDisplayScreen() {
 
       // Prefer a real network attempt even if navigator.onLine is wrong.
       if (isBrowserOffline()) {
-        await showOfflineFallback(
-          langRef.current === 'es'
-            ? 'Modo sin conexión — mostrando pedidos locales / en caché.'
-            : 'Offline mode — showing local / cached orders.'
-        );
+        await showOfflineFallback(tRef.current('orderDisplay.offlineModeNotice'));
         return;
       }
 
@@ -530,11 +526,7 @@ export function OrderDisplayScreen() {
             return;
           }
           if (res.status >= 500) {
-            await showOfflineFallback(
-              langRef.current === 'es'
-                ? 'Error del servidor — mostrando pedidos en caché.'
-                : 'Server error — showing cached orders.'
-            );
+            await showOfflineFallback(tRef.current('orderDisplay.serverErrorNotice'));
             return;
           }
           setError(tRef.current('orderDisplay.loadError'));
@@ -594,9 +586,7 @@ export function OrderDisplayScreen() {
 
         if (cached || hasLocal) {
           await showOfflineFallback(
-            langRef.current === 'es'
-              ? 'Sin conexión al servidor — mostrando pedidos locales / en caché.'
-              : 'Server unreachable — showing local / cached orders.'
+            tRef.current('orderDisplay.serverUnreachableNotice')
           );
           return;
         }

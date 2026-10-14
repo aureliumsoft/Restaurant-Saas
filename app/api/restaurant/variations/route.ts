@@ -85,6 +85,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const existingCount = await db.restaurantVariation.count({
+    where: { restaurantId: auth.restaurant.id },
+  });
+  const { assertCreateCap } = await import(
+    '@/lib/subscription-plan-enforcement'
+  );
+  const limitDenied = await assertCreateCap(
+    auth.restaurant.id,
+    'variations',
+    existingCount,
+    'Variations'
+  );
+  if (limitDenied) return limitDenied;
+
   const maxOrder = await db.restaurantVariation.aggregate({
     where: { restaurantId: auth.restaurant.id },
     _max: { sortOrder: true },

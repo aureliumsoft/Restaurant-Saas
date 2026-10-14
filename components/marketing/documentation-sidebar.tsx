@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { BookOpen, ChevronRight, Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import {
   docHeadingPath,
@@ -18,6 +19,7 @@ type Props = {
 };
 
 export function DocumentationSidebar({ nav }: Props) {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const params = useParams<{
     headingSlug?: string;
@@ -92,14 +94,14 @@ export function DocumentationSidebar({ nav }: Props) {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search this site…"
+            placeholder={t('marketingExtras.documentation.sidebar.searchPlaceholder')}
             className="h-9 w-full rounded-md border border-zinc-200 bg-white py-1 pl-8 pr-3 text-sm text-zinc-900 outline-none ring-fire-500/30 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-white"
           />
         </label>
       </div>
 
       <nav
-        aria-label="Documentation"
+        aria-label={t('marketingExtras.documentation.sidebar.navAria')}
         className="flex-1 space-y-1 overflow-y-auto p-3 text-sm md:p-4"
       >
         <Link
@@ -112,7 +114,7 @@ export function DocumentationSidebar({ nav }: Props) {
           )}
         >
           <BookOpen className="h-4 w-4 shrink-0" />
-          Documentation
+          {t('marketingExtras.documentation.title')}
         </Link>
 
         {filtered.map((h) => {
@@ -140,7 +142,11 @@ export function DocumentationSidebar({ nav }: Props) {
                     type="button"
                     onClick={toggleExpanded}
                     className="rounded-md p-1 text-zinc-500 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                    aria-label={childrenVisible ? 'Collapse' : 'Expand'}
+                    aria-label={
+                      childrenVisible
+                        ? t('marketingExtras.documentation.sidebar.collapse')
+                        : t('marketingExtras.documentation.sidebar.expand')
+                    }
                     aria-expanded={childrenVisible}
                   >
                     <ChevronRight
@@ -220,7 +226,7 @@ export function DocumentationSidebar({ nav }: Props) {
 
         {!filtered.length ? (
           <p className="px-2 py-6 text-center text-xs text-zinc-500">
-            No published documentation yet.
+            {t('marketingExtras.documentation.sidebar.empty')}
           </p>
         ) : null}
       </nav>

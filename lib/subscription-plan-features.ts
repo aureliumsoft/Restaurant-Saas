@@ -1,6 +1,12 @@
 import { SubscriptionPlan } from '@prisma/client';
 
-/** Entitlements for dashboard + APIs (see pricing tiers). */
+import {
+  canAccessModule,
+  resolveEntitlements,
+  type Entitlements,
+} from '@/lib/entitlements';
+
+/** @deprecated Prefer Entitlements; kept for existing call sites. */
 export type PlanFeatureMatrix = {
   plan: SubscriptionPlan;
   maxBranches: number;
@@ -8,42 +14,35 @@ export type PlanFeatureMatrix = {
   roleBasedSettings: boolean;
   branding: boolean;
   advancedAnalytics: boolean;
-  /** Branded Play Store / App Store listing for this restaurant. */
   mobileApp: boolean;
 };
 
-export function getPlanFeatures(plan: SubscriptionPlan | string | null): PlanFeatureMatrix {
-  if (plan === SubscriptionPlan.SCALE) {
-    return {
-      plan: SubscriptionPlan.SCALE,
-      maxBranches: Number.POSITIVE_INFINITY,
-      recommendations: true,
-      roleBasedSettings: true,
-      branding: true,
-      advancedAnalytics: true,
-      mobileApp: true,
-    };
-  }
-  if (plan === SubscriptionPlan.GROWTH) {
-    return {
-      plan: SubscriptionPlan.GROWTH,
-      maxBranches: 5,
-      recommendations: true,
-      roleBasedSettings: true,
-      branding: true,
-      advancedAnalytics: true,
-      mobileApp: true,
-    };
-  }
+export function planFeaturesFromEntitlements(e: Entitlements): PlanFeatureMatrix {
+  const branches = e.caps.branches;
   return {
-    plan: SubscriptionPlan.STARTER,
-    maxBranches: 1,
-    recommendations: false,
-    roleBasedSettings: false,
-    branding: false,
-    advancedAnalytics: false,
-    mobileApp: false,
+    plan: e.plan,
+    maxBranches: branches == null ? 9999 : branches,
+    recommendations: canAccessModule(e, 'configuration'),
+    roleBasedSettings: canAccessModule(e, 'usersRoles'),
+    branding:
+      e.caps.mainBanner ||
+      e.caps.menuBanners === null ||
+      (typeof e.caps.menuBanners === 'number' && e.caps.menuBanners > 0),
+    advancedAnalytics:
+      e.modules.dashboard.access !== 'paid' &&
+      (e.modules.dashboard.limits?.days14 === true ||
+        e.plan !== SubscriptionPlan.FREE),
+    mobileApp: canAccessModule(e, 'mobileApp'),
   };
+}
+
+export function getPlanFeatures(
+  plan: SubscriptionPlan | string | null,
+  customSelectedModules: string[] = []
+): PlanFeatureMatrix {
+  return planFeaturesFromEntitlements(
+    resolveEntitlements(plan, customSelectedModules)
+  );
 }
 
 export function branchCapacityAllows(

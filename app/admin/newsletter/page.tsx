@@ -44,6 +44,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { useTranslation } from 'react-i18next';
 import { plainTextFromHtml } from '@/lib/blog/blog';
 import { cn } from '@/lib/utils';
 
@@ -94,6 +95,7 @@ function resetComposeFields() {
 }
 
 export default function AdminNewsletterPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<NewsletterPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,11 +122,11 @@ export default function AdminNewsletterPage() {
       );
       setData(r.data.data);
     } catch {
-      setError('Could not load newsletter data.');
+      setError(t('admin.newsletterPage.loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -158,25 +160,25 @@ export default function AdminNewsletterPage() {
   const requestSave = () => {
     const plain = plainTextFromHtml(bodyHtml);
     if (!subject.trim()) {
-      toast.error('Enter a subject.');
+      toast.error(t('admin.newsletterPage.validateSubjectRequired'));
       return;
     }
     if (plain.length < 10) {
-      toast.error('Enter a message with at least a short paragraph.');
+      toast.error(t('admin.newsletterPage.validateMessageTooShort'));
       return;
     }
     const titleTrim = buttonTitle.trim();
     const linkTrim = buttonLink.trim();
     if (titleTrim && !linkTrim) {
-      toast.error('Enter a button link or clear the button title.');
+      toast.error(t('admin.newsletterPage.validateButtonLinkRequired'));
       return;
     }
     if (linkTrim && !titleTrim) {
-      toast.error('Enter a button title or clear the button link.');
+      toast.error(t('admin.newsletterPage.validateButtonTitleRequired'));
       return;
     }
     if (linkTrim && !/^https?:\/\//i.test(linkTrim)) {
-      toast.error('Button link must start with http:// or https://');
+      toast.error(t('admin.newsletterPage.validateButtonLinkFormat'));
       return;
     }
     setShowSaveConfirmation(true);
@@ -199,10 +201,13 @@ export default function AdminNewsletterPage() {
       const created = r.data.data;
 
       if (created.recipientCount === 0) {
-        toast.success('Message saved. New subscribers will receive it by email.');
+        toast.success(t('admin.newsletterPage.savedNoRecipientsToast'));
       } else {
         toast.success(
-          `Saved and sent to ${created.successCount} of ${created.recipientCount} subscribers.`
+          t('admin.newsletterPage.savedAndSentToast', {
+            success: created.successCount,
+            total: created.recipientCount,
+          })
         );
       }
       if (created.errors?.length) {
@@ -228,7 +233,7 @@ export default function AdminNewsletterPage() {
       const msg =
         axios.isAxiosError(e) && typeof e.response?.data?.error === 'string'
           ? e.response.data.error
-          : 'Failed to save and send newsletter.';
+          : t('admin.newsletterPage.sendFailed');
       toast.error(msg);
     } finally {
       setSending(false);
@@ -236,15 +241,15 @@ export default function AdminNewsletterPage() {
   };
 
   const onUnsubscribe = async (id: string) => {
-    const confirmed = window.confirm('Remove this subscriber from the list?');
+    const confirmed = window.confirm(t('admin.newsletterPage.removeSubscriberConfirm'));
     if (!confirmed) return;
     setRemovingId(id);
     try {
       await axios.delete(`/api/admin/newsletter/${id}`);
-      toast.success('Subscriber removed.');
+      toast.success(t('admin.newsletterPage.subscriberRemovedToast'));
       await load();
     } catch {
-      toast.error('Could not remove subscriber.');
+      toast.error(t('admin.newsletterPage.removeSubscriberError'));
     } finally {
       setRemovingId(null);
     }
@@ -260,7 +265,7 @@ export default function AdminNewsletterPage() {
       );
       setPreview(res.data.data);
     } catch {
-      toast.error('Could not load message preview.');
+      toast.error(t('admin.newsletterPage.previewLoadError'));
     } finally {
       setPreviewLoading(false);
       setCampaignBusyId(null);
@@ -279,10 +284,10 @@ export default function AdminNewsletterPage() {
       setButtonTitle(c.buttonTitle ?? '');
       setButtonLink(c.buttonLink ?? '');
       setComposeFormKey((k) => k + 1);
-      toast.success('Message loaded into the compose form.');
+      toast.success(t('admin.newsletterPage.loadedIntoComposeToast'));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch {
-      toast.error('Could not load message.');
+      toast.error(t('admin.newsletterPage.loadMessageError'));
     } finally {
       setCampaignBusyId(null);
     }
@@ -295,11 +300,11 @@ export default function AdminNewsletterPage() {
       await axios.delete(
         `/api/admin/newsletter/campaigns/${deleteCampaignId}`
       );
-      toast.success('Message deleted.');
+      toast.success(t('admin.newsletterPage.messageDeletedToast'));
       setDeleteCampaignId(null);
       await load();
     } catch {
-      toast.error('Could not delete message.');
+      toast.error(t('admin.newsletterPage.deleteMessageError'));
     } finally {
       setDeletingCampaign(false);
     }
@@ -307,13 +312,13 @@ export default function AdminNewsletterPage() {
 
   const statusBadge = (status: string) => {
     if (status === 'SENT') {
-      return <Badge variant="default">Sent</Badge>;
+      return <Badge variant="default">{t('admin.newsletterPage.statusSent')}</Badge>;
     }
     if (status === 'SAVED') {
-      return <Badge variant="secondary">Saved</Badge>;
+      return <Badge variant="secondary">{t('admin.newsletterPage.statusSaved')}</Badge>;
     }
     if (status === 'FAILED') {
-      return <Badge variant="destructive">Failed</Badge>;
+      return <Badge variant="destructive">{t('admin.newsletterPage.statusFailed')}</Badge>;
     }
     return <Badge variant="outline">{status}</Badge>;
   };
@@ -321,16 +326,16 @@ export default function AdminNewsletterPage() {
   return (
     <div className="space-y-8">
       <AdminPageHeader
-        eyebrow="Management"
-        title="Newsletter"
-        description="Save a message to the database, email all subscribers, and auto-send the latest message when someone new subscribes."
+        eyebrow={t('admin.newsletterPage.eyebrow')}
+        title={t('admin.newsletterPage.title')}
+        description={t('admin.newsletterPage.description')}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className={adminCardClass}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active subscribers
+              {t('admin.newsletterPage.activeSubscribers')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -342,7 +347,7 @@ export default function AdminNewsletterPage() {
         <Card className={adminCardClass}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Unsubscribed
+              {t('admin.newsletterPage.unsubscribed')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -354,7 +359,7 @@ export default function AdminNewsletterPage() {
         <Card className={adminCardClass}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Messages saved
+              {t('admin.newsletterPage.messagesSaved')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -369,17 +374,17 @@ export default function AdminNewsletterPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Send className="h-4 w-4" />
-            Compose, save &amp; send
+            {t('admin.newsletterPage.composeTitle')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="newsletter-subject">Subject</Label>
+            <Label htmlFor="newsletter-subject">{t('admin.newsletterPage.subjectLabel')}</Label>
             <Input
               id="newsletter-subject"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="What's new at Foodluk"
+              placeholder={t('admin.newsletterPage.subjectPlaceholder')}
               maxLength={200}
               disabled={sending}
             />
@@ -387,26 +392,26 @@ export default function AdminNewsletterPage() {
           <RichTextEditor
             key={`newsletter-body-${composeFormKey}`}
             id="newsletter-body"
-            label="Message"
+            label={t('admin.newsletterPage.messageLabel')}
             value={bodyHtml}
             onChange={setBodyHtml}
-            helperText="Rich text is sent as HTML in the email. Formatting (bold, lists, links) appears as you compose it."
+            helperText={t('admin.newsletterPage.messageHelper')}
           />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="newsletter-button-title">Button title</Label>
+              <Label htmlFor="newsletter-button-title">{t('admin.newsletterPage.buttonTitleLabel')}</Label>
               <Input
                 id="newsletter-button-title"
                 value={buttonTitle}
                 onChange={(e) => setButtonTitle(e.target.value)}
-                placeholder="Read more"
+                placeholder={t('admin.newsletterPage.buttonTitlePlaceholder')}
                 maxLength={120}
                 disabled={sending}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="newsletter-button-link">Button link</Label>
+              <Label htmlFor="newsletter-button-link">{t('admin.newsletterPage.buttonLinkLabel')}</Label>
               <Input
                 id="newsletter-button-link"
                 value={buttonLink}
@@ -418,10 +423,7 @@ export default function AdminNewsletterPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Optional call-to-action button shown below the message in the email.
-            Saving stores this as the latest newsletter, emails every active
-            subscriber, and sends this message automatically to anyone who
-            subscribes later.
+            {t('admin.newsletterPage.buttonHelper')}
           </p>
           <Button
             type="button"
@@ -431,14 +433,14 @@ export default function AdminNewsletterPage() {
             {sending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving &amp; sending…
+                {t('admin.newsletterPage.savingAndSending')}
               </>
             ) : (
               <>
                 <Mail className="mr-2 h-4 w-4" />
                 {(data?.activeCount ?? 0) === 0
-                  ? 'Save message'
-                  : `Save & send to ${data?.activeCount ?? 0} subscribers`}
+                  ? t('admin.newsletterPage.saveMessage')
+                  : t('admin.newsletterPage.saveAndSendTo', { count: data?.activeCount ?? 0 })}
               </>
             )}
           </Button>
@@ -449,18 +451,20 @@ export default function AdminNewsletterPage() {
         open={showSaveConfirmation}
         title={
           (data?.activeCount ?? 0) === 0
-            ? 'Save newsletter message'
-            : 'Save & send newsletter'
+            ? t('admin.newsletterPage.saveDialogTitleNoRecipients')
+            : t('admin.newsletterPage.saveDialogTitleWithRecipients')
         }
         description={
           (data?.activeCount ?? 0) === 0
-            ? 'No active subscribers yet. This message will be stored and emailed automatically when someone new subscribes.'
-            : `This message will be saved and emailed to ${data?.activeCount ?? 0} active subscriber(s). Continue?`
+            ? t('admin.newsletterPage.saveDialogDescNoRecipients')
+            : t('admin.newsletterPage.saveDialogDescWithRecipients', { count: data?.activeCount ?? 0 })
         }
         itemName={subject.trim() || undefined}
         loading={sending}
         confirmText={
-          (data?.activeCount ?? 0) === 0 ? 'Save message' : 'Save & send'
+          (data?.activeCount ?? 0) === 0
+            ? t('admin.newsletterPage.saveMessage')
+            : t('admin.newsletterPage.saveAndSend')
         }
         onConfirm={() => void onSend()}
         onCancel={() => {
@@ -470,7 +474,7 @@ export default function AdminNewsletterPage() {
 
       <Card className={cn(adminCardClass, 'min-w-0 max-w-full')}>
         <CardHeader>
-          <CardTitle>Subscribers</CardTitle>
+          <CardTitle>{t('admin.newsletterPage.subscribersTitle')}</CardTitle>
         </CardHeader>
         <CardContent className="min-w-0 p-0">
           <AdminTableWrapper>
@@ -480,17 +484,16 @@ export default function AdminNewsletterPage() {
               <p className="px-4 text-sm text-destructive">{error}</p>
             ) : activeSubscribers.length === 0 ? (
               <AdminTableEmpty>
-                No active subscribers yet. They will appear when people sign up
-                from the site footer.
+                {t('admin.newsletterPage.emptySubscribers')}
               </AdminTableEmpty>
             ) : (
               <AdminTable minWidth={720}>
                 <AdminTableHeader>
                   <AdminTableRow>
-                    <AdminTableHead>Subscriber</AdminTableHead>
-                    <AdminTableHead>Source</AdminTableHead>
-                    <AdminTableHead>Joined</AdminTableHead>
-                    <AdminTableHead className="text-right">Actions</AdminTableHead>
+                    <AdminTableHead>{t('admin.newsletterPage.colSubscriber')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.newsletterPage.colSource')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.dashboard.colJoined')}</AdminTableHead>
+                    <AdminTableHead className="text-right">{t('admin.requests.colActions')}</AdminTableHead>
                   </AdminTableRow>
                 </AdminTableHeader>
                 <AdminTableBody>
@@ -517,7 +520,7 @@ export default function AdminNewsletterPage() {
                           size="icon"
                           variant="ghost"
                           className="rounded-lg text-destructive hover:bg-destructive/10"
-                          title="Unsubscribe"
+                          title={t('admin.newsletterPage.unsubscribe')}
                           disabled={removingId === s.id}
                           onClick={() => void onUnsubscribe(s.id)}
                         >
@@ -526,7 +529,7 @@ export default function AdminNewsletterPage() {
                           ) : (
                             <Trash2 className="h-4 w-4" />
                           )}
-                          <span className="sr-only">Unsubscribe</span>
+                          <span className="sr-only">{t('admin.newsletterPage.unsubscribe')}</span>
                         </Button>
                       </AdminTableCell>
                     </AdminTableRow>
@@ -540,7 +543,7 @@ export default function AdminNewsletterPage() {
 
       <Card className={cn(adminCardClass, 'min-w-0 max-w-full')}>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
-          <CardTitle>Saved &amp; sent messages</CardTitle>
+          <CardTitle>{t('admin.newsletterPage.savedSentMessages')}</CardTitle>
           <Button
             type="button"
             variant="ghost"
@@ -559,17 +562,17 @@ export default function AdminNewsletterPage() {
             {loading ? (
               <Loader2 className="mx-auto animate-spin text-center text-primary" />
             ) : !data?.campaigns.length ? (
-              <AdminTableEmpty>No messages saved yet.</AdminTableEmpty>
+              <AdminTableEmpty>{t('admin.newsletterPage.emptyMessages')}</AdminTableEmpty>
             ) : (
               <AdminTable minWidth={860}>
                 <AdminTableHeader>
                   <AdminTableRow>
-                    <AdminTableHead>Subject</AdminTableHead>
-                    <AdminTableHead>Status</AdminTableHead>
-                    <AdminTableHead>Delivered</AdminTableHead>
-                    <AdminTableHead>Sent</AdminTableHead>
-                    <AdminTableHead>By</AdminTableHead>
-                    <AdminTableHead className="text-right">Actions</AdminTableHead>
+                    <AdminTableHead>{t('admin.newsletterPage.colSubject')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.dashboard.colStatus')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.newsletterPage.colDelivered')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.newsletterPage.colSent')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.newsletterPage.colBy')}</AdminTableHead>
+                    <AdminTableHead className="text-right">{t('admin.requests.colActions')}</AdminTableHead>
                   </AdminTableRow>
                 </AdminTableHeader>
                 <AdminTableBody>
@@ -579,7 +582,7 @@ export default function AdminNewsletterPage() {
                         <span className="font-medium">{c.subject}</span>
                         {c.buttonTitle ? (
                           <p className="mt-0.5 text-xs text-muted-foreground">
-                            Button: {c.buttonTitle}
+                            {t('admin.newsletterPage.buttonColonLabel')} {c.buttonTitle}
                           </p>
                         ) : null}
                       </AdminTableCell>
@@ -588,7 +591,7 @@ export default function AdminNewsletterPage() {
                         <AdminTableMuted>
                           {c.successCount}/{c.recipientCount}
                           {c.failureCount > 0
-                            ? ` (${c.failureCount} failed)`
+                            ? ` (${t('admin.newsletterPage.failedCount', { count: c.failureCount })})`
                             : ''}
                         </AdminTableMuted>
                       </AdminTableCell>
@@ -606,7 +609,7 @@ export default function AdminNewsletterPage() {
                             type="button"
                             size="icon"
                             variant="ghost"
-                            title="Preview"
+                            title={t('admin.newsletterPage.previewTitle')}
                             disabled={campaignBusyId === c.id}
                             onClick={() => void openPreview(c.id)}
                           >
@@ -620,7 +623,7 @@ export default function AdminNewsletterPage() {
                             type="button"
                             size="icon"
                             variant="ghost"
-                            title="Load into compose form"
+                            title={t('admin.newsletterPage.loadIntoComposeTitle')}
                             disabled={campaignBusyId === c.id}
                             onClick={() => void loadIntoCompose(c.id)}
                           >
@@ -631,7 +634,7 @@ export default function AdminNewsletterPage() {
                             size="icon"
                             variant="ghost"
                             className="text-destructive hover:bg-destructive/10"
-                            title="Delete"
+                            title={t('admin.docsPage.deleteAction')}
                             disabled={campaignBusyId === c.id}
                             onClick={() => setDeleteCampaignId(c.id)}
                           >
@@ -659,7 +662,7 @@ export default function AdminNewsletterPage() {
       >
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{preview?.subject ?? 'Message preview'}</DialogTitle>
+            <DialogTitle>{preview?.subject ?? t('admin.newsletterPage.messagePreviewTitle')}</DialogTitle>
           </DialogHeader>
           {previewLoading && !preview ? (
             <div className="flex justify-center py-12">
@@ -673,7 +676,7 @@ export default function AdminNewsletterPage() {
                   {format(new Date(preview.sentAt), 'MMM d, yyyy · h:mm a')}
                 </span>
                 <span>
-                  Delivered {preview.successCount}/{preview.recipientCount}
+                  {t('admin.newsletterPage.delivered')} {preview.successCount}/{preview.recipientCount}
                 </span>
               </div>
               <div
@@ -697,10 +700,10 @@ export default function AdminNewsletterPage() {
 
       <DeleteConfirmation
         open={deleteCampaignId != null}
-        title="Delete saved message"
-        description="This removes the message from history. It does not undo emails already sent."
+        title={t('admin.newsletterPage.deleteDialogTitle')}
+        description={t('admin.newsletterPage.deleteDialogDescription')}
         loading={deletingCampaign}
-        confirmText="Delete"
+        confirmText={t('admin.docsPage.deleteAction')}
         onConfirm={() => void confirmDeleteCampaign()}
         onCancel={() => {
           if (!deletingCampaign) setDeleteCampaignId(null);

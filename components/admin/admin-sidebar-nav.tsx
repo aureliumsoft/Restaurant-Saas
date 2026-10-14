@@ -2,19 +2,21 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 
 import { ADMIN_NAV_GROUPS } from '@/constant/adminNav';
 import { cn } from '@/lib/utils';
 
 export function AdminSidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { t } = useTranslation();
 
   return (
     <nav className="space-y-6 px-1.5">
       {ADMIN_NAV_GROUPS.map((group) => (
         <div key={group.label} className="space-y-1.5">
           <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
-            {group.label}
+            {t(group.label)}
           </p>
           <div className="grid gap-0.5">
             {group.items.map((item) => {
@@ -52,7 +54,7 @@ export function AdminSidebarNav({ onNavigate }: { onNavigate?: () => void }) {
                     {item.icon}
                   </span>
                   <span className="min-w-0 flex-1 truncate tracking-tight">
-                    {item.title}
+                    {t(item.title)}
                   </span>
                 </Link>
               );
