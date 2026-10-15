@@ -53,6 +53,18 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
+    {
+      const { assertModuleNotPaid } = await import(
+        '@/lib/subscription-plan-enforcement'
+      );
+      const denied = await assertModuleNotPaid(
+        auth.restaurant.id,
+        'onlinePayments',
+        'Table / dine-in payments'
+      );
+      if (denied) return denied;
+    }
+
     const json = await req.json().catch(() => null);
     const parsed = patchSchema.safeParse(json);
     if (!parsed.success) {

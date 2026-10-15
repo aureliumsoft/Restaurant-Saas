@@ -168,9 +168,11 @@ export function ProductsTab({
   const uiLang = useUiLanguage();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { canEdit, canDelete } = useDashboardPermissions();
-  const { canCreateMore } = useEntitlements();
+  const { canCreateMore, limitFlag } = useEntitlements();
   const canEditProducts = canEdit('product');
   const canDeleteProducts = canDelete('product');
+  const allowCsvImport = limitFlag('products', 'csvImport', true);
+  const allowCsvExport = limitFlag('products', 'csvExport', true);
 
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
@@ -483,30 +485,41 @@ export function ProductsTab({
       <DashboardCardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <DashboardCardTitle>{t('dashboard.product.title')}</DashboardCardTitle>
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setShowImportWizard(true)}
-            disabled={exporting}
+          <PremiumDisabledControl
+            locked={!allowCsvImport}
+            label={t('dashboard.product.importCsv')}
           >
-            <Download className="mr-2 h-4 w-4" />
-            {t('dashboard.product.importCsv')}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setShowExportConfirmation(true)}
-            disabled={exporting || noCategories}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowImportWizard(true)}
+              disabled={exporting}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {t('dashboard.product.importCsv')}
+            </Button>
+          </PremiumDisabledControl>
+          <PremiumDisabledControl
+            locked={!allowCsvExport}
+            label={t('dashboard.product.exportCsv')}
           >
-            {exporting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="mr-2 h-4 w-4" />
-            )}
-            {t('dashboard.product.exportCsv')}
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowExportConfirmation(true)}
+              disabled={exporting || noCategories}
+            >
+              {exporting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" />
+              )}
+              {t('dashboard.product.exportCsv')}
+            </Button>
+          </PremiumDisabledControl>
           <InventoryQuickActions
             onMenuRefresh={refreshAll}
+            categoryCount={categories.length}
             className="flex flex-wrap gap-2"
           />
         </div>
@@ -521,6 +534,7 @@ export function ProductsTab({
               variant="toolbar"
               showVariation={false}
               onMenuRefresh={refreshAll}
+              categoryCount={categories.length}
             />
           </div>
         ) : showEmptyInventory ? (

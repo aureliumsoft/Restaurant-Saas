@@ -62,7 +62,9 @@ export type PlanCaps = {
   variations: number | null;
   products: number | null;
   branches: number | null;
+  /** Per-branch seats (restaurant max ≈ users × branchCount). */
   users: number | null;
+  /** Per-branch custom roles (Owner/Admin excluded from count). */
   roles: number | null;
   /** 0 = logo only; positive = max menu banners; null = unlimited */
   menuBanners: number | null;

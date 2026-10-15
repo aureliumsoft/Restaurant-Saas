@@ -81,6 +81,7 @@ const CHANNEL_META: {
       icon: Monitor,
       iconColor: 'text-purple-600 dark:text-purple-400',
       iconBg: 'bg-purple-500/10 border-purple-500/20',
+      limitFlagKey: 'kioskUrl',
     },
     {
       key: 'kdsEnabled',

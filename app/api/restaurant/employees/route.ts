@@ -218,22 +218,72 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const [employeeCount, pendingInviteCount] = await Promise.all([
-    db.employee.count({ where: { restaurantId: auth.restaurantId } }),
-    db.employeeInvite.count({
-      where: { restaurantId: auth.restaurantId, status: 'PENDING' },
-    }),
-  ]);
-  const { assertCreateCap } = await import(
+  const { getRestaurantEntitlements, canCreate } = await import(
+    '@/lib/entitlements'
+  );
+  const { subscriptionLimitDeniedResponse } = await import(
     '@/lib/subscription-plan-enforcement'
   );
-  const limitDenied = await assertCreateCap(
-    auth.restaurantId,
-    'users',
-    employeeCount + pendingInviteCount,
-    'Users'
-  );
-  if (limitDenied) return limitDenied;
+  const entitlements = await getRestaurantEntitlements(auth.restaurantId);
+  const perBranchUserCap = entitlements.caps.users;
+  const targetBranchIds = parsed.data.branchIds ?? [];
+
+  if (perBranchUserCap != null) {
+    if (targetBranchIds.length > 0) {
+      for (const branchId of targetBranchIds) {
+        const [onBranch, invitesForBranch] = await Promise.all([
+          db.employeeBranch.count({
+            where: {
+              branchId,
+              employee: {
+                restaurantId: auth.restaurantId,
+                role: {
+                  slug: { not: RESTAURANT_ROLE_SLUG.OWNER },
+                },
+              },
+            },
+          }),
+          db.employeeInvite.count({
+            where: {
+              restaurantId: auth.restaurantId,
+              status: 'PENDING',
+              branchIds: { has: branchId },
+            },
+          }),
+        ]);
+        if (!canCreate(perBranchUserCap, onBranch + invitesForBranch)) {
+          return subscriptionLimitDeniedResponse('Users');
+        }
+      }
+    } else {
+      // Owner/Admin without branches: restaurant-wide pool = per-branch × branches
+      const branchCount = await db.branch.count({
+        where: { restaurantId: auth.restaurantId },
+      });
+      const [employeeCount, pendingInviteCount] = await Promise.all([
+        db.employee.count({
+          where: {
+            restaurantId: auth.restaurantId,
+            role: { slug: { not: RESTAURANT_ROLE_SLUG.OWNER } },
+          },
+        }),
+        db.employeeInvite.count({
+          where: { restaurantId: auth.restaurantId, status: 'PENDING' },
+        }),
+      ]);
+      const { canCreatePerBranchCap } = await import('@/lib/entitlements');
+      if (
+        !canCreatePerBranchCap(
+          entitlements,
+          'users',
+          employeeCount + pendingInviteCount,
+          Math.max(1, branchCount)
+        )
+      ) {
+        return subscriptionLimitDeniedResponse('Users');
+      }
+    }
+  }
 
   const restaurant = await db.restaurant.findUnique({
     where: { id: auth.restaurantId },

@@ -7,7 +7,7 @@ import {
   useStaffBootstrapSWR,
 } from '@/hooks/use-staff-bootstrap-swr';
 import type { ModuleKey, PlanCaps } from '@/lib/entitlements';
-import { canCreate } from '@/lib/entitlements';
+import { canCreate, effectivePerBranchCap } from '@/lib/entitlements';
 
 export type ClientModuleEntitlement = {
   access: 'full' | 'limited' | 'paid';
@@ -78,6 +78,19 @@ export function useEntitlements() {
       return canCreate(cap as number | null, currentCount);
     }
 
+    /** users/roles: currentCount vs per-branch cap × branchCount. */
+    function canCreateMorePerBranch(
+      capKey: 'users' | 'roles',
+      currentCount: number,
+      branchCount: number
+    ): boolean {
+      if (!caps) return true;
+      return canCreate(
+        effectivePerBranchCap(caps[capKey], branchCount),
+        currentCount
+      );
+    }
+
     return {
       loading: isLoading && !bootstrap,
       error,
@@ -90,6 +103,7 @@ export function useEntitlements() {
       canUse,
       limitFlag,
       canCreateMore,
+      canCreateMorePerBranch,
       moduleAccess,
     };
   }, [bootstrap, caps, error, isLoading, modules, plan]);

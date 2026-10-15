@@ -52,8 +52,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { PremiumCrown } from '@/components/premium/premium-crown';
+import { PremiumGate } from '@/components/premium/premium-gate';
 import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
 import { useDashboardPermissions } from '@/hooks/use-dashboard-permissions';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { extractApiErrorMessage } from '@/lib/extract-api-error';
 import { formatIngredientUnit } from '@/lib/inventory/stock';
@@ -129,6 +132,8 @@ export default function ExpensesPage() {
   const uiLang = useUiLanguage();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { canEdit, canDelete } = useDashboardPermissions();
+  const { limitFlag } = useEntitlements();
+  const manualOnly = limitFlag('expenses', 'manualOnly', false);
   const canEditExp = canEdit('expenses');
   const canDeleteExp = canDelete('expenses');
   const {
@@ -152,6 +157,13 @@ export default function ExpensesPage() {
   const [typeFilter, setTypeFilter] = useState<ExpenseTypeFilter>('all');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+
+  useEffect(() => {
+    if (manualOnly && typeFilter === 'INVENTORY') {
+      setTypeFilter('all');
+      setPage(1);
+    }
+  }, [manualOnly, typeFilter]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -337,12 +349,14 @@ export default function ExpensesPage() {
               value={formatMoney(kpis.totalAmount)}
               hint={filterHint}
             />
-            <ExpenseInsightChip
-              icon={Boxes}
-              label={t('dashboard.expenses.inventory')}
-              value={formatMoney(kpis.inventoryAmount)}
-              hint={t('dashboard.expenses.restockHint')}
-            />
+            <PremiumGate locked={manualOnly}>
+              <ExpenseInsightChip
+                icon={Boxes}
+                label={t('dashboard.expenses.inventory')}
+                value={formatMoney(kpis.inventoryAmount)}
+                hint={t('dashboard.expenses.restockHint')}
+              />
+            </PremiumGate>
             <ExpenseInsightChip
               icon={Receipt}
               label={t('dashboard.expenses.manual')}
@@ -415,9 +429,18 @@ export default function ExpensesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t('dashboard.expenses.allTypes')}</SelectItem>
-                <SelectItem value="INVENTORY">
-                  {t('dashboard.expenses.inventory')}
-                </SelectItem>
+                {manualOnly ? (
+                  <SelectItem value="INVENTORY" disabled>
+                    <span className="inline-flex items-center gap-1.5 opacity-70">
+                      {t('dashboard.expenses.inventory')}
+                      <PremiumCrown size="sm" />
+                    </span>
+                  </SelectItem>
+                ) : (
+                  <SelectItem value="INVENTORY">
+                    {t('dashboard.expenses.inventory')}
+                  </SelectItem>
+                )}
                 <SelectItem value="MANUAL">
                   {t('dashboard.expenses.manual')}
                 </SelectItem>

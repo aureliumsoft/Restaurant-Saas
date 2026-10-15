@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import {
   canCreateCap,
+  canCreatePerBranchCap,
   getRestaurantEntitlements,
   isPaidModule,
   type CapKey,
@@ -58,6 +59,21 @@ export async function assertCreateCap(
 ) {
   const e = await getRestaurantEntitlements(restaurantId);
   if (!canCreateCap(e, capKey, currentCount)) {
+    return subscriptionLimitDeniedResponse(featureLabel);
+  }
+  return null;
+}
+
+/** Hard 403 when users/roles create would exceed per-branch × branchCount. */
+export async function assertPerBranchCreateCap(
+  restaurantId: string,
+  capKey: 'users' | 'roles',
+  currentCount: number,
+  branchCount: number,
+  featureLabel: string
+) {
+  const e = await getRestaurantEntitlements(restaurantId);
+  if (!canCreatePerBranchCap(e, capKey, currentCount, branchCount)) {
     return subscriptionLimitDeniedResponse(featureLabel);
   }
   return null;

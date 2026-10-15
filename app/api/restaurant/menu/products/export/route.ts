@@ -161,6 +161,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
+  {
+    const { getRestaurantEntitlements, moduleLimitFlag } = await import(
+      '@/lib/entitlements'
+    );
+    const { subscriptionPlanDeniedResponse } = await import(
+      '@/lib/subscription-plan-enforcement'
+    );
+    const entitlements = await getRestaurantEntitlements(auth.restaurant.id);
+    if (!moduleLimitFlag(entitlements, 'products', 'csvExport', true)) {
+      return subscriptionPlanDeniedResponse('Product CSV export');
+    }
+  }
+
   const search = req.nextUrl.searchParams.get('search')?.trim() || '';
   const categoryIds = parseCategoryIds(req.nextUrl.searchParams);
 

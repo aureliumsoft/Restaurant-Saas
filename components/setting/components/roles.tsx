@@ -15,6 +15,7 @@ import {
 import { roleApiPath } from '@/lib/dashboard-paths';
 import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
 import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
+import { useBranchContext } from '@/hooks/use-branch-context';
 import { useEntitlements } from '@/hooks/use-entitlements';
 import {
   Collapsible,
@@ -71,7 +72,8 @@ export default function RolesCard({
   roleBasedSettingsAllowed = true,
 }: RolesCardProps) {
   const { t } = useTranslation();
-  const { canCreateMore } = useEntitlements();
+  const { branches } = useBranchContext();
+  const { canCreateMorePerBranch } = useEntitlements();
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState<Record<string, RoleRow>>({});
@@ -242,6 +244,12 @@ export default function RolesCard({
       r.slug !== RESTAURANT_ROLE_SLUG.OWNER &&
       r.slug !== RESTAURANT_ROLE_SLUG.ADMIN
   );
+  const branchCount = Math.max(1, branches.length);
+  const rolesAtCap = !canCreateMorePerBranch(
+    'roles',
+    editableRoles.length,
+    branchCount
+  );
 
   return (
     <>
@@ -275,7 +283,7 @@ export default function RolesCard({
                   />
                 </div>
                 <PremiumDisabledControl
-                  locked={!canCreateMore('roles', editableRoles.length)}
+                  locked={rolesAtCap}
                   label={t('settings.cards.roles.createRole')}
                   className="sm:mb-0"
                 >

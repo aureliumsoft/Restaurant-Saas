@@ -24,6 +24,8 @@ export {
   moduleLimitFlag,
   canCreate,
   canCreateCap,
+  effectivePerBranchCap,
+  canCreatePerBranchCap,
   entitlementModuleForNav,
   isNavModulePremium,
   entitlementsToClientPayload,

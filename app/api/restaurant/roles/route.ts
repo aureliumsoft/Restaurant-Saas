@@ -69,16 +69,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const existingRoleCount = await db.role.count({
-    where: { restaurantId: auth.restaurantId },
-  });
-  const { assertCreateCap } = await import(
+  const { RESTAURANT_ROLE_SLUG } = await import('@/lib/restaurant-roles');
+  const [customRoleCount, branchCount] = await Promise.all([
+    db.role.count({
+      where: {
+        restaurantId: auth.restaurantId,
+        OR: [
+          { slug: null },
+          {
+            slug: {
+              notIn: [RESTAURANT_ROLE_SLUG.OWNER, RESTAURANT_ROLE_SLUG.ADMIN],
+            },
+          },
+        ],
+      },
+    }),
+    db.branch.count({ where: { restaurantId: auth.restaurantId } }),
+  ]);
+  const { assertPerBranchCreateCap } = await import(
     '@/lib/subscription-plan-enforcement'
   );
-  const limitDenied = await assertCreateCap(
+  const limitDenied = await assertPerBranchCreateCap(
     auth.restaurantId,
     'roles',
-    existingRoleCount,
+    customRoleCount,
+    Math.max(1, branchCount),
     'Roles'
   );
   if (limitDenied) return limitDenied;

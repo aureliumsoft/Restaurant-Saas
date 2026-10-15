@@ -32,6 +32,7 @@ import {
 } from '@/components/dashboard/dashboard-table';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { PremiumGate } from '@/components/premium/premium-gate';
 import { useEntitlements } from '@/hooks/use-entitlements';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { formatCurrency } from '@/lib/format-money';
@@ -380,14 +381,16 @@ export function Records() {
               accentColor="#ed6e40"
               icon={ShoppingBag}
             />
-            <OrdersKpiCard
-              label={t('dashboard.records.kpiInventory')}
-              subtitle={t('dashboard.records.inCurrentPage')}
-              value={stats.inventoryCount.toLocaleString()}
-              sparklineData={kpiSparklineFromValue(stats.inventoryCount)}
-              accentColor="#0ea5e9"
-              icon={Boxes}
-            />
+            <PremiumGate locked={ordersOnly}>
+              <OrdersKpiCard
+                label={t('dashboard.records.kpiInventory')}
+                subtitle={t('dashboard.records.inCurrentPage')}
+                value={stats.inventoryCount.toLocaleString()}
+                sparklineData={kpiSparklineFromValue(stats.inventoryCount)}
+                accentColor="#0ea5e9"
+                icon={Boxes}
+              />
+            </PremiumGate>
           </div>
 
           {loading ? (

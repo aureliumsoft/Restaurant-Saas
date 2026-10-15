@@ -75,9 +75,23 @@ export async function GET(req: NextRequest) {
       };
     }
 
+    const { getRestaurantEntitlements, moduleLimitFlag } = await import(
+      '@/lib/entitlements'
+    );
+    const entitlements = await getRestaurantEntitlements(restaurantId);
+    const ordersOnly = moduleLimitFlag(
+      entitlements,
+      'transactions',
+      'ordersOnly',
+      false
+    );
+
     const kindRaw = req.nextUrl.searchParams.get('kind');
-    const kind =
+    let kind =
       kindRaw === 'ORDER' || kindRaw === 'INVENTORY' ? kindRaw : 'ALL';
+    if (ordersOnly) {
+      kind = kind === 'INVENTORY' ? 'ORDER' : kind === 'ALL' ? 'ORDER' : kind;
+    }
 
     const result = await queryTransactionLedger({
       restaurantId,

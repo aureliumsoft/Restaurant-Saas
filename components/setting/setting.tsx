@@ -114,7 +114,9 @@ export function Setting() {
               {activeSection === 'payments' ? (
                 <>
                   {fulfillmentSettings.dineInEnabled ? (
-                    <RestaurantDineInPaymentCard />
+                    <PremiumGate locked={onlinePaymentsPaid}>
+                      <RestaurantDineInPaymentCard />
+                    </PremiumGate>
                   ) : null}
                   <RestaurantRegionalSettingsCard />
                   <RestaurantServiceChargesCard />

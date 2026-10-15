@@ -168,6 +168,28 @@ export function canCreateCap(
   return canCreate(e.caps[key] as number | null, currentCount);
 }
 
+/** users/roles caps are per-branch; restaurant max = perBranch × branchCount. */
+export function effectivePerBranchCap(
+  perBranchCap: number | null | undefined,
+  branchCount: number
+): number | null {
+  if (perBranchCap == null) return null;
+  if (perBranchCap <= 0) return 0;
+  return perBranchCap * Math.max(1, branchCount);
+}
+
+export function canCreatePerBranchCap(
+  e: Entitlements,
+  key: 'users' | 'roles',
+  currentCount: number,
+  branchCount: number
+): boolean {
+  return canCreate(
+    effectivePerBranchCap(e.caps[key], branchCount),
+    currentCount
+  );
+}
+
 export function entitlementModuleForNav(
   dashboardModuleKey: string
 ): ModuleKey | null {

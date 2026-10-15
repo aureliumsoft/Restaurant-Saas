@@ -44,6 +44,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
+  {
+    const { getRestaurantEntitlements, moduleLimitFlag } = await import(
+      '@/lib/entitlements'
+    );
+    const entitlements = await getRestaurantEntitlements(auth.restaurant.id);
+    if (!moduleLimitFlag(entitlements, 'products', 'csvImport', true)) {
+      return subscriptionPlanDeniedResponse('Product CSV import');
+    }
+  }
+
   const form = await req.formData().catch(() => null);
   if (!form) {
     return NextResponse.json({ error: 'Invalid form data' }, { status: 400 });
@@ -96,6 +106,41 @@ export async function POST(req: NextRequest) {
       return subscriptionPlanDeniedResponse(
         'Product recommendations and personalize import'
       );
+    }
+  }
+
+  {
+    const { getRestaurantEntitlements, canCreateCap } = await import(
+      '@/lib/entitlements'
+    );
+    const { assertCreateCap } = await import(
+      '@/lib/subscription-plan-enforcement'
+    );
+    const entitlements = await getRestaurantEntitlements(auth.restaurant.id);
+    const existingCount = await db.menuItem.count({
+      where: { restaurantId: auth.restaurant.id },
+    });
+    // Conservative: treat every CSV row as a potential create against the cap.
+    if (!canCreateCap(entitlements, 'products', existingCount)) {
+      const denied = await assertCreateCap(
+        auth.restaurant.id,
+        'products',
+        existingCount,
+        'Products'
+      );
+      if (denied) return denied;
+    }
+    const cap = entitlements.caps.products;
+    if (cap != null) {
+      const room = Math.max(0, cap - existingCount);
+      if (parsed.products.length > room && !skipDuplicates) {
+        return NextResponse.json(
+          {
+            error: `Import would exceed product limit (${cap}). You can add ${room} more.`,
+          },
+          { status: 403 }
+        );
+      }
     }
   }
 

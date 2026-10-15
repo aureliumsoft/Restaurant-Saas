@@ -77,6 +77,7 @@ import {
   parseDineInPaymentTiming,
   type DineInPaymentTiming,
 } from '@/lib/restaurant-dine-in-payment';
+import { PremiumCrown } from '@/components/premium/premium-crown';
 import { useEntitlements } from '@/hooks/use-entitlements';
 import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import {
@@ -816,10 +817,11 @@ export function PosScreen({
   >();
 
   const { settings: bootstrapFulfillment } = useRestaurantFulfillmentSettings();
-  const { limitFlag } = useEntitlements();
+  const { limitFlag, isPaid } = useEntitlements();
   const allowDeliveryChrome = limitFlag('pos', 'delivery', true);
   const allowKioskChrome = limitFlag('pos', 'kioskButton', true);
   const allowKdsChrome = limitFlag('pos', 'kdsButton', true);
+  const kioskModulePaid = isPaid('kiosk');
   const [apiFulfillment, setApiFulfillment] =
     useState<RestaurantFulfillmentSettings | null>(null);
 
@@ -3462,21 +3464,41 @@ export function PosScreen({
           </Button>
           ) : null}
           {fulfillmentSettings.kioskEnabled && allowKioskChrome ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
-            title={t('pos.toolbar.kioskOrders')}
-            onClick={() => setKioskOrdersOpen(true)}
-          >
-            <Monitor className="h-4 w-4" />
-            {kioskPendingCount > 0 ? (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
-                {kioskPendingCount}
-              </span>
-            ) : null}
-          </Button>
+            kioskModulePaid ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-disabled
+                tabIndex={-1}
+                title={t('pos.toolbar.kioskOrders')}
+                className={cn(
+                  'pointer-events-none relative h-9 w-9 border border-amber-300/60 bg-amber-50/40',
+                  POS_GHOST_ICON_BTN
+                )}
+              >
+                <Monitor className="h-4 w-4 opacity-70" />
+                <span className="absolute -right-0.5 -top-0.5">
+                  <PremiumCrown size="sm" />
+                </span>
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
+                title={t('pos.toolbar.kioskOrders')}
+                onClick={() => setKioskOrdersOpen(true)}
+              >
+                <Monitor className="h-4 w-4" />
+                {kioskPendingCount > 0 ? (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
+                    {kioskPendingCount}
+                  </span>
+                ) : null}
+              </Button>
+            )
           ) : null}
           {fulfillmentSettings.dineInEnabled ? (
           <Button

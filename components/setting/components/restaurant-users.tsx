@@ -85,7 +85,7 @@ export default function RestaurantUsersCard({
 }: RestaurantUsersCardProps) {
   const { t } = useTranslation();
   const { isOwnerOrAdmin } = useBranchContext();
-  const { canCreateMore } = useEntitlements();
+  const { canCreateMore, canCreateMorePerBranch } = useEntitlements();
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
@@ -543,13 +543,28 @@ export default function RestaurantUsersCard({
 
           <div className="sm:col-span-2 lg:col-span-1">
             <PremiumDisabledControl
-              locked={
-                !canCreateMore(
-                  'users',
+              locked={(() => {
+                const branchCount = Math.max(1, branchOptions.length);
+                if (inviteBranchId) {
+                  const onBranch =
+                    employees.filter(
+                      (e) =>
+                        !e.isOwner && e.branchIds.includes(inviteBranchId)
+                    ).length +
+                    pendingInvites.filter((p) =>
+                      p.branchIds.includes(inviteBranchId)
+                    ).length;
+                  return !canCreateMore('users', onBranch);
+                }
+                const totalSeats =
                   employees.filter((e) => !e.isOwner).length +
-                    pendingInvites.length
-                )
-              }
+                  pendingInvites.length;
+                return !canCreateMorePerBranch(
+                  'users',
+                  totalSeats,
+                  branchCount
+                );
+              })()}
               label={t('settings.cards.users.addInvite')}
               className="w-full"
             >

@@ -433,8 +433,8 @@ Legend: **F** = Free · **L** = Free Limited · **P** = Paid · **S** = Selectio
 
 #### Users & Roles (Free — Limited)
 
-1. Max **2** users and **2** roles.
-2. After limit: Add buttons show crown (disabled).
+1. Max **1** user and **1** custom role **per branch** (Owner/Admin presets do not consume the role cap).
+2. After limit: Add buttons show crown (disabled). API create blocked.
 
 
 
@@ -600,7 +600,8 @@ Legend: **F** = Free · **L** = Free Limited · **P** = Paid · **S** = Selectio
 
 #### Users & Roles (Free — Limited)
 
-1. Max **5** users and **5** roles.
+1. Max **3** users and **3** custom roles **per branch** (e.g. 2 branches → up to 6 users and 6 roles). Owner/Admin presets do not consume the role cap.
+2. After limit: Add buttons disabled + crown; API create blocked.
 
 
 
@@ -745,7 +746,8 @@ Legend: **F** = Free · **L** = Free Limited · **P** = Paid · **S** = Selectio
 
 #### Users & Roles (Free — Limited)
 
-1. Max **15** users and **15** roles.
+1. Max **5** users and **5** custom roles **per branch** (e.g. 5 branches → up to 25 users and 25 roles). Owner/Admin presets do not consume the role cap.
+2. After limit: Add buttons disabled + crown; API create blocked.
 
 
 
@@ -819,14 +821,14 @@ Legend: **F** = Free · **L** = Free Limited · **P** = Paid · **S** = Selectio
 #### Soft limits only
 
 
-| Resource | Max    |
-| -------- | ------ |
-| Branches | **10** |
-| Users    | **30** |
-| Roles    | **30** |
+| Resource | Max                          |
+| -------- | ---------------------------- |
+| Branches | **10**                       |
+| Users    | **10 per branch** (× branches) |
+| Roles    | **10 custom roles per branch** (× branches; Owner/Admin excluded) |
 
 
-After limits: Add buttons disabled + crown.
+After limits: Add buttons disabled + crown; API create blocked.
 
 #### Everything else
 
@@ -924,8 +926,8 @@ At minimum expose checkboxes for:
 | Variations             | 3               | 5         | 7                               | 10          | Unlimited   |
 | Products               | 15              | 35        | 100                             | Unlimited   | Unlimited   |
 | Branches               | 1               | 1         | 2                               | 5           | 10          |
-| Users                  | — (Paid module) | 2         | 5                               | 15          | 30          |
-| Roles                  | — (Paid module) | 2         | 5                               | 15          | 30          |
+| Users (per branch)     | — (Paid module) | 1         | 3                               | 5           | 10          |
+| Roles (per branch)     | — (Paid module) | 1         | 3                               | 5           | 10          |
 | Menu banners           | Logo only       | Logo only | Logo + main; **3** menu banners | All banners | All banners |
 | Online payment methods | 0 (Paid)        | 0 (Paid)  | 1                               | 1           | Unlimited   |
 
@@ -1022,7 +1024,7 @@ Turning order-channel switches **off** must **not** remove sidebar entries. Paid
 | ---------------------------------------------------------------- | ---------------------------------------------------------- |
 | Free Branches “Only 1 products create maximum”                   | Treated as **1 branch**                                    |
 | Growth “99+” / “After 100 products”                              | Cap = **100**                                              |
-| Basic Users “2 Users and banners”                                | Treated as **2 users** and **2 roles**                     |
+| Basic Users “2 Users and banners”                                | Treated as **1 user + 1 custom role per branch** (Owner/Admin excluded from role cap) |
 | Scale Dashboard “Free — Limited” heading vs full feature list    | Treated as **full** for listed dashboard features          |
 | Pro Payment/Terminal/Website/Kiosk labeled “Paid” in one section | Treated as **included (Free/full)** per Pro module summary |
 | Custom limited modules                                           | Use **Basic** limits when unchecked                        |
@@ -1055,10 +1057,10 @@ Whenever access is **Paid** (or Selection unchecked on Custom):
 | Plan   | One-liner                                                                                 |
 | ------ | ----------------------------------------------------------------------------------------- |
 | Free   | POS + tiny catalog; almost everything else crowned                                        |
-| Basic  | Adds KDS + manual expenses + small team (2 users)                                         |
+| Basic  | Adds KDS + manual expenses + small team (1 user / 1 role per branch)                      |
 | Growth | Adds website + configuration + single online payment                                      |
 | Scale  | Ops complete (inventory, layout, kiosk, order display); terminals & multi-PSP still gated |
-| Pro    | Full product; soft caps on branches (10) and users/roles (30)                             |
+| Pro    | Full product; soft caps on branches (10) and users/roles (10 per branch)                  |
 | Custom | Pick modules; request-to-buy email to admin                                               |
 
 

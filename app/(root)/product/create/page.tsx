@@ -19,7 +19,10 @@ import {
 } from '@/components/dashboard/menu-manager/product-form-fields';
 import { InventoryQuickActions } from '@/components/dashboard/menu-manager/inventory-quick-actions';
 import type { IngredientRecipeRow } from '@/components/dashboard/menu-manager/product-ingredient-recipes';
+import { PlanUpgradeScreen } from '@/components/premium/plan-upgrade-screen';
+import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
 import { useMenuCategoriesCatalog } from '@/hooks/use-menu-categories-catalog';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import ErrorBoundary from '@/components/toaster/toaster';
 import {
   AlertDialog,
@@ -54,6 +57,7 @@ export default function ProductCreatePage() {
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
+  const { canCreateMore } = useEntitlements();
   const {
     categories,
     loading: categoriesLoading,
@@ -66,8 +70,33 @@ export default function ProductCreatePage() {
   const [ingredientRows, setIngredientRows] = useState<IngredientRecipeRow[]>(
     []
   );
+  const [productTotal, setProductTotal] = useState<number | null>(null);
   const { variationTemplates, reloadVariationTemplates } =
     useRestaurantVariationTemplates();
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await axios.get<{
+          data?: { pagination?: { total?: number } };
+        }>('/api/restaurant/menu/items', {
+          params: { page: 1, pageSize: 1 },
+        });
+        if (cancelled) return;
+        const total = res.data?.data?.pagination?.total;
+        setProductTotal(typeof total === 'number' ? total : 0);
+      } catch {
+        if (!cancelled) setProductTotal(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const atProductCap =
+    productTotal != null && !canCreateMore('products', productTotal);
 
   const showEmptyCategories =
     !categoriesLoading && categories.length === 0;
@@ -79,13 +108,14 @@ export default function ProductCreatePage() {
 
   const canCreate = useMemo(
     () =>
+      !atProductCap &&
       isProductFormValid(
         form,
         variationRows,
         variationTemplates,
         ingredientRows
       ),
-    [form, variationRows, variationTemplates, ingredientRows]
+    [atProductCap, form, variationRows, variationTemplates, ingredientRows]
   );
 
   const {
@@ -182,13 +212,23 @@ export default function ProductCreatePage() {
     }
   };
 
+  if (atProductCap) {
+    return (
+      <PlanUpgradeScreen
+        featureLabel={t('dashboard.product.title')}
+        description={t('premium.upgradeToAddMore')}
+        upgradeHref="/pricing"
+      />
+    );
+  }
+
   return (
     <div className="w-full">
       <ErrorBoundary>
         <MenuPageShell
           title={t('dashboard.product.addTitle')}
           description={t('dashboard.product.addDescription')}
-          loading={false}
+          loading={productTotal == null}
         >
           <Card>
             <CardHeader className="flex flex-col gap-4 space-y-0">
@@ -214,6 +254,7 @@ export default function ProductCreatePage() {
                     variant="toolbar"
                     showVariation={false}
                     onMenuRefresh={refreshCategories}
+                    categoryCount={categories.length}
                     onCategoryCreated={(categoryId) =>
                       setForm((f) => ({
                         ...f,
@@ -243,23 +284,28 @@ export default function ProductCreatePage() {
                     onVariationTemplatesReload={reloadVariationTemplates}
                   />
                   <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-                    <Button
-                      type="button"
-                      disabled={saving || !canCreate}
-                      onClick={() => setSaveConfirmOpen(true)}
+                    <PremiumDisabledControl
+                      locked={atProductCap}
+                      label={t('dashboard.product.createTitle')}
                     >
-                      {saving ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          <span>{t('dashboard.product.creating')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="h-4 w-4 mr-2" />
-                          <span>{t('dashboard.product.createTitle')}</span>
-                        </>
-                      )}
-                    </Button>
+                      <Button
+                        type="button"
+                        disabled={saving || !canCreate}
+                        onClick={() => setSaveConfirmOpen(true)}
+                      >
+                        {saving ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <span>{t('dashboard.product.creating')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-4 w-4 mr-2" />
+                            <span>{t('dashboard.product.createTitle')}</span>
+                          </>
+                        )}
+                      </Button>
+                    </PremiumDisabledControl>
                     <Button
                       type="button"
                       variant="outline"

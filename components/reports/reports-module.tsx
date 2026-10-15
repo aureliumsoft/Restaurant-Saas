@@ -66,6 +66,9 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { PremiumCrown } from '@/components/premium/premium-crown';
+import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
+import { PremiumGate } from '@/components/premium/premium-gate';
+import { PlanUpgradeScreen } from '@/components/premium/plan-upgrade-screen';
 import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
 import { useEntitlements } from '@/hooks/use-entitlements';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
@@ -399,6 +402,14 @@ export function ReportsModule() {
   const { limitFlag } = useEntitlements();
   const allowInventoryTab = limitFlag('reports', 'inventoryTab', true);
   const allowExpensesTab = limitFlag('reports', 'expensesTab', true);
+  const allowFinancialExpenses = limitFlag('reports', 'financialExpenses', true);
+  const allowFinancialInventory = limitFlag(
+    'reports',
+    'financialInventory',
+    true
+  );
+  const allowFinancialCard = limitFlag('reports', 'financialCard', true);
+  const allowFinancialOther = limitFlag('reports', 'financialOther', true);
   const allowCustomDateRange = limitFlag('reports', 'customDateRange', true);
   const allowWebsiteFilter = limitFlag('reports', 'websiteFilter', true);
   const allowPosFilter = limitFlag('reports', 'posFilter', true);
@@ -421,6 +432,9 @@ export function ReportsModule() {
   const [reportType, setReportType] = useState<ReportType>(() =>
     parseReportType(searchParams.get('type'))
   );
+  const reportTabLocked =
+    (reportType === 'inventory' && !allowInventoryTab) ||
+    (reportType === 'expenses' && !allowExpensesTab);
 
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
@@ -544,6 +558,13 @@ export function ReportsModule() {
           setTotalPages(res.data.meta?.totalPages ?? 1);
           setPage(res.data.meta?.page ?? p);
         } else if (reportType === 'inventory') {
+          if (!allowInventoryTab) {
+            setInvRows([]);
+            setTotal(0);
+            setTotalPages(1);
+            setPage(1);
+            return;
+          }
           const res = await axios.get<{
             data: InventoryEntryRow[];
             meta: { total: number; totalPages: number; page: number };
@@ -559,6 +580,13 @@ export function ReportsModule() {
           setTotalPages(res.data.meta?.totalPages ?? 1);
           setPage(res.data.meta?.page ?? p);
         } else {
+          if (!allowExpensesTab) {
+            setExpRows([]);
+            setTotal(0);
+            setTotalPages(1);
+            setPage(1);
+            return;
+          }
           const res = await axios.get<{
             data: ExpenseRow[];
             meta: { total: number; totalPages: number; page: number };
@@ -594,19 +622,21 @@ export function ReportsModule() {
       appliedTo,
       activeBranchId,
       activeBranchUrlId,
+      allowInventoryTab,
+      allowExpensesTab,
       t,
     ]
   );
 
   useEffect(() => {
-    if (branchLoading) return;
+    if (branchLoading || reportTabLocked) return;
     void loadSummary();
-  }, [branchLoading, loadSummary]);
+  }, [branchLoading, reportTabLocked, loadSummary]);
 
   useEffect(() => {
-    if (branchLoading) return;
+    if (branchLoading || reportTabLocked) return;
     void loadTrack(1);
-  }, [branchLoading, loadTrack]);
+  }, [branchLoading, reportTabLocked, loadTrack]);
 
   useEffect(() => {
     setTypeFilter('all');
@@ -900,6 +930,7 @@ export function ReportsModule() {
   }
 
   function runCsvExport() {
+    if (reportTabLocked) return;
     setConfirmCsv(false);
     downloadCsv(
       exportPayload.filename,
@@ -909,6 +940,19 @@ export function ReportsModule() {
   }
 
   const historicalLocked = summary?.meta.canViewHistorical === false;
+
+  if (reportTabLocked) {
+    return (
+      <PlanUpgradeScreen
+        featureLabel={
+          reportType === 'inventory'
+            ? t('dashboard.reports.inventory')
+            : t('dashboard.reports.expenses')
+        }
+        upgradeHref="/pricing"
+      />
+    );
+  }
 
   return (
     <MenuPageShell
@@ -923,23 +967,33 @@ export function ReportsModule() {
       loading={branchLoading}
       actions={
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="default"
-            className="bg-sky-600 hover:bg-sky-700"
-            onClick={handlePrintClick}
+          <PremiumDisabledControl
+            locked={reportTabLocked}
+            label={t('dashboard.reports.printReport')}
           >
-            <Printer className="mr-2 h-4 w-4" />
-            {t('dashboard.reports.printReport')}
-          </Button>
-          <Button
-            type="button"
-            className="bg-emerald-600 hover:bg-emerald-700"
-            onClick={() => setConfirmCsv(true)}
+            <Button
+              type="button"
+              variant="default"
+              className="bg-sky-600 hover:bg-sky-700"
+              onClick={handlePrintClick}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              {t('dashboard.reports.printReport')}
+            </Button>
+          </PremiumDisabledControl>
+          <PremiumDisabledControl
+            locked={reportTabLocked}
+            label={t('dashboard.reports.exportCsv')}
           >
-            <Download className="mr-2 h-4 w-4" />
-            {t('dashboard.reports.exportCsv')}
-          </Button>
+            <Button
+              type="button"
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => setConfirmCsv(true)}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {t('dashboard.reports.exportCsv')}
+            </Button>
+          </PremiumDisabledControl>
         </div>
       }
     >
@@ -1324,17 +1378,21 @@ export function ReportsModule() {
                   value={formatMoney(pnl?.revenue ?? 0)}
                   hint={t('dashboard.reports.revenueHint')}
                 />
-                <KpiCard
-                  tone="orange"
-                  label={t('dashboard.reports.expenses')}
-                  value={formatMoney(pnl?.expenses ?? 0)}
-                />
-                <KpiCard
-                  tone="blue"
-                  label={t('dashboard.reports.inventory')}
-                  value={formatMoney(pnl?.inventoryExpenses ?? 0)}
-                  hint={t('dashboard.reports.inventoryCostsHint')}
-                />
+                <PremiumGate locked={!allowFinancialExpenses}>
+                  <KpiCard
+                    tone="orange"
+                    label={t('dashboard.reports.expenses')}
+                    value={formatMoney(pnl?.expenses ?? 0)}
+                  />
+                </PremiumGate>
+                <PremiumGate locked={!allowFinancialInventory}>
+                  <KpiCard
+                    tone="blue"
+                    label={t('dashboard.reports.inventory')}
+                    value={formatMoney(pnl?.inventoryExpenses ?? 0)}
+                    hint={t('dashboard.reports.inventoryCostsHint')}
+                  />
+                </PremiumGate>
                 <KpiCard
                   tone={(pnl?.profit ?? 0) >= 0 ? 'green' : 'red'}
                   label={t('dashboard.reports.netProfit')}
@@ -1348,18 +1406,22 @@ export function ReportsModule() {
                   value={formatMoney(pnl?.paymentBreakdown?.cash ?? 0)}
                   hint={t('dashboard.reports.paymentMixHint')}
                 />
-                <KpiCard
-                  tone="default"
-                  label={t('dashboard.reports.cardPayments')}
-                  value={formatMoney(pnl?.paymentBreakdown?.card ?? 0)}
-                  hint={t('dashboard.reports.paymentMixHint')}
-                />
-                <KpiCard
-                  tone="default"
-                  label={t('dashboard.reports.otherPayments')}
-                  value={formatMoney(pnl?.paymentBreakdown?.other ?? 0)}
-                  hint={t('dashboard.reports.paymentMixHint')}
-                />
+                <PremiumGate locked={!allowFinancialCard}>
+                  <KpiCard
+                    tone="default"
+                    label={t('dashboard.reports.cardPayments')}
+                    value={formatMoney(pnl?.paymentBreakdown?.card ?? 0)}
+                    hint={t('dashboard.reports.paymentMixHint')}
+                  />
+                </PremiumGate>
+                <PremiumGate locked={!allowFinancialOther}>
+                  <KpiCard
+                    tone="default"
+                    label={t('dashboard.reports.otherPayments')}
+                    value={formatMoney(pnl?.paymentBreakdown?.other ?? 0)}
+                    hint={t('dashboard.reports.paymentMixHint')}
+                  />
+                </PremiumGate>
               </div>
               <div className={`rounded-xl border p-4 ${(pnl?.profit ?? 0) >= 0 ? 'bg-emerald-50' : 'bg-red-100'}`}>
                 <h3 className="mb-3 text-sm font-semibold text-black">
