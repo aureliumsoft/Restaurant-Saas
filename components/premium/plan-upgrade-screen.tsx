@@ -1,5 +1,3 @@
-'use client';
-
 import Link from 'next/link';
 import { Crown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';

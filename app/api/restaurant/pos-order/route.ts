@@ -242,6 +242,18 @@ export async function POST(req: NextRequest) {
         { status: 403 }
       );
     }
+    if (address) {
+      const { getRestaurantEntitlements, moduleLimitFlag } = await import(
+        '@/lib/entitlements'
+      );
+      const entitlements = await getRestaurantEntitlements(restaurantId);
+      if (!moduleLimitFlag(entitlements, 'pos', 'delivery', true)) {
+        return NextResponse.json(
+          { error: 'Delivery orders are not available on your plan' },
+          { status: 403 }
+        );
+      }
+    }
     if (
       (paymentMode === 'card' || paymentMode === 'card_terminal') &&
       !fulfillmentSettings.cardPaymentsEnabled

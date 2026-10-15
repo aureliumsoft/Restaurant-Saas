@@ -2691,6 +2691,10 @@ export function PosScreen({
         toast.warn(t('pos.toasts.selectTableForTableOrders'));
         return;
       }
+      if (isDeliveryMode && !allowDeliveryChrome) {
+        toast.warn(t('pos.toasts.deliveryNotAvailable'));
+        return;
+      }
       if (isDeliveryMode && (!addressTrim || !phoneTrim)) {
         toast.warn(t('pos.toasts.deliveryRequiresPhoneAndAddress'));
         return;
@@ -3130,10 +3134,13 @@ export function PosScreen({
     ];
     return all.filter((b) => {
       if (b.id === 'tables') return fulfillmentSettings.dineInEnabled;
-      if (b.id === 'delivery') return fulfillmentSettings.deliveryEnabled;
+      if (b.id === 'delivery') {
+        return fulfillmentSettings.deliveryEnabled && allowDeliveryChrome;
+      }
       return true;
     });
   }, [
+    allowDeliveryChrome,
     fulfillmentSettings.deliveryEnabled,
     fulfillmentSettings.dineInEnabled,
     t,
@@ -3143,10 +3150,18 @@ export function PosScreen({
     if (orderMode === 'tables' && !fulfillmentSettings.dineInEnabled) {
       setOrderMode('takeaway');
       setTableId('');
-    } else if (orderMode === 'delivery' && !fulfillmentSettings.deliveryEnabled) {
+    } else if (
+      orderMode === 'delivery' &&
+      (!fulfillmentSettings.deliveryEnabled || !allowDeliveryChrome)
+    ) {
       setOrderMode('takeaway');
     }
-  }, [fulfillmentSettings.deliveryEnabled, fulfillmentSettings.dineInEnabled, orderMode]);
+  }, [
+    allowDeliveryChrome,
+    fulfillmentSettings.deliveryEnabled,
+    fulfillmentSettings.dineInEnabled,
+    orderMode,
+  ]);
 
   useEffect(() => {
     if (!fulfillmentSettings.cardPaymentsEnabled && paymentMode === 'card') {
@@ -3429,7 +3444,7 @@ export function PosScreen({
           >
             <History className="h-4 w-4" />
           </Button>
-          {fulfillmentSettings.deliveryEnabled && allowDeliveryChrome ? (
+          {fulfillmentSettings.deliveryEnabled ? (
           <Button
             type="button"
             variant="ghost"
