@@ -241,8 +241,15 @@ export const initialChartThreeOptions: ApexOptions = {
     fontSize: '14px',
 
     markers: {
-      size: 6,
-      shape: 'circle',
+      // 3.49 legend markers use width/height/radius; 3.54+ uses size/shape.
+      // Both are set so either installed version renders a circle and typechecks.
+      ...({
+        size: 6,
+        shape: 'circle',
+        width: 12,
+        height: 12,
+        radius: 12,
+      } as NonNullable<NonNullable<ApexOptions['legend']>['markers']>),
     },
   },
   fill: {
