@@ -17,6 +17,7 @@ export const runtime = 'nodejs';
 const bodySchema = z.object({
   subscriptionId: z.string().min(3).max(200),
   plan: z.nativeEnum(SubscriptionPlan),
+  interval: z.enum(['monthly', 'yearly']).optional().default('monthly'),
 });
 
 export async function POST(req: NextRequest) {
@@ -52,6 +53,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unknown plan' }, { status: 404 });
   }
 
+  const { resolveCatalogFinalAmount } = await import(
+    '@/lib/subscription-catalog-pricing'
+  );
+  const amount = resolveCatalogFinalAmount({
+    interval: parsed.data.interval,
+    price: catalog.price,
+    yearlyPrice: catalog.yearlyPrice,
+    monthlyDiscountEnabled: catalog.monthlyDiscountEnabled,
+    monthlyDiscountPercent: catalog.monthlyDiscountPercent,
+    yearlyDiscountEnabled: catalog.yearlyDiscountEnabled,
+    yearlyDiscountPercent: catalog.yearlyDiscountPercent,
+  });
+
   const config = getPayPalPlatformConfig();
 
   try {
@@ -60,7 +74,7 @@ export async function POST(req: NextRequest) {
       paypalSubscriptionId: parsed.data.subscriptionId,
       plan: parsed.data.plan,
       recordPayment: {
-        amount: catalog.price,
+        amount,
         currency: config.currency,
         idempotencyKey: `paypal_sub_activate:${parsed.data.subscriptionId}`,
       },

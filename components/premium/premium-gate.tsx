@@ -5,16 +5,22 @@ import Link from 'next/link';
 import { Crown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { PremiumCrown } from '@/components/premium/premium-crown';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 type Props = {
-  /** When true, children are blurred and Upgrade CTA is shown. */
+  /** When true, children are locked. */
   locked: boolean;
   children: ReactNode;
   className?: string;
   upgradeHref?: string;
   label?: string;
+  /**
+   * `overlay` — blurred content + Upgrade CTA (default).
+   * `crown` — muted/disabled content + corner crown only (no Upgrade popup).
+   */
+  variant?: 'overlay' | 'crown';
 };
 
 export function PremiumGate({
@@ -23,9 +29,30 @@ export function PremiumGate({
   className,
   upgradeHref = '/pricing',
   label,
+  variant = 'overlay',
 }: Props) {
   const { t } = useTranslation();
   if (!locked) return <>{children}</>;
+
+  if (variant === 'crown') {
+    return (
+      <div
+        className={cn('relative', className)}
+        aria-disabled
+        title={label ?? t('premium.upgradeRequired')}
+      >
+        <div
+          className="pointer-events-none select-none opacity-50 grayscale-[0.35]"
+          aria-hidden
+        >
+          {children}
+        </div>
+        <span className="absolute right-2 top-2 z-10">
+          <PremiumCrown size="sm" />
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className={cn('relative', className)}>

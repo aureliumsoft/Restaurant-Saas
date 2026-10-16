@@ -16,6 +16,7 @@ export type PayPalPlatformConfig = {
 
 export type PayPalOrderMetadata = {
   plan?: string;
+  interval?: string;
   restaurantId?: string;
   userId?: string;
   userEmail?: string;

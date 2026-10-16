@@ -30,13 +30,18 @@ export function Setting() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { plan } = useStaffPermissions();
-  const { isPaid } = useEntitlements();
+  const { isPaid, limitFlag } = useEntitlements();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const brandingAllowed = plan?.branding !== false;
   const roleBasedSettingsAllowed = plan?.roleBasedSettings !== false;
   const usersRolesPaid = isPaid('usersRoles');
   const onlinePaymentsPaid = isPaid('onlinePayments');
   const terminalPaymentPaid = isPaid('terminalPayment');
+  const serviceChargesAllowed = limitFlag(
+    'basicSettings',
+    'serviceCharges',
+    true
+  );
 
   const activeSection = useMemo(
     () => parseSettingsSection(searchParams.get('section')),
@@ -119,7 +124,9 @@ export function Setting() {
                     </PremiumGate>
                   ) : null}
                   <RestaurantRegionalSettingsCard />
-                  <RestaurantServiceChargesCard />
+                  <PremiumGate locked={!serviceChargesAllowed}>
+                    <RestaurantServiceChargesCard />
+                  </PremiumGate>
                   <RestaurantPaymentProviderCard
                     cardPaymentsEnabled={fulfillmentSettings.cardPaymentsEnabled}
                     onlinePaymentsLocked={onlinePaymentsPaid}

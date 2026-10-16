@@ -18,7 +18,8 @@
     "db:setup": "node scripts/prisma-migrate-deploy.mjs && prisma db seed",
     "lint": "next lint",
     "postinstall": "prisma generate",
-    "seed:admin": "ts-node -O \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/seed-admin-user.ts"
+    "seed:admin": "ts-node -O \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/seed-admin-user.ts",
+    "seed:pricing": "ts-node -O \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/seed-subscription-plans.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.4.2",

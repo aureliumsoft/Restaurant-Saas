@@ -1,4 +1,4 @@
-import type { PrismaClient, SubscriptionPlan } from '@prisma/client';
+import { PrismaClient, type SubscriptionPlan } from '@prisma/client';
 
 /** Same separator as lib/menu/bilingual-text (avoid importing app path aliases in seed). */
 const SEP = '&&&&';
@@ -8,27 +8,46 @@ type CatalogSeed = {
   plan: SubscriptionPlan;
   name: string;
   price: number;
+  yearlyPrice: number;
   priceLabel: string;
   description: string;
   features: string[];
+  monthlyDiscountEnabled?: boolean;
+  monthlyDiscountPercent?: number;
+  yearlyDiscountEnabled?: boolean;
+  yearlyDiscountPercent?: number;
 };
 
 function bi(en: string, es: string): string {
   return `${en} ${SEP} ${es}`;
 }
 
+export type SeedSubscriptionPlansOptions = {
+  /**
+   * When true, existing rows keep admin-tuned discount flags/percents.
+   * New plans still get seed defaults (off / 0).
+   * Default false: full replace of pricing + discount fields from seed.
+   */
+  preserveDiscounts?: boolean;
+};
+
 /**
- * Seeds all public pricing plans (Free → Custom).
+ * Upserts all public pricing plans (Free → Custom).
+ * Safe for production: does not touch PayPal plan/product ids.
  * Names / labels / features use `&&&&` for English + Spanish.
- * Upserts on `plan` so `prisma db seed` / reset refreshes copy.
  */
-export async function seedSubscriptionPlans(prisma: PrismaClient) {
+export async function seedSubscriptionPlans(
+  prisma: PrismaClient,
+  options: SeedSubscriptionPlansOptions = {}
+) {
+  const preserveDiscounts = Boolean(options.preserveDiscounts);
   const plans: CatalogSeed[] = [
     {
       id: 'subcat_free',
       plan: 'FREE',
       name: bi('Free', 'Gratis'),
       price: 0,
+      yearlyPrice: 0,
       priceLabel: bi('€0/mo', '0 €/mes'),
       description: bi(
         'Trial / starter restaurant — core catalog and POS with tight limits.',
@@ -49,6 +68,7 @@ export async function seedSubscriptionPlans(prisma: PrismaClient) {
       plan: 'BASIC',
       name: bi('Basic', 'Básico'),
       price: 29,
+      yearlyPrice: 290,
       priceLabel: bi('€29/mo', '29 €/mes'),
       description: bi(
         'Small venue — adds KDS and slightly higher catalog limits.',
@@ -59,7 +79,7 @@ export async function seedSubscriptionPlans(prisma: PrismaClient) {
         bi('Dashboard 7D / 14D / 30D', 'Panel 7D / 14D / 30D'),
         bi('Up to 15 categories / 5 variations / 35 products', 'Hasta 15 categorías / 5 variaciones / 35 productos'),
         bi('Manual expenses', 'Gastos manuales'),
-        bi('2 users & 2 roles', '2 usuarios y 2 roles'),
+        bi('1 user & 1 role per branch', '1 usuario y 1 rol por sucursal'),
         bi('1 branch maximum', 'Máximo 1 sucursal'),
         bi('Website, kiosk & inventory still upgrade', 'Web, kiosco e inventario siguen siendo mejora'),
       ],
@@ -69,6 +89,7 @@ export async function seedSubscriptionPlans(prisma: PrismaClient) {
       plan: 'GROWTH',
       name: bi('Growth', 'Crecimiento'),
       price: 79,
+      yearlyPrice: 790,
       priceLabel: bi('€79/mo', '79 €/mes'),
       description: bi(
         'Growing venue — website, configuration, and more catalog capacity.',
@@ -79,7 +100,7 @@ export async function seedSubscriptionPlans(prisma: PrismaClient) {
         bi('Full configuration module', 'Módulo de configuración completo'),
         bi('Up to 30 categories / 7 variations / 100 products', 'Hasta 30 categorías / 7 variaciones / 100 productos'),
         bi('2 branches', '2 sucursales'),
-        bi('5 users & 5 roles', '5 usuarios y 5 roles'),
+        bi('3 users & 3 roles per branch', '3 usuarios y 3 roles por sucursal'),
         bi('1 online payment method', '1 método de pago online'),
         bi('Delivery on POS; KDS included', 'Delivery en TPV; KDS incluido'),
       ],
@@ -89,6 +110,7 @@ export async function seedSubscriptionPlans(prisma: PrismaClient) {
       plan: 'SCALE',
       name: bi('Scale', 'Escala'),
       price: 149,
+      yearlyPrice: 1490,
       priceLabel: bi('€149/mo', '149 €/mes'),
       description: bi(
         'Multi-branch ops — inventory, layout, kiosk, and order display unlocked.',
@@ -100,7 +122,7 @@ export async function seedSubscriptionPlans(prisma: PrismaClient) {
         bi('Website & kiosk platforms', 'Plataformas web y kiosco'),
         bi('Unlimited products; 60 categories / 10 variations', 'Productos ilimitados; 60 categorías / 10 variaciones'),
         bi('5 branches', '5 sucursales'),
-        bi('15 users & 15 roles', '15 usuarios y 15 roles'),
+        bi('5 users & 5 roles per branch', '5 usuarios y 5 roles por sucursal'),
         bi('1 online payment method; terminal still upgrade', '1 pago online; terminal sigue siendo mejora'),
       ],
     },
@@ -109,6 +131,7 @@ export async function seedSubscriptionPlans(prisma: PrismaClient) {
       plan: 'PRO',
       name: bi('Pro', 'Pro'),
       price: 249,
+      yearlyPrice: 2490,
       priceLabel: bi('€249/mo', '249 €/mes'),
       description: bi(
         'Full product access with soft caps on branches and team size.',
@@ -120,7 +143,7 @@ export async function seedSubscriptionPlans(prisma: PrismaClient) {
         bi('Online payments & terminal payments', 'Pagos online y terminal'),
         bi('Mobile app included', 'App móvil incluida'),
         bi('Up to 10 branches', 'Hasta 10 sucursales'),
-        bi('Up to 30 users & 30 roles', 'Hasta 30 usuarios y 30 roles'),
+        bi('10 users & 10 roles per branch', '10 usuarios y 10 roles por sucursal'),
         bi('Priority-ready operations stack', 'Stack operativo listo para prioridad'),
       ],
     },
@@ -129,6 +152,7 @@ export async function seedSubscriptionPlans(prisma: PrismaClient) {
       plan: 'CUSTOM',
       name: bi('Custom', 'Personalizado'),
       price: 0,
+      yearlyPrice: 0,
       priceLabel: bi('Request quote', 'Solicitar presupuesto'),
       description: bi(
         'Pick modules with checkboxes; request to buy — we email the admin like a demo request.',
@@ -146,32 +170,120 @@ export async function seedSubscriptionPlans(prisma: PrismaClient) {
   ];
 
   for (const p of plans) {
-    await prisma.$executeRaw`
-      INSERT INTO "SubscriptionCatalog" (
-        "id", "plan", "name", "price", "priceLabel", "description", "features", "createdAt", "updatedAt"
-      )
-      VALUES (
-        ${p.id},
-        ${p.plan}::"SubscriptionPlan",
-        ${p.name},
-        ${p.price},
-        ${p.priceLabel},
-        ${p.description},
-        ${p.features}::text[],
-        now(),
-        now()
-      )
-      ON CONFLICT ("plan") DO UPDATE SET
-        "id" = EXCLUDED."id",
-        "name" = EXCLUDED."name",
-        "price" = EXCLUDED."price",
-        "priceLabel" = EXCLUDED."priceLabel",
-        "description" = EXCLUDED."description",
-        "features" = EXCLUDED."features",
-        "updatedAt" = now()
-    `;
+    const monthlyDiscountEnabled = p.monthlyDiscountEnabled ?? false;
+    const monthlyDiscountPercent = p.monthlyDiscountPercent ?? 0;
+    const yearlyDiscountEnabled = p.yearlyDiscountEnabled ?? false;
+    const yearlyDiscountPercent = p.yearlyDiscountPercent ?? 0;
+
+    if (preserveDiscounts) {
+      await prisma.$executeRaw`
+        INSERT INTO "SubscriptionCatalog" (
+          "id", "plan", "name", "price", "priceLabel", "description", "features",
+          "monthlyDiscountEnabled", "monthlyDiscountPercent",
+          "yearlyPrice", "yearlyDiscountEnabled", "yearlyDiscountPercent",
+          "createdAt", "updatedAt"
+        )
+        VALUES (
+          ${p.id},
+          ${p.plan}::"SubscriptionPlan",
+          ${p.name},
+          ${p.price},
+          ${p.priceLabel},
+          ${p.description},
+          ${p.features}::text[],
+          ${monthlyDiscountEnabled},
+          ${monthlyDiscountPercent},
+          ${p.yearlyPrice},
+          ${yearlyDiscountEnabled},
+          ${yearlyDiscountPercent},
+          now(),
+          now()
+        )
+        ON CONFLICT ("plan") DO UPDATE SET
+          "id" = EXCLUDED."id",
+          "name" = EXCLUDED."name",
+          "price" = EXCLUDED."price",
+          "priceLabel" = EXCLUDED."priceLabel",
+          "description" = EXCLUDED."description",
+          "features" = EXCLUDED."features",
+          "yearlyPrice" = EXCLUDED."yearlyPrice",
+          "updatedAt" = now()
+      `;
+    } else {
+      await prisma.$executeRaw`
+        INSERT INTO "SubscriptionCatalog" (
+          "id", "plan", "name", "price", "priceLabel", "description", "features",
+          "monthlyDiscountEnabled", "monthlyDiscountPercent",
+          "yearlyPrice", "yearlyDiscountEnabled", "yearlyDiscountPercent",
+          "createdAt", "updatedAt"
+        )
+        VALUES (
+          ${p.id},
+          ${p.plan}::"SubscriptionPlan",
+          ${p.name},
+          ${p.price},
+          ${p.priceLabel},
+          ${p.description},
+          ${p.features}::text[],
+          ${monthlyDiscountEnabled},
+          ${monthlyDiscountPercent},
+          ${p.yearlyPrice},
+          ${yearlyDiscountEnabled},
+          ${yearlyDiscountPercent},
+          now(),
+          now()
+        )
+        ON CONFLICT ("plan") DO UPDATE SET
+          "id" = EXCLUDED."id",
+          "name" = EXCLUDED."name",
+          "price" = EXCLUDED."price",
+          "priceLabel" = EXCLUDED."priceLabel",
+          "description" = EXCLUDED."description",
+          "features" = EXCLUDED."features",
+          "monthlyDiscountEnabled" = EXCLUDED."monthlyDiscountEnabled",
+          "monthlyDiscountPercent" = EXCLUDED."monthlyDiscountPercent",
+          "yearlyPrice" = EXCLUDED."yearlyPrice",
+          "yearlyDiscountEnabled" = EXCLUDED."yearlyDiscountEnabled",
+          "yearlyDiscountPercent" = EXCLUDED."yearlyDiscountPercent",
+          "updatedAt" = now()
+      `;
+    }
   }
 
-  // Remove legacy STARTER catalog row if somehow still present as orphan text (post-migration should be gone).
-  console.log(`[seed] Upserted ${plans.length} subscription plans (FREE…CUSTOM, EN&&&&ES)`);
+  console.log(
+    `[seed:pricing] Upserted ${plans.length} plans (FREE…CUSTOM)` +
+      (preserveDiscounts ? '; preserved existing discounts' : '; replaced discounts from seed') +
+      '; PayPal catalog ids left unchanged'
+  );
+
+  return plans.length;
+}
+
+async function main() {
+  const preserveDiscounts = process.argv.includes('--preserve-discounts');
+  const prisma = new PrismaClient();
+  try {
+    console.log(
+      `[seed:pricing] DATABASE_URL host → ${
+        (() => {
+          try {
+            const u = new URL(process.env.DATABASE_URL ?? '');
+            return `${u.hostname}${u.pathname}`;
+          } catch {
+            return '(unset or invalid DATABASE_URL)';
+          }
+        })()
+      }`
+    );
+    await seedSubscriptionPlans(prisma, { preserveDiscounts });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+if (require.main === module) {
+  main().catch((e) => {
+    console.error('[seed:pricing] Failed:', e);
+    process.exit(1);
+  });
 }

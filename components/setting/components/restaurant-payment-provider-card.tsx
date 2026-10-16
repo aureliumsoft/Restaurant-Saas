@@ -176,7 +176,11 @@ export function RestaurantPaymentProviderCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <PremiumGate locked={onlinePaymentsLocked} className="space-y-5">
+        <PremiumGate
+          locked={onlinePaymentsLocked}
+          variant="crown"
+          className="space-y-5"
+        >
           <div className="space-y-2">
             <p className="text-sm font-medium">
               {t('settings.cards.paymentProvider.activeGateway')}
@@ -254,7 +258,11 @@ export function RestaurantPaymentProviderCard({
         </PremiumGate>
 
         {cardPaymentsEnabled ? (
-          <PremiumGate locked={terminalPaymentLocked} className="space-y-2">
+          <PremiumGate
+            locked={terminalPaymentLocked}
+            variant="crown"
+            className="space-y-2"
+          >
             <label className="text-sm font-medium" htmlFor="payment-terminal-ip">
               {t('settings.cards.paymentProvider.terminalIpLabel')}
             </label>

@@ -1378,18 +1378,24 @@ export function ReportsModule() {
                   value={formatMoney(pnl?.revenue ?? 0)}
                   hint={t('dashboard.reports.revenueHint')}
                 />
-                <PremiumGate locked={!allowFinancialExpenses}>
+                <PremiumGate locked={!allowFinancialExpenses} variant="crown">
                   <KpiCard
                     tone="orange"
                     label={t('dashboard.reports.expenses')}
-                    value={formatMoney(pnl?.expenses ?? 0)}
+                    value={formatMoney(
+                      allowFinancialExpenses ? (pnl?.expenses ?? 0) : 0
+                    )}
                   />
                 </PremiumGate>
-                <PremiumGate locked={!allowFinancialInventory}>
+                <PremiumGate locked={!allowFinancialInventory} variant="crown">
                   <KpiCard
                     tone="blue"
                     label={t('dashboard.reports.inventory')}
-                    value={formatMoney(pnl?.inventoryExpenses ?? 0)}
+                    value={formatMoney(
+                      allowFinancialInventory
+                        ? (pnl?.inventoryExpenses ?? 0)
+                        : 0
+                    )}
                     hint={t('dashboard.reports.inventoryCostsHint')}
                   />
                 </PremiumGate>
@@ -1406,19 +1412,27 @@ export function ReportsModule() {
                   value={formatMoney(pnl?.paymentBreakdown?.cash ?? 0)}
                   hint={t('dashboard.reports.paymentMixHint')}
                 />
-                <PremiumGate locked={!allowFinancialCard}>
+                <PremiumGate locked={!allowFinancialCard} variant="crown">
                   <KpiCard
                     tone="default"
                     label={t('dashboard.reports.cardPayments')}
-                    value={formatMoney(pnl?.paymentBreakdown?.card ?? 0)}
+                    value={formatMoney(
+                      allowFinancialCard
+                        ? (pnl?.paymentBreakdown?.card ?? 0)
+                        : 0
+                    )}
                     hint={t('dashboard.reports.paymentMixHint')}
                   />
                 </PremiumGate>
-                <PremiumGate locked={!allowFinancialOther}>
+                <PremiumGate locked={!allowFinancialOther} variant="crown">
                   <KpiCard
                     tone="default"
                     label={t('dashboard.reports.otherPayments')}
-                    value={formatMoney(pnl?.paymentBreakdown?.other ?? 0)}
+                    value={formatMoney(
+                      allowFinancialOther
+                        ? (pnl?.paymentBreakdown?.other ?? 0)
+                        : 0
+                    )}
                     hint={t('dashboard.reports.paymentMixHint')}
                   />
                 </PremiumGate>
@@ -1436,15 +1450,29 @@ export function ReportsModule() {
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3 text-gray-600">
-                    <dt>{t('dashboard.reports.cardPayments')}</dt>
+                    <dt className="inline-flex items-center gap-1.5">
+                      {t('dashboard.reports.cardPayments')}
+                      {!allowFinancialCard ? <PremiumCrown size="sm" /> : null}
+                    </dt>
                     <dd className="tabular-nums font-medium">
-                      {formatMoney(pnl?.paymentBreakdown?.card ?? 0)}
+                      {formatMoney(
+                        allowFinancialCard
+                          ? (pnl?.paymentBreakdown?.card ?? 0)
+                          : 0
+                      )}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3 border-b border-gray-300 pb-2 text-gray-600">
-                    <dt>{t('dashboard.reports.otherPayments')}</dt>
+                    <dt className="inline-flex items-center gap-1.5">
+                      {t('dashboard.reports.otherPayments')}
+                      {!allowFinancialOther ? <PremiumCrown size="sm" /> : null}
+                    </dt>
                     <dd className="tabular-nums font-medium">
-                      {formatMoney(pnl?.paymentBreakdown?.other ?? 0)}
+                      {formatMoney(
+                        allowFinancialOther
+                          ? (pnl?.paymentBreakdown?.other ?? 0)
+                          : 0
+                      )}
                     </dd>
                   </div>
 
@@ -1457,19 +1485,33 @@ export function ReportsModule() {
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-blue-900">
+                    <dt className="inline-flex items-center gap-1.5 text-blue-900">
                       {t('dashboard.reports.inventory')}
+                      {!allowFinancialInventory ? (
+                        <PremiumCrown size="sm" />
+                      ) : null}
                     </dt>
                     <dd className="tabular-nums font-medium text-blue-900">
-                      {formatMoney(pnl?.inventoryExpenses ?? 0)}
+                      {formatMoney(
+                        allowFinancialInventory
+                          ? (pnl?.inventoryExpenses ?? 0)
+                          : 0
+                      )}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-orange-900">
+                    <dt className="inline-flex items-center gap-1.5 text-orange-900">
                       {t('dashboard.reports.operatingExpenses')}
+                      {!allowFinancialExpenses ? (
+                        <PremiumCrown size="sm" />
+                      ) : null}
                     </dt>
                     <dd className="tabular-nums font-medium text-orange-900">
-                      {formatMoney(pnl?.operatingExpenses ?? 0)}
+                      {formatMoney(
+                        allowFinancialExpenses
+                          ? (pnl?.operatingExpenses ?? 0)
+                          : 0
+                      )}
                     </dd>
                   </div>
                

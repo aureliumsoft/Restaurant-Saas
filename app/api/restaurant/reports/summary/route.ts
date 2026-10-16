@@ -226,6 +226,56 @@ export async function GET(req: NextRequest) {
   const profitMargin =
     revenueAmount > 0 ? (profit / revenueAmount) * 100 : 0;
 
+  const { getRestaurantEntitlements, moduleLimitFlag } = await import(
+    '@/lib/entitlements'
+  );
+  const entitlements = await getRestaurantEntitlements(auth.restaurant.id);
+  const allowFinancialExpenses = moduleLimitFlag(
+    entitlements,
+    'reports',
+    'financialExpenses',
+    true
+  );
+  const allowFinancialInventory = moduleLimitFlag(
+    entitlements,
+    'reports',
+    'financialInventory',
+    true
+  );
+  const allowFinancialCard = moduleLimitFlag(
+    entitlements,
+    'reports',
+    'financialCard',
+    true
+  );
+  const allowFinancialOther = moduleLimitFlag(
+    entitlements,
+    'reports',
+    'financialOther',
+    true
+  );
+  const allowInventoryTab = moduleLimitFlag(
+    entitlements,
+    'reports',
+    'inventoryTab',
+    true
+  );
+  const allowExpensesTab = moduleLimitFlag(
+    entitlements,
+    'reports',
+    'expensesTab',
+    true
+  );
+
+  const safePaymentBreakdown = {
+    cash: paymentBreakdown.cash,
+    card: allowFinancialCard ? paymentBreakdown.card : 0,
+    other: allowFinancialOther ? paymentBreakdown.other : 0,
+  };
+  const safePnlExpenses = allowFinancialExpenses ? expensesTotal : 0;
+  const safeInventoryExpenses = allowFinancialInventory ? inventoryAmount : 0;
+  const safeOperatingExpenses = allowFinancialExpenses ? manualAmount : 0;
+
   return NextResponse.json(
     {
       kpis: {
@@ -240,28 +290,43 @@ export async function GET(req: NextRequest) {
           pendingCount,
           canceledCount,
         },
-        inventory: {
-          totalInventoryValue,
-          lowStockCount,
-          usageValueInRange,
-          entryCountInRange: usageEntries.length,
-          itemCount: ingredients.length,
-        },
-        expenses: {
-          totalAmount: expensesTotal,
-          inventoryAmount,
-          manualAmount,
-          count: expenseAgg._count._all,
-        },
+        inventory: allowInventoryTab
+          ? {
+              totalInventoryValue,
+              lowStockCount,
+              usageValueInRange,
+              entryCountInRange: usageEntries.length,
+              itemCount: ingredients.length,
+            }
+          : {
+              totalInventoryValue: 0,
+              lowStockCount: 0,
+              usageValueInRange: 0,
+              entryCountInRange: 0,
+              itemCount: 0,
+            },
+        expenses: allowExpensesTab
+          ? {
+              totalAmount: expensesTotal,
+              inventoryAmount,
+              manualAmount,
+              count: expenseAgg._count._all,
+            }
+          : {
+              totalAmount: 0,
+              inventoryAmount: 0,
+              manualAmount: 0,
+              count: 0,
+            },
       },
       pnl: {
         revenue: revenueAmount,
-        expenses: expensesTotal,
-        inventoryExpenses: inventoryAmount,
-        operatingExpenses: manualAmount,
+        expenses: safePnlExpenses,
+        inventoryExpenses: safeInventoryExpenses,
+        operatingExpenses: safeOperatingExpenses,
         profit,
         profitMargin,
-        paymentBreakdown,
+        paymentBreakdown: safePaymentBreakdown,
       },
       meta: {
         from: range.fromKey,

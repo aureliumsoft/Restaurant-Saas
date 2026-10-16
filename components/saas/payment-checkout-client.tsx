@@ -38,6 +38,7 @@ type Props = {
   planName: string;
   priceLabel: string;
   priceMajor?: number | null;
+  billingInterval?: 'monthly' | 'yearly';
   description: string;
   features: string[];
   /** Custom plan: module ids included in this quote request */
@@ -54,6 +55,7 @@ export function PaymentCheckoutClient({
   planName,
   priceLabel,
   priceMajor,
+  billingInterval = 'monthly',
   description,
   features,
   selectedModules = [],
@@ -125,6 +127,13 @@ export function PaymentCheckoutClient({
                 ? t('marketingExtras.pricing.custom.checkoutSubtitle')
                 : t('marketingExtras.checkout.subtitle')}
             </p>
+            {!isCustom ? (
+              <p className="mt-1 text-sm font-medium text-fire-600 dark:text-fire-400">
+                {billingInterval === 'yearly'
+                  ? t('marketingExtras.pricing.billing.billedYearly')
+                  : t('marketingExtras.pricing.billing.billedMonthly')}
+              </p>
+            ) : null}
           </div>
 
           <Card className="border-zinc-200/80 bg-white/95 shadow-[0_20px_60px_-30px] shadow-black/20 dark:border-zinc-800/80 dark:bg-zinc-950/80 dark:shadow-black/60">
@@ -247,6 +256,7 @@ export function PaymentCheckoutClient({
             ) : stripeReady && amount > 0 && restaurantId ? (
               <PayPalSubscriptionButtons
                 plan={plan}
+                billingInterval={billingInterval}
                 disabled={loading}
                 onProcessingChange={setLoading}
                 onApproved={async ({ subscriptionId }) => {
@@ -256,7 +266,11 @@ export function PaymentCheckoutClient({
                       {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ subscriptionId, plan }),
+                        body: JSON.stringify({
+                          subscriptionId,
+                          plan,
+                          interval: billingInterval,
+                        }),
                       }
                     );
                     const body = (await res.json().catch(() => ({}))) as {

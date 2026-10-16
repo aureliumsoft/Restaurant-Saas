@@ -31,9 +31,16 @@ export type PricingPlanView = {
   plan: string;
   name: string;
   price: number;
+  yearlyPrice: number;
   priceLabel: string;
   description: string;
   features: string[];
+  monthlyDiscountEnabled: boolean;
+  monthlyDiscountPercent: number;
+  yearlyDiscountEnabled: boolean;
+  yearlyDiscountPercent: number;
+  monthlyFinal: number;
+  yearlyFinal: number;
 };
 
 type PricingPageViewProps = {
@@ -44,18 +51,26 @@ type PricingPageViewProps = {
   plans: PricingPlanView[];
 };
 
+type BillingInterval = 'monthly' | 'yearly';
+
 function buildPaymentHref(
   plan: string,
   isLoggedIn: boolean,
+  interval: BillingInterval,
   modules?: string[]
 ): string {
-  const params = new URLSearchParams({ plan });
+  const params = new URLSearchParams({ plan, interval });
   if (modules && modules.length > 0) {
     params.set('modules', modules.join(','));
   }
   const path = `/payment?${params.toString()}`;
   if (isLoggedIn) return path;
   return `/login?callbackUrl=${encodeURIComponent(path)}`;
+}
+
+function formatEuro(amount: number, lang: 'en' | 'es'): string {
+  const n = Math.max(0, Math.floor(amount));
+  return lang === 'es' ? `${n} €` : `€${n}`;
 }
 
 export function PricingPageView({
@@ -67,6 +82,8 @@ export function PricingPageView({
 }: PricingPageViewProps) {
   const { t } = useTranslation();
   const uiLang = useUiLanguage();
+  const [billingInterval, setBillingInterval] =
+    useState<BillingInterval>('monthly');
 
   const [customSelected, setCustomSelected] = useState<Set<string>>(
     () => new Set()
@@ -107,7 +124,12 @@ export function PricingPageView({
       toast.info(t('marketingExtras.pricing.custom.selectModulesFirst'));
       return;
     }
-    const href = buildPaymentHref('CUSTOM', isLoggedIn, customModulesForPayment);
+    const href = buildPaymentHref(
+      'CUSTOM',
+      isLoggedIn,
+      billingInterval,
+      customModulesForPayment
+    );
     window.location.href = href;
   }
 
@@ -139,6 +161,36 @@ export function PricingPageView({
               </Link>
             </Button>
           </div>
+          <div
+            className="mx-auto mt-8 inline-flex rounded-full border border-zinc-200/80 bg-white/80 p-1 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/70"
+            role="group"
+            aria-label={t('marketingExtras.pricing.billing.toggleLabel')}
+          >
+            <button
+              type="button"
+              onClick={() => setBillingInterval('monthly')}
+              className={cn(
+                'rounded-full px-5 py-2 text-sm font-semibold transition',
+                billingInterval === 'monthly'
+                  ? 'bg-fire-500 text-white shadow'
+                  : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white'
+              )}
+            >
+              {t('marketingExtras.pricing.billing.monthly')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillingInterval('yearly')}
+              className={cn(
+                'rounded-full px-5 py-2 text-sm font-semibold transition',
+                billingInterval === 'yearly'
+                  ? 'bg-fire-500 text-white shadow'
+                  : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white'
+              )}
+            >
+              {t('marketingExtras.pricing.billing.yearly')}
+            </button>
+          </div>
         </div>
 
         {localizedPlans.length === 0 ? (
@@ -157,8 +209,36 @@ export function PricingPageView({
                 planMatches && !subscriptionPeriodActive;
               const isFeatured = planKey === 'GROWTH';
               const isCustom = planKey === 'CUSTOM';
+              const isFree = planKey === 'FREE';
 
-              const paymentHref = buildPaymentHref(plan.plan, isLoggedIn);
+              const paymentHref = buildPaymentHref(
+                plan.plan,
+                isLoggedIn,
+                billingInterval
+              );
+
+              const listPrice =
+                billingInterval === 'yearly' ? plan.yearlyPrice : plan.price;
+              const salePrice =
+                billingInterval === 'yearly'
+                  ? plan.yearlyFinal
+                  : plan.monthlyFinal;
+              const discountOn =
+                billingInterval === 'yearly'
+                  ? plan.yearlyDiscountEnabled &&
+                    plan.yearlyDiscountPercent > 0 &&
+                    salePrice < listPrice
+                  : plan.monthlyDiscountEnabled &&
+                    plan.monthlyDiscountPercent > 0 &&
+                    salePrice < listPrice;
+              const discountPct =
+                billingInterval === 'yearly'
+                  ? plan.yearlyDiscountPercent
+                  : plan.monthlyDiscountPercent;
+              const periodSuffix =
+                billingInterval === 'yearly'
+                  ? t('marketingExtras.pricing.billing.perYear')
+                  : t('marketingExtras.pricing.billing.perMonth');
 
               return (
                 <article
@@ -170,15 +250,42 @@ export function PricingPageView({
                       : 'border-zinc-200/80 bg-white/70 dark:border-zinc-700 dark:bg-zinc-900/50'
                   )}
                 >
+                  {discountOn ? (
+                    <span className="absolute right-3 top-3 z-10 inline-flex rounded-full bg-fire-500 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-md">
+                      {t('marketingExtras.pricing.billing.savePercent', {
+                        percent: discountPct,
+                      })}
+                    </span>
+                  ) : null}
                   {isFeatured ? (
                     <span className="absolute -top-3 left-1/2 inline-flex -translate-x-1/2 rounded-full border border-fire-300 bg-fire-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-fire-700 dark:border-fire-500/40 dark:bg-fire-500/15 dark:text-fire-200">
                       {t('marketingExtras.pricing.mostPopular')}
                     </span>
                   ) : null}
+                  
                   <h2 className="text-3xl font-semibold">{plan.name}</h2>
-                  <p className="mt-2 text-4xl font-bold tracking-tight text-fire-600 dark:text-fire-400">
-                    {plan.priceLabel}
-                  </p>
+                  {isCustom || isFree ? (
+                    <p className="mt-2 text-4xl font-bold tracking-tight text-fire-600 dark:text-fire-400">
+                      {plan.priceLabel}
+                    </p>
+                  ) : (
+                    <div className="mt-2">
+                      {discountOn ? (
+                        <p className="text-base font-medium text-zinc-400 line-through tabular-nums dark:text-zinc-500">
+                          {formatEuro(listPrice, uiLang)}
+                          <span className="ml-1 text-sm no-underline">
+                            {periodSuffix}
+                          </span>
+                        </p>
+                      ) : null}
+                      <p className="text-4xl font-bold tracking-tight text-fire-600 tabular-nums dark:text-fire-400">
+                        {formatEuro(salePrice, uiLang)}
+                        <span className="ml-1 text-base font-semibold text-zinc-500 dark:text-zinc-400">
+                          {periodSuffix}
+                        </span>
+                      </p>
+                    </div>
+                  )}
                   <p className="mt-2 min-h-10 text-sm text-zinc-600 dark:text-zinc-300">
                     {plan.description}
                   </p>

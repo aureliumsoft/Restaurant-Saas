@@ -9,6 +9,11 @@ import {
   getPayPalPlatformConfig,
   isPayPalConfigured,
 } from '@/lib/paypal-server';
+import {
+  bilingualPlanPriceLabel,
+  parseBillingInterval,
+  resolveCatalogFinalAmount,
+} from '@/lib/subscription-catalog-pricing';
 
 export const runtime = 'nodejs';
 
@@ -21,6 +26,9 @@ export async function GET(req: NextRequest) {
   }
 
   const planRaw = req.nextUrl.searchParams.get('plan')?.toUpperCase().trim();
+  const interval = parseBillingInterval(
+    req.nextUrl.searchParams.get('interval')
+  );
   const planValues = Object.values(SubscriptionPlan) as string[];
   if (!planRaw || !planValues.includes(planRaw)) {
     return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
@@ -32,8 +40,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unknown plan' }, { status: 404 });
   }
 
+  const amount = resolveCatalogFinalAmount({
+    interval,
+    price: catalog.price,
+    yearlyPrice: catalog.yearlyPrice,
+    monthlyDiscountEnabled: catalog.monthlyDiscountEnabled,
+    monthlyDiscountPercent: catalog.monthlyDiscountPercent,
+    yearlyDiscountEnabled: catalog.yearlyDiscountEnabled,
+    yearlyDiscountPercent: catalog.yearlyDiscountPercent,
+  });
+
   try {
-    const { planId } = await ensurePayPalPlanForCatalog(plan);
+    const { planId } = await ensurePayPalPlanForCatalog(plan, interval);
     const config = getPayPalPlatformConfig();
     return NextResponse.json({
       clientId: config.clientId,
@@ -41,7 +59,9 @@ export async function GET(req: NextRequest) {
       currency: config.currency,
       mode: config.mode,
       planName: catalog.name,
-      priceLabel: catalog.priceLabel,
+      priceLabel: bilingualPlanPriceLabel(amount, interval),
+      amount,
+      interval,
     });
   } catch (e) {
     console.error('PayPal subscription-config failed:', e);

@@ -3285,11 +3285,11 @@ export function PosScreen({
             {priceDisplay.hasFromPrefix ? (
               <span className="text-[10px] font-normal text-muted-foreground">
                 {t('priceFromLabel')}
-              </span>
+        </span>
             ) : null}
             <span className={cn('text-sm font-bold tabular-nums', POS_ACCENT_TEXT)}>
               {formatMoney(priceDisplay.amount)}
-            </span>
+        </span>
             {onSale && priceDisplay.compareAt != null ? (
               <span className="text-[10px] tabular-nums text-muted-foreground line-through">
                 {formatMoney(priceDisplay.compareAt)}
@@ -3489,15 +3489,15 @@ export function PosScreen({
                 size="icon"
                 className={cn('relative h-9 w-9', POS_GHOST_ICON_BTN)}
                 title={t('pos.toolbar.kioskOrders')}
-                onClick={() => setKioskOrdersOpen(true)}
-              >
-                <Monitor className="h-4 w-4" />
-                {kioskPendingCount > 0 ? (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
-                    {kioskPendingCount}
-                  </span>
-                ) : null}
-              </Button>
+            onClick={() => setKioskOrdersOpen(true)}
+          >
+            <Monitor className="h-4 w-4" />
+            {kioskPendingCount > 0 ? (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-fire-500 px-1 text-[10px] font-bold text-white">
+                {kioskPendingCount}
+              </span>
+            ) : null}
+          </Button>
             )
           ) : null}
           {fulfillmentSettings.dineInEnabled ? (
@@ -5048,8 +5048,8 @@ export function PosScreen({
                           <p className="text-xs text-muted-foreground">
                             {t('pos.itemCount', {
                               count: order.lines.reduce(
-                                (sum, line) => sum + line.qty,
-                                0
+                              (sum, line) => sum + line.qty,
+                              0
                               ),
                             })}
                           </p>
@@ -5145,7 +5145,7 @@ export function PosScreen({
                   {t('pos.dialogs.sendToKitchen.orderLabel', {
                     label:
                       kitchenSendOrder.ticketNumber != null
-                        ? `#${String(kitchenSendOrder.ticketNumber).padStart(2, '0')}`
+                    ? `#${String(kitchenSendOrder.ticketNumber).padStart(2, '0')}`
                         : kitchenSendOrder.shortOrderId,
                   })}
                 </p>

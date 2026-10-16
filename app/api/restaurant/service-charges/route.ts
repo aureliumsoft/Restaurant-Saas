@@ -63,6 +63,19 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
+    {
+      const { getRestaurantEntitlements, moduleLimitFlag } = await import(
+        '@/lib/entitlements'
+      );
+      const { subscriptionPlanDeniedResponse } = await import(
+        '@/lib/subscription-plan-enforcement'
+      );
+      const entitlements = await getRestaurantEntitlements(auth.restaurant.id);
+      if (!moduleLimitFlag(entitlements, 'basicSettings', 'serviceCharges', true)) {
+        return subscriptionPlanDeniedResponse('Service charges');
+      }
+    }
+
     const json = await req.json().catch(() => null);
     const parsed = patchSchema.safeParse(json);
     if (!parsed.success) {

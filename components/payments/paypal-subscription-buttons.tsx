@@ -20,6 +20,7 @@ type SubscriptionConfig = {
 
 type PayPalSubscriptionButtonsProps = {
   plan: string;
+  billingInterval?: 'monthly' | 'yearly';
   disabled?: boolean;
   onProcessingChange?: (processing: boolean) => void;
   onApproved: (info: { subscriptionId: string }) => void | Promise<void>;
@@ -30,12 +31,16 @@ type PayPalSubscriptionButtonsProps = {
 const configCache = new Map<string, SubscriptionConfig>();
 const sdkPromises = new Map<string, Promise<void>>();
 
-async function fetchSubscriptionConfig(plan: string): Promise<SubscriptionConfig> {
-  const cached = configCache.get(plan);
+async function fetchSubscriptionConfig(
+  plan: string,
+  interval: 'monthly' | 'yearly'
+): Promise<SubscriptionConfig> {
+  const cacheKey = `${plan}:${interval}`;
+  const cached = configCache.get(cacheKey);
   if (cached) return cached;
 
   const res = await fetch(
-    `/api/paypal/subscription-config?plan=${encodeURIComponent(plan)}`,
+    `/api/paypal/subscription-config?plan=${encodeURIComponent(plan)}&interval=${encodeURIComponent(interval)}`,
     { cache: 'no-store' }
   );
   const body = (await res.json().catch(() => ({}))) as {
@@ -58,7 +63,7 @@ async function fetchSubscriptionConfig(plan: string): Promise<SubscriptionConfig
     currency: (body.currency ?? 'EUR').toUpperCase(),
     mode: body.mode === 'live' ? 'live' : 'sandbox',
   };
-  configCache.set(plan, config);
+  configCache.set(cacheKey, config);
   return config;
 }
 
@@ -117,6 +122,7 @@ function loadSubscriptionSdk(
 
 export function PayPalSubscriptionButtons({
   plan,
+  billingInterval = 'monthly',
   disabled,
   onProcessingChange,
   onApproved,
@@ -132,8 +138,14 @@ export function PayPalSubscriptionButtons({
   const [sandboxMode, setSandboxMode] = useState(false);
   const [checkoutCurrency, setCheckoutCurrency] = useState('EUR');
 
-  const latestRef = useRef({ plan, onApproved, onError, onCancel });
-  latestRef.current = { plan, onApproved, onError, onCancel };
+  const latestRef = useRef({
+    plan,
+    billingInterval,
+    onApproved,
+    onError,
+    onCancel,
+  });
+  latestRef.current = { plan, billingInterval, onApproved, onError, onCancel };
 
   useEffect(() => {
     setPortalMounted(true);
@@ -146,7 +158,7 @@ export function PayPalSubscriptionButtons({
     setReady(false);
     (async () => {
       try {
-        const config = await fetchSubscriptionConfig(plan);
+        const config = await fetchSubscriptionConfig(plan, billingInterval);
         await loadSubscriptionSdk(
           config.clientId,
           config.currency,
@@ -168,7 +180,7 @@ export function PayPalSubscriptionButtons({
     return () => {
       cancelled = true;
     };
-  }, [plan, onError]);
+  }, [plan, billingInterval, onError]);
 
   useEffect(() => {
     if (!ready) return;
@@ -179,7 +191,10 @@ export function PayPalSubscriptionButtons({
 
     let config: SubscriptionConfig;
     const setup = async () => {
-      config = await fetchSubscriptionConfig(latestRef.current.plan);
+      config = await fetchSubscriptionConfig(
+        latestRef.current.plan,
+        latestRef.current.billingInterval
+      );
 
       const btn = paypal.Buttons({
         style: {
@@ -248,7 +263,7 @@ export function PayPalSubscriptionButtons({
     return () => {
       slot.innerHTML = '';
     };
-  }, [ready, plan, onProcessingChange, onError]);
+  }, [ready, plan, billingInterval, onProcessingChange, onError]);
 
   const blocked = disabled || processing;
 

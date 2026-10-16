@@ -27,6 +27,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
+import {
+  bilingualPlanPriceLabel,
+  finalPrice,
+} from '@/lib/subscription-catalog-pricing';
 import { cn } from '@/lib/utils';
 
 export type CatalogPlan = {
@@ -37,6 +41,13 @@ export type CatalogPlan = {
   priceLabel: string;
   description: string;
   features: string[] | null;
+  monthlyDiscountEnabled?: boolean;
+  monthlyDiscountPercent?: number;
+  yearlyPrice?: number;
+  yearlyDiscountEnabled?: boolean;
+  yearlyDiscountPercent?: number;
+  monthlyFinal?: number;
+  yearlyFinal?: number;
 };
 
 type Props = {
@@ -76,7 +87,9 @@ function FormField({
     <div className={cn('grid gap-1.5', className)}>
       <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
       {children}
-      {hint ? <p className="text-[11px] leading-relaxed text-muted-foreground">{hint}</p> : null}
+      {hint ? (
+        <p className="text-[11px] leading-relaxed text-muted-foreground">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -95,7 +108,9 @@ function SectionPanel({
   accent: string;
 }) {
   return (
-    <section className={cn('overflow-hidden rounded-2xl p-4 sm:p-5', adminInsetClass)}>
+    <section
+      className={cn('overflow-hidden rounded-2xl p-4 sm:p-5', adminInsetClass)}
+    >
       <div className="mb-4 flex items-start gap-3">
         <div
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
@@ -115,24 +130,72 @@ function SectionPanel({
   );
 }
 
+function DiscountToggle({
+  checked,
+  onChange,
+  id,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  id: string;
+}) {
+  return (
+    <button
+      id={id}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative h-7 w-12 shrink-0 rounded-full transition-colors',
+        checked ? 'bg-fire-500' : 'bg-zinc-300 dark:bg-zinc-600'
+      )}
+    >
+      <span
+        className={cn(
+          'absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform',
+          checked ? 'left-5' : 'left-0.5'
+        )}
+      />
+    </button>
+  );
+}
+
 export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
+  const [yearlyAmount, setYearlyAmount] = useState('');
   const [priceLabel, setPriceLabel] = useState('');
   const [description, setDescription] = useState('');
   const [featuresText, setFeaturesText] = useState('');
+  const [monthlyDiscountOn, setMonthlyDiscountOn] = useState(false);
+  const [monthlyDiscountPct, setMonthlyDiscountPct] = useState('0');
+  const [yearlyDiscountOn, setYearlyDiscountOn] = useState(false);
+  const [yearlyDiscountPct, setYearlyDiscountPct] = useState('0');
   const [saving, setSaving] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [yearlyTouched, setYearlyTouched] = useState(false);
 
   const accent = plan ? PLAN_ACCENTS[plan.plan] : '#7c3aed';
+  const isQuotePlan = plan?.plan === 'FREE' || plan?.plan === 'CUSTOM';
 
   useEffect(() => {
     if (!open || !plan) return;
     setName(plan.name);
     setAmount(String(plan.price ?? 0));
+    const yearly =
+      plan.yearlyPrice != null && plan.yearlyPrice > 0
+        ? plan.yearlyPrice
+        : (plan.price ?? 0) * 12;
+    setYearlyAmount(String(yearly));
+    setYearlyTouched(false);
     setPriceLabel(plan.priceLabel);
     setDescription(plan.description);
     setFeaturesText((plan.features ?? []).join('\n'));
+    setMonthlyDiscountOn(Boolean(plan.monthlyDiscountEnabled));
+    setMonthlyDiscountPct(String(plan.monthlyDiscountPercent ?? 0));
+    setYearlyDiscountOn(Boolean(plan.yearlyDiscountEnabled));
+    setYearlyDiscountPct(String(plan.yearlyDiscountPercent ?? 0));
   }, [open, plan]);
 
   const featureLines = useMemo(
@@ -144,17 +207,47 @@ export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
     [featuresText]
   );
 
+  const monthlyList = Math.max(0, Math.floor(Number(amount) || 0));
+  const yearlyList = Math.max(0, Math.floor(Number(yearlyAmount) || 0));
+  const monthlyPct = Math.min(
+    100,
+    Math.max(0, Math.floor(Number(monthlyDiscountPct) || 0))
+  );
+  const yearlyPct = Math.min(
+    100,
+    Math.max(0, Math.floor(Number(yearlyDiscountPct) || 0))
+  );
+  const monthlyFinal = finalPrice(monthlyList, monthlyDiscountOn, monthlyPct);
+  const yearlyFinal = finalPrice(yearlyList, yearlyDiscountOn, yearlyPct);
+
+  const onMonthlyChange = (raw: string) => {
+    setAmount(raw);
+    if (!yearlyTouched) {
+      const n = Math.max(0, Math.floor(Number(raw) || 0));
+      setYearlyAmount(String(n * 12));
+    }
+  };
+
   const save = async () => {
     if (!plan) return;
     setSaving(true);
     try {
+      const autoLabel =
+        isQuotePlan && priceLabel.trim()
+          ? priceLabel.trim()
+          : bilingualPlanPriceLabel(monthlyFinal, 'monthly');
       await axios.patch('/api/admin/pricing-plans', {
         plan: plan.plan,
         name: name.trim(),
-        price: Math.max(0, Math.floor(Number(amount) || 0)),
-        priceLabel: priceLabel.trim(),
+        price: monthlyList,
+        priceLabel: autoLabel,
         description: description.trim(),
         features: featureLines,
+        monthlyDiscountEnabled: monthlyDiscountOn,
+        monthlyDiscountPercent: monthlyPct,
+        yearlyPrice: yearlyList,
+        yearlyDiscountEnabled: yearlyDiscountOn,
+        yearlyDiscountPercent: yearlyPct,
       });
       toast.success('Pricing catalog updated');
       setShowConfirmation(false);
@@ -200,13 +293,12 @@ export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
                 >
                   {plan.plan}
                 </Badge>
-                {priceLabel ? (
-                  <Badge variant="secondary" className="rounded-md font-medium">
-                    {priceLabel}
-                  </Badge>
-                ) : null}
+                <Badge variant="secondary" className="rounded-md font-medium">
+                  €{monthlyFinal}/mo · €{yearlyFinal}/yr
+                </Badge>
                 <Badge variant="secondary" className="rounded-md">
-                  {featureLines.length} feature{featureLines.length === 1 ? '' : 's'}
+                  {featureLines.length} feature
+                  {featureLines.length === 1 ? '' : 's'}
                 </Badge>
               </div>
             </div>
@@ -234,51 +326,163 @@ export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
             <SectionPanel
               icon={Sparkles}
               title="Pricing"
-              description="Amount and label on the marketing site"
+              description="Monthly and yearly list prices with optional discounts"
               accent="#10b981"
             >
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField label="Price (integer)" hint="Stored as whole number (e.g. 49)">
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                      €
-                    </span>
-                    <Input
-                      inputMode="numeric"
-                      className={cn(fieldInputClass, 'pl-7 tabular-nums')}
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0"
-                    />
+              <div className="space-y-5">
+                <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-3">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <FormField
+                      label="Monthly price"
+                      hint="Whole euros (e.g. 29). Sets yearly to ×12 until you edit yearly."
+                      className="min-w-[140px] flex-1"
+                    >
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                          €
+                        </span>
+                        <Input
+                          inputMode="numeric"
+                          className={cn(fieldInputClass, 'pl-7 tabular-nums')}
+                          value={amount}
+                          onChange={(e) => onMonthlyChange(e.target.value)}
+                          placeholder="0"
+                        />
+                      </div>
+                    </FormField>
+                    <div className="flex items-center gap-2 pb-1">
+                      <Label
+                        htmlFor="monthly-discount-toggle"
+                        className="text-xs font-medium text-muted-foreground"
+                      >
+                        Discount
+                      </Label>
+                      <DiscountToggle
+                        id="monthly-discount-toggle"
+                        checked={monthlyDiscountOn}
+                        onChange={setMonthlyDiscountOn}
+                      />
+                    </div>
                   </div>
-                </FormField>
-                <FormField
-                  label="Price label"
-                  hint='Shown on cards, e.g. "€49/mo" or "Contact us"'
-                >
-                  <Input
-                    className={fieldInputClass}
-                    value={priceLabel}
-                    onChange={(e) => setPriceLabel(e.target.value)}
-                    placeholder="€49/mo"
-                  />
-                </FormField>
-              </div>
+                  {monthlyDiscountOn ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <FormField label="Discount (%)">
+                        <Input
+                          inputMode="numeric"
+                          className={cn(fieldInputClass, 'tabular-nums')}
+                          value={monthlyDiscountPct}
+                          onChange={(e) => setMonthlyDiscountPct(e.target.value)}
+                          placeholder="0"
+                        />
+                      </FormField>
+                      <FormField label="Final price">
+                        <Input
+                          readOnly
+                          className={cn(
+                            fieldInputClass,
+                            'tabular-nums text-muted-foreground'
+                          )}
+                          value={`€${monthlyFinal}`}
+                        />
+                      </FormField>
+                    </div>
+                  ) : null}
+                </div>
 
-              {(name || priceLabel) && (
+                <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-3">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <FormField
+                      label="Yearly price"
+                      hint="Defaults to monthly × 12"
+                      className="min-w-[140px] flex-1"
+                    >
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                          €
+                        </span>
+                        <Input
+                          inputMode="numeric"
+                          className={cn(fieldInputClass, 'pl-7 tabular-nums')}
+                          value={yearlyAmount}
+                          onChange={(e) => {
+                            setYearlyTouched(true);
+                            setYearlyAmount(e.target.value);
+                          }}
+                          placeholder="0"
+                        />
+                      </div>
+                    </FormField>
+                    <div className="flex items-center gap-2 pb-1">
+                      <Label
+                        htmlFor="yearly-discount-toggle"
+                        className="text-xs font-medium text-muted-foreground"
+                      >
+                        Discount
+                      </Label>
+                      <DiscountToggle
+                        id="yearly-discount-toggle"
+                        checked={yearlyDiscountOn}
+                        onChange={setYearlyDiscountOn}
+                      />
+                    </div>
+                  </div>
+                  {yearlyDiscountOn ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <FormField label="Discount (%)">
+                        <Input
+                          inputMode="numeric"
+                          className={cn(fieldInputClass, 'tabular-nums')}
+                          value={yearlyDiscountPct}
+                          onChange={(e) => setYearlyDiscountPct(e.target.value)}
+                          placeholder="0"
+                        />
+                      </FormField>
+                      <FormField label="Final price">
+                        <Input
+                          readOnly
+                          className={cn(
+                            fieldInputClass,
+                            'tabular-nums text-muted-foreground'
+                          )}
+                          value={`€${yearlyFinal}`}
+                        />
+                      </FormField>
+                    </div>
+                  ) : null}
+                </div>
+
+                {isQuotePlan ? (
+                  <FormField
+                    label="Price label (Free / Custom)"
+                    hint='e.g. "€0/mo" or "Request quote"'
+                  >
+                    <Input
+                      className={fieldInputClass}
+                      value={priceLabel}
+                      onChange={(e) => setPriceLabel(e.target.value)}
+                      placeholder="Request quote"
+                    />
+                  </FormField>
+                ) : null}
+
                 <div
-                  className="mt-4 rounded-xl px-4 py-3"
+                  className="rounded-xl px-4 py-3"
                   style={{ backgroundColor: `${accent}0c` }}
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Preview
                   </p>
-                  <p className="mt-1 text-base font-semibold">{name || 'Plan name'}</p>
-                  <p className="text-2xl font-bold tabular-nums" style={{ color: accent }}>
-                    {priceLabel || '—'}
+                  <p className="mt-1 text-base font-semibold">
+                    {name || 'Plan name'}
+                  </p>
+                  <p
+                    className="text-lg font-bold tabular-nums"
+                    style={{ color: accent }}
+                  >
+                    €{monthlyFinal}/mo · €{yearlyFinal}/yr
                   </p>
                 </div>
-              )}
+              </div>
             </SectionPanel>
 
             <SectionPanel
@@ -312,7 +516,9 @@ export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
                   className={textareaClass}
                   value={featuresText}
                   onChange={(e) => setFeaturesText(e.target.value)}
-                  placeholder={'Unlimited menu items\nPOS & KDS\nPriority support'}
+                  placeholder={
+                    'Unlimited menu items\nPOS & KDS\nPriority support'
+                  }
                 />
               </FormField>
 

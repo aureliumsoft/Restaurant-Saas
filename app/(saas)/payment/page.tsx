@@ -10,9 +10,18 @@ import {
   PRICING_MODULE_ROWS,
 } from '@/lib/pricing-comparison';
 import { getRestaurantForUser } from '@/lib/restaurant-owner';
+import {
+  bilingualPlanPriceLabel,
+  parseBillingInterval,
+  resolveCatalogFinalAmount,
+} from '@/lib/subscription-catalog-pricing';
 
 type PaymentPageProps = {
-  searchParams?: Promise<{ plan?: string; modules?: string }>;
+  searchParams?: Promise<{
+    plan?: string;
+    modules?: string;
+    interval?: string;
+  }>;
 };
 
 function parseModulesParam(raw: string | undefined): string[] {
@@ -32,6 +41,7 @@ export default async function PaymentPage({ searchParams }: PaymentPageProps) {
   const params = searchParams ? await searchParams : undefined;
   const planRaw =
     typeof params?.plan === 'string' ? params.plan.toUpperCase().trim() : 'FREE';
+  const interval = parseBillingInterval(params?.interval);
 
   const planValues = Object.values(SubscriptionPlan) as string[];
   const plan = planValues.includes(planRaw)
@@ -51,7 +61,6 @@ export default async function PaymentPage({ searchParams }: PaymentPageProps) {
       : null;
 
   let restaurantId: string | null = null;
-  let priceMajor: number | null = null;
   if (userEmail) {
     const user = await db.user.findUnique({
       where: { email: userEmail },
@@ -62,9 +71,24 @@ export default async function PaymentPage({ searchParams }: PaymentPageProps) {
       if (restaurant) restaurantId = restaurant.id;
     }
   }
-  if (Number.isFinite(catalog.price) && catalog.price > 0) {
-    priceMajor = Number(catalog.price);
-  }
+
+  const finalAmount = resolveCatalogFinalAmount({
+    interval,
+    price: catalog.price,
+    yearlyPrice: catalog.yearlyPrice,
+    monthlyDiscountEnabled: catalog.monthlyDiscountEnabled,
+    monthlyDiscountPercent: catalog.monthlyDiscountPercent,
+    yearlyDiscountEnabled: catalog.yearlyDiscountEnabled,
+    yearlyDiscountPercent: catalog.yearlyDiscountPercent,
+  });
+
+  const isQuote =
+    plan === SubscriptionPlan.FREE || plan === SubscriptionPlan.CUSTOM;
+  const priceMajor =
+    Number.isFinite(finalAmount) && finalAmount > 0 ? finalAmount : null;
+  const priceLabel = isQuote
+    ? catalog.priceLabel
+    : bilingualPlanPriceLabel(finalAmount, interval);
 
   const isCustom = plan === SubscriptionPlan.CUSTOM;
   let selectedModules: string[] = [];
@@ -84,8 +108,9 @@ export default async function PaymentPage({ searchParams }: PaymentPageProps) {
     <PaymentCheckoutClient
       plan={plan}
       planName={catalog.name}
-      priceLabel={catalog.priceLabel}
+      priceLabel={priceLabel}
       priceMajor={priceMajor}
+      billingInterval={interval}
       description={catalog.description}
       features={catalog.features ?? []}
       selectedModules={selectedModules}

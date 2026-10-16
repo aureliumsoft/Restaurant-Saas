@@ -13,6 +13,7 @@ export const runtime = 'nodejs';
 
 const bodySchema = z.object({
   plan: z.nativeEnum(SubscriptionPlan),
+  interval: z.enum(['monthly', 'yearly']).optional().default('monthly'),
 });
 
 export async function POST(req: NextRequest) {
@@ -46,8 +47,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unknown subscription plan' }, { status: 404 });
   }
 
+  const { resolveCatalogFinalAmount } = await import(
+    '@/lib/subscription-catalog-pricing'
+  );
+  const amountMajor = resolveCatalogFinalAmount({
+    interval: parsed.data.interval,
+    price: catalog.price,
+    yearlyPrice: catalog.yearlyPrice,
+    monthlyDiscountEnabled: catalog.monthlyDiscountEnabled,
+    monthlyDiscountPercent: catalog.monthlyDiscountPercent,
+    yearlyDiscountEnabled: catalog.yearlyDiscountEnabled,
+    yearlyDiscountPercent: catalog.yearlyDiscountPercent,
+  });
+
   const currency = 'EUR';
-  if (!Number.isFinite(catalog.price) || catalog.price <= 0) {
+  if (!Number.isFinite(amountMajor) || amountMajor <= 0) {
     return NextResponse.json({ error: 'Invalid plan price for checkout' }, { status: 400 });
   }
 
@@ -74,13 +88,14 @@ export async function POST(req: NextRequest) {
   const origin = await getRequestOrigin();
   try {
     const checkout = await createPayPalOrder({
-      amount: catalog.price,
+      amount: amountMajor,
       currency,
       title: catalog.name,
-      returnUrl: `${origin}/payment/success?plan=${encodeURIComponent(parsed.data.plan)}`,
-      cancelUrl: `${origin}/payment?plan=${encodeURIComponent(parsed.data.plan)}`,
+      returnUrl: `${origin}/payment/success?plan=${encodeURIComponent(parsed.data.plan)}&interval=${encodeURIComponent(parsed.data.interval)}`,
+      cancelUrl: `${origin}/payment?plan=${encodeURIComponent(parsed.data.plan)}&interval=${encodeURIComponent(parsed.data.interval)}`,
       metadata: {
         plan: parsed.data.plan,
+        interval: parsed.data.interval,
         ...(restaurantId ? { restaurantId } : {}),
         ...(userId ? { userId } : {}),
         ...(email ? { userEmail: email } : {}),

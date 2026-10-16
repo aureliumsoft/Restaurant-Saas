@@ -159,7 +159,7 @@ function LoginForm() {
   return (
     <PublicAuthShell
       title={t('auth.login.title')}
-      subtitle={t('auth.login.subtitle')}
+      subtitle={t('auth.login.googleHint')}
     >
       <div className="flex flex-col gap-2">
         <Button
@@ -188,6 +188,11 @@ function LoginForm() {
         </div>
         <div className="my-6 border-t flex-1" />
       </div>
+
+      <div className="text-center text-sm text-muted-foreground mb-6">
+        {t('auth.login.loginHint')}
+      </div>
+      
       <form onSubmit={handleCredentials} className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <Label htmlFor="email">{t('auth.email')}</Label>

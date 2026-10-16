@@ -6,6 +6,7 @@ import { getAppSession } from '@/lib/auth/app-session';
 import { getRestaurantForUser } from '@/lib/restaurant-owner';
 import { isSubscriptionPeriodActive } from '@/lib/subscription-access';
 import { processSubscriptionLifecycle } from '@/lib/subscription-lifecycle';
+import { finalPrice } from '@/lib/subscription-catalog-pricing';
 
 function formatPeriodEnd(iso: Date | null): string {
   if (!iso) return '';
@@ -57,9 +58,16 @@ export default async function PricingPage() {
     plan: string;
     name: string;
     price: number;
+    yearlyPrice: number;
     priceLabel: string;
     description: string;
     features: string[];
+    monthlyDiscountEnabled: boolean;
+    monthlyDiscountPercent: number;
+    yearlyDiscountEnabled: boolean;
+    yearlyDiscountPercent: number;
+    monthlyFinal: number;
+    yearlyFinal: number;
   }> = [];
   try {
     const rows = await db.$queryRaw<
@@ -70,9 +78,25 @@ export default async function PricingPage() {
         priceLabel: string;
         description: string;
         features: string[] | null;
+        monthlyDiscountEnabled: boolean;
+        monthlyDiscountPercent: number;
+        yearlyPrice: number;
+        yearlyDiscountEnabled: boolean;
+        yearlyDiscountPercent: number;
       }>
     >(Prisma.sql`
-      SELECT "plan"::text AS "plan", "name", "price", "priceLabel", "description", "features"
+      SELECT
+        "plan"::text AS "plan",
+        "name",
+        "price",
+        "priceLabel",
+        "description",
+        "features",
+        COALESCE("monthlyDiscountEnabled", false) AS "monthlyDiscountEnabled",
+        COALESCE("monthlyDiscountPercent", 0) AS "monthlyDiscountPercent",
+        COALESCE("yearlyPrice", 0) AS "yearlyPrice",
+        COALESCE("yearlyDiscountEnabled", false) AS "yearlyDiscountEnabled",
+        COALESCE("yearlyDiscountPercent", 0) AS "yearlyDiscountPercent"
       FROM "SubscriptionCatalog"
       ORDER BY CASE "plan"
         WHEN 'FREE' THEN 1
@@ -85,14 +109,33 @@ export default async function PricingPage() {
       END
     `);
     if (rows.length > 0) {
-      plans = rows.map((r) => ({
-        plan: r.plan,
-        name: r.name,
-        price: Number(r.price) || 0,
-        priceLabel: r.priceLabel,
-        description: r.description,
-        features: r.features ?? [],
-      }));
+      plans = rows.map((r) => {
+        const price = Number(r.price) || 0;
+        const yearlyPrice = Number(r.yearlyPrice) || 0;
+        return {
+          plan: r.plan,
+          name: r.name,
+          price,
+          yearlyPrice,
+          priceLabel: r.priceLabel,
+          description: r.description,
+          features: r.features ?? [],
+          monthlyDiscountEnabled: Boolean(r.monthlyDiscountEnabled),
+          monthlyDiscountPercent: Number(r.monthlyDiscountPercent) || 0,
+          yearlyDiscountEnabled: Boolean(r.yearlyDiscountEnabled),
+          yearlyDiscountPercent: Number(r.yearlyDiscountPercent) || 0,
+          monthlyFinal: finalPrice(
+            price,
+            Boolean(r.monthlyDiscountEnabled),
+            Number(r.monthlyDiscountPercent) || 0
+          ),
+          yearlyFinal: finalPrice(
+            yearlyPrice,
+            Boolean(r.yearlyDiscountEnabled),
+            Number(r.yearlyDiscountPercent) || 0
+          ),
+        };
+      });
     }
   } catch {
     plans = [];

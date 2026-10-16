@@ -351,6 +351,7 @@ export function fakeSubscriptionCatalog() {
     description: faker.lorem.words(5),
     paypalProductId: undefined,
     paypalPlanId: undefined,
+    paypalYearlyPlanId: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -363,8 +364,14 @@ export function fakeSubscriptionCatalogComplete() {
     priceLabel: faker.lorem.words(5),
     description: faker.lorem.words(5),
     features: [],
+    monthlyDiscountEnabled: false,
+    monthlyDiscountPercent: 0,
+    yearlyPrice: 0,
+    yearlyDiscountEnabled: false,
+    yearlyDiscountPercent: 0,
     paypalProductId: undefined,
     paypalPlanId: undefined,
+    paypalYearlyPlanId: undefined,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };

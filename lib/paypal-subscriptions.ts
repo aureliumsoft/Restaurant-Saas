@@ -15,6 +15,10 @@ import {
   getPayPalPlatformConfig,
   isPayPalConfigured,
 } from '@/lib/paypal-server';
+import {
+  type BillingInterval,
+  resolveCatalogFinalAmount,
+} from '@/lib/subscription-catalog-pricing';
 
 export type PayPalSubscriptionDetails = {
   id: string;
@@ -93,9 +97,10 @@ async function ensurePayPalPlanActive(
   );
 }
 
-/** Ensures a PayPal product + monthly plan exist for the catalog row; caches ids on SubscriptionCatalog. */
+/** Ensures a PayPal product + billing plan exist for the catalog row; caches ids on SubscriptionCatalog. */
 export async function ensurePayPalPlanForCatalog(
-  plan: SubscriptionPlan
+  plan: SubscriptionPlan,
+  interval: BillingInterval = 'monthly'
 ): Promise<{ planId: string; productId: string }> {
   if (!isPayPalConfigured()) {
     throw new Error('PayPal is not configured');
@@ -104,25 +109,36 @@ export async function ensurePayPalPlanForCatalog(
   const catalog = await db.subscriptionCatalog.findUnique({ where: { plan } });
   if (!catalog) throw new Error(`Unknown subscription plan: ${plan}`);
 
-  if (catalog.paypalPlanId && catalog.paypalProductId) {
+  const cachedPlanId =
+    interval === 'yearly' ? catalog.paypalYearlyPlanId : catalog.paypalPlanId;
+
+  if (cachedPlanId && catalog.paypalProductId) {
     const config = getPayPalPlatformConfig();
     const token = await getPayPalAccessToken();
     try {
-      await ensurePayPalPlanActive(
-        catalog.paypalPlanId,
-        token,
-        config.baseUrl
-      );
+      await ensurePayPalPlanActive(cachedPlanId, token, config.baseUrl);
     } catch (e) {
       console.warn('PayPal plan status check failed:', e);
     }
-    return { planId: catalog.paypalPlanId, productId: catalog.paypalProductId };
+    return { planId: cachedPlanId, productId: catalog.paypalProductId };
   }
 
   const config = getPayPalPlatformConfig();
   const token = await getPayPalAccessToken();
   const currency = config.currency;
-  const priceValue = Number(catalog.price).toFixed(2);
+  const amountMajor = resolveCatalogFinalAmount({
+    interval,
+    price: catalog.price,
+    yearlyPrice: catalog.yearlyPrice,
+    monthlyDiscountEnabled: catalog.monthlyDiscountEnabled,
+    monthlyDiscountPercent: catalog.monthlyDiscountPercent,
+    yearlyDiscountEnabled: catalog.yearlyDiscountEnabled,
+    yearlyDiscountPercent: catalog.yearlyDiscountPercent,
+  });
+  if (!Number.isFinite(amountMajor) || amountMajor <= 0) {
+    throw new Error('Invalid plan price for PayPal billing plan');
+  }
+  const priceValue = amountMajor.toFixed(2);
 
   let productId = catalog.paypalProductId;
   if (!productId) {
@@ -148,16 +164,20 @@ export async function ensurePayPalPlanForCatalog(
     productId = productJson.id;
   }
 
+  const isYearly = interval === 'yearly';
   const planRes = await fetch(`${config.baseUrl}/v1/billing/plans`, {
     method: 'POST',
     headers: authHeaders(token),
     body: JSON.stringify({
       product_id: productId,
-      name: `${catalog.name} Monthly`,
+      name: `${catalog.name} ${isYearly ? 'Yearly' : 'Monthly'}`,
       description: catalog.description.slice(0, 128),
       billing_cycles: [
         {
-          frequency: { interval_unit: 'MONTH', interval_count: 1 },
+          frequency: {
+            interval_unit: isYearly ? 'YEAR' : 'MONTH',
+            interval_count: 1,
+          },
           tenure_type: 'REGULAR',
           sequence: 1,
           total_cycles: 0,
@@ -196,7 +216,9 @@ export async function ensurePayPalPlanForCatalog(
     where: { plan },
     data: {
       paypalProductId: productId,
-      paypalPlanId: planJson.id,
+      ...(isYearly
+        ? { paypalYearlyPlanId: planJson.id }
+        : { paypalPlanId: planJson.id }),
     },
   });
 
@@ -694,7 +716,18 @@ export async function attemptSubscriptionAutoRenewal(
 
   const config = getPayPalPlatformConfig();
   const currency = config.currency.toUpperCase();
-  const amountMajor = Number(catalog.price);
+  const isYearly =
+    Boolean(catalog.paypalYearlyPlanId) &&
+    sub.paypalPlanId === catalog.paypalYearlyPlanId;
+  const amountMajor = resolveCatalogFinalAmount({
+    interval: isYearly ? 'yearly' : 'monthly',
+    price: catalog.price,
+    yearlyPrice: catalog.yearlyPrice,
+    monthlyDiscountEnabled: catalog.monthlyDiscountEnabled,
+    monthlyDiscountPercent: catalog.monthlyDiscountPercent,
+    yearlyDiscountEnabled: catalog.yearlyDiscountEnabled,
+    yearlyDiscountPercent: catalog.yearlyDiscountPercent,
+  });
   const amountValue = amountMajor.toFixed(2);
 
   const periodExpired = isPeriodExpired(sub.currentPeriodEnd);

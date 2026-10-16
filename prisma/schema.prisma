@@ -466,17 +466,26 @@ model RestaurantSubscription {
 }
 
 model SubscriptionCatalog {
-  id              String           @id @default(uuid())
-  plan            SubscriptionPlan @unique
-  name            String
-  price           Int
-  priceLabel      String
-  description     String
-  features        String[]         @default([])
-  paypalProductId String?
-  paypalPlanId    String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id                       String           @id @default(uuid())
+  plan                     SubscriptionPlan @unique
+  name                     String
+  /// Monthly list price (major units, e.g. EUR).
+  price                    Int
+  priceLabel               String
+  description              String
+  features                 String[]         @default([])
+  monthlyDiscountEnabled   Boolean          @default(false)
+  monthlyDiscountPercent   Int              @default(0)
+  /// Yearly list price (major units). Defaults to monthly × 12 in admin UI.
+  yearlyPrice              Int              @default(0)
+  yearlyDiscountEnabled    Boolean          @default(false)
+  yearlyDiscountPercent    Int              @default(0)
+  paypalProductId          String?
+  paypalPlanId             String?
+  /// Cached PayPal Billing Plan id for yearly interval (auto-created).
+  paypalYearlyPlanId       String?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
 }
 
 model SubscriptionPayment {

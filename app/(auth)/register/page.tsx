@@ -185,9 +185,7 @@ export default function RegisterPage() {
             </>
           )}
         </Button>
-        <p className="text-center text-xs text-zinc-600 dark:text-zinc-400">
-          {t('auth.register.googleRoleHint')}
-        </p>
+        
       </div>
 
       <div className="flex flex-row items-center gap-2">
