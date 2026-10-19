@@ -263,6 +263,7 @@ Legend: **F** = Free · **L** = Free Limited · **P** = Paid · **S** = Selectio
 
 1. Max **1** branch.
 2. After 1: Add branch disabled + crown.
+3. Table **QR** disabled + crown.
 
 
 
@@ -408,7 +409,7 @@ Legend: **F** = Free · **L** = Free Limited · **P** = Paid · **S** = Selectio
 #### Reports (Free — Limited)
 
 1. Date range fields + Apply **work**.
-2. Website / POS / Kiosk filter buttons disabled + crown.
+2. **POS** sales filter works; **Website** / **Kiosk** filters disabled + crown (modules Paid).
 3. Inventory reports tab: crown + blurred dummy data.
 4. Expenses reports: show **manual** expense data only (not inventory).
 5. Financial overview: **Inventory**, **Card payments**, **Other payments** blurred + crown (Expenses card may reflect manual data per product rules above).
@@ -419,7 +420,7 @@ Legend: **F** = Free · **L** = Free Limited · **P** = Paid · **S** = Selectio
 
 1. Public URLs Website + Kiosk disabled / blurred + crown.
 2. Language switch works.
-3. Order channels: toggles off + disabled + crown **except** dine-in, delivery, and **KDS** (those work).
+3. Order channels: toggles off + disabled + crown **except** dine-in and **KDS** (those work). **Delivery** and **Order Display** disabled + crown (align with POS / module unlock).
 4. Nav tabs remain visible when channels are off.
 5. Logo editable; banners disabled + crown.
 
@@ -428,6 +429,7 @@ Legend: **F** = Free · **L** = Free Limited · **P** = Paid · **S** = Selectio
 #### Branches (Free — Limited)
 
 1. Max **1** branch; then Add disabled + crown.
+2. Table **QR** available (Basic+).
 
 
 
@@ -575,7 +577,7 @@ Legend: **F** = Free · **L** = Free Limited · **P** = Paid · **S** = Selectio
 #### Reports (Free — Limited)
 
 1. Date range + Apply work.
-2. Website / POS / Kiosk filters disabled + crown.
+2. **Website** and **POS** sales filters work; **Kiosk** filter disabled + crown (kiosk Paid until Scale).
 3. Inventory reports: crown + blurred dummy data.
 4. Expenses reports: manual expenses data (not inventory).
 5. Financial overview: Inventory, Card payments, Other payments blurred + crown.
@@ -586,7 +588,7 @@ Legend: **F** = Free · **L** = Free Limited · **P** = Paid · **S** = Selectio
 
 1. Public URLs: **Kiosk** disabled / blurred + crown; **Website** works and accessible.
 2. Language switch works.
-3. Order channels: disabled + crown except **dine-in**, **delivery**, **KDS**; also **Website** and **Order Display** toggles work.
+3. Order channels: disabled + crown except **dine-in**, **delivery**, **KDS**, and **Website**; **Order Display** remains disabled + crown until Scale.
 4. Nav remains visible when channels off.
 5. Logo + **main banner** editable; **menu banners** upload limited to **3**.
 
@@ -595,6 +597,7 @@ Legend: **F** = Free · **L** = Free Limited · **P** = Paid · **S** = Selectio
 #### Branches (Free — Limited)
 
 1. Max **2** branches.
+2. Table **QR** available.
 
 
 

@@ -399,7 +399,7 @@ export function ReportsModule() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { formatMoney } = useOwnerRestaurantRegional();
-  const { limitFlag } = useEntitlements();
+  const { limitFlag, canUse } = useEntitlements();
   const allowInventoryTab = limitFlag('reports', 'inventoryTab', true);
   const allowExpensesTab = limitFlag('reports', 'expensesTab', true);
   const allowFinancialExpenses = limitFlag('reports', 'financialExpenses', true);
@@ -411,9 +411,12 @@ export function ReportsModule() {
   const allowFinancialCard = limitFlag('reports', 'financialCard', true);
   const allowFinancialOther = limitFlag('reports', 'financialOther', true);
   const allowCustomDateRange = limitFlag('reports', 'customDateRange', true);
-  const allowWebsiteFilter = limitFlag('reports', 'websiteFilter', true);
-  const allowPosFilter = limitFlag('reports', 'posFilter', true);
-  const allowKioskFilter = limitFlag('reports', 'kioskFilter', true);
+  const allowWebsiteFilter = canUse('website');
+  const allowPosFilter = canUse('pos');
+  const allowKioskFilter = canUse('kiosk');
+  const expensesManualOnly =
+    limitFlag('expenses', 'manualOnly', false) ||
+    limitFlag('reports', 'expensesManualOnly', false);
   const {
     loading: branchLoading,
     activeBranchId,
@@ -650,6 +653,13 @@ export function ReportsModule() {
     setPage(1);
   }, [reportType]);
 
+  useEffect(() => {
+    if (expensesManualOnly && typeFilter === 'INVENTORY') {
+      setTypeFilter('all');
+      setPage(1);
+    }
+  }, [expensesManualOnly, typeFilter]);
+
   const typeOptions = useMemo(() => {
     if (reportType === 'financial') {
       return [
@@ -675,10 +685,17 @@ export function ReportsModule() {
     }
     return [
       { value: 'all', label: t('dashboard.reports.filterAllTypes') },
-      { value: 'INVENTORY', label: t('dashboard.expenses.inventory') },
+      ...(expensesManualOnly
+        ? []
+        : [
+            {
+              value: 'INVENTORY',
+              label: t('dashboard.expenses.inventory'),
+            },
+          ]),
       { value: 'MANUAL', label: t('dashboard.expenses.manual') },
     ];
-  }, [reportType, t]);
+  }, [reportType, t, expensesManualOnly]);
 
   const reportTypes: Array<{
     id: ReportType;

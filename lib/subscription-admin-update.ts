@@ -1,6 +1,7 @@
 import type { RestaurantSubscription, SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
 
 import { db } from '@/lib/db';
+import { syncPlanQuotaLocks } from '@/lib/entitlements/sync-plan-quota-locks';
 import {
   syncPayPalSubscriptionFromAdmin,
   type PayPalAdminSyncResult,
@@ -18,6 +19,8 @@ export type AdminSubscriptionPatch = {
   trialEndsAt?: Date | null;
   currentPeriodEnd?: Date | null;
   notes?: string | null;
+  /** Pricing comparison module ids; only applied for CUSTOM plan. */
+  customSelectedModules?: string[];
 };
 
 export type AdminSubscriptionUpdateResult = {
@@ -80,6 +83,17 @@ export async function applyAdminSubscriptionUpdate(
     patch.currentPeriodEnd !== undefined &&
     datesDiffer(existing?.currentPeriodEnd, currentPeriodEnd);
 
+  const customSelectedModules =
+    patch.plan === 'CUSTOM'
+      ? (patch.customSelectedModules ?? existing?.customSelectedModules ?? [])
+      : [];
+
+  const planChanged =
+    existing?.plan !== patch.plan ||
+    (patch.plan === 'CUSTOM' &&
+      JSON.stringify([...(patch.customSelectedModules ?? [])].sort()) !==
+        JSON.stringify([...(existing?.customSelectedModules ?? [])].sort()));
+
   const subscription = await db.restaurantSubscription.upsert({
     where: { restaurantId },
     create: {
@@ -91,6 +105,7 @@ export async function applyAdminSubscriptionUpdate(
       notes: patch.notes ?? null,
       autoRenew: true,
       adminPeriodEndAt: currentPeriodEnd,
+      customSelectedModules,
     },
     update: {
       plan: patch.plan,
@@ -98,6 +113,7 @@ export async function applyAdminSubscriptionUpdate(
       trialEndsAt,
       currentPeriodEnd,
       notes: patch.notes === undefined ? undefined : patch.notes,
+      customSelectedModules,
       ...(periodChanged
         ? { adminPeriodEndAt: currentPeriodEnd }
         : patch.currentPeriodEnd === null
@@ -105,6 +121,10 @@ export async function applyAdminSubscriptionUpdate(
           : {}),
     },
   });
+
+  if (planChanged || !existing) {
+    await syncPlanQuotaLocks(restaurantId);
+  }
 
   const paymentPeriodEndUpdated = periodChanged
     ? await syncLatestPaymentPeriodEnd(

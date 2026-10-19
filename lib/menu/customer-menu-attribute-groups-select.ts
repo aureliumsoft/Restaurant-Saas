@@ -5,11 +5,13 @@ import {
   MENU_ITEM_CATEGORY_LINK_DATE_ORDER,
   MENU_ITEM_DATE_ORDER,
 } from '@/lib/menu/product-order';
+import { MENU_ITEM_VARIATION_SELLABLE_WHERE } from '@/lib/menu/variation-sellable';
 
 export type CustomerMenuSelectMode = 'full' | 'legacy';
 
 /** Base product / variation select — may include imageUrl for the product being customized. */
 const variationSelectFull = {
+  where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
   orderBy: { sortOrder: 'asc' as const },
   select: {
     id: true,
@@ -27,6 +29,7 @@ const variationSelectFull = {
 } as const;
 
 const variationSelectLegacy = {
+  where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
   orderBy: { sortOrder: 'asc' as const },
   select: {
     id: true,
@@ -44,6 +47,7 @@ const variationSelectLegacy = {
  * Thumbs use lazy `/image` proxy URLs after the sheet paints.
  */
 const variationSelectLinkedFull = {
+  where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
   orderBy: { sortOrder: 'asc' as const },
   select: {
     id: true,
@@ -60,6 +64,7 @@ const variationSelectLinkedFull = {
 } as const;
 
 const variationSelectLinkedLegacy = {
+  where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
   orderBy: { sortOrder: 'asc' as const },
   select: {
     id: true,
@@ -420,6 +425,7 @@ export function buildPosLiteAttributeGroupsSelect(): any {
     updatedAt: true,
     createdAt: true,
     variations: {
+      where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
       orderBy: { sortOrder: 'asc' as const },
       select: {
         id: true,

@@ -77,7 +77,7 @@ export async function resolveBranchScope(
   activeBranchIdFromRequest: string | null
 ): Promise<BranchScope | null> {
   const branches = await db.branch.findMany({
-    where: { restaurantId },
+    where: { restaurantId, isActive: true },
     orderBy: { name: 'asc' },
     select: { id: true, name: true, address: true, phone: true },
   });
@@ -166,7 +166,7 @@ export async function validateBranchForRestaurant(
   restaurantId: string
 ): Promise<boolean> {
   const row = await db.branch.findFirst({
-    where: { id: branchId, restaurantId },
+    where: { id: branchId, restaurantId, isActive: true },
     select: { id: true },
   });
   return Boolean(row);
@@ -179,7 +179,7 @@ export async function syncEmployeeBranches(
 ) {
   const validIds = (
     await db.branch.findMany({
-      where: { restaurantId, id: { in: branchIds } },
+      where: { restaurantId, id: { in: branchIds }, isActive: true },
       select: { id: true },
     })
   ).map((b) => b.id);

@@ -22,6 +22,7 @@ import {
 } from '@/lib/menu/category-visibility';
 import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
 import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
+import { MENU_ITEM_VARIATION_SELLABLE_WHERE } from '@/lib/menu/variation-sellable';
 
 export function isPrismaSchemaDriftError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -65,7 +66,9 @@ function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
                   imageUrl: true,
                   price: true,
                   salePrice: true,
-                  variations: true,
+                  variations: {
+                    where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
+                  },
                 },
               },
             },
@@ -152,7 +155,7 @@ async function loadBySlugWithMode(
   });
   if (!restaurant) return null;
   const branch = await db.branch.findFirst({
-    where: { id: branchId, restaurantId: restaurant.id },
+    where: { id: branchId, restaurantId: restaurant.id, isActive: true },
     select: { id: true },
   });
   if (!branch) return null;
@@ -181,7 +184,7 @@ async function loadBySubdomainWithMode(
   });
   if (!restaurant) return null;
   const branch = await db.branch.findFirst({
-    where: { id: branchId, restaurantId: restaurant.id },
+    where: { id: branchId, restaurantId: restaurant.id, isActive: true },
     select: { id: true },
   });
   if (!branch) return null;

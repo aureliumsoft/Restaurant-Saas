@@ -5,9 +5,8 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
-import {
-  DeleteConfirmation,
-} from '@/components/ui/confirmation-dialogs';
+import { DeleteConfirmation } from '@/components/ui/confirmation-dialogs';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -21,20 +20,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AddressMapPicker } from '@/components/ui/address-map-picker';
 import { toast } from 'react-toastify';
-import {
-  Building2,
-  Loader2,
-  Pencil,
-  Plus,
-  Save,
-  Trash2,
-} from 'lucide-react';
+import { Building2, Loader2, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import { useStaffPermissions } from '@/hooks/use-staff-permissions';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useEntitlements } from '@/hooks/use-entitlements';
 import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
+import { PlanCapOverLimitBanner } from '@/components/premium/plan-cap-over-limit-banner';
 import { TablesModule } from '@/components/dashboard/tables/tables-module';
 import { timezoneForRestaurantCountry } from '@/lib/restaurant-regional';
 import {
@@ -54,6 +47,8 @@ type BranchRow = {
   longitude: number | null;
   deliveryRadiusKm: number | null;
   openingHours: BranchOpeningHours | null;
+  isActive?: boolean;
+  planQuotaLocked?: boolean;
   createdAt: string;
 };
 
@@ -114,15 +109,13 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation();
   const weekdayLabels = useMemo(() => weekdayLabelsFor(t), [t]);
   const { plan } = useStaffPermissions();
-  const { canCreateMore } = useEntitlements();
+  const { canCreateMore, isOverCap } = useEntitlements();
   const { regional } = useOwnerRestaurantRegional();
   const { branches: scopedBranches } = useBranchContext();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const branchTimeZone = timezoneForRestaurantCountry(regional.countryCode);
   const restaurantZoneLabel =
-    regional.countryCode === 'PK'
-      ? 'Pakistan (Karachi)'
-      : 'Spain (Madrid)';
+    regional.countryCode === 'PK' ? 'Pakistan (Karachi)' : 'Spain (Madrid)';
   const [restaurantClock, setRestaurantClock] = useState('');
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,10 +158,7 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
 
   useEffect(() => {
     if (loading || branches.length === 0) return;
-    if (
-      selectedBranchId &&
-      branches.some((b) => b.id === selectedBranchId)
-    ) {
+    if (selectedBranchId && branches.some((b) => b.id === selectedBranchId)) {
       return;
     }
     setSelectedBranchId(branches[0]!.id);
@@ -220,7 +210,10 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
     setFormOpen(true);
   }
 
-  function updateOpeningHour(dayOfWeek: number, patch: Partial<BranchOpeningHours[number]>) {
+  function updateOpeningHour(
+    dayOfWeek: number,
+    patch: Partial<BranchOpeningHours[number]>
+  ) {
     setOpeningHours((current) =>
       current.map((entry) =>
         entry.dayOfWeek === dayOfWeek ? { ...entry, ...patch } : entry
@@ -235,7 +228,9 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
     setPhone(branch.phone ?? '');
     setLatitude(branch.latitude ?? null);
     setLongitude(branch.longitude ?? null);
-    setDeliveryRadiusKm(branch.deliveryRadiusKm != null ? String(branch.deliveryRadiusKm) : '');
+    setDeliveryRadiusKm(
+      branch.deliveryRadiusKm != null ? String(branch.deliveryRadiusKm) : ''
+    );
     setOpeningHours(normalizeOpeningHours(branch.openingHours));
     setSelectedBranchId(branch.id);
     setFormOpen(true);
@@ -269,7 +264,9 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
         phone: phone.trim(),
         latitude,
         longitude,
-        deliveryRadiusKm: deliveryRadiusKm ? parseFloat(deliveryRadiusKm) : null,
+        deliveryRadiusKm: deliveryRadiusKm
+          ? parseFloat(deliveryRadiusKm)
+          : null,
         openingHours,
       });
       toast.success(t('dashboard.branches.created'));
@@ -303,7 +300,9 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
         phone: phone.trim(),
         latitude,
         longitude,
-        deliveryRadiusKm: deliveryRadiusKm ? parseFloat(deliveryRadiusKm) : null,
+        deliveryRadiusKm: deliveryRadiusKm
+          ? parseFloat(deliveryRadiusKm)
+          : null,
         openingHours,
       });
       toast.success(t('dashboard.branches.updated'));
@@ -358,8 +357,8 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
           </h1>
           <p className="space-y-2 text-sm text-muted-foreground">
             {t('dashboard.branches.intro', { limit: branchLimitLabel })}
-        </p>
-      </div>
+          </p>
+        </div>
       ) : null}
 
       <Card>
@@ -380,7 +379,8 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
           </PremiumDisabledControl>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!loading && atBranchLimit ? (
+          <PlanCapOverLimitBanner resource="branches" />
+          {!loading && atBranchLimit && !isOverCap('branches') ? (
             <p className="rounded-md border border-dashed border-destructive bg-destructive/10 p-3 text-sm text-destructive">
               {t('dashboard.branches.planLimitWarning', {
                 limit:
@@ -412,37 +412,63 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
                   {t('dashboard.branches.keepOneBranch')}
                 </p>
               ) : null}
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {branches.map((b, index) => {
                   const selected = b.id === selectedBranchId;
+                  const address =
+                    b.address || t('dashboard.branches.noAddress');
                   return (
                     <button
                       key={b.id}
                       type="button"
                       onClick={() => setSelectedBranchId(b.id)}
                       className={cn(
-                        'relative w-full min-w-0 overflow-hidden rounded-xl border bg-background p-4 text-left transition-colors',
+                        'relative flex h-full min-w-0 flex-col overflow-hidden rounded-xl border bg-background p-3 text-left transition-colors sm:p-3.5',
                         selected
                           ? 'border-primary ring-1 ring-primary/30'
-                          : 'border-border hover:border-primary/40'
+                          : 'border-border hover:border-primary/40',
+                        b.planQuotaLocked && 'opacity-80'
                       )}
                     >
                       <Building2
-                        className="pointer-events-none absolute -right-2 bottom-0 h-24 w-24 text-muted-foreground/15 opacity-25"
+                        className="pointer-events-none absolute -right-2 -bottom-2 h-20 w-20 text-muted-foreground/10 opacity-50 sm:h-20 sm:w-20"
                         aria-hidden
                       />
-                      <div className="relative z-[1] flex items-start justify-between gap-2">
-                        <div className="min-w-0 pr-10">
-                          <p className="text-sm font-semibold">
-                            {index + 1}. {b.name}
+                      <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 truncate text-sm font-semibold leading-snug">
+                            <span className="text-muted-foreground">
+                              {index + 1}.
+                            </span>{' '}
+                            {b.name}
                           </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {b.address || t('dashboard.branches.noAddress')}
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            {selected ? (
+                              <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                {t('dashboard.branches.selected')}
+                              </span>
+                            ) : null}
+                            {b.planQuotaLocked ? (
+                              <Badge
+                                variant="outline"
+                                className="border-destructive/40 text-[10px] font-normal text-destructive"
+                              >
+                                {t('dashboard.planCaps.lockedBadge')}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="min-w-0 space-y-1 text-xs text-muted-foreground">
+                          <p
+                            className="line-clamp-2 break-words"
+                            title={address}
+                          >
+                            {address}
                           </p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="truncate">
                             {b.phone || t('dashboard.branches.noPhone')}
                           </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
+                          <p className="truncate">
                             {formatOpeningHoursSummary(
                               b.openingHours,
                               weekdayLabels,
@@ -450,38 +476,35 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
                             )}
                           </p>
                         </div>
-                        {selected ? (
-                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
-                            Selected
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="relative z-[1] mt-3 flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startEdit(b);
-                          }}
-                        >
-                          <Pencil className="mr-2 h-4 w-4" />
-                          <span>{t('dashboard.branches.edit')}</span>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          disabled={cannotDeleteLastBranch}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveId(b.id);
-                            setSelectedBranchId(b.id);
-                            setConfirmDeleteOpen(true);
-                          }}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          <span>{t('dashboard.branches.delete')}</span>
-                        </Button>
+                        <div className="mt-auto flex gap-2 pt-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2 text-xs sm:px-3"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEdit(b);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5 shrink-0" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="h-8 px-2 text-xs sm:px-3"
+                            disabled={cannotDeleteLastBranch}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveId(b.id);
+                              setSelectedBranchId(b.id);
+                              setConfirmDeleteOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                          </Button>
+                        </div>
                       </div>
                     </button>
                   );
@@ -563,9 +586,7 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
               />
             ) : null}
             <div className="grid gap-2">
-              <Label htmlFor="branch-radius">
-                Delivery Radius (km)
-              </Label>
+              <Label htmlFor="branch-radius">Delivery Radius (km)</Label>
               <Input
                 id="branch-radius"
                 type="number"
@@ -575,7 +596,9 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
                 value={deliveryRadiusKm}
                 onChange={(e) => setDeliveryRadiusKm(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">Maximum distance for delivery orders.</p>
+              <p className="text-xs text-muted-foreground">
+                Maximum distance for delivery orders.
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="branch-phone">
@@ -602,68 +625,68 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
                     time: restaurantClock,
                   })}
                 </p>
-            </div>
-            <div className="space-y-2">
-              {openingHours.map((entry) => (
-                <div
-                  key={entry.dayOfWeek}
+              </div>
+              <div className="space-y-2">
+                {openingHours.map((entry) => (
+                  <div
+                    key={entry.dayOfWeek}
                     className="grid items-center gap-2 sm:grid-cols-[110px_70px_1fr_1fr]"
-                >
+                  >
                     <span className="text-sm">
                       {weekdayLabels[entry.dayOfWeek]}
                     </span>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={entry.isOpen}
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={entry.isOpen}
+                        onChange={(event) =>
+                          updateOpeningHour(entry.dayOfWeek, {
+                            isOpen: event.target.checked,
+                          })
+                        }
+                      />
+                      {t('dashboard.branches.open')}
+                    </label>
+                    <Input
+                      type="time"
+                      step={60}
+                      value={entry.openTime}
+                      disabled={!entry.isOpen}
+                      className="min-w-0"
                       onChange={(event) =>
                         updateOpeningHour(entry.dayOfWeek, {
-                          isOpen: event.target.checked,
+                          openTime: event.target.value,
                         })
                       }
                     />
-                      {t('dashboard.branches.open')}
-                  </label>
-                  <Input
-                    type="time"
-                    step={60}
-                    value={entry.openTime}
-                    disabled={!entry.isOpen}
+                    <Input
+                      type="time"
+                      step={60}
+                      value={entry.closeTime}
+                      disabled={!entry.isOpen}
                       className="min-w-0"
-                    onChange={(event) =>
-                      updateOpeningHour(entry.dayOfWeek, {
-                        openTime: event.target.value,
-                      })
-                    }
-                  />
-                  <Input
-                    type="time"
-                    step={60}
-                    value={entry.closeTime}
-                    disabled={!entry.isOpen}
-                      className="min-w-0"
-                    onChange={(event) =>
-                      updateOpeningHour(entry.dayOfWeek, {
-                        closeTime: event.target.value,
-                      })
-                    }
-                  />
-                </div>
-              ))}
+                      onChange={(event) =>
+                        updateOpeningHour(entry.dayOfWeek, {
+                          closeTime: event.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-          </div>
           <DialogFooter className="gap-2 sm:gap-0">
-                <Button
-                  type="button"
-                  variant="outline"
+            <Button
+              type="button"
+              variant="outline"
               disabled={saving}
               onClick={closeForm}
-                >
+            >
               {t('dashboard.common.cancel')}
-                </Button>
-              <Button
-                type="button"
+            </Button>
+            <Button
+              type="button"
               disabled={
                 saving ||
                 !name.trim() ||
@@ -671,30 +694,28 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
                 !phone.trim() ||
                 (!activeId && atBranchLimit)
               }
-              onClick={() =>
-                void (activeId ? updateBranch() : createBranch())
-              }
-              >
-                {saving ? (
-                  <>
+              onClick={() => void (activeId ? updateBranch() : createBranch())}
+            >
+              {saving ? (
+                <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   <span>
                     {activeId
                       ? t('dashboard.branches.updating')
                       : t('dashboard.branches.adding')}
                   </span>
-                  </>
-                ) : (
-                  <>
+                </>
+              ) : (
+                <>
                   <Save className="mr-2 h-4 w-4" />
                   <span>
                     {activeId
                       ? t('dashboard.branches.update')
                       : t('dashboard.branches.addNew')}
                   </span>
-                  </>
-                )}
-              </Button>
+                </>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

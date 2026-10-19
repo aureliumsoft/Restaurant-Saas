@@ -5,6 +5,7 @@ import {
 } from '@prisma/client';
 
 import { db } from '@/lib/db';
+import { syncPlanQuotaLocks } from '@/lib/entitlements/sync-plan-quota-locks';
 
 export async function resolveRestaurantIdForCustomRequest(opts: {
   restaurantId?: string | null;
@@ -142,6 +143,8 @@ export async function applyCustomPlanDecision(opts: {
       },
     });
   });
+
+  await syncPlanQuotaLocks(restaurantId);
 
   return { ok: true, status, plan, restaurantId };
 }

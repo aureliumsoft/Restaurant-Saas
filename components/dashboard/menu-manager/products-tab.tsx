@@ -51,6 +51,7 @@ import { useDashboardPermissions } from '@/hooks/use-dashboard-permissions';
 import { useEntitlements } from '@/hooks/use-entitlements';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
+import { PlanCapOverLimitBanner } from '@/components/premium/plan-cap-over-limit-banner';
 
 import { InventoryQuickActions } from './inventory-quick-actions';
 import { LazyProductImage } from './lazy-product-image';
@@ -525,6 +526,7 @@ export function ProductsTab({
         </div>
       </DashboardCardHeader>
       <DashboardCardContent className="space-y-4 pt-4">
+        <PlanCapOverLimitBanner resource="products" />
         {noCategories ? (
           <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6">
             <p className="text-sm text-muted-foreground">
@@ -711,8 +713,16 @@ export function ProductsTab({
                                     />
                                   </DashboardTableCell>
                                   <DashboardTableCell>
-                                    <div className="font-medium">
+                                    <div className="flex flex-wrap items-center gap-1.5 font-medium">
                                       {resolveBilingualText(item.name, uiLang)}
+                                      {item.planQuotaLocked ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="border-destructive/40 text-[10px] font-normal text-destructive"
+                                        >
+                                          {t('dashboard.planCaps.lockedBadge')}
+                                        </Badge>
+                                      ) : null}
                                     </div>
                                     {descriptionText ? (
                                       <div className="line-clamp-2 text-wrap text-xs font-light text-muted-foreground">
@@ -831,6 +841,14 @@ export function ProductsTab({
                                   <p className="line-clamp-2 font-medium leading-snug">
                                     {resolveBilingualText(item.name, uiLang)}
                                   </p>
+                                  {item.planQuotaLocked ? (
+                                    <Badge
+                                      variant="outline"
+                                      className="mt-1 border-destructive/40 text-[10px] font-normal text-destructive"
+                                    >
+                                      {t('dashboard.planCaps.lockedBadge')}
+                                    </Badge>
+                                  ) : null}
                                   <div className="mt-1 flex flex-wrap gap-1">
                                     {(categoryNames.length > 0
                                       ? categoryNames

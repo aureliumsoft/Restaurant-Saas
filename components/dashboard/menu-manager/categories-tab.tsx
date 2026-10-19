@@ -15,6 +15,7 @@ import {
 
 import { AddCategoryFormDialog } from '@/components/dashboard/menu-manager/add-category-form-dialog';
 import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
+import { PlanCapOverLimitBanner } from '@/components/premium/plan-cap-over-limit-banner';
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useEntitlements } from '@/hooks/use-entitlements';
@@ -297,7 +298,10 @@ export function CategoriesTab({
           />
         </CardHeader>
 
-        <CardContent className="space-y-4">{renderList()}</CardContent>
+        <CardContent className="space-y-4">
+          <PlanCapOverLimitBanner resource="categories" />
+          {renderList()}
+        </CardContent>
       </Card>
 
       <AddCategoryFormDialog
@@ -474,7 +478,7 @@ function CategoryCard({
             </p>
           </div>
 
-          <div>
+          <div className="flex flex-wrap gap-1.5">
             {!hasProducts ? (
               <Badge variant="outline">
                 {t('dashboard.categories.emptyBadge')}
@@ -486,6 +490,14 @@ function CategoryCard({
                   : t('dashboard.categories.tabRecommendations')}
               </Badge>
             )}
+            {category.planQuotaLocked ? (
+              <Badge
+                variant="outline"
+                className="border-destructive/40 text-destructive"
+              >
+                {t('dashboard.planCaps.lockedBadge')}
+              </Badge>
+            ) : null}
           </div>
 
           <div className="mt-auto flex flex-wrap gap-2">

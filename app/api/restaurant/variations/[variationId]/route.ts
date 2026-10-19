@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
+import { syncPlanQuotaLocks } from '@/lib/entitlements/sync-plan-quota-locks';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { resolveRouteParams } from '@/lib/resolve-route-id';
 
@@ -91,6 +92,7 @@ export async function DELETE(
   }
 
   await db.restaurantVariation.delete({ where: { id: variationId } });
+  await syncPlanQuotaLocks(auth.restaurant.id);
 
   return NextResponse.json({ ok: true });
 }

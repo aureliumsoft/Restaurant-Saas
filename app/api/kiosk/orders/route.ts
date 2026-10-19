@@ -269,7 +269,7 @@ export async function POST(req: NextRequest) {
     }
   } else {
     const defaultBranch = await db.branch.findFirst({
-      where: { restaurantId: restaurant.id },
+      where: { restaurantId: restaurant.id, isActive: true },
       orderBy: { createdAt: 'asc' },
       select: { id: true },
     });

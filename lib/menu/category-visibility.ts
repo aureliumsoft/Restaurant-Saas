@@ -1,14 +1,22 @@
 import type { Prisma } from '@prisma/client';
 
+/** Sellable products on POS / kiosk / web browse. */
+export const MENU_ITEM_SELLABLE_FILTER: Prisma.MenuItemWhereInput = {
+  isActive: true,
+};
+
 /** Categories visible on web storefront, kiosk browse, and POS category tabs. */
 export const MENU_CATEGORY_FRONT_FILTER: Prisma.MenuCategoryWhereInput = {
   showInFront: true,
 };
 
-/** Storefront / kiosk / POS: must be shown in front and have at least one product. */
+/** Storefront / kiosk / POS: must be shown in front and have at least one sellable product. */
 export const CUSTOMER_MENU_CATEGORY_WHERE: Prisma.MenuCategoryWhereInput = {
   showInFront: true,
-  OR: [{ itemLinks: { some: {} } }, { items: { some: {} } }],
+  OR: [
+    { itemLinks: { some: { menuItem: MENU_ITEM_SELLABLE_FILTER } } },
+    { items: { some: MENU_ITEM_SELLABLE_FILTER } },
+  ],
 };
 
 export function categoryVisibleForBranch(

@@ -31,3 +31,13 @@ export {
   entitlementsToClientPayload,
 } from '@/lib/entitlements/resolve';
 export { getPublicModuleGate } from '@/lib/entitlements/public';
+export {
+  getCapUsage,
+  countCapUsage,
+  buildCapUsageSnapshot,
+  type CapUsageSnapshot,
+  type CapUsageKey,
+  type CapUsageCounts,
+  type CapUsageOverLimit,
+} from '@/lib/entitlements/cap-usage';
+export { syncPlanQuotaLocks } from '@/lib/entitlements/sync-plan-quota-locks';

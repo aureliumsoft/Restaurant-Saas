@@ -65,6 +65,8 @@ export type RestaurantVariationRow = {
   name: string;
   shortLabel: string | null;
   sortOrder: number;
+  isActive?: boolean;
+  planQuotaLocked?: boolean;
 };
 
 export type MenuItemRow = {
@@ -80,6 +82,8 @@ export type MenuItemRow = {
   categoryIds?: string[];
   /** Final View order per category id (MenuItemCategory.sortOrder). */
   sortOrderByCategory?: Record<string, number>;
+  isActive?: boolean;
+  planQuotaLocked?: boolean;
   updatedAt?: string;
   createdAt?: string;
   variations?: {
@@ -143,6 +147,7 @@ export type MenuCategoryRow = {
   name: string;
   imageUrl?: string | null;
   showInFront: boolean;
+  planQuotaLocked?: boolean;
   hiddenBranchIds?: string[];
   sortOrder: number;
   itemCount?: number;

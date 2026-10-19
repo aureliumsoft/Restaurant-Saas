@@ -1,7 +1,8 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Check, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Check, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -289,9 +290,23 @@ type FeatureListProps = {
   onToggleModule?: (moduleId: string, next: boolean) => void;
 };
 
+function isIncludedAccess(access: ModuleAccess): boolean {
+  return (
+    access === 'full' || access === 'limited' || access === 'limited_single'
+  );
+}
+
+function includedSortRank(access: ModuleAccess): number {
+  if (access === 'full') return 0;
+  return 1; // limited / limited_single
+}
+
 /**
- * Full module list for a plan card.
- * Custom plan uses interactive checkboxes for Selection modules.
+ * Plan card module list:
+ * 1) Free (full) with ✓
+ * 2) Limited with ✓ + Limited badge after the name
+ * 3) “Show excluded features” expands paid / selection rows
+ * Custom plan keeps checkboxes for limited unlock + selection add-ons.
  */
 export function PricingPlanFeatureList({
   plan,
@@ -299,35 +314,101 @@ export function PricingPlanFeatureList({
   filterToSelected = false,
   onToggleModule,
 }: FeatureListProps) {
+  const { t } = useTranslation();
+  const [showExcluded, setShowExcluded] = useState(false);
   const isCustom = plan.toUpperCase() === 'CUSTOM';
   const selected = selectedModules ?? new Set<string>();
 
-  const rows = PRICING_MODULE_ROWS.filter((row) => {
-    if (!isCustom || !filterToSelected) return true;
-    const access = row.byPlan.CUSTOM;
-    if (access === 'full') return true;
-    if (access === 'limited') return true; // always show limited base (or unlocked)
-    if (access === 'selection') return selected.has(row.id);
-    return false;
-  });
+  const { included, excluded } = useMemo(() => {
+    const visible = PRICING_MODULE_ROWS.filter((row) => {
+      if (!isCustom || !filterToSelected) return true;
+      const access = row.byPlan.CUSTOM;
+      if (access === 'full' || access === 'limited') return true;
+      if (access === 'selection') return selected.has(row.id);
+      return false;
+    });
+
+    const inc: PricingModuleRow[] = [];
+    const exc: PricingModuleRow[] = [];
+    for (const row of visible) {
+      const access = getModuleAccess(plan, row) ?? 'paid';
+      if (isIncludedAccess(access)) inc.push(row);
+      else exc.push(row);
+    }
+    inc.sort((a, b) => {
+      const aa = getModuleAccess(plan, a) ?? 'paid';
+      const bb = getModuleAccess(plan, b) ?? 'paid';
+      return includedSortRank(aa) - includedSortRank(bb);
+    });
+    return { included: inc, excluded: exc };
+  }, [filterToSelected, isCustom, plan, selected]);
 
   return (
-    <ul className="mt-3 flex-1 space-y-2 text-sm">
-      {rows.map((row) => (
-        <FeatureListItem
-          key={row.id}
-          plan={plan}
-          row={row}
-          selected={selected.has(row.id)}
-          interactive={isCustom && isCustomSelectableModule(row)}
-          onToggle={
-            onToggleModule
-              ? (next) => onToggleModule(row.id, next)
-              : undefined
-          }
-        />
-      ))}
-    </ul>
+    <div className="mt-3 flex flex-1 flex-col">
+      <ul className="space-y-2 text-sm">
+        {included.map((row) => (
+          <FeatureListItem
+            key={row.id}
+            plan={plan}
+            row={row}
+            selected={selected.has(row.id)}
+            interactive={isCustom && isCustomSelectableModule(row)}
+            onToggle={
+              onToggleModule
+                ? (next) => onToggleModule(row.id, next)
+                : undefined
+            }
+          />
+        ))}
+      </ul>
+
+      {excluded.length > 0 ? (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => setShowExcluded((v) => !v)}
+            className={cn(
+              'flex w-full items-center justify-between gap-2 rounded-xl border-2 px-3.5 py-3 text-sm font-semibold shadow-sm transition',
+              showExcluded
+                ? 'border-fire-400 bg-fire-50 text-fire-800 shadow-fire-200/40 dark:border-fire-500/60 dark:bg-fire-500/15 dark:text-fire-100'
+                : 'border-fire-300 bg-gradient-to-r from-fire-500 to-fire-600 text-white shadow-fire-500/25 hover:from-fire-400 hover:to-fire-500 dark:border-fire-500/50'
+            )}
+            aria-expanded={showExcluded}
+          >
+            <span className="text-left leading-snug">
+              {showExcluded
+                ? t('marketingExtras.pricing.hideExcludedFeatures')
+                : t('marketingExtras.pricing.showExcludedFeatures', {
+                    count: excluded.length,
+                  })}
+            </span>
+            {showExcluded ? (
+              <ChevronUp className="h-5 w-5 shrink-0" aria-hidden />
+            ) : (
+              <ChevronDown className="h-5 w-5 shrink-0" aria-hidden />
+            )}
+          </button>
+          {showExcluded ? (
+            <ul className="mt-2 space-y-2 text-sm">
+              {excluded.map((row) => (
+                <FeatureListItem
+                  key={row.id}
+                  plan={plan}
+                  row={row}
+                  selected={selected.has(row.id)}
+                  interactive={isCustom && isCustomSelectableModule(row)}
+                  onToggle={
+                    onToggleModule
+                      ? (next) => onToggleModule(row.id, next)
+                      : undefined
+                  }
+                />
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -344,58 +425,78 @@ function FeatureListItem({
   interactive: boolean;
   onToggle?: (next: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const label = useModuleLabel(row.id, row.label);
   const access = getModuleAccess(plan, row) ?? 'paid';
   const isCustom = plan.toUpperCase() === 'CUSTOM';
 
-  // Custom limited: unchecked = ✓(L), checked = ✓ (unlocked)
-  let displayAccess: ModuleAccess = access;
-  if (isCustom && access === 'limited' && interactive) {
-    displayAccess = selected ? 'full' : 'limited';
-  }
-  // Custom selection: show checkbox (interactive)
-  if (isCustom && access === 'selection') {
-    displayAccess = 'selection';
-  }
+  // Custom limited: unchecked = limited, checked = unlocked full
+  const effectiveAccess: ModuleAccess =
+    isCustom && access === 'limited' && interactive
+      ? selected
+        ? 'full'
+        : 'limited'
+      : access;
+
+  const isLimited =
+    effectiveAccess === 'limited' || effectiveAccess === 'limited_single';
+  const isPaid = effectiveAccess === 'paid';
+  const isSelection = effectiveAccess === 'selection';
 
   return (
-    <li className="flex items-center gap-2.5 text-zinc-700 dark:text-zinc-300">
+    <li
+      className={cn(
+        'flex items-center gap-2.5 text-zinc-700 dark:text-zinc-300',
+        isPaid && 'text-zinc-400 dark:text-zinc-500'
+      )}
+    >
       <span className="shrink-0">
         {interactive && access === 'limited' ? (
-          <label className="inline-flex cursor-pointer items-center gap-1">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-zinc-400 text-fire-600 focus:ring-fire-500/40"
-              checked={selected}
-              onChange={(e) => onToggle?.(e.target.checked)}
-              aria-label={label}
-            />
-            {!selected ? (
-              <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800 dark:text-amber-300">
-                L
-              </span>
-            ) : (
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
-                <Check className="h-3 w-3" strokeWidth={2.5} />
-              </span>
-            )}
-          </label>
-        ) : (
-          <AccessMark
-            access={displayAccess}
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-zinc-400 text-fire-600 focus:ring-fire-500/40"
             checked={selected}
-            interactive={interactive && access === 'selection'}
+            onChange={(e) => onToggle?.(e.target.checked)}
+            aria-label={label}
+          />
+        ) : isSelection ? (
+          <AccessMark
+            access="selection"
+            checked={selected}
+            interactive={interactive}
             onCheckedChange={onToggle}
           />
+        ) : isPaid ? (
+          <AccessMark access="paid" />
+        ) : (
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+            <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+            <span className="sr-only">
+              {t('marketingExtras.pricing.access.full')}
+            </span>
+          </span>
         )}
       </span>
-      <span
-        className={cn(
-          access === 'paid' && !isCustom && 'text-zinc-400 dark:text-zinc-500'
-        )}
-      >
-        {label}
-      </span>
+      <span className="min-w-0 flex-1 leading-snug">{label}</span>
+      {isLimited ? (
+        <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+          {effectiveAccess === 'limited_single'
+            ? t('marketingExtras.pricing.access.limitedSingleTag')
+            : t('marketingExtras.pricing.access.limitedBadge', {
+                defaultValue: t('marketingExtras.pricing.access.limitedTag'),
+              })}
+        </span>
+      ) : null}
+      {isPaid ? (
+        <span className="shrink-0 rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700 dark:text-red-300">
+          {t('marketingExtras.pricing.access.paid')}
+        </span>
+      ) : null}
+      {isSelection ? (
+        <span className="shrink-0 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-300">
+          {t('marketingExtras.pricing.access.selection')}
+        </span>
+      ) : null}
     </li>
   );
 }

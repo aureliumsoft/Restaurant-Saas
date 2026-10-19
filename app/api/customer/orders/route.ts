@@ -252,7 +252,7 @@ export async function POST(req: NextRequest) {
   }
 
   const branch = await db.branch.findFirst({
-    where: { id: branchId, restaurantId: restaurant.id },
+    where: { id: branchId, restaurantId: restaurant.id, isActive: true },
     select: { id: true, latitude: true, longitude: true, deliveryRadiusKm: true },
   });
 

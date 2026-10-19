@@ -34,6 +34,8 @@ const listItemSelect = {
   price: true,
   salePrice: true,
   categoryId: true,
+  isActive: true,
+  planQuotaLocked: true,
   createdAt: true,
   updatedAt: true,
   // Only fields needed for list pricing + variation count (no variation images).
@@ -285,6 +287,8 @@ export async function GET(req: NextRequest) {
           '—',
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
+        isActive: item.isActive,
+        planQuotaLocked: item.planQuotaLocked,
         variations: item.variations,
         attributeGroups: [] as unknown[],
       };

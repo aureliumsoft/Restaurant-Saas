@@ -112,6 +112,30 @@ export async function GET(req: NextRequest) {
       : 'all';
   const channel = parseChannel(req.nextUrl.searchParams.get('channel'));
 
+  const {
+    getRestaurantEntitlements,
+    canAccessModule,
+  } = await import('@/lib/entitlements');
+  const entitlements = await getRestaurantEntitlements(auth.restaurant.id);
+  if (channel === 'online' && !canAccessModule(entitlements, 'website')) {
+    return NextResponse.json(
+      { error: 'Website sales filter is not available on your plan' },
+      { status: 403 }
+    );
+  }
+  if (channel === 'pos' && !canAccessModule(entitlements, 'pos')) {
+    return NextResponse.json(
+      { error: 'POS sales filter is not available on your plan' },
+      { status: 403 }
+    );
+  }
+  if (channel === 'kiosk' && !canAccessModule(entitlements, 'kiosk')) {
+    return NextResponse.json(
+      { error: 'Kiosk sales filter is not available on your plan' },
+      { status: 403 }
+    );
+  }
+
   const { page, pageSize } = parsePaginationParams(req.nextUrl.searchParams, {
     defaultPageSize: 20,
     maxPageSize: 100,

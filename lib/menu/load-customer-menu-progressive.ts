@@ -199,7 +199,11 @@ export async function loadCustomerMenuCategoriesMeta(options: {
     const restaurant = await resolveRestaurant(options.slug, options.subdomain);
     if (!restaurant) return null;
     const branch = await db.branch.findFirst({
-      where: { id: options.branchId, restaurantId: restaurant.id },
+      where: {
+        id: options.branchId,
+        restaurantId: restaurant.id,
+        isActive: true,
+      },
       select: { id: true },
     });
     if (!branch) return null;
@@ -248,7 +252,11 @@ export async function loadCustomerMenuCategoryItems(options: {
     const restaurant = await resolveRestaurant(options.slug, options.subdomain);
     if (!restaurant) return null;
     const branch = await db.branch.findFirst({
-      where: { id: options.branchId, restaurantId: restaurant.id },
+      where: {
+        id: options.branchId,
+        restaurantId: restaurant.id,
+        isActive: true,
+      },
       select: { id: true },
     });
     if (!branch) return null;
@@ -275,6 +283,7 @@ export async function loadCustomerMenuCategoryItems(options: {
         ...categoryVisibleForBranch(options.branchId),
       },
       pagination: { skip, take: limit },
+      sellableOnly: true,
     });
     if (!category) return null;
 

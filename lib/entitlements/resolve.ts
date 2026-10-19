@@ -8,6 +8,7 @@ import {
   CUSTOM_SELECTION_MODULES,
   CUSTOM_UNLOCKABLE_LIMITED,
 } from '@/lib/entitlements/plan-matrices';
+import { normalizeCustomSelectedToModuleKeys } from '@/lib/entitlements/pricing-module-ids';
 import type {
   CapKey,
   Entitlements,
@@ -38,9 +39,7 @@ function normalizePlan(plan: SubscriptionPlan | string | null): SubscriptionPlan
 function mergeCustomModules(
   selected: string[]
 ): Record<ModuleKey, ModuleEntitlement> {
-  const selectedSet = new Set(
-    selected.map((s) => s.trim()).filter(Boolean)
-  );
+  const selectedSet = normalizeCustomSelectedToModuleKeys(selected);
   const modules = modulesForPlan(SubscriptionPlan.CUSTOM);
 
   for (const key of CUSTOM_SELECTION_MODULES) {
@@ -67,7 +66,7 @@ function mergeCustomModules(
 }
 
 function capsForCustom(selected: string[]): PlanCaps {
-  const selectedSet = new Set(selected);
+  const selectedSet = normalizeCustomSelectedToModuleKeys(selected);
   const caps = capsForPlan(SubscriptionPlan.CUSTOM);
   if (selectedSet.has('branches')) {
     caps.branches = PRO_CAPS.branches;

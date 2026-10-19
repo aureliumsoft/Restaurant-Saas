@@ -2,6 +2,7 @@ import { SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
 import Stripe from 'stripe';
 
 import { db } from '@/lib/db';
+import { syncPlanQuotaLocks } from '@/lib/entitlements/sync-plan-quota-locks';
 import { fromStripeUnitAmount } from '@/lib/stripe-server';
 import { getRestaurantForUser } from '@/lib/restaurant-owner';
 
@@ -68,6 +69,13 @@ export async function syncSubscriptionForPaidCheckoutSession(
   const periodEnd = new Date(periodStart);
   periodEnd.setDate(periodEnd.getDate() + 30);
 
+  const previousPlan = (
+    await db.restaurantSubscription.findUnique({
+      where: { restaurantId },
+      select: { plan: true },
+    })
+  )?.plan;
+
   await db.$transaction(async (tx) => {
     const sub = await tx.restaurantSubscription.upsert({
       where: { restaurantId },
@@ -100,6 +108,10 @@ export async function syncSubscriptionForPaidCheckoutSession(
       },
     });
   });
+
+  if (previousPlan !== plan) {
+    await syncPlanQuotaLocks(restaurantId);
+  }
 
   return 'updated';
 }

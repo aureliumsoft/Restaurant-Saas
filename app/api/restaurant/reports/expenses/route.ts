@@ -30,18 +30,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  {
-    const { getRestaurantEntitlements, moduleLimitFlag } = await import(
-      '@/lib/entitlements'
-    );
-    const { subscriptionPlanDeniedResponse } = await import(
-      '@/lib/subscription-plan-enforcement'
-    );
-    const entitlements = await getRestaurantEntitlements(auth.restaurant.id);
-    if (!moduleLimitFlag(entitlements, 'reports', 'expensesTab', true)) {
-      return subscriptionPlanDeniedResponse('Expenses reports');
-    }
+  const { getRestaurantEntitlements, moduleLimitFlag } = await import(
+    '@/lib/entitlements'
+  );
+  const { subscriptionPlanDeniedResponse } = await import(
+    '@/lib/subscription-plan-enforcement'
+  );
+  const entitlements = await getRestaurantEntitlements(auth.restaurant.id);
+  if (!moduleLimitFlag(entitlements, 'reports', 'expensesTab', true)) {
+    return subscriptionPlanDeniedResponse('Expenses reports');
   }
+  const manualOnly =
+    moduleLimitFlag(entitlements, 'expenses', 'manualOnly', false) ||
+    moduleLimitFlag(entitlements, 'reports', 'expensesManualOnly', false);
 
   const canViewHistorical = await userIsOwnerOrAdmin(
     auth.user.id,
@@ -61,7 +62,16 @@ export async function GET(req: NextRequest) {
   });
 
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';
-  const type = parseExpenseType(req.nextUrl.searchParams.get('type'));
+  let type = parseExpenseType(req.nextUrl.searchParams.get('type'));
+  if (manualOnly) {
+    if (type === 'INVENTORY') {
+      return NextResponse.json(
+        { error: 'Inventory expenses are not available on your plan' },
+        { status: 403 }
+      );
+    }
+    type = type ?? 'MANUAL';
+  }
 
   const { page, pageSize } = parsePaginationParams(req.nextUrl.searchParams, {
     defaultPageSize: 20,

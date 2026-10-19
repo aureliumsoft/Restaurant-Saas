@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
   }
 
   const wantsPagination = req.nextUrl.searchParams.get('page') != null;
+  const sellableOnly = req.nextUrl.searchParams.get('sellableOnly') === '1';
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';
   const searchWhere = q
     ? {
@@ -34,10 +35,15 @@ export async function GET(req: NextRequest) {
         ],
       }
     : {};
+  const sellableWhere = sellableOnly ? { isActive: true as const } : {};
 
   if (!wantsPagination) {
     const rows = await db.restaurantVariation.findMany({
-      where: { restaurantId: auth.restaurant.id, ...searchWhere },
+      where: {
+        restaurantId: auth.restaurant.id,
+        ...searchWhere,
+        ...sellableWhere,
+      },
       orderBy: { sortOrder: 'asc' },
     });
     return NextResponse.json({ data: rows });
@@ -47,7 +53,11 @@ export async function GET(req: NextRequest) {
     req.nextUrl.searchParams,
     { defaultPageSize: 12 }
   );
-  const where = { restaurantId: auth.restaurant.id, ...searchWhere };
+  const where = {
+    restaurantId: auth.restaurant.id,
+    ...searchWhere,
+    ...sellableWhere,
+  };
   const [total, rows] = await Promise.all([
     db.restaurantVariation.count({ where }),
     db.restaurantVariation.findMany({

@@ -395,6 +395,10 @@ model Branch {
   /// Dining floor plan grid size for this branch.
   tableFloorRows      Int      @default(4)
   tableFloorCols      Int      @default(4)
+  /// When false, branch is excluded from POS / dashboard switcher / guest flows.
+  isActive            Boolean  @default(true)
+  /// Set by plan quota sync when this branch exceeds the plan cap.
+  planQuotaLocked     Boolean  @default(false)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -409,6 +413,8 @@ model Branch {
   hiddenCategories MenuCategoryHiddenBranch[]
 
   @@index([restaurantId])
+  @@index([restaurantId, isActive])
+  @@index([restaurantId, planQuotaLocked])
 }
 
 /// POS register shift — tracks completed sales and end-of-shift cash count.
@@ -766,6 +772,8 @@ model MenuCategory {
   /// When true, category and its products appear on web, kiosk, and POS browse menus.
   /// When false, products are only available via recommendation / add-on rules.
   showInFront  Boolean @default(true)
+  /// Set by plan quota sync when this category exceeds the plan cap (forces showInFront=false).
+  planQuotaLocked Boolean @default(false)
 
   items                   MenuItem[]
   itemLinks               MenuItemCategory[]
@@ -777,6 +785,7 @@ model MenuCategory {
   updatedAt DateTime @updatedAt
 
   @@index([restaurantId, sortOrder])
+  @@index([restaurantId, planQuotaLocked])
 }
 
 /// Hide a category on specific branches (still visible on others).
@@ -818,6 +827,10 @@ model MenuItem {
   /// Primary category (first selected); kept for backward compatibility.
   categoryId   String
   restaurantId String
+  /// When false, product is hidden from POS / kiosk / web browse menus.
+  isActive     Boolean @default(true)
+  /// Set by plan quota sync when this product exceeds the plan cap.
+  planQuotaLocked Boolean @default(false)
 
   category          MenuCategory             @relation(fields: [categoryId], references: [id])
   categoryLinks     MenuItemCategory[]
@@ -839,6 +852,9 @@ model MenuItem {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([restaurantId, isActive])
+  @@index([restaurantId, planQuotaLocked])
 }
 
 /// Guest-facing preference group (e.g. "Personalize") — no pricing.
@@ -882,6 +898,10 @@ model RestaurantVariation {
   /// Short label for configuration UI headers (e.g. M, L, XL).
   shortLabel   String?
   sortOrder    Int    @default(0)
+  /// When false, variation is hidden from POS / kiosk / web and product pickers.
+  isActive     Boolean @default(true)
+  /// Set by plan quota sync when this variation exceeds the plan cap.
+  planQuotaLocked Boolean @default(false)
 
   restaurant Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   menuRates  MenuItemVariation[]
@@ -892,6 +912,8 @@ model RestaurantVariation {
 
   @@unique([restaurantId, name])
   @@index([restaurantId, sortOrder])
+  @@index([restaurantId, isActive])
+  @@index([restaurantId, planQuotaLocked])
 }
 
 model MenuItemVariation {

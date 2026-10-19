@@ -153,6 +153,9 @@ export async function GET(req: NextRequest) {
     if (row.type === 'INVENTORY') inventoryAmount = sum;
     if (row.type === 'MANUAL') manualAmount = sum;
   }
+  if (manualOnly) {
+    inventoryAmount = 0;
+  }
 
   const count = aggregates._count._all;
   const totalAmount = aggregates._sum.amount ?? 0;

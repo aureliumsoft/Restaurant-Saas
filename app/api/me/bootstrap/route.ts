@@ -23,6 +23,7 @@ import {
 } from '@/lib/restaurant-fulfillment-settings';
 import {
   entitlementsToClientPayload,
+  getCapUsage,
   getRestaurantEntitlements,
   resolveEntitlements,
 } from '@/lib/entitlements';
@@ -164,9 +165,19 @@ export async function GET(req: NextRequest) {
         getRestaurantEntitlements(restaurant.id),
       ]);
 
+    const capUsage = await getCapUsage(restaurant.id, entitlements);
+    const planPayload = entitlementsToClientPayload(entitlements);
+
     const payload: StaffBootstrapData = {
       permissions,
-      plan: entitlementsToClientPayload(entitlements),
+      plan: {
+        ...planPayload,
+        capUsage: {
+          usage: capUsage.usage,
+          overLimit: capUsage.overLimit,
+          anyOverLimit: capUsage.anyOverLimit,
+        },
+      },
       regional: parseRestaurantRegionalSettings(
         restaurantPayload as {
           currencyCode?: string;

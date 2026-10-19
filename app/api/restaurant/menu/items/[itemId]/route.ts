@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { syncPlanQuotaLocks } from "@/lib/entitlements/sync-plan-quota-locks";
 import { estimateDataUrlBytes, isAcceptedImageValue } from "@/lib/image-data-url";
 import {
   getMenuItemCategoryIds,
@@ -507,5 +508,6 @@ export async function DELETE(
     `;
     await tx.menuItem.delete({ where: { id: itemId } });
   });
+  await syncPlanQuotaLocks(auth.restaurant.id);
   return NextResponse.json({ ok: true }, { status: 200 });
 }

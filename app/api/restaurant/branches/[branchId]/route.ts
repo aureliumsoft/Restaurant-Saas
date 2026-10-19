@@ -138,6 +138,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'Branch not found' }, { status: 404 });
     }
 
+    const { syncPlanQuotaLocks } = await import(
+      '@/lib/entitlements/sync-plan-quota-locks'
+    );
+    await syncPlanQuotaLocks(auth.restaurantId);
+
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
     console.error('delete restaurant branch', error);

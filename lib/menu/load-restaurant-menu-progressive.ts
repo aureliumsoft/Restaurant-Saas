@@ -87,7 +87,10 @@ export async function loadRestaurantMenuCategoriesMeta(
     where: {
       restaurantId,
       showInFront: true,
-      OR: [{ itemLinks: { some: {} } }, { items: { some: {} } }],
+      OR: [
+        { itemLinks: { some: { menuItem: { isActive: true } } } },
+        { items: { some: { isActive: true } } },
+      ],
     },
     orderBy: { sortOrder: 'asc' },
     select: {
@@ -128,7 +131,10 @@ export async function loadRestaurantPosMenuCatalog(
   const frontCategoryWhere = {
     restaurantId,
     showInFront: true,
-    OR: [{ itemLinks: { some: {} } }, { items: { some: {} } }],
+    OR: [
+      { itemLinks: { some: { menuItem: { isActive: true } } } },
+      { items: { some: { isActive: true } } },
+    ],
   };
 
   const [restaurantMeta, categories, links, loadedItems, itemsWithImage] =
@@ -157,13 +163,17 @@ export async function loadRestaurantPosMenuCatalog(
         },
       }),
       db.menuItemCategory.findMany({
-        where: { category: frontCategoryWhere },
+        where: {
+          category: frontCategoryWhere,
+          menuItem: { isActive: true },
+        },
         orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
         select: { categoryId: true, menuItemId: true },
       }),
       db.menuItem.findMany({
         where: {
           restaurantId,
+          isActive: true,
           OR: [
             {
               category: {
@@ -280,6 +290,7 @@ export async function loadRestaurantMenuCategoryItems(
       imageUrl: true,
     },
     itemSelect: menuItemBrowseListSelect,
+    sellableOnly: true,
   });
   if (!category || category.showInFront === false) return null;
 

@@ -285,6 +285,8 @@ export function fakeBranchComplete() {
     slotDurationMinutes: 30,
     tableFloorRows: 4,
     tableFloorCols: 4,
+    isActive: true,
+    planQuotaLocked: false,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -684,6 +686,7 @@ export function fakeMenuCategoryComplete() {
     restaurantId: faker.string.uuid(),
     sortOrder: 0,
     showInFront: true,
+    planQuotaLocked: false,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -724,6 +727,8 @@ export function fakeMenuItemComplete() {
     salePrice: undefined,
     categoryId: faker.string.uuid(),
     restaurantId: faker.string.uuid(),
+    isActive: true,
+    planQuotaLocked: false,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -777,6 +782,8 @@ export function fakeRestaurantVariationComplete() {
     name: faker.person.fullName(),
     shortLabel: undefined,
     sortOrder: 0,
+    isActive: true,
+    planQuotaLocked: false,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };

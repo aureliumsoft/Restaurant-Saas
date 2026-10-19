@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
+import { syncPlanQuotaLocks } from '@/lib/entitlements/sync-plan-quota-locks';
 import { estimateDataUrlBytes, isAcceptedImageValue } from '@/lib/image-data-url';
 import { loadRestaurantMenuCategoryItems } from '@/lib/menu/load-restaurant-menu-progressive';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
@@ -258,6 +259,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
 
   try {
     await db.menuCategory.delete({ where: { id: trimmed } });
+    await syncPlanQuotaLocks(auth.restaurant.id);
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (e) {
     console.error(e);

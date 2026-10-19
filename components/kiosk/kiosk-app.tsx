@@ -94,6 +94,10 @@ import { submitKioskOrder } from '@/lib/offline/submit-order';
 import { useCustomerAccountOptional } from '@/components/customer-app/customer-account-context';
 import { KioskQrSignInDialog } from '@/components/kiosk/kiosk-qr-sign-in-dialog';
 import {
+  clearKioskTableQrCookie,
+  setKioskTableQrCookie,
+} from '@/lib/kiosk-qr-cookie';
+import {
   loadKioskQrContext,
   saveKioskQrContext,
 } from '@/lib/kiosk-qr-context-storage';
@@ -653,6 +657,14 @@ export function KioskApp({
       setFulfillment('dine_in');
       setStep('menu');
       if (mobile !== false) setPaymentMode('cash');
+      if (tableId) {
+        setKioskTableQrCookie({
+          slug,
+          branchId,
+          tableId,
+          mobile: mobile !== false,
+        });
+      }
     } else {
       const saved = loadKioskQrContext(slug, branchId);
       if (saved) {
@@ -664,8 +676,15 @@ export function KioskApp({
         if (saved.isMobileScan) {
           setPaymentMode('cash');
         }
+        setKioskTableQrCookie({
+          slug,
+          branchId,
+          tableId: saved.tableId,
+          mobile: saved.isMobileScan,
+        });
       } else {
         setFromTableQr(false);
+        clearKioskTableQrCookie();
       }
     }
   }, [slug, branchId, searchParams]);
@@ -912,14 +931,26 @@ export function KioskApp({
         setFromTableQr(true);
         setPaymentMode('cash');
         setStep('menu');
+        const isMobile = mobile !== false;
         saveKioskQrContext(slug, branchId, {
           fromTableQr: true,
-          isMobileScan: mobile !== false,
+          isMobileScan: isMobile,
           tableId: matched.id,
           fulfillment: 'dine_in',
         });
+        setKioskTableQrCookie({
+          slug,
+          branchId,
+          tableId: matched.id,
+          mobile: isMobile,
+        });
         deepLinkAppliedRef.current = true;
-        router.replace(kioskPath);
+        // Keep table QR query until Google sign-in finishes so OAuth returnTo
+        // and the server plan gate still see tableID.
+        const needsSignIn = isMobile && !customerAccount?.account;
+        if (!needsSignIn) {
+          router.replace(kioskPath);
+        }
         return;
       }
       toast.warn(t('tableQrNotAvailable'));
@@ -927,7 +958,35 @@ export function KioskApp({
 
     deepLinkAppliedRef.current = true;
     router.replace(kioskPath);
-  }, [diningTables, diningTablesLoaded, kioskPath, router, searchParams]);
+  }, [
+    customerAccount?.account,
+    diningTables,
+    diningTablesLoaded,
+    kioskPath,
+    router,
+    searchParams,
+    slug,
+    branchId,
+    t,
+  ]);
+
+  // After mobile QR Google sign-in, clean the URL (cookie still bypasses upgrade).
+  useEffect(() => {
+    if (!fromTableQr || !isMobileScan) return;
+    if (!customerAccount?.account) return;
+    if (!selectedTableId) return;
+    const { tableId } = parseKioskDeepLinkParams(searchParams);
+    if (!tableId) return;
+    router.replace(kioskPath);
+  }, [
+    customerAccount?.account,
+    fromTableQr,
+    isMobileScan,
+    kioskPath,
+    router,
+    searchParams,
+    selectedTableId,
+  ]);
 
   const allProducts = useMemo(() => {
     if (!menu) return [];
@@ -1651,6 +1710,8 @@ export function KioskApp({
           loading={Boolean(customerAccount?.loading)}
           slug={slug}
           branchId={branchId}
+          tableId={selectedTableId || null}
+          isMobileScan={isMobileScan}
         />
 
         <header className="sticky top-0 z-50 border-b border-[#e2e8f0] bg-white/95 px-4 py-3 text-[#0f172a] backdrop-blur">

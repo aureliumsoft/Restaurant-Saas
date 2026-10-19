@@ -5,9 +5,15 @@ import { z } from 'zod';
 
 import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import { db } from '@/lib/db';
+import {
+  CUSTOM_SELECTABLE_MODULE_IDS,
+  toPricingModuleIds,
+} from '@/lib/entitlements/pricing-module-ids';
 import { applyAdminSubscriptionUpdate } from '@/lib/subscription-admin-update';
 import { parseSubscriptionDateInput } from '@/lib/subscription-timezone';
 import { resolveRouteParams } from '@/lib/resolve-route-id';
+
+const selectableSet = new Set(CUSTOM_SELECTABLE_MODULE_IDS);
 
 const patchSchema = z.object({
   plan: z.enum(['FREE', 'BASIC', 'GROWTH', 'SCALE', 'PRO', 'CUSTOM']),
@@ -15,6 +21,7 @@ const patchSchema = z.object({
   trialEndsAt: z.string().max(40).nullable().optional(),
   currentPeriodEnd: z.string().max(40).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+  customSelectedModules: z.array(z.string().trim().min(1).max(64)).max(40).optional(),
 });
 
 function parseDate(s: string | null | undefined): Date | null | undefined {
@@ -50,7 +57,15 @@ export async function PATCH(
     return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
   }
 
-  const { trialEndsAt, currentPeriodEnd, notes, plan, status } = parsed.data;
+  const { trialEndsAt, currentPeriodEnd, notes, plan, status, customSelectedModules } =
+    parsed.data;
+
+  const normalizedModules =
+    plan === 'CUSTOM'
+      ? toPricingModuleIds(customSelectedModules ?? []).filter((id) =>
+          selectableSet.has(id)
+        )
+      : [];
 
   try {
     const result = await applyAdminSubscriptionUpdate(restaurantId, {
@@ -59,6 +74,7 @@ export async function PATCH(
       trialEndsAt: parseDate(trialEndsAt),
       currentPeriodEnd: parseDate(currentPeriodEnd),
       notes: notes === undefined ? undefined : notes,
+      customSelectedModules: normalizedModules,
     });
 
     return NextResponse.json(

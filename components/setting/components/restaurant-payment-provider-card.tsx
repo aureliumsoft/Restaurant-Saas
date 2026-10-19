@@ -23,7 +23,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
 import { PremiumGate } from '@/components/premium/premium-gate';
+import { useEntitlements } from '@/hooks/use-entitlements';
 
 type Provider = 'NONE' | 'PAYPAL' | 'STRIPE' | 'WALLETS';
 
@@ -71,10 +73,15 @@ export function RestaurantPaymentProviderCard({
 }) {
   const { t } = useTranslation();
   const router = useRouter();
+  const { limitFlag, caps } = useEntitlements();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [state, setState] = useState<PaymentProviderState | null>(null);
   const [terminalIp, setTerminalIp] = useState('');
+
+  const singleMethodOnly =
+    limitFlag('onlinePayments', 'singleMethod', false) ||
+    caps?.onlinePaymentMethods === 1;
 
   const load = useCallback(async () => {
     const res = await axios.get<{ data?: PaymentProviderState }>(
@@ -226,34 +233,66 @@ export function RestaurantPaymentProviderCard({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push('/settings/payments/paypal')}
-            >
-              {t('settings.cards.paymentProvider.configurePaypal')}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push('/settings/payments/stripe')}
-            >
-              {t('settings.cards.paymentProvider.configureStripe')}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push('/settings/payments/jazzcash')}
-            >
-              {t('settings.cards.paymentProvider.configureJazzcash')}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push('/settings/payments/easypaisa')}
-            >
-              {t('settings.cards.paymentProvider.configureEasypaisa')}
-            </Button>
+            {(
+              [
+                {
+                  key: 'paypal' as const,
+                  href: '/settings/payments/paypal',
+                  configured: Boolean(state?.paypal.configured),
+                  configureKey: 'settings.cards.paymentProvider.configurePaypal',
+                  editKey: 'settings.cards.paymentProvider.editPaypalConfig',
+                },
+                {
+                  key: 'stripe' as const,
+                  href: '/settings/payments/stripe',
+                  configured: Boolean(state?.stripe.configured),
+                  configureKey: 'settings.cards.paymentProvider.configureStripe',
+                  editKey: 'settings.cards.paymentProvider.editStripeConfig',
+                },
+                {
+                  key: 'jazzcash' as const,
+                  href: '/settings/payments/jazzcash',
+                  configured: Boolean(state?.jazzcash.configured),
+                  configureKey:
+                    'settings.cards.paymentProvider.configureJazzcash',
+                  editKey: 'settings.cards.paymentProvider.editJazzcashConfig',
+                },
+                {
+                  key: 'easypaisa' as const,
+                  href: '/settings/payments/easypaisa',
+                  configured: Boolean(state?.easypaisa.configured),
+                  configureKey:
+                    'settings.cards.paymentProvider.configureEasypaisa',
+                  editKey: 'settings.cards.paymentProvider.editEasypaisaConfig',
+                },
+              ] as const
+            ).map((method) => {
+              const anyConfigured = Boolean(
+                state?.paypal.configured ||
+                  state?.stripe.configured ||
+                  state?.jazzcash.configured ||
+                  state?.easypaisa.configured
+              );
+              const lockedExtra =
+                singleMethodOnly && anyConfigured && !method.configured;
+              return (
+                <PremiumDisabledControl
+                  key={method.key}
+                  locked={lockedExtra}
+                  label={t(method.configureKey)}
+                >
+                  <Button
+                    type="button"
+                    variant={method.configured ? 'outline' : 'default'}
+                    onClick={() => router.push(method.href)}
+                  >
+                    {method.configured
+                      ? t(method.editKey)
+                      : t(method.configureKey)}
+                  </Button>
+                </PremiumDisabledControl>
+              );
+            })}
           </div>
         </PremiumGate>
 

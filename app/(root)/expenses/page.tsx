@@ -349,11 +349,11 @@ export default function ExpensesPage() {
               value={formatMoney(kpis.totalAmount)}
               hint={filterHint}
             />
-            <PremiumGate locked={manualOnly}>
+            <PremiumGate locked={manualOnly} variant="crown">
               <ExpenseInsightChip
                 icon={Boxes}
                 label={t('dashboard.expenses.inventory')}
-                value={formatMoney(kpis.inventoryAmount)}
+                value={formatMoney(manualOnly ? 0 : kpis.inventoryAmount)}
                 hint={t('dashboard.expenses.restockHint')}
               />
             </PremiumGate>

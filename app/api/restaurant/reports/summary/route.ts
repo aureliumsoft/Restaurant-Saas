@@ -196,35 +196,8 @@ export async function GET(req: NextRequest) {
     if (row.type === 'INVENTORY') inventoryAmount = sum;
     if (row.type === 'MANUAL') manualAmount = sum;
   }
-  const expensesTotal = expenseAgg._sum.amount ?? 0;
-
-  const branchStock = branchId
-    ? await listBranchStockForIngredients(
-        branchId,
-        ingredients.map((i) => i.id)
-      )
-    : new Map();
-
-  let totalInventoryValue = 0;
-  let lowStockCount = 0;
-  for (const ing of ingredients) {
-    const stock = branchStock.get(ing.id);
-    const quantity = branchId ? (stock?.quantity ?? 0) : ing.quantity;
-    const minQuantity = branchId
-      ? (stock?.minQuantity ?? ing.minQuantity)
-      : ing.minQuantity;
-    totalInventoryValue += quantity * (ing.unitCost ?? 0);
-    if (minQuantity != null && quantity <= minQuantity) lowStockCount += 1;
-  }
-
-  const usageValueInRange = usageEntries.reduce(
-    (sum, row) => sum + row.quantity * (row.ingredient.unitCost ?? 0),
-    0
-  );
-
-  const profit = revenueAmount - expensesTotal;
-  const profitMargin =
-    revenueAmount > 0 ? (profit / revenueAmount) * 100 : 0;
+  const expensesTotalRaw = expenseAgg._sum.amount ?? 0;
+  const expensesCountRaw = expenseAgg._count._all;
 
   const { getRestaurantEntitlements, moduleLimitFlag } = await import(
     '@/lib/entitlements'
@@ -266,6 +239,55 @@ export async function GET(req: NextRequest) {
     'expensesTab',
     true
   );
+  const manualOnlyExpenses =
+    moduleLimitFlag(entitlements, 'expenses', 'manualOnly', false) ||
+    moduleLimitFlag(entitlements, 'reports', 'expensesManualOnly', false);
+  /** Inventory restock costs excluded when inventory module unpaid / manual-only plans. */
+  const includeInventoryExpenses =
+    allowFinancialInventory && !manualOnlyExpenses;
+
+  const inventoryAmountSafe = includeInventoryExpenses ? inventoryAmount : 0;
+  const expensesTotal = includeInventoryExpenses
+    ? expensesTotalRaw
+    : manualAmount;
+  const expensesCount = includeInventoryExpenses
+    ? expensesCountRaw
+    : await db.expense.count({
+        where: {
+          restaurantId: rid,
+          ...(branchId ? { branchId } : {}),
+          occurredAt: { gte: range.from, lte: range.to },
+          type: 'MANUAL',
+        },
+      });
+
+  const branchStock = branchId
+    ? await listBranchStockForIngredients(
+        branchId,
+        ingredients.map((i) => i.id)
+      )
+    : new Map();
+
+  let totalInventoryValue = 0;
+  let lowStockCount = 0;
+  for (const ing of ingredients) {
+    const stock = branchStock.get(ing.id);
+    const quantity = branchId ? (stock?.quantity ?? 0) : ing.quantity;
+    const minQuantity = branchId
+      ? (stock?.minQuantity ?? ing.minQuantity)
+      : ing.minQuantity;
+    totalInventoryValue += quantity * (ing.unitCost ?? 0);
+    if (minQuantity != null && quantity <= minQuantity) lowStockCount += 1;
+  }
+
+  const usageValueInRange = usageEntries.reduce(
+    (sum, row) => sum + row.quantity * (row.ingredient.unitCost ?? 0),
+    0
+  );
+
+  const profit = revenueAmount - expensesTotal;
+  const profitMargin =
+    revenueAmount > 0 ? (profit / revenueAmount) * 100 : 0;
 
   const safePaymentBreakdown = {
     cash: paymentBreakdown.cash,
@@ -273,7 +295,7 @@ export async function GET(req: NextRequest) {
     other: allowFinancialOther ? paymentBreakdown.other : 0,
   };
   const safePnlExpenses = allowFinancialExpenses ? expensesTotal : 0;
-  const safeInventoryExpenses = allowFinancialInventory ? inventoryAmount : 0;
+  const safeInventoryExpenses = inventoryAmountSafe;
   const safeOperatingExpenses = allowFinancialExpenses ? manualAmount : 0;
 
   return NextResponse.json(
@@ -308,9 +330,9 @@ export async function GET(req: NextRequest) {
         expenses: allowExpensesTab
           ? {
               totalAmount: expensesTotal,
-              inventoryAmount,
+              inventoryAmount: inventoryAmountSafe,
               manualAmount,
-              count: expenseAgg._count._all,
+              count: expensesCount,
             }
           : {
               totalAmount: 0,

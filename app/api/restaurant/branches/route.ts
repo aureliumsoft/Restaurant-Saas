@@ -39,8 +39,14 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
+    const sellableOnly =
+      _req.nextUrl.searchParams.get('sellableOnly') === '1';
+
     const branches = await db.branch.findMany({
-      where: { restaurantId: auth.restaurantId },
+      where: {
+        restaurantId: auth.restaurantId,
+        ...(sellableOnly ? { isActive: true } : {}),
+      },
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,
@@ -51,6 +57,8 @@ export async function GET(_req: NextRequest) {
         longitude: true,
         deliveryRadiusKm: true,
         openingHours: true,
+        isActive: true,
+        planQuotaLocked: true,
         createdAt: true,
       },
     });

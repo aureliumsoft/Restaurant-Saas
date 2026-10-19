@@ -44,6 +44,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
+import { useEntitlements } from '@/hooks/use-entitlements';
+import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
 import { TableQrDialog } from '@/components/dashboard/tables/table-qr-card';
 import { TableFloorPlan } from '@/components/dashboard/tables/table-floor-plan';
 import {
@@ -96,6 +98,8 @@ export function TablesModule({
   branchName: branchNameProp,
 }: TablesModuleProps = {}) {
   const { t } = useTranslation();
+  const { limitFlag } = useEntitlements();
+  const allowTableQr = limitFlag('branches', 'tableQr', true);
   const {
     activeBranchId,
     activeBranchUrlId,
@@ -451,15 +455,22 @@ export function TablesModule({
             {selected ? (
               <div className="flex max-w-xl items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2">
                 <p className="mr-auto text-sm font-medium">{selected.name}</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!restaurantSlug || !selected.persisted}
-                  onClick={() => setQrTarget(selected)}
+                <PremiumDisabledControl
+                  locked={!allowTableQr}
+                  label={t('dashboard.tables.qrCode', {
+                    defaultValue: 'QR',
+                  })}
                 >
-                  <QrCode className="mr-2 h-3.5 w-3.5" />
-                  QR
-                </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!restaurantSlug || !selected.persisted}
+                    onClick={() => setQrTarget(selected)}
+                  >
+                    <QrCode className="mr-2 h-3.5 w-3.5" />
+                    QR
+                  </Button>
+                </PremiumDisabledControl>
                 <Button
                   type="button"
                   variant="outline"

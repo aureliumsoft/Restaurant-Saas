@@ -101,6 +101,8 @@ export async function loadCategoriesWithLinkedItems<
   itemSelect: TItemSelect;
   categoryWhere?: Prisma.MenuCategoryWhereInput;
   itemOrderBy?: Prisma.Enumerable<Prisma.MenuItemOrderByWithRelationInput>;
+  /** When true, only include sellable (isActive) products. */
+  sellableOnly?: boolean;
 }): Promise<
   Array<
     Prisma.MenuCategoryGetPayload<{ select: TCategorySelect }> & {
@@ -112,6 +114,10 @@ export async function loadCategoriesWithLinkedItems<
   type Result = Prisma.MenuCategoryGetPayload<{ select: TCategorySelect }> & {
     items: MenuItem[];
   };
+
+  const sellableWhere: Prisma.MenuItemWhereInput | undefined = options.sellableOnly
+    ? { isActive: true }
+    : undefined;
 
   const categories = await db.menuCategory.findMany({
     where: {
@@ -126,7 +132,10 @@ export async function loadCategoriesWithLinkedItems<
   });
 
   const links = await db.menuItemCategory.findMany({
-    where: { category: { restaurantId: options.restaurantId } },
+    where: {
+      category: { restaurantId: options.restaurantId },
+      ...(sellableWhere ? { menuItem: sellableWhere } : {}),
+    },
     orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
     select: {
       categoryId: true,
@@ -155,6 +164,7 @@ export async function loadCategoriesWithLinkedItems<
       where: {
         restaurantId: options.restaurantId,
         categoryId: { in: categoryIds },
+        ...sellableWhere,
       },
       orderBy: options.itemOrderBy ?? [...MENU_ITEM_DATE_ORDER],
       select: {
@@ -199,6 +209,8 @@ export async function loadSingleCategoryWithLinkedItems<
   itemOrderBy?: Prisma.Enumerable<Prisma.MenuItemOrderByWithRelationInput>;
   /** When set, only this page of items is loaded (full id list is still resolved). */
   pagination?: { skip: number; take: number };
+  /** When true, only include sellable (isActive) products. */
+  sellableOnly?: boolean;
 }): Promise<
   | (Prisma.MenuCategoryGetPayload<{ select: TCategorySelect }> & {
       items: Prisma.MenuItemGetPayload<{ select: TItemSelect }>[];
@@ -208,6 +220,10 @@ export async function loadSingleCategoryWithLinkedItems<
   | null
 > {
   type MenuItem = Prisma.MenuItemGetPayload<{ select: TItemSelect }>;
+
+  const sellableWhere: Prisma.MenuItemWhereInput | undefined = options.sellableOnly
+    ? { isActive: true }
+    : undefined;
 
   const category = await db.menuCategory.findFirst({
     where: {
@@ -224,6 +240,7 @@ export async function loadSingleCategoryWithLinkedItems<
     where: {
       categoryId: options.categoryId,
       category: { restaurantId: options.restaurantId },
+      ...(sellableWhere ? { menuItem: sellableWhere } : {}),
     },
     orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
     select: { menuItemId: true },
@@ -241,6 +258,7 @@ export async function loadSingleCategoryWithLinkedItems<
     where: {
       restaurantId: options.restaurantId,
       categoryId: options.categoryId,
+      ...sellableWhere,
     },
     orderBy: options.itemOrderBy ?? [...MENU_ITEM_DATE_ORDER],
     select: { id: true },

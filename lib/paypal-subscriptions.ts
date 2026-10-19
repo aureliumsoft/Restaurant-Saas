@@ -2,6 +2,7 @@ import type { RestaurantSubscription, SubscriptionPlan } from '@prisma/client';
 import { SubscriptionStatus } from '@prisma/client';
 
 import { db } from '@/lib/db';
+import { syncPlanQuotaLocks } from '@/lib/entitlements/sync-plan-quota-locks';
 import { isPayPalNetworkError } from '@/lib/paypal-network';
 import {
   hasActiveAdminPeriodLock,
@@ -343,6 +344,13 @@ export async function syncRestaurantSubscriptionFromPayPal(opts: {
         }
       : {};
 
+  const previousPlan = (
+    await db.restaurantSubscription.findUnique({
+      where: { restaurantId: opts.restaurantId },
+      select: { plan: true },
+    })
+  )?.plan;
+
   await db.$transaction(async (tx) => {
     const sub = await tx.restaurantSubscription.upsert({
       where: { restaurantId: opts.restaurantId },
@@ -393,6 +401,10 @@ export async function syncRestaurantSubscriptionFromPayPal(opts: {
       }
     }
   });
+
+  if (previousPlan !== plan) {
+    await syncPlanQuotaLocks(opts.restaurantId);
+  }
 
   return details;
 }

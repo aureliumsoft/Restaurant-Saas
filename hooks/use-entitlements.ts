@@ -6,12 +6,24 @@ import {
   selectStaffBootstrap,
   useStaffBootstrapSWR,
 } from '@/hooks/use-staff-bootstrap-swr';
-import type { ModuleKey, PlanCaps } from '@/lib/entitlements';
+import type {
+  CapUsageKey,
+  CapUsageOverLimit,
+  CapUsageCounts,
+  ModuleKey,
+  PlanCaps,
+} from '@/lib/entitlements';
 import { canCreate, effectivePerBranchCap } from '@/lib/entitlements';
 
 export type ClientModuleEntitlement = {
   access: 'full' | 'limited' | 'paid';
   limits?: Record<string, number | boolean | string>;
+};
+
+export type ClientCapUsage = {
+  usage: CapUsageCounts;
+  overLimit: CapUsageOverLimit;
+  anyOverLimit: boolean;
 };
 
 export type ClientEntitlementsPlan = {
@@ -25,6 +37,7 @@ export type ClientEntitlementsPlan = {
   modules?: Record<string, ClientModuleEntitlement>;
   caps?: PlanCaps;
   customSelectedModules?: string[];
+  capUsage?: ClientCapUsage;
 };
 
 export function useEntitlements() {
@@ -34,6 +47,7 @@ export function useEntitlements() {
 
   const modules = plan?.modules ?? {};
   const caps = plan?.caps;
+  const capUsage = plan?.capUsage ?? null;
 
   return useMemo(() => {
     function moduleAccess(key: ModuleKey | string): ClientModuleEntitlement {
@@ -91,12 +105,17 @@ export function useEntitlements() {
       );
     }
 
+    function isOverCap(key: CapUsageKey): boolean {
+      return Boolean(capUsage?.overLimit?.[key]);
+    }
+
     return {
       loading: isLoading && !bootstrap,
       error,
       plan,
       modules,
       caps,
+      capUsage,
       isPaid,
       isLimited,
       isFull,
@@ -104,7 +123,8 @@ export function useEntitlements() {
       limitFlag,
       canCreateMore,
       canCreateMorePerBranch,
+      isOverCap,
       moduleAccess,
     };
-  }, [bootstrap, caps, error, isLoading, modules, plan]);
+  }, [bootstrap, capUsage, caps, error, isLoading, modules, plan]);
 }

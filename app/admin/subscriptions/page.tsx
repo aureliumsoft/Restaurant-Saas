@@ -47,6 +47,7 @@ type Subscription = {
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
   notes: string | null;
+  customSelectedModules?: string[];
 } | null;
 
 type Row = {

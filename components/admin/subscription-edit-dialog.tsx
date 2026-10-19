@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CreditCard,
   Loader2,
+  Puzzle,
   Receipt,
   Save,
   StickyNote,
@@ -34,6 +35,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
+import {
+  getCustomSelectablePricingRows,
+  toPricingModuleIds,
+} from '@/lib/entitlements/pricing-module-ids';
 import { cn } from '@/lib/utils';
 import {
   formatInTimezone,
@@ -53,7 +58,10 @@ type Sub = {
   currentPeriodEnd: string | null;
   notes: string | null;
   paypalSubscriptionId?: string | null;
+  customSelectedModules?: string[];
 } | null;
+
+const CUSTOM_MODULE_ROWS = getCustomSelectablePricingRows();
 
 type PaymentRow = {
   id: string;
@@ -189,6 +197,7 @@ export function SubscriptionEditDialog({
   const [savingPayment, setSavingPayment] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!open) return;
@@ -199,6 +208,9 @@ export function SubscriptionEditDialog({
       utcToDatetimeLocalInTimezone(subscription?.currentPeriodEnd ?? null, ADMIN_TZ)
     );
     setNotes(subscription?.notes ?? '');
+    setSelectedModules(
+      new Set(toPricingModuleIds(subscription?.customSelectedModules ?? []))
+    );
     setPaymentAmount('');
     setPaymentPeriodEnd(
       utcToDatetimeLocalInTimezone(subscription?.currentPeriodEnd ?? null, ADMIN_TZ)
@@ -206,6 +218,15 @@ export function SubscriptionEditDialog({
     setPaymentNotes('');
     setPayments([]);
   }, [open, subscription]);
+
+  const toggleModule = (id: string, next: boolean) => {
+    setSelectedModules((prev) => {
+      const copy = new Set(prev);
+      if (next) copy.add(id);
+      else copy.delete(id);
+      return copy;
+    });
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -260,6 +281,8 @@ export function SubscriptionEditDialog({
           ? subscriptionDateInputToIso(currentPeriodEnd, ADMIN_TZ)
           : null,
         notes: notes.trim() || null,
+        customSelectedModules:
+          plan === 'CUSTOM' ? [...selectedModules] : [],
       });
       toast.success('Subscription updated');
       const sync = res.data?.sync;
@@ -408,6 +431,57 @@ export function SubscriptionEditDialog({
                 </FormField>
               </div>
             </SectionPanel>
+
+            {plan === 'CUSTOM' ? (
+              <SectionPanel
+                icon={Puzzle}
+                title="Custom modules & features"
+                description="Only checked items are available. Unchecked selection modules stay locked; limited modules keep Basic limits."
+                accent="#8b5cf6"
+              >
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {CUSTOM_MODULE_ROWS.map((row) => {
+                    const checked = selectedModules.has(row.id);
+                    const isSelection = row.byPlan.CUSTOM === 'selection';
+                    return (
+                      <label
+                        key={row.id}
+                        className={cn(
+                          'flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 transition',
+                          checked
+                            ? 'bg-violet-500/10 dark:bg-violet-500/15'
+                            : 'bg-white/60 dark:bg-zinc-900/40'
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4 rounded border-border accent-violet-600"
+                          checked={checked}
+                          onChange={(e) => toggleModule(row.id, e.target.checked)}
+                        />
+                        <span className="min-w-0 space-y-0.5">
+                          <span className="block text-sm font-medium leading-snug">
+                            {row.label}
+                          </span>
+                          <span className="block text-[11px] text-muted-foreground">
+                            {isSelection
+                              ? checked
+                                ? 'Full access'
+                                : 'Locked until checked'
+                              : checked
+                                ? 'Unlocked to full'
+                                : 'Basic limited access'}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-[11px] text-muted-foreground">
+                  {selectedModules.size} selected
+                </p>
+              </SectionPanel>
+            ) : null}
 
             <SectionPanel
               icon={CalendarClock}

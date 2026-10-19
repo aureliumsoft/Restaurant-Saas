@@ -15,7 +15,7 @@ export async function resolveBranchIdForStock(
     return trimmed;
   }
   const defaultBranch = await db.branch.findFirst({
-    where: { restaurantId },
+    where: { restaurantId, isActive: true },
     orderBy: { createdAt: 'asc' },
     select: { id: true },
   });

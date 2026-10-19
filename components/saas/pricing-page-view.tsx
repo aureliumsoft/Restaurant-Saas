@@ -289,20 +289,6 @@ export function PricingPageView({
                   <p className="mt-2 min-h-10 text-sm text-zinc-600 dark:text-zinc-300">
                     {plan.description}
                   </p>
-                  <div className="mt-5 text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                    {t('marketingExtras.pricing.featuresHeading')}
-                  </div>
-                  {isCustom ? (
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      {t('marketingExtras.pricing.custom.hint')}
-                    </p>
-                  ) : null}
-                  <PricingPlanFeatureList
-                    plan={plan.plan}
-                    selectedModules={isCustom ? customSelected : undefined}
-                    filterToSelected={false}
-                    onToggleModule={isCustom ? toggleCustomModule : undefined}
-                  />
 
                   {isCurrentPlan ? (
                     <p className="mt-6 rounded-lg border border-fire-300 bg-fire-100 px-4 py-3 text-center text-sm font-medium text-fire-700 dark:border-fire-500/40 dark:bg-fire-500/15 dark:text-fire-100">
@@ -386,6 +372,23 @@ export function PricingPageView({
                       </Button>
                     </>
                   )}
+                  
+                  <div className="mt-5 text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                    {t('marketingExtras.pricing.featuresHeading')}
+                  </div>
+                  {isCustom ? (
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      {t('marketingExtras.pricing.custom.hint')}
+                    </p>
+                  ) : null}
+                  <PricingPlanFeatureList
+                    plan={plan.plan}
+                    selectedModules={isCustom ? customSelected : undefined}
+                    filterToSelected={false}
+                    onToggleModule={isCustom ? toggleCustomModule : undefined}
+                  />
+
+                 
                 </article>
               );
             })}

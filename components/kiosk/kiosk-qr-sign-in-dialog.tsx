@@ -11,23 +11,58 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { kioskTableDeepLink } from '@/lib/kiosk-path';
+import {
+  readKioskTableQrCookieFromDocument,
+  setKioskTableQrCookie,
+} from '@/lib/kiosk-qr-cookie';
+import { loadKioskQrContext } from '@/lib/kiosk-qr-context-storage';
 import { cn } from '@/lib/utils';
 
 export function KioskQrSignInDialog({
   open,
   slug,
   branchId,
+  tableId,
+  isMobileScan = true,
   loading,
 }: {
   open: boolean;
   slug: string;
   branchId: string;
+  /** Prefer current table id so Google returnTo keeps QR deep-link params. */
+  tableId?: string | null;
+  isMobileScan?: boolean;
   loading?: boolean;
 }) {
   const { t } = useTranslation();
 
   function startGoogleSignIn() {
-    const returnTo = `${window.location.pathname}${window.location.search}`;
+    const saved = loadKioskQrContext(slug, branchId);
+    const cookie = readKioskTableQrCookieFromDocument();
+    const resolvedTableId =
+      tableId?.trim() ||
+      saved?.tableId?.trim() ||
+      (cookie?.slug === slug ? cookie.tableId : '') ||
+      '';
+    const mobile =
+      typeof isMobileScan === 'boolean'
+        ? isMobileScan
+        : saved?.isMobileScan !== false;
+
+    const returnTo = resolvedTableId
+      ? kioskTableDeepLink(slug, branchId, resolvedTableId, { mobile })
+      : `${window.location.pathname}${window.location.search}`;
+
+    if (resolvedTableId) {
+      setKioskTableQrCookie({
+        slug,
+        branchId,
+        tableId: resolvedTableId,
+        mobile,
+      });
+    }
+
     const params = new URLSearchParams({
       restaurantSlug: slug,
       returnTo,

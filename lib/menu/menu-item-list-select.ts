@@ -1,5 +1,7 @@
 /** Lightweight product select for browse grids (kiosk / online / POS). */
 
+import { MENU_ITEM_VARIATION_SELLABLE_WHERE } from '@/lib/menu/variation-sellable';
+
 export const menuItemBrowseListSelect = {
   id: true,
   name: true,
@@ -10,6 +12,7 @@ export const menuItemBrowseListSelect = {
   updatedAt: true,
   createdAt: true,
   variations: {
+    where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
     orderBy: { sortOrder: 'asc' as const },
     select: {
       id: true,
@@ -55,6 +58,7 @@ export const menuItemBrowseListSelect = {
           price: true,
           salePrice: true,
           variations: {
+            where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
             orderBy: { sortOrder: 'asc' as const },
             select: {
               id: true,
@@ -82,6 +86,7 @@ export const menuItemBrowseListSelectLegacy = {
   updatedAt: true,
   createdAt: true,
   variations: {
+    where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
     orderBy: { sortOrder: 'asc' as const },
     select: {
       id: true,
@@ -130,6 +135,7 @@ export const menuItemPosCatalogSelect = {
   updatedAt: true,
   createdAt: true,
   variations: {
+    where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
     orderBy: { sortOrder: 'asc' as const },
     select: {
       id: true,
@@ -167,6 +173,7 @@ export const menuItemPosCatalogSelect = {
           price: true,
           salePrice: true,
           variations: {
+            where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
             orderBy: { sortOrder: 'asc' as const },
             select: {
               id: true,

@@ -77,7 +77,8 @@ export function useRestaurantVariationTemplates() {
   const reloadVariationTemplates = useCallback(async () => {
     try {
       const res = await axios.get<{ data: RestaurantVariationRow[] }>(
-        '/api/restaurant/variations'
+        '/api/restaurant/variations',
+        { params: { sellableOnly: '1' } }
       );
       setVariationTemplates(res.data.data ?? []);
     } catch {

@@ -23,6 +23,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
+import { PlanCapOverLimitBanner } from '@/components/premium/plan-cap-over-limit-banner';
 import { SearchField } from '@/components/ui/search-field';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { apiErrorMessage } from '@/lib/api-error-message';
@@ -188,6 +189,7 @@ export function RestaurantVariationsPanel() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          <PlanCapOverLimitBanner resource="variations" />
           <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
             <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 items-end justify-end">
               <div className="grid gap-1.5">
@@ -411,13 +413,21 @@ function VariationCard({
     <Card className="dashboard-grid-card flex flex-col overflow-hidden transition-shadow">
       <CardHeader className="space-y-3 pb-3">
         <div className="flex items-start justify-between gap-2">
-          {!editing && variation.shortLabel ? (
-            <Badge variant="secondary" className="shrink-0 font-mono">
-              {variation.shortLabel}
-            </Badge>
-          ) : (
-            <div className="min-h-6 flex-1" aria-hidden />
-          )}
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {!editing && variation.shortLabel ? (
+              <Badge variant="secondary" className="shrink-0 font-mono">
+                {variation.shortLabel}
+              </Badge>
+            ) : null}
+            {variation.planQuotaLocked ? (
+              <Badge
+                variant="outline"
+                className="border-destructive/40 text-[10px] font-normal text-destructive"
+              >
+                {t('dashboard.planCaps.lockedBadge')}
+              </Badge>
+            ) : null}
+          </div>
           <Button
             type="button"
             size="icon"
