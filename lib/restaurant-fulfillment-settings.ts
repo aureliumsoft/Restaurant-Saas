@@ -8,6 +8,7 @@ export type RestaurantFulfillmentSettings = {
   kioskEnabled: boolean;
   kdsEnabled: boolean;
   orderDisplayEnabled: boolean;
+  onscreenKeyboardEnabled: boolean;
 };
 
 /** Fields that existed before website/kiosk/kds/order-display flags. */
@@ -23,6 +24,7 @@ export const RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT = {
   kioskEnabled: true,
   kdsEnabled: true,
   orderDisplayEnabled: true,
+  onscreenKeyboardEnabled: true,
 } as const;
 
 export type RestaurantFulfillmentSettingsRow = {
@@ -33,6 +35,7 @@ export type RestaurantFulfillmentSettingsRow = {
   kioskEnabled: boolean;
   kdsEnabled: boolean;
   orderDisplayEnabled: boolean;
+  onscreenKeyboardEnabled: boolean;
 };
 
 export const DEFAULT_RESTAURANT_FULFILLMENT_SETTINGS: RestaurantFulfillmentSettings =
@@ -44,6 +47,7 @@ export const DEFAULT_RESTAURANT_FULFILLMENT_SETTINGS: RestaurantFulfillmentSetti
     kioskEnabled: true,
     kdsEnabled: true,
     orderDisplayEnabled: true,
+    onscreenKeyboardEnabled: true,
   };
 
 export function parseRestaurantFulfillmentSettings(
@@ -57,6 +61,7 @@ export function parseRestaurantFulfillmentSettings(
     kioskEnabled: row?.kioskEnabled !== false,
     kdsEnabled: row?.kdsEnabled !== false,
     orderDisplayEnabled: row?.orderDisplayEnabled !== false,
+    onscreenKeyboardEnabled: row?.onscreenKeyboardEnabled !== false,
   };
 }
 
@@ -81,6 +86,7 @@ export function isPrismaFulfillmentSettingsFieldError(error: unknown): boolean {
     error.message.includes('kioskEnabled') ||
     error.message.includes('kdsEnabled') ||
     error.message.includes('orderDisplayEnabled') ||
+    error.message.includes('onscreenKeyboardEnabled') ||
     error.message.includes('Unknown field') ||
     error.message.includes('Unknown arg')
   );
@@ -93,4 +99,3 @@ export async function loadRestaurantFulfillmentSettings(restaurantId: string) {
   });
   return parseRestaurantFulfillmentSettings(row ?? undefined);
 }
-

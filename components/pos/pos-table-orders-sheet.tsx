@@ -137,6 +137,7 @@ export function PosTableOrdersSheet({
   const { t } = useTranslation();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
+  const onscreenKeyboardEnabled = fulfillmentSettings.onscreenKeyboardEnabled;
   const { cards, loading, removeTable, confirmInBackground, refresh } =
     useOpenTableOrders(branchId);
 
@@ -146,6 +147,10 @@ export function PosTableOrdersSheet({
   const [payMethod, setPayMethod] = useState<'cash' | 'card'>('cash');
   const [paidInput, setPaidInput] = useState('');
   const [paidKeyboardOpen, setPaidKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    if (!onscreenKeyboardEnabled) setPaidKeyboardOpen(false);
+  }, [onscreenKeyboardEnabled]);
   const [cancelOrder, setCancelOrder] = useState<OpenTableOrderRow | null>(
     null
   );
@@ -1007,15 +1012,22 @@ export function PosTableOrdersSheet({
                       {t('pos.dialogs.payTable.cashPaid')}
                     </label>
                     <Input
-                      className="h-9 cursor-pointer bg-background tabular-nums"
-                      inputMode="none"
+                      className={cn(
+                        'h-9 bg-background tabular-nums',
+                        onscreenKeyboardEnabled && 'cursor-pointer'
+                      )}
+                      inputMode={onscreenKeyboardEnabled ? 'none' : 'decimal'}
                       autoComplete="off"
                       placeholder="0.00"
                       value={paidInput}
                       disabled={paying}
                       onChange={(e) => setPaidInput(e.target.value)}
-                      onPointerDown={() => setPaidKeyboardOpen(true)}
-                      onFocus={() => setPaidKeyboardOpen(true)}
+                      onPointerDown={() => {
+                        if (onscreenKeyboardEnabled) setPaidKeyboardOpen(true);
+                      }}
+                      onFocus={() => {
+                        if (onscreenKeyboardEnabled) setPaidKeyboardOpen(true);
+                      }}
                     />
                   </div>
                   <div className="flex items-end justify-between gap-3 pt-1">
@@ -1026,7 +1038,7 @@ export function PosTableOrdersSheet({
                       {formatMoney(payChange)}
                     </span>
                   </div>
-                  {paidKeyboardOpen ? (
+                  {onscreenKeyboardEnabled && paidKeyboardOpen ? (
                     <PosOnScreenKeyboard
                       portal={false}
                       mode="numeric"

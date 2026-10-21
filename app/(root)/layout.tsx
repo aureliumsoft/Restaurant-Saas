@@ -275,12 +275,12 @@ const RootLayout = ({ children }: RootLayoutProps) => {
                     target={restaurantSlug ? '_blank' : undefined}
                     className="group flex min-w-0 items-center gap-3 transition-opacity hover:opacity-90"
                   >
-                    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-fire-400 to-fire-600 text-sm font-bold uppercase text-white shadow-lg shadow-fire-500/30">
+                    <div className="relative flex max-h-10 max-w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-sm font-bold uppercase text-white">
                       {restaurantLogoUrl && !logoFailed ? (
-                        <img
+                        <img  
                           src={restaurantLogoUrl}
                           alt={restaurantName}
-                          className="h-full w-full object-cover"
+                          className="max-h-10 max-w-20 object-cover"
                           onError={() => setLogoFailed(true)}
                         />
                       ) : (

@@ -98,6 +98,7 @@ export function fakeRestaurantComplete() {
     kioskEnabled: true,
     kdsEnabled: true,
     orderDisplayEnabled: true,
+    onscreenKeyboardEnabled: true,
     dineInPaymentTiming: DineInPaymentTiming.ON_LEAVE,
     currencyCode: 'EUR',
     countryCode: 'ES',

@@ -1022,27 +1022,23 @@ export default function OrderPageClient({
   };
 
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
-    if (productNeedsCustomizeDialog(p)) {
-      const token = ++customizeLoadTokenRef.current;
-      openCustomizeForProduct(p, { loading: true });
-      const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
-        p.id,
-        {
-          slug: orderInfo?.restaurantSlug ?? undefined,
-          subdomain: hostSubdomain ?? undefined,
-        },
-        { force: true }
-      );
-      if (token !== customizeLoadTokenRef.current) return;
-      if (full) {
-        setCustomizeProduct({ ...full, categoryId: p.categoryId });
-        setCustomizeLoading(false);
-        return;
-      }
-      openCustomizeForProduct(p);
-    } else {
-      addToCart(p, []);
+    const token = ++customizeLoadTokenRef.current;
+    openCustomizeForProduct(p, { loading: true });
+    const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
+      p.id,
+      {
+        slug: orderInfo?.restaurantSlug ?? undefined,
+        subdomain: hostSubdomain ?? undefined,
+      },
+      { force: true }
+    );
+    if (token !== customizeLoadTokenRef.current) return;
+    if (full) {
+      setCustomizeProduct({ ...full, categoryId: p.categoryId });
+      setCustomizeLoading(false);
+      return;
     }
+    openCustomizeForProduct(p);
   };
 
   const handleProductSelect = (product: CustomerMenuProduct) => {

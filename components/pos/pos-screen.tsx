@@ -165,7 +165,6 @@ import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import { restaurantMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
-import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import {
   fetchRestaurantMenuProductDetail,
   overlayLiveCatalogPrices,
@@ -860,6 +859,17 @@ export function PosScreen({
     menuMeta?.fulfillmentSettings,
     bootstrapFulfillment,
   ]);
+
+  const onscreenKeyboardEnabled = fulfillmentSettings.onscreenKeyboardEnabled;
+
+  useEffect(() => {
+    if (!onscreenKeyboardEnabled) setKeyboardField(null);
+  }, [onscreenKeyboardEnabled]);
+
+  const openKeyboardField = (field: PosKeyboardField) => {
+    if (!onscreenKeyboardEnabled) return;
+    setKeyboardField(field);
+  };
 
   const categories = useMemo<Category[]>(() => {
     const next: Category[] = [
@@ -1924,40 +1934,36 @@ export function PosScreen({
   };
 
   const proceedWithProduct = async (p: PosMenuProduct) => {
-    if (productNeedsCustomizeDialog(p)) {
-        const token = ++customizeLoadTokenRef.current;
-        openCustomize(p, { loading: true });
-        const full = await fetchRestaurantMenuProductDetail<
-          PosMenuProduct & { categoryIds?: string[] }
-      >(p.id, { force: true });
-        if (token !== customizeLoadTokenRef.current) return;
-        if (!full) {
-          setCustomizeOpen(false);
-          setCustomizeProduct(null);
-          setCustomizeLoading(false);
-          toast.error(t('pos.toasts.couldNotLoadProductConfig'));
-          return;
-        }
-        setCustomizeProduct({
-          ...full,
-          categoryId: p.categoryId,
-          description: full.description ?? null,
-          imageUrl: full.imageUrl ?? null,
-          price: Number(full.price),
-          salePrice:
-            full.salePrice != null && Number.isFinite(Number(full.salePrice))
-              ? Number(full.salePrice)
-              : null,
-          attributeGroups: full.attributeGroups ?? [],
-          variations: (full.variations ?? []).map((v) => ({
-            ...v,
-            priceDelta: Number(v.priceDelta ?? 0),
-          })),
-        });
-        setCustomizeLoading(false);
+    const token = ++customizeLoadTokenRef.current;
+    openCustomize(p, { loading: true });
+    const full = await fetchRestaurantMenuProductDetail<
+      PosMenuProduct & { categoryIds?: string[] }
+    >(p.id, { force: true });
+    if (token !== customizeLoadTokenRef.current) return;
+    if (!full) {
+      setCustomizeOpen(false);
+      setCustomizeProduct(null);
+      setCustomizeLoading(false);
+      toast.error(t('pos.toasts.couldNotLoadProductConfig'));
       return;
     }
-    addToCart(p, []);
+    setCustomizeProduct({
+      ...full,
+      categoryId: p.categoryId,
+      description: full.description ?? null,
+      imageUrl: full.imageUrl ?? null,
+      price: Number(full.price),
+      salePrice:
+        full.salePrice != null && Number.isFinite(Number(full.salePrice))
+          ? Number(full.salePrice)
+          : null,
+      attributeGroups: full.attributeGroups ?? [],
+      variations: (full.variations ?? []).map((v) => ({
+        ...v,
+        priceDelta: Number(v.priceDelta ?? 0),
+      })),
+    });
+    setCustomizeLoading(false);
   };
 
   const handleProductSelect = (p: PosMenuProduct) => {
@@ -2449,11 +2455,12 @@ export function PosScreen({
     setAmountPaid('');
     if (
       mode === 'cash' &&
+      onscreenKeyboardEnabled &&
       !isEditingKioskOrder &&
       (!isTableMode || tablePayBeforeKitchen)
     ) {
       setKeyboardField('amount');
-    } else if (mode === 'card') {
+    } else if (mode === 'card' || !onscreenKeyboardEnabled) {
       setKeyboardField(null);
     }
   }
@@ -4056,12 +4063,14 @@ export function PosScreen({
                       </div>
                       <Input
                         className={cn(
-                          'h-11 cursor-pointer rounded-xl border-0 bg-background/80 shadow-none',
+                          'h-11 rounded-xl border-0 bg-background/80 shadow-none',
+                          onscreenKeyboardEnabled && 'cursor-pointer',
                           POS_INPUT_CLASS,
-                          keyboardField === 'prepCustom' &&
+                          onscreenKeyboardEnabled &&
+                            keyboardField === 'prepCustom' &&
                             'ring-2 ring-fire-500/40'
                         )}
-                        inputMode="none"
+                        inputMode={onscreenKeyboardEnabled ? 'none' : 'numeric'}
                         autoComplete="off"
                         placeholder={t('pos.cart.customPrepPlaceholder', { min: KITCHEN_PREP_MIN, max: KITCHEN_PREP_MAX })}
                         value={tableCheckoutCustomMinutes}
@@ -4071,8 +4080,11 @@ export function PosScreen({
                             e.target.value.replace(/\D/g, '')
                           )
                         }
-                        onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('prepCustom'); }}
-                        onFocus={() => setKeyboardField('prepCustom')}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          openKeyboardField('prepCustom');
+                        }}
+                        onFocus={() => openKeyboardField('prepCustom')}
                       />
                     </div>
                   </>
@@ -4147,16 +4159,22 @@ export function PosScreen({
                       </label>
                       <Input
                         className={cn(
-                          'h-11 cursor-pointer rounded-xl',
+                          'h-11 rounded-xl',
+                          onscreenKeyboardEnabled && 'cursor-pointer',
                           POS_INPUT_CLASS,
-                          keyboardField === 'name' && 'ring-2 ring-fire-500/40'
+                          onscreenKeyboardEnabled &&
+                            keyboardField === 'name' &&
+                            'ring-2 ring-fire-500/40'
                         )}
                         value={customerName}
-                        inputMode="none"
+                        inputMode={onscreenKeyboardEnabled ? 'none' : 'text'}
                         autoComplete="off"
                         onChange={(e) => setCustomerName(e.target.value)}
-                        onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('name'); }}
-                        onFocus={() => setKeyboardField('name')}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          openKeyboardField('name');
+                        }}
+                        onFocus={() => openKeyboardField('name')}
                       />
                     </div>
                     <div className="space-y-1">
@@ -4165,18 +4183,24 @@ export function PosScreen({
                       </label>
                       <Input
                         className={cn(
-                          'h-11 cursor-pointer rounded-xl',
+                          'h-11 rounded-xl',
+                          onscreenKeyboardEnabled && 'cursor-pointer',
                           POS_INPUT_CLASS,
-                          keyboardField === 'phone' && 'ring-2 ring-fire-500/40'
+                          onscreenKeyboardEnabled &&
+                            keyboardField === 'phone' &&
+                            'ring-2 ring-fire-500/40'
                         )}
-                        inputMode="none"
+                        inputMode={onscreenKeyboardEnabled ? 'none' : 'tel'}
                         autoComplete="off"
                         value={customerPhone}
                         onChange={(e) =>
                           setCustomerPhone(e.target.value.replace(/\D/g, ''))
                         }
-                        onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('phone'); }}
-                        onFocus={() => setKeyboardField('phone')}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          openKeyboardField('phone');
+                        }}
+                        onFocus={() => openKeyboardField('phone')}
                       />
                     </div>
                     {isDeliveryMode ? (
@@ -4188,17 +4212,25 @@ export function PosScreen({
                             </label>
                             <Input
                               className={cn(
-                                'h-11 cursor-pointer rounded-xl',
+                                'h-11 rounded-xl',
+                                onscreenKeyboardEnabled && 'cursor-pointer',
                                 POS_INPUT_CLASS,
-                                keyboardField === 'apartment' && 'ring-2 ring-fire-500/40'
+                                onscreenKeyboardEnabled &&
+                                  keyboardField === 'apartment' &&
+                                  'ring-2 ring-fire-500/40'
                               )}
                               value={orderApartment}
-                              inputMode="none"
+                              inputMode={
+                                onscreenKeyboardEnabled ? 'none' : 'text'
+                              }
                               autoComplete="off"
                               placeholder={t('pos.apartmentHint')}
                               onChange={(e) => setOrderApartment(e.target.value)}
-                              onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('apartment'); }}
-                              onFocus={() => setKeyboardField('apartment')}
+                              onPointerDown={(e) => {
+                                e.stopPropagation();
+                                openKeyboardField('apartment');
+                              }}
+                              onFocus={() => openKeyboardField('apartment')}
                             />
                           </div>
                           <div className="space-y-1">
@@ -4207,17 +4239,25 @@ export function PosScreen({
                             </label>
                             <Input
                               className={cn(
-                                'h-11 cursor-pointer rounded-xl',
+                                'h-11 rounded-xl',
+                                onscreenKeyboardEnabled && 'cursor-pointer',
                                 POS_INPUT_CLASS,
-                                keyboardField === 'doorNumber' && 'ring-2 ring-fire-500/40'
+                                onscreenKeyboardEnabled &&
+                                  keyboardField === 'doorNumber' &&
+                                  'ring-2 ring-fire-500/40'
                               )}
                               value={orderDoorNumber}
-                              inputMode="none"
+                              inputMode={
+                                onscreenKeyboardEnabled ? 'none' : 'text'
+                              }
                               autoComplete="off"
                               placeholder={t('pos.doorNumberHint')}
                               onChange={(e) => setOrderDoorNumber(e.target.value)}
-                              onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('doorNumber'); }}
-                              onFocus={() => setKeyboardField('doorNumber')}
+                              onPointerDown={(e) => {
+                                e.stopPropagation();
+                                openKeyboardField('doorNumber');
+                              }}
+                              onFocus={() => openKeyboardField('doorNumber')}
                             />
                           </div>
                         </div>
@@ -4227,18 +4267,25 @@ export function PosScreen({
                           </label>
                           <textarea
                             className={cn(
-                              'flex min-h-[72px] w-full cursor-pointer rounded-xl border-0 px-3 py-2 text-sm shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fire-500/25',
+                              'flex min-h-[72px] w-full rounded-xl border-0 px-3 py-2 text-sm shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fire-500/25',
+                              onscreenKeyboardEnabled && 'cursor-pointer',
                               POS_INPUT_CLASS,
-                              keyboardField === 'address' &&
+                              onscreenKeyboardEnabled &&
+                                keyboardField === 'address' &&
                                 'ring-2 ring-fire-500/40'
                             )}
                             placeholder={t('pos.enterDeliveryAddress')}
                             value={orderAddress}
-                            inputMode="none"
+                            inputMode={
+                              onscreenKeyboardEnabled ? 'none' : 'text'
+                            }
                             autoComplete="off"
                             onChange={(e) => setOrderAddress(e.target.value)}
-                            onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('address'); }}
-                            onFocus={() => setKeyboardField('address')}
+                            onPointerDown={(e) => {
+                              e.stopPropagation();
+                              openKeyboardField('address');
+                            }}
+                            onFocus={() => openKeyboardField('address')}
                             rows={3}
                           />
                         </div>
@@ -4360,18 +4407,25 @@ export function PosScreen({
                         ) : null}
                         <Input
                           className={cn(
-                            'h-12 cursor-pointer rounded-xl text-base font-semibold tabular-nums',
+                            'h-12 rounded-xl text-base font-semibold tabular-nums',
+                            onscreenKeyboardEnabled && 'cursor-pointer',
                             POS_INPUT_CLASS,
-                            keyboardField === 'amount' &&
+                            onscreenKeyboardEnabled &&
+                              keyboardField === 'amount' &&
                               'ring-2 ring-fire-500/40'
                           )}
-                          inputMode="none"
+                          inputMode={
+                            onscreenKeyboardEnabled ? 'none' : 'decimal'
+                          }
                           autoComplete="off"
                           placeholder="0.00"
                           value={amountPaid}
                           onChange={(e) => setAmountPaid(e.target.value)}
-                          onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('amount'); }}
-                          onFocus={() => setKeyboardField('amount')}
+                          onPointerDown={(e) => {
+                            e.stopPropagation();
+                            openKeyboardField('amount');
+                          }}
+                          onFocus={() => openKeyboardField('amount')}
                         />
                         <div className="flex items-end justify-between gap-3 pt-2">
                           <span className="pb-1 text-sm font-medium text-muted-foreground">
@@ -4426,7 +4480,7 @@ export function PosScreen({
                 ) : null}
               </div>
 
-              {keyboardField ? (
+              {onscreenKeyboardEnabled && keyboardField ? (
                 <div onPointerDown={(e) => e.stopPropagation()}>
                   <PosOnScreenKeyboard
                   mode={

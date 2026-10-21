@@ -18,6 +18,7 @@ const patchSchema = z
     kioskEnabled: z.boolean().optional(),
     kdsEnabled: z.boolean().optional(),
     orderDisplayEnabled: z.boolean().optional(),
+    onscreenKeyboardEnabled: z.boolean().optional(),
   })
   .strict()
   .refine(
@@ -28,7 +29,8 @@ const patchSchema = z
       data.websiteEnabled !== undefined ||
       data.kioskEnabled !== undefined ||
       data.kdsEnabled !== undefined ||
-      data.orderDisplayEnabled !== undefined,
+      data.orderDisplayEnabled !== undefined ||
+      data.onscreenKeyboardEnabled !== undefined,
     { message: 'At least one setting must be provided.' }
   );
 
@@ -122,6 +124,11 @@ export async function PATCH(req: NextRequest) {
         enabled: parsed.data.kioskEnabled,
         flag: 'kioskUrl',
         label: 'Kiosk',
+      },
+      {
+        enabled: parsed.data.onscreenKeyboardEnabled,
+        flag: 'onscreenKeyboard',
+        label: 'On-screen keyboard',
       },
     ];
     for (const check of channelChecks) {

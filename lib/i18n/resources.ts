@@ -429,6 +429,7 @@ export const resources = {
       trackingIdCopied: 'Tracking ID copied',
       couldNotCopyTrackingId: 'Could not copy tracking ID',
       backToHome: 'Back to Home',
+      kioskReturningHome: 'Returning to home in {{seconds}}s…',
       trackYourOrder: 'Track your order',
       trackYourOrderTitle: 'Track Your Order',
       enterTrackingIdPlaceholder: 'Enter tracking ID',
@@ -999,6 +1000,11 @@ export const resources = {
                 label: 'Order Display Screen',
                 description:
                   'Customer-facing live order queue status screen. When off, the order display module and public screen are blocked.',
+              },
+              onscreenKeyboard: {
+                label: 'On-screen keyboard',
+                description:
+                  'Virtual keyboard for active fields in POS and kiosk. When off, the on-screen keyboard is hidden and the device keyboard is used instead.',
               },
             },
           },
@@ -4692,6 +4698,7 @@ export const resources = {
       trackingIdCopied: 'ID de seguimiento copiado',
       couldNotCopyTrackingId: 'No se pudo copiar el ID de seguimiento',
       backToHome: 'Volver al inicio',
+      kioskReturningHome: 'Volviendo al inicio en {{seconds}}s…',
       trackYourOrder: 'Seguir tu pedido',
       trackYourOrderTitle: 'Sigue tu pedido',
       enterTrackingIdPlaceholder: 'Introduce el ID de seguimiento',
@@ -5276,6 +5283,11 @@ export const resources = {
                 label: 'Pantalla de pedidos',
                 description:
                   'Pantalla de estado de pedidos en vivo de cara al cliente. Si está desactivado, el módulo y la pantalla pública quedan bloqueados.',
+              },
+              onscreenKeyboard: {
+                label: 'Teclado en pantalla',
+                description:
+                  'Teclado virtual para los campos activos en TPV y quiosco. Si está desactivado, se oculta el teclado en pantalla y se usa el teclado del dispositivo.',
               },
             },
           },

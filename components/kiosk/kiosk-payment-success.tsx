@@ -114,6 +114,11 @@ export function KioskPaymentSuccess({
   }, [orderId]);
 
   const autoPrintedRef = useRef(false);
+  const homePath =
+    isMobile
+      ? `${kioskBasePath(slug, branchId)}?Mobile=true`
+      : kioskBasePath(slug, branchId);
+  const [homeInSeconds, setHomeInSeconds] = useState(10);
 
   useEffect(() => {
     if (isMobile) return;
@@ -124,6 +129,27 @@ export function KioskPaymentSuccess({
     }, 400);
     return () => window.clearTimeout(timer);
   }, [orderId, slug, branchId, isMobile]);
+
+  useEffect(() => {
+    setHomeInSeconds(10);
+    const startedAt = Date.now();
+    const tick = window.setInterval(() => {
+      const remaining = Math.max(
+        0,
+        10 - Math.floor((Date.now() - startedAt) / 1000)
+      );
+      setHomeInSeconds(remaining);
+      if (remaining <= 0) {
+        window.clearInterval(tick);
+        router.push(homePath);
+      }
+    }, 250);
+    return () => window.clearInterval(tick);
+  }, [homePath, router]);
+
+  const goHome = () => {
+    router.push(homePath);
+  };
 
   const printTicket = async () => {
     if (!orderId) {
@@ -202,18 +228,16 @@ export function KioskPaymentSuccess({
                     ? 'w-full bg-primary text-white hover:bg-primary/90 dark:bg-primary dark:text-white dark:hover:bg-primary/90'
                     : 'border border-primary bg-white text-primary hover:bg-primary/10 hover:text-primary dark:border-primary dark:bg-white dark:text-primary dark:hover:bg-primary/10'
                 }
-                onClick={() =>
-                  router.push(
-                    isMobile
-                      ? `${kioskBasePath(slug, branchId)}?Mobile=true`
-                      : kioskBasePath(slug, branchId)
-                  )
-                }
+                onClick={goHome}
               >
                 <IconHome className="w-4 h-4 mr-2" />
                 {t('backToHome')}
+                {homeInSeconds > 0 ? ` (${homeInSeconds})` : ''}
               </Button>
             </div>
+            <p className="text-center text-xs text-[#64748b]">
+              {t('kioskReturningHome', { seconds: homeInSeconds })}
+            </p>
           </CardContent>
         </Card>
       </div>

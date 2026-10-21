@@ -39,7 +39,6 @@ import {
 } from '@/components/order/product-customize-dialog';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
-import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import {
   fetchCustomerMenuProductDetail,
   overlayLiveCatalogPrices,
@@ -309,7 +308,6 @@ type KioskProductCardProps = {
   formatMoney: (n: number) => string;
   qty: number;
   customizeLabel: string;
-  addLabel: string;
   onTap: (p: CustomerMenuProduct) => void;
   onBumpQty: (productId: string, delta: number) => void;
   cardRef?: (el: HTMLDivElement | null) => void;
@@ -323,7 +321,6 @@ const KioskProductCard = memo(function KioskProductCard({
   formatMoney,
   qty,
   customizeLabel,
-  addLabel,
   onTap,
   onBumpQty,
   cardRef,
@@ -332,7 +329,6 @@ const KioskProductCard = memo(function KioskProductCard({
   const { t } = useTranslation();
   const priceDisplay = getMenuItemDisplayPrice(p);
   const showStrike = priceDisplay.compareAt != null;
-  const isCustomizable = productNeedsCustomizeDialog(p);
   const displayName = resolveBilingualText(p.name, uiLang);
 
   const captureOrigin = (el: HTMLElement | null) => {
@@ -423,7 +419,7 @@ const KioskProductCard = memo(function KioskProductCard({
               className="w-full bg-primary font-semibold text-primary-foreground hover:brightness-95"
               onClick={() => onTap(p)}
             >
-              {isCustomizable ? customizeLabel : addLabel}
+              {customizeLabel}
             </Button>
           )}
         </div>
@@ -439,7 +435,6 @@ type KioskHorizontalRowProps = {
   formatMoney: (n: number) => string;
   qtyOnMenu: (productId: string) => number;
   customizeLabel: string;
-  addLabel: string;
   onTap: (p: CustomerMenuProduct) => void;
   onBumpQty: (productId: string, delta: number) => void;
   setProductCardRef: (productId: string, el: HTMLDivElement | null) => void;
@@ -453,7 +448,6 @@ const KioskHorizontalRow = memo(function KioskHorizontalRow({
   formatMoney,
   qtyOnMenu,
   customizeLabel,
-  addLabel,
   onTap,
   onBumpQty,
   setProductCardRef,
@@ -472,7 +466,6 @@ const KioskHorizontalRow = memo(function KioskHorizontalRow({
               formatMoney={formatMoney}
               qty={qtyOnMenu(p.id)}
               customizeLabel={customizeLabel}
-              addLabel={addLabel}
               onTap={onTap}
               onBumpQty={onBumpQty}
               cardRef={(el) => setProductCardRef(p.id, el)}
@@ -745,6 +738,17 @@ export function KioskApp({
       ),
     [restaurantMeta?.fulfillmentSettings]
   );
+
+  const onscreenKeyboardEnabled = fulfillmentSettings.onscreenKeyboardEnabled;
+
+  useEffect(() => {
+    if (!onscreenKeyboardEnabled) setKeyboardField(null);
+  }, [onscreenKeyboardEnabled]);
+
+  const openKeyboardField = (field: KioskKeyboardField) => {
+    if (!onscreenKeyboardEnabled) return;
+    setKeyboardField(field);
+  };
 
   useEffect(() => {
     if (!restaurantMeta || fromTableQr) return;
@@ -1353,27 +1357,23 @@ export function KioskApp({
   };
 
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
-    if (productNeedsCustomizeDialog(p)) {
-      const token = ++customizeLoadTokenRef.current;
-      openCustomize(p, { loading: true });
-      const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
-        p.id,
-        { slug },
-        { force: true }
-      );
-      if (token !== customizeLoadTokenRef.current) return;
-      if (!full) {
-        setDialogOpen(false);
-        setCustomizeProduct(null);
-        setCustomizeLoading(false);
-        toast.error(t('productNotFoundToModify'));
-        return;
-      }
-      setCustomizeProduct({ ...full, categoryId: p.categoryId });
+    const token = ++customizeLoadTokenRef.current;
+    openCustomize(p, { loading: true });
+    const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
+      p.id,
+      { slug },
+      { force: true }
+    );
+    if (token !== customizeLoadTokenRef.current) return;
+    if (!full) {
+      setDialogOpen(false);
+      setCustomizeProduct(null);
       setCustomizeLoading(false);
+      toast.error(t('productNotFoundToModify'));
       return;
     }
-    addToCart(p, []);
+    setCustomizeProduct({ ...full, categoryId: p.categoryId });
+    setCustomizeLoading(false);
   };
 
   const handleProductSelect = (p: CustomerMenuProduct) => {
@@ -1595,7 +1595,6 @@ export function KioskApp({
       formatMoney={formatMoney}
       qty={qtyOnMenu(p.id)}
       customizeLabel={t('customizePlus')}
-      addLabel={t('addPlus')}
       onTap={onProductTap}
       onBumpQty={bumpProductQty}
       cardRef={(el) => setProductCardRef(p.id, el)}
@@ -1722,7 +1721,7 @@ export function KioskApp({
                 <img
                   src={displayMenu.logoUrl}
                   alt=""
-                  className="h-11 w-11 shrink-0 rounded-full border border-[#e2e8f0] object-cover"
+                  className="max-h-10 max-w-25 shrink-0 object-cover"
                 />
               ) : null}
               <div className="min-w-0">
@@ -1980,7 +1979,6 @@ export function KioskApp({
                   formatMoney={formatMoney}
                   qtyOnMenu={qtyOnMenu}
                   customizeLabel={t('customizePlus')}
-                  addLabel={t('addPlus')}
                   onTap={onProductTap}
                   onBumpQty={bumpProductQty}
                   setProductCardRef={setProductCardRef}
@@ -1993,7 +1991,6 @@ export function KioskApp({
                   formatMoney={formatMoney}
                   qtyOnMenu={qtyOnMenu}
                   customizeLabel={t('customizePlus')}
-                  addLabel={t('addPlus')}
                   onTap={onProductTap}
                   onBumpQty={bumpProductQty}
                   setProductCardRef={setProductCardRef}
@@ -2276,15 +2273,20 @@ export function KioskApp({
                         id="kiosk-customer-name"
                         placeholder={t('yourName')}
                         value={customerName}
-                        inputMode="none"
+                        inputMode={onscreenKeyboardEnabled ? 'none' : 'text'}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('name'); }}
-                        onFocus={() => setKeyboardField('name')}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          openKeyboardField('name');
+                        }}
+                        onFocus={() => openKeyboardField('name')}
                         maxLength={120}
                         autoComplete="name"
                         className={cn(
                           'border-[#e2e8f0] bg-white text-[#0f172a]',
-                          keyboardField === 'name' && 'ring-2 ring-primary/40'
+                          onscreenKeyboardEnabled &&
+                            keyboardField === 'name' &&
+                            'ring-2 ring-primary/40'
                         )}
                       />
                     </div>
@@ -2297,18 +2299,23 @@ export function KioskApp({
                         type="tel"
                         placeholder={`${t('phoneNumber')} (${t('optional')})`}
                         value={customerPhone}
-                        inputMode="none"
+                        inputMode={onscreenKeyboardEnabled ? 'none' : 'tel'}
                         onChange={(e) => {
                           const value = e.target.value.replace(/\D/g, '');
                           setCustomerPhone(value);
                         }}
-                        onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('phone'); }}
-                        onFocus={() => setKeyboardField('phone')}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          openKeyboardField('phone');
+                        }}
+                        onFocus={() => openKeyboardField('phone')}
                         maxLength={40}
                         autoComplete="tel"
                         className={cn(
                           'border-[#e2e8f0] bg-white text-[#0f172a]',
-                          keyboardField === 'phone' && 'ring-2 ring-primary/40'
+                          onscreenKeyboardEnabled &&
+                            keyboardField === 'phone' &&
+                            'ring-2 ring-primary/40'
                         )}
                       />
                     </div>
@@ -2317,19 +2324,31 @@ export function KioskApp({
                 <textarea
                   placeholder={t('cookingInstructionsPlaceholder')}
                   value={cookingNote}
-                  readOnly
-                  inputMode="none"
-                  onPointerDown={(e) => { e.stopPropagation(); setKeyboardField('instructions'); }}
-                  onFocus={() => setKeyboardField('instructions')}
+                  readOnly={onscreenKeyboardEnabled}
+                  inputMode={onscreenKeyboardEnabled ? 'none' : 'text'}
+                  onChange={
+                    onscreenKeyboardEnabled
+                      ? undefined
+                      : (e) => setCookingNote(e.target.value)
+                  }
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    openKeyboardField('instructions');
+                  }}
+                  onFocus={() => openKeyboardField('instructions')}
                   rows={3}
                   className={cn(
                     'flex min-h-[88px] w-full rounded-md border border-[#e2e8f0] bg-white px-3 py-2 text-sm text-[#0f172a]',
                     'placeholder:text-[#94a3b8]',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ea580c] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8fafc]',
-                    keyboardField === 'instructions' && 'ring-2 ring-primary/40'
+                    onscreenKeyboardEnabled &&
+                      keyboardField === 'instructions' &&
+                      'ring-2 ring-primary/40'
                   )}
                 />
-                {step === 'cart' && keyboardField ? (
+                {step === 'cart' &&
+                onscreenKeyboardEnabled &&
+                keyboardField ? (
                   <div onPointerDown={(e) => e.stopPropagation()}>
                     <PosOnScreenKeyboard
                     mode={keyboardField === 'phone' ? 'phone' : 'text'}

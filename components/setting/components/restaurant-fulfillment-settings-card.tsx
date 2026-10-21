@@ -8,6 +8,7 @@ import {
   ChefHat,
   CreditCard,
   Globe,
+  Keyboard,
   Loader2,
   Monitor,
   RefreshCcw,
@@ -98,6 +99,14 @@ const CHANNEL_META: {
       iconColor: 'text-rose-600 dark:text-rose-400',
       iconBg: 'bg-rose-500/10 border-rose-500/20',
       limitFlagKey: 'orderDisplayChannel',
+    },
+    {
+      key: 'onscreenKeyboardEnabled',
+      i18nKey: 'onscreenKeyboard',
+      icon: Keyboard,
+      iconColor: 'text-indigo-600 dark:text-indigo-400',
+      iconBg: 'bg-indigo-500/10 border-indigo-500/20',
+      limitFlagKey: 'onscreenKeyboard',
     },
   ];
 

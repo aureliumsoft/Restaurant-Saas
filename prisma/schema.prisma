@@ -186,6 +186,8 @@ model Restaurant {
   kdsEnabled Boolean @default(true)
   /// Offer customer-facing order queue display screen.
   orderDisplayEnabled Boolean @default(true)
+  /// Show on-screen keyboard for active fields in POS and kiosk.
+  onscreenKeyboardEnabled Boolean @default(true)
   /// Table / dine-in: collect payment before kitchen, or when the guest leaves.
   dineInPaymentTiming DineInPaymentTiming @default(ON_LEAVE)
   /// ISO 4217 currency for POS, kiosk, storefront, and customer payments.
