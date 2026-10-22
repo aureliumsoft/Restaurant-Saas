@@ -109,6 +109,62 @@ export function isSunmiPrinterAvailable(): boolean {
   return detectSunmiPrinterBridge() != null;
 }
 
+function envApiBase(name: string): string {
+  if (typeof process === 'undefined') return '';
+  return process.env[name]?.trim().replace(/\/$/, '') || '';
+}
+
+/** Prefer dedicated printer APK, then terminal bridge, then loopback default. */
+function localPrintBaseUrls(): string[] {
+  const urls = [
+    envApiBase('NEXT_PUBLIC_KIOSK_PRINTER_API'),
+    envApiBase('NEXT_PUBLIC_POS_TERMINAL_API'),
+    'http://127.0.0.1:5055',
+  ].filter(Boolean);
+  return [...new Set(urls)];
+}
+
+/**
+ * Chrome / stock WebView cannot talk to the Sunmi thermal printer.
+ * Foodluk Printer or Kiosk Terminal exposes POST /print on loopback.
+ */
+async function printViaLocalApiOnce(
+  base: string,
+  text: string
+): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 8_000);
+  try {
+    const res = await fetch(`${base}/print`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      signal: controller.signal,
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      status?: string;
+      ok?: boolean;
+    };
+    if (res.ok && (body.ok === true || body.status === 'printed')) {
+      return true;
+    }
+    console.warn('[kiosk-print] local /print failed', base, body);
+    return false;
+  } catch (e) {
+    console.warn('[kiosk-print] local /print unreachable', base, e);
+    return false;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+async function printViaLocalApi(text: string): Promise<boolean> {
+  for (const base of localPrintBaseUrls()) {
+    if (await printViaLocalApiOnce(base, text)) return true;
+  }
+  return false;
+}
+
 export async function printKioskReceipt({
   slug,
   branchId,
@@ -118,11 +174,17 @@ export async function printKioskReceipt({
 
   try {
     const model = await loadReceiptModel({ slug, branchId, orderId });
+    const plain = buildReceiptPlainText(model);
+
     const bridge = detectSunmiPrinterBridge();
     if (bridge) {
       const printed = await printViaSunmiBridge(bridge, model);
       if (printed) return;
     }
+
+    // Sunmi K2 Chrome has no JS printer bridge — Foodluk Printer / Terminal APK does.
+    if (await printViaLocalApi(plain)) return;
+
     await printHtmlInHiddenFrame(buildReceiptHtml(model));
   } catch {
     // Last resort: browser print dialog (desktop only; useless on bare K2 WebView).
