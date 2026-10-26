@@ -844,6 +844,11 @@ export function KioskApp({
 
   useEffect(() => {
     let cancelled = false;
+    const slow = window.setTimeout(() => {
+      if (!cancelled) {
+        setBranchValid((current) => (current == null ? true : current));
+      }
+    }, 8000);
     (async () => {
       try {
         const res = await fetch(
@@ -870,6 +875,7 @@ export function KioskApp({
     })();
     return () => {
       cancelled = true;
+      window.clearTimeout(slow);
     };
   }, [slug, branchId]);
 

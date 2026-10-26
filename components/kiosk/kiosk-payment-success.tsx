@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -34,7 +33,6 @@ export function KioskPaymentSuccess({
   isMobile = false,
 }: Props) {
   const { t } = useTranslation();
-  const router = useRouter();
   const [ticket, setTicket] = useState<number | null>(ticketFromQuery);
   const [paymentStatus, setPaymentStatus] = useState<string>(
     initialPayStatus ?? (sessionId || token ? 'pending' : initialMethod?.toLowerCase().includes('cash') ? 'pending' : 'completed')
@@ -120,6 +118,14 @@ export function KioskPaymentSuccess({
       : kioskBasePath(slug, branchId);
   const [homeInSeconds, setHomeInSeconds] = useState(10);
 
+  const goHome = () => {
+    const path = window.location.pathname.replace(/\/success\/?$/, '') || homePath;
+    const target = path.startsWith('http')
+      ? path
+      : `${window.location.origin}${path.startsWith('/') ? path : `/${path}`}`;
+    window.location.replace(isMobile ? `${target}?Mobile=true` : target);
+  };
+
   useEffect(() => {
     if (isMobile) return;
     if (!orderId || autoPrintedRef.current) return;
@@ -131,25 +137,24 @@ export function KioskPaymentSuccess({
   }, [orderId, slug, branchId, isMobile]);
 
   useEffect(() => {
+    if (isMobile) return;
     setHomeInSeconds(10);
     const startedAt = Date.now();
+    let left = false;
     const tick = window.setInterval(() => {
       const remaining = Math.max(
         0,
         10 - Math.floor((Date.now() - startedAt) / 1000)
       );
       setHomeInSeconds(remaining);
-      if (remaining <= 0) {
+      if (remaining <= 0 && !left) {
+        left = true;
         window.clearInterval(tick);
-        router.push(homePath);
+        goHome();
       }
     }, 250);
     return () => window.clearInterval(tick);
-  }, [homePath, router]);
-
-  const goHome = () => {
-    router.push(homePath);
-  };
+  }, [homePath, isMobile]);
 
   const printTicket = async () => {
     if (!orderId) {

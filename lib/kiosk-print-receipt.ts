@@ -13,6 +13,10 @@ import {
   escapeHtml,
   getThermalReceiptDocumentCss,
 } from '@/lib/thermal-receipt-html';
+import {
+  PAPER_80MM_DOTS,
+  renderThermalReceiptPng,
+} from '@/lib/thermal-receipt-bitmap';
 
 export type PrintKioskReceiptParams = {
   slug: string;
@@ -59,6 +63,8 @@ export type SunmiPrinterBridge = {
   cutPaper?: (callback?: unknown) => unknown;
   /** Stringly typed helpers some wrappers expose. */
   print?: (text: string) => unknown;
+  /** PNG data URL or raw base64. Printed full width and centered. */
+  printBitmap?: (data: string) => unknown;
 };
 
 declare global {
@@ -177,17 +183,35 @@ export async function printKioskReceipt({
     const plain = buildReceiptPlainText(model);
 
     const bridge = detectSunmiPrinterBridge();
+    const inNativeKioskBridge =
+      typeof window !== 'undefined' &&
+      Boolean((window as Window & { __FOODLUK_SUNMI_BRIDGE__?: boolean })
+        .__FOODLUK_SUNMI_BRIDGE__);
+
     if (bridge) {
       const printed = await printViaSunmiBridge(bridge, model);
       if (printed) return;
+      console.warn(
+        '[kiosk-print] Sunmi JS bridge present but print failed; skipping browser print'
+      );
+      // Chrome + separate Foodluk printer driver may still listen on loopback.
+      // Native kiosk APK has no 5055 server — skip HTTP there.
+      if (!inNativeKioskBridge && (await printViaLocalApi(plain))) return;
+      return;
     }
 
-    // Sunmi K2 Chrome has no JS printer bridge — Foodluk Printer / Terminal APK does.
+    // Sunmi K2 Chrome has no JS printer bridge — optional Foodluk Printer driver APK.
     if (await printViaLocalApi(plain)) return;
 
     await printHtmlInHiddenFrame(buildReceiptHtml(model));
-  } catch {
-    // Last resort: browser print dialog (desktop only; useless on bare K2 WebView).
+  } catch (e) {
+    console.warn('[kiosk-print] receipt print failed', e);
+    // Browser print is desktop-only; skip inside native kiosk WebView bridge.
+    const inNativeKioskBridge =
+      typeof window !== 'undefined' &&
+      Boolean((window as Window & { __FOODLUK_SUNMI_BRIDGE__?: boolean })
+        .__FOODLUK_SUNMI_BRIDGE__);
+    if (inNativeKioskBridge) return;
     try {
       window.print();
     } catch {
@@ -256,7 +280,10 @@ async function loadReceiptModel({
 
   const details = orderBody.data;
   const restaurantName = restaurantBody.data?.name?.trim() || 'Restaurant';
-  const logoUrl = restaurantBody.data?.logoUrl ?? null;
+  const storedLogo = restaurantBody.data?.logoUrl?.trim() || '';
+  const logoUrl = storedLogo.startsWith('data:')
+    ? storedLogo
+    : `/api/customer/restaurant/media?slug=${encodeURIComponent(slug)}&kind=logo`;
   const regional = parseRestaurantRegionalSettings(restaurantBody.data?.regional);
   const money = (n: number) => formatCurrency(n, regional);
   const ticketNo = details?.ticketNumber ?? null;
@@ -317,19 +344,19 @@ async function loadReceiptModel({
 
 function buildReceiptPlainText(model: ReceiptModel): string {
   const line = (left: string, right = '') => {
-    const width = 32;
+    const width = 48;
     const l = left.slice(0, width);
     if (!right) return l;
     const r = right.slice(0, width);
     const gap = Math.max(1, width - l.length - r.length);
     return `${l}${' '.repeat(gap)}${r}`;
   };
-  const sep = '-'.repeat(32);
+  const sep = '-'.repeat(48);
 
   const lines: string[] = [];
-  lines.push(centerText(model.restaurantName, 32));
-  if (model.branchName) lines.push(centerText(model.branchName, 32));
-  lines.push(centerText(model.dateTime, 32));
+  lines.push(centerText(model.restaurantName.toUpperCase(), 48));
+  if (model.branchName) lines.push(centerText(model.branchName, 48));
+  lines.push(centerText(model.dateTime, 48));
   lines.push(sep);
   if (model.ticketNo != null) lines.push(`Ticket: #${model.ticketNo}`);
   lines.push(`Tracking: ${model.trackingId}`);
@@ -357,7 +384,7 @@ function buildReceiptPlainText(model: ReceiptModel): string {
   lines.push(line('Paid', model.money(model.paidAmount)));
   lines.push(line('TOTAL', model.money(model.total)));
   lines.push(sep);
-  lines.push(centerText('Thank you!', 32));
+  lines.push(centerText('Thank you!', 48));
   lines.push('');
   lines.push('');
   lines.push('');
@@ -378,10 +405,103 @@ function escPosFeed(lines: number): number[] {
   return [0x1b, 0x64, Math.max(0, Math.min(255, lines))];
 }
 
+function receiptForBitmap(model: ReceiptModel) {
+  const isDineInDisplayName =
+    !!model.customerName &&
+    model.customerName.toLowerCase().endsWith(' customer');
+  const meta: Array<{ label: string; value: string }> = [];
+  if (model.ticketNo != null) meta.push({ label: 'Ticket', value: '#' + model.ticketNo });
+  meta.push({ label: 'Tracking', value: model.trackingId });
+  meta.push({ label: 'Payment', value: model.paymentMethod });
+  meta.push({ label: 'Status', value: model.paymentState });
+  if (model.tableName && !isDineInDisplayName) {
+    meta.push({ label: 'Table', value: model.tableName });
+  }
+  if (model.customerName) meta.push({ label: 'Customer', value: model.customerName });
+  meta.push({ label: 'Phone', value: model.customerPhone || 'N/A' });
+
+  const items = model.items.flatMap((it) => [
+    {
+      name: it.name,
+      quantity: it.quantity,
+      amount: model.money(it.lineTotal),
+    },
+    ...it.modifiers.map((m) => ({
+      name: m.name,
+      quantity: m.quantity,
+      amount: model.money(m.lineTotal),
+      indent: true,
+    })),
+  ]);
+
+  return {
+    logoUrl: model.logoUrl,
+    restaurantName: model.restaurantName,
+    branchName: model.branchName,
+    dateTime: model.dateTime,
+    meta,
+    items,
+    totals: [
+      { label: 'Subtotal', value: model.money(model.subtotal) },
+      { label: 'Tax', value: model.money(model.tax) },
+      { label: 'Paid', value: model.money(model.paidAmount) },
+      { label: 'Total', value: model.money(model.total), bold: true },
+    ],
+    footer: 'Thank you!',
+    widthDots: PAPER_80MM_DOTS,
+  };
+}
+
+async function finishSunmiPrint(
+  bridge: SunmiPrinterBridge & { funAndroid?: (text: string) => unknown }
+) {
+  if (typeof bridge.lineWrap === 'function') {
+    try {
+      bridge.lineWrap(3);
+    } catch {
+      // ignore
+    }
+  }
+  if (typeof bridge.cutPaper === 'function') {
+    try {
+      bridge.cutPaper();
+    } catch {
+      // ignore
+    }
+  } else {
+    const send = bridge.sendRawData ?? bridge.sendRAWData;
+    if (typeof send === 'function') {
+      try {
+        send([...escPosFeed(3), ...ESC_POS_CUT]);
+      } catch {
+        // ignore cut failures — text may already have printed
+      }
+    }
+  }
+}
+
 async function printViaSunmiBridge(
   bridge: SunmiPrinterBridge & { funAndroid?: (text: string) => unknown },
   model: ReceiptModel
 ): Promise<boolean> {
+  if (typeof bridge.printBitmap === 'function') {
+    try {
+      if (typeof bridge.printerInit === 'function') {
+        try {
+          bridge.printerInit();
+        } catch {
+          // ignore
+        }
+      }
+      const png = await renderThermalReceiptPng(receiptForBitmap(model));
+      bridge.printBitmap(png);
+      await finishSunmiPrint(bridge);
+      return true;
+    } catch (e) {
+      console.warn('[kiosk-print] bitmap receipt failed, using text', e);
+    }
+  }
+
   const text = buildReceiptPlainText(model);
 
   try {
@@ -413,30 +533,7 @@ async function printViaSunmiBridge(
       return false;
     }
 
-    // Prefer native helpers when present; otherwise send ESC/POS feed + cut.
-    if (typeof bridge.lineWrap === 'function') {
-      try {
-        bridge.lineWrap(3);
-      } catch {
-        // ignore
-      }
-    }
-    if (typeof bridge.cutPaper === 'function') {
-      try {
-        bridge.cutPaper();
-      } catch {
-        // ignore
-      }
-    } else {
-      const send = bridge.sendRawData ?? bridge.sendRAWData;
-      if (typeof send === 'function') {
-        try {
-          send([...escPosFeed(3), ...ESC_POS_CUT]);
-        } catch {
-          // ignore cut failures — text may already have printed
-        }
-      }
-    }
+    await finishSunmiPrint(bridge);
 
     return true;
   } catch (e) {
@@ -456,9 +553,7 @@ function buildReceiptHtml(model: ReceiptModel): string {
     model.customerName
       ? `<div class="receipt-line"><strong>Customer:</strong> ${escapeHtml(model.customerName)}</div>`
       : '',
-    model.customerPhone
-      ? `<div class="receipt-line"><strong>Phone:</strong> ${escapeHtml(model.customerPhone)}</div>`
-      : '',
+    `<div class="receipt-line"><strong>Phone:</strong> ${escapeHtml(model.customerPhone || 'N/A')}</div>`,
   ]
     .filter(Boolean)
     .join('');
