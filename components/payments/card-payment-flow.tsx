@@ -40,6 +40,24 @@ type UseCardPaymentFlowOptions = {
   onChargeBlocked?: (message: string) => void;
 };
 
+const KIOSK_TERMINAL_BASE = 'http://127.0.0.1:5055';
+
+/**
+ * Inside the Kiosk app, the sale always goes to the pinpad on this tablet.
+ * A browser POS still uses NEXT_PUBLIC_POS_TERMINAL_API.
+ */
+function resolveTerminalBase(): string {
+  if (typeof window !== 'undefined') {
+    const kioskApp = (
+      window as Window & { __FOODLUK_KIOSK_APP__?: boolean }
+    ).__FOODLUK_KIOSK_APP__;
+    if (kioskApp) return KIOSK_TERMINAL_BASE;
+  }
+  return (
+    process.env.NEXT_PUBLIC_POS_TERMINAL_API?.trim().replace(/\/$/, '') || ''
+  );
+}
+
 function defaultFormatMoney(n: number) {
   return n.toLocaleString('en-IE', {
     minimumFractionDigits: 2,
@@ -104,8 +122,7 @@ export function useCardPaymentFlow({
     message?: string;
     cancelled?: boolean;
   }> {
-    const terminalBase =
-      process.env.NEXT_PUBLIC_POS_TERMINAL_API?.trim().replace(/\/$/, '') || '';
+    const terminalBase = resolveTerminalBase();
     if (!terminalBase) {
       return { ok: false, message: 'Terminal API not configured' };
     }
@@ -160,9 +177,7 @@ export function useCardPaymentFlow({
     setCardProcessingOpen(true);
     setCardPaymentStatus('processing');
 
-    const terminalBase =
-      process.env.NEXT_PUBLIC_POS_TERMINAL_API?.trim().replace(/\/$/, '') ||
-      '';
+    const terminalBase = resolveTerminalBase();
     if (!terminalBase) return;
 
     const result = await runTerminalCardCharge();
