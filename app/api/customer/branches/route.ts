@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
+import { withUrlIds } from '@/lib/with-url-id';
 import { normalizeOpeningHours } from '@/lib/order-time-slots';
 import {
   parseRestaurantRegionalSettings,
@@ -69,7 +70,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       {
-        data: (restaurant?.branches ?? []).map((branch) => ({
+        data: withUrlIds(restaurant?.branches ?? []).map((branch) => ({
           ...branch,
           openingHours: normalizeOpeningHours(branch.openingHours),
         })),

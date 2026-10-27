@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { printKioskReceipt } from '@/lib/kiosk-print-receipt';
 import { kioskBasePath, kioskCartStorageKey, kioskCheckoutDraftKey } from '@/lib/kiosk-path';
-import { IconHome, IconPrinter } from '@tabler/icons-react';
+import { IconHome } from '@tabler/icons-react';
 
 type Props = {
   slug: string;
@@ -156,14 +156,6 @@ export function KioskPaymentSuccess({
     return () => window.clearInterval(tick);
   }, [homePath, isMobile]);
 
-  const printTicket = async () => {
-    if (!orderId) {
-      window.print();
-      return;
-    }
-    await printKioskReceipt({ slug, branchId, orderId });
-  };
-
   const isCash = (paymentMethod ?? '').toLowerCase().includes('cash');
   const isPending =
     paymentStatus.toLowerCase() === 'pending' ||
@@ -216,23 +208,9 @@ export function KioskPaymentSuccess({
               ) : null}
             </div>
             <div className="flex gap-2">
-              {isMobile ? null : (
-                <Button
-                  type="button"
-                  className="bg-primary text-white hover:bg-primary/90 dark:bg-primary dark:text-white dark:hover:bg-primary/90"
-                  onClick={printTicket}
-                >
-                  <IconPrinter className="w-4 h-4 mr-2" />
-                  {t('printTicket')}
-                </Button>
-              )}
               <Button
                 type="button"
-                className={
-                  isMobile
-                    ? 'w-full bg-primary text-white hover:bg-primary/90 dark:bg-primary dark:text-white dark:hover:bg-primary/90'
-                    : 'border border-primary bg-white text-primary hover:bg-primary/10 hover:text-primary dark:border-primary dark:bg-white dark:text-primary dark:hover:bg-primary/10'
-                }
+                className="w-full bg-primary text-white hover:bg-primary/90 dark:bg-primary dark:text-white dark:hover:bg-primary/90"
                 onClick={goHome}
               >
                 <IconHome className="w-4 h-4 mr-2" />

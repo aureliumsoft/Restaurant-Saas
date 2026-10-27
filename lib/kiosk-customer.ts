@@ -21,7 +21,14 @@ export function kioskDineInCustomerPhone(tableId: string): string {
 export function isKioskSyntheticCustomerPhone(
   phone: string | null | undefined
 ): boolean {
-  return !!phone?.trim().startsWith(KIOSK_DINE_PHONE_PREFIX);
+  const value = phone?.trim().toLowerCase() ?? '';
+  if (!value) return false;
+  return (
+    value.startsWith('kiosk-dine') ||
+    value.startsWith('kiosk-mobile') ||
+    value.startsWith(KIOSK_DINE_PHONE_PREFIX) ||
+    value.startsWith(KIOSK_MOBILE_QR_PHONE_PREFIX)
+  );
 }
 
 type DbTx = Prisma.TransactionClient;

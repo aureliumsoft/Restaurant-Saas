@@ -82,7 +82,7 @@ type Props = {
   orderId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  formatMoney: (n: number | null | undefined) => string;
+  formatMoney: (n: number) => string;
   brandName: string;
   branchName?: string | null;
   logoUrl?: string | null;
@@ -410,7 +410,7 @@ export function ReportsOrderDetailSheet({
                 {(detail.serviceChargeAmount ?? 0) > 0 ? (
                   <p>
                     {t('dashboard.reports.serviceCharge')}:{' '}
-                    {formatMoney(detail.serviceChargeAmount)}
+                    {formatMoney(detail.serviceChargeAmount ?? 0)}
                   </p>
                 ) : null}
               </div>

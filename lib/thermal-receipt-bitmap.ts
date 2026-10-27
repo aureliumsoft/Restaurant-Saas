@@ -14,7 +14,7 @@ export type ThermalBitmapReceipt = {
   restaurantName: string;
   branchName?: string | null;
   dateTime: string;
-  /** Centered between rules, for example "Ticket: #1". */
+  /** Centered between rules, for example "Token: #1". */
   ticket?: string | null;
   meta: Array<{ label: string; value: string }>;
   items: ThermalBitmapLine[];
@@ -91,7 +91,7 @@ function drawReceipt(
   const qtyW = Math.round(contentW * 0.14);
   const amtW = Math.round(contentW * 0.24);
   const itemW = contentW - qtyW - amtW;
-  // Match the HTML receipt: 10px body, 11px bold, 20px ticket, on a 302px-wide 80mm page.
+  // 10 / 11 / 20 CSS px on a 302px-wide 80mm page, scaled onto the printer dots.
   const scale = width / 302;
   const normalSize = Math.max(10, Math.round(10 * scale));
   const boldSize = Math.max(11, Math.round(11 * scale));
@@ -129,6 +129,20 @@ function drawReceipt(
     };
   });
 
+  measure.font = `700 ${boldSize}px ${FONT}`;
+  const metaBlocks = receipt.meta.map((row) => {
+    const label = `${row.label}: `;
+    const labelW = measure.measureText(label).width;
+    measure.font = `${normalSize}px ${FONT}`;
+    const lines = wrapText(
+      measure,
+      row.value,
+      Math.max(40, contentW - labelW)
+    );
+    measure.font = `700 ${boldSize}px ${FONT}`;
+    return { label, lines: lines.length ? lines : [''] };
+  });
+
   const sep = 10;
   let height = pad;
   if (logo) height += logoBoxH + 10;
@@ -137,7 +151,10 @@ function drawReceipt(
   height += dateLines.length * (normalSize + lineGap) + 8;
   height += sep + 8;
   if (ticket) height += ticketSize + lineGap + sep + 8;
-  height += (normalSize + lineGap) * Math.max(1, receipt.meta.length) + 8;
+  height +=
+    metaBlocks.reduce((sum, block) => sum + block.lines.length, 0) *
+      (boldSize + lineGap) +
+    8;
   height += sep + 8;
   height += boldSize + lineGap + 4;
   for (const block of itemBlocks) {
@@ -214,10 +231,20 @@ function drawReceipt(
   }
 
   ctx.textAlign = 'left';
-  ctx.font = `${normalSize}px ${FONT}`;
-  for (const row of receipt.meta) {
-    ctx.fillText(`${row.label}: ${row.value}`, pad, y);
-    y += normalSize + lineGap;
+  for (const block of metaBlocks) {
+    ctx.font = `700 ${boldSize}px ${FONT}`;
+    const labelW = ctx.measureText(block.label).width;
+    block.lines.forEach((line, index) => {
+      let x = pad;
+      if (index === 0) {
+        ctx.font = `700 ${boldSize}px ${FONT}`;
+        ctx.fillText(block.label, pad, y);
+        x = pad + labelW;
+      }
+      ctx.font = `${normalSize}px ${FONT}`;
+      ctx.fillText(line, x, y);
+      y += boldSize + lineGap;
+    });
   }
   y += 6;
   dash();

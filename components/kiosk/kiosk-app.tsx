@@ -843,6 +843,16 @@ export function KioskApp({
   );
 
   useEffect(() => {
+    const name = branchName?.trim();
+    if (!name) return;
+    try {
+      sessionStorage.setItem('foodluk-kiosk-branch-name', name);
+    } catch {
+      // ignore private-mode storage failures
+    }
+  }, [branchName]);
+
+  useEffect(() => {
     let cancelled = false;
     const slow = window.setTimeout(() => {
       if (!cancelled) {
@@ -855,10 +865,15 @@ export function KioskApp({
           `/api/customer/branches?slug=${encodeURIComponent(slug)}`
         );
         const json = (await res.json().catch(() => ({}))) as {
-          data?: { id: string; name: string }[];
+          data?: { id: string; urlId?: string; name: string }[];
         };
         if (cancelled) return;
-        const match = (json.data ?? []).find((b) => b.id === branchId);
+        const match = (json.data ?? []).find(
+          (b) =>
+            b.id === branchId ||
+            b.urlId === branchId ||
+            b.urlId === branchUrlId
+        );
         if (match) {
           setBranchValid(true);
           setBranchName(match.name);
@@ -877,7 +892,7 @@ export function KioskApp({
       cancelled = true;
       window.clearTimeout(slow);
     };
-  }, [slug, branchId]);
+  }, [slug, branchId, branchUrlId]);
 
   useEffect(() => {
     let cancelled = false;

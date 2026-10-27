@@ -1,4 +1,6 @@
 import { KioskPaymentSuccess } from '@/components/kiosk/kiosk-payment-success';
+import { db } from '@/lib/db';
+import { resolveRouteId } from '@/lib/resolve-route-id';
 
 import '../../../kiosk-light.css';
 
@@ -30,8 +32,18 @@ export default async function KioskBranchSuccessPage({
   const initialPayStatus = pick(sp, 'payStatus').trim() || null;
   const mobileRaw = (pick(sp, 'Mobile') || pick(sp, 'mobile')).trim().toLowerCase();
   const isMobile = mobileRaw === 'true' || mobileRaw === '1' || mobileRaw === 'yes';
+  const resolvedBranchId = resolveRouteId(decodeURIComponent(branchId));
+  const branch = resolvedBranchId
+    ? await db.branch.findFirst({
+        where: { id: resolvedBranchId },
+        select: { name: true },
+      })
+    : null;
   return (
-    <div className="kiosk-light-root min-h-screen bg-[#f8fafc]">
+    <div
+      className="kiosk-light-root min-h-screen bg-[#f8fafc]"
+      data-kiosk-branch={branch?.name ?? ''}
+    >
       <KioskPaymentSuccess
         slug={decodeURIComponent(slug)}
         branchId={decodeURIComponent(branchId)}

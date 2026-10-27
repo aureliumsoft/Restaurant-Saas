@@ -285,14 +285,17 @@ async function loadReceiptModel({
     } | null;
   };
   const branchesBody = (await branchesRes.json().catch(() => ({}))) as {
-    data?: Array<{ id?: string; name?: string | null }>;
+    data?: Array<{ id?: string; urlId?: string; name?: string | null }>;
   };
 
   const details = orderBody.data;
+  const namedBranches = (branchesBody.data ?? []).filter((b) => b.name?.trim());
   const branchName =
     details?.branchName?.trim() ||
-    branchesBody.data?.find((b) => b.id === branchId)?.name?.trim() ||
-    branchesBody.data?.find((b) => b.name?.trim())?.name?.trim() ||
+    namedBranches
+      .find((b) => b.id === branchId || b.urlId === branchId)
+      ?.name?.trim() ||
+    (namedBranches.length === 1 ? namedBranches[0]?.name?.trim() : '') ||
     null;
 
   const restaurantName = restaurantBody.data?.name?.trim() || 'Restaurant';
@@ -414,7 +417,7 @@ function buildReceiptPlainText(model: ReceiptModel): string {
   lines.push(centerText(model.dateTime, 48));
   lines.push(sep);
   if (model.ticketNo != null) {
-    lines.push(centerText(`Ticket: #${model.ticketNo}`, 48));
+    lines.push(centerText(`Token: #${model.ticketNo}`, 48));
     lines.push(sep);
   }
   lines.push(`Tracking ID: ${model.trackingId}`);
@@ -501,7 +504,7 @@ function receiptForBitmap(model: ReceiptModel) {
     restaurantName: model.restaurantName,
     branchName: model.branchName,
     dateTime: model.dateTime,
-    ticket: model.ticketNo != null ? `Ticket: #${model.ticketNo}` : null,
+    ticket: model.ticketNo != null ? `Token: #${model.ticketNo}` : null,
     meta,
     items,
     totals: [
@@ -672,7 +675,7 @@ function buildReceiptHtml(model: ReceiptModel): string {
   <div class="r">
     ${receiptHeader}
     <div class="sep"></div>
-    ${model.ticketNo != null ? `<div class="receipt-ticket">Ticket: #${model.ticketNo}</div><div class="sep"></div>` : ''}
+    ${model.ticketNo != null ? `<div class="receipt-ticket">Token: #${model.ticketNo}</div><div class="sep"></div>` : ''}
     <div class="receipt-line"><strong>Tracking ID:</strong> ${escapeHtml(model.trackingId)}</div>
     <div class="receipt-line"><strong>Mode:</strong> ${escapeHtml(model.mode)}</div>
     <div class="receipt-line"><strong>Payment:</strong> ${escapeHtml(model.paymentMethod)}</div>

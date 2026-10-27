@@ -1,4 +1,5 @@
 import { formatCurrency } from '@/lib/format-money';
+import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
 import {
   DEFAULT_RESTAURANT_REGIONAL,
   RestaurantCountryCode,
@@ -82,6 +83,11 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
 
   const changeAmount =
     paymentMode === 'cash' ? Math.max(0, paidAmount - grandTotal) : 0;
+  const phoneLabel = !customerPhone?.trim()
+    ? null
+    : isKioskSyntheticCustomerPhone(customerPhone)
+      ? 'N/A'
+      : customerPhone.trim();
 
   const rows = lines
     .map((line) => {
@@ -120,14 +126,14 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
     <div class="r">
       ${receiptHeader}
       <div class="sep"></div>
-      ${ticketNumber != null ? `<div class="receipt-ticket">Ticket: #${ticketNumber}</div><div class="sep"></div>` : ''}
+      ${ticketNumber != null ? `<div class="receipt-ticket">Token: #${ticketNumber}</div><div class="sep"></div>` : ''}
       <div class="receipt-line"><strong>Tracking ID:</strong> ${escapeHtml(orderRef)}</div>
       <div class="receipt-line"><strong>Mode:</strong> ${escapeHtml(orderMode)}</div>
       <div class="receipt-line"><strong>Payment:</strong> ${escapeHtml(paymentMethodLabel)}</div>
       <div class="receipt-line"><strong>Status:</strong> paid</div>
       ${tableLabel ? `<div class="receipt-line"><strong>Table:</strong> ${escapeHtml(tableLabel)}</div>` : ''}
       ${customerName ? `<div class="receipt-line"><strong>Customer:</strong> ${escapeHtml(customerName)}</div>` : ''}
-      ${customerPhone ? `<div class="receipt-line"><strong>Phone:</strong> ${escapeHtml(customerPhone)}</div>` : ''}
+      ${phoneLabel ? `<div class="receipt-line"><strong>Phone:</strong> ${escapeHtml(phoneLabel)}</div>` : ''}
       ${address ? `<div class="receipt-line"><strong>Address:</strong> ${escapeHtml(address)}</div>` : ''}
       ${cutleryRequested ? `<div class="receipt-line"><strong>Cutlery:</strong> yes</div>` : ''}
       ${note ? `<div class="receipt-line"><strong>Note:</strong> ${escapeHtml(note)}</div>` : ''}
