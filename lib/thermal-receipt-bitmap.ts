@@ -4,7 +4,7 @@ export const PAPER_58MM_DOTS = 384;
 
 export type ThermalBitmapLine = {
   name: string;
-  quantity: number;
+  quantity?: number;
   amount: string;
   indent?: boolean;
 };
@@ -14,6 +14,8 @@ export type ThermalBitmapReceipt = {
   restaurantName: string;
   branchName?: string | null;
   dateTime: string;
+  /** Centered between rules, for example "Ticket: #1". */
+  ticket?: string | null;
   meta: Array<{ label: string; value: string }>;
   items: ThermalBitmapLine[];
   totals: Array<{ label: string; value: string; bold?: boolean }>;
@@ -89,14 +91,15 @@ function drawReceipt(
   const qtyW = Math.round(contentW * 0.14);
   const amtW = Math.round(contentW * 0.24);
   const itemW = contentW - qtyW - amtW;
-  // h-10 = 2.5rem, w-26 = 6.5rem, sized for a 50mm / 58mm roll.
-  const logoBoxW = Math.round(width * (104 / 219));
-  const logoBoxH = Math.round(width * (40 / 219));
-  const brandSize = Math.max(22, Math.round(width * 0.052));
-  const branchSize = Math.max(16, Math.round(width * 0.034));
-  const bodySize = Math.max(16, Math.round(width * 0.034));
-  const totalSize = Math.max(20, Math.round(width * 0.044));
-  const lineGap = Math.round(bodySize * 0.38);
+  // Match the HTML receipt: 10px body, 11px bold, 20px ticket, on a 302px-wide 80mm page.
+  const scale = width / 302;
+  const normalSize = Math.max(10, Math.round(10 * scale));
+  const boldSize = Math.max(11, Math.round(11 * scale));
+  const ticketSize = Math.max(20, Math.round(20 * scale));
+  const brandSize = Math.max(14, Math.round(14 * scale));
+  const lineGap = Math.round(normalSize * 0.35);
+  const logoBoxW = Math.round(104 * scale);
+  const logoBoxH = Math.round(40 * scale);
 
   const measure = document.createElement('canvas').getContext('2d');
   if (!measure) throw new Error('Canvas is not available');
@@ -104,19 +107,23 @@ function drawReceipt(
   const brand = (receipt.restaurantName || 'Restaurant').trim().toUpperCase();
   measure.font = `800 ${brandSize}px ${FONT}`;
   const brandLines = wrapText(measure, brand, contentW);
-  measure.font = `${branchSize}px ${FONT}`;
+  measure.font = `${normalSize}px ${FONT}`;
   const branchLines = receipt.branchName?.trim()
     ? wrapText(measure, receipt.branchName.trim(), contentW)
     : [];
-  measure.font = `${bodySize}px ${FONT}`;
+  measure.font = `${normalSize}px ${FONT}`;
   const dateLines = wrapText(measure, receipt.dateTime.trim(), contentW);
+  const ticket = receipt.ticket?.trim() || '';
 
   const itemBlocks = receipt.items.map((item) => {
-    const indent = item.indent ? Math.round(bodySize * 0.8) : 0;
-    measure.font = `${bodySize}px ${FONT}`;
+    const indent = item.indent ? Math.round(normalSize * 0.75) : 0;
+    measure.font = `${normalSize}px ${FONT}`;
     return {
       lines: wrapText(measure, item.name, Math.max(40, itemW - indent)),
-      quantity: String(item.quantity),
+      quantity:
+        item.quantity != null && item.quantity > 0
+          ? String(item.quantity)
+          : '',
       amount: item.amount,
       indent: Boolean(item.indent),
     };
@@ -126,20 +133,21 @@ function drawReceipt(
   let height = pad;
   if (logo) height += logoBoxH + 10;
   height += brandLines.length * (brandSize + lineGap) + 6;
-  height += branchLines.length * (branchSize + lineGap);
-  height += dateLines.length * (bodySize + lineGap) + 8;
+  height += branchLines.length * (normalSize + lineGap);
+  height += dateLines.length * (normalSize + lineGap) + 8;
   height += sep + 8;
-  height += (bodySize + lineGap) * Math.max(1, receipt.meta.length) + 8;
+  if (ticket) height += ticketSize + lineGap + sep + 8;
+  height += (normalSize + lineGap) * Math.max(1, receipt.meta.length) + 8;
   height += sep + 8;
-  height += bodySize + lineGap + 4;
+  height += boldSize + lineGap + 4;
   for (const block of itemBlocks) {
-    height += block.lines.length * (bodySize + lineGap);
+    height += block.lines.length * (normalSize + lineGap);
   }
-  if (itemBlocks.length === 0) height += bodySize + lineGap;
+  if (itemBlocks.length === 0) height += normalSize + lineGap;
   height += sep + 8;
-  height += receipt.totals.length * (totalSize + lineGap) + 8;
+  height += receipt.totals.length * (boldSize + lineGap) + 8;
   height += sep + 8;
-  height += bodySize + lineGap + pad + 28;
+  height += normalSize + lineGap + pad + 28;
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -169,16 +177,16 @@ function drawReceipt(
   }
   y += 4;
 
-  ctx.font = `${branchSize}px ${FONT}`;
+  ctx.font = `${normalSize}px ${FONT}`;
   for (const line of branchLines) {
     ctx.fillText(line, width / 2, y);
-    y += branchSize + lineGap;
+    y += normalSize + lineGap;
   }
 
-  ctx.font = `${bodySize}px ${FONT}`;
+  ctx.font = `${normalSize}px ${FONT}`;
   for (const line of dateLines) {
     ctx.fillText(line, width / 2, y);
-    y += bodySize + lineGap;
+    y += normalSize + lineGap;
   }
   y += 8;
 
@@ -197,31 +205,39 @@ function drawReceipt(
 
   dash();
 
+  if (ticket) {
+    ctx.font = `700 ${ticketSize}px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(ticket, width / 2, y);
+    y += ticketSize + lineGap;
+    dash();
+  }
+
   ctx.textAlign = 'left';
-  ctx.font = `${bodySize}px ${FONT}`;
+  ctx.font = `${normalSize}px ${FONT}`;
   for (const row of receipt.meta) {
     ctx.fillText(`${row.label}: ${row.value}`, pad, y);
-    y += bodySize + lineGap;
+    y += normalSize + lineGap;
   }
   y += 6;
   dash();
 
-  ctx.font = `700 ${bodySize}px ${FONT}`;
+  ctx.font = `700 ${boldSize}px ${FONT}`;
   ctx.textAlign = 'left';
   ctx.fillText('Item', pad, y);
   ctx.textAlign = 'right';
   ctx.fillText('Qty', width - pad - amtW, y);
   ctx.fillText('Amt', width - pad, y);
-  y += bodySize + lineGap + 4;
+  y += boldSize + lineGap + 4;
 
-  ctx.font = `${bodySize}px ${FONT}`;
+  ctx.font = `${normalSize}px ${FONT}`;
   if (itemBlocks.length === 0) {
     ctx.textAlign = 'left';
     ctx.fillText('No items', pad, y);
-    y += bodySize + lineGap;
+    y += normalSize + lineGap;
   }
   for (const block of itemBlocks) {
-    const indent = block.indent ? Math.round(bodySize * 0.8) : 0;
+    const indent = block.indent ? Math.round(normalSize * 0.75) : 0;
     block.lines.forEach((line, index) => {
       ctx.textAlign = 'left';
       ctx.fillText(line, pad + indent, y);
@@ -230,24 +246,24 @@ function drawReceipt(
         ctx.fillText(block.quantity, width - pad - amtW, y);
         ctx.fillText(block.amount, width - pad, y);
       }
-      y += bodySize + lineGap;
+      y += normalSize + lineGap;
     });
   }
   y += 6;
   dash();
 
   for (const row of receipt.totals) {
-    ctx.font = `${row.bold ? '800' : '400'} ${row.bold ? totalSize : bodySize}px ${FONT}`;
+    ctx.font = `${row.bold ? '800' : '400'} ${row.bold ? boldSize : normalSize}px ${FONT}`;
     ctx.textAlign = 'left';
     ctx.fillText(row.label, pad, y);
     ctx.textAlign = 'right';
     ctx.fillText(row.value, width - pad, y);
-    y += (row.bold ? totalSize : bodySize) + lineGap;
+    y += (row.bold ? boldSize : normalSize) + lineGap;
   }
   y += 6;
   dash();
 
-  ctx.font = `${bodySize}px ${FONT}`;
+  ctx.font = `${normalSize}px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.fillText(receipt.footer || 'Thank you!', width / 2, y);
 

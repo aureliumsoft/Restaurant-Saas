@@ -16,6 +16,7 @@ import {
   Boxes,
   Calendar,
   Download,
+  Eye,
   FileBarChart,
   Loader2,
   Printer,
@@ -25,6 +26,8 @@ import {
   Wallet,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { ReportsOrderDetailSheet } from '@/components/reports/reports-order-detail-sheet';
+import { useRestaurantDocumentBranding } from '@/hooks/use-restaurant-document-branding';
 
 import {
   DashboardCard,
@@ -398,7 +401,10 @@ export function ReportsModule() {
   const uiLang = useUiLanguage();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { formatMoney } = useOwnerRestaurantRegional();
+  const { formatMoney, regional } = useOwnerRestaurantRegional();
+  const { restaurantName, logoUrl } = useRestaurantDocumentBranding({
+    titleSuffix: 'Reports',
+  });
   const { limitFlag, canUse } = useEntitlements();
   const allowInventoryTab = limitFlag('reports', 'inventoryTab', true);
   const allowExpensesTab = limitFlag('reports', 'expensesTab', true);
@@ -460,6 +466,9 @@ export function ReportsModule() {
   const [expRows, setExpRows] = useState<ExpenseRow[]>([]);
 
   const [confirmCsv, setConfirmCsv] = useState(false);
+  const [orderDetailId, setOrderDetailId] = useState<string | null>(null);
+  const [orderDetailOpen, setOrderDetailOpen] = useState(false);
+  const [orderDetailAutoPrint, setOrderDetailAutoPrint] = useState(false);
 
   useEffect(() => {
     const fromQuery = parseReportType(searchParams.get('type'));
@@ -1582,6 +1591,9 @@ export function ReportsModule() {
                   <DashboardTableHead className="text-right">
                     {t('dashboard.reports.revenue')}
                   </DashboardTableHead>
+                  <DashboardTableHead className="text-right">
+                    {t('dashboard.reports.colActions')}
+                  </DashboardTableHead>
                 </DashboardTableRow>
               </DashboardTableHeader>
               <DashboardTableBody>
@@ -1613,6 +1625,38 @@ export function ReportsModule() {
                     </DashboardTableCell>
                     <DashboardTableCell className="text-right tabular-nums">
                       {formatMoney(row.revenueAmount)}
+                    </DashboardTableCell>
+                    <DashboardTableCell className="text-right">
+                      <div className="inline-flex items-center justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            setOrderDetailAutoPrint(false);
+                            setOrderDetailId(row.id);
+                            setOrderDetailOpen(true);
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                          {t('dashboard.reports.viewOrder')}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            setOrderDetailAutoPrint(true);
+                            setOrderDetailId(row.id);
+                            setOrderDetailOpen(true);
+                          }}
+                        >
+                          <Printer className="h-4 w-4" />
+                          {t('dashboard.reports.printOrder')}
+                        </Button>
+                      </div>
                     </DashboardTableCell>
                   </DashboardTableRow>
                 ))}
@@ -1852,6 +1896,25 @@ export function ReportsModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ReportsOrderDetailSheet
+        orderId={orderDetailId}
+        open={orderDetailOpen}
+        autoPrint={orderDetailAutoPrint}
+        onOpenChange={(open) => {
+          setOrderDetailOpen(open);
+          if (!open) {
+            setOrderDetailId(null);
+            setOrderDetailAutoPrint(false);
+          }
+        }}
+        formatMoney={formatMoney}
+        brandName={restaurantName}
+        branchName={activeBranchName}
+        logoUrl={logoUrl}
+        currencyCode={regional.currencyCode}
+        countryCode={regional.countryCode}
+      />
     </MenuPageShell>
   );
 }

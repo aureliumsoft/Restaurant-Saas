@@ -151,10 +151,11 @@ import { ModeToggle } from '@/components/darkmode/darkmode';
 import UserMenu from '@/components/dashboard/UserMenu';
 import { Cross2Icon } from '@radix-ui/react-icons';
 import {
-  cartLineDisplayName,
   cartLineTitle,
   cartModifierSelectionNames,
 } from '@/lib/cart-line-display';
+import { receiptLinesFromCartLine } from '@/lib/receipt-item-lines';
+import { buildKitchenTicketItemRows } from '@/lib/kitchen-ticket-items';
 import { ProductLineDetails } from '@/components/orders/product-line-details';
 import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
 import { useBilingualText } from '@/hooks/use-bilingual-text';
@@ -431,14 +432,6 @@ function lineUnitTotal(line: CartLine) {
     0
   );
   return base + modTotal;
-}
-
-function posCartLineDisplayName(line: CartLine) {
-  return cartLineDisplayName(
-    line.productName,
-    line.variationName,
-    line.modifiers
-  );
 }
 
 function normalizeCartLine(
@@ -1678,14 +1671,16 @@ export function PosScreen({
       customerPhone: customerPhone || null,
       address: orderAddress || null,
       note: kotNote || null,
-      lines: cart.map((line) => {
+      lines: cart.flatMap((line) => {
         const gross = lineUnitTotal(line) * line.qty;
         const discAmt = gross * (line.lineDiscPct / 100);
-        return {
-          name: posCartLineDisplayName(line),
-          qty: line.qty,
+        return receiptLinesFromCartLine({
+          productName: line.productName,
+          variationName: line.variationName,
+          quantity: line.qty,
           lineTotal: gross - discAmt,
-        };
+          modifiers: line.modifiers,
+        });
       }),
       subtotal,
       serviceChargeAmount: activeServiceChargeAmount,
@@ -2740,7 +2735,7 @@ export function PosScreen({
         branchId: selectedBranchId || undefined,
         items: cart.map((l) => ({
           productId: l.menuItemId,
-          name: posCartLineDisplayName(l),
+          name: cartLineTitle(l.productName, l.variationName),
           qty: l.qty,
           unitPrice: lineUnitTotal(l),
           lineDiscPct: l.lineDiscPct,
@@ -2814,10 +2809,24 @@ export function PosScreen({
           );
           return;
         }
-        const kitchenItems = cart.map((l) => ({
-          id: l.menuItemId,
-          productName: posCartLineDisplayName(l),
-          quantity: l.qty,
+        const kitchenItems = buildKitchenTicketItemRows(
+          cart.map((l) => ({
+            quantity: l.qty,
+            productName: l.productName,
+            variationName: l.variationName,
+            modifiers: l.modifiers.flatMap((g) =>
+              g.selections.map((s) => ({
+                name: s.name,
+                quantity: 1,
+                menuItemId: s.menuItemId,
+                groupName: g.groupName,
+              }))
+            ),
+          }))
+        ).map((row, index) => ({
+          id: `kitchen-${index}`,
+          productName: row.productName,
+          quantity: row.quantity,
         }));
         const createResult = await submitPosOrder(orderPayload);
         if (createResult.status === 'queued') {
@@ -2902,10 +2911,24 @@ export function PosScreen({
       const kitchenItemsForDialog =
         (savedOrder as { _kitchenItems?: Array<{ id: string; productName: string; quantity: number }> })
           ._kitchenItems ??
-        cart.map((l) => ({
-          id: l.menuItemId,
-          productName: posCartLineDisplayName(l),
-          quantity: l.qty,
+        buildKitchenTicketItemRows(
+          cart.map((l) => ({
+            quantity: l.qty,
+            productName: l.productName,
+            variationName: l.variationName,
+            modifiers: l.modifiers.flatMap((g) =>
+              g.selections.map((s) => ({
+                name: s.name,
+                quantity: 1,
+                menuItemId: s.menuItemId,
+                groupName: g.groupName,
+              }))
+            ),
+          }))
+        ).map((row, index) => ({
+          id: `kitchen-${index}`,
+          productName: row.productName,
+          quantity: row.quantity,
         }));
       if (!isEditing && isTerminal) {
         const terminalBase =

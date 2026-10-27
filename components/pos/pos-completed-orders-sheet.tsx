@@ -21,6 +21,11 @@ import {
   posOrderApiPath,
 } from '@/lib/dashboard-paths';
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
+import { receiptLinesFromOrderItem } from '@/lib/receipt-item-lines';
+import {
+  parseCutleryFromAddressSnapshot,
+  parseNoteFromAddressSnapshot,
+} from '@/lib/order-fulfillment';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import {
   usePosCompletedOrders,
@@ -157,6 +162,13 @@ export function PosCompletedOrdersSheet({
         (sum, item) => sum + item.unitPrice * item.quantity,
         0
       );
+      const note =
+        detail.customerComment?.trim() ||
+        parseNoteFromAddressSnapshot(detail.address) ||
+        null;
+      const cutleryRequested =
+        detail.cutleryRequested === true ||
+        parseCutleryFromAddressSnapshot(detail.address);
       const ok = printPosOrderReceipt({
         orderRef: detail.shortOrderId,
         ticketNumber: detail.ticketNumber,
@@ -173,11 +185,16 @@ export function PosCompletedOrdersSheet({
         customerName: detail.customerName,
         customerPhone: detail.customerPhone,
         address: detail.address,
-        lines: detail.items.map((item) => ({
-          name: item.name,
-          qty: item.quantity,
-          lineTotal: item.unitPrice * item.quantity,
-        })),
+        note,
+        cutleryRequested,
+        lines: detail.items.flatMap((item) =>
+          receiptLinesFromOrderItem({
+            name: item.name,
+            quantity: item.quantity,
+            lineTotal: item.unitPrice * item.quantity,
+            modifiers: item.modifiers,
+          })
+        ),
         subtotal,
         serviceChargeAmount: detail.serviceChargeAmount,
         taxAmount: detail.taxAmount,

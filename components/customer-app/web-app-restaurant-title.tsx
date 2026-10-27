@@ -36,12 +36,11 @@ export function WebAppRestaurantTitle({
     <div className={cn('flex min-w-0 items-center gap-3', className)}>
       <span
         className={cn(
-          'inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 ring-1 ring-primary/20',
+          'inline-flex shrink-0 items-center justify-center overflow-hidden bg-primary/10 ring-primary/20',
           logoSize
         )}
       >
         {showLogo && logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={logo}
             alt=""

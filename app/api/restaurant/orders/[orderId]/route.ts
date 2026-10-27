@@ -29,6 +29,7 @@ export async function GET(
       select: {
         id: true,
         shortOrderId: true,
+        ticketNumber: true,
         total: true,
         status: true,
         sourceType: true,
@@ -38,6 +39,7 @@ export async function GET(
         tableLabel: true,
         taxAmount: true,
         discountAmount: true,
+        serviceChargeAmount: true,
         createdAt: true,
         updatedAt: true,
         customer: {

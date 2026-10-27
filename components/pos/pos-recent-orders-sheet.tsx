@@ -21,6 +21,11 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
+import { receiptLinesFromOrderItem } from '@/lib/receipt-item-lines';
+import {
+  parseCutleryFromAddressSnapshot,
+  parseNoteFromAddressSnapshot,
+} from '@/lib/order-fulfillment';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
@@ -55,6 +60,8 @@ export type PosOrderDetail = {
   address: string | null;
   tableId: string | null;
   tableLabel: string | null;
+  cutleryRequested?: boolean;
+  customerComment?: string | null;
   customerName: string | null;
   customerPhone: string | null;
   paymentMethod: string | null;
@@ -69,7 +76,13 @@ export type PosOrderDetail = {
     quantity: number;
     unitPrice: number;
     imageUrl: string | null;
-    modifiers: { name: string; unitPrice: number; menuItemId?: string | null }[];
+    modifiers: {
+      name: string;
+      unitPrice: number;
+      menuItemId?: string | null;
+      groupName?: string | null;
+      quantity?: number;
+    }[];
   }>;
 };
 
@@ -239,6 +252,13 @@ export function PosRecentOrdersSheet({
         (sum, item) => sum + item.unitPrice * item.quantity,
         0
       );
+      const note =
+        detail.customerComment?.trim() ||
+        parseNoteFromAddressSnapshot(detail.address) ||
+        null;
+      const cutleryRequested =
+        detail.cutleryRequested === true ||
+        parseCutleryFromAddressSnapshot(detail.address);
       const ok = printPosOrderReceipt({
         orderRef: detail.shortOrderId,
         ticketNumber: detail.ticketNumber,
@@ -255,11 +275,16 @@ export function PosRecentOrdersSheet({
         customerName: detail.customerName,
         customerPhone: detail.customerPhone,
         address: detail.address,
-        lines: detail.items.map((item) => ({
-          name: item.name,
-          qty: item.quantity,
-          lineTotal: item.unitPrice * item.quantity,
-        })),
+        note,
+        cutleryRequested,
+        lines: detail.items.flatMap((item) =>
+          receiptLinesFromOrderItem({
+            name: item.name,
+            quantity: item.quantity,
+            lineTotal: item.unitPrice * item.quantity,
+            modifiers: item.modifiers,
+          })
+        ),
         subtotal,
         serviceChargeAmount: detail.serviceChargeAmount,
         taxAmount: detail.taxAmount,

@@ -9,6 +9,7 @@ import {
   isPersonalizeModifierMenuItemId,
   normalizePersonalizeModifierMenuItemId,
 } from '@/lib/menu/personalize-modifiers';
+import { buildKitchenTicketItemRows } from '@/lib/kitchen-ticket-items';
 import {
   isPrismaUniqueViolation,
   parseOrderIdempotencyKey,
@@ -157,18 +158,6 @@ function buildAddressSnapshot(
   }
 
   return lines.join('\n');
-}
-
-function ticketProductName(
-  productName: string,
-  groups: z.infer<typeof modifierGroupSchema>[]
-): string {
-  if (!groups.length) return productName;
-  const bits = groups.map((g) => {
-    const names = g.selections.map((s) => s.name).join(', ');
-    return `${g.groupName}: ${names}`;
-  });
-  return `${productName} (${bits.join('; ')})`;
 }
 
 export async function POST(req: NextRequest) {
@@ -363,18 +352,25 @@ export async function POST(req: NextRequest) {
           data: {
             orderId: order.id,
             menuItemId: line.menuItemId,
+            productName: line.productName,
             quantity: line.quantity,
             price: line.unitPrice,
           },
         });
 
-        const flatMods = line.modifiers.flatMap((g) => g.selections);
+        const flatMods = line.modifiers.flatMap((g) =>
+          g.selections.map((s) => ({
+            selection: s,
+            groupName: g.groupName,
+          }))
+        );
         if (flatMods.length > 0) {
           await tx.orderItemModifier.createMany({
-            data: flatMods.map((s) => ({
+            data: flatMods.map(({ selection: s, groupName }) => ({
               orderItemId: orderItem.id,
               menuItemId: normalizePersonalizeModifierMenuItemId(s.menuItemId),
               name: s.name,
+              groupName: groupName?.trim() || null,
               unitPrice: s.unitPrice,
               quantity: 1,
             })),
@@ -392,10 +388,23 @@ export async function POST(req: NextRequest) {
       });
 
       await tx.kitchenTicketItem.createMany({
-        data: lines.map((line) => ({
+        data: buildKitchenTicketItemRows(
+          lines.map((line) => ({
+            quantity: line.quantity,
+            productName: line.productName,
+            modifiers: line.modifiers.flatMap((group) =>
+              group.selections.map((sel) => ({
+                name: sel.name,
+                quantity: 1,
+                menuItemId: sel.menuItemId,
+                groupName: group.groupName,
+              }))
+            ),
+          }))
+        ).map((row) => ({
           kitchenTicketId: ticket.id,
-          productName: ticketProductName(line.productName, line.modifiers),
-          quantity: line.quantity,
+          productName: row.productName,
+          quantity: row.quantity,
         })),
       });
 

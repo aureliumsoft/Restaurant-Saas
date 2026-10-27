@@ -40,6 +40,8 @@ const orderSelect = {
   address: true,
   diningTableId: true,
   tableLabel: true,
+  cutleryRequested: true,
+  customerComment: true,
   createdAt: true,
   customer: { select: { name: true, phone: true } },
   items: {
@@ -80,6 +82,8 @@ function mapOrderDetail(order: {
   address: string | null;
   diningTableId: string | null;
   tableLabel: string | null;
+  cutleryRequested: boolean;
+  customerComment: string | null;
   createdAt: Date;
   customer: { name: string; phone: string | null } | null;
   items: Array<{
@@ -89,7 +93,13 @@ function mapOrderDetail(order: {
     price: number;
     productName: string | null;
     menuItem: { name: string; imageUrl: string | null } | null;
-    modifiers: Array<{ name: string; unitPrice: number; menuItemId: string | null; quantity: number }>;
+    modifiers: Array<{
+      name: string;
+      unitPrice: number;
+      menuItemId: string | null;
+      quantity: number;
+      groupName: string | null;
+    }>;
   }>;
   payments: Array<{
     id: string;
@@ -111,6 +121,8 @@ function mapOrderDetail(order: {
     address: order.address,
     tableId: order.diningTableId,
     tableLabel: order.tableLabel,
+    cutleryRequested: order.cutleryRequested,
+    customerComment: order.customerComment,
     customerName: order.customer?.name ?? null,
     customerPhone: order.customer?.phone ?? null,
     paymentId: payment?.id ?? null,
@@ -131,6 +143,7 @@ function mapOrderDetail(order: {
         unitPrice: Number(modifier.unitPrice) || 0,
         menuItemId: modifier.menuItemId,
         quantity: modifier.quantity,
+        groupName: modifier.groupName,
       })),
     })),
   });

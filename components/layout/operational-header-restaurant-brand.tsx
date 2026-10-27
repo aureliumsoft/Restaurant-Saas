@@ -20,12 +20,12 @@ export function OperationalHeaderRestaurantBrand() {
         <img
           src={logoUrl}
           alt=""
-          className="h-9 w-9 shrink-0 rounded-md border border-border object-cover"
+          className="h-10 w-24 shrink-0 object-cover"
           onError={() => setLogoFailed(true)}
         />
       ) : (
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-sm font-semibold text-muted-foreground"
+          className="flex h-10 w-24 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-sm font-semibold text-muted-foreground"
           aria-hidden
         >
           {initial}

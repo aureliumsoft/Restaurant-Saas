@@ -24,12 +24,17 @@ import {
 } from '@/components/kds/kds-order-action-dialog';
 import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
 import { kdsFetchErrorMessage } from '@/lib/kds-api-errors';
+import {
+  buildKitchenTicketItemRows,
+  parseKitchenTicketItemDisplay,
+} from '@/lib/kitchen-ticket-items';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
 import { useTranslation } from 'react-i18next';
+import { i18n } from '@/lib/i18n/client';
 
 type PendingOrder = {
   id: string;
@@ -53,8 +58,14 @@ type PendingOrder = {
   items: {
     id: string;
     quantity: number;
-    menuItem: { name: string };
-    modifiers: { name: string; quantity: number }[];
+    productName?: string | null;
+    menuItem: { name: string } | null;
+    modifiers: {
+      name: string;
+      quantity: number;
+      menuItemId?: string | null;
+      groupName?: string | null;
+    }[];
   }[];
 };
 
@@ -75,21 +86,16 @@ function trackingLabel(o: { shortOrderId: string | null; id: string }): string {
   return (o.shortOrderId ?? o.id.slice(0, 6)).toUpperCase();
 }
 
-function normalizeLineName(rawName: string, rawQty: number) {
-  const trimmed = String(rawName || '').trim();
-  const trailingQty = trimmed.match(/^(.*)\s+x(\d+)$/i);
-  if (!trailingQty) {
-    return { name: trimmed, quantity: rawQty };
+function getLocalizedName(val: string, lang: string) {
+  try {
+    const obj = JSON.parse(val);
+    if (typeof obj === 'object' && obj !== null) {
+      return obj[lang] || obj.en || Object.values(obj)[0] || val;
+    }
+    return val;
+  } catch {
+    return val;
   }
-
-  const parsed = Number(trailingQty[2]);
-  const safeParsed = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-  const baseName = trailingQty[1].trim();
-  const effectiveQty = rawQty > 1 ? rawQty * safeParsed : safeParsed;
-  return {
-    name: baseName || trimmed,
-    quantity: effectiveQty,
-  };
 }
 
 const MIN_CUSTOM_MINUTES = 1;
@@ -260,12 +266,7 @@ export function KdsManagerBoard() {
   }
 
   if (!settingsLoading && !fulfillmentSettings.kdsEnabled) {
-    return (
-      <FeatureDisabledScreen
-        feature="kds"
-        homeUrl="/dashboard"
-      />
-    );
+    return <FeatureDisabledScreen feature="kds" homeUrl="/dashboard" />;
   }
 
   return (
@@ -294,7 +295,6 @@ export function KdsManagerBoard() {
               <ExternalLink className="ml-2 h-4 w-4" />
             </Link>
           </Button>
-
         </div>
       </div>
 
@@ -364,44 +364,77 @@ export function KdsManagerBoard() {
                           {t('kds.asap')}
                         </p>
                       )}
-                      <OrderCustomerExtras
-                        cutleryRequested={o.cutleryRequested}
-                        customerComment={o.customerComment}
-                        compact
-                      />
+
                       <div className="space-y-1">
-                        {o.items.map((it) => {
-                          const base = normalizeLineName(
-                            it.menuItem.name,
-                            it.quantity
+                        {buildKitchenTicketItemRows(
+                          o.items.map((it) => ({
+                            quantity: it.quantity,
+                            productName: it.productName,
+                            menuItem: it.menuItem,
+                            modifiers: (it.modifiers ?? []).map((m) => ({
+                              name: m.name,
+                              quantity: m.quantity,
+                              menuItemId: m.menuItemId,
+                              groupName: m.groupName,
+                            })),
+                          }))
+                        ).map((row, idx) => {
+                          const parsed = parseKitchenTicketItemDisplay(
+                            row.productName,
+                            row.quantity
                           );
-                          return (
-                            <div key={it.id} className="text-xs leading-snug">
-                              <p>
-                                <span className="font-semibold tabular-nums">
-                                  {base.quantity}×
-                                </span>{' '}
-                                {base.name}
+                          const lang =
+                            typeof i18n !== 'undefined' ? i18n.language : 'en';
+                          const name = getLocalizedName(parsed.name, lang);
+                          if (parsed.kind === 'branch') {
+                            return (
+                              <p
+                                key={`${o.id}-k-${idx}`}
+                                className="text-xs font-medium text-muted-foreground"
+                              >
+                                ↳ {name}
                               </p>
-                              {it.modifiers?.map((m, idx) => {
-                                const mod = normalizeLineName(m.name, m.quantity);
-                                return (
-                                  <p
-                                    key={`${it.id}-m-${idx}`}
-                                    className="pl-4 text-muted-foreground"
-                                  >
-                                    <span className="font-semibold tabular-nums">
-                                      {mod.quantity}×
-                                    </span>{' '}
-                                    {mod.name}
-                                  </p>
-                                );
-                              })}
-                            </div>
+                            );
+                          }
+                          if (
+                            parsed.kind === 'nested' ||
+                            parsed.kind === 'addon'
+                          ) {
+                            return (
+                              <p
+                                key={`${o.id}-k-${idx}`}
+                                className="pl-3 text-xs text-muted-foreground"
+                              >
+                                + {name}
+                              </p>
+                            );
+                          }
+                          if (parsed.kind === 'personalize') {
+                            return (
+                              <p
+                                key={`${o.id}-k-${idx}`}
+                                className="pl-3 text-xs italic text-amber-600 dark:text-amber-500"
+                              >
+                                • {name}
+                              </p>
+                            );
+                          }
+                          return (
+                            <p
+                              key={`${o.id}-k-${idx}`}
+                              className="text-xs leading-snug"
+                            >
+                              <span className="font-semibold tabular-nums">
+                                {parsed.quantity}×
+                              </span>{' '}
+                              {name}
+                            </p>
                           );
                         })}
                       </div>
-                      <p className="text-xs font-semibold">{formatMoney(o.total)}</p>
+                      <p className="text-xs font-semibold">
+                        {formatMoney(o.total)}
+                      </p>
                     </div>
 
                     <div className="flex w-full justify-between flex-col gap-3 rounded-lg border bg-muted/20 p-3">
@@ -487,7 +520,51 @@ export function KdsManagerBoard() {
                         </p>
                       ) : null}
 
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className='flex flex-col gap-2'>
+                        <OrderCustomerExtras
+                          cutleryRequested={o.cutleryRequested}
+                          customerComment={o.customerComment}
+                          compact
+                        />
+
+<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <Button
+                          className="w-full"
+                          variant="destructive"
+                          type="button"
+                          disabled={
+                            (activeCancelCount > 0 &&
+                              activeCancelOrderId !== o.id) ||
+                            (activeCancelOrderId !== null &&
+                              activeCancelOrderId === o.id) ||
+                            (activeSubmitCount > 0 &&
+                              activeSubmittingOrderId === o.id)
+                          }
+                          onClick={() =>
+                            setPendingAction({
+                              kind: 'cancel',
+                              orderId: o.id,
+                              label: tokenLabel(o),
+                            })
+                          }
+                        >
+                          {activeCancelCount > 0 &&
+                          activeCancelOrderId === o.id ? (
+                            <>
+                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
+                              <span className="text-sm font-medium">
+                                {t('kds.canceling')}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="mr-2 h-5 w-5" />{' '}
+                              <span className="text-sm font-medium">
+                                {t('kds.cancelOrder')}
+                              </span>
+                            </>
+                          )}
+                        </Button>
                         <Button
                           className="w-full"
                           type="button"
@@ -524,7 +601,7 @@ export function KdsManagerBoard() {
                           }}
                         >
                           {activeSubmitCount > 0 &&
-                            activeSubmittingOrderId === o.id ? (
+                          activeSubmittingOrderId === o.id ? (
                             <>
                               <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
                               <span className="text-sm font-medium">
@@ -540,44 +617,9 @@ export function KdsManagerBoard() {
                             </>
                           )}
                         </Button>
-                        <Button
-                          className="w-full"
-                          variant="destructive"
-                          type="button"
-                          disabled={
-                            (activeCancelCount > 0 &&
-                              activeCancelOrderId !== o.id) ||
-                            (activeCancelOrderId !== null &&
-                              activeCancelOrderId === o.id) ||
-                            (activeSubmitCount > 0 &&
-                              activeSubmittingOrderId === o.id)
-                          }
-                          onClick={() =>
-                            setPendingAction({
-                              kind: 'cancel',
-                              orderId: o.id,
-                              label: tokenLabel(o),
-                            })
-                          }
-                        >
-                          {activeCancelCount > 0 &&
-                            activeCancelOrderId === o.id ? (
-                            <>
-                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
-                              <span className="text-sm font-medium">
-                                {t('kds.canceling')}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <XCircle className="mr-2 h-5 w-5" />{' '}
-                              <span className="text-sm font-medium">
-                                {t('kds.cancelOrder')}
-                              </span>
-                            </>
-                          )}
-                        </Button>
                       </div>
+                      </div>
+                     
                     </div>
                   </div>
                 </CardContent>
@@ -598,10 +640,10 @@ export function KdsManagerBoard() {
         loading={
           pendingAction?.kind === 'proceed'
             ? activeSubmitCount > 0 &&
-            activeSubmittingOrderId === pendingAction.orderId
+              activeSubmittingOrderId === pendingAction.orderId
             : pendingAction?.kind === 'cancel'
               ? activeCancelCount > 0 &&
-              activeCancelOrderId === pendingAction.orderId
+                activeCancelOrderId === pendingAction.orderId
               : false
         }
         onCancel={() => setPendingAction(null)}

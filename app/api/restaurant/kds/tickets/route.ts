@@ -190,15 +190,18 @@ export async function GET(req: NextRequest) {
       rows.map((r) => {
         const stored = itemsByTicket.get(r.id) ?? [];
         const orderItems = linesByOrderId.get(r.orderId) ?? [];
-        const shouldHydrateFromOrder =
-          orderItems.length > 0 &&
+        // Always prefer order lines for display so parent variation
+        // (`Product (XL)`) and recommendation options stay in sync with cart.
+        const hydratedRows =
+          orderItems.length > 0
+            ? buildKitchenTicketItemRowsFromOrder(orderItems)
+            : null;
+
+        const shouldPersistHydration =
+          hydratedRows != null &&
           (stored.length === 0 || kitchenTicketItemsLookLegacy(stored));
 
-        const hydratedRows = shouldHydrateFromOrder
-          ? buildKitchenTicketItemRowsFromOrder(orderItems)
-          : null;
-
-        if (hydratedRows) {
+        if (shouldPersistHydration) {
           syncTicketIds.push(r.id);
         }
 

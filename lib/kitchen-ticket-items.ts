@@ -31,46 +31,91 @@ export function isKitchenPersonalizeModifier(mod: {
 
 /** Main product line only — modifiers are separate kitchen ticket rows. */
 export function kitchenTicketMainLineName(line: KitchenTicketLineInput): string {
-  const fromMenu = line.menuItem?.name?.trim();
-  if (fromMenu) return fromMenu;
-
+  // Prefer the order snapshot so parent variation in `Product (XL)` is kept.
+  // Live menuItem.name is the base product only and would hide the variation.
   const snap = line.productName?.trim();
   if (snap) {
     const stripped = stripLegacyEmbeddedModifierSuffix(snap);
-    if (stripped) return stripped;
+    if (stripped) {
+      const variation = line.variationName?.trim();
+      if (
+        variation &&
+        !stripped.toLowerCase().includes(`(${variation.toLowerCase()})`)
+      ) {
+        return cartLineTitle(stripped, variation);
+      }
+      return stripped;
+    }
   }
+
+  const fromMenu = line.menuItem?.name?.trim();
+  if (fromMenu) return cartLineTitle(fromMenu, line.variationName);
 
   return cartLineTitle(line.productName ?? 'Item', line.variationName);
 }
 
-function stripLegacyEmbeddedModifierSuffix(name: string): string {
+/** Strip trailing `(a, b; Group: x)` baked modifier lists; keep simple `(variation)`. */
+export function stripLegacyEmbeddedModifierSuffix(name: string): string {
   let base = name.trim();
   if (!base) return base;
 
   let changed = true;
   while (changed) {
     changed = false;
-    const match = base.match(/^(.*)\s+\(([^()]+)\)\s*$/);
-    if (!match) break;
-    const inner = match[2].trim();
+    if (!base.endsWith(')')) break;
+
+    // Walk backwards so nested parens like `(Tacos (XL), Pepsi)` still match.
+    let depth = 0;
+    let openAt = -1;
+    for (let i = base.length - 1; i >= 0; i--) {
+      const ch = base[i];
+      if (ch === ')') depth += 1;
+      else if (ch === '(') {
+        depth -= 1;
+        if (depth === 0) {
+          openAt = i;
+          break;
+        }
+      }
+    }
+    if (openAt <= 0) break;
+    if (!/\s/.test(base[openAt - 1]!)) break;
+
+    const before = base.slice(0, openAt).trimEnd();
+    const inner = base.slice(openAt + 1, -1).trim();
     if (!inner.includes(',') && !inner.includes(':') && !inner.includes(';')) {
       break;
     }
-    base = match[1].trim();
+    if (!before) break;
+    base = before;
     changed = true;
   }
 
   return base || name.trim();
 }
 
+function isSizeLikeChildName(parentName: string, childName: string): boolean {
+  const parent = parentName.trim().toLowerCase();
+  const child = childName.trim().toLowerCase();
+  if (!parent || !child || parent === child) return false;
+  return (
+    child.startsWith(`${parent} `) ||
+    child.startsWith(`${parent}(`) ||
+    child.startsWith(`${parent} (`)
+  );
+}
+
 /**
  * Kitchen rows:
- * Burger
+ * Burger (XL)
  * No onions          ← personalize first, no arrow
  * ↳ Sauces
  * - Tomato
  * ↳ Drink
  * - Coke
+ *
+ * Recommendation size/variation options fold onto the parent selection name
+ * (same as cart), e.g. "Los Tacos Chuncky" + "Los Tacos Chuncky (TALLA XL)".
  */
 export function buildKitchenTicketItemRows(
   lines: KitchenTicketLineInput[]
@@ -99,17 +144,38 @@ export function buildKitchenTicketItemRows(
       });
     }
 
-    let lastHeader: string | null = null;
+    type Folded = {
+      header: string;
+      name: string;
+      quantity: number;
+    };
+    const folded: Folded[] = [];
     for (const mod of others) {
       const modName = String(mod.name || '').trim();
       const header = recommendationGroupDisplayLabel(mod.groupName || 'Add-ons');
-      if (header !== lastHeader) {
-        rows.push({ productName: `↳ ${header}`, quantity: 0 });
-        lastHeader = header;
+      const qty = mod.quantity > 0 ? mod.quantity : 1;
+      const previous = folded[folded.length - 1];
+      if (
+        previous &&
+        previous.header === header &&
+        isSizeLikeChildName(previous.name, modName)
+      ) {
+        previous.name = modName;
+        previous.quantity = qty;
+        continue;
+      }
+      folded.push({ header, name: modName, quantity: qty });
+    }
+
+    let lastHeader: string | null = null;
+    for (const mod of folded) {
+      if (mod.header !== lastHeader) {
+        rows.push({ productName: `↳ ${mod.header}`, quantity: 0 });
+        lastHeader = mod.header;
       }
       rows.push({
-        productName: `- ${modName}`,
-        quantity: mod.quantity > 0 ? mod.quantity : 1,
+        productName: `- ${mod.name}`,
+        quantity: mod.quantity,
       });
     }
   }

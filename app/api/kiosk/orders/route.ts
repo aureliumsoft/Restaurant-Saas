@@ -347,6 +347,7 @@ export async function POST(req: NextRequest) {
               total: computedTotal,
               sourceType: OrderSourceType.KIOSK,
               address: addressSnapshot || null,
+              customerComment: cookingNote?.trim() || null,
               diningTableId: selectedTableId ?? undefined,
               tableLabel: selectedTableName ?? undefined,
               taxAmount: 0,

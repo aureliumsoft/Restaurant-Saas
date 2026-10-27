@@ -13,8 +13,10 @@ import {
 
 export type PosOrderReceiptLine = {
   name: string;
-  qty: number;
-  lineTotal: number;
+  /** Null/undefined hides the qty cell (modifier / branch rows). */
+  qty?: number | null;
+  /** Null/undefined hides the amount cell (modifier / branch rows). */
+  lineTotal?: number | null;
 };
 
 export type PrintPosOrderReceiptOptions = {
@@ -30,6 +32,7 @@ export type PrintPosOrderReceiptOptions = {
   customerPhone?: string | null;
   address?: string | null;
   note?: string | null;
+  cutleryRequested?: boolean | null;
   lines: PosOrderReceiptLine[];
   subtotal: number;
   serviceChargeAmount?: number;
@@ -58,6 +61,7 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
     customerPhone,
     address,
     note,
+    cutleryRequested,
     lines,
     subtotal,
     serviceChargeAmount = 0,
@@ -80,13 +84,23 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
     paymentMode === 'cash' ? Math.max(0, paidAmount - grandTotal) : 0;
 
   const rows = lines
-    .map(
-      (line) => `<tr>
-          <td>${escapeHtml(line.name)}</td>
-          <td class="qty">${line.qty}</td>
-          <td class="amt">${escapeHtml(money(line.lineTotal))}</td>
-        </tr>`
-    )
+    .map((line) => {
+      const isMod =
+        line.name.startsWith('↳') ||
+        line.name.startsWith('-') ||
+        line.qty == null;
+      const qtyCell =
+        line.qty != null && line.qty > 0 ? String(line.qty) : '';
+      const amtCell =
+        line.lineTotal != null && Number.isFinite(line.lineTotal)
+          ? escapeHtml(money(line.lineTotal))
+          : '';
+      return `<tr>
+          <td${isMod ? ' class="mod"' : ''}>${escapeHtml(line.name)}</td>
+          <td class="qty">${qtyCell}</td>
+          <td class="amt">${amtCell}</td>
+        </tr>`;
+    })
     .join('');
 
   const receiptHeader = buildThermalReceiptHeaderHtml({
@@ -106,7 +120,7 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
     <div class="r">
       ${receiptHeader}
       <div class="sep"></div>
-      ${ticketNumber != null ? `<div class="receipt-line"><strong>Ticket:</strong> #${ticketNumber}</div>` : ''}
+      ${ticketNumber != null ? `<div class="receipt-ticket">Ticket: #${ticketNumber}</div><div class="sep"></div>` : ''}
       <div class="receipt-line"><strong>Tracking ID:</strong> ${escapeHtml(orderRef)}</div>
       <div class="receipt-line"><strong>Mode:</strong> ${escapeHtml(orderMode)}</div>
       <div class="receipt-line"><strong>Payment:</strong> ${escapeHtml(paymentMethodLabel)}</div>
@@ -115,6 +129,7 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
       ${customerName ? `<div class="receipt-line"><strong>Customer:</strong> ${escapeHtml(customerName)}</div>` : ''}
       ${customerPhone ? `<div class="receipt-line"><strong>Phone:</strong> ${escapeHtml(customerPhone)}</div>` : ''}
       ${address ? `<div class="receipt-line"><strong>Address:</strong> ${escapeHtml(address)}</div>` : ''}
+      ${cutleryRequested ? `<div class="receipt-line"><strong>Cutlery:</strong> yes</div>` : ''}
       ${note ? `<div class="receipt-line"><strong>Note:</strong> ${escapeHtml(note)}</div>` : ''}
       <div class="sep"></div>
       <table>

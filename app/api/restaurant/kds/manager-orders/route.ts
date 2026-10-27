@@ -55,8 +55,16 @@ export async function GET(_req: NextRequest) {
           select: {
             id: true,
             quantity: true,
+            productName: true,
             menuItem: { select: { name: true } },
-            modifiers: { select: { name: true, quantity: true } },
+            modifiers: {
+              select: {
+                name: true,
+                quantity: true,
+                menuItemId: true,
+                groupName: true,
+              },
+            },
           },
         },
         payments: {

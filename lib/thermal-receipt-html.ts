@@ -63,7 +63,7 @@ export function getThermalReceiptDocumentCss(): string {
         flex-direction: column;
         align-items: center;
         font-family: Arial, sans-serif;
-        font-size: 11px;
+        font-size: 10px;
         line-height: 1.35;
       }
       .r {
@@ -101,7 +101,7 @@ export function getThermalReceiptDocumentCss(): string {
         border: 0;
       }
       .receipt-brand {
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 800;
         letter-spacing: 0.04em;
         line-height: 1.2;
@@ -110,16 +110,25 @@ export function getThermalReceiptDocumentCss(): string {
         text-align: center;
         text-transform: uppercase;
       }
-      .receipt-branch { font-size: 11px; margin-top: 2px; text-align: center; }
+      .receipt-branch { font-size: 10px; margin-top: 2px; text-align: center; }
       .receipt-datetime { font-size: 10px; margin-top: 2px; text-align: center; }
-      .receipt-line { font-size: 11px; margin-top: 2px; text-align: left; }
+      .receipt-line { font-size: 10px; margin-top: 2px; text-align: left; }
+      .receipt-line strong { font-size: 11px; font-weight: 700; }
+      .receipt-ticket {
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1.2;
+        margin: 2px 0;
+        text-align: center;
+      }
       .sep { border-top: 1px dashed #111; margin: 6px 0; }
       table { width: 100%; border-collapse: collapse; }
-      th, td { padding: 2px 0; font-size: 11px; vertical-align: top; text-align: left; }
-      th { text-align: left; font-weight: 700; }
+      th, td { padding: 2px 0; font-size: 10px; vertical-align: top; text-align: left; }
+      th { font-size: 11px; text-align: left; font-weight: 700; }
+      td.mod { padding-left: 8px; }
       .qty, .amt { white-space: nowrap; text-align: right; }
-      .totals { margin-top: 4px; text-align: left; width: 100%; }
+      .totals { margin-top: 4px; text-align: left; width: 100%; font-size: 10px; }
       .totals div { display: flex; justify-content: space-between; margin-top: 2px; }
-      .grand { font-weight: 800; font-size: 13px; }
+      .grand { font-weight: 800; font-size: 11px; }
     `;
 }

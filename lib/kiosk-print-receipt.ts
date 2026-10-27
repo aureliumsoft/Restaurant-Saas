@@ -1,6 +1,8 @@
 import { formatCurrency } from '@/lib/format-money';
 import {
   parseCustomerFromAddressSnapshot,
+  parseCutleryFromAddressSnapshot,
+  parseNoteFromAddressSnapshot,
   parseTableFromAddressSnapshot,
 } from '@/lib/order-fulfillment';
 import {
@@ -8,6 +10,7 @@ import {
   type RestaurantRegionalSettings,
 } from '@/lib/restaurant-regional';
 import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
+import { receiptLinesFromOrderItem } from '@/lib/receipt-item-lines';
 import {
   buildThermalReceiptHeaderHtml,
   escapeHtml,
@@ -26,9 +29,8 @@ export type PrintKioskReceiptParams = {
 
 type ReceiptLineItem = {
   name: string;
-  quantity: number;
-  lineTotal: number;
-  modifiers: Array<{ name: string; quantity: number; lineTotal: number }>;
+  quantity: number | null;
+  lineTotal: number | null;
 };
 
 type ReceiptModel = {
@@ -43,10 +45,16 @@ type ReceiptModel = {
   tableName: string | null;
   customerName: string | null;
   customerPhone: string | null;
+  address: string | null;
+  mode: string;
+  cutleryRequested: boolean;
+  note: string | null;
   items: ReceiptLineItem[];
   subtotal: number;
   tax: number;
+  discount: number;
   paidAmount: number;
+  change: number;
   total: number;
   money: (n: number) => string;
 };
@@ -243,9 +251,14 @@ async function loadReceiptModel({
       shortOrderId?: string;
       ticketNumber?: number | null;
       total?: number;
+      taxAmount?: number;
+      discountAmount?: number;
+      branchName?: string | null;
       address?: string | null;
       tableLabel?: string | null;
       tableName?: string | null;
+      cutleryRequested?: boolean;
+      customerComment?: string | null;
       createdAt?: string;
       customer?: { name?: string | null; phone?: string | null } | null;
       payment?: { method?: string; status?: string; amount?: number } | null;
@@ -258,6 +271,8 @@ async function loadReceiptModel({
           name: string;
           quantity: number;
           unitPrice: number;
+          menuItemId?: string | null;
+          groupName?: string | null;
         }>;
       }>;
     };
@@ -273,12 +288,13 @@ async function loadReceiptModel({
     data?: Array<{ id?: string; name?: string | null }>;
   };
 
+  const details = orderBody.data;
   const branchName =
-    branchesBody.data?.find((b) => b.id === branchId)?.name?.trim() ??
-    branchesBody.data?.find((b) => b.name?.trim())?.name?.trim() ??
+    details?.branchName?.trim() ||
+    branchesBody.data?.find((b) => b.id === branchId)?.name?.trim() ||
+    branchesBody.data?.find((b) => b.name?.trim())?.name?.trim() ||
     null;
 
-  const details = orderBody.data;
   const restaurantName = restaurantBody.data?.name?.trim() || 'Restaurant';
   const storedLogo = restaurantBody.data?.logoUrl?.trim() || '';
   const logoUrl = storedLogo.startsWith('data:')
@@ -289,22 +305,40 @@ async function loadReceiptModel({
   const ticketNo = details?.ticketNumber ?? null;
   const trackingId = details?.shortOrderId ?? details?.id ?? orderId;
   const rawItems = details?.items ?? [];
-  const items: ReceiptLineItem[] = rawItems.map((it) => ({
-    name: it.name,
-    quantity: it.quantity,
-    lineTotal: it.price * it.quantity,
-    modifiers: (it.modifiers ?? []).map((m) => ({
-      name: m.name,
-      quantity: m.quantity,
-      lineTotal: m.unitPrice * m.quantity,
-    })),
-  }));
-  const subtotal = items.reduce((sum, it) => sum + it.lineTotal, 0);
+  const items: ReceiptLineItem[] = rawItems.flatMap((it) =>
+    receiptLinesFromOrderItem({
+      name: it.name,
+      quantity: it.quantity,
+      lineTotal: it.price * it.quantity,
+      modifiers: (it.modifiers ?? []).map((m) => ({
+        name: m.name,
+        quantity: m.quantity,
+        unitPrice: m.unitPrice,
+        menuItemId: m.menuItemId ?? null,
+        groupName: m.groupName ?? null,
+      })),
+    }).map((line) => ({
+      name: line.name,
+      quantity: line.qty,
+      lineTotal: line.lineTotal,
+    }))
+  );
+  const subtotal = items.reduce(
+    (sum, it) => sum + (it.lineTotal != null ? it.lineTotal : 0),
+    0
+  );
   const total = details?.total ?? subtotal;
-  const tax = Math.max(0, total - subtotal);
+  const tax =
+    details?.taxAmount != null && Number.isFinite(Number(details.taxAmount))
+      ? Number(details.taxAmount)
+      : Math.max(0, total - subtotal);
+  const discount = Number(details?.discountAmount) || 0;
   const paymentMethod = details?.payment?.method ?? 'Kiosk';
   const paymentState = details?.payment?.status ?? 'pending';
   const paidAmount = details?.payment?.amount ?? total;
+  const isCash = paymentMethod.toLowerCase().includes('cash');
+  const change = isCash ? Math.max(0, paidAmount - total) : 0;
+  const mode = fulfillmentMode(details?.address);
 
   const fromAddress = parseCustomerFromAddressSnapshot(details?.address);
   const customerName =
@@ -318,6 +352,13 @@ async function loadReceiptModel({
     details?.tableName?.trim() ||
     details?.tableLabel?.trim() ||
     parseTableFromAddressSnapshot(details?.address);
+  const cutleryRequested =
+    details?.cutleryRequested === true ||
+    parseCutleryFromAddressSnapshot(details?.address);
+  const note =
+    details?.customerComment?.trim() ||
+    parseNoteFromAddressSnapshot(details?.address) ||
+    null;
 
   return {
     restaurantName,
@@ -333,13 +374,27 @@ async function loadReceiptModel({
     tableName,
     customerName,
     customerPhone,
+    address: details?.address?.trim() || null,
+    mode,
+    cutleryRequested,
+    note,
     items,
     subtotal,
     tax,
+    discount,
     paidAmount,
+    change,
     total,
     money,
   };
+}
+
+function fulfillmentMode(address: string | null | undefined): string {
+  const line = address
+    ?.split('\n')
+    .find((row) => row.trim().toLowerCase().startsWith('fulfillment:'));
+  const value = line?.split(':').slice(1).join(':').trim();
+  return value || 'kiosk';
 }
 
 function buildReceiptPlainText(model: ReceiptModel): string {
@@ -358,30 +413,36 @@ function buildReceiptPlainText(model: ReceiptModel): string {
   if (model.branchName) lines.push(centerText(model.branchName, 48));
   lines.push(centerText(model.dateTime, 48));
   lines.push(sep);
-  if (model.ticketNo != null) lines.push(`Ticket: #${model.ticketNo}`);
-  lines.push(`Tracking: ${model.trackingId}`);
+  if (model.ticketNo != null) {
+    lines.push(centerText(`Ticket: #${model.ticketNo}`, 48));
+    lines.push(sep);
+  }
+  lines.push(`Tracking ID: ${model.trackingId}`);
+  lines.push(`Mode: ${model.mode}`);
   lines.push(`Payment: ${model.paymentMethod}`);
   lines.push(`Status: ${model.paymentState}`);
   if (model.tableName && !model.customerName?.toLowerCase().endsWith(' customer')) {
     lines.push(`Table: ${model.tableName}`);
   }
   if (model.customerName) lines.push(`Customer: ${model.customerName}`);
-  if (model.customerPhone) lines.push(`Phone: ${model.customerPhone}`);
+  if (model.address) lines.push(`Address: ${model.address.replace(/\s*\n\s*/g, ' ')}`);
+  lines.push(`Phone: ${model.customerPhone || 'N/A'}`);
+  if (model.cutleryRequested) lines.push('Cutlery: yes');
+  if (model.note) lines.push(`Note: ${model.note}`);
   lines.push(sep);
   lines.push(line('Item', 'Amt'));
   for (const it of model.items) {
-    lines.push(line(`${it.quantity}x ${it.name}`, model.money(it.lineTotal)));
-    for (const m of it.modifiers) {
-      lines.push(
-        line(`  ${m.quantity}x ${m.name}`, model.money(m.lineTotal))
-      );
-    }
+    const qty = it.quantity != null && it.quantity > 0 ? String(it.quantity) : '';
+    const amt = it.lineTotal != null ? model.money(it.lineTotal) : '';
+    lines.push(line(it.name, [qty, amt].filter(Boolean).join('  ')));
   }
   if (model.items.length === 0) lines.push('No items');
   lines.push(sep);
   lines.push(line('Subtotal', model.money(model.subtotal)));
   lines.push(line('Tax', model.money(model.tax)));
+  lines.push(line('Discount', model.money(model.discount)));
   lines.push(line('Paid', model.money(model.paidAmount)));
+  lines.push(line('Change', model.money(model.change)));
   lines.push(line('TOTAL', model.money(model.total)));
   lines.push(sep);
   lines.push(centerText('Thank you!', 48));
@@ -410,41 +471,45 @@ function receiptForBitmap(model: ReceiptModel) {
     !!model.customerName &&
     model.customerName.toLowerCase().endsWith(' customer');
   const meta: Array<{ label: string; value: string }> = [];
-  if (model.ticketNo != null) meta.push({ label: 'Ticket', value: '#' + model.ticketNo });
-  meta.push({ label: 'Tracking', value: model.trackingId });
+  meta.push({ label: 'Tracking ID', value: model.trackingId });
+  meta.push({ label: 'Mode', value: model.mode });
   meta.push({ label: 'Payment', value: model.paymentMethod });
   meta.push({ label: 'Status', value: model.paymentState });
   if (model.tableName && !isDineInDisplayName) {
     meta.push({ label: 'Table', value: model.tableName });
   }
   if (model.customerName) meta.push({ label: 'Customer', value: model.customerName });
+  if (model.address) {
+    meta.push({ label: 'Address', value: model.address.replace(/\s*\n\s*/g, ' ') });
+  }
   meta.push({ label: 'Phone', value: model.customerPhone || 'N/A' });
+  if (model.cutleryRequested) meta.push({ label: 'Cutlery', value: 'yes' });
+  if (model.note) meta.push({ label: 'Note', value: model.note });
 
-  const items = model.items.flatMap((it) => [
-    {
-      name: it.name,
-      quantity: it.quantity,
-      amount: model.money(it.lineTotal),
-    },
-    ...it.modifiers.map((m) => ({
-      name: m.name,
-      quantity: m.quantity,
-      amount: model.money(m.lineTotal),
-      indent: true,
-    })),
-  ]);
+  const items = model.items.map((it) => ({
+    name: it.name,
+    quantity: it.quantity != null && it.quantity > 0 ? it.quantity : undefined,
+    amount: it.lineTotal != null ? model.money(it.lineTotal) : '',
+    indent:
+      it.name.startsWith('↳') ||
+      it.name.startsWith('-') ||
+      it.quantity == null,
+  }));
 
   return {
     logoUrl: model.logoUrl,
     restaurantName: model.restaurantName,
     branchName: model.branchName,
     dateTime: model.dateTime,
+    ticket: model.ticketNo != null ? `Ticket: #${model.ticketNo}` : null,
     meta,
     items,
     totals: [
       { label: 'Subtotal', value: model.money(model.subtotal) },
       { label: 'Tax', value: model.money(model.tax) },
+      { label: 'Discount', value: model.money(model.discount) },
       { label: 'Paid', value: model.money(model.paidAmount) },
+      { label: 'Change', value: model.money(model.change) },
       { label: 'Total', value: model.money(model.total), bold: true },
     ],
     footer: 'Thank you!',
@@ -553,6 +618,9 @@ function buildReceiptHtml(model: ReceiptModel): string {
     model.customerName
       ? `<div class="receipt-line"><strong>Customer:</strong> ${escapeHtml(model.customerName)}</div>`
       : '',
+    model.address
+      ? `<div class="receipt-line"><strong>Address:</strong> ${escapeHtml(model.address.replace(/\s*\n\s*/g, ' '))}</div>`
+      : '',
     `<div class="receipt-line"><strong>Phone:</strong> ${escapeHtml(model.customerPhone || 'N/A')}</div>`,
   ]
     .filter(Boolean)
@@ -560,20 +628,19 @@ function buildReceiptHtml(model: ReceiptModel): string {
 
   const rows = model.items
     .map((it) => {
-      const modifierRows = it.modifiers
-        .map(
-          (m) => `<tr>
-<td style="padding-left:10px;color:#555;">${escapeHtml(m.name)}</td>
-<td class="qty">${m.quantity}</td>
-<td class="amt">${escapeHtml(model.money(m.lineTotal))}</td>
-</tr>`
-        )
-        .join('');
+      const isMod =
+        it.name.startsWith('↳') ||
+        it.name.startsWith('-') ||
+        it.quantity == null;
+      const qtyCell =
+        it.quantity != null && it.quantity > 0 ? String(it.quantity) : '';
+      const amtCell =
+        it.lineTotal != null ? escapeHtml(model.money(it.lineTotal)) : '';
       return `<tr>
-<td>${escapeHtml(it.name)}</td>
-<td class="qty">${it.quantity}</td>
-<td class="amt">${escapeHtml(model.money(it.lineTotal))}</td>
-</tr>${modifierRows}`;
+<td${isMod ? ' class="mod"' : ''}>${escapeHtml(it.name)}</td>
+<td class="qty">${qtyCell}</td>
+<td class="amt">${amtCell}</td>
+</tr>`;
     })
     .join('');
 
@@ -583,6 +650,17 @@ function buildReceiptHtml(model: ReceiptModel): string {
     branchName: model.branchName,
     dateTime: model.dateTime,
   });
+
+  const extras = [
+    model.cutleryRequested
+      ? `<div class="receipt-line"><strong>Cutlery:</strong> yes</div>`
+      : '',
+    model.note
+      ? `<div class="receipt-line"><strong>Note:</strong> ${escapeHtml(model.note)}</div>`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('');
 
   return `<!doctype html>
 <html>
@@ -594,11 +672,13 @@ function buildReceiptHtml(model: ReceiptModel): string {
   <div class="r">
     ${receiptHeader}
     <div class="sep"></div>
-    ${model.ticketNo != null ? `<div class="receipt-line"><strong>Ticket:</strong> #${model.ticketNo}</div>` : ''}
-    <div class="receipt-line"><strong>Tracking:</strong> ${escapeHtml(model.trackingId)}</div>
+    ${model.ticketNo != null ? `<div class="receipt-ticket">Ticket: #${model.ticketNo}</div><div class="sep"></div>` : ''}
+    <div class="receipt-line"><strong>Tracking ID:</strong> ${escapeHtml(model.trackingId)}</div>
+    <div class="receipt-line"><strong>Mode:</strong> ${escapeHtml(model.mode)}</div>
     <div class="receipt-line"><strong>Payment:</strong> ${escapeHtml(model.paymentMethod)}</div>
     <div class="receipt-line"><strong>Status:</strong> ${escapeHtml(model.paymentState)}</div>
     ${metaLines}
+    ${extras}
     <div class="sep"></div>
     <table>
       <thead>
@@ -610,7 +690,9 @@ function buildReceiptHtml(model: ReceiptModel): string {
     <div class="totals">
       <div><span>Subtotal</span><span>${escapeHtml(model.money(model.subtotal))}</span></div>
       <div><span>Tax</span><span>${escapeHtml(model.money(model.tax))}</span></div>
+      <div><span>Discount</span><span>${escapeHtml(model.money(model.discount))}</span></div>
       <div><span>Paid</span><span>${escapeHtml(model.money(model.paidAmount))}</span></div>
+      <div><span>Change</span><span>${escapeHtml(model.money(model.change))}</span></div>
       <div class="grand"><span>Total</span><span>${escapeHtml(model.money(model.total))}</span></div>
     </div>
     <div class="sep"></div>
