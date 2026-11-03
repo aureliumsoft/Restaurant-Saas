@@ -17,6 +17,9 @@ import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
+import { useBilingualText } from '@/hooks/use-bilingual-text';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import type { UiLanguage } from '@/lib/i18n/resources';
 import {
   useOpenTableOrders,
   markOpenTableOrderKitchenSent,
@@ -103,9 +106,12 @@ function isUnpaid(order: OpenTableOrderRow): boolean {
   return s === 'pending' || s === 'pedding' || s === '';
 }
 
-function itemsPreview(order: OpenTableOrderRow): string {
+function itemsPreview(order: OpenTableOrderRow, lang: UiLanguage): string {
   return order.items
-    .map((it) => (it.quantity > 1 ? `${it.quantity}× ${it.name}` : it.name))
+    .map((it) => {
+      const name = resolveBilingualText(it.name, lang) || it.name;
+      return it.quantity > 1 ? `${it.quantity}× ${name}` : name;
+    })
     .join(' · ');
 }
 
@@ -135,6 +141,7 @@ export function PosTableOrdersSheet({
   onOrdersChanged,
 }: Props) {
   const { t } = useTranslation();
+  const { lang: uiLang } = useBilingualText();
   const { formatMoney } = useOwnerRestaurantRegional();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
   const onscreenKeyboardEnabled = fulfillmentSettings.onscreenKeyboardEnabled;
@@ -633,7 +640,7 @@ export function PosTableOrdersSheet({
                           const kitchen = kitchenTone(order, t);
                           const unpaid = isUnpaid(order);
                           const expanded = expandedTicketIds.has(order.id);
-                          const preview = itemsPreview(order);
+                          const preview = itemsPreview(order, uiLang);
 
                           return (
                             <li key={order.id} className="px-3 py-2.5">
@@ -713,7 +720,8 @@ export function PosTableOrdersSheet({
                                       className="flex justify-between gap-2"
                                     >
                                       <span className="min-w-0 truncate">
-                                        {it.name}
+                                        {resolveBilingualText(it.name, uiLang) ||
+                                          it.name}
                                       </span>
                                       <span className="shrink-0 tabular-nums">
                                         ×{it.quantity}

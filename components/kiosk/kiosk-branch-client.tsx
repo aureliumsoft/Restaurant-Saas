@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { Suspense, useEffect, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +10,18 @@ import {
   CustomerAccountProvider,
   useCustomerAccount,
 } from '@/components/customer-app/customer-account-context';
-import { KioskApp } from '@/components/kiosk/kiosk-app';
+
+const KioskApp = dynamic(
+  () => import('@/components/kiosk/kiosk-app').then((m) => m.KioskApp),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">
+        Loading kiosk…
+      </div>
+    ),
+  }
+);
 
 function KioskCustomerSlugSync({
   slug,

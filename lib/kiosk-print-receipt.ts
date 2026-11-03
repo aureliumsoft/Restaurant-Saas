@@ -69,6 +69,8 @@ export type SunmiPrinterBridge = {
   printerInit?: (callback?: unknown) => unknown;
   lineWrap?: (n: number, callback?: unknown) => unknown;
   cutPaper?: (callback?: unknown) => unknown;
+  /** Sunmi text size in printer points (larger ≈ easier to read). */
+  setFontSize?: (size: number, callback?: unknown) => unknown;
   /** Stringly typed helpers some wrappers expose. */
   print?: (text: string) => unknown;
   /** PNG data URL or raw base64. Printed full width and centered. */
@@ -469,6 +471,9 @@ function escPosFeed(lines: number): number[] {
   return [0x1b, 0x64, Math.max(0, Math.min(255, lines))];
 }
 
+/** Almost double default thermal type for kiosk kitchen/customer tickets. */
+const KIOSK_RECEIPT_FONT_SCALE = 2;
+
 function receiptForBitmap(model: ReceiptModel) {
   const isDineInDisplayName =
     !!model.customerName &&
@@ -517,6 +522,7 @@ function receiptForBitmap(model: ReceiptModel) {
     ],
     footer: 'Thank you!',
     widthDots: PAPER_80MM_DOTS,
+    fontScale: KIOSK_RECEIPT_FONT_SCALE,
   };
 }
 
@@ -578,6 +584,15 @@ async function printViaSunmiBridge(
         bridge.printerInit();
       } catch {
         // some bridges require a callback; ignore init failures
+      }
+    }
+
+    // Default Sunmi text is ~24pt; ~48pt is roughly double for text fallbacks.
+    if (typeof bridge.setFontSize === 'function') {
+      try {
+        bridge.setFontSize(48);
+      } catch {
+        // ignore — not all bridges implement this
       }
     }
 
@@ -669,7 +684,7 @@ function buildReceiptHtml(model: ReceiptModel): string {
 <html>
 <head>
   <title>Kiosk Ticket</title>
-  <style>${getThermalReceiptDocumentCss()}</style>
+  <style>${getThermalReceiptDocumentCss({ fontScale: KIOSK_RECEIPT_FONT_SCALE })}</style>
 </head>
 <body>
   <div class="r">

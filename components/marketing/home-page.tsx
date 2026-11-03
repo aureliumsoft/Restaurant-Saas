@@ -10,6 +10,7 @@ import {
   LandingHeroSection,
   LandingStatsSection,
 } from '@/components/marketing/landing-classic-sections';
+import { LandingProofSection } from '@/components/marketing/landing-proof-section';
 import {
   ProductStoryFontScope,
   ProductStorySections,
@@ -23,6 +24,7 @@ export function HomePage() {
 
         <main className="marketing-site-main relative w-full overflow-x-hidden">
           <LandingHeroSection />
+          <LandingProofSection />
           <LandingFeaturesSection />
           <LandingStatsSection />
           <ProductStorySections />

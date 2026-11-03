@@ -2735,7 +2735,7 @@ export function PosScreen({
         branchId: selectedBranchId || undefined,
         items: cart.map((l) => ({
           productId: l.menuItemId,
-          name: cartLineTitle(l.productName, l.variationName),
+          name: cartLineTitle(l.productName, l.variationName, uiLang),
           qty: l.qty,
           unitPrice: lineUnitTotal(l),
           lineDiscPct: l.lineDiscPct,
@@ -5147,15 +5147,21 @@ export function PosScreen({
                                 {'productName' in line
                                   ? cartLineTitle(
                                     (line as CartLine).productName,
-                                    (line as CartLine).variationName
+                                    (line as CartLine).variationName,
+                                    uiLang
                                   )
-                                  : (line as { name?: string }).name}
+                                  : resolveBilingualText(
+                                      (line as { name?: string }).name,
+                                      uiLang
+                                    ) ||
+                                    (line as { name?: string }).name}
                               </span>
                               {'modifiers' in line &&
                                 Array.isArray((line as CartLine).modifiers) ? (
                                 <span className="mt-0.5 block space-y-0.5">
                                   {cartModifierSelectionNames(
-                                    (line as CartLine).modifiers
+                                    (line as CartLine).modifiers,
+                                    uiLang
                                   ).map((name, index) => (
                                     <span
                                       key={`${order.id}-${line.lineId}-sel-${index}`}

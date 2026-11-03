@@ -2,6 +2,11 @@ import {
   cartLineTitle,
   recommendationGroupDisplayLabel,
 } from '@/lib/cart-line-display';
+import {
+  DEFAULT_UI_LANGUAGE,
+  type UiLanguage,
+} from '@/lib/i18n/resources';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
 
 export type KitchenTicketModifierInput = {
@@ -30,28 +35,34 @@ export function isKitchenPersonalizeModifier(mod: {
 }
 
 /** Main product line only — modifiers are separate kitchen ticket rows. */
-export function kitchenTicketMainLineName(line: KitchenTicketLineInput): string {
+export function kitchenTicketMainLineName(
+  line: KitchenTicketLineInput,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
+): string {
   // Prefer the order snapshot so parent variation in `Product (XL)` is kept.
   // Live menuItem.name is the base product only and would hide the variation.
   const snap = line.productName?.trim();
   if (snap) {
     const stripped = stripLegacyEmbeddedModifierSuffix(snap);
     if (stripped) {
+      const resolvedSnap = resolveBilingualText(stripped, lang).trim() || stripped;
       const variation = line.variationName?.trim();
-      if (
-        variation &&
-        !stripped.toLowerCase().includes(`(${variation.toLowerCase()})`)
-      ) {
-        return cartLineTitle(stripped, variation);
+      if (variation) {
+        const resolvedVar = resolveBilingualText(variation, lang).trim() || variation;
+        if (
+          !resolvedSnap.toLowerCase().includes(`(${resolvedVar.toLowerCase()})`)
+        ) {
+          return cartLineTitle(stripped, variation, lang);
+        }
       }
-      return stripped;
+      return resolvedSnap;
     }
   }
 
   const fromMenu = line.menuItem?.name?.trim();
-  if (fromMenu) return cartLineTitle(fromMenu, line.variationName);
+  if (fromMenu) return cartLineTitle(fromMenu, line.variationName, lang);
 
-  return cartLineTitle(line.productName ?? 'Item', line.variationName);
+  return cartLineTitle(line.productName ?? 'Item', line.variationName, lang);
 }
 
 /** Strip trailing `(a, b; Group: x)` baked modifier lists; keep simple `(variation)`. */
@@ -118,28 +129,31 @@ function isSizeLikeChildName(parentName: string, childName: string): boolean {
  * (same as cart), e.g. "Los Tacos Chuncky" + "Los Tacos Chuncky (TALLA XL)".
  */
 export function buildKitchenTicketItemRows(
-  lines: KitchenTicketLineInput[]
+  lines: KitchenTicketLineInput[],
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): { productName: string; quantity: number }[] {
   const rows: { productName: string; quantity: number }[] = [];
 
   for (const line of lines) {
     rows.push({
-      productName: kitchenTicketMainLineName(line),
+      productName: kitchenTicketMainLineName(line, lang),
       quantity: line.quantity,
     });
 
     const personalize: KitchenTicketModifierInput[] = [];
     const others: KitchenTicketModifierInput[] = [];
     for (const mod of line.modifiers) {
-      const modName = String(mod.name || '').trim();
+      const modName = resolveBilingualText(mod.name, lang).trim();
       if (!modName) continue;
       if (isKitchenPersonalizeModifier(mod)) personalize.push(mod);
       else others.push(mod);
     }
 
     for (const mod of personalize) {
+      const name = resolveBilingualText(mod.name, lang).trim();
+      if (!name) continue;
       rows.push({
-        productName: `${KITCHEN_PERSONALIZE_MARKER}${String(mod.name).trim()}`,
+        productName: `${KITCHEN_PERSONALIZE_MARKER}${name}`,
         quantity: 0,
       });
     }
@@ -151,8 +165,12 @@ export function buildKitchenTicketItemRows(
     };
     const folded: Folded[] = [];
     for (const mod of others) {
-      const modName = String(mod.name || '').trim();
-      const header = recommendationGroupDisplayLabel(mod.groupName || 'Add-ons');
+      const modName = resolveBilingualText(mod.name, lang).trim();
+      if (!modName) continue;
+      const header = recommendationGroupDisplayLabel(
+        mod.groupName || 'Add-ons',
+        lang
+      );
       const qty = mod.quantity > 0 ? mod.quantity : 1;
       const previous = folded[folded.length - 1];
       if (

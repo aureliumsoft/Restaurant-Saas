@@ -247,9 +247,6 @@ function configurationItemPickerPrice(
     {},
     { group, parentVariation }
   );
-  const nestedVariation = nestedVariationId
-    ? (item.variations ?? []).find((v) => v.id === nestedVariationId)
-    : undefined;
   const listUnit =
     group.defaultLinkedRestaurantVariationId &&
     !(group.useVariationPricing ?? false)
@@ -268,8 +265,7 @@ function configurationItemPickerPrice(
   const defaultListUnit = configurationDefaultListUnitPriceForSelection(
     group,
     parentVariation,
-    visible,
-    nestedVariation ?? null
+    visible
   );
   const itemQty = groupSelectedIds.filter(
     (id) => id === item.menuItemId
@@ -1792,34 +1788,33 @@ export function ProductCustomizeDialog({
             )}
           </div>
 
-          <div className="relative h-[min(42vw,15.5rem)] w-full shrink-0 overflow-hidden bg-white lg:hidden">
-            {productImageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- arbitrary menu image URLs
-              <img
-                src={productImageUrl}
-                alt={productName}
-                className="h-full w-full object-contain"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center bg-[#f7f7f9] text-sm text-muted-foreground">
-                {t('noImage')}
-              </div>
-            )}
+          <div className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col lg:w-[390px] lg:max-w-[390px] lg:flex-none">
             <SheetClose asChild>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="absolute right-3 top-3 h-9 w-9 rounded-full bg-white/95 text-muted-foreground shadow-sm hover:bg-white hover:text-foreground"
+                className="absolute right-3 top-3 z-20 h-9 w-9 rounded-full bg-white/95 text-muted-foreground shadow-sm hover:bg-white hover:text-foreground lg:hidden"
                 aria-label={t('closeAria')}
               >
                 <X className="h-5 w-5" />
               </Button>
             </SheetClose>
-          </div>
-
-          <div className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col lg:w-[390px] lg:max-w-[390px] lg:flex-none">
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6 pb-6 pt-6">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6 pb-6 pt-0 lg:pt-6">
+              <div className="relative -mx-6 mb-6 aspect-[4/3] overflow-hidden bg-[#f7f7f9] lg:hidden">
+                {productImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- arbitrary menu image URLs
+                  <img
+                    src={productImageUrl}
+                    alt={productName}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    {t('noImage')}
+                  </div>
+                )}
+              </div>
               <SheetHeader className="space-y-0 p-0 text-left">
                 <div className="flex items-start justify-between gap-3">
                   <SheetTitle className="mb-[15px] text-balance text-[30px] font-bold uppercase leading-[40px] text-primary">

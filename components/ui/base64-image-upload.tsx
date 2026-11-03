@@ -25,7 +25,7 @@ type Props = {
   helperText?: string;
   /** Max original file size before encode (MB). Default 8. */
   maxMb?: number;
-  /** Target max encoded size (MB). Default 1.5. */
+  /** Target max encoded size (MB). Default 1.0. */
   maxEncodedMb?: number;
 };
 
@@ -36,7 +36,7 @@ export function Base64ImageUploadField({
   placeholder = 'https://example.com/image.jpg',
   helperText,
   maxMb = 8,
-  maxEncodedMb = 1.5,
+  maxEncodedMb = 1,
 }: Props) {
   const { t } = useTranslation();
   const id = useId();
@@ -78,8 +78,8 @@ export function Base64ImageUploadField({
     setLocalError(null);
     try {
       const dataUrl = await fileToOptimizedDataUrl(file, {
-        maxEdge: 1600,
-        quality: 0.85,
+        maxEdge: 1200,
+        quality: 0.8,
         maxBytes: Math.floor(maxEncodedMb * 1024 * 1024),
       });
 

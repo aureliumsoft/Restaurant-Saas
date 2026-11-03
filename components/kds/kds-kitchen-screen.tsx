@@ -48,6 +48,8 @@ import { enqueueOrderOutbox, isOfflineLocalOrderId } from '@/lib/offline/outbox'
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { i18n } from '@/lib/i18n/client';
+import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 
 type Ticket = {
   id: string;
@@ -90,15 +92,7 @@ function trackingLabel(t: {
 }
 
 function getLocalizedName(val: string, lang: string) {
-  try {
-    const obj = JSON.parse(val);
-    if (typeof obj === 'object' && obj !== null) {
-      return obj[lang] || obj.en || Object.values(obj)[0] || val;
-    }
-    return val;
-  } catch {
-    return val;
-  }
+  return resolveBilingualText(val, normalizeUiLanguage(lang));
 }
 
 function getOrderMethodLabel(t: Ticket, tr: any) {

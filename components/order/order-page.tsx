@@ -1441,7 +1441,7 @@ export default function OrderPageClient({
       ) : (
         <div className="divide-y divide-[#ececf0]">
           {cart.map((line) => {
-            const modifierLines = cartModifierDisplayLines(line.modifiers);
+            const modifierLines = cartModifierDisplayLines(line.modifiers, uiLang);
             const canModify =
               Boolean(line.variationId) || line.modifiers.length > 0;
 
@@ -1449,7 +1449,7 @@ export default function OrderPageClient({
               <div key={line.lineId} className="py-4 first:pt-1 last:pb-1">
                 <div className="flex items-start justify-between gap-3">
                   <p className="min-w-0 flex-1 text-sm font-bold leading-snug text-primary">
-                    {cartLineTitle(line.productName, line.variationName)}
+                    {cartLineTitle(line.productName, line.variationName, uiLang)}
                   </p>
                   <span className="shrink-0 text-sm font-bold text-primary">
                     {formatMoney(lineTotal(line))}

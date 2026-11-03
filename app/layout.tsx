@@ -13,15 +13,15 @@ import { parseUiLanguage } from '@/lib/i18n/language-cookie';
 import { UI_LANG_STORAGE_KEY } from '@/lib/i18n/resources';
 import { getAppSession } from '@/lib/auth/app-session';
 import {
-  getPlatformSetting,
+  getPlatformSettingsMap,
   normalizeGa4MeasurementId,
   normalizeGtmContainerId,
+  SEO_TRACKING_SETTING_KEYS,
 } from '@/lib/platform-settings';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const verification = (
-    await getPlatformSetting('seo_google_site_verification')
-  ).trim();
+  const settings = await getPlatformSettingsMap(SEO_TRACKING_SETTING_KEYS);
+  const verification = (settings.seo_google_site_verification ?? '').trim();
 
   return {
     title: 'Foodluk',
@@ -46,14 +46,17 @@ export default async function RootLayout({
   const initialLanguage = parseUiLanguage(
     cookieStore.get(UI_LANG_STORAGE_KEY)?.value
   );
-  const session = await getAppSession();
+  const [session, settings] = await Promise.all([
+    getAppSession(),
+    getPlatformSettingsMap(SEO_TRACKING_SETTING_KEYS),
+  ]);
   const gtmId = normalizeGtmContainerId(
-    (await getPlatformSetting('seo_gtm_container_id')) ||
+    settings.seo_gtm_container_id ||
       process.env.NEXT_PUBLIC_GTM_CONTAINER_ID ||
       ''
   );
   const gaId = normalizeGa4MeasurementId(
-    (await getPlatformSetting('seo_ga4_measurement_id')) ||
+    settings.seo_ga4_measurement_id ||
       process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID ||
       ''
   );

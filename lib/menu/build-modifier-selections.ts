@@ -111,8 +111,7 @@ export function buildModifierSelectionsForGroups(
         const defaultListUnit = configurationDefaultListUnitPriceForSelection(
           g,
           parentVariation,
-          visibleItems,
-          nestedVariation ?? null
+          visibleItems
         );
         const unit = configurationChargeableAddonUnit(
           listUnit,

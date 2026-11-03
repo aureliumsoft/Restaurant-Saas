@@ -20,9 +20,13 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
+import { marketingWhatsAppUrl } from '@/lib/marketing/whatsapp';
 
 export function LandingHeroSection() {
   const { t } = useTranslation();
+  const whatsappHref = marketingWhatsAppUrl(
+    t('marketing.hero.whatsappPrefill')
+  );
 
   const features = [
     {
@@ -43,7 +47,7 @@ export function LandingHeroSection() {
             {t('marketing.hero.badge')}
           </span>
 
-          <h1 className="mt-6 text-5xl font-extrabold leading-[1.05] tracking-tight md:text-6xl lg:text-7xl">
+          <h1 className="mt-6 text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
             {t('marketing.hero.headline')}
             <br />
             <span className="text-fire-500">
@@ -51,7 +55,7 @@ export function LandingHeroSection() {
             </span>
           </h1>
 
-          <p className="mt-6 max-w-md text-base text-zinc-600 dark:text-zinc-400 md:text-lg">
+          <p className="mt-6 max-w-lg text-base text-zinc-600 dark:text-zinc-400 md:text-lg">
             {t('marketing.hero.subhead1')}{' '}
             <span className="font-semibold text-zinc-900 dark:text-white">
               {t('marketing.hero.subhead2')}
@@ -59,12 +63,15 @@ export function LandingHeroSection() {
             {t('marketing.hero.subhead3')}
           </p>
 
-          <div className="mt-10 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+          <div className="mt-10 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Button
               asChild
               className="h-12 rounded-lg bg-gradient-to-br from-fire-400 via-fire-500 to-fire-600 pl-2 pr-7 text-base font-semibold text-white shadow-[0_14px_40px_-10px] shadow-fire-500/60 transition-all hover:from-fire-500 hover:to-fire-700 hover:shadow-fire-500/80"
             >
-              <Link href="/register" className="inline-flex items-center gap-3">
+              <Link
+                href="/demo-request"
+                className="inline-flex items-center gap-3"
+              >
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-fire-500">
                   <Play className="h-4 w-4 fill-current" />
                 </span>
@@ -76,17 +83,28 @@ export function LandingHeroSection() {
               asChild
               className="h-12 rounded-lg border border-zinc-200 bg-white px-7 text-base font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white dark:hover:bg-zinc-900"
             >
-              <Link
-                href="/demo-request"
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-3"
               >
                 {t('marketing.hero.ctaSecondary')}
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-900 text-white dark:bg-zinc-800">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white">
                   <ArrowRight className="h-3.5 w-3.5" />
                 </span>
-              </Link>
+              </a>
             </Button>
           </div>
+
+          <p className="mt-3 text-sm">
+            <Link
+              href="/register"
+              className="font-medium text-fire-600 underline-offset-4 hover:underline dark:text-fire-400"
+            >
+              {t('marketing.hero.ctaTrial')}
+            </Link>
+          </p>
 
           <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-500">
             {t('marketing.hero.fineprint')}

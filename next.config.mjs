@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Slimmer Coolify/Nixpacks runtime (no full node_modules tree in the start image).
+  output: 'standalone',
   async redirects() {
     // Avoid /orders (confusing vs middleware `/order*` → web-app); canonical list is /sales
     return [{ source: '/orders', destination: '/sales', permanent: true }];

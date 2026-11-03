@@ -8,8 +8,6 @@ import { applyProductRecommendationPools } from '@/lib/menu/apply-product-recomm
 import {
   buildCustomerMenuAttributeGroupsSelect,
   buildCustomerMenuAttributeGroupsSelectLegacy,
-  customerMenuItemCoreSelect,
-  customerMenuItemCoreSelectLegacy,
   customerMenuLinkedItemCoreSelect,
   customerMenuLinkedItemCoreSelectLegacy,
   type CustomerMenuSelectMode,
@@ -21,8 +19,17 @@ import {
   sanitizeCustomerMenuPayload,
 } from '@/lib/menu/category-visibility';
 import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
+import {
+  attachCustomerLazyImages,
+  imageMetaByCategoryIds,
+  restaurantBrandingFlags,
+} from '@/lib/menu/menu-item-image-utils';
 import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
 import { MENU_ITEM_VARIATION_SELLABLE_WHERE } from '@/lib/menu/variation-sellable';
+import {
+  customerCategoryImageUrl,
+  publicRestaurantImageUrls,
+} from '@/lib/stored-image-response';
 
 export function isPrismaSchemaDriftError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -37,10 +44,11 @@ export function isPrismaSchemaDriftError(error: unknown): boolean {
 }
 
 function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
+  // Linked core omits imageUrl blobs; lazy /image URLs stamped after load.
   const itemCore =
     mode === 'full'
-      ? customerMenuItemCoreSelect
-      : customerMenuItemCoreSelectLegacy;
+      ? customerMenuLinkedItemCoreSelect
+      : customerMenuLinkedItemCoreSelectLegacy;
   const buildGroups =
     mode === 'full'
       ? buildCustomerMenuAttributeGroupsSelect
@@ -63,11 +71,20 @@ function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
                   id: true,
                   name: true,
                   description: true,
-                  imageUrl: true,
                   price: true,
                   salePrice: true,
+                  updatedAt: true,
                   variations: {
                     where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
+                    orderBy: { sortOrder: 'asc' as const },
+                    select: {
+                      id: true,
+                      name: true,
+                      title: true,
+                      swatchHex: true,
+                      priceDelta: true,
+                      sortOrder: true,
+                    },
                   },
                 },
               },
@@ -83,9 +100,9 @@ function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
                   id: true,
                   name: true,
                   description: true,
-                  imageUrl: true,
                   price: true,
                   salePrice: true,
+                  updatedAt: true,
                 },
               },
             },
@@ -96,7 +113,6 @@ function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
 }
 
 function buildRecommendationPoolItemSelect(mode: CustomerMenuSelectMode) {
-  // Pool feeds recommendation option lists — never embed image blobs.
   const itemCore =
     mode === 'full'
       ? customerMenuLinkedItemCoreSelect
@@ -115,8 +131,6 @@ function buildRecommendationPoolItemSelect(mode: CustomerMenuSelectMode) {
 const restaurantPublicSelect = {
   id: true,
   name: true,
-  logoUrl: true,
-  mainBannerUrl: true,
   themePrimaryColor: true,
   subdomain: true,
   slug: true,
@@ -124,19 +138,80 @@ const restaurantPublicSelect = {
   ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
 } as const;
 
+async function stampMenusLazyImages<
+  T extends {
+    id: string;
+    updatedAt?: Date | string | number | null;
+    imageUrl?: string | null;
+    items?: unknown[];
+  },
+>(
+  menus: T[],
+  query: { slug?: string | null; subdomain?: string | null }
+): Promise<T[]> {
+  const categoryMeta = await imageMetaByCategoryIds(menus.map((m) => m.id));
+  return Promise.all(
+    menus.map(async (cat) => {
+      const meta = categoryMeta.get(cat.id);
+      const hasImage = meta?.hasImage ?? false;
+      const items = await Promise.all(
+        ((cat.items ?? []) as object[]).map((item) =>
+          attachCustomerLazyImages(item, query)
+        )
+      );
+      return {
+        ...cat,
+        imageUrl: hasImage
+          ? customerCategoryImageUrl(cat.id, {
+              ...query,
+              updatedAt: meta?.updatedAt ?? cat.updatedAt,
+            })
+          : null,
+        items,
+      };
+    })
+  );
+}
+
 async function enrichRestaurantMenuForCustomer<
-  T extends { id: string; menus: unknown } & RestaurantServiceChargeRow,
->(restaurant: T, mode: CustomerMenuSelectMode) {
-  const allCategories = await loadRestaurantMenuCategories({
+  T extends {
+    id: string;
+    slug: string;
+    updatedAt?: Date | string | number | null;
+    menus: unknown;
+  } & RestaurantServiceChargeRow,
+>(
+  restaurant: T,
+  mode: CustomerMenuSelectMode,
+  query: { slug?: string | null; subdomain?: string | null },
+  branding: { hasLogo: boolean; hasMainBanner: boolean }
+) {
+  const allCategoriesRaw = await loadRestaurantMenuCategories({
     restaurantId: restaurant.id,
-    categorySelect: { id: true, name: true, sortOrder: true },
+    categorySelect: { id: true, name: true, sortOrder: true, updatedAt: true },
     itemSelect: buildRecommendationPoolItemSelect(mode),
     categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
   });
+  const allCategories = await stampMenusLazyImages(allCategoriesRaw, query);
+  const menus = await stampMenusLazyImages(
+    restaurant.menus as Parameters<typeof stampMenusLazyImages>[0],
+    query
+  );
+
+  const withImages = {
+    ...restaurant,
+    ...publicRestaurantImageUrls(restaurant.slug, {
+      hasLogo: branding.hasLogo,
+      hasMainBanner: branding.hasMainBanner,
+      updatedAt: restaurant.updatedAt,
+    }),
+    menus,
+  };
+
   return {
     ...sanitizeCustomerMenuPayload(
       applyProductRecommendationPools(
-        restaurant as Parameters<typeof applyProductRecommendationPools>[0],
+        withImages as Parameters<typeof applyProductRecommendationPools>[0],
         allCategories
       )
     ),
@@ -154,15 +229,23 @@ async function loadBySlugWithMode(
     select: restaurantPublicSelect,
   });
   if (!restaurant) return null;
-  const branch = await db.branch.findFirst({
-    where: { id: branchId, restaurantId: restaurant.id, isActive: true },
-    select: { id: true },
-  });
+  const [branch, branding] = await Promise.all([
+    db.branch.findFirst({
+      where: { id: branchId, restaurantId: restaurant.id, isActive: true },
+      select: { id: true },
+    }),
+    restaurantBrandingFlags(restaurant.id),
+  ]);
   if (!branch) return null;
 
   const menus = await loadRestaurantMenuCategories({
     restaurantId: restaurant.id,
-    categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
+    categorySelect: {
+      id: true,
+      name: true,
+      sortOrder: true,
+      updatedAt: true,
+    },
     itemSelect: buildCustomerMenuItemSelect(mode),
     categoryWhere: {
       ...CUSTOMER_MENU_CATEGORY_WHERE,
@@ -170,7 +253,12 @@ async function loadBySlugWithMode(
     },
   });
 
-  return enrichRestaurantMenuForCustomer({ ...restaurant, menus }, mode);
+  return enrichRestaurantMenuForCustomer(
+    { ...restaurant, menus },
+    mode,
+    { slug, subdomain: null },
+    branding
+  );
 }
 
 async function loadBySubdomainWithMode(
@@ -183,15 +271,23 @@ async function loadBySubdomainWithMode(
     select: restaurantPublicSelect,
   });
   if (!restaurant) return null;
-  const branch = await db.branch.findFirst({
-    where: { id: branchId, restaurantId: restaurant.id, isActive: true },
-    select: { id: true },
-  });
+  const [branch, branding] = await Promise.all([
+    db.branch.findFirst({
+      where: { id: branchId, restaurantId: restaurant.id, isActive: true },
+      select: { id: true },
+    }),
+    restaurantBrandingFlags(restaurant.id),
+  ]);
   if (!branch) return null;
 
   const menus = await loadRestaurantMenuCategories({
     restaurantId: restaurant.id,
-    categorySelect: { id: true, name: true, sortOrder: true, imageUrl: true },
+    categorySelect: {
+      id: true,
+      name: true,
+      sortOrder: true,
+      updatedAt: true,
+    },
     itemSelect: buildCustomerMenuItemSelect(mode),
     categoryWhere: {
       ...CUSTOMER_MENU_CATEGORY_WHERE,
@@ -199,7 +295,12 @@ async function loadBySubdomainWithMode(
     },
   });
 
-  return enrichRestaurantMenuForCustomer({ ...restaurant, menus }, mode);
+  return enrichRestaurantMenuForCustomer(
+    { ...restaurant, menus },
+    mode,
+    { slug: null, subdomain },
+    branding
+  );
 }
 
 /** Load customer menu; retries with legacy Prisma select when production DB lags migrations. */

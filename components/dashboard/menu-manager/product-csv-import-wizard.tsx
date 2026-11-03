@@ -5,6 +5,8 @@ import { Loader2, Upload } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
+import { useBilingualText } from '@/hooks/use-bilingual-text';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -65,6 +67,7 @@ export function ProductCsvImportWizard({
   onImported,
 }: ProductCsvImportWizardProps) {
   const { t } = useTranslation();
+  const { lang: uiLang } = useBilingualText();
   const STEPS = [
     { id: 1, title: t('dashboard.menuManager.csvImport.stepUpload') },
     { id: 2, title: t('dashboard.menuManager.csvImport.stepMap') },
@@ -511,13 +514,16 @@ export function ProductCsvImportWizard({
                             {idx + 1}
                           </td>
                           <td className="max-w-[160px] whitespace-normal break-words px-3 py-2 font-medium">
-                            {p.name}
+                            {resolveBilingualText(p.name, uiLang) || p.name}
                           </td>
                           <td className="max-w-[220px] whitespace-normal break-words px-3 py-2">
                             {formatIngredientsPreview(p.ingredients) || '—'}
                           </td>
                           <td className="max-w-[200px] whitespace-normal break-words px-3 py-2 text-muted-foreground">
-                            {p.description || '—'}
+                            {p.description
+                              ? resolveBilingualText(p.description, uiLang) ||
+                                p.description
+                              : '—'}
                           </td>
                           <td className="whitespace-nowrap px-3 py-2 tabular-nums">
                             {p.price}
@@ -526,7 +532,11 @@ export function ProductCsvImportWizard({
                             {p.salePrice ?? '—'}
                           </td>
                           <td className="max-w-[180px] whitespace-normal break-words px-3 py-2">
-                            {p.categoryNames.join('; ') || '—'}
+                            {p.categoryNames
+                              .map(
+                                (n) => resolveBilingualText(n, uiLang) || n
+                              )
+                              .join('; ') || '—'}
                           </td>
                           <td className="max-w-[200px] whitespace-normal break-words px-3 py-2">
                             {p.variations.map((v) => v.title).join('; ') ||

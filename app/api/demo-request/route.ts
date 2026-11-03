@@ -9,6 +9,7 @@ const createSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(200),
   restaurant: z.string().trim().min(2).max(200),
+  phone: z.string().trim().max(40).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -25,6 +26,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const restaurantLabel = parsed.data.phone
+      ? `${parsed.data.restaurant} · Tel: ${parsed.data.phone}`
+      : parsed.data.restaurant;
+
     const row = await db.$queryRaw<{ id: string }[]>(
       Prisma.sql`
         INSERT INTO "DemoRequest" ("id","name","email","restaurantName","createdAt","updatedAt")
@@ -32,7 +37,7 @@ export async function POST(req: NextRequest) {
           ${`dr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`},
           ${parsed.data.name},
           ${parsed.data.email.toLowerCase()},
-          ${parsed.data.restaurant},
+          ${restaurantLabel},
           now(),
           now()
         )

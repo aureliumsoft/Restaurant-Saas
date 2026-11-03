@@ -2,7 +2,7 @@ import {
   DEFAULT_UI_LANGUAGE,
   UI_LANG_STORAGE_KEY,
   type UiLanguage,
-} from '@/lib/i18n/resources';
+} from '@/lib/i18n/ui-language';
 
 export const UI_LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 

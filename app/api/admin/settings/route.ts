@@ -4,7 +4,10 @@ import { z } from "zod";
 
 import { requirePlatformAdmin } from "@/lib/auth/adminRequest";
 import { db } from "@/lib/db";
-import { PLATFORM_SETTING_DEFAULTS } from "@/lib/platform-settings";
+import {
+  clearPlatformSettingsCache,
+  PLATFORM_SETTING_DEFAULTS,
+} from "@/lib/platform-settings";
 import { clearGoogleReportingTokenCache } from "@/lib/seo/google-auth";
 
 const DEFAULTS: Record<string, string> = { ...PLATFORM_SETTING_DEFAULTS };
@@ -60,6 +63,7 @@ export async function PUT(req: NextRequest) {
         update: { value },
       });
     }
+    clearPlatformSettingsCache();
     if (
       parsed.data.entries.some((e) =>
         e.key.startsWith("seo_google_") || e.key.startsWith("seo_ga") || e.key.startsWith("seo_gsc")

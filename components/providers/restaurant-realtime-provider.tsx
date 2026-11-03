@@ -85,9 +85,27 @@ export function RestaurantRealtimeProvider({
 
     let es: EventSource | null = null;
     let disposed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearReconnect = () => {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    };
+
+    const disconnect = () => {
+      clearReconnect();
+      es?.close();
+      es = null;
+      setConnected(false);
+    };
 
     const connect = () => {
       if (disposed) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
+
+      clearReconnect();
       es?.close();
 
       const params = new URLSearchParams();
@@ -119,16 +137,27 @@ export function RestaurantRealtimeProvider({
         if (disposed) return;
         setConnected(false);
         es?.close();
-        window.setTimeout(connect, 5_000);
+        es = null;
+        clearReconnect();
+        reconnectTimer = setTimeout(connect, 5_000);
       };
     };
 
+    const onVisibility = () => {
+      if (document.hidden) {
+        disconnect();
+        return;
+      }
+      connect();
+    };
+
     connect();
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       disposed = true;
-      setConnected(false);
-      es?.close();
+      document.removeEventListener('visibilitychange', onVisibility);
+      disconnect();
     };
   }, [staffRoute, branchId]);
 

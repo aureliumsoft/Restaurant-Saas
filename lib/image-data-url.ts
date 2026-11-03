@@ -39,16 +39,19 @@ export function estimateDataUrlBytes(value: string): number {
 
 type CanvasExportMime = 'image/jpeg' | 'image/png' | 'image/webp';
 
-/** Keep formats that support transparency; JPEG photos stay JPEG. */
+/**
+ * Prefer WebP for opaque photos (smaller DB rows); keep PNG/GIF for alpha.
+ * Unknown types start as WebP and fall back to PNG if alpha is detected.
+ */
 function exportMimeForSource(file: File): CanvasExportMime {
   const type = (file.type || '').toLowerCase();
   if (type === 'image/png' || type === 'image/gif') return 'image/png';
   if (type === 'image/webp') return 'image/webp';
-  // Unknown / HEIC / etc. — prefer PNG so alpha is not flattened to black.
-  if (type && type !== 'image/jpeg' && type !== 'image/jpg') {
-    return 'image/png';
+  if (type === 'image/jpeg' || type === 'image/jpg' || !type) {
+    return 'image/webp';
   }
-  return 'image/jpeg';
+  // Other types (HEIC, etc.) — try WebP; alpha check may switch to PNG.
+  return 'image/webp';
 }
 
 function canvasHasAlpha(
@@ -105,12 +108,12 @@ export async function fileToOptimizedDataUrl(
     maxBytes?: number;
   }
 ): Promise<string> {
-  const maxEdge = options?.maxEdge ?? 1600;
-  const maxBytes = options?.maxBytes ?? Math.floor(1.5 * 1024 * 1024);
+  const maxEdge = options?.maxEdge ?? 1200;
+  const maxBytes = options?.maxBytes ?? Math.floor(1 * 1024 * 1024);
   const preferredMime = exportMimeForSource(file);
 
-  // Small files: keep original encoding when possible
-  if (file.size <= 400 * 1024 && file.type.startsWith('image/')) {
+  // Tiny already-compressed files: keep original when clearly under budget.
+  if (file.size <= 100 * 1024 && file.type.startsWith('image/')) {
     const raw = await readFileAsDataUrl(file);
     if (raw.startsWith('data:image/') && estimateDataUrlBytes(raw) <= maxBytes) {
       return raw;
@@ -140,24 +143,29 @@ export async function fileToOptimizedDataUrl(
       canvas.width = w;
       canvas.height = h;
       ctx.clearRect(0, 0, w, h);
-      // JPEG has no alpha — composite onto white so transparent pixels are not black.
-      if (mime === 'image/jpeg') {
+      // Opaque formats — composite onto white so transparent pixels are not black.
+      if (mime === 'image/jpeg' || mime === 'image/webp') {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, w, h);
       }
       ctx.drawImage(bitmap, 0, 0, w, h);
     };
 
-    draw(width, height, preferredMime);
-
-    // If a "JPEG" source actually has alpha (rare), switch to PNG.
+    // Probe alpha on a clear canvas before opaque compositing.
     let mime: CanvasExportMime = preferredMime;
-    if (mime === 'image/jpeg' && canvasHasAlpha(ctx, width, height)) {
-      mime = 'image/png';
-      draw(width, height, mime);
+    if (mime === 'image/jpeg' || mime === 'image/webp') {
+      canvas.width = width;
+      canvas.height = height;
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      if (canvasHasAlpha(ctx, width, height)) {
+        mime = 'image/png';
+      }
     }
 
-    let quality = options?.quality ?? 0.85;
+    draw(width, height, mime);
+
+    let quality = options?.quality ?? 0.8;
     let dataUrl = encodeCanvas(canvas, mime, quality);
 
     // Shrink / re-compress until under maxBytes without converting PNG → JPEG.

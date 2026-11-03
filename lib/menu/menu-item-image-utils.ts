@@ -76,6 +76,80 @@ export function restaurantMenuItemImageUrl(
   );
 }
 
+export function restaurantMenuCategoryImageUrl(
+  categoryId: string,
+  updatedAt?: Date | string | number | null
+): string {
+  return withImageCacheBust(
+    `/api/restaurant/menu/categories/${encodeURIComponent(pathSegmentId(categoryId))}/image`,
+    updatedAt
+  );
+}
+
+export type CategoryImageMeta = {
+  hasImage: boolean;
+  updatedAt: number | null;
+};
+
+/** Presence only — never SELECT imageUrl blobs just to test existence. */
+export async function imageMetaByCategoryIds(
+  ids: string[]
+): Promise<Map<string, CategoryImageMeta>> {
+  const map = new Map<string, CategoryImageMeta>();
+  if (ids.length === 0) return map;
+
+  for (const id of ids) {
+    map.set(id, { hasImage: false, updatedAt: null });
+  }
+
+  const rows = await db.menuCategory.findMany({
+    where: {
+      id: { in: ids },
+      AND: [{ imageUrl: { not: null } }, { NOT: { imageUrl: '' } }],
+    },
+    select: { id: true, updatedAt: true },
+  });
+
+  for (const row of rows) {
+    map.set(row.id, {
+      hasImage: true,
+      updatedAt: row.updatedAt.getTime(),
+    });
+  }
+  return map;
+}
+
+export type RestaurantBrandingFlags = {
+  hasLogo: boolean;
+  hasMainBanner: boolean;
+};
+
+/** Presence flags for restaurant media without loading base64 columns. */
+export async function restaurantBrandingFlags(
+  restaurantId: string
+): Promise<RestaurantBrandingFlags> {
+  const [logoRow, bannerRow] = await Promise.all([
+    db.restaurant.findFirst({
+      where: {
+        id: restaurantId,
+        AND: [{ logoUrl: { not: null } }, { NOT: { logoUrl: '' } }],
+      },
+      select: { id: true },
+    }),
+    db.restaurant.findFirst({
+      where: {
+        id: restaurantId,
+        AND: [{ mainBannerUrl: { not: null } }, { NOT: { mainBannerUrl: '' } }],
+      },
+      select: { id: true },
+    }),
+  ]);
+  return {
+    hasLogo: Boolean(logoRow),
+    hasMainBanner: Boolean(bannerRow),
+  };
+}
+
 export type VariationImageMeta = {
   hasImage: boolean;
   updatedAt: number | null;
@@ -305,6 +379,62 @@ function applyLazyImageFlags(
       applyLazyImageFlags(offer.offeredItem, itemMeta, variationMeta, query);
     }
   }
+}
+
+function applyRestaurantLazyImageFlags(
+  node: LinkedMenuNode,
+  itemMeta: Map<string, MenuItemImageMeta>,
+  variationMeta: Map<string, VariationImageMeta>
+) {
+  if (node.id) {
+    const row = itemMeta.get(node.id);
+    const hasImage = row?.hasImage ?? false;
+    node.hasImage = hasImage;
+    node.imageUrl = hasImage
+      ? restaurantMenuItemImageUrl(node.id, row?.updatedAt)
+      : null;
+    for (const variation of node.variations ?? []) {
+      if (!variation.id) continue;
+      const variationRow = variationMeta.get(variation.id);
+      const hasVariationImage = variationRow?.hasImage ?? false;
+      variation.hasImage = hasVariationImage;
+      // Staff variation image proxy is not wired; reuse product thumb when present.
+      variation.imageUrl = hasVariationImage ? node.imageUrl : null;
+    }
+  }
+  for (const group of node.attributeGroups ?? []) {
+    if (group.linkedProduct) {
+      applyRestaurantLazyImageFlags(group.linkedProduct, itemMeta, variationMeta);
+    }
+    walkLinkedCategoryItems(group, (item) =>
+      applyRestaurantLazyImageFlags(item, itemMeta, variationMeta)
+    );
+  }
+  for (const deal of node.dealsFromThis ?? []) {
+    if (deal.dealItem) {
+      applyRestaurantLazyImageFlags(deal.dealItem, itemMeta, variationMeta);
+    }
+  }
+  for (const offer of node.offersFromThis ?? []) {
+    if (offer.offeredItem) {
+      applyRestaurantLazyImageFlags(offer.offeredItem, itemMeta, variationMeta);
+    }
+  }
+}
+
+/** Stamp hasImage + lazy staff `/image` URLs onto dashboard/POS menu trees. */
+export async function attachRestaurantLazyImages<T>(item: T): Promise<T> {
+  const node = item as T & LinkedMenuNode;
+  const itemIds = new Set<string>();
+  collectLinkedMenuItemIds(node, itemIds);
+  const variationRefs: Array<{ itemId: string; variationId: string }> = [];
+  collectVariationRefs(node, variationRefs);
+  const [itemMeta, variationMeta] = await Promise.all([
+    imageMetaByMenuItemIds([...itemIds]),
+    imageMetaByVariationIds(variationRefs.map((ref) => ref.variationId)),
+  ]);
+  applyRestaurantLazyImageFlags(node, itemMeta, variationMeta);
+  return item;
 }
 
 /** Stamp hasImage + lazy /image URLs onto a product, variations, and nested add-on items. */

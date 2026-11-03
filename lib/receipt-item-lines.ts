@@ -4,6 +4,11 @@ import {
   orderModifierDisplayTree,
   type ModifierDisplayLine,
 } from '@/lib/cart-line-display';
+import {
+  DEFAULT_UI_LANGUAGE,
+  type UiLanguage,
+} from '@/lib/i18n/resources';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { stripLegacyEmbeddedModifierSuffix } from '@/lib/kitchen-ticket-items';
 
 export type ReceiptItemLine = {
@@ -36,14 +41,17 @@ function expandModifierLines(
 }
 
 /** Cart / POS place-order: main title + cart-style modifier rows (not brackets). */
-export function receiptLinesFromCartLine(input: {
-  productName: string;
-  variationName?: string | null;
-  quantity: number;
-  lineTotal: number;
-  modifiers: unknown;
-}): ReceiptItemLine[] {
-  const title = cartLineTitle(input.productName, input.variationName);
+export function receiptLinesFromCartLine(
+  input: {
+    productName: string;
+    variationName?: string | null;
+    quantity: number;
+    lineTotal: number;
+    modifiers: unknown;
+  },
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
+): ReceiptItemLine[] {
+  const title = cartLineTitle(input.productName, input.variationName, lang);
   const rows: ReceiptItemLine[] = [
     {
       name: title,
@@ -53,7 +61,7 @@ export function receiptLinesFromCartLine(input: {
   ];
   rows.push(
     ...expandModifierLines(
-      cartModifierDisplayTree(input.modifiers),
+      cartModifierDisplayTree(input.modifiers, lang),
       input.quantity
     )
   );
@@ -61,19 +69,24 @@ export function receiptLinesFromCartLine(input: {
 }
 
 /** Reprint / kiosk: clean name + order modifier tree (not brackets). */
-export function receiptLinesFromOrderItem(input: {
-  name: string;
-  quantity: number;
-  lineTotal: number;
-  modifiers?: Array<{
+export function receiptLinesFromOrderItem(
+  input: {
     name: string;
-    menuItemId?: string | null;
-    groupName?: string | null;
-    unitPrice?: number;
-    quantity?: number;
-  }>;
-}): ReceiptItemLine[] {
-  const title = stripLegacyEmbeddedModifierSuffix(input.name) || input.name;
+    quantity: number;
+    lineTotal: number;
+    modifiers?: Array<{
+      name: string;
+      menuItemId?: string | null;
+      groupName?: string | null;
+      unitPrice?: number;
+      quantity?: number;
+    }>;
+  },
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
+): ReceiptItemLine[] {
+  const cleaned =
+    stripLegacyEmbeddedModifierSuffix(input.name) || input.name;
+  const title = resolveBilingualText(cleaned, lang).trim() || cleaned;
   const rows: ReceiptItemLine[] = [
     {
       name: title,
@@ -84,7 +97,7 @@ export function receiptLinesFromOrderItem(input: {
   const mods = input.modifiers ?? [];
   if (mods.length === 0) return rows;
   rows.push(
-    ...expandModifierLines(orderModifierDisplayTree(mods), input.quantity)
+    ...expandModifierLines(orderModifierDisplayTree(mods, lang), input.quantity)
   );
   return rows;
 }

@@ -12,6 +12,7 @@ import {
   cartLineTitle,
   cartModifierDisplayLines,
 } from '@/lib/cart-line-display';
+import { useBilingualText } from '@/hooks/use-bilingual-text';
 import { orderPathWithQuery } from '@/lib/order-search-params';
 import { submitCustomerOrder } from '@/lib/offline/submit-order';
 import { WebAppRestaurantTitle } from '@/components/customer-app/web-app-restaurant-title';
@@ -186,6 +187,7 @@ export default function CheckoutPageClient({
   initialThemePrimaryColor = null,
 }: CheckoutPageProps) {
   const { t } = useTranslation();
+  const { lang: uiLang } = useBilingualText();
   const orderInfo = useOrderInfo(orderId, orderType, initialOrderInfo);
   const brand = useRestaurantBranding();
   const { restaurantSlug: accountRestaurantSlug } = useCustomerAccount();
@@ -427,7 +429,7 @@ export default function CheckoutPageClient({
           menuItemId: line.menuItemId,
           quantity: line.quantity,
           unitPrice: lineUnitTotal(line),
-          productName: cartLineTitle(line.productName, line.variationName),
+          productName: cartLineTitle(line.productName, line.variationName, uiLang),
           modifiers: line.modifiers,
         })),
         subtotal: total,
@@ -499,7 +501,7 @@ export default function CheckoutPageClient({
         menuItemId: line.menuItemId,
         quantity: line.quantity,
         unitPrice: lineUnitTotal(line),
-        productName: cartLineTitle(line.productName, line.variationName),
+        productName: cartLineTitle(line.productName, line.variationName, uiLang),
         modifiers: line.modifiers,
       })),
       subtotal: total,
@@ -732,12 +734,19 @@ export default function CheckoutPageClient({
               <div className="p-6 space-y-4">
                 <div className="space-y-3">
                   {cart.map((line) => {
-                    const modifierLines = cartModifierDisplayLines(line.modifiers);
+                    const modifierLines = cartModifierDisplayLines(
+                      line.modifiers,
+                      uiLang
+                    );
                     return (
                       <div key={line.lineId} className="space-y-1">
                         <div className="flex justify-between text-sm">
                           <p className="font-medium text-[#0f172a]">
-                            {cartLineTitle(line.productName, line.variationName)}
+                            {cartLineTitle(
+                              line.productName,
+                              line.variationName,
+                              uiLang
+                            )}
                           </p>
                           <p className="font-semibold text-[#0f172a]">
                             {formatMoney(lineTotal(line))}

@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
+import { useBilingualText } from '@/hooks/use-bilingual-text';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import {
   Card,
   CardContent,
@@ -495,6 +497,7 @@ function TopItemsList({
   items: TopItem[];
   formatMoney: (n: number) => string;
 }) {
+  const { lang } = useBilingualText();
   const maxQty = Math.max(1, ...items.map((i) => i.quantity));
   return (
     <div className="space-y-3">
@@ -505,7 +508,7 @@ function TopItemsList({
               <span className="mr-2 tabular-nums text-muted-foreground">
                 {idx + 1}.
               </span>
-              {item.name}
+              {resolveBilingualText(item.name, lang) || item.name}
             </span>
             <span className="shrink-0 tabular-nums text-muted-foreground">
               {item.quantity} · {formatMoney(item.revenue)}

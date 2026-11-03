@@ -9,7 +9,7 @@ export const HOME_STORY = {
       title: 'More tickets.',
       titleAccent: 'Same kitchen.',
       items: [
-        { n: '01', title: 'Own the guest', line: 'Your web and app. No aggregator cut.' },
+        { n: '01', title: 'Own the guest', line: 'Your web and app. 0% Glovo-style cut.' },
         { n: '02', title: 'Catch walk-ins', line: 'QR, kiosk, and POS on one menu.' },
         { n: '03', title: 'Bigger tickets', line: 'Sizes, extras, and offers at tap.' },
         { n: '04', title: 'Faster service', line: 'Kitchen screen and ready board.' },
@@ -89,7 +89,7 @@ export const HOME_STORY = {
       title: 'Más tickets.',
       titleAccent: 'Misma cocina.',
       items: [
-        { n: '01', title: 'Tu cliente', line: 'Tu web y app. Sin comisión.' },
+        { n: '01', title: 'Tu cliente', line: 'Tu web y app. Sin comisión tipo Glovo.' },
         { n: '02', title: 'Cada visita', line: 'QR, kiosco y TPV. Un menú.' },
         { n: '03', title: 'Ticket mayor', line: 'Tamaños, extras y ofertas.' },
         { n: '04', title: 'Más rápido', line: 'Cocina y panel de listo.' },

@@ -10,7 +10,7 @@ type PublicFaq = {
   answer: string;
 };
 
-const FALLBACK_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5'] as const;
+const FALLBACK_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'] as const;
 
 export function LandingFaqSection() {
   const { t } = useTranslation();

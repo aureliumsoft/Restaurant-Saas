@@ -3,6 +3,7 @@ import {
   applyConfigurationCategoryPricing,
   effectiveMenuItemUnitPrice,
   productUnitPriceWithVariation,
+  variationPickerBaselineUnitPrice,
 } from '@/lib/menu/recommendation-addon-price';
 import {
   shouldShowOptionQuantityPrice,
@@ -382,32 +383,6 @@ export function configurationDefaultListUnitPrice(
   return group.defaultUnitPrice ?? null;
 }
 
-function parallelVariationOnItem(
-  item: ConfigurationItemLike & { variations?: VariationLinkRef[] },
-  source: VariationLinkRef
-): VariationLinkRef | null {
-  const variations = item.variations ?? [];
-  if (source.restaurantVariationId) {
-    const match = variations.find(
-      (v) => v.restaurantVariationId === source.restaurantVariationId
-    );
-    if (match) return match;
-  }
-  const sourceKeys = new Set(
-    [source.name, source.title]
-      .map(normalizeVariationKey)
-      .filter((k) => k.length > 0)
-  );
-  return (
-    variations.find((v) => {
-      const keys = [v.name, v.title]
-        .map(normalizeVariationKey)
-        .filter((k) => k.length > 0);
-      return keys.some((k) => sourceKeys.has(k));
-    }) ?? null
-  );
-}
-
 /** List unit for an add-on, including a manually selected nested variation when applicable. */
 export function configurationItemResolvedListUnit(
   item: ConfigurationItemLike & { variations?: VariationLinkRef[] },
@@ -427,16 +402,18 @@ export function configurationItemResolvedListUnit(
 }
 
 /**
- * Default-item baseline for delta pricing, aligned to the guest's nested variation
- * (e.g. 7 Up Medium vs default Pepsi Medium at the same tier).
+ * Default-item baseline for delta pricing (included tier only).
+ *
+ * Never align this baseline to the guest's selected variation — that zeroed
+ * size upgrades (e.g. +€2) in the cart. Brand swaps still bill correctly
+ * because the selected item's resolved list unit already includes its tier.
  */
 export function configurationDefaultListUnitPriceForSelection(
   group: ConfigurationDefaultListUnitInput,
   parentVariation: ParentVariationContext | null | undefined,
   visibleItems: Array<
     ConfigurationItemLike & { menuItemId?: string; variations?: VariationLinkRef[] }
-  >,
-  selectedNestedVariation?: VariationLinkRef | null
+  >
 ): number | null {
   if (!group.defaultMenuItemId) return group.defaultUnitPrice ?? null;
   const defaultItem = visibleItems.find(
@@ -456,17 +433,17 @@ export function configurationDefaultListUnitPriceForSelection(
     });
   }
 
-  let defaultNestedVariationId: string | null = null;
-  if (selectedNestedVariation && !(group.useVariationPricing ?? false)) {
-    defaultNestedVariationId =
-      parallelVariationOnItem(defaultItem, selectedNestedVariation)?.id ?? null;
+  if (group.useVariationPricing ?? false) {
+    return configurationItemListUnitPrice(
+      defaultItem,
+      parentVariation,
+      true
+    );
   }
 
-  return configurationItemResolvedListUnit(
-    defaultItem,
-    parentVariation,
-    group.useVariationPricing ?? false,
-    defaultNestedVariationId
+  return variationPickerBaselineUnitPrice(
+    effectiveMenuItemUnitPrice(defaultItem.price, defaultItem.salePrice),
+    defaultItem.variations
   );
 }
 

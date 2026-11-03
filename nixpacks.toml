@@ -3,5 +3,10 @@ cmds = [
   "npx prisma generate",
   "npx prisma migrate resolve --rolled-back 20260909115831_recomendation_enhanced || true",
   "node scripts/prisma-migrate-deploy.mjs",
-  "npm run build"
+  "npm run build",
+  "cp -r public .next/standalone/public",
+  "cp -r .next/static .next/standalone/.next/static"
 ]
+
+[start]
+cmd = "HOSTNAME=0.0.0.0 node .next/standalone/server.js"

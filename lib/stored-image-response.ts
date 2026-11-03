@@ -150,6 +150,9 @@ export function publicRestaurantImageUrls(
     mainBannerUrl?: string | null;
     menuBannerUrls?: string[] | null;
     updatedAt?: Date | string | number | null;
+    /** When set, prefer these over inspecting blob columns (avoids loading base64). */
+    hasLogo?: boolean;
+    hasMainBanner?: boolean;
   }
 ) {
   const base = (kind: string, extra?: Record<string, string>) => {
@@ -163,9 +166,16 @@ export function publicRestaurantImageUrls(
     );
   };
 
+  const hasLogo =
+    typeof row.hasLogo === 'boolean' ? row.hasLogo : hasStoredImage(row.logoUrl);
+  const hasMainBanner =
+    typeof row.hasMainBanner === 'boolean'
+      ? row.hasMainBanner
+      : hasStoredImage(row.mainBannerUrl);
+
   return {
-    logoUrl: hasStoredImage(row.logoUrl) ? base('logo') : null,
-    mainBannerUrl: hasStoredImage(row.mainBannerUrl) ? base('mainBanner') : null,
+    logoUrl: hasLogo ? base('logo') : null,
+    mainBannerUrl: hasMainBanner ? base('mainBanner') : null,
     menuBannerUrls: (row.menuBannerUrls ?? [])
       .map((url, index) =>
         hasStoredImage(url) ? base('menuBanner', { index: String(index) }) : null

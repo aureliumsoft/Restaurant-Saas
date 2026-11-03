@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Home,
   Loader2,
+  MessageCircle,
   PlusCircle,
   SendHorizonal,
 } from 'lucide-react';
@@ -16,14 +17,20 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { marketingWhatsAppUrl } from '@/lib/marketing/whatsapp';
 
 export default function DemoRequestPage() {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [restaurant, setRestaurant] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  const whatsappHref = marketingWhatsAppUrl(
+    t('marketingExtras.demo.whatsappPrefill')
+  );
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,6 +40,7 @@ export default function DemoRequestPage() {
         name: name.trim(),
         email: email.trim(),
         restaurant: restaurant.trim(),
+        phone: phone.trim() || undefined,
       });
       setSubmitted(true);
     } catch (error: unknown) {
@@ -53,6 +61,7 @@ export default function DemoRequestPage() {
     setName('');
     setEmail('');
     setRestaurant('');
+    setPhone('');
   }
 
   return (
@@ -73,6 +82,19 @@ export default function DemoRequestPage() {
               {t('marketingExtras.demo.successBody')}
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Button
+                asChild
+                className="w-full bg-emerald-600 text-white hover:bg-emerald-500 sm:w-auto"
+              >
+                <a
+                  href={whatsappHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <MessageCircle className="mr-2 h-4 w-4" />
+                  {t('marketingExtras.demo.whatsappCta')}
+                </a>
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -135,11 +157,23 @@ export default function DemoRequestPage() {
                   required
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">
+                  {t('marketingExtras.demo.phoneLabel')}
+                </Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder={t('marketingExtras.demo.phonePlaceholder')}
+                />
+              </div>
 
               <Button
                 type="submit"
                 disabled={loading}
-                className="bg-gradient-to-r from-fire-500 via-fire-600 to-fire-500 text-white hover:from-fire-400 hover:to-fire-500"
+                className="w-full bg-gradient-to-r from-fire-500 via-fire-600 to-fire-500 text-white hover:from-fire-400 hover:to-fire-500 sm:w-auto"
               >
                 {loading ? (
                   <>
@@ -153,6 +187,24 @@ export default function DemoRequestPage() {
                   </>
                 )}
               </Button>
+
+              <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 sm:text-left">
+                <Link
+                  href="/register"
+                  className="font-medium text-fire-600 underline-offset-4 hover:underline dark:text-fire-400"
+                >
+                  {t('marketingExtras.demo.trialLink')}
+                </Link>
+                {' · '}
+                <a
+                  href={whatsappHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400"
+                >
+                  {t('marketingExtras.demo.whatsappCta')}
+                </a>
+              </p>
             </form>
           </>
         )}

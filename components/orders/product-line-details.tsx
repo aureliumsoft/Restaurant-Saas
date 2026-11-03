@@ -7,6 +7,7 @@ import {
   orderModifierDisplayTree,
   type ModifierDisplayLine,
 } from '@/lib/cart-line-display';
+import { useBilingualText } from '@/hooks/use-bilingual-text';
 
 type OrderModifierLike = {
   name: string;
@@ -102,13 +103,14 @@ export function ProductLineDetails({
   lineClassName = 'text-xs leading-relaxed text-muted-foreground',
   showQuantityOnModifiers = false,
 }: Props) {
-  const title = cartLineTitle(productName, variationName);
+  const { lang } = useBilingualText();
+  const title = cartLineTitle(productName, variationName, lang);
   const displayTitle =
     quantity != null && quantity > 0 ? `${quantity}× ${title}` : title;
   const lines =
     modifiers != null
-      ? cartModifierDisplayTree(modifiers)
-      : orderModifierDisplayTree(orderModifiers ?? []);
+      ? cartModifierDisplayTree(modifiers, lang)
+      : orderModifierDisplayTree(orderModifiers ?? [], lang);
 
   return (
     <div className="space-y-1">

@@ -12,7 +12,8 @@ export type CartModifierSelectionLike = {
 
 function selectionNames(
   modifiers: CartModifierSelectionLike[],
-  personalize: boolean
+  personalize: boolean,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): string[] {
   const names: string[] = [];
   for (const mod of modifiers) {
@@ -22,7 +23,7 @@ function selectionNames(
         ? isPersonalizeModifierMenuItemId(sel.menuItemId)
         : false;
       if (isPersonalize !== personalize) continue;
-      const n = String(sel.name ?? '').trim();
+      const n = resolveBilingualText(sel.name, lang).trim();
       if (n.length > 0) names.push(n);
     }
   }
@@ -79,9 +80,13 @@ function foldSizeLikeChildren(node: CartTreeNode) {
  * Belorder-style composed cart: each wrap/fries line is ↳, extras nest as dashes.
  * Nested XL/size options fold onto the parent name instead of a sibling row.
  */
-function buildCartModifierForest(modifiers: unknown): CartTreeNode[] {
+function buildCartModifierForest(
+  modifiers: unknown,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
+): CartTreeNode[] {
   const nodes: CartTreeNode[] = [];
   const byKey = new Map<string, CartTreeNode>();
+  const label = (raw: unknown) => resolveBilingualText(raw, lang).trim();
 
   for (const group of normalizeCartModifiers(modifiers)) {
     const parentKey = group.parentSelectionKey?.trim() || '';
@@ -89,15 +94,8 @@ function buildCartModifierForest(modifiers: unknown): CartTreeNode[] {
 
     if (parentNode) {
       for (const sel of group.selections) {
-        if (isPersonalizeModifierMenuItemId(sel.menuItemId)) {
-          parentNode.children.push({
-            name: sel.name,
-            unitPrice: sel.unitPrice,
-          });
-          continue;
-        }
         parentNode.children.push({
-          name: sel.name,
+          name: label(sel.name),
           unitPrice: sel.unitPrice,
         });
       }
@@ -105,13 +103,14 @@ function buildCartModifierForest(modifiers: unknown): CartTreeNode[] {
     }
 
     for (const sel of group.selections) {
+      const resolvedName = label(sel.name);
       const previous = nodes[nodes.length - 1];
       if (
         previous &&
         !isPersonalizeModifierMenuItemId(sel.menuItemId) &&
-        isSizeLikeChild(previous.name, sel.name)
+        isSizeLikeChild(previous.name, resolvedName)
       ) {
-        previous.name = sel.name.trim();
+        previous.name = resolvedName;
         previous.unitPrice += sel.unitPrice;
         continue;
       }
@@ -119,7 +118,7 @@ function buildCartModifierForest(modifiers: unknown): CartTreeNode[] {
       const key = selectionKey(group.attributeGroupId, sel.menuItemId);
       const node: CartTreeNode = {
         key,
-        name: sel.name,
+        name: resolvedName,
         unitPrice: sel.unitPrice,
         children: [],
       };
@@ -159,37 +158,45 @@ export function cartModifierDisplayLines(
       menuItemId?: string;
       unitPrice?: number;
     }[];
-  }> | unknown
+  }> | unknown,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): CartModifierDisplayLine[] {
-  return forestToDisplayLines(buildCartModifierForest(modifiers));
+  return forestToDisplayLines(buildCartModifierForest(modifiers, lang));
 }
 
 /** Personalize selections — shown below the product name. */
 export function cartPersonalizeSelectionNames(
-  modifiers: CartModifierSelectionLike[] | unknown
+  modifiers: CartModifierSelectionLike[] | unknown,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): string[] {
   return selectionNames(
     Array.isArray(modifiers) ? modifiers : normalizeCartModifiers(modifiers),
-    true
+    true,
+    lang
   );
 }
 
 /** Addon / recommendation names only — no personalize, no category group labels. */
 export function cartModifierSelectionNames(
-  modifiers: CartModifierSelectionLike[] | unknown
+  modifiers: CartModifierSelectionLike[] | unknown,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): string[] {
   return selectionNames(
     Array.isArray(modifiers) ? modifiers : normalizeCartModifiers(modifiers),
-    false
+    false,
+    lang
   );
 }
 
 export function cartLineTitle(
   productName: string | null | undefined,
-  variationName?: string | null
+  variationName?: string | null,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): string {
-  const base = String(productName ?? '').trim() || 'Item';
-  const variation = variationName?.trim();
+  const base = resolveBilingualText(productName, lang).trim() || 'Item';
+  const variation = variationName
+    ? resolveBilingualText(variationName, lang).trim()
+    : '';
   return variation ? `${base} (${variation})` : base;
 }
 
@@ -302,12 +309,17 @@ function blocksToDisplayLines(
  * ↳ Loaded Fries
  * - Barbecue (+0,30 €)
  */
-export function cartModifierDisplayTree(modifiers: unknown): ModifierDisplayLine[] {
-  return forestToDisplayLines(buildCartModifierForest(modifiers)).map((line) => ({
-    style: line.prefix,
-    name: line.name,
-    unitPrice: line.unitPrice,
-  }));
+export function cartModifierDisplayTree(
+  modifiers: unknown,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
+): ModifierDisplayLine[] {
+  return forestToDisplayLines(buildCartModifierForest(modifiers, lang)).map(
+    (line) => ({
+      style: line.prefix,
+      name: line.name,
+      unitPrice: line.unitPrice,
+    })
+  );
 }
 
 export function orderModifierDisplayTree(
@@ -317,11 +329,12 @@ export function orderModifierDisplayTree(
     groupName?: string | null;
     unitPrice?: number;
     quantity?: number;
-  }>
+  }>,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): ModifierDisplayLine[] {
   const blocks: ModifierDisplayBlock[] = [];
   for (const mod of modifiers) {
-    const name = String(mod.name ?? '').trim();
+    const name = resolveBilingualText(mod.name, lang).trim();
     if (!name) continue;
     const line = {
       name,
@@ -333,7 +346,7 @@ export function orderModifierDisplayTree(
     } else {
       pushBlock(
         blocks,
-        recommendationGroupDisplayLabel(mod.groupName || 'Add-ons'),
+        recommendationGroupDisplayLabel(mod.groupName || 'Add-ons', lang),
         line,
         false
       );
@@ -354,7 +367,8 @@ export type ModifierDisplaySection = {
 
 /** @deprecated Prefer cartModifierDisplayTree. */
 export function cartModifierDisplaySections(
-  modifiers: unknown
+  modifiers: unknown,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): ModifierDisplaySection[] {
   const normalized = normalizeCartModifiers(modifiers);
   const personalizeLines: ModifierDisplaySection['lines'] = [];
@@ -365,12 +379,16 @@ export function cartModifierDisplaySections(
 
   for (const group of normalized) {
     for (const sel of group.selections) {
-      const line = { name: sel.name, unitPrice: sel.unitPrice };
+      const line = {
+        name: resolveBilingualText(sel.name, lang),
+        unitPrice: sel.unitPrice,
+      };
       if (isPersonalizeModifierMenuItemId(sel.menuItemId)) {
         personalizeLines.push(line);
       } else {
         const label = recommendationGroupDisplayLabel(
-          group.groupName?.trim() || 'Add-ons'
+          group.groupName?.trim() || 'Add-ons',
+          lang
         );
         const existing = recommendationByGroup.get(label) ?? [];
         existing.push(line);
@@ -401,7 +419,8 @@ export function orderModifierDisplaySections(
     groupName?: string | null;
     unitPrice?: number;
     quantity?: number;
-  }>
+  }>,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): ModifierDisplaySection[] {
   const personalizeLines: ModifierDisplaySection['lines'] = [];
   const recommendationByGroup = new Map<
@@ -410,7 +429,7 @@ export function orderModifierDisplaySections(
   >();
 
   for (const mod of modifiers) {
-    const name = String(mod.name ?? '').trim();
+    const name = resolveBilingualText(mod.name, lang).trim();
     if (!name) continue;
     const line = {
       name,
@@ -421,7 +440,8 @@ export function orderModifierDisplaySections(
       personalizeLines.push(line);
     } else {
       const label = recommendationGroupDisplayLabel(
-        mod.groupName?.trim() || 'Add-ons'
+        mod.groupName?.trim() || 'Add-ons',
+        lang
       );
       const existing = recommendationByGroup.get(label) ?? [];
       existing.push(line);
@@ -446,29 +466,33 @@ export function orderModifierDisplaySections(
 /** Kitchen ticket / receipt single-line label — selection names only, no group titles. */
 export function ticketProductName(
   productName: string,
-  modifiers: unknown
+  modifiers: unknown,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): string {
+  const base = resolveBilingualText(productName, lang).trim() || productName;
   const groups = normalizeCartModifiers(modifiers);
-  if (!groups.length) return productName;
+  if (!groups.length) return base;
   const names: string[] = [];
   for (const group of groups) {
     for (const sel of group.selections) {
-      const name = String(sel.name ?? '').trim();
+      const name = resolveBilingualText(sel.name, lang).trim();
       if (name) names.push(name);
     }
   }
-  if (!names.length) return productName;
-  return `${productName} (${names.join(', ')})`;
+  if (!names.length) return base;
+  return `${base} (${names.join(', ')})`;
 }
 
 export function cartLineDisplayName(
   productName: string,
   variationName: string | null | undefined,
-  modifiers: unknown
+  modifiers: unknown,
+  lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): string {
   return ticketProductName(
-    cartLineTitle(productName, variationName),
-    modifiers
+    cartLineTitle(productName, variationName, lang),
+    modifiers,
+    lang
   );
 }
 

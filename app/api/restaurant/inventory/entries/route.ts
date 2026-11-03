@@ -16,6 +16,8 @@ import {
 } from '@/lib/pagination';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { publishInventoryStockUpdate } from '@/lib/realtime/publish';
+import { DEFAULT_UI_LANGUAGE } from '@/lib/i18n/resources';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 
 export async function GET(req: NextRequest) {
   const auth = await getRestaurantForOwnerRequest(req, {
@@ -167,10 +169,13 @@ export async function POST(req: NextRequest) {
   const deduct = parsed.data.quantity;
   const stockMap = await loadBranchStockQuantities(db, branchId, [ingredient.id]);
   const onHand = stockMap.get(ingredient.id) ?? 0;
+  const ingredientLabel =
+    resolveBilingualText(ingredient.name, DEFAULT_UI_LANGUAGE).trim() ||
+    ingredient.name;
   if (onHand < deduct) {
     return NextResponse.json(
       {
-        error: `${ingredient.name} ingredient is not exist in stock`,
+        error: `${ingredientLabel} ingredient is not exist in stock`,
       },
       { status: 400 }
     );
@@ -185,7 +190,9 @@ export async function POST(req: NextRequest) {
         requireAvailable: true,
       });
       if (!ok) {
-        throw new Error(`${ingredient.name} ingredient is not exist in stock`);
+        throw new Error(
+          `${ingredientLabel} ingredient is not exist in stock`
+        );
       }
       return tx.ingredientStockEntry.create({
         data: {

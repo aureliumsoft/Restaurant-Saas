@@ -4,14 +4,25 @@ import { initReactI18next } from 'react-i18next';
 import { normalizeUiLanguage, uiLanguageCookieHeader } from '@/lib/i18n/language-cookie';
 import {
   DEFAULT_UI_LANGUAGE,
-  resources,
   UI_LANG_STORAGE_KEY,
   type UiLanguage,
-} from '@/lib/i18n/resources';
+} from '@/lib/i18n/ui-language';
 
-function readStoredLanguage(): UiLanguage {
-  if (typeof window === 'undefined') return DEFAULT_UI_LANGUAGE;
-  return normalizeUiLanguage(window.localStorage.getItem(UI_LANG_STORAGE_KEY));
+// Default locale is statically imported so SSR / first paint stay sync.
+import defaultLocale from '@/lib/i18n/locales/es';
+
+const loadedLocales = new Set<UiLanguage>([DEFAULT_UI_LANGUAGE]);
+
+async function ensureLocaleLoaded(lng: UiLanguage) {
+  if (loadedLocales.has(lng)) return;
+  if (lng === 'en') {
+    const mod = await import('@/lib/i18n/locales/en');
+    i18n.addResourceBundle('en', 'translation', mod.default.translation, true, true);
+    loadedLocales.add('en');
+    return;
+  }
+  // Future locales: dynamic import here.
+  loadedLocales.add(lng);
 }
 
 if (!i18n.isInitialized) {
@@ -23,20 +34,33 @@ export function ensureI18nInitialized(lng: UiLanguage = DEFAULT_UI_LANGUAGE) {
   const language = normalizeUiLanguage(lng);
 
   if (!i18n.isInitialized) {
+    const initialResources: Record<string, typeof defaultLocale> = {
+      [DEFAULT_UI_LANGUAGE]: defaultLocale,
+    };
+
     void i18n.init({
-      resources,
-      lng: language,
+      resources: initialResources,
+      lng: language === DEFAULT_UI_LANGUAGE ? language : DEFAULT_UI_LANGUAGE,
       fallbackLng: DEFAULT_UI_LANGUAGE,
       supportedLngs: ['en', 'es'],
       nonExplicitSupportedLngs: false,
+      partialBundledLanguages: true,
       interpolation: { escapeValue: false },
       initAsync: false,
     });
+
+    if (language !== DEFAULT_UI_LANGUAGE) {
+      void ensureLocaleLoaded(language).then(() => {
+        void i18n.changeLanguage(language);
+      });
+    }
     return;
   }
 
   if (normalizeUiLanguage(i18n.language) !== language) {
-    void i18n.changeLanguage(language);
+    void ensureLocaleLoaded(language).then(() => {
+      void i18n.changeLanguage(language);
+    });
   }
 }
 
@@ -51,9 +75,11 @@ export function hydrateUiLanguageFromStorage() {
     window.localStorage.setItem(UI_LANG_STORAGE_KEY, DEFAULT_UI_LANGUAGE);
   }
 
-  if (normalizeUiLanguage(i18n.language) !== lang) {
-    void i18n.changeLanguage(lang);
-  }
+  void ensureLocaleLoaded(lang).then(() => {
+    if (normalizeUiLanguage(i18n.language) !== lang) {
+      void i18n.changeLanguage(lang);
+    }
+  });
 
   document.cookie = uiLanguageCookieHeader(lang);
   document.documentElement.lang = lang;
@@ -66,7 +92,9 @@ export function setUiLanguage(lang: UiLanguage) {
     document.cookie = uiLanguageCookieHeader(next);
     document.documentElement.lang = next;
   }
-  void i18n.changeLanguage(next);
+  void ensureLocaleLoaded(next).then(() => {
+    void i18n.changeLanguage(next);
+  });
 }
 
 export { i18n };

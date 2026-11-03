@@ -22,6 +22,8 @@ import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
+import { useBilingualText } from '@/hooks/use-bilingual-text';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -112,6 +114,7 @@ export function PosWorkingOrdersSheet({
   onOrderCountChange,
 }: Props) {
   const { t } = useTranslation();
+  const { lang: uiLang } = useBilingualText();
   const { formatMoney } = useOwnerRestaurantRegional();
   const {
     orders,
@@ -413,8 +416,12 @@ export function PosWorkingOrdersSheet({
                       {/* Items list */}
                       <div className="space-y-1.5 rounded-xl bg-muted/20 p-2.5">
                         {order.items.map((item, idx) => {
+                          const rawName =
+                            item.productName ||
+                            item.menuItem?.name ||
+                            t('pos.sheets.workingOrders.item');
                           const itemName =
-                            item.productName || item.menuItem?.name || t('pos.sheets.workingOrders.item');
+                            resolveBilingualText(rawName, uiLang) || rawName;
                           return (
                             <div
                               key={item.id || idx}
@@ -431,11 +438,14 @@ export function PosWorkingOrdersSheet({
                               {item.modifiers && item.modifiers.length > 0 ? (
                                 <div className="pl-4 text-[11px] text-muted-foreground">
                                   {item.modifiers
-                                    .map((m) =>
-                                       m.quantity > 1
-                                        ? `${m.quantity}× ${m.name}`
-                                        : m.name
-                                    )
+                                    .map((m) => {
+                                      const modName =
+                                        resolveBilingualText(m.name, uiLang) ||
+                                        m.name;
+                                      return m.quantity > 1
+                                        ? `${m.quantity}× ${modName}`
+                                        : modName;
+                                    })
                                     .join(', ')}
                                 </div>
                               ) : null}

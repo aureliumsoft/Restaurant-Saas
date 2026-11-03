@@ -27,8 +27,10 @@ import {
 } from '@/lib/menu/map-attribute-group-items';
 import {
   customerMenuItemImageUrl,
+  imageMetaByCategoryIds,
   imageMetaByMenuItemIds,
   mapBrowseListItem,
+  restaurantBrandingFlags,
   stampBrowseVariationImages,
 } from '@/lib/menu/menu-item-image-utils';
 import { customerCategoryImageUrl, publicRestaurantImageUrls } from '@/lib/stored-image-response';
@@ -48,8 +50,7 @@ import {
 const restaurantPublicSelectCore = {
   id: true,
   name: true,
-  logoUrl: true,
-  mainBannerUrl: true,
+  // logo/banner blobs are never selected here — presence + /media proxy URLs instead
   themePrimaryColor: true,
   subdomain: true,
   slug: true,
@@ -174,16 +175,21 @@ function dealsFromBrowseItem(item: object): BrowseDealLink[] {
 
 function restaurantMetaPayload<
   T extends { id: string; slug: string; updatedAt?: Date | string | number | null } & RestaurantServiceChargeRow & {
-    logoUrl?: string | null;
-    mainBannerUrl?: string | null;
     deliveryEnabled?: boolean;
     dineInEnabled?: boolean;
     cardPaymentsEnabled?: boolean;
   },
->(restaurant: T) {
+>(
+  restaurant: T,
+  flags: { hasLogo: boolean; hasMainBanner: boolean }
+) {
   return {
     ...restaurant,
-    ...publicRestaurantImageUrls(restaurant.slug, restaurant),
+    ...publicRestaurantImageUrls(restaurant.slug, {
+      hasLogo: flags.hasLogo,
+      hasMainBanner: flags.hasMainBanner,
+      updatedAt: restaurant.updatedAt,
+    }),
     serviceCharges: parseRestaurantServiceCharges(restaurant),
     fulfillmentSettings: parseRestaurantFulfillmentSettings(restaurant),
   };
@@ -209,31 +215,43 @@ export async function loadCustomerMenuCategoriesMeta(options: {
     if (!branch) return null;
 
     // Category WHERE already requires products — skip joining every item id.
-    const categories = await db.menuCategory.findMany({
-      where: {
-        restaurantId: restaurant.id,
-        ...CUSTOMER_MENU_CATEGORY_WHERE,
-        ...categoryVisibleForBranch(options.branchId),
-      },
-      orderBy: { sortOrder: 'asc' },
-      select: { id: true, name: true, sortOrder: true, imageUrl: true, updatedAt: true },
+    // Never SELECT imageUrl blobs; presence + proxy URLs only.
+    const [categories, branding] = await Promise.all([
+      db.menuCategory.findMany({
+        where: {
+          restaurantId: restaurant.id,
+          ...CUSTOMER_MENU_CATEGORY_WHERE,
+          ...categoryVisibleForBranch(options.branchId),
+        },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true, name: true, sortOrder: true, updatedAt: true },
+      }),
+      restaurantBrandingFlags(restaurant.id),
+    ]);
+
+    const categoryImageMeta = await imageMetaByCategoryIds(
+      categories.map((c) => c.id)
+    );
+
+    const menus = categories.map((c) => {
+      const meta = categoryImageMeta.get(c.id);
+      const hasImage = meta?.hasImage ?? false;
+      return {
+        id: c.id,
+        name: c.name,
+        imageUrl: hasImage
+          ? customerCategoryImageUrl(c.id, {
+              slug: options.slug,
+              subdomain: options.subdomain,
+              updatedAt: meta?.updatedAt ?? c.updatedAt,
+            })
+          : null,
+        items: [],
+      };
     });
 
-    const menus = categories.map((c) => ({
-      id: c.id,
-      name: c.name,
-      imageUrl: c.imageUrl
-        ? customerCategoryImageUrl(c.id, {
-            slug: options.slug,
-            subdomain: options.subdomain,
-            updatedAt: c.updatedAt,
-          })
-        : null,
-      items: [],
-    }));
-
     return {
-      ...restaurantMetaPayload(restaurant),
+      ...restaurantMetaPayload(restaurant, branding),
       menus,
     };
   });
@@ -272,7 +290,6 @@ export async function loadCustomerMenuCategoryItems(options: {
         id: true,
         name: true,
         sortOrder: true,
-        imageUrl: true,
       },
       itemSelect:
         mode === 'full'

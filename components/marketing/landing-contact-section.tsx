@@ -1,29 +1,37 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock, Loader2, Mail, Phone, SendHorizonal } from 'lucide-react';
+import { Clock, Loader2, Mail, MessageCircle, Phone, SendHorizonal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { marketingWhatsAppUrl } from '@/lib/marketing/whatsapp';
 
 export function LandingContactSection() {
   const { t } = useTranslation();
   const [firstName, setFirstName] = useState('');
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
+  const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<
     { kind: 'success'; text: string } | { kind: 'error'; text: string } | null
   >(null);
+  const whatsappHref = marketingWhatsAppUrl(
+    t('marketing.contact.whatsappPrefill')
+  );
 
   async function handleContactSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSending(true);
     setStatus(null);
     try {
+      const phoneNote = phone.trim()
+        ? `\nPhone/WhatsApp: ${phone.trim()}`
+        : '';
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -31,7 +39,7 @@ export function LandingContactSection() {
           firstName,
           email,
           company,
-          message,
+          message: `${message.trim()}${phoneNote}`,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -50,6 +58,7 @@ export function LandingContactSection() {
       setFirstName('');
       setEmail('');
       setCompany('');
+      setPhone('');
       setMessage('');
     } catch {
       const text = 'Network error. Please try again.';
@@ -84,6 +93,19 @@ export function LandingContactSection() {
             </h3>
 
             <ul className="mt-5 space-y-4 text-sm text-zinc-700 dark:text-zinc-300">
+              <li className="flex items-center gap-3">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/30 dark:text-emerald-400">
+                  <MessageCircle className="h-4 w-4" />
+                </span>
+                <a
+                  href={whatsappHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-emerald-700 hover:text-emerald-600 dark:text-emerald-400"
+                >
+                  {t('marketing.contact.whatsappCta')}
+                </a>
+              </li>
               <li className="flex items-center gap-3">
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-fire-500/15 text-fire-500 ring-1 ring-fire-500/30">
                   <Phone className="h-4 w-4" />
@@ -165,6 +187,14 @@ export function LandingContactSection() {
                   placeholder={t('marketing.contact.companyPlaceholder')}
                   value={company}
                   onChange={setCompany}
+                />
+                <FormField
+                  id="contact-phone"
+                  label={t('marketing.contact.phoneLabel')}
+                  placeholder={t('marketing.contact.phonePlaceholder')}
+                  type="tel"
+                  value={phone}
+                  onChange={setPhone}
                 />
                 <div>
                   <label

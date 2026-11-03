@@ -9,6 +9,8 @@ import {
   loadBranchStockQuantities,
   resolveBranchIdForStock,
 } from '@/lib/inventory/branch-stock';
+import { DEFAULT_UI_LANGUAGE } from '@/lib/i18n/resources';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 
 export const INGREDIENT_UNITS: IngredientUnit[] = [...INGREDIENT_UNIT_VALUES];
 
@@ -33,9 +35,13 @@ export class MajorIngredientOutOfStockError extends Error {
   ingredientName: string;
 
   constructor(ingredientName: string) {
-    super(`${ingredientName} ingredient is not exist in stock`);
+    const label =
+      resolveBilingualText(ingredientName, DEFAULT_UI_LANGUAGE).trim() ||
+      String(ingredientName ?? '').trim() ||
+      'Ingredient';
+    super(`${label} ingredient is not exist in stock`);
     this.name = 'MajorIngredientOutOfStockError';
-    this.ingredientName = ingredientName;
+    this.ingredientName = label;
   }
 }
 

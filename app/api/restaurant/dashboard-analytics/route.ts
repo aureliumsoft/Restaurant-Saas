@@ -24,6 +24,8 @@ import {
   salesOrderFilterTimezone,
 } from '@/lib/sales-order-period';
 import { getRestaurantPlanFeatures } from '@/lib/subscription-plan-enforcement';
+import { DEFAULT_UI_LANGUAGE } from '@/lib/i18n/resources';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 
 function hourInTimezone(date: Date, timeZone: string): number {
   try {
@@ -330,10 +332,13 @@ export async function GET(_req: NextRequest) {
         for (const item of row.items) {
           const qty = Number(item.quantity) || 0;
           if (qty <= 0) continue;
-          const name =
+          const rawName =
             item.productName?.trim() ||
             item.menuItem?.name?.trim() ||
             'Item';
+          const name =
+            resolveBilingualText(rawName, DEFAULT_UI_LANGUAGE).trim() ||
+            rawName;
           const key = item.menuItemId || name.toLowerCase();
           const line = qty * (Number(item.price) || 0);
           const prev = itemAgg.get(key) ?? {

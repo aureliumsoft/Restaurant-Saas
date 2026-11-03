@@ -725,9 +725,6 @@ function InlineRecommendationGroups({
                     optionNestedConfigs,
                     { group: g, parentVariation: baseProductVariation }
                   );
-                  const nestedVariation = nestedVariationId
-                    ? (it.variations ?? []).find((v) => v.id === nestedVariationId)
-                    : undefined;
                   const listUnit =
                     g.defaultLinkedRestaurantVariationId &&
                     !(g.useVariationPricing ?? false)
@@ -747,8 +744,7 @@ function InlineRecommendationGroups({
                     configurationDefaultListUnitPriceForSelection(
                       g,
                       baseProductVariation,
-                      visibleItems,
-                      nestedVariation ?? null
+                      visibleItems
                     );
                   const qty = selectedIds.filter(
                     (id) => id === it.menuItemId
@@ -2058,7 +2054,7 @@ export function NestedRecommendationSheet({
           open
           stackClassName="z-[92]"
           stackZIndex={140}
-          parentGroupName={activeProductGroup.name}
+          parentGroupName={resolve(activeProductGroup.name)}
           parentConfigurationGroup={activeProductGroup}
           baseProductVariation={configurationParentVariation}
           baseProductVariationShortLabel={baseProductVariationShortLabel}

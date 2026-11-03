@@ -35,6 +35,8 @@ import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
 import { useTranslation } from 'react-i18next';
 import { i18n } from '@/lib/i18n/client';
+import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
+import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 
 type PendingOrder = {
   id: string;
@@ -87,15 +89,7 @@ function trackingLabel(o: { shortOrderId: string | null; id: string }): string {
 }
 
 function getLocalizedName(val: string, lang: string) {
-  try {
-    const obj = JSON.parse(val);
-    if (typeof obj === 'object' && obj !== null) {
-      return obj[lang] || obj.en || Object.values(obj)[0] || val;
-    }
-    return val;
-  } catch {
-    return val;
-  }
+  return resolveBilingualText(val, normalizeUiLanguage(lang));
 }
 
 const MIN_CUSTOM_MINUTES = 1;

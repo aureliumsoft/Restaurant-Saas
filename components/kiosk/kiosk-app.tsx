@@ -10,6 +10,7 @@ import {
   Minus,
   Plus,
   ShoppingBag,
+  Settings,
   ShoppingCart,
   Store,
   Trash2,
@@ -81,6 +82,7 @@ import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
 import type { UiLanguage } from '@/lib/i18n/resources';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
+import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import { IconArrowBack } from '@tabler/icons-react';
 import {
   kioskBasePath,
@@ -92,6 +94,8 @@ import {
 import { submitKioskOrder } from '@/lib/offline/submit-order';
 import { useCustomerAccountOptional } from '@/components/customer-app/customer-account-context';
 import { KioskQrSignInDialog } from '@/components/kiosk/kiosk-qr-sign-in-dialog';
+import { KioskIdleCountdown } from '@/components/kiosk/kiosk-idle-countdown';
+import { useKioskIdleHome } from '@/components/kiosk/use-kiosk-idle-home';
 import {
   clearKioskTableQrCookie,
   setKioskTableQrCookie,
@@ -307,7 +311,6 @@ type KioskProductCardProps = {
   uiLang: UiLanguage;
   formatMoney: (n: number) => string;
   qty: number;
-  customizeLabel: string;
   onTap: (p: CustomerMenuProduct) => void;
   onBumpQty: (productId: string, delta: number) => void;
   cardRef?: (el: HTMLDivElement | null) => void;
@@ -320,7 +323,6 @@ const KioskProductCard = memo(function KioskProductCard({
   uiLang,
   formatMoney,
   qty,
-  customizeLabel,
   onTap,
   onBumpQty,
   cardRef,
@@ -330,6 +332,9 @@ const KioskProductCard = memo(function KioskProductCard({
   const priceDisplay = getMenuItemDisplayPrice(p);
   const showStrike = priceDisplay.compareAt != null;
   const displayName = resolveBilingualText(p.name, uiLang);
+  const actionLabel = productNeedsCustomizeDialog(p)
+    ? t('customizePlus')
+    : t('addPlus');
 
   const captureOrigin = (el: HTMLElement | null) => {
     if (!el || !onCaptureFlyOrigin) return;
@@ -419,7 +424,7 @@ const KioskProductCard = memo(function KioskProductCard({
               className="w-full bg-primary font-semibold text-primary-foreground hover:brightness-95"
               onClick={() => onTap(p)}
             >
-              {customizeLabel}
+              {actionLabel}
             </Button>
           )}
         </div>
@@ -434,7 +439,6 @@ type KioskHorizontalRowProps = {
   uiLang: UiLanguage;
   formatMoney: (n: number) => string;
   qtyOnMenu: (productId: string) => number;
-  customizeLabel: string;
   onTap: (p: CustomerMenuProduct) => void;
   onBumpQty: (productId: string, delta: number) => void;
   setProductCardRef: (productId: string, el: HTMLDivElement | null) => void;
@@ -447,7 +451,6 @@ const KioskHorizontalRow = memo(function KioskHorizontalRow({
   uiLang,
   formatMoney,
   qtyOnMenu,
-  customizeLabel,
   onTap,
   onBumpQty,
   setProductCardRef,
@@ -465,7 +468,6 @@ const KioskHorizontalRow = memo(function KioskHorizontalRow({
               uiLang={uiLang}
               formatMoney={formatMoney}
               qty={qtyOnMenu(p.id)}
-              customizeLabel={customizeLabel}
               onTap={onTap}
               onBumpQty={onBumpQty}
               cardRef={(el) => setProductCardRef(p.id, el)}
@@ -1491,7 +1493,7 @@ export function KioskApp({
         menuItemId: line.menuItemId,
         quantity: line.quantity,
         unitPrice: lineUnitTotal(line),
-      productName: cartLineTitle(line.productName, line.variationName),
+      productName: cartLineTitle(line.productName, line.variationName, uiLang),
       variationId: line.variationId,
         modifiers: line.modifiers,
       }));
@@ -1608,6 +1610,43 @@ export function KioskApp({
     }
   };
 
+  const resetIdleSessionToHome = useCallback(() => {
+    customizeLoadTokenRef.current += 1;
+    setDialogOpen(false);
+    setCustomizeProduct(null);
+    setMenuOfferOpen(false);
+    setMenuOfferProduct(null);
+    setMenuOfferBundles([]);
+    setCookingNote('');
+    setCustomerName('');
+    setCustomerEmail('');
+    setCustomerPhone('');
+    setPaymentMode('cash');
+    setKeyboardField(null);
+    persistCart([]);
+    setLastOrderId(null);
+    setLastTicketNumber(null);
+    if (fromTableQr) {
+      setStep('menu');
+      setFulfillment('dine_in');
+    } else {
+      setSelectedTableId('');
+      setFulfillment(null);
+      setStep('mode');
+    }
+  }, [fromTableQr, persistCart]);
+
+  const idleEnabled =
+    qrCustomerReady &&
+    !placing &&
+    (step === 'menu' || step === 'cart' || step === 'checkout');
+  const { secondsLeft: idleSecondsLeft } = useKioskIdleHome({
+    enabled: idleEnabled,
+    idleMs: 60_000,
+    warnSeconds: 5,
+    onTimeout: resetIdleSessionToHome,
+  });
+
   const renderProductCard = (p: CustomerMenuProduct) => (
     <KioskProductCard
       key={p.id}
@@ -1615,7 +1654,6 @@ export function KioskApp({
       uiLang={uiLang}
       formatMoney={formatMoney}
       qty={qtyOnMenu(p.id)}
-      customizeLabel={t('customizePlus')}
       onTap={onProductTap}
       onBumpQty={bumpProductQty}
       cardRef={(el) => setProductCardRef(p.id, el)}
@@ -1719,6 +1757,9 @@ export function KioskApp({
       style={kioskThemeVars}
       onPointerDown={() => setKeyboardField(null)}
     >
+      {idleSecondsLeft != null ? (
+        <KioskIdleCountdown secondsLeft={idleSecondsLeft} />
+      ) : null}
       <div
         className={cn(
           'relative z-10 flex min-h-screen flex-1 flex-col',
@@ -1788,7 +1829,31 @@ export function KioskApp({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <LanguageSwitcher variant="inline" tone="light" />
+              {step === 'mode' ? (
+                <div className="flex items-center gap-2" data-kiosk-nav-tools>
+                  <LanguageSwitcher variant="inline" tone="light" />
+                  <button
+                    type="button"
+                    data-kiosk-settings
+                    aria-label="Settings"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#e2e8f0] bg-white text-[#0f172a] shadow-sm hover:border-primary hover:text-primary"
+                    onClick={() => {
+                      const bridge = (
+                        window as Window & {
+                          ReactNativeWebView?: {
+                            postMessage: (message: string) => void;
+                          };
+                        }
+                      ).ReactNativeWebView;
+                      bridge?.postMessage(
+                        JSON.stringify({ type: 'openKioskSetup' })
+                      );
+                    }}
+                  >
+                    <Settings className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : null}
               {step === 'menu' ? (
                 <Button
                   type="button"
@@ -1999,7 +2064,6 @@ export function KioskApp({
                   uiLang={uiLang}
                   formatMoney={formatMoney}
                   qtyOnMenu={qtyOnMenu}
-                  customizeLabel={t('customizePlus')}
                   onTap={onProductTap}
                   onBumpQty={bumpProductQty}
                   setProductCardRef={setProductCardRef}
@@ -2011,7 +2075,6 @@ export function KioskApp({
                   uiLang={uiLang}
                   formatMoney={formatMoney}
                   qtyOnMenu={qtyOnMenu}
-                  customizeLabel={t('customizePlus')}
                   onTap={onProductTap}
                   onBumpQty={bumpProductQty}
                   setProductCardRef={setProductCardRef}
@@ -2527,10 +2590,11 @@ export function KioskApp({
                   <>
                     <div
                       className={cn(
-                        'grid gap-2',
-                        fulfillmentSettings.cardPaymentsEnabled
-                          ? 'grid-cols-2'
-                          : 'grid-cols-1'
+                        'grid grid-cols-1 gap-2'
+                        // ,
+                        // fulfillmentSettings.cardPaymentsEnabled
+                        //   ? 'grid-cols-2'
+                        //   : 'grid-cols-1'
                       )}
                     >
                       <Button
@@ -2542,7 +2606,7 @@ export function KioskApp({
                         <Banknote className="h-4 w-4" />
                         {t('cash')}
                       </Button>
-                      {fulfillmentSettings.cardPaymentsEnabled ? (
+                      {/* {fulfillmentSettings.cardPaymentsEnabled ? (
                       <Button
                         type="button"
                         variant={paymentMode === 'card' ? 'default' : 'outline'}
@@ -2552,9 +2616,9 @@ export function KioskApp({
                         <CreditCard className="h-4 w-4" />
                         {t('card')}
                       </Button>
-                      ) : null}
+                      ) : null} */}
                     </div>
-                    {fulfillmentSettings.cardPaymentsEnabled &&
+                    {/* {fulfillmentSettings.cardPaymentsEnabled &&
                     paymentMode === 'card' ? (
                       <div className="mt-3 space-y-2">
                         <Button
@@ -2610,7 +2674,7 @@ export function KioskApp({
                       <p className="mt-3 text-xs text-[#64748b]">
                         {t('cashAtCounterOrderHint')}
                       </p>
-                    )}
+                    )} */}
                   </>
                 )}
               </div>
