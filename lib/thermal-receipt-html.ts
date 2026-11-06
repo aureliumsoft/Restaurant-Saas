@@ -44,36 +44,22 @@ export function buildThermalReceiptHeaderHtml(
 }
 
 export type ThermalReceiptCssOptions = {
-  /** Multiply base thermal type (1 = default; kiosk uses ~2). */
-  fontScale?: number;
+  /** Kiosk tickets use the larger fixed sizes. POS stays on the smaller fixed sizes. */
+  variant?: 'default' | 'kiosk';
 };
 
-/**
- * Receipt fills an 80mm Sunmi roll and stays centered. It is not locked to 50mm.
- * h-10 = 2.5rem, w-26 = 6.5rem. Logo is a flat rectangle, not a circle.
- */
-export function getThermalReceiptDocumentCss(
-  options?: ThermalReceiptCssOptions
-): string {
-  const scale = Math.max(1, options?.fontScale ?? 1);
-  const px = (n: number) => `${Math.round(n * scale)}px`;
-  const rem = (n: number) => `${(n * scale).toFixed(2)}rem`;
-  return `
+const RECEIPT_CSS_SHARED = `
       @page { size: auto; margin: 0; }
-      html {
+      html, body {
         width: 100%;
         margin: 0;
         padding: 0;
       }
       body {
-        width: 100%;
-        margin: 0;
-        padding: 0;
         display: flex;
         flex-direction: column;
         align-items: center;
         font-family: Arial, sans-serif;
-        font-size: ${px(10)};
         line-height: 1.35;
       }
       .r {
@@ -81,7 +67,7 @@ export function getThermalReceiptDocumentCss(
         max-width: 80mm;
         box-sizing: border-box;
         margin: 0 auto;
-        padding: 2mm 2mm 4mm;
+        padding: 8px 8px 16px;
         text-align: center;
       }
       @media print {
@@ -99,19 +85,17 @@ export function getThermalReceiptDocumentCss(
         }
       }
       .center { text-align: center; }
-      .muted { font-size: ${px(10)}; }
-      .receipt-header { text-align: center; width: 100%; margin-bottom: ${px(4)}; }
-      .receipt-logo-wrap { display: flex; justify-content: center; width: 100%; margin-bottom: ${px(6)}; }
+      .receipt-header { text-align: center; width: 100%; margin-bottom: 4px; }
+      .receipt-logo-wrap { display: flex; justify-content: center; width: 100%; margin-bottom: 6px; }
       .receipt-logo {
-        width: ${rem(6.5)};
-        height: ${rem(2.5)};
+        width: 104px;
+        height: 40px;
         object-fit: contain;
         object-position: center;
         border-radius: 0;
         border: 0;
       }
       .receipt-brand {
-        font-size: ${px(14)};
         font-weight: 800;
         letter-spacing: 0.04em;
         line-height: 1.2;
@@ -120,25 +104,52 @@ export function getThermalReceiptDocumentCss(
         text-align: center;
         text-transform: uppercase;
       }
-      .receipt-branch { font-size: ${px(10)}; margin-top: ${px(2)}; text-align: center; }
-      .receipt-datetime { font-size: ${px(10)}; margin-top: ${px(2)}; text-align: center; }
-      .receipt-line { font-size: ${px(10)}; margin-top: ${px(2)}; text-align: left; }
-      .receipt-line strong { font-size: ${px(11)}; font-weight: 700; }
+      .receipt-branch, .receipt-datetime { margin-top: 2px; text-align: center; }
+      .receipt-line { margin-top: 2px; text-align: left; }
+      .receipt-line strong { font-weight: 700; }
       .receipt-ticket {
-        font-size: ${px(20)};
         font-weight: 700;
         line-height: 1.2;
-        margin: ${px(2)} 0;
+        margin: 2px 0;
         text-align: center;
       }
-      .sep { border-top: 1px dashed #111; margin: ${px(6)} 0; }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { padding: ${px(2)} 0; font-size: ${px(10)}; vertical-align: top; text-align: left; }
-      th { font-size: ${px(11)}; text-align: left; font-weight: 700; }
-      td.mod { padding-left: ${px(8)}; }
+      .sep { border-top: 1px dashed #111; margin: 6px 0; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      th, td { padding: 2px 0; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
+      th { text-align: left; font-weight: 700; }
+      td.mod { padding-left: 8px; }
       .qty, .amt { white-space: nowrap; text-align: right; }
-      .totals { margin-top: ${px(4)}; text-align: left; width: 100%; font-size: ${px(10)}; }
-      .totals div { display: flex; justify-content: space-between; margin-top: ${px(2)}; }
-      .grand { font-weight: 800; font-size: ${px(11)}; }
-    `;
+      .qty { width: 48px; }
+      .amt { width: 112px; }
+      .totals { margin-top: 4px; text-align: left; width: 100%; }
+      .totals div { display: flex; justify-content: space-between; margin-top: 2px; }
+      .grand { font-weight: 800; }
+`;
+
+/** POS receipt. Every size below is a fixed px value. */
+const DEFAULT_RECEIPT_CSS = `
+      body, .muted, .receipt-branch, .receipt-datetime, .receipt-line, td { font-size: 10px; }
+      .receipt-line strong, th, .grand { font-size: 11px; }
+      .receipt-brand { font-size: 14px; }
+      .receipt-ticket { font-size: 20px; }
+      ${RECEIPT_CSS_SHARED}
+`;
+
+/** Kiosk receipt. Every size below is a fixed px value, about twice the POS type. */
+const KIOSK_RECEIPT_CSS = `
+      body, .muted, .receipt-branch, .receipt-datetime, .receipt-line, td, .totals { font-size: 20px; }
+      .receipt-line strong, th, .grand { font-size: 22px; }
+      .receipt-brand { font-size: 28px; }
+      .receipt-ticket { font-size: 40px; }
+      ${RECEIPT_CSS_SHARED}
+`;
+
+/**
+ * Receipt fills an 80mm roll and stays centered.
+ * Logo box is 104px by 40px, a flat rectangle.
+ */
+export function getThermalReceiptDocumentCss(
+  options?: ThermalReceiptCssOptions
+): string {
+  return options?.variant === 'kiosk' ? KIOSK_RECEIPT_CSS : DEFAULT_RECEIPT_CSS;
 }

@@ -47,6 +47,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function BlogPostPage({ params }: Props) {
   const { slug } = await params;
+  const lang = await getServerUiLanguage();
   const [row, featured, recent] = await Promise.all([
     db.blogPost.findFirst({
       where: { slug, status: 'PUBLISHED' },
@@ -58,8 +59,8 @@ export default async function BlogPostPage({ params }: Props) {
         publishedAt: true,
       },
     }),
-    loadFeaturedBlogPosts(6),
-    loadRecentBlogPosts(8, slug),
+    loadFeaturedBlogPosts(6, lang),
+    loadRecentBlogPosts(8, slug, lang),
   ]);
 
   if (!row) notFound();
@@ -67,7 +68,12 @@ export default async function BlogPostPage({ params }: Props) {
   return (
     <div className="flex min-h-[100vh] flex-col bg-gradient-to-b from-zinc-50 via-white to-zinc-50 dark:from-zinc-950 dark:via-black dark:to-zinc-950">
       <div className="mx-auto w-full flex-1 px-4 pb-20 pt-28 sm:px-6">
-        <PublicBlogShell featured={featured} recent={recent}>
+        <PublicBlogShell
+          featured={featured}
+          recent={recent}
+          initialLang={lang}
+          excludeSlug={slug}
+        >
           <PublicBlogArticle
             title={row.title}
             shortDescription={row.shortDescription}

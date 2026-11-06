@@ -1,5 +1,7 @@
 import { db } from '@/lib/db';
 import { withImageCacheBust } from '@/lib/image-cache-bust';
+import { resolveStoredImageUrl } from '@/lib/resolve-stored-image-url';
+import { customerCategoryImageUrl } from '@/lib/stored-image-response';
 import { pathSegmentId } from '@/lib/url-id-path';
 
 export type MenuItemImageMeta = {
@@ -215,42 +217,57 @@ export function customerMenuVariationImageUrl(
 }
 
 export function mapBrowseListItem<
-  T extends { id: string; imageUrl?: string | null },
+  T extends { id: string; imageUrl?: string | null; updatedAt?: Date | string | number | null },
 >(
   item: T,
-  hasImage: boolean,
-  imageUrl: string | null
+  query?: {
+    slug?: string | null;
+    subdomain?: string | null;
+    /** staff dashboard / POS proxy instead of customer */
+    restaurantProxy?: boolean;
+  }
 ): Omit<T, 'imageUrl'> & { hasImage: boolean; imageUrl: string | null } {
-  const { imageUrl: _drop, ...rest } = item;
+  const { imageUrl: stored, ...rest } = item;
+  const proxy = query?.restaurantProxy
+    ? restaurantMenuItemImageUrl(item.id, item.updatedAt)
+    : customerMenuItemImageUrl(item.id, {
+        slug: query?.slug,
+        subdomain: query?.subdomain,
+        updatedAt: item.updatedAt,
+      });
+  const imageUrl = resolveStoredImageUrl(stored, proxy);
   return {
     ...rest,
-    hasImage,
+    hasImage: Boolean(imageUrl),
     imageUrl,
   };
 }
 
-export async function stampBrowseVariationImages<
+/** Normalize variation thumbs from selected imageUrl (CDN) or legacy proxy. */
+export function stampBrowseVariationImages<
   T extends {
     id: string;
-    variations?: Array<{ id: string; hasImage?: boolean; imageUrl?: string | null }>;
+    updatedAt?: Date | string | number | null;
+    variations?: Array<{
+      id: string;
+      hasImage?: boolean;
+      imageUrl?: string | null;
+      updatedAt?: Date | string | number | null;
+    }>;
   },
 >(
   items: T[],
   query: { slug?: string | null; subdomain?: string | null }
-): Promise<T[]> {
-  const ids = items.flatMap((item) => (item.variations ?? []).map((v) => v.id));
-  const meta = await imageMetaByVariationIds(ids);
+): T[] {
   for (const item of items) {
     for (const variation of item.variations ?? []) {
-      const row = meta.get(variation.id);
-      const hasImage = row?.hasImage ?? false;
-      variation.hasImage = hasImage;
-      variation.imageUrl = hasImage
-        ? customerMenuVariationImageUrl(item.id, variation.id, {
-            ...query,
-            updatedAt: row?.updatedAt,
-          })
-        : null;
+      const proxy = customerMenuVariationImageUrl(item.id, variation.id, {
+        ...query,
+        updatedAt: variation.updatedAt ?? item.updatedAt,
+      });
+      const imageUrl = resolveStoredImageUrl(variation.imageUrl, proxy);
+      variation.hasImage = Boolean(imageUrl);
+      variation.imageUrl = imageUrl;
     }
   }
   return items;
@@ -280,201 +297,109 @@ type LinkedMenuNode = {
   }> | null;
 };
 
-function walkLinkedCategoryItems(
-  group: NonNullable<LinkedMenuNode['attributeGroups']>[number],
-  visit: (item: LinkedMenuNode) => void
-) {
-  for (const item of group.linkedCategory?.items ?? []) {
-    visit(item);
-  }
-  for (const link of group.linkedCategory?.itemLinks ?? []) {
-    if (link.menuItem) visit(link.menuItem);
-  }
-}
-
-function collectLinkedMenuItemIds(node: LinkedMenuNode | null | undefined, ids: Set<string>) {
-  if (!node?.id) return;
-  ids.add(node.id);
-  for (const group of node.attributeGroups ?? []) {
-    collectLinkedMenuItemIds(group.linkedProduct, ids);
-    walkLinkedCategoryItems(group, (item) => collectLinkedMenuItemIds(item, ids));
-  }
-  for (const deal of node.dealsFromThis ?? []) {
-    collectLinkedMenuItemIds(deal.dealItem, ids);
-  }
-  for (const offer of node.offersFromThis ?? []) {
-    collectLinkedMenuItemIds(offer.offeredItem, ids);
-  }
-}
-
-function collectVariationRefs(
-  node: LinkedMenuNode | null | undefined,
-  refs: Array<{ itemId: string; variationId: string }>
-) {
-  if (!node?.id) return;
-  for (const variation of node.variations ?? []) {
-    if (variation.id) refs.push({ itemId: node.id, variationId: variation.id });
-  }
-  for (const group of node.attributeGroups ?? []) {
-    collectVariationRefs(group.linkedProduct, refs);
-    walkLinkedCategoryItems(group, (item) => collectVariationRefs(item, refs));
-  }
-  for (const deal of node.dealsFromThis ?? []) {
-    collectVariationRefs(deal.dealItem, refs);
-  }
-  for (const offer of node.offersFromThis ?? []) {
-    collectVariationRefs(offer.offeredItem, refs);
-  }
-}
-
-function applyLazyImageFlags(
+function applyInlineImageFlags(
   node: LinkedMenuNode,
-  itemMeta: Map<string, MenuItemImageMeta>,
-  variationMeta: Map<string, VariationImageMeta>,
-  query: { slug?: string | null; subdomain?: string | null }
+  query: { slug?: string | null; subdomain?: string | null } | null,
+  restaurantProxy: boolean
 ) {
   if (node.id) {
-    const row = itemMeta.get(node.id);
-    const hasImage = row?.hasImage ?? false;
-    node.hasImage = hasImage;
-    node.imageUrl = hasImage
-      ? customerMenuItemImageUrl(node.id, {
-          ...query,
-          updatedAt: row?.updatedAt,
-        })
-      : null;
+    const updatedAt = (node as { updatedAt?: Date | string | number | null })
+      .updatedAt;
+    const proxy = restaurantProxy
+      ? restaurantMenuItemImageUrl(node.id, updatedAt)
+      : customerMenuItemImageUrl(node.id, { ...(query ?? {}), updatedAt });
+    const imageUrl = resolveStoredImageUrl(node.imageUrl, proxy);
+    node.hasImage = Boolean(imageUrl);
+    node.imageUrl = imageUrl;
     for (const variation of node.variations ?? []) {
       if (!variation.id) continue;
-      const variationRow = variationMeta.get(variation.id);
-      const hasVariationImage = variationRow?.hasImage ?? false;
-      variation.hasImage = hasVariationImage;
-      variation.imageUrl = hasVariationImage
-        ? customerMenuVariationImageUrl(node.id, variation.id, {
-            ...query,
-            updatedAt: variationRow?.updatedAt,
-          })
-        : null;
+      if (restaurantProxy) {
+        // Staff variation image proxy is not wired; reuse product thumb when present.
+        const vUrl = resolveStoredImageUrl(variation.imageUrl, imageUrl);
+        variation.hasImage = Boolean(vUrl);
+        variation.imageUrl = vUrl;
+      } else {
+        const vProxy = customerMenuVariationImageUrl(node.id, variation.id, {
+          ...(query ?? {}),
+          updatedAt,
+        });
+        const vUrl = resolveStoredImageUrl(variation.imageUrl, vProxy);
+        variation.hasImage = Boolean(vUrl);
+        variation.imageUrl = vUrl;
+      }
     }
   }
   for (const group of node.attributeGroups ?? []) {
     if (group.linkedProduct) {
-      applyLazyImageFlags(group.linkedProduct, itemMeta, variationMeta, query);
+      applyInlineImageFlags(group.linkedProduct, query, restaurantProxy);
     }
     for (const item of group.linkedCategory?.items ?? []) {
-      applyLazyImageFlags(item, itemMeta, variationMeta, query);
+      applyInlineImageFlags(item, query, restaurantProxy);
     }
     for (const link of group.linkedCategory?.itemLinks ?? []) {
       if (link.menuItem) {
-        applyLazyImageFlags(link.menuItem, itemMeta, variationMeta, query);
+        applyInlineImageFlags(link.menuItem, query, restaurantProxy);
       }
     }
   }
   for (const deal of node.dealsFromThis ?? []) {
     if (deal.dealItem) {
-      applyLazyImageFlags(deal.dealItem, itemMeta, variationMeta, query);
+      applyInlineImageFlags(deal.dealItem, query, restaurantProxy);
     }
   }
   for (const offer of node.offersFromThis ?? []) {
     if (offer.offeredItem) {
-      applyLazyImageFlags(offer.offeredItem, itemMeta, variationMeta, query);
+      applyInlineImageFlags(offer.offeredItem, query, restaurantProxy);
     }
   }
 }
 
-function applyRestaurantLazyImageFlags(
-  node: LinkedMenuNode,
-  itemMeta: Map<string, MenuItemImageMeta>,
-  variationMeta: Map<string, VariationImageMeta>
-) {
-  if (node.id) {
-    const row = itemMeta.get(node.id);
-    const hasImage = row?.hasImage ?? false;
-    node.hasImage = hasImage;
-    node.imageUrl = hasImage
-      ? restaurantMenuItemImageUrl(node.id, row?.updatedAt)
-      : null;
-    for (const variation of node.variations ?? []) {
-      if (!variation.id) continue;
-      const variationRow = variationMeta.get(variation.id);
-      const hasVariationImage = variationRow?.hasImage ?? false;
-      variation.hasImage = hasVariationImage;
-      // Staff variation image proxy is not wired; reuse product thumb when present.
-      variation.imageUrl = hasVariationImage ? node.imageUrl : null;
-    }
-  }
-  for (const group of node.attributeGroups ?? []) {
-    if (group.linkedProduct) {
-      applyRestaurantLazyImageFlags(group.linkedProduct, itemMeta, variationMeta);
-    }
-    walkLinkedCategoryItems(group, (item) =>
-      applyRestaurantLazyImageFlags(item, itemMeta, variationMeta)
-    );
-  }
-  for (const deal of node.dealsFromThis ?? []) {
-    if (deal.dealItem) {
-      applyRestaurantLazyImageFlags(deal.dealItem, itemMeta, variationMeta);
-    }
-  }
-  for (const offer of node.offersFromThis ?? []) {
-    if (offer.offeredItem) {
-      applyRestaurantLazyImageFlags(offer.offeredItem, itemMeta, variationMeta);
-    }
-  }
-}
-
-/** Stamp hasImage + lazy staff `/image` URLs onto dashboard/POS menu trees. */
-export async function attachRestaurantLazyImages<T>(item: T): Promise<T> {
-  const node = item as T & LinkedMenuNode;
-  const itemIds = new Set<string>();
-  collectLinkedMenuItemIds(node, itemIds);
-  const variationRefs: Array<{ itemId: string; variationId: string }> = [];
-  collectVariationRefs(node, variationRefs);
-  const [itemMeta, variationMeta] = await Promise.all([
-    imageMetaByMenuItemIds([...itemIds]),
-    imageMetaByVariationIds(variationRefs.map((ref) => ref.variationId)),
-  ]);
-  applyRestaurantLazyImageFlags(node, itemMeta, variationMeta);
+/**
+ * Prefer selected CDN `imageUrl` values; fall back to `/image` proxy only for
+ * legacy base64. Sync — no extra presence queries.
+ */
+export function attachRestaurantLazyImages<T>(item: T): T {
+  applyInlineImageFlags(item as T & LinkedMenuNode, null, true);
   return item;
 }
 
-/** Stamp hasImage + lazy /image URLs onto a product, variations, and nested add-on items. */
-export async function attachCustomerLazyImages<T>(
+/** Prefer selected CDN URLs on customer menu trees (sync). */
+export function attachCustomerLazyImages<T>(
   item: T,
   query: { slug?: string | null; subdomain?: string | null }
-): Promise<T> {
-  const node = item as T & LinkedMenuNode;
-  const itemIds = new Set<string>();
-  collectLinkedMenuItemIds(node, itemIds);
-  const variationRefs: Array<{ itemId: string; variationId: string }> = [];
-  collectVariationRefs(node, variationRefs);
-  const [itemMeta, variationMeta] = await Promise.all([
-    imageMetaByMenuItemIds([...itemIds]),
-    imageMetaByVariationIds(variationRefs.map((ref) => ref.variationId)),
-  ]);
-  applyLazyImageFlags(node, itemMeta, variationMeta, query);
+): T {
+  applyInlineImageFlags(item as T & LinkedMenuNode, query, false);
   return item;
 }
 
-/** Same lazy URLs without extra image-presence queries (customize first paint). */
+/** Customize first paint: keep CDN URLs when selected, else proxy. */
 export function stampCustomerDetailLazyUrls<T>(
   item: T,
   query: { slug?: string | null; subdomain?: string | null }
 ): T {
-  const visit = (node: LinkedMenuNode | null | undefined) => {
-    if (!node?.id) return;
-    const updatedAt = (node as { updatedAt?: Date | string | number | null }).updatedAt;
-    node.hasImage = true;
-    node.imageUrl = customerMenuItemImageUrl(node.id, { ...query, updatedAt });
-    for (const variation of node.variations ?? []) {
-      variation.imageUrl = node.imageUrl;
-    }
-    for (const group of node.attributeGroups ?? []) {
-      visit(group.linkedProduct);
-      walkLinkedCategoryItems(group, visit);
-    }
-    for (const deal of node.dealsFromThis ?? []) visit(deal.dealItem);
-    for (const offer of node.offersFromThis ?? []) visit(offer.offeredItem);
-  };
-  visit(item as T & LinkedMenuNode);
+  applyInlineImageFlags(item as T & LinkedMenuNode, query, false);
   return item;
+}
+
+/** Resolve a category image from selected column or legacy proxy. */
+export function resolveCategoryImageUrl(
+  category: {
+    id: string;
+    imageUrl?: string | null;
+    updatedAt?: Date | string | number | null;
+  },
+  query: {
+    slug?: string | null;
+    subdomain?: string | null;
+    restaurantProxy?: boolean;
+  }
+): string | null {
+  const proxy = query.restaurantProxy
+    ? restaurantMenuCategoryImageUrl(category.id, category.updatedAt)
+    : customerCategoryImageUrl(category.id, {
+        slug: query.slug,
+        subdomain: query.subdomain,
+        updatedAt: category.updatedAt,
+      });
+  return resolveStoredImageUrl(category.imageUrl, proxy);
 }

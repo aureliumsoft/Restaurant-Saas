@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 import { format } from 'date-fns';
@@ -9,10 +9,10 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { useUiLanguage } from '@/hooks/use-ui-language';
+import type { UiLanguage } from '@/lib/i18n/resources';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { cn } from '@/lib/utils';
 
-/** Raw bilingual fields from API / SSR (JSON or &&&&). */
 export type PublicBlogCard = {
   id: string;
   title: string;
@@ -20,18 +20,22 @@ export type PublicBlogCard = {
   imageUrl: string | null;
   shortDescription: string;
   publishedAt: string | null;
+  english?: boolean;
+  spanish?: boolean;
 };
 
 type Props = {
   initialPosts: PublicBlogCard[];
   initialNextCursor: string | null;
   initialHasMore: boolean;
+  initialLang: UiLanguage;
 };
 
 export function PublicBlogList({
   initialPosts,
   initialNextCursor,
   initialHasMore,
+  initialLang,
 }: Props) {
   const { t } = useTranslation();
   const lang = useUiLanguage();
@@ -39,15 +43,17 @@ export function PublicBlogList({
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadedLang = useRef(initialLang);
 
-  const loadMore = useCallback(async () => {
-    if (!hasMore || loadingMore) return;
-    setLoadingMore(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ limit: '9' });
-      if (nextCursor) params.set('cursor', nextCursor);
+  const fetchPage = useCallback(
+    async (opts: { cursor?: string | null; replace: boolean; forLang: UiLanguage }) => {
+      const params = new URLSearchParams({
+        limit: '9',
+        lang: opts.forLang,
+      });
+      if (opts.cursor) params.set('cursor', opts.cursor);
       const res = await axios.get<{
         data: {
           posts: PublicBlogCard[];
@@ -56,15 +62,59 @@ export function PublicBlogList({
         };
       }>(`/api/blog?${params}`);
       const page = res.data.data;
-      setPosts((prev) => [...prev, ...page.posts]);
+      setPosts((prev) =>
+        opts.replace ? page.posts : [...prev, ...page.posts]
+      );
       setNextCursor(page.nextCursor);
       setHasMore(page.hasMore);
+      loadedLang.current = opts.forLang;
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (lang === loadedLang.current) return;
+    let cancelled = false;
+    setReloading(true);
+    setError(null);
+    void (async () => {
+      try {
+        await fetchPage({ replace: true, forLang: lang });
+      } catch {
+        if (!cancelled) setError(t('marketingExtras.blog.loadMoreError'));
+      } finally {
+        if (!cancelled) setReloading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lang, fetchPage, t]);
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || loadingMore || reloading) return;
+    setLoadingMore(true);
+    setError(null);
+    try {
+      await fetchPage({
+        cursor: nextCursor,
+        replace: false,
+        forLang: lang,
+      });
     } catch {
       setError(t('marketingExtras.blog.loadMoreError'));
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, loadingMore, nextCursor, t]);
+  }, [fetchPage, hasMore, loadingMore, nextCursor, lang, reloading, t]);
+
+  if (reloading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-fire-500" />
+      </div>
+    );
+  }
 
   if (posts.length === 0) {
     return (

@@ -42,10 +42,7 @@ const variationSelectLegacy = {
   },
 } as const;
 
-/**
- * Linked recommendation products — never select imageUrl blobs.
- * Thumbs use lazy `/image` proxy URLs after the sheet paints.
- */
+/** Linked recommendation products — include CDN imageUrl (short public URLs). */
 const variationSelectLinkedFull = {
   where: MENU_ITEM_VARIATION_SELLABLE_WHERE,
   orderBy: { sortOrder: 'asc' as const },
@@ -53,6 +50,7 @@ const variationSelectLinkedFull = {
     id: true,
     name: true,
     title: true,
+    imageUrl: true,
     swatchHex: true,
     priceDelta: true,
     sortOrder: true,
@@ -70,6 +68,7 @@ const variationSelectLinkedLegacy = {
     id: true,
     name: true,
     title: true,
+    imageUrl: true,
     swatchHex: true,
     priceDelta: true,
     sortOrder: true,
@@ -100,11 +99,12 @@ export const customerMenuItemCoreSelectLegacy = {
   variations: variationSelectLegacy,
 } as const;
 
-/** Linked category/product option cards — lightweight, no image blobs. */
+/** Linked category/product option cards — include public image URLs. */
 export const customerMenuLinkedItemCoreSelect = {
   id: true,
   name: true,
   description: true,
+  imageUrl: true,
   price: true,
   salePrice: true,
   updatedAt: true,
@@ -116,6 +116,7 @@ export const customerMenuLinkedItemCoreSelectLegacy = {
   id: true,
   name: true,
   description: true,
+  imageUrl: true,
   price: true,
   salePrice: true,
   updatedAt: true,
@@ -311,6 +312,7 @@ const productDetailOptionVariationSelectFull = {
     id: true,
     name: true,
     title: true,
+    imageUrl: true,
     priceDelta: true,
     sortOrder: true,
     restaurantVariationId: true,
@@ -323,6 +325,7 @@ const productDetailOptionVariationSelectLegacy = {
     id: true,
     name: true,
     title: true,
+    imageUrl: true,
     priceDelta: true,
     sortOrder: true,
   },
@@ -334,6 +337,7 @@ export function customerProductDetailOptionCardSelect(
   return {
     id: true,
     name: true,
+    imageUrl: true,
     price: true,
     salePrice: true,
     updatedAt: true,

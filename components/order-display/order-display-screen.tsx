@@ -45,6 +45,8 @@ import type { TFunction } from 'i18next';
 const VOICE_STORAGE_KEY = 'order-display:voice-enabled';
 const COMPLETED_ANNOUNCEMENT_REPEATS = 3;
 const IN_PROGRESS_DISPLAY_LIMIT = 8;
+/** Background API poll only (no page reload) — keeps BrowseHere / WebViews fresh. */
+const ORDER_DISPLAY_POLL_MS = 5_000;
 
 function localTicketToDisplay(
   t: LocalOfflineTicket,
@@ -334,11 +336,12 @@ export function OrderDisplayScreen() {
 
   const loadSeqRef = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
     const seq = ++loadSeqRef.current;
     const isStale = () => seq !== loadSeqRef.current;
 
-    setRefreshing(true);
+    if (!silent) setRefreshing(true);
     try {
       const applyPayload = (
         next: OrderDisplayPayload['data'],
@@ -596,21 +599,24 @@ export function OrderDisplayScreen() {
       if (!isStale()) setError(tRef.current('orderDisplay.loadError'));
     } finally {
       if (!isStale()) {
-      setLoading(false);
-      setRefreshing(false);
-    }
+        setLoading(false);
+        if (!silent) setRefreshing(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    const onOfflineChange = () => void load();
+    const onOfflineChange = () => void load({ silent: true });
     window.addEventListener('offline-outbox-changed', onOfflineChange);
     window.addEventListener('online', onOfflineChange);
     window.addEventListener('offline', onOfflineChange);
+    // BrowseHere / some WebViews resume without a reliable visibilitychange.
+    window.addEventListener('pageshow', onOfflineChange);
+    window.addEventListener('focus', onOfflineChange);
     let bc: BroadcastChannel | null = null;
     try {
       bc = new BroadcastChannel('foodluk-offline-sync');
-      bc.onmessage = () => void load();
+      bc.onmessage = () => void load({ silent: true });
     } catch {
       /* optional */
     }
@@ -618,11 +624,26 @@ export function OrderDisplayScreen() {
       window.removeEventListener('offline-outbox-changed', onOfflineChange);
       window.removeEventListener('online', onOfflineChange);
       window.removeEventListener('offline', onOfflineChange);
+      window.removeEventListener('pageshow', onOfflineChange);
+      window.removeEventListener('focus', onOfflineChange);
       bc?.close();
     };
   }, [load]);
 
-  useRealtimeRefresh('realtime:order_display', () => void load());
+  // Background API poll every 5s — no page reload, no spinner flash.
+  useEffect(() => {
+    void load();
+    const id = window.setInterval(() => {
+      void load({ silent: true });
+    }, ORDER_DISPLAY_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [load]);
+
+  useRealtimeRefresh(
+    'realtime:order_display',
+    () => void load({ silent: true }),
+    { runOnMount: false }
+  );
 
   const lastUpdatedText = useMemo(() => {
     if (!lastUpdated) return '—';
@@ -646,9 +667,9 @@ export function OrderDisplayScreen() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-3 overflow-hidden p-3 md:p-4">
+    <div className="order-display-root gap-3 p-3 md:p-4">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
             {tr('orderDisplay.title')}
           </h1>
@@ -672,7 +693,7 @@ export function OrderDisplayScreen() {
             {tr('orderDisplay.liveSync')} {lastUpdatedText}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <LanguageSwitcher variant="inline" />
           <Button
             type="button"
@@ -714,19 +735,19 @@ export function OrderDisplayScreen() {
         </Card>
       ) : null}
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-2">
-        <section className="flex min-h-0 flex-col gap-2 overflow-hidden">
+      <main className="order-display-main">
+        <section className="order-display-col gap-2">
           <SectionTitle
             title={tr('orderDisplay.readyNow')}
             subtitle={tr('orderDisplay.readyNowSubtitle')}
             accent="emerald"
           />
-          <div className="min-h-0 flex-1">
+          <div className="order-display-scroll">
             {loading ? (
-              <SkeletonCard className="h-full" />
+              <SkeletonCard className="min-h-[240px] h-full" />
             ) : !featured ? (
               <EmptyState
-                className="h-full"
+                className="min-h-[240px] h-full"
                 icon={
                   <CheckCircle2 className="h-12 w-12 text-emerald-500/60" />
                 }
@@ -743,70 +764,72 @@ export function OrderDisplayScreen() {
           </div>
         </section>
 
-        <section className="flex min-h-0 flex-col gap-3 overflow-y-auto">
-          <div className="flex shrink-0 flex-col gap-2">
-            <SectionTitle
-              title={tr('orderDisplay.recentlyCompleted')}
-              subtitle={tr('orderDisplay.recentlyCompletedSubtitle')}
-              accent="emerald"
-            />
-            {loading ? (
-              <div className="grid grid-cols-2 gap-3">
-                <SkeletonCard className="h-24" />
-                <SkeletonCard className="h-24" />
-              </div>
-            ) : recentOthers.length === 0 ? (
-              <EmptyState
-                icon={<CheckCircle2 className="h-8 w-8 text-emerald-500/50" />}
-                title={tr('orderDisplay.noOlderReady')}
-                subtitle={tr('orderDisplay.noOlderReadySubtitle')}
+        <section className="order-display-col">
+          <div className="order-display-scroll flex flex-col gap-3">
+            <div className="flex shrink-0 flex-col gap-2">
+              <SectionTitle
+                title={tr('orderDisplay.recentlyCompleted')}
+                subtitle={tr('orderDisplay.recentlyCompletedSubtitle')}
+                accent="emerald"
               />
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {recentOthers.map((t) => (
-                  <RecentReadyCard
-                    key={t.ticketId}
-                    ticket={t}
-                    pulsing={highlighted.has(t.ticketId)}
-                    tr={tr}
-                  />
-                ))}
-                {recentOthers.length === 1 ? (
-                  <div className="flex items-center justify-center rounded-lg border border-dashed border-emerald-500/20 bg-emerald-500/[0.03] px-4 py-6 text-xs text-muted-foreground">
-                    {tr('orderDisplay.upNext')}
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </div>
+              {loading ? (
+                <div className="order-display-cards-2">
+                  <SkeletonCard className="h-24" />
+                  <SkeletonCard className="h-24" />
+                </div>
+              ) : recentOthers.length === 0 ? (
+                <EmptyState
+                  icon={<CheckCircle2 className="h-8 w-8 text-emerald-500/50" />}
+                  title={tr('orderDisplay.noOlderReady')}
+                  subtitle={tr('orderDisplay.noOlderReadySubtitle')}
+                />
+              ) : (
+                <div className="order-display-cards-2">
+                  {recentOthers.map((t) => (
+                    <RecentReadyCard
+                      key={t.ticketId}
+                      ticket={t}
+                      pulsing={highlighted.has(t.ticketId)}
+                      tr={tr}
+                    />
+                  ))}
+                  {recentOthers.length === 1 ? (
+                    <div className="flex items-center justify-center rounded-lg border border-dashed border-emerald-500/20 bg-emerald-500/5 px-4 py-6 text-xs text-muted-foreground">
+                      {tr('orderDisplay.upNext')}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
 
-          <div className="flex shrink-0 flex-col gap-2">
-            <SectionTitle
-              title={tr('orderDisplay.preparing')}
-              subtitle={tr('orderDisplay.preparingSubtitle')}
-              accent="amber"
-            />
-            {loading ? (
-              <div className="grid grid-cols-2 grid-rows-4 gap-2 sm:gap-3">
-                {Array.from({ length: IN_PROGRESS_DISPLAY_LIMIT }).map(
-                  (_, i) => (
-                    <SkeletonCard key={i} className="h-24" />
-                  )
-                )}
-              </div>
-            ) : inProgress.length === 0 ? (
-              <EmptyState
-                icon={<Utensils className="h-8 w-8 text-amber-500/50" />}
-                title={tr('orderDisplay.noPreparing')}
-                subtitle={tr('orderDisplay.noPreparingSubtitle')}
+            <div className="flex shrink-0 flex-col gap-2">
+              <SectionTitle
+                title={tr('orderDisplay.preparing')}
+                subtitle={tr('orderDisplay.preparingSubtitle')}
+                accent="amber"
               />
-            ) : (
-              <div className="grid grid-cols-2 grid-rows-4 gap-2 sm:gap-3">
-                {inProgress.slice(0, IN_PROGRESS_DISPLAY_LIMIT).map((t) => (
-                  <InProgressCard key={t.ticketId} ticket={t} tr={tr} />
-                ))}
-              </div>
-            )}
+              {loading ? (
+                <div className="order-display-cards-2">
+                  {Array.from({ length: IN_PROGRESS_DISPLAY_LIMIT }).map(
+                    (_, i) => (
+                      <SkeletonCard key={i} className="h-24" />
+                    )
+                  )}
+                </div>
+              ) : inProgress.length === 0 ? (
+                <EmptyState
+                  icon={<Utensils className="h-8 w-8 text-amber-500/50" />}
+                  title={tr('orderDisplay.noPreparing')}
+                  subtitle={tr('orderDisplay.noPreparingSubtitle')}
+                />
+              ) : (
+                <div className="order-display-cards-2">
+                  {inProgress.slice(0, IN_PROGRESS_DISPLAY_LIMIT).map((t) => (
+                    <InProgressCard key={t.ticketId} ticket={t} tr={tr} />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </section>
       </main>
@@ -852,7 +875,7 @@ function FeaturedReadyCard({
 }) {
   return (
     <Card
-      className={`relative flex h-full flex-col overflow-hidden border-emerald-500/50 bg-gradient-to-br from-emerald-500/15 via-emerald-400/5 to-transparent shadow-2xl shadow-emerald-500/20 ${
+      className={`relative flex min-h-[240px] h-full flex-col overflow-hidden border-emerald-500/50 bg-gradient-to-br from-emerald-500/15 via-emerald-400/5 to-transparent shadow-2xl shadow-emerald-500/20 ${
         pulsing ? 'ring-4 ring-emerald-400/70 animate-pulse' : ''
       }`}
     >
@@ -902,7 +925,7 @@ function RecentReadyCard({
 }) {
   return (
     <Card
-      className={`relative overflow-hidden border-emerald-500/30 bg-emerald-500/[0.05] shadow-sm ${
+      className={`relative overflow-hidden border-emerald-500/30 bg-emerald-500/5 shadow-sm ${
         pulsing ? 'ring-2 ring-emerald-400/70 animate-pulse' : ''
       }`}
     >
@@ -937,7 +960,7 @@ function InProgressCard({
   tr: TFunction;
 }) {
   return (
-    <Card className="relative overflow-hidden border-amber-500/30 bg-amber-500/[0.05] shadow-sm">
+    <Card className="relative overflow-hidden border-amber-500/30 bg-amber-500/5 shadow-sm">
       <CardContent className="flex items-center gap-3 p-3 md:p-4">
         <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-amber-500 text-white shadow-md shadow-amber-500/40">
           <Clock3 className="h-7 w-7" strokeWidth={2.5} />

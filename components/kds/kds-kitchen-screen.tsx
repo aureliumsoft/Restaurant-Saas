@@ -461,7 +461,7 @@ export function KdsKitchenScreen() {
           </CardContent>
         </Card>
       ) : (
-        <div className="flex flex-row flex-wrap items-start gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-4">
           {sorted.map((t) => {
             const left = remainingSeconds(
               t.startedAt,
@@ -470,39 +470,38 @@ export function KdsKitchenScreen() {
             );
             const overdue = left < 0;
             return (
-              <Card key={t.id} className={cn("w-max shrink-0 h-[calc(50vh-70px)]", overdue ? 'border-red-500' : '')}>
-                <div className="flex flex-col flex-wrap content-start h-full gap-x-6 gap-y-1.5 p-4 ">
-                  <div className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 pb-3 space-y-3 border-b">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <div className="flex items-baseline gap-2">
-                            
-                            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                              {tr('kds.token')}
-                            </span>
-
-                            <span className="font-mono text-3xl font-extrabold leading-none tabular-nums">
-                              {tokenLabel(t)}
-                            </span>
-
-                          </div>
-                            <Badge variant={overdue ? 'destructive' : 'secondary'}>
-                          {getOrderMethodLabel(t, tr)}
-                        </Badge>
-                          <span className="hidden h-5 w-px bg-border sm:inline-block" />
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                              {tr('kds.tracking')}
-                            </span>
-                            <span className="font-mono text-sm font-semibold uppercase tracking-wider">
-                              {trackingLabel(t)}
-                            </span>
-                          </div>
+              <Card
+                key={t.id}
+                className={cn(
+                  'flex min-h-[280px] flex-col overflow-hidden',
+                  overdue ? 'border-red-500' : ''
+                )}
+              >
+                <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+                  <div className="shrink-0 space-y-3 border-b pb-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                            {tr('kds.token')}
+                          </span>
+                          <span className="font-mono text-3xl font-extrabold leading-none tabular-nums">
+                            {tokenLabel(t)}
+                          </span>
+                          <Badge variant={overdue ? 'destructive' : 'secondary'}>
+                            {getOrderMethodLabel(t, tr)}
+                          </Badge>
                         </div>
-                        
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                            {tr('kds.tracking')}
+                          </span>
+                          <span className="font-mono text-sm font-semibold uppercase tracking-wider">
+                            {trackingLabel(t)}
+                          </span>
+                        </div>
                       </div>
-                    <div className="flex flex-col w-1/3  justify-between">
+                      <div className="shrink-0 text-right">
                         <p className="text-xs text-muted-foreground">
                           {tr('kds.selectedTime')}
                         </p>
@@ -516,59 +515,68 @@ export function KdsKitchenScreen() {
                             minutes: t.selectedMinutes,
                           })}
                         </p>
+                      </div>
                     </div>
-                    </div>
-
                   </div>
 
-                  {t.items.map((it) => {
-                    const row = parseKitchenTicketItemDisplay(
-                      it.productName,
-                      it.quantity
-                    );
-                    const currentLang = typeof i18n !== 'undefined' ? i18n.language : 'en';
-                    const localizedName = getLocalizedName(row.name, currentLang);
+                  <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+                    {t.items.map((it) => {
+                      const row = parseKitchenTicketItemDisplay(
+                        it.productName,
+                        it.quantity
+                      );
+                      const currentLang =
+                        typeof i18n !== 'undefined' ? i18n.language : 'en';
+                      const localizedName = getLocalizedName(
+                        row.name,
+                        currentLang
+                      );
 
-                    if (row.kind === 'branch') {
+                      if (row.kind === 'branch') {
+                        return (
+                          <p
+                            key={it.id}
+                            className="pt-0.5 text-sm font-medium leading-snug text-muted-foreground"
+                          >
+                            ↳ {localizedName}
+                          </p>
+                        );
+                      }
+                      if (row.kind === 'nested' || row.kind === 'addon') {
+                        return (
+                          <p
+                            key={it.id}
+                            className="pl-4 text-sm leading-snug text-muted-foreground"
+                          >
+                            + {localizedName}
+                          </p>
+                        );
+                      }
+                      if (row.kind === 'personalize') {
+                        return (
+                          <p
+                            key={it.id}
+                            className="pl-4 text-sm font-medium italic leading-snug text-amber-600 dark:text-amber-500"
+                          >
+                            • {localizedName}
+                          </p>
+                        );
+                      }
                       return (
                         <p
                           key={it.id}
-                          className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 pt-0.5 text-sm font-medium leading-snug text-muted-foreground"
+                          className="pt-2 text-base font-bold leading-snug first:pt-0"
                         >
-                          ↳ {localizedName}
+                          <span className="mr-1.5 tabular-nums">
+                            {row.quantity}×
+                          </span>
+                          {localizedName}
                         </p>
                       );
-                    }
-                    if (row.kind === 'nested' || row.kind === 'addon') {
-                      return (
-                        <p
-                          key={it.id}
-                          className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 pl-4 text-sm leading-snug text-muted-foreground"
-                        >
-                          + {localizedName}
-                        </p>
-                      );
-                    }
-                    if (row.kind === 'personalize') {
-                      return (
-                        <p
-                          key={it.id}
-                          className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 pl-4 text-sm font-medium leading-snug text-amber-600 dark:text-amber-500 italic"
-                        >
-                          • {localizedName}
-                        </p>
-                      );
-                    }
-                    return (
-                      <p key={it.id} className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 pt-2 first:pt-0 text-base font-bold leading-snug">
-                        <span className="tabular-nums mr-1.5">
-                          {row.quantity}×
-                        </span>
-                        {localizedName}
-                      </p>
-                    );
-                  })}
-                  <div className="w-[280px] xl:w-[calc(25vw-2rem)] min-w-[220px] max-w-[320px] shrink-0 mt-auto pt-3 border-t border-border/50 flex flex-col justify-between gap-3">
+                    })}
+                  </div>
+
+                  <div className="mt-auto flex shrink-0 flex-col gap-3 border-t border-border/50 pt-3">
                     {(() => {
                       const cutlery =
                         t.cutleryRequested === true ||
@@ -585,7 +593,7 @@ export function KdsKitchenScreen() {
                         />
                       );
                     })()}
-                    <div className="flex justify-between w-full gap-2">
+                    <div className="flex w-full justify-between gap-2">
                       <Button
                         type="button"
                         variant="destructive"
@@ -606,7 +614,7 @@ export function KdsKitchenScreen() {
                         }
                       >
                         {activeCancelCount > 0 &&
-                          activeCancelingTicketId === t.id ? (
+                        activeCancelingTicketId === t.id ? (
                           <>
                             <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
                             <span className="text-sm font-medium">
@@ -642,7 +650,7 @@ export function KdsKitchenScreen() {
                         }
                       >
                         {activeCompleteCount > 0 &&
-                          activeCompletingTicketId === t.id ? (
+                        activeCompletingTicketId === t.id ? (
                           <>
                             <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
                             <span className="text-sm font-medium">
@@ -660,11 +668,7 @@ export function KdsKitchenScreen() {
                       </Button>
                     </div>
                   </div>
-
                 </div>
-
-
-
               </Card>
             );
           })}

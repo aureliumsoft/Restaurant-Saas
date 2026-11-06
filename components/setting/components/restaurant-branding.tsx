@@ -205,6 +205,7 @@ export function RestaurantBrandingCard({
           value={logoUrl}
           onChange={setLogoUrl}
           helperText={t('settings.cards.branding.logoHelper')}
+          storageKind="logo"
         />
         <div className="space-y-2">
           <Label htmlFor="restaurant-theme-primary-color">
@@ -237,6 +238,7 @@ export function RestaurantBrandingCard({
             value={mainBannerUrl}
             onChange={setMainBannerUrl}
             helperText={t('settings.cards.branding.mainBannerHelper')}
+            storageKind="banners"
           />
         </PremiumGate>
         <div className="space-y-2">
@@ -270,6 +272,7 @@ export function RestaurantBrandingCard({
                   })}
                   value={url}
                   onChange={(v) => setMenuBanner(i, v)}
+                  storageKind="banners"
                 />
               </div>
               {menuBanners.length > 1 ? (

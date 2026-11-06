@@ -20,9 +20,9 @@ import {
 } from "@/lib/menu/customer-menu-attribute-groups-select";
 import { clearCustomerMenuProductDetailCache } from "@/lib/menu/load-customer-menu-progressive";
 import { personalizeGroupsSelect } from "@/lib/menu/personalize-groups-select";
-import {
-  restaurantMenuItemImageUrl,
-} from "@/lib/menu/menu-item-image-utils";
+import { attachRestaurantLazyImages } from "@/lib/menu/menu-item-image-utils";
+import { resolveStoredImageUrl } from "@/lib/resolve-stored-image-url";
+import { restaurantMenuItemImageUrl } from "@/lib/menu/menu-item-image-utils";
 import { encodeUrlId } from "@/lib/url-id";
 import { resolveRouteId } from "@/lib/resolve-route-id";
 
@@ -87,6 +87,7 @@ const liteDetailSelect = {
           id: true,
           name: true,
           description: true,
+          imageUrl: true,
           price: true,
           salePrice: true,
           updatedAt: true,
@@ -104,6 +105,7 @@ const liteDetailSelect = {
           id: true,
           name: true,
           description: true,
+          imageUrl: true,
           price: true,
           salePrice: true,
           updatedAt: true,
@@ -139,44 +141,51 @@ export async function GET(
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
-    // Skip extra category/image round-trips — POS uses lazy /image URLs and categoryId.
+    const withImages = attachRestaurantLazyImages(item);
+    const imageUrl = resolveStoredImageUrl(
+      withImages.imageUrl,
+      restaurantMenuItemImageUrl(itemId, item.updatedAt)
+    );
+
     return NextResponse.json(
       {
         data: {
-          ...item,
+          ...withImages,
           urlId: encodeUrlId(itemId),
-          hasImage: true,
-          imageUrl: restaurantMenuItemImageUrl(itemId, item.updatedAt),
+          hasImage: Boolean(imageUrl),
+          imageUrl,
           categoryIds: [item.categoryId],
           createdAt: item.createdAt.toISOString(),
           updatedAt: item.updatedAt.toISOString(),
-          dealsFromThis: (item.dealsFromThis ?? []).map((row) => {
+          dealsFromThis: (withImages.dealsFromThis ?? []).map((row) => {
             const did = row.dealItem?.id;
             if (!did || !row.dealItem) return row;
+            const dealUrl = resolveStoredImageUrl(
+              row.dealItem.imageUrl,
+              restaurantMenuItemImageUrl(did, row.dealItem.updatedAt)
+            );
             return {
               ...row,
               dealItem: {
                 ...row.dealItem,
-                hasImage: true,
-                imageUrl: restaurantMenuItemImageUrl(
-                  did,
-                  row.dealItem.updatedAt
-                ),
+                hasImage: Boolean(dealUrl),
+                imageUrl: dealUrl,
               },
             };
           }),
-          offersFromThis: (item.offersFromThis ?? []).map((row) => {
+          offersFromThis: (withImages.offersFromThis ?? []).map((row) => {
             const oid = row.offeredItem?.id;
             if (!oid || !row.offeredItem) return row;
+            const offerUrl = resolveStoredImageUrl(
+              row.offeredItem.imageUrl,
+              restaurantMenuItemImageUrl(oid, row.offeredItem.updatedAt)
+            );
             return {
               ...row,
               offeredItem: {
                 ...row.offeredItem,
-                hasImage: true,
-                imageUrl: restaurantMenuItemImageUrl(
-                  oid,
-                  row.offeredItem.updatedAt
-                ),
+                hasImage: Boolean(offerUrl),
+                imageUrl: offerUrl,
               },
             };
           }),
@@ -200,11 +209,12 @@ export async function GET(
   }
 
   const categoryIds = await getMenuItemCategoryIds(itemId);
+  const withImages = attachRestaurantLazyImages(item);
 
   return NextResponse.json(
     {
       data: {
-        ...item,
+        ...withImages,
         ingredientRecipes: [],
         urlId: encodeUrlId(itemId),
         categoryIds:

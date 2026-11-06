@@ -22,8 +22,8 @@ export type ThermalBitmapReceipt = {
   footer: string;
   /** Defaults to 80mm (576 dots) so a Sunmi K2 roll is full width and centered. */
   widthDots?: number;
-  /** Multiply base type size (1 = default; kiosk uses ~2). */
-  fontScale?: number;
+  /** Kiosk uses the larger fixed px sizes. POS uses the smaller fixed px sizes. */
+  variant?: 'default' | 'kiosk';
 };
 
 const FONT = 'Arial, sans-serif';
@@ -91,18 +91,16 @@ function drawReceipt(
   const pad = Math.round(width * 0.03);
   const contentW = width - pad * 2;
   const qtyW = Math.round(contentW * 0.14);
-  const amtW = Math.round(contentW * 0.24);
+  const amtW = Math.round(contentW * 0.28);
   const itemW = contentW - qtyW - amtW;
-  // 10 / 11 / 20 CSS px on a 302px-wide 80mm page, scaled onto the printer dots.
-  const fontScale = Math.max(1, receipt.fontScale ?? 1);
-  const scale = (width / 302) * fontScale;
-  const normalSize = Math.max(10, Math.round(10 * scale));
-  const boldSize = Math.max(11, Math.round(11 * scale));
-  const ticketSize = Math.max(20, Math.round(20 * scale));
-  const brandSize = Math.max(14, Math.round(14 * scale));
-  const lineGap = Math.round(normalSize * 0.35);
-  const logoBoxW = Math.round(104 * scale);
-  const logoBoxH = Math.round(40 * scale);
+  const kiosk = receipt.variant === 'kiosk';
+  const normalSize = kiosk ? 20 : 10;
+  const boldSize = kiosk ? 22 : 11;
+  const ticketSize = kiosk ? 40 : 20;
+  const brandSize = kiosk ? 28 : 14;
+  const lineGap = 4;
+  const logoBoxW = Math.round(104 * (width / 302));
+  const logoBoxH = Math.round(40 * (width / 302));
 
   const measure = document.createElement('canvas').getContext('2d');
   if (!measure) throw new Error('Canvas is not available');

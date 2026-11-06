@@ -7,7 +7,6 @@ import { ArrowLeft, Loader2, Send, Star, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
-import { AdminCmsLocaleTabs } from '@/components/admin/admin-cms-locale-tabs';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { adminCardClass } from '@/components/admin/admin-surface';
 import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
@@ -28,25 +27,19 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
+import { blogLanguageFromFlags } from '@/lib/blog/blog-language';
 import { plainTextFromHtml } from '@/lib/blog/blog';
-import {
-  bilingualInputFromStored,
-  parseBilingualInput,
-  parseStoredBilingualText,
-} from '@/lib/menu/bilingual-text';
+import type { UiLanguage } from '@/lib/i18n/resources';
+import { parseStoredBilingualText } from '@/lib/menu/bilingual-text';
 import { cn } from '@/lib/utils';
 
 export type BlogPostFormValues = {
-  /** Editor: `English &&&& Spanish` */
+  language: UiLanguage;
   title: string;
   imageUrl: string;
-  /** Editor: `English &&&& Spanish` */
   shortDescription: string;
   contentHtml: string;
-  contentHtmlEs: string;
-  /** Editor: `English &&&& Spanish` */
   seoTitle: string;
-  /** Editor: `English &&&& Spanish` */
   seoDescription: string;
   seoImageUrl: string;
   featured: boolean;
@@ -59,11 +52,11 @@ type BlogPostFormProps = {
 };
 
 const empty: BlogPostFormValues = {
+  language: 'en',
   title: '',
   imageUrl: '',
   shortDescription: '',
   contentHtml: '',
-  contentHtmlEs: '',
   seoTitle: '',
   seoDescription: '',
   seoImageUrl: '',
@@ -72,11 +65,11 @@ const empty: BlogPostFormValues = {
 
 function snapshot(v: BlogPostFormValues) {
   return JSON.stringify({
+    language: v.language,
     title: v.title.trim(),
     imageUrl: v.imageUrl.trim(),
     shortDescription: v.shortDescription.trim(),
     contentHtml: v.contentHtml.trim(),
-    contentHtmlEs: v.contentHtmlEs.trim(),
     seoTitle: v.seoTitle.trim(),
     seoDescription: v.seoDescription.trim(),
     seoImageUrl: v.seoImageUrl.trim(),
@@ -110,7 +103,7 @@ function flattenApiError(
   return e.message || t('admin.blogForm.requestFailed');
 }
 
-/** Hydrate form from DB row (bilingual JSON / &&&& in primary columns). */
+/** Hydrate form from DB row (plain or legacy bilingual). */
 export function blogFormFromStored(post: {
   title: string;
   imageUrl?: string | null;
@@ -120,17 +113,30 @@ export function blogFormFromStored(post: {
   seoDescription?: string | null;
   seoImageUrl?: string | null;
   featured?: boolean;
+  english?: boolean;
+  spanish?: boolean;
   status?: string;
 }): BlogPostFormValues & { status?: string } {
-  const html = parseStoredBilingualText(post.contentHtml);
+  const language = blogLanguageFromFlags(post);
+  const htmlParts = parseStoredBilingualText(post.contentHtml);
+  const titleParts = parseStoredBilingualText(post.title);
+  const shortParts = parseStoredBilingualText(post.shortDescription);
+  const seoTitleParts = parseStoredBilingualText(post.seoTitle);
+  const seoDescParts = parseStoredBilingualText(post.seoDescription);
+
+  const pick = (parts: { en: string; es: string }, raw: string) => {
+    if (language === 'es') return parts.es || parts.en || raw;
+    return parts.en || parts.es || raw;
+  };
+
   return {
-    title: bilingualInputFromStored(post.title),
+    language,
+    title: pick(titleParts, post.title),
     imageUrl: post.imageUrl ?? '',
-    shortDescription: bilingualInputFromStored(post.shortDescription),
-    contentHtml: html.en,
-    contentHtmlEs: html.es,
-    seoTitle: bilingualInputFromStored(post.seoTitle),
-    seoDescription: bilingualInputFromStored(post.seoDescription),
+    shortDescription: pick(shortParts, post.shortDescription),
+    contentHtml: pick(htmlParts, post.contentHtml),
+    seoTitle: pick(seoTitleParts, post.seoTitle ?? ''),
+    seoDescription: pick(seoDescParts, post.seoDescription ?? ''),
     seoImageUrl: post.seoImageUrl ?? '',
     featured: Boolean(post.featured),
     status: post.status,
@@ -165,11 +171,11 @@ export function AdminBlogPostForm({
   useEffect(() => {
     if (!initial) return;
     setForm({
+      language: initial.language,
       title: initial.title,
       imageUrl: initial.imageUrl ?? '',
       shortDescription: initial.shortDescription,
       contentHtml: initial.contentHtml,
-      contentHtmlEs: initial.contentHtmlEs ?? '',
       seoTitle: initial.seoTitle ?? '',
       seoDescription: initial.seoDescription ?? '',
       seoImageUrl: initial.seoImageUrl ?? '',
@@ -178,11 +184,11 @@ export function AdminBlogPostForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional field deps
   }, [
     postId,
+    initial?.language,
     initial?.title,
     initial?.imageUrl,
     initial?.shortDescription,
     initial?.contentHtml,
-    initial?.contentHtmlEs,
     initial?.seoTitle,
     initial?.seoDescription,
     initial?.seoImageUrl,
@@ -197,18 +203,15 @@ export function AdminBlogPostForm({
   }
 
   function validate(): boolean {
-    const titleEn = parseBilingualInput(form.title).en;
-    if (!titleEn) {
+    if (!form.title.trim()) {
       toast.error(t('admin.blogForm.validateTitleRequired'));
       return false;
     }
-    const shortEn = parseBilingualInput(form.shortDescription).en;
-    if (!shortEn) {
+    if (!form.shortDescription.trim()) {
       toast.error(t('admin.blogForm.validateShortRequired'));
       return false;
     }
-    const detail = plainTextFromHtml(form.contentHtml);
-    if (detail.length < 1) {
+    if (plainTextFromHtml(form.contentHtml).length < 1) {
       toast.error(t('admin.blogForm.validateDetailRequired'));
       return false;
     }
@@ -219,16 +222,19 @@ export function AdminBlogPostForm({
     if (!validate()) return;
     setSaving(true);
     try {
+      const isSpanish = form.language === 'es';
       const body = {
-        title: form.title,
+        title: form.title.trim(),
         imageUrl: form.imageUrl?.trim() ? form.imageUrl : '',
-        shortDescription: form.shortDescription,
+        shortDescription: form.shortDescription.trim(),
         contentHtml: form.contentHtml || '<p></p>',
-        contentHtmlEs: form.contentHtmlEs?.trim() ? form.contentHtmlEs : '',
         seoTitle: form.seoTitle?.trim() ? form.seoTitle : '',
         seoDescription: form.seoDescription?.trim() ? form.seoDescription : '',
         seoImageUrl: form.seoImageUrl?.trim() ? form.seoImageUrl : '',
         featured: Boolean(form.featured),
+        english: !isSpanish,
+        spanish: isSpanish,
+        language: form.language,
         status,
       };
       const axiosOpts = {
@@ -315,17 +321,46 @@ export function AdminBlogPostForm({
       <Card className={cn(adminCardClass)}>
         <CardContent className="space-y-5 pt-6">
           <div className="grid gap-2">
+            <div className="grid h-10 w-full grid-cols-2 rounded-lg bg-muted p-1 mt-5">
+              <button
+                type="button"
+                className={cn(
+                  'rounded-md text-sm font-medium transition-colors',
+                  form.language === 'en'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setField('language', 'en')}
+              >
+                {t('admin.blog.english')}
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  'rounded-md text-sm font-medium transition-colors',
+                  form.language === 'es'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setField('language', 'es')}
+              >
+                {t('admin.blog.spanish')}
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t('admin.blogForm.writeLanguageHelper')}
+            </p>
+          </div>
+
+          <div className="grid gap-2">
             <Label htmlFor="blog-title">{t('admin.blogForm.titleLabel')}</Label>
             <Input
               id="blog-title"
               value={form.title}
               onChange={(e) => setField('title', e.target.value)}
               placeholder={t('admin.blogForm.titlePlaceholder')}
-              maxLength={500}
+              maxLength={200}
             />
-            <p className="text-xs text-muted-foreground">
-              {t('admin.blogForm.bilingualHint')}
-            </p>
           </div>
 
           <div className="grid gap-2">
@@ -335,34 +370,17 @@ export function AdminBlogPostForm({
               value={form.shortDescription}
               onChange={(e) => setField('shortDescription', e.target.value)}
               placeholder={t('admin.blogForm.shortDescPlaceholder')}
-              maxLength={1200}
+              maxLength={500}
               className="min-h-[88px]"
             />
-            <p className="text-xs text-muted-foreground">
-              {t('admin.blogForm.bilingualHint')}
-            </p>
           </div>
 
-          <AdminCmsLocaleTabs
-            labelsNs="admin.blog"
-            english={
-              <RichTextEditor
-                id="blog-detail"
-                label={t('admin.blogForm.detailEnglishLabel')}
-                value={form.contentHtml}
-                onChange={(html) => setField('contentHtml', html)}
-                helperText={t('admin.blogForm.detailEnglishHelper')}
-              />
-            }
-            spanish={
-              <RichTextEditor
-                id="blog-detail-es"
-                label={t('admin.blogForm.detailSpanishLabel')}
-                value={form.contentHtmlEs}
-                onChange={(html) => setField('contentHtmlEs', html)}
-                helperText={t('admin.blogForm.detailSpanishHelper')}
-              />
-            }
+          <RichTextEditor
+            id="blog-detail"
+            label={t('admin.blogForm.detailLabel')}
+            value={form.contentHtml}
+            onChange={(html) => setField('contentHtml', html)}
+            helperText={t('admin.blogForm.detailHelper')}
           />
 
           <Base64ImageUploadField
@@ -370,6 +388,7 @@ export function AdminBlogPostForm({
             value={form.imageUrl}
             onChange={(v) => setField('imageUrl', v)}
             helperText={t('admin.blogForm.imageHelper')}
+            storageKind="blogs"
             maxMb={8}
             maxEncodedMb={1.8}
           />
@@ -409,7 +428,7 @@ export function AdminBlogPostForm({
                 value={form.seoTitle}
                 onChange={(e) => setField('seoTitle', e.target.value)}
                 placeholder={t('admin.blogForm.seoTitlePlaceholder')}
-                maxLength={500}
+                maxLength={200}
               />
             </div>
             <div className="grid gap-2">
@@ -421,7 +440,7 @@ export function AdminBlogPostForm({
                 value={form.seoDescription}
                 onChange={(e) => setField('seoDescription', e.target.value)}
                 placeholder={t('admin.blogForm.seoDescPlaceholder')}
-                maxLength={1200}
+                maxLength={500}
                 className="min-h-[88px]"
               />
             </div>
@@ -431,6 +450,7 @@ export function AdminBlogPostForm({
               value={form.seoImageUrl}
               onChange={(v) => setField('seoImageUrl', v)}
               helperText={t('admin.blogForm.seoImageHelper')}
+              storageKind="blogs"
               maxMb={8}
               maxEncodedMb={1.8}
             />
@@ -438,6 +458,18 @@ export function AdminBlogPostForm({
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-4">
             <div className="flex items-center gap-2">
+            <Button
+                type="button"
+                variant="secondary"
+                disabled={saving}
+                onClick={() => void save('DRAFT')}
+              >
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                {t('admin.blogForm.saveDraft')}
+              </Button>
+              
               <Button
                 type="button"
                 disabled={saving}
@@ -456,17 +488,7 @@ export function AdminBlogPostForm({
                 )}
               </Button>
 
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={saving}
-                onClick={() => void save('DRAFT')}
-              >
-                {saving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                {t('admin.blogForm.saveDraft')}
-              </Button>
+             
             </div>
 
             <Button

@@ -333,6 +333,7 @@ export function ProductFormFields({
           value={form.imageUrl}
           onChange={(v) => onFormChange({ imageUrl: v })}
           helperText={tr('dashboard.menuManager.productsBasics.photoHelper')}
+          storageKind="product"
         />
       </div>
 
@@ -478,6 +479,7 @@ export function ProductFormFields({
                     label={tr('dashboard.menuManager.productsBasics.photo')}
                     value={row.imageUrl}
                     onChange={(v) => updateVariation(index, { imageUrl: v })}
+                    storageKind="variation"
                   />
                     <Button
                       type="button"

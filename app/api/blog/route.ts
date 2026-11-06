@@ -1,12 +1,14 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { blogLanguageWhere } from '@/lib/blog/blog-language';
 import { db } from '@/lib/db';
+import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
 
 const DEFAULT_LIMIT = 9;
 const MAX_LIMIT = 30;
 
-/** Public list of published blog posts (raw bilingual fields; client resolves locale). */
+/** Public list of published blog posts for one UI language. */
 export async function GET(req: NextRequest) {
   const limitRaw = Number(req.nextUrl.searchParams.get('limit') ?? DEFAULT_LIMIT);
   const limit = Math.min(
@@ -14,10 +16,21 @@ export async function GET(req: NextRequest) {
     Math.max(1, Number.isFinite(limitRaw) ? limitRaw : DEFAULT_LIMIT)
   );
   const cursor = req.nextUrl.searchParams.get('cursor')?.trim() || null;
+  const featuredOnly =
+    req.nextUrl.searchParams.get('featured') === '1' ||
+    req.nextUrl.searchParams.get('featured') === 'true';
+  const lang = normalizeUiLanguage(
+    req.nextUrl.searchParams.get('lang') ??
+      req.nextUrl.searchParams.get('language')
+  );
 
   try {
     const posts = await db.blogPost.findMany({
-      where: { status: 'PUBLISHED' },
+      where: {
+        status: 'PUBLISHED',
+        ...blogLanguageWhere(lang),
+        ...(featuredOnly ? { featured: true } : {}),
+      },
       orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       ...(cursor
@@ -33,6 +46,9 @@ export async function GET(req: NextRequest) {
         imageUrl: true,
         shortDescription: true,
         publishedAt: true,
+        featured: true,
+        english: true,
+        spanish: true,
       },
     });
 
@@ -42,6 +58,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       data: {
+        lang,
         posts: page.map((row) => ({
           id: row.id,
           slug: row.slug,
@@ -49,6 +66,9 @@ export async function GET(req: NextRequest) {
           title: row.title,
           shortDescription: row.shortDescription,
           publishedAt: row.publishedAt,
+          featured: row.featured,
+          english: row.english,
+          spanish: row.spanish,
         })),
         nextCursor,
         hasMore,

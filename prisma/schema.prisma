@@ -605,22 +605,24 @@ model NewsletterCampaign {
 /// Platform marketing blog posts (admin-managed; public at /blog).
 model BlogPost {
   id               String    @id @default(cuid())
-  /// Bilingual: JSON `{en,es}` or legacy `English &&&& Spanish` (same as menu products).
+  /// Plain title for the selected language (legacy rows may still be bilingual JSON / &&&&).
   title            String
   slug             String    @unique
   imageUrl         String?
-  /// Bilingual: JSON `{en,es}` or legacy `English &&&& Spanish`.
   shortDescription String
-  /// Bilingual HTML body: JSON `{en,es}` (same resolve path as products).
   contentHtml      String
-  /// Google search / social snippet title (falls back to title). Bilingual JSON / &&&&.
+  /// Google search / social snippet title (falls back to title).
   seoTitle         String?
-  /// Google search / social snippet description (falls back to shortDescription). Bilingual JSON / &&&&.
+  /// Google search / social snippet description (falls back to shortDescription).
   seoDescription   String?
   /// Google / OG image URL (falls back to imageUrl).
   seoImageUrl      String?
   /// Shown in the public featured blogs sidebar.
   featured         Boolean   @default(false)
+  /// Written for English audience (mutually exclusive with `spanish`).
+  english          Boolean   @default(true)
+  /// Written for Spanish audience (mutually exclusive with `english`).
+  spanish          Boolean   @default(false)
   /// DRAFT | PUBLISHED
   status           String    @default("DRAFT")
   publishedAt      DateTime?
@@ -629,6 +631,8 @@ model BlogPost {
 
   @@index([status, publishedAt])
   @@index([status, featured, publishedAt])
+  @@index([status, english, publishedAt])
+  @@index([status, spanish, publishedAt])
   @@index([createdAt])
 }
 

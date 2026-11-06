@@ -10,11 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   canPreviewImageValue,
-  estimateDataUrlBytes,
-  fileToOptimizedDataUrl,
+  fileToOptimizedImageBlob,
   isDataImageUrl,
   isHttpImageUrl,
 } from '@/lib/image-data-url';
+import {
+  isSupabasePublicObjectUrl,
+  type StorageImageKind,
+} from '@/lib/supabase/storage';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -27,7 +30,65 @@ type Props = {
   maxMb?: number;
   /** Target max encoded size (MB). Default 1.0. */
   maxEncodedMb?: number;
+  /**
+   * Storage object kind → `{restaurant}-{kind}-{n}.ext`
+   * e.g. product | category | banners | logo | variation
+   */
+  storageKind?: StorageImageKind;
 };
+
+async function uploadImageToSupabaseApi(
+  file: Blob,
+  contentType: string,
+  kind: StorageImageKind
+) {
+  const form = new FormData();
+  const ext =
+    contentType === 'image/png'
+      ? 'png'
+      : contentType === 'image/webp'
+        ? 'webp'
+        : contentType === 'image/gif'
+          ? 'gif'
+          : 'jpg';
+  form.append('file', file, `upload.${ext}`);
+  form.append('kind', kind);
+
+  const res = await fetch('/api/uploads/image', {
+    method: 'POST',
+    body: form,
+    credentials: 'include',
+  });
+  const json = (await res.json().catch(() => null)) as
+    | { data?: { url?: string }; error?: string }
+    | null;
+  if (!res.ok || !json?.data?.url) {
+    throw new Error(json?.error || `Upload failed (${res.status})`);
+  }
+  return json.data.url;
+}
+
+async function rehostImageUrlToSupabaseApi(
+  sourceUrl: string,
+  kind: StorageImageKind
+) {
+  const form = new FormData();
+  form.append('sourceUrl', sourceUrl);
+  form.append('kind', kind);
+
+  const res = await fetch('/api/uploads/image', {
+    method: 'POST',
+    body: form,
+    credentials: 'include',
+  });
+  const json = (await res.json().catch(() => null)) as
+    | { data?: { url?: string }; error?: string }
+    | null;
+  if (!res.ok || !json?.data?.url) {
+    throw new Error(json?.error || `Upload failed (${res.status})`);
+  }
+  return json.data.url;
+}
 
 export function Base64ImageUploadField({
   label,
@@ -37,10 +98,12 @@ export function Base64ImageUploadField({
   helperText,
   maxMb = 8,
   maxEncodedMb = 1,
+  storageKind = 'image',
 }: Props) {
   const { t } = useTranslation();
   const id = useId();
   const fileRef = useRef<HTMLInputElement>(null);
+  const rehostSeq = useRef(0);
   const [busy, setBusy] = useState(false);
   const [urlDraft, setUrlDraft] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -48,6 +111,7 @@ export function Base64ImageUploadField({
   const previewOk = canPreviewImageValue(value);
   const isData =
     isDataImageUrl(value) || value.trim().startsWith('data:image/');
+  const isRemoteHttp = isHttpImageUrl(value);
 
   useEffect(() => {
     if (value.trim()) return;
@@ -77,20 +141,13 @@ export function Base64ImageUploadField({
     setBusy(true);
     setLocalError(null);
     try {
-      const dataUrl = await fileToOptimizedDataUrl(file, {
+      const { blob, contentType } = await fileToOptimizedImageBlob(file, {
         maxEdge: 1200,
         quality: 0.8,
         maxBytes: Math.floor(maxEncodedMb * 1024 * 1024),
       });
 
-      if (!dataUrl.startsWith('data:image/')) {
-        toast.error(t('dashboard.common.imageEncodeFailed'));
-        setLocalError('Encode failed');
-        return;
-      }
-
-      const bytes = estimateDataUrlBytes(dataUrl);
-      if (bytes > Math.floor(maxEncodedMb * 1024 * 1024) * 1.05) {
+      if (blob.size > Math.floor(maxEncodedMb * 1024 * 1024) * 1.05) {
         toast.error(
           t('dashboard.common.imageTooLargeAfterCompression', { maxEncodedMb })
         );
@@ -98,39 +155,75 @@ export function Base64ImageUploadField({
         return;
       }
 
-      onChange(dataUrl);
+      const publicUrl = await uploadImageToSupabaseApi(
+        blob,
+        contentType,
+        storageKind
+      );
+      onChange(publicUrl);
       setUrlDraft('');
       toast.success(t('dashboard.common.imageUploaded'));
     } catch (err) {
       console.error('image upload', err);
       toast.error(
-        t('dashboard.common.imageProcessFailed')
+        err instanceof Error && err.message
+          ? err.message
+          : t('dashboard.common.imageProcessFailed')
       );
-      setLocalError('Process failed');
+      setLocalError('Upload failed');
     } finally {
       setBusy(false);
     }
   }
 
-  function applyUrl() {
-    const trimmedUrl = urlDraft.trim();
-    if (!trimmedUrl) {
-      toast.error(t('dashboard.common.pasteImageUrlFirst'));
+  async function applyManualUrl(raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      onChange('');
+      setLocalError(null);
       return;
     }
-    if (!isHttpImageUrl(trimmedUrl)) {
-      toast.error(t('dashboard.common.useHttpImageUrl'));
+    if (!isHttpImageUrl(trimmed)) {
+      setUrlDraft(raw);
       return;
     }
-    onChange(trimmedUrl);
+    if (isSupabasePublicObjectUrl(trimmed)) {
+      onChange(trimmed);
+      setUrlDraft('');
+      setLocalError(null);
+      return;
+    }
+
+    const seq = ++rehostSeq.current;
+    setBusy(true);
     setLocalError(null);
-    toast.success(t('dashboard.common.imageUrlSet'));
+    setUrlDraft(trimmed);
+    try {
+      const publicUrl = await rehostImageUrlToSupabaseApi(trimmed, storageKind);
+      if (seq !== rehostSeq.current) return;
+      onChange(publicUrl);
+      setUrlDraft('');
+      toast.success(t('dashboard.common.imageUploaded'));
+    } catch (err) {
+      if (seq !== rehostSeq.current) return;
+      console.error('image rehost', err);
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : t('dashboard.common.imageProcessFailed')
+      );
+      setLocalError('Upload failed');
+    } finally {
+      if (seq === rehostSeq.current) setBusy(false);
+    }
   }
 
   function clearImage() {
+    rehostSeq.current += 1;
     onChange('');
     setUrlDraft('');
     setLocalError(null);
+    setBusy(false);
     if (fileRef.current) fileRef.current.value = '';
   }
 
@@ -172,11 +265,9 @@ export function Base64ImageUploadField({
             {t('dashboard.common.remove')}
           </Button>
         ) : null}
-        {isData && value.trim() ? (
+        {isRemoteHttp ? (
           <span className="text-xs text-muted-foreground">
-            {t('dashboard.common.imageReady', {
-              kb: Math.max(1, Math.round(estimateDataUrlBytes(value) / 1024)),
-            })}
+            {t('dashboard.common.usingUploadedImage')}
           </span>
         ) : null}
       </div>
@@ -194,11 +285,19 @@ export function Base64ImageUploadField({
             const v = e.target.value;
             if (v.startsWith('data:')) return;
             setUrlDraft(v);
-            if (v.trim() && isHttpImageUrl(v.trim())) {
-              onChange(v.trim());
-              setLocalError(null);
-            } else if (!v.trim() && !isData) {
+            if (!v.trim()) {
               onChange('');
+              setLocalError(null);
+              return;
+            }
+            if (isHttpImageUrl(v.trim())) {
+              void applyManualUrl(v);
+            }
+          }}
+          onBlur={() => {
+            const draft = urlDraft.trim();
+            if (draft && isHttpImageUrl(draft) && draft !== value.trim()) {
+              void applyManualUrl(draft);
             }
           }}
           disabled={busy || isData}
@@ -215,14 +314,13 @@ export function Base64ImageUploadField({
       ) : null}
 
       {previewOk ? (
-        // eslint-disable-next-line @next/next/no-img-element -- data URLs + external
+        // eslint-disable-next-line @next/next/no-img-element -- remote URLs + legacy data
         <img
           key={value.slice(0, 64)}
           src={value}
           alt={`${label} preview`}
           className={cn(
             'mt-1 max-h-48 w-full max-w-md rounded-md border border-border object-contain',
-            // Checkerboard so PNG transparency is visible (not mistaken for a fill color).
             'bg-[length:16px_16px] bg-[linear-gradient(45deg,#d4d4d8_25%,transparent_25%),linear-gradient(-45deg,#d4d4d8_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#d4d4d8_75%),linear-gradient(-45deg,transparent_75%,#d4d4d8_75%)] bg-[position:0_0,0_8px,8px_-8px,-8px_0]'
           )}
           onError={() => {

@@ -19,6 +19,7 @@ import {
 import {
   PAPER_80MM_DOTS,
   renderThermalReceiptPng,
+  type ThermalBitmapReceipt,
 } from '@/lib/thermal-receipt-bitmap';
 
 export type PrintKioskReceiptParams = {
@@ -471,10 +472,7 @@ function escPosFeed(lines: number): number[] {
   return [0x1b, 0x64, Math.max(0, Math.min(255, lines))];
 }
 
-/** Almost double default thermal type for kiosk kitchen/customer tickets. */
-const KIOSK_RECEIPT_FONT_SCALE = 2;
-
-function receiptForBitmap(model: ReceiptModel) {
+function receiptForBitmap(model: ReceiptModel): ThermalBitmapReceipt {
   const isDineInDisplayName =
     !!model.customerName &&
     model.customerName.toLowerCase().endsWith(' customer');
@@ -522,7 +520,7 @@ function receiptForBitmap(model: ReceiptModel) {
     ],
     footer: 'Thank you!',
     widthDots: PAPER_80MM_DOTS,
-    fontScale: KIOSK_RECEIPT_FONT_SCALE,
+    variant: 'kiosk',
   };
 }
 
@@ -684,7 +682,7 @@ function buildReceiptHtml(model: ReceiptModel): string {
 <html>
 <head>
   <title>Kiosk Ticket</title>
-  <style>${getThermalReceiptDocumentCss({ fontScale: KIOSK_RECEIPT_FONT_SCALE })}</style>
+  <style>${getThermalReceiptDocumentCss({ variant: 'kiosk' })}</style>
 </head>
 <body>
   <div class="r">

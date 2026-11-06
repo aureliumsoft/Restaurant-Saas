@@ -2282,7 +2282,7 @@ export default {
             selectCategoriesHint:
               'Selecciona una o más categorías donde debe aparecer este producto.',
             photoHelper:
-              'La imagen subida se guarda en base64 directamente en la base de datos.',
+              'La imagen subida se guarda como URL de Supabase Storage en la base de datos.',
             variablePricingTitle: 'Precio variable del producto',
             variablePricingHint:
               'El precio base y el de oferta se ocultan mientras haya variaciones. El menú muestra Desde {{price}} (el precio más bajo).',
@@ -3171,7 +3171,7 @@ export default {
         targetMinutes: 'Objetivo: {{minutes}} min',
         complete: 'Completar',
         completing: 'Completando…',
-        cancelOrder: 'Cancelar pedido',
+        cancelOrder: 'Cancelar',
         canceling: 'Cancelando…',
         managerTitle: 'Gestor KDS',
         managerSubtitle:
@@ -3438,6 +3438,14 @@ export default {
           colOrders: 'Pedidos',
           colCreated: 'Creado',
           colStorefront: 'Tienda',
+          colActions: 'Acciones',
+          migrateImages: 'Migrar imágenes',
+          migrateImagesConfirm:
+            '¿Subir imágenes base64 de {{name}} a Supabase Storage y reemplazar los valores en la BD por URLs públicas?',
+          migrateImagesSuccess:
+            'Migradas {{migrated}} / {{scanned}} imagen(es). Fallidas: {{failed}}.',
+          migrateImagesFailed: 'Falló la migración de imágenes',
+          migrateImagesWorking: 'Migrando…',
         },
         settingsPage: {
           eyebrow: 'Sistema',
@@ -3531,13 +3539,18 @@ export default {
           createTitle: 'Crear entrada de blog',
           editTitle: 'Editar entrada de blog',
           description:
-            'Escribe contenido para el blog de marketing SaaS público. Usa Inglés &&&& Español en los campos de texto (igual que los productos).',
+            'Escribe un idioma por entrada. Los visitantes solo ven entradas del idioma del conmutador del sitio.',
+          writeLanguageLabel: 'Escribir blog en',
+          writeLanguageHelper:
+            'Las entradas en español aparecen para visitantes en español; las de inglés para inglés.',
           backToBlogs: 'Volver a las entradas',
           titleLabel: 'Título',
-          titlePlaceholder: 'Título en inglés &&&& Título en español',
+          titlePlaceholder: 'Título de la entrada',
           bilingualHint: 'Primero en inglés, luego el separador &&&&, luego en español.',
           shortDescLabel: 'Descripción corta',
-          shortDescPlaceholder: 'Descripción en inglés &&&& Descripción en español',
+          shortDescPlaceholder: 'Resumen corto para tarjetas y listados',
+          detailLabel: 'Detalle del blog',
+          detailHelper: 'Cuerpo completo del artículo para el idioma seleccionado.',
           detailEnglishLabel: 'Detalle del blog (inglés)',
           detailEnglishHelper: 'Artículo completo en inglés (texto enriquecido).',
           detailSpanishLabel: 'Detalle del blog (español)',
@@ -3550,11 +3563,11 @@ export default {
           featuredHelper: 'Muestra esta entrada en la barra lateral destacada del blog público.',
           seoTagsTitle: 'Etiquetas de fragmento de Google',
           seoTagsHelper:
-            'Cómo aparece esta entrada en la búsqueda de Google y las vistas previas sociales. Usa Inglés &&&& Español. Déjalo en blanco para usar título / descripción corta / imagen de portada.',
+            'Cómo aparece esta entrada en la búsqueda de Google y las vistas previas sociales. Déjalo en blanco para usar título / descripción corta / imagen de portada.',
           seoTitleLabel: 'Párrafo / título (título de búsqueda)',
-          seoTitlePlaceholder: 'Título SEO en inglés &&&& Título SEO en español',
+          seoTitlePlaceholder: 'Título SEO',
           seoDescLabel: 'Descripción (detalle de búsqueda)',
-          seoDescPlaceholder: 'Descripción SEO en inglés &&&& Descripción SEO en español',
+          seoDescPlaceholder: 'Descripción SEO',
           seoImageLabel: 'Foto (imagen de Google / redes sociales)',
           seoImageHelper:
             'Preferido: URL de imagen pública (https). Se usa como og:image para tarjetas de indexación. Si no, usa la imagen de portada.',
@@ -3573,10 +3586,9 @@ export default {
           leaveWithoutSaving: 'Salir sin guardar',
           unsavedGuardMessage:
             'Tienes cambios de blog sin guardar. ¿Salir de esta página sin guardar?',
-          validateTitleRequired: 'El título en inglés (antes de &&&&) es obligatorio.',
-          validateShortRequired:
-            'La descripción corta en inglés (antes de &&&&) es obligatoria.',
-          validateDetailRequired: 'El detalle del blog en inglés es obligatorio.',
+          validateTitleRequired: 'El título es obligatorio.',
+          validateShortRequired: 'La descripción corta es obligatoria.',
+          validateDetailRequired: 'El detalle del blog es obligatorio.',
           toastPublished: 'Blog publicado.',
           toastDraftSaved: 'Borrador guardado.',
           toastDiscarded: 'Borrador descartado.',

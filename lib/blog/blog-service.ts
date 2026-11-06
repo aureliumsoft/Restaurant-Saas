@@ -1,11 +1,10 @@
 import { db } from '@/lib/db';
 import {
-  persistBlogBilingualField,
-  persistBlogBilingualHtml,
+  sanitizeBlogHtml,
   slugifyBlogTitle,
   type BlogPostWriteInput,
 } from '@/lib/blog/blog';
-import { parseBilingualInput } from '@/lib/menu/bilingual-text';
+import { normalizeBlogLanguageFlags } from '@/lib/blog/blog-language';
 
 export async function ensureUniqueBlogSlug(
   base: string,
@@ -39,22 +38,20 @@ export function mapBlogWritePayload(
     input.status === 'PUBLISHED'
       ? previousPublishedAt ?? new Date()
       : null;
+  const language = normalizeBlogLanguageFlags(input);
 
   return {
-    title: persistBlogBilingualField(input.title),
+    title: input.title.trim(),
     slug,
     imageUrl: image || null,
-    shortDescription: persistBlogBilingualField(input.shortDescription),
-    contentHtml: persistBlogBilingualHtml(
-      input.contentHtml,
-      input.contentHtmlEs
-    ),
-    seoTitle: seoTitleRaw ? persistBlogBilingualField(seoTitleRaw) : null,
-    seoDescription: seoDescriptionRaw
-      ? persistBlogBilingualField(seoDescriptionRaw)
-      : null,
+    shortDescription: input.shortDescription.trim(),
+    contentHtml: sanitizeBlogHtml(input.contentHtml.trim()),
+    seoTitle: seoTitleRaw || null,
+    seoDescription: seoDescriptionRaw || null,
     seoImageUrl: seoImage || null,
     featured: Boolean(input.featured),
+    english: language.english,
+    spanish: language.spanish,
     status: input.status,
     publishedAt,
   };
@@ -64,12 +61,10 @@ export async function resolveSlugForWrite(
   input: BlogPostWriteInput,
   excludeId?: string
 ): Promise<string> {
-  const englishTitle =
-    parseBilingualInput(input.title).en || input.title.trim();
-  const base =
-    (input.slug ?? '').trim() || slugifyBlogTitle(englishTitle);
+  const title = input.title.trim();
+  const base = (input.slug ?? '').trim() || slugifyBlogTitle(title);
   return ensureUniqueBlogSlug(
-    slugifyBlogTitle(base) || slugifyBlogTitle(englishTitle),
+    slugifyBlogTitle(base) || slugifyBlogTitle(title),
     excludeId
   );
 }

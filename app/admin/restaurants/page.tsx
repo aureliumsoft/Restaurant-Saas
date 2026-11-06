@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'react-toastify';
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminRestaurantStorefrontLink } from '@/components/admin/admin-restaurant-storefront-link';
@@ -23,6 +24,7 @@ import {
   AdminTableWrapper,
 } from '@/components/admin/admin-table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -42,10 +44,17 @@ type Row = {
   _count: { orders: number; menuItems: number };
 };
 
+type MigrateResult = {
+  scanned: number;
+  migrated: number;
+  failed: number;
+};
+
 export default function AdminRestaurantsPage() {
   const { t } = useTranslation();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [migratingId, setMigratingId] = useState<string | null>(null);
 
   useEffect(() => {
     axios
@@ -54,6 +63,41 @@ export default function AdminRestaurantsPage() {
       .catch(() => setRows([]))
       .finally(() => setLoading(false));
   }, []);
+
+  async function migrateImages(row: Row) {
+    if (
+      !window.confirm(
+        t('admin.restaurants.migrateImagesConfirm', { name: row.name })
+      )
+    ) {
+      return;
+    }
+    setMigratingId(row.id);
+    try {
+      const res = await axios.post<{ data: MigrateResult }>(
+        `/api/admin/restaurants/${encodeURIComponent(row.id)}/migrate-images`,
+        { dryRun: false },
+        { timeout: 290_000 }
+      );
+      const data = res.data.data;
+      toast.success(
+        t('admin.restaurants.migrateImagesSuccess', {
+          migrated: data.migrated,
+          scanned: data.scanned,
+          failed: data.failed,
+        })
+      );
+    } catch (e) {
+      const message =
+        axios.isAxiosError(e) &&
+        typeof e.response?.data?.error === 'string'
+          ? e.response.data.error
+          : t('admin.restaurants.migrateImagesFailed');
+      toast.error(message);
+    } finally {
+      setMigratingId(null);
+    }
+  }
 
   if (loading) {
     return <Loader2 className="text-primary animate-spin text-center mx-auto" />;
@@ -77,7 +121,7 @@ export default function AdminRestaurantsPage() {
           {rows.length === 0 ? (
             <AdminTableEmpty>{t('admin.restaurants.empty')}</AdminTableEmpty>
           ) : (
-            <AdminTable minWidth={920}>
+            <AdminTable minWidth={1080}>
               <AdminTableHeader>
                 <AdminTableRow>
                   <AdminTableHead>{t('admin.restaurants.colRestaurant')}</AdminTableHead>
@@ -87,6 +131,7 @@ export default function AdminRestaurantsPage() {
                   <AdminTableHead className="text-right">{t('admin.restaurants.colMenuItems')}</AdminTableHead>
                   <AdminTableHead className="text-right">{t('admin.restaurants.colOrders')}</AdminTableHead>
                   <AdminTableHead>{t('admin.restaurants.colCreated')}</AdminTableHead>
+                  <AdminTableHead>{t('admin.restaurants.colActions')}</AdminTableHead>
                   <AdminTableHead className="w-12">
                     <span className="sr-only">{t('admin.restaurants.colStorefront')}</span>
                   </AdminTableHead>
@@ -125,6 +170,24 @@ export default function AdminRestaurantsPage() {
                       <AdminTableMuted>
                         {format(new Date(r.createdAt), 'MMM d, yyyy')}
                       </AdminTableMuted>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={migratingId != null}
+                        onClick={() => void migrateImages(r)}
+                      >
+                        {migratingId === r.id ? (
+                          <>
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            {t('admin.restaurants.migrateImagesWorking')}
+                          </>
+                        ) : (
+                          t('admin.restaurants.migrateImages')
+                        )}
+                      </Button>
                     </AdminTableCell>
                     <AdminTableCell className="text-right">
                       <AdminRestaurantStorefrontLink slug={r.slug} />

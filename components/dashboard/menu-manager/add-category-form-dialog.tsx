@@ -126,6 +126,7 @@ export function AddCategoryFormDialog({
             helperText={t(
               'dashboard.menuManager.category.categoryImageHelper'
             )}
+            storageKind="category"
           />
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input

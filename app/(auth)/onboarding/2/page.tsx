@@ -127,12 +127,14 @@ export default function OnboardingStep2Page() {
           value={logoUrl}
           onChange={setLogoUrl}
           helperText={t("onboarding.step2.logoHelper")}
+          storageKind="logo"
         />
         <Base64ImageUploadField
           label={t("onboarding.step2.mainBannerLabel")}
           value={mainBannerUrl}
           onChange={setMainBannerUrl}
           helperText={t("onboarding.step2.mainBannerHelper")}
+          storageKind="banners"
         />
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -152,6 +154,7 @@ export default function OnboardingStep2Page() {
                 label={t("onboarding.step2.menuBannerItemLabel", { n: i + 1 })}
                 value={url}
                 onChange={(v) => setMenuBanner(i, v)}
+                storageKind="banners"
               />
               {menuBanners.length > 1 && (
                 <Button

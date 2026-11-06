@@ -196,6 +196,7 @@ export function SwatchesModule({ categories, onRefresh }: Props) {
                       label={t('dashboard.menuManager.swatches.imageLabel')}
                       value={row.imageUrl}
                       onChange={(v) => updateRow(index, { imageUrl: v })}
+                      storageKind="variation"
                     />
                     <div className="flex items-end">
                       <Button

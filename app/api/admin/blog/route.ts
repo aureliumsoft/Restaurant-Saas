@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
         shortDescription: true,
         status: true,
         featured: true,
+        english: true,
+        spanish: true,
         publishedAt: true,
         createdAt: true,
         updatedAt: true,

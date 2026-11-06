@@ -2242,7 +2242,7 @@ export default {
             selectCategoriesHint:
               'Select one or more categories where this product should appear.',
             photoHelper:
-              'Upload image stores base64 directly in the database.',
+              'Upload image stores a Supabase Storage URL in the database.',
             variablePricingTitle: 'Variable product pricing',
             variablePricingHint:
               'Base price and sale price are hidden while variations exist. The menu shows From {{price}} (lowest variation price).',
@@ -3120,7 +3120,7 @@ export default {
         targetMinutes: 'Target: {{minutes}}m',
         complete: 'Complete',
         completing: 'Completing…',
-        cancelOrder: 'Cancel order',
+        cancelOrder: 'Cancel',
         canceling: 'Canceling…',
         managerTitle: 'KDS Manager',
         managerSubtitle:
@@ -3381,6 +3381,14 @@ export default {
           colOrders: 'Orders',
           colCreated: 'Created',
           colStorefront: 'Storefront',
+          colActions: 'Actions',
+          migrateImages: 'Migrate images',
+          migrateImagesConfirm:
+            'Upload base64 images for {{name}} to Supabase Storage and replace DB values with public URLs?',
+          migrateImagesSuccess:
+            'Migrated {{migrated}} / {{scanned}} image(s). Failed: {{failed}}.',
+          migrateImagesFailed: 'Image migration failed',
+          migrateImagesWorking: 'Migrating…',
         },
         settingsPage: {
           eyebrow: 'System',
@@ -3474,13 +3482,18 @@ export default {
           createTitle: 'Create blog post',
           editTitle: 'Edit blog post',
           description:
-            'Write content for the public SaaS marketing blog. Use English &&&& Spanish in text fields (same as products).',
+            'Write one language per post. Visitors only see posts matching the site language switcher.',
+          writeLanguageLabel: 'Write blog in',
+          writeLanguageHelper:
+            'Spanish posts appear for Spanish visitors; English posts for English visitors.',
           backToBlogs: 'Back to Blogs',
           titleLabel: 'Title',
-          titlePlaceholder: 'English title &&&& Spanish title',
+          titlePlaceholder: 'Post title',
           bilingualHint: 'First English, then separator &&&&, then Spanish.',
           shortDescLabel: 'Short description',
-          shortDescPlaceholder: 'English description &&&& Spanish description',
+          shortDescPlaceholder: 'Short summary for cards and listings',
+          detailLabel: 'Blog detail',
+          detailHelper: 'Full article body for the selected language.',
           detailEnglishLabel: 'Blog detail (English)',
           detailEnglishHelper: 'Full English article (rich text).',
           detailSpanishLabel: 'Blog detail (Spanish)',
@@ -3493,11 +3506,11 @@ export default {
           featuredHelper: 'Show this post in the left featured sidebar on the public blog.',
           seoTagsTitle: 'Google snippet tags',
           seoTagsHelper:
-            'How this post appears in Google search and social previews. Use English &&&& Spanish. Leave blank to fall back to title / short description / cover image.',
+            'How this post appears in Google search and social previews. Leave blank to fall back to title / short description / cover image.',
           seoTitleLabel: 'Paragraph / title (search title)',
-          seoTitlePlaceholder: 'English SEO title &&&& Spanish SEO title',
+          seoTitlePlaceholder: 'SEO title',
           seoDescLabel: 'Description (search detail)',
-          seoDescPlaceholder: 'English SEO description &&&& Spanish SEO description',
+          seoDescPlaceholder: 'SEO description',
           seoImageLabel: 'Photo (Google / social image)',
           seoImageHelper:
             'Preferred: public image URL (https). Used as og:image for indexing cards. Falls back to cover image.',
@@ -3515,9 +3528,9 @@ export default {
           unsavedChangesTitle: 'Unsaved changes',
           leaveWithoutSaving: 'Leave without saving',
           unsavedGuardMessage: 'You have unsaved blog changes. Leave this page without saving?',
-          validateTitleRequired: 'English title (before &&&&) is required.',
-          validateShortRequired: 'English short description (before &&&&) is required.',
-          validateDetailRequired: 'English blog detail is required.',
+          validateTitleRequired: 'Title is required.',
+          validateShortRequired: 'Short description is required.',
+          validateDetailRequired: 'Blog detail is required.',
           toastPublished: 'Blog published.',
           toastDraftSaved: 'Draft saved.',
           toastDiscarded: 'Draft discarded.',

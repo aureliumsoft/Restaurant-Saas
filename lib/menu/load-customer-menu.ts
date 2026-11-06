@@ -21,15 +21,11 @@ import {
 import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
 import {
   attachCustomerLazyImages,
-  imageMetaByCategoryIds,
-  restaurantBrandingFlags,
+  resolveCategoryImageUrl,
 } from '@/lib/menu/menu-item-image-utils';
 import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
 import { MENU_ITEM_VARIATION_SELLABLE_WHERE } from '@/lib/menu/variation-sellable';
-import {
-  customerCategoryImageUrl,
-  publicRestaurantImageUrls,
-} from '@/lib/stored-image-response';
+import { publicRestaurantImageUrls } from '@/lib/stored-image-response';
 
 export function isPrismaSchemaDriftError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -44,7 +40,7 @@ export function isPrismaSchemaDriftError(error: unknown): boolean {
 }
 
 function buildCustomerMenuItemSelect(mode: CustomerMenuSelectMode) {
-  // Linked core omits imageUrl blobs; lazy /image URLs stamped after load.
+  // imageUrl is a short public CDN URL (post-migration); resolved inline.
   const itemCore =
     mode === 'full'
       ? customerMenuLinkedItemCoreSelect
@@ -134,11 +130,14 @@ const restaurantPublicSelect = {
   themePrimaryColor: true,
   subdomain: true,
   slug: true,
+  logoUrl: true,
+  mainBannerUrl: true,
+  menuBannerUrls: true,
   updatedAt: true,
   ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
 } as const;
 
-async function stampMenusLazyImages<
+function stampMenusInlineImages<
   T extends {
     id: string;
     updatedAt?: Date | string | number | null;
@@ -148,61 +147,58 @@ async function stampMenusLazyImages<
 >(
   menus: T[],
   query: { slug?: string | null; subdomain?: string | null }
-): Promise<T[]> {
-  const categoryMeta = await imageMetaByCategoryIds(menus.map((m) => m.id));
-  return Promise.all(
-    menus.map(async (cat) => {
-      const meta = categoryMeta.get(cat.id);
-      const hasImage = meta?.hasImage ?? false;
-      const items = await Promise.all(
-        ((cat.items ?? []) as object[]).map((item) =>
-          attachCustomerLazyImages(item, query)
-        )
-      );
-      return {
-        ...cat,
-        imageUrl: hasImage
-          ? customerCategoryImageUrl(cat.id, {
-              ...query,
-              updatedAt: meta?.updatedAt ?? cat.updatedAt,
-            })
-          : null,
-        items,
-      };
-    })
-  );
+): T[] {
+  return menus.map((cat) => {
+    const items = ((cat.items ?? []) as object[]).map((item) =>
+      attachCustomerLazyImages(item, query)
+    );
+    return {
+      ...cat,
+      imageUrl: resolveCategoryImageUrl(cat, query),
+      items,
+    };
+  });
 }
 
 async function enrichRestaurantMenuForCustomer<
   T extends {
     id: string;
     slug: string;
+    logoUrl?: string | null;
+    mainBannerUrl?: string | null;
+    menuBannerUrls?: string[] | null;
     updatedAt?: Date | string | number | null;
     menus: unknown;
   } & RestaurantServiceChargeRow,
 >(
   restaurant: T,
   mode: CustomerMenuSelectMode,
-  query: { slug?: string | null; subdomain?: string | null },
-  branding: { hasLogo: boolean; hasMainBanner: boolean }
+  query: { slug?: string | null; subdomain?: string | null }
 ) {
   const allCategoriesRaw = await loadRestaurantMenuCategories({
     restaurantId: restaurant.id,
-    categorySelect: { id: true, name: true, sortOrder: true, updatedAt: true },
+    categorySelect: {
+      id: true,
+      name: true,
+      sortOrder: true,
+      updatedAt: true,
+      imageUrl: true,
+    },
     itemSelect: buildRecommendationPoolItemSelect(mode),
     categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
   });
-  const allCategories = await stampMenusLazyImages(allCategoriesRaw, query);
-  const menus = await stampMenusLazyImages(
-    restaurant.menus as Parameters<typeof stampMenusLazyImages>[0],
+  const allCategories = stampMenusInlineImages(allCategoriesRaw, query);
+  const menus = stampMenusInlineImages(
+    restaurant.menus as Parameters<typeof stampMenusInlineImages>[0],
     query
   );
 
   const withImages = {
     ...restaurant,
     ...publicRestaurantImageUrls(restaurant.slug, {
-      hasLogo: branding.hasLogo,
-      hasMainBanner: branding.hasMainBanner,
+      logoUrl: restaurant.logoUrl,
+      mainBannerUrl: restaurant.mainBannerUrl,
+      menuBannerUrls: restaurant.menuBannerUrls,
       updatedAt: restaurant.updatedAt,
     }),
     menus,
@@ -229,13 +225,10 @@ async function loadBySlugWithMode(
     select: restaurantPublicSelect,
   });
   if (!restaurant) return null;
-  const [branch, branding] = await Promise.all([
-    db.branch.findFirst({
-      where: { id: branchId, restaurantId: restaurant.id, isActive: true },
-      select: { id: true },
-    }),
-    restaurantBrandingFlags(restaurant.id),
-  ]);
+  const branch = await db.branch.findFirst({
+    where: { id: branchId, restaurantId: restaurant.id, isActive: true },
+    select: { id: true },
+  });
   if (!branch) return null;
 
   const menus = await loadRestaurantMenuCategories({
@@ -245,6 +238,7 @@ async function loadBySlugWithMode(
       name: true,
       sortOrder: true,
       updatedAt: true,
+      imageUrl: true,
     },
     itemSelect: buildCustomerMenuItemSelect(mode),
     categoryWhere: {
@@ -256,8 +250,7 @@ async function loadBySlugWithMode(
   return enrichRestaurantMenuForCustomer(
     { ...restaurant, menus },
     mode,
-    { slug, subdomain: null },
-    branding
+    { slug, subdomain: null }
   );
 }
 
@@ -271,13 +264,10 @@ async function loadBySubdomainWithMode(
     select: restaurantPublicSelect,
   });
   if (!restaurant) return null;
-  const [branch, branding] = await Promise.all([
-    db.branch.findFirst({
-      where: { id: branchId, restaurantId: restaurant.id, isActive: true },
-      select: { id: true },
-    }),
-    restaurantBrandingFlags(restaurant.id),
-  ]);
+  const branch = await db.branch.findFirst({
+    where: { id: branchId, restaurantId: restaurant.id, isActive: true },
+    select: { id: true },
+  });
   if (!branch) return null;
 
   const menus = await loadRestaurantMenuCategories({
@@ -287,6 +277,7 @@ async function loadBySubdomainWithMode(
       name: true,
       sortOrder: true,
       updatedAt: true,
+      imageUrl: true,
     },
     itemSelect: buildCustomerMenuItemSelect(mode),
     categoryWhere: {
@@ -298,8 +289,7 @@ async function loadBySubdomainWithMode(
   return enrichRestaurantMenuForCustomer(
     { ...restaurant, menus },
     mode,
-    { slug: null, subdomain },
-    branding
+    { slug: null, subdomain }
   );
 }
 

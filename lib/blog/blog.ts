@@ -12,13 +12,14 @@ export const BLOG_STATUSES = ['DRAFT', 'PUBLISHED'] as const;
 export type BlogStatus = (typeof BLOG_STATUSES)[number];
 
 export function slugifyBlogTitle(title: string): string {
-  const english =
+  // Prefer plain title; fall back to legacy bilingual EN side when present.
+  const fromParts =
     parseBilingualInput(title).en ||
     parseStoredBilingualText(title).en ||
-    title;
-  const base = english
+    '';
+  const source = (fromParts || title).trim();
+  const base = source
     .toLowerCase()
-    .trim()
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\s-]/g, '')
@@ -72,72 +73,32 @@ export function persistBlogBilingualField(raw: string): string {
 
 export const blogPostWriteSchema = z
   .object({
-    /** Editor: `English &&&& Spanish` (or stored JSON). */
-    title: z.string().trim().min(1, 'Title is required').max(500),
+    /** Single-language title for the selected locale. */
+    title: z.string().trim().min(1, 'Title is required').max(200),
     imageUrl: z.string().max(5_500_000).optional().or(z.literal('')),
     shortDescription: z
       .string()
       .trim()
       .min(1, 'Short description is required')
-      .max(1200),
-    /** HTML EN body, or combined bilingual JSON / &&&& string. */
+      .max(500),
+    /** HTML body for the selected language. */
     contentHtml: z.string().trim().min(1, 'Blog detail is required').max(2_800_000),
-    /** Optional Spanish HTML body when sending split EN/ES (admin form). */
+    /** @deprecated Prefer `spanish` / `english` flags. */
     contentHtmlEs: optionalCmsField(2_800_000),
     status: z.enum(BLOG_STATUSES),
     slug: z.string().trim().max(100).optional().or(z.literal('')),
-    seoTitle: optionalCmsField(500),
-    seoDescription: optionalCmsField(1200),
+    seoTitle: optionalCmsField(200),
+    seoDescription: optionalCmsField(500),
     seoImageUrl: z.string().max(5_500_000).optional().or(z.literal('')),
     featured: z.boolean().optional(),
+    /** Write language: English post. */
+    english: z.boolean().optional(),
+    /** Write language: Spanish post. */
+    spanish: z.boolean().optional(),
+    /** Alternate to english/spanish flags. */
+    language: z.enum(['en', 'es']).optional(),
   })
   .superRefine((val, ctx) => {
-    const titleParts = parseBilingualInput(val.title);
-    if (!titleParts.en) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'English title (before &&&&) is required',
-        path: ['title'],
-      });
-    }
-    if (titleParts.en.length > 200) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'English title must be ≤ 200 characters',
-        path: ['title'],
-      });
-    }
-    if (titleParts.es.length > 200) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Spanish title must be ≤ 200 characters',
-        path: ['title'],
-      });
-    }
-
-    const shortParts = parseBilingualInput(val.shortDescription);
-    if (!shortParts.en) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'English short description (before &&&&) is required',
-        path: ['shortDescription'],
-      });
-    }
-    if (shortParts.en.length > 500) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'English short description must be ≤ 500 characters',
-        path: ['shortDescription'],
-      });
-    }
-    if (shortParts.es.length > 500) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Spanish short description must be ≤ 500 characters',
-        path: ['shortDescription'],
-      });
-    }
-
     if (val.imageUrl !== undefined && val.imageUrl !== '') {
       assertImage('Image', val.imageUrl, ctx, ['imageUrl']);
     }

@@ -103,17 +103,28 @@ export function RestaurantRealtimeProvider({
 
     const connect = () => {
       if (disposed) return;
-      if (typeof document !== 'undefined' && document.hidden) return;
+      // Some Android WebViews (BrowseHere) report document.hidden incorrectly;
+      // still attempt connect so display screens keep receiving events.
 
       clearReconnect();
       es?.close();
 
-      const params = new URLSearchParams();
-      if (branchId) params.set('branchId', branchId);
-      const qs = params.toString();
-      es = new EventSource(
-        `/api/restaurant/realtime/stream${qs ? `?${qs}` : ''}`
-      );
+      if (typeof EventSource === 'undefined') {
+        setConnected(false);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        if (branchId) params.set('branchId', branchId);
+        const qs = params.toString();
+        es = new EventSource(
+          `/api/restaurant/realtime/stream${qs ? `?${qs}` : ''}`
+        );
+      } catch {
+        setConnected(false);
+        return;
+      }
 
       es.onopen = () => {
         if (disposed) return;
@@ -145,18 +156,23 @@ export function RestaurantRealtimeProvider({
 
     const onVisibility = () => {
       if (document.hidden) {
-        disconnect();
+        // Keep connection on display tablets — only tear down when truly backgrounded
+        // and EventSource is open (saves battery). If hidden check is wrong, poll covers it.
         return;
       }
-      connect();
+      if (!es) connect();
     };
 
     connect();
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pageshow', connect);
+    window.addEventListener('focus', connect);
 
     return () => {
       disposed = true;
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pageshow', connect);
+      window.removeEventListener('focus', connect);
       disconnect();
     };
   }, [staffRoute, branchId]);
@@ -171,10 +187,11 @@ export function RestaurantRealtimeProvider({
     }
 
     const pulse = () => {
-      if (document.hidden) return;
       eventBus.emit('realtime:fallback-sync');
     };
 
+    // Fire once immediately when SSE is down (BrowseHere often never opens EventSource).
+    pulse();
     fallbackTimerRef.current = setInterval(pulse, REALTIME_FALLBACK_POLL_MS);
     return () => {
       if (fallbackTimerRef.current) {

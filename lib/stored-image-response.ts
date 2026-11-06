@@ -2,7 +2,27 @@ import { NextResponse } from 'next/server';
 
 import { isHttpImageUrl } from '@/lib/image-data-url';
 import { withImageCacheBust } from '@/lib/image-cache-bust';
+import {
+  hasStoredImageValue,
+  resolveStoredImageUrl,
+} from '@/lib/resolve-stored-image-url';
 import { pathSegmentId } from '@/lib/url-id-path';
+
+function isSupabasePublicObjectUrl(url: string): boolean {
+  try {
+    const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()?.replace(/\/$/, '');
+    if (!base) {
+      return /\/storage\/v1\/object\/(public|sign)\//.test(url);
+    }
+    const href = new URL(url.trim()).href;
+    return (
+      href.startsWith(`${base}/storage/v1/object/public/`) ||
+      href.startsWith(`${base}/storage/v1/object/sign/`)
+    );
+  } catch {
+    return false;
+  }
+}
 
 function sniffContentType(buffer: Buffer, fallback: string): string {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
@@ -95,6 +115,15 @@ export async function responseFromStoredImage(
 
   const value = raw.trim();
   if (isHttpImageUrl(value)) {
+    // Supabase (and other CDN) URLs: send the browser straight to the object.
+    if (isSupabasePublicObjectUrl(value)) {
+      return NextResponse.redirect(value, {
+        status: 302,
+        headers: {
+          'Cache-Control': 'public, max-age=86400',
+        },
+      });
+    }
     try {
       const upstream = await fetch(value, { redirect: 'follow' });
       if (!upstream.ok) {
@@ -140,7 +169,7 @@ export async function responseFromStoredImage(
 }
 
 export function hasStoredImage(value: string | null | undefined): boolean {
-  return Boolean(value && value.trim());
+  return hasStoredImageValue(value);
 }
 
 export function publicRestaurantImageUrls(
@@ -155,7 +184,7 @@ export function publicRestaurantImageUrls(
     hasMainBanner?: boolean;
   }
 ) {
-  const base = (kind: string, extra?: Record<string, string>) => {
+  const proxy = (kind: string, extra?: Record<string, string>) => {
     const params = new URLSearchParams({ slug, kind });
     if (extra) {
       for (const [key, value] of Object.entries(extra)) params.set(key, value);
@@ -167,18 +196,30 @@ export function publicRestaurantImageUrls(
   };
 
   const hasLogo =
-    typeof row.hasLogo === 'boolean' ? row.hasLogo : hasStoredImage(row.logoUrl);
+    typeof row.hasLogo === 'boolean'
+      ? row.hasLogo
+      : hasStoredImageValue(row.logoUrl);
   const hasMainBanner =
     typeof row.hasMainBanner === 'boolean'
       ? row.hasMainBanner
-      : hasStoredImage(row.mainBannerUrl);
+      : hasStoredImageValue(row.mainBannerUrl);
 
   return {
-    logoUrl: hasLogo ? base('logo') : null,
-    mainBannerUrl: hasMainBanner ? base('mainBanner') : null,
+    // Prefer Supabase/public URLs already on the row; proxy only for legacy base64.
+    logoUrl: hasLogo
+      ? resolveStoredImageUrl(row.logoUrl, proxy('logo'))
+      : null,
+    mainBannerUrl: hasMainBanner
+      ? resolveStoredImageUrl(row.mainBannerUrl, proxy('mainBanner'))
+      : null,
     menuBannerUrls: (row.menuBannerUrls ?? [])
       .map((url, index) =>
-        hasStoredImage(url) ? base('menuBanner', { index: String(index) }) : null
+        hasStoredImageValue(url)
+          ? resolveStoredImageUrl(
+              url,
+              proxy('menuBanner', { index: String(index) })
+            )
+          : null
       )
       .filter((url): url is string => Boolean(url)),
   };

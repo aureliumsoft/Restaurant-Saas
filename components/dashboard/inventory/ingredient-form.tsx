@@ -355,6 +355,7 @@ export function IngredientForm({
         label={t('dashboard.inventory.photo')}
         value={form.imageUrl}
         onChange={(imageUrl) => setForm((f) => ({ ...f, imageUrl }))}
+        storageKind="ingredient"
       />
 
       <div className="flex flex-wrap gap-2 border-t pt-4">

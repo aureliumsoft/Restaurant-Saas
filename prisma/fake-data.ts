@@ -539,6 +539,8 @@ export function fakeBlogPostComplete() {
     seoDescription: undefined,
     seoImageUrl: undefined,
     featured: false,
+    english: true,
+    spanish: false,
     status: 'DRAFT',
     publishedAt: undefined,
     createdAt: new Date(),

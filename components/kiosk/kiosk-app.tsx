@@ -83,7 +83,6 @@ import type { UiLanguage } from '@/lib/i18n/resources';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { getMenuItemDisplayPrice } from '@/lib/menu-item-pricing';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
-import { IconArrowBack } from '@tabler/icons-react';
 import {
   kioskBasePath,
   kioskCartStorageKey,
@@ -402,7 +401,7 @@ const KioskProductCard = memo(function KioskProductCard({
                 onClick={() => onBumpQty(p.id, -1)}
                 aria-label={t('decreaseProductQuantity', { name: displayName })}
               >
-                <Minus className="h-4 w-4" />
+                <Minus className="h-4 w-4" /> 
               </Button>
               <span className="min-w-[2ch] text-center text-sm font-medium">
                 {qty}

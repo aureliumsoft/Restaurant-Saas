@@ -253,6 +253,7 @@ export function PersonalizeConfigSection({
                       onChange={(imageUrl) =>
                         updateOption(groupIndex, optionIndex, { imageUrl })
                       }
+                      storageKind="personalize"
                     />
                   </div>
                   <Button

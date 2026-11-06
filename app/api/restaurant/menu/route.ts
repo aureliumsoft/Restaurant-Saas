@@ -16,16 +16,14 @@ import { RECOMMENDATION_SOURCE_CATEGORY_WHERE } from '@/lib/menu/category-visibi
 import { loadRestaurantMenuCategories } from '@/lib/menu/load-restaurant-menu-categories';
 import {
   attachRestaurantLazyImages,
-  imageMetaByCategoryIds,
-  restaurantBrandingFlags,
-  restaurantMenuCategoryImageUrl,
+  resolveCategoryImageUrl,
 } from '@/lib/menu/menu-item-image-utils';
 import { personalizeGroupsSelect } from '@/lib/menu/personalize-groups-select';
 import { MENU_ITEM_VARIATION_SELLABLE_WHERE } from '@/lib/menu/variation-sellable';
 import { getRestaurantForOwnerRequest } from '@/lib/restaurant/ownerRestaurant';
 import { publicRestaurantImageUrls } from '@/lib/stored-image-response';
 
-/** List/dashboard select — never pulls imageUrl blobs (lazy /image proxies stamped after). */
+/** List/dashboard select — includes public CDN imageUrl columns. */
 const menuItemSelect = {
   ...customerMenuLinkedItemCoreSelect,
   categoryId: true,
@@ -43,6 +41,7 @@ const menuItemSelect = {
           id: true,
           name: true,
           description: true,
+          imageUrl: true,
           price: true,
           salePrice: true,
           updatedAt: true,
@@ -53,6 +52,7 @@ const menuItemSelect = {
               id: true,
               name: true,
               title: true,
+              imageUrl: true,
               swatchHex: true,
               priceDelta: true,
               sortOrder: true,
@@ -94,23 +94,17 @@ async function loadCategoryIdsByItem(restaurantId: string) {
   return map;
 }
 
-async function stampCategoryImages<
-  T extends { id: string; imageUrl?: string | null; updatedAt?: Date | string | number | null },
->(categories: T[]): Promise<T[]> {
-  const meta = await imageMetaByCategoryIds(categories.map((c) => c.id));
-  return categories.map((category) => {
-    const row = meta.get(category.id);
-    const hasImage = row?.hasImage ?? false;
-    return {
-      ...category,
-      imageUrl: hasImage
-        ? restaurantMenuCategoryImageUrl(
-            category.id,
-            row?.updatedAt ?? category.updatedAt
-          )
-        : null,
-    };
-  });
+function stampCategoryImages<
+  T extends {
+    id: string;
+    imageUrl?: string | null;
+    updatedAt?: Date | string | number | null;
+  },
+>(categories: T[]): T[] {
+  return categories.map((category) => ({
+    ...category,
+    imageUrl: resolveCategoryImageUrl(category, { restaurantProxy: true }),
+  }));
 }
 
 export async function GET(req: NextRequest) {
@@ -123,21 +117,21 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [restaurantMeta, branding] = await Promise.all([
-      db.restaurant.findUnique({
-        where: { id: auth.restaurant.id },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          updatedAt: true,
-          themePrimaryColor: true,
-          ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
-          ...RESTAURANT_DINE_IN_PAYMENT_DB_SELECT,
-        },
-      }),
-      restaurantBrandingFlags(auth.restaurant.id),
-    ]);
+    const restaurantMeta = await db.restaurant.findUnique({
+      where: { id: auth.restaurant.id },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        logoUrl: true,
+        mainBannerUrl: true,
+        menuBannerUrls: true,
+        updatedAt: true,
+        themePrimaryColor: true,
+        ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
+        ...RESTAURANT_DINE_IN_PAYMENT_DB_SELECT,
+      },
+    });
 
     if (!restaurantMeta) {
       return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
@@ -153,22 +147,19 @@ export async function GET(req: NextRequest) {
         showInFront: true,
         sortOrder: true,
         updatedAt: true,
+        imageUrl: true,
       },
       itemSelect: menuItemSelect,
     });
 
-    const menusWithCategoryIds = await Promise.all(
-      (await stampCategoryImages(menus)).map(async (category) => ({
-        ...category,
-        items: await Promise.all(
-          category.items.map(async (item) =>
-            attachRestaurantLazyImages(
-              mapMenuItemWithCategoryIds(item, categoryIdsByItem)
-            )
-          )
-        ),
-      }))
-    );
+    const menusWithCategoryIds = stampCategoryImages(menus).map((category) => ({
+      ...category,
+      items: category.items.map((item) =>
+        attachRestaurantLazyImages(
+          mapMenuItemWithCategoryIds(item, categoryIdsByItem)
+        )
+      ),
+    }));
 
     const allCategoriesRaw = await loadRestaurantMenuCategories({
       restaurantId: auth.restaurant.id,
@@ -177,23 +168,23 @@ export async function GET(req: NextRequest) {
         name: true,
         sortOrder: true,
         updatedAt: true,
+        imageUrl: true,
       },
       itemSelect: recommendationPoolItemSelect,
       categoryWhere: RECOMMENDATION_SOURCE_CATEGORY_WHERE,
     });
 
-    const allCategories = await Promise.all(
-      (await stampCategoryImages(allCategoriesRaw)).map(async (category) => ({
+    const allCategories = stampCategoryImages(allCategoriesRaw).map(
+      (category) => ({
         ...category,
-        items: await Promise.all(
-          category.items.map((item) => attachRestaurantLazyImages(item))
-        ),
-      }))
+        items: category.items.map((item) => attachRestaurantLazyImages(item)),
+      })
     );
 
     const logoUrls = publicRestaurantImageUrls(restaurantMeta.slug, {
-      hasLogo: branding.hasLogo,
-      hasMainBanner: branding.hasMainBanner,
+      logoUrl: restaurantMeta.logoUrl,
+      mainBannerUrl: restaurantMeta.mainBannerUrl,
+      menuBannerUrls: restaurantMeta.menuBannerUrls,
       updatedAt: restaurantMeta.updatedAt,
     });
     const { slug: _slug, updatedAt: _updatedAt, ...metaRest } = restaurantMeta;
@@ -207,17 +198,15 @@ export async function GET(req: NextRequest) {
       allCategories
     );
 
-    const inventoryItems = await Promise.all(
-      (
-        await db.menuItem.findMany({
-          where: { restaurantId: auth.restaurant.id },
-          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-          select: menuItemSelect,
-        })
-      ).map((item) =>
-        attachRestaurantLazyImages(
-          mapMenuItemWithCategoryIds(item, categoryIdsByItem)
-        )
+    const inventoryItems = (
+      await db.menuItem.findMany({
+        where: { restaurantId: auth.restaurant.id },
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        select: menuItemSelect,
+      })
+    ).map((item) =>
+      attachRestaurantLazyImages(
+        mapMenuItemWithCategoryIds(item, categoryIdsByItem)
       )
     );
 

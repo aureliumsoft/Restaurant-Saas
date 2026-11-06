@@ -22,6 +22,8 @@ type PostDto = {
   seoDescription: string | null;
   seoImageUrl: string | null;
   featured: boolean;
+  english?: boolean;
+  spanish?: boolean;
   status: string;
 };
 

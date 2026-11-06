@@ -19,7 +19,8 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "seed:admin": "ts-node -O \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/seed-admin-user.ts",
-    "seed:pricing": "ts-node -O \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/seed-subscription-plans.ts"
+    "seed:pricing": "ts-node -O \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/seed-subscription-plans.ts",
+    "migrate:images": "ts-node -r tsconfig-paths/register -O \"{\\\"module\\\":\\\"CommonJS\\\"}\" scripts/migrate-base64-images-to-supabase.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.4.2",
@@ -39,6 +40,8 @@
     "@radix-ui/react-tabs": "^1.0.4",
     "@radix-ui/react-toast": "^1.1.5",
     "@radix-ui/react-tooltip": "^1.0.7",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
     "@tabler/icons-react": "^3.3.0",
     "@vercel/analytics": "^1.2.2",
     "@vercel/speed-insights": "^1.0.10",

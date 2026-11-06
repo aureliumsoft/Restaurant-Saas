@@ -6,6 +6,7 @@ import {
 } from '@/components/marketing/public-blog-list';
 import { PublicBlogIndexHeader } from '@/components/marketing/public-blog-chrome';
 import { PublicBlogShell } from '@/components/marketing/public-blog-shell';
+import { blogLanguageWhere } from '@/lib/blog/blog-language';
 import {
   loadFeaturedBlogPosts,
   loadRecentBlogPosts,
@@ -30,10 +31,13 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-async function loadFirstPage() {
+async function loadFirstPage(lang: Awaited<ReturnType<typeof getServerUiLanguage>>) {
   const limit = 9;
   const rows = await db.blogPost.findMany({
-    where: { status: 'PUBLISHED' },
+    where: {
+      status: 'PUBLISHED',
+      ...blogLanguageWhere(lang),
+    },
     orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
     select: {
@@ -43,6 +47,8 @@ async function loadFirstPage() {
       imageUrl: true,
       shortDescription: true,
       publishedAt: true,
+      english: true,
+      spanish: true,
     },
   });
   const hasMore = rows.length > limit;
@@ -55,6 +61,8 @@ async function loadFirstPage() {
         title: p.title,
         shortDescription: p.shortDescription,
         publishedAt: p.publishedAt?.toISOString() ?? null,
+        english: p.english,
+        spanish: p.spanish,
       }) satisfies PublicBlogCard
   );
   const nextCursor = hasMore ? posts[posts.length - 1]?.id ?? null : null;
@@ -62,10 +70,11 @@ async function loadFirstPage() {
 }
 
 export default async function BlogPage() {
+  const lang = await getServerUiLanguage();
   const [{ posts, nextCursor, hasMore }, featured, recent] = await Promise.all([
-    loadFirstPage(),
-    loadFeaturedBlogPosts(6),
-    loadRecentBlogPosts(8),
+    loadFirstPage(lang),
+    loadFeaturedBlogPosts(6, lang),
+    loadRecentBlogPosts(8, undefined, lang),
   ]);
 
   return (
@@ -73,11 +82,16 @@ export default async function BlogPage() {
       <div className="mx-auto flex w-full flex-1 flex-col px-4 pb-20 pt-28 sm:px-6">
         <PublicBlogIndexHeader />
 
-        <PublicBlogShell featured={featured} recent={recent}>
+        <PublicBlogShell
+          featured={featured}
+          recent={recent}
+          initialLang={lang}
+        >
           <PublicBlogList
             initialPosts={posts}
             initialNextCursor={nextCursor}
             initialHasMore={hasMore}
+            initialLang={lang}
           />
         </PublicBlogShell>
       </div>

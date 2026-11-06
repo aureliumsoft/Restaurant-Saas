@@ -581,6 +581,7 @@ function CategoryCard({
               helperText={t(
                 'dashboard.menuManager.category.categoryImageHelper'
               )}
+              storageKind="category"
             />
 
             <div className="space-y-2 rounded-md border p-3">

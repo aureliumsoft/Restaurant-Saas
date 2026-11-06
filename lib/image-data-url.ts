@@ -201,3 +201,39 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const commaIdx = dataUrl.indexOf(',');
+  if (commaIdx <= 0) {
+    throw new Error('Invalid data URL');
+  }
+  const meta = dataUrl.slice(0, commaIdx);
+  const mime = meta.match(/^data:([^;]+)/i)?.[1]?.trim() || 'image/jpeg';
+  const b64 = dataUrl.slice(commaIdx + 1);
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+}
+
+/**
+ * Optimize a File for upload (resize/compress) and return a Blob —
+ * for Supabase Storage, not for embedding base64 in the database.
+ */
+export async function fileToOptimizedImageBlob(
+  file: File,
+  options?: {
+    maxEdge?: number;
+    quality?: number;
+    maxBytes?: number;
+  }
+): Promise<{ blob: Blob; contentType: string }> {
+  const dataUrl = await fileToOptimizedDataUrl(file, options);
+  const blob = dataUrlToBlob(dataUrl);
+  return {
+    blob,
+    contentType: blob.type || file.type || 'image/jpeg',
+  };
+}

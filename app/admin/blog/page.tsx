@@ -58,6 +58,8 @@ type BlogListItem = {
   shortDescription: string;
   status: string;
   featured?: boolean;
+  english?: boolean;
+  spanish?: boolean;
   publishedAt: string | null;
   updatedAt: string;
 };
@@ -67,6 +69,8 @@ type BlogDetail = BlogListItem & {
   seoTitle?: string | null;
   seoDescription?: string | null;
   seoImageUrl?: string | null;
+  english?: boolean;
+  spanish?: boolean;
 };
 
 export default function AdminBlogListPage() {
@@ -129,6 +133,8 @@ export default function AdminBlogListPage() {
         seoDescription: full.seoDescription ?? '',
         seoImageUrl: full.seoImageUrl ?? '',
         featured: Boolean(full.featured),
+        english: full.spanish ? false : true,
+        spanish: Boolean(full.spanish),
         status: next,
       });
       toast.success(
@@ -271,6 +277,11 @@ export default function AdminBlogListPage() {
                           ? t('admin.blogPage.statusPublished')
                           : t('admin.blogPage.statusDraft')}
                       </Badge>
+                      <Badge variant="outline">
+                        {post.spanish && !post.english
+                          ? t('admin.blog.spanish')
+                          : t('admin.blog.english')}
+                      </Badge>
                       {post.featured ? (
                         <Badge variant="outline">{t('admin.blogPage.featured')}</Badge>
                       ) : null}
@@ -295,28 +306,11 @@ export default function AdminBlogListPage() {
                   </CardDescription>
                 </CardHeader>
               </button>
-              <CardFooter className="flex flex-wrap gap-2 border-t border-border/60 pt-4 justify-between">
-                <Button
-                  type="button"
-                  variant={
-                    post.status === 'PUBLISHED' ? 'secondary' : 'default'
-                  }
-                  disabled={busyId === post.id}
-                  onClick={() => void toggleStatus(post)}
-                >
-                  {busyId === post.id ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : post.status === 'PUBLISHED' ? (
-                    <Undo2 className="mr-1.5 h-3.5 w-3.5" />
-                  ) : (
-                    <Send className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  {post.status === 'PUBLISHED'
-                    ? t('admin.blogPage.makeDraft')
-                    : t('admin.blogPage.publish')}
-                </Button>
-
-                <div className="flex items-center">
+              <CardFooter className="flex flex-wrap gap-2 border-t border-border/60 justify-between">
+                <div className="flex items-center gap-2 justify-between mt-5 w-full">
+               
+                
+                <div className="flex items-center ">
                   <Button
                     type="button"
                     size="icon"
@@ -339,6 +333,27 @@ export default function AdminBlogListPage() {
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
+                </div>
+
+                <Button
+                  type="button"
+                  variant={
+                    post.status === 'PUBLISHED' ? 'secondary' : 'default'
+                  }
+                  disabled={busyId === post.id}
+                  onClick={() => void toggleStatus(post)}
+                >
+                  {busyId === post.id ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : post.status === 'PUBLISHED' ? (
+                    <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+                  ) : (
+                    <Send className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {post.status === 'PUBLISHED'
+                    ? t('admin.blogPage.makeDraft')
+                    : t('admin.blogPage.publish')}
+                </Button>
                 </div>
               </CardFooter>
             </Card>
