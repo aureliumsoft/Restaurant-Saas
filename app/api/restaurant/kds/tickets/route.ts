@@ -51,6 +51,23 @@ function buildKitchenTicketItemRowsFromOrder(
   );
 }
 
+/** True when stored kitchen lines no longer match the sheet-order rebuild. */
+function kitchenTicketItemsOrderDrift(
+  stored: { productName: string; quantity: number }[],
+  rebuilt: { productName: string; quantity: number }[]
+): boolean {
+  if (stored.length !== rebuilt.length) return true;
+  for (let i = 0; i < stored.length; i++) {
+    if (
+      stored[i]!.productName !== rebuilt[i]!.productName ||
+      stored[i]!.quantity !== rebuilt[i]!.quantity
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const KDS_TX_OPTIONS = { maxWait: 10_000, timeout: 30_000 } as const;
 
 type TicketRow = {
@@ -169,11 +186,13 @@ export async function GET(req: NextRequest) {
                   quantity: true,
                   menuItemId: true,
                   groupName: true,
+                  createdAt: true,
                 },
-                orderBy: { id: 'asc' },
+                // Insertion order — UUID id sort scrambled recommendation groups.
+                orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
               },
             },
-            orderBy: { id: 'asc' },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           })
         : [];
 
@@ -190,8 +209,8 @@ export async function GET(req: NextRequest) {
       rows.map((r) => {
         const stored = itemsByTicket.get(r.id) ?? [];
         const orderItems = linesByOrderId.get(r.orderId) ?? [];
-        // Always prefer order lines for display so parent variation
-        // (`Product (XL)`) and recommendation options stay in sync with cart.
+        // Rebuild from order lines (createdAt order) so recommendation groups
+        // match the customize sheet top→bottom, including personalize last.
         const hydratedRows =
           orderItems.length > 0
             ? buildKitchenTicketItemRowsFromOrder(orderItems)
@@ -199,7 +218,9 @@ export async function GET(req: NextRequest) {
 
         const shouldPersistHydration =
           hydratedRows != null &&
-          (stored.length === 0 || kitchenTicketItemsLookLegacy(stored));
+          (stored.length === 0 ||
+            kitchenTicketItemsLookLegacy(stored) ||
+            kitchenTicketItemsOrderDrift(stored, hydratedRows));
 
         if (shouldPersistHydration) {
           syncTicketIds.push(r.id);

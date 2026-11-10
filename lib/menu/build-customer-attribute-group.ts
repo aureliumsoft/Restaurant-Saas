@@ -193,6 +193,9 @@ export function buildCustomerAttributeGroup(
           personalizeGroups:
             (raw as { personalizeGroups?: PersonalizeGroup[] } | undefined)
               ?.personalizeGroups ?? undefined,
+          needsNestedSheet: Boolean(
+            (raw as { needsNestedSheet?: boolean } | undefined)?.needsNestedSheet
+          ),
         };
       }),
   };

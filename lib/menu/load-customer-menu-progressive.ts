@@ -352,7 +352,8 @@ export async function loadCustomerMenuCategoryItems(options: {
 }
 
 const PRODUCT_DETAIL_OPTION_TAKE = 40;
-const PRODUCT_DETAIL_CACHE_TTL_MS = 10_000;
+/** Restaurant menu writes clear this cache explicitly. */
+const PRODUCT_DETAIL_CACHE_TTL_MS = 120_000;
 
 type CachedProductDetail = {
   expiresAt: number;
@@ -360,6 +361,10 @@ type CachedProductDetail = {
 };
 
 const productDetailCache = new Map<string, CachedProductDetail>();
+const productDetailInflight = new Map<
+  string,
+  Promise<Awaited<ReturnType<typeof loadCustomerMenuProductDetailUncached>>>
+>();
 
 function productDetailCacheKey(options: {
   slug?: string | null;
@@ -457,50 +462,59 @@ async function loadOptionCardsByCategoryIds(
   const optionSelect = customerProductDetailOptionCardSelect(mode);
   const seenByCategory = new Map<string, Set<string>>();
 
-  const [links, legacyItems] = await Promise.all([
-    db.menuItemCategory.findMany({
-      where: {
-        categoryId: { in: categoryIds },
-        menuItem: { restaurantId },
-      },
-      orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
-      select: {
-        categoryId: true,
-        menuItemId: true,
-        menuItem: { select: optionSelect },
-      },
-    }),
-    db.menuItem.findMany({
-      where: {
-        restaurantId,
-        categoryId: { in: categoryIds },
-      },
-      orderBy: [...MENU_ITEM_DATE_ORDER],
-      select: {
-        ...optionSelect,
-        categoryId: true,
-      },
-    }),
-  ]);
+  // Cap at DB per category — unbounded findMany then truncate was the slow path
+  // for large recommendation categories.
+  await Promise.all(
+    categoryIds.map(async (categoryId) => {
+      const [links, legacyItems] = await Promise.all([
+        db.menuItemCategory.findMany({
+          where: {
+            categoryId,
+            menuItem: { restaurantId },
+          },
+          orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
+          take: PRODUCT_DETAIL_OPTION_TAKE,
+          select: {
+            categoryId: true,
+            menuItemId: true,
+            menuItem: { select: optionSelect },
+          },
+        }),
+        db.menuItem.findMany({
+          where: {
+            restaurantId,
+            categoryId,
+          },
+          orderBy: [...MENU_ITEM_DATE_ORDER],
+          take: PRODUCT_DETAIL_OPTION_TAKE,
+          select: {
+            ...optionSelect,
+            categoryId: true,
+          },
+        }),
+      ]);
 
-  for (const link of links) {
-    pushUniqueItem(
-      itemsByCategory,
-      seenByCategory,
-      link.categoryId,
-      link.menuItemId,
-      link.menuItem as Record<string, unknown>
-    );
-  }
-  for (const item of legacyItems) {
-    pushUniqueItem(
-      itemsByCategory,
-      seenByCategory,
-      item.categoryId,
-      item.id,
-      item as Record<string, unknown>
-    );
-  }
+      for (const link of links) {
+        pushUniqueItem(
+          itemsByCategory,
+          seenByCategory,
+          link.categoryId,
+          link.menuItemId,
+          link.menuItem as Record<string, unknown>
+        );
+      }
+      for (const item of legacyItems) {
+        pushUniqueItem(
+          itemsByCategory,
+          seenByCategory,
+          item.categoryId,
+          item.id,
+          item as Record<string, unknown>
+        );
+      }
+    })
+  );
+
   return itemsByCategory;
 }
 
@@ -643,6 +657,48 @@ function attachCategoryItemsToGroups(
   });
 }
 
+/**
+ * Cheap existence flags so the customize sheet knows which option cards open a
+ * nested sheet — without loading every option's full recommendation tree up front.
+ */
+async function stampNeedsNestedSheetFlags(
+  itemsByCategory: Map<string, Array<Record<string, unknown>>>
+) {
+  const ids: string[] = [];
+  for (const items of itemsByCategory.values()) {
+    for (const item of items) {
+      const id = typeof item.id === 'string' ? item.id : '';
+      if (id) ids.push(id);
+    }
+  }
+  if (ids.length === 0) return;
+
+  const unique = [...new Set(ids)];
+  const [withGroups, withPersonalize] = await Promise.all([
+    db.menuItemAttributeGroup.findMany({
+      where: { menuItemId: { in: unique } },
+      distinct: ['menuItemId'],
+      select: { menuItemId: true },
+    }),
+    db.menuItemPersonalizeGroup.findMany({
+      where: { menuItemId: { in: unique } },
+      distinct: ['menuItemId'],
+      select: { menuItemId: true },
+    }),
+  ]);
+
+  const needs = new Set<string>();
+  for (const row of withGroups) needs.add(row.menuItemId);
+  for (const row of withPersonalize) needs.add(row.menuItemId);
+
+  for (const items of itemsByCategory.values()) {
+    for (const item of items) {
+      const id = typeof item.id === 'string' ? item.id : '';
+      if (id && needs.has(id)) item.needsNestedSheet = true;
+    }
+  }
+}
+
 async function loadCustomerMenuProductDetailUncached(options: {
   slug?: string | null;
   subdomain?: string | null;
@@ -669,6 +725,8 @@ async function loadCustomerMenuProductDetailUncached(options: {
     const parentProductIds = collectLinkedProductIdsFromGroups(rawGroups);
     const parentCategoryIds = collectLinkedCategoryIdsFromGroups(rawGroups);
 
+    // Fast path: group rules + option cards only. Nested option trees load
+    // on demand when the guest opens a nested recommendation sheet.
     const [nestedByProduct, parentItemsByCategory] = await Promise.all([
       loadAttributeGroupsByMenuItemIds(parentProductIds, mode),
       loadOptionCardsByCategoryIds(restaurantId, parentCategoryIds, mode),
@@ -677,6 +735,7 @@ async function loadCustomerMenuProductDetailUncached(options: {
     const deeperProductIds = collectLinkedProductIdsFromGroups(
       [...nestedByProduct.values()].flat()
     ).filter((id) => !parentProductIds.includes(id));
+
     if (deeperProductIds.length > 0) {
       const deeper = await loadAttributeGroupsByMenuItemIds(
         deeperProductIds,
@@ -695,78 +754,33 @@ async function loadCustomerMenuProductDetailUncached(options: {
     const extraCategoryIds = allCategoryIds.filter(
       (id) => !parentCategoryIds.includes(id)
     );
-    const extraItemsByCategory =
+
+    const [extraItemsByCategory] = await Promise.all([
       extraCategoryIds.length > 0
-        ? await loadOptionCardsByCategoryIds(
+        ? loadOptionCardsByCategoryIds(
             restaurantId,
             extraCategoryIds,
             mode
           )
-        : new Map<string, Array<Record<string, unknown>>>();
+        : Promise.resolve(
+            new Map<string, Array<Record<string, unknown>>>()
+          ),
+    ]);
 
     const itemsByCategory = new Map(parentItemsByCategory);
     for (const [categoryId, items] of extraItemsByCategory) {
       itemsByCategory.set(categoryId, items);
     }
 
-    let hydratedGroups = attachCategoryItemsToGroups(
+    await stampNeedsNestedSheetFlags(itemsByCategory);
+
+    const hydratedGroups = attachCategoryItemsToGroups(
       groupsWithNested,
       itemsByCategory
     ).filter((group) => {
       if (group.sourceType === 'PRODUCT') return group.linkedProduct != null;
       return categoryHasProducts(group.linkedCategory ?? undefined);
     });
-
-    const optionItemIds = collectCategoryOptionItemIds(hydratedGroups);
-    if (optionItemIds.length > 0) {
-      const optionNestedGroups = await loadAttributeGroupsByMenuItemIds(
-        optionItemIds,
-        mode
-      );
-      const nestedGroupList = [...optionNestedGroups.values()].flat();
-      const nestedCategoryIds = collectLinkedCategoryIdsFromGroups(
-        nestedGroupList
-      ).filter((id) => !itemsByCategory.has(id));
-      const nestedProductIds = collectLinkedProductIdsFromGroups(
-        nestedGroupList
-      ).filter((id) => !nestedByProduct.has(id));
-
-      const [nestedItemsByCategory, nestedProductGroups] = await Promise.all([
-        nestedCategoryIds.length > 0
-          ? loadOptionCardsByCategoryIds(
-              restaurantId,
-              nestedCategoryIds,
-              mode
-            )
-          : Promise.resolve(
-              new Map<string, Array<Record<string, unknown>>>()
-            ),
-        nestedProductIds.length > 0
-          ? loadAttributeGroupsByMenuItemIds(nestedProductIds, mode)
-          : Promise.resolve(new Map<string, DetailGroup[]>()),
-      ]);
-
-      for (const [categoryId, items] of nestedItemsByCategory) {
-        itemsByCategory.set(categoryId, items);
-      }
-      for (const [id, groups] of nestedProductGroups) {
-        nestedByProduct.set(id, groups);
-      }
-
-      const optionNestedWithProducts = new Map<string, DetailGroup[]>();
-      for (const [itemId, groups] of optionNestedGroups) {
-        optionNestedWithProducts.set(
-          itemId,
-          attachNestedProductGroups(groups, nestedByProduct)
-        );
-      }
-
-      hydratedGroups = attachNestedGroupsToCategoryItems(
-        hydratedGroups,
-        optionNestedWithProducts,
-        itemsByCategory
-      );
-    }
 
     const withInline = attachCustomerLazyImages(
       {
@@ -786,7 +800,7 @@ async function loadCustomerMenuProductDetailUncached(options: {
   });
 }
 
-/** Customize sheet: slim group metadata, then one batched option-card query. */
+/** Customize sheet: slim group metadata + option cards (nested trees on demand). */
 export async function loadCustomerMenuProductDetail(options: {
   slug?: string | null;
   subdomain?: string | null;
@@ -802,17 +816,29 @@ export async function loadCustomerMenuProductDetail(options: {
         ReturnType<typeof loadCustomerMenuProductDetailUncached>
       >;
     }
+    const inflight = productDetailInflight.get(key);
+    if (inflight) return inflight;
   } else {
     productDetailCache.delete(key);
   }
 
-  const data = await loadCustomerMenuProductDetailUncached(options);
-  if (data && !options.skipCache) {
-    productDetailCache.set(key, {
-      expiresAt: Date.now() + PRODUCT_DETAIL_CACHE_TTL_MS,
-      data,
+  const request = loadCustomerMenuProductDetailUncached(options)
+    .then((data) => {
+      if (data && !options.skipCache) {
+        productDetailCache.set(key, {
+          expiresAt: Date.now() + PRODUCT_DETAIL_CACHE_TTL_MS,
+          data,
+        });
+      }
+      return data;
+    })
+    .finally(() => {
+      productDetailInflight.delete(key);
     });
+
+  if (!options.skipCache) {
+    productDetailInflight.set(key, request);
   }
-  return data;
+  return request;
 }
 

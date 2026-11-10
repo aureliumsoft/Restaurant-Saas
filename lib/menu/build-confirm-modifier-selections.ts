@@ -387,6 +387,16 @@ export function buildConfirmModifierSelections(params: {
     }
   }
 
+  // Match recommendation sheet top→bottom: product recs → categories → personalize.
+  appendFallbackProductRecs(
+    mods,
+    processedKeys,
+    visibleProductRecommendationGroups,
+    nestedConfigs,
+    preselectedRecommendationVariationByGroup,
+    parentVariation,
+    productRecChildGroupNamePrefix
+  );
   appendFallbackCategoryOptions(
     mods,
     processedKeys,
@@ -398,15 +408,6 @@ export function buildConfirmModifierSelections(params: {
     parentVariationShortLabel,
     allGroupsFlat,
     lang
-  );
-  appendFallbackProductRecs(
-    mods,
-    processedKeys,
-    visibleProductRecommendationGroups,
-    nestedConfigs,
-    preselectedRecommendationVariationByGroup,
-    parentVariation,
-    productRecChildGroupNamePrefix
   );
   appendFallbackPersonalize(
     mods,

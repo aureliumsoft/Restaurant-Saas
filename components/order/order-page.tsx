@@ -744,8 +744,7 @@ export default function OrderPageClient({
       {
         slug: orderInfo?.restaurantSlug ?? undefined,
         subdomain: hostSubdomain ?? undefined,
-      },
-      { force: true }
+      }
     );
     if (token !== customizeLoadTokenRef.current) return;
     if (full) {
@@ -768,7 +767,7 @@ export default function OrderPageClient({
     };
     let warmed = 0;
     for (const product of products) {
-      if (warmed >= 3) break;
+      if (warmed >= 12) break;
       if (
         !productNeedsCustomizeDialog(product) ||
         !productNeedsDetailFetch(product)
@@ -1024,13 +1023,13 @@ export default function OrderPageClient({
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     const token = ++customizeLoadTokenRef.current;
     openCustomizeForProduct(p, { loading: true });
+    // Prefer prefetch / short client TTL; live browse prices overlay below.
     const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
       p.id,
       {
         slug: orderInfo?.restaurantSlug ?? undefined,
         subdomain: hostSubdomain ?? undefined,
-      },
-      { force: true }
+      }
     );
     if (token !== customizeLoadTokenRef.current) return;
     if (full) {
@@ -1860,6 +1859,16 @@ export default function OrderPageClient({
         <ProductCustomizeDialog
         open={customizeOpen}
         isLoading={customizeLoading}
+        menuQuery={{
+          slug: orderInfo?.restaurantSlug ?? undefined,
+          subdomain: hostSubdomain ?? undefined,
+        }}
+        optionImageUrlForItem={(id) =>
+          customerMenuItemImageUrl(id, {
+            slug: orderInfo?.restaurantSlug,
+            subdomain: hostSubdomain,
+          })
+        }
         onOpenChange={(open) => {
           setCustomizeOpen(open);
           if (!open) {

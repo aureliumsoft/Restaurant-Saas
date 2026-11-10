@@ -133,12 +133,15 @@ export function recommendationOptionNeedsSheet(
     variations?: unknown[] | null;
     nestedAttributeGroups?: unknown[] | null;
     personalizeGroups?: Array<{ options?: unknown[] }> | null;
+    /** Set when nested trees were deferred for a fast first paint. */
+    needsNestedSheet?: boolean;
   },
   group?: OptionConfigGroup
 ): boolean {
   return (
     optionNeedsManualVariationPicker(item, group) ||
     (item.nestedAttributeGroups?.length ?? 0) > 0 ||
+    Boolean(item.needsNestedSheet) ||
     hasPersonalizeOptions(item)
   );
 }

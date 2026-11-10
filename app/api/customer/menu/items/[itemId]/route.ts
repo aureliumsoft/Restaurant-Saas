@@ -25,11 +25,16 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: resolved.error }, { status: 400 });
     }
 
+    // Prefer the short in-memory cache. Only bypass when the client asks for
+    // a fresh read (`fresh=1`) — storefront customize reuses cache + overlays
+    // live browse prices so recommendation cards stay fast.
+    const skipCache =
+      req.nextUrl.searchParams.get('fresh')?.trim() === '1';
+
     const data = await loadCustomerMenuProductDetail({
       ...resolved,
       itemId: trimmed,
-      // Always re-read add-on / recommendation prices from the DB.
-      skipCache: true,
+      skipCache,
     });
 
     if (!data) {

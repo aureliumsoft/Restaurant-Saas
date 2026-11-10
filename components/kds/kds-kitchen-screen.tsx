@@ -421,8 +421,8 @@ export function KdsKitchenScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 text-foreground md:p-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <div className="flex h-[90dvh] max-h-[90dvh] flex-col overflow-hidden bg-background p-4 text-foreground md:p-6">
+      <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold">{tr('kds.title')}</h1>
           <p className="text-sm text-muted-foreground">
@@ -445,7 +445,7 @@ export function KdsKitchenScreen() {
       </div>
 
       {recommendedNames.length > 0 ? (
-        <Card className="mb-4 border-dashed">
+        <Card className="mb-4 shrink-0 border-dashed">
           <CardContent className="py-3 text-sm leading-snug text-foreground">
             {recommendedNames.join(', ')}
           </CardContent>
@@ -453,15 +453,16 @@ export function KdsKitchenScreen() {
       ) : null}
 
       {loading ? (
-        <Loader2 className="animate-spin text-primary text-center mx-auto" />
+        <Loader2 className="mx-auto animate-spin text-primary" />
       ) : sorted.length === 0 ? (
-        <Card>
+        <Card className="shrink-0">
           <CardContent className="pt-6 text-sm text-muted-foreground">
             {tr('kds.noActiveMaking')}
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-4">
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-1">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-4">
           {sorted.map((t) => {
             const left = remainingSeconds(
               t.startedAt,
@@ -473,7 +474,7 @@ export function KdsKitchenScreen() {
               <Card
                 key={t.id}
                 className={cn(
-                  'flex min-h-[280px] flex-col overflow-hidden',
+                  'flex h-[calc(90dvh-9rem)] min-h-[280px] flex-col overflow-hidden',
                   overdue ? 'border-red-500' : ''
                 )}
               >
@@ -672,6 +673,7 @@ export function KdsKitchenScreen() {
               </Card>
             );
           })}
+          </div>
         </div>
       )}
       <KdsOrderActionDialog

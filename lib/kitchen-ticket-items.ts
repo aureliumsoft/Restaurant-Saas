@@ -117,13 +117,13 @@ function isSizeLikeChildName(parentName: string, childName: string): boolean {
 }
 
 /**
- * Kitchen rows:
+ * Kitchen rows (same top→bottom order as the recommendation sheet):
  * Burger (XL)
- * No onions          ← personalize first, no arrow
  * ↳ Sauces
  * - Tomato
  * ↳ Drink
  * - Coke
+ * No onions          ← personalize last
  *
  * Recommendation size/variation options fold onto the parent selection name
  * (same as cart), e.g. "Los Tacos Chuncky" + "Los Tacos Chuncky (TALLA XL)".
@@ -147,15 +147,6 @@ export function buildKitchenTicketItemRows(
       if (!modName) continue;
       if (isKitchenPersonalizeModifier(mod)) personalize.push(mod);
       else others.push(mod);
-    }
-
-    for (const mod of personalize) {
-      const name = resolveBilingualText(mod.name, lang).trim();
-      if (!name) continue;
-      rows.push({
-        productName: `${KITCHEN_PERSONALIZE_MARKER}${name}`,
-        quantity: 0,
-      });
     }
 
     type Folded = {
@@ -194,6 +185,15 @@ export function buildKitchenTicketItemRows(
       rows.push({
         productName: `- ${mod.name}`,
         quantity: mod.quantity,
+      });
+    }
+
+    for (const mod of personalize) {
+      const name = resolveBilingualText(mod.name, lang).trim();
+      if (!name) continue;
+      rows.push({
+        productName: `${KITCHEN_PERSONALIZE_MARKER}${name}`,
+        quantity: 0,
       });
     }
   }

@@ -90,6 +90,11 @@ import {
   shouldAutoOpenOptionFlow,
   syncParentVariationOptionSelections,
 } from '@/lib/menu/recommendation-option-utils';
+import {
+  fetchOptionNestedSheetPayload,
+  type CustomerMenuQuery,
+  type OptionNestedSheetPayload,
+} from '@/lib/menu/fetch-menu-product-detail';
 
 export type MenuOption = {
   menuItemId: string;
@@ -142,6 +147,8 @@ export type AttributeGroup = {
     }[];
     nestedAttributeGroups?: AttributeGroup[];
     personalizeGroups?: PersonalizeGroup[];
+    /** Nested config deferred — fetch on sheet open. */
+    needsNestedSheet?: boolean;
   })[];
 };
 
@@ -358,6 +365,9 @@ type Props = {
   open: boolean;
   /** When true, sheet is open but recommendation data is still loading. */
   isLoading?: boolean;
+  /** Storefront query used to lazy-load nested option recommendation trees. */
+  menuQuery?: CustomerMenuQuery | null;
+  optionImageUrlForItem?: ((menuItemId: string) => string) | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: (
     mods: ModifierGroupSelection[],
@@ -372,11 +382,13 @@ export function ProductCustomizeDialog({
   productBaseUnitPrice,
   productDescription,
   themePrimaryColor,
-  attributeGroups,
+  attributeGroups: attributeGroupsProp,
   personalizeGroups = [],
   variations = [],
   open,
   isLoading = false,
+  menuQuery = null,
+  optionImageUrlForItem = null,
   onOpenChange,
   onConfirm,
 }: Props) {
@@ -428,8 +440,33 @@ export function ProductCustomizeDialog({
   const [skippedOptionalGroupIds, setSkippedOptionalGroupIds] = useState<
     Record<string, true>
   >({});
+  const [optionNestById, setOptionNestById] = useState<
+    Record<string, OptionNestedSheetPayload>
+  >({});
+  const [optionNestLoadingId, setOptionNestLoadingId] = useState<string | null>(
+    null
+  );
   const skippedOptionalGroupIdsRef = useRef(skippedOptionalGroupIds);
   skippedOptionalGroupIdsRef.current = skippedOptionalGroupIds;
+
+  const attributeGroups = useMemo(
+    () =>
+      attributeGroupsProp.map((group) => ({
+        ...group,
+        items: group.items.map((item) => {
+          const nest = optionNestById[item.menuItemId];
+          if (!nest) return item;
+          return {
+            ...item,
+            nestedAttributeGroups: nest.nestedAttributeGroups,
+            personalizeGroups:
+              nest.personalizeGroups ?? item.personalizeGroups,
+            needsNestedSheet: false,
+          };
+        }),
+      })),
+    [attributeGroupsProp, optionNestById]
+  );
 
   const categoryGroups = useMemo(
     () => attributeGroups.filter((g) => g.sourceType !== 'PRODUCT'),
@@ -438,6 +475,29 @@ export function ProductCustomizeDialog({
   const productRecommendationGroups = useMemo(
     () => attributeGroups.filter((g) => g.sourceType === 'PRODUCT'),
     [attributeGroups]
+  );
+
+  const ensureOptionNest = useCallback(
+    async (optionId: string) => {
+      if (optionNestById[optionId]) return optionNestById[optionId];
+      if (!menuQuery) return null;
+      setOptionNestLoadingId(optionId);
+      try {
+        const payload = await fetchOptionNestedSheetPayload(
+          optionId,
+          menuQuery,
+          optionImageUrlForItem ?? (() => ''),
+          lang
+        );
+        if (payload) {
+          setOptionNestById((prev) => ({ ...prev, [optionId]: payload }));
+        }
+        return payload;
+      } finally {
+        setOptionNestLoadingId((cur) => (cur === optionId ? null : cur));
+      }
+    },
+    [lang, menuQuery, optionImageUrlForItem, optionNestById]
   );
 
   const baseProductVariationContext = useMemo(() => {
@@ -828,18 +888,26 @@ export function ProductCustomizeDialog({
 
   const openCategoryOptionFlow = useCallback(
     (groupId: string, optionId: string) => {
-      const group = categoryGroups.find((g) => g.id === groupId);
-      const item = group?.items.find((it) => it.menuItemId === optionId);
-      if (!item || !recommendationOptionNeedsSheet(item, group)) return;
-      setActiveProductGroupId(null);
-      setActiveCategoryOption(null);
-      if (optionNeedsManualVariationPicker(item, group)) {
-        setPicker({ kind: 'nested', groupId, optionId });
-        return;
-      }
-      setActiveCategoryOption({ groupId, optionId });
+      void (async () => {
+        const group = categoryGroups.find((g) => g.id === groupId);
+        const item = group?.items.find((it) => it.menuItemId === optionId);
+        if (!item || !recommendationOptionNeedsSheet(item, group)) return;
+        setActiveProductGroupId(null);
+        setActiveCategoryOption(null);
+        if (optionNeedsManualVariationPicker(item, group)) {
+          setPicker({ kind: 'nested', groupId, optionId });
+          return;
+        }
+        if (
+          !(item.nestedAttributeGroups?.length ?? 0) &&
+          item.needsNestedSheet
+        ) {
+          await ensureOptionNest(optionId);
+        }
+        setActiveCategoryOption({ groupId, optionId });
+      })();
     },
-    [categoryGroups]
+    [categoryGroups, ensureOptionNest, menuQuery]
   );
 
   useEffect(() => {
@@ -884,6 +952,8 @@ export function ProductCustomizeDialog({
       setActiveCategoryOption(null);
       setSelectionTimeline([]);
       setSkippedOptionalGroupIds({});
+      setOptionNestById({});
+      setOptionNestLoadingId(null);
       skippedOptionalGroupIdsRef.current = {};
       const autoNested = autoNestedForGroups({});
       setNestedConfigs(autoNested);
@@ -2475,6 +2545,8 @@ export function ProductCustomizeDialog({
                 open
                 stackClassName="z-[120]"
                 stackZIndex={120}
+                menuQuery={menuQuery}
+                optionImageUrlForItem={optionImageUrlForItem}
                 parentGroupName={recommendationGroupDisplayLabel(
                   activeCategoryOptionTarget.group.name,
                   lang
@@ -2550,6 +2622,8 @@ export function ProductCustomizeDialog({
                 open={activeProductGroupId === activeProductGroup.id}
                 stackClassName="z-[120]"
                 stackZIndex={120}
+                menuQuery={menuQuery}
+                optionImageUrlForItem={optionImageUrlForItem}
                 parentGroupName={recommendationGroupDisplayLabel(
                   activeProductGroup.name,
                   lang

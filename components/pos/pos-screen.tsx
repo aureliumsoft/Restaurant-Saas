@@ -1931,9 +1931,10 @@ export function PosScreen({
   const proceedWithProduct = async (p: PosMenuProduct) => {
     const token = ++customizeLoadTokenRef.current;
     openCustomize(p, { loading: true });
+    // Prefer prefetch / short client TTL; live browse prices overlay below.
     const full = await fetchRestaurantMenuProductDetail<
       PosMenuProduct & { categoryIds?: string[] }
-    >(p.id, { force: true });
+    >(p.id);
     if (token !== customizeLoadTokenRef.current) return;
     if (!full) {
       setCustomizeOpen(false);

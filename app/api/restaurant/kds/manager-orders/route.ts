@@ -52,12 +52,14 @@ export async function GET(_req: NextRequest) {
         createdAt: true,
         customer: { select: { name: true, phone: true } },
         items: {
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           select: {
             id: true,
             quantity: true,
             productName: true,
             menuItem: { select: { name: true } },
             modifiers: {
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
               select: {
                 name: true,
                 quantity: true,

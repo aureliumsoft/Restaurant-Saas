@@ -1381,10 +1381,10 @@ export function KioskApp({
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     const token = ++customizeLoadTokenRef.current;
     openCustomize(p, { loading: true });
+    // Prefer prefetch / short client TTL; live browse prices overlay below.
     const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
       p.id,
-      { slug },
-      { force: true }
+      { slug }
     );
     if (token !== customizeLoadTokenRef.current) return;
     if (!full) {
@@ -2997,6 +2997,10 @@ export function KioskApp({
           }))}
           open={dialogOpen}
           isLoading={customizeLoading}
+          menuQuery={{ slug }}
+          optionImageUrlForItem={(id) =>
+            customerMenuItemImageUrl(id, { slug })
+          }
           onOpenChange={(open) => {
             setDialogOpen(open);
             if (!open) {

@@ -73,6 +73,11 @@ import type {
   AttributeGroup,
   MenuOption,
 } from '@/components/order/product-customize-dialog';
+import {
+  fetchOptionNestedSheetPayload,
+  type CustomerMenuQuery,
+  type OptionNestedSheetPayload,
+} from '@/lib/menu/fetch-menu-product-detail';
 
 function effectiveUnitPrice(price: number, salePrice: number | null) {
   if (salePrice != null && salePrice > 0 && salePrice < price) return salePrice;
@@ -220,6 +225,7 @@ type InlineGroupsProps = {
   ) => void;
   onAppendTimelineKey?: (key: string) => void;
   onRemoveTimelineKey?: (key: string) => void;
+  onEnsureOptionNest?: (optionId: string) => Promise<void>;
 };
 
 type OptionNestedPanelProps = {
@@ -253,6 +259,7 @@ type OptionNestedPanelProps = {
   ) => void;
   onAppendTimelineKey?: (key: string) => void;
   onRemoveTimelineKey?: (key: string) => void;
+  onEnsureOptionNest?: (optionId: string) => Promise<void>;
 };
 
 function OptionNestedPanel({
@@ -275,6 +282,7 @@ function OptionNestedPanel({
   advanceAfterGroupComplete,
   onAppendTimelineKey,
   onRemoveTimelineKey,
+  onEnsureOptionNest,
 }: OptionNestedPanelProps) {
   const { resolve } = useBilingualText();
   const { t } = useTranslation();
@@ -337,6 +345,7 @@ function OptionNestedPanel({
         advanceAfterGroupComplete={advanceAfterGroupComplete}
         onAppendTimelineKey={onAppendTimelineKey}
         onRemoveTimelineKey={onRemoveTimelineKey}
+        onEnsureOptionNest={onEnsureOptionNest}
       />
     </div>
   );
@@ -367,6 +376,7 @@ function InlineRecommendationGroups({
   advanceAfterGroupComplete,
   onAppendTimelineKey,
   onRemoveTimelineKey,
+  onEnsureOptionNest,
 }: InlineGroupsProps) {
   const { lang, resolve } = useBilingualText();
   const { t } = useTranslation();
@@ -458,14 +468,22 @@ function InlineRecommendationGroups({
   };
 
   const beginOptionSetup = (groupId: string, optionId: string) => {
-    const group = allGroupsFlat.find((g) => g.id === groupId);
-    const item = group?.items.find((it) => it.menuItemId === optionId);
-    if (!item || !recommendationOptionNeedsSheet(item, group)) return;
-    const key = optionSelectionKey(groupId, optionId);
-    if (optionNeedsManualVariationPicker(item, group)) {
-      onOpenOptionVariation(scopeParentOptionKey, groupId, optionId);
-      return;
-    } else {
+    void (async () => {
+      const group = allGroupsFlat.find((g) => g.id === groupId);
+      const item = group?.items.find((it) => it.menuItemId === optionId);
+      if (!item || !recommendationOptionNeedsSheet(item, group)) return;
+      const key = optionSelectionKey(groupId, optionId);
+      if (optionNeedsManualVariationPicker(item, group)) {
+        onOpenOptionVariation(scopeParentOptionKey, groupId, optionId);
+        return;
+      }
+      if (
+        !(item.nestedAttributeGroups?.length ?? 0) &&
+        item.needsNestedSheet &&
+        onEnsureOptionNest
+      ) {
+        await onEnsureOptionNest(optionId);
+      }
       const resolved = resolveCategoryItemVariationId(
         item,
         baseProductVariation,
@@ -474,9 +492,9 @@ function InlineRecommendationGroups({
       if (resolved) {
         onNestedVariationChange((prev) => ({ ...prev, [key]: resolved }));
       }
-    }
-    onExpandNestedForGroup?.(groupId);
-    scrollToGroup(groupId);
+      onExpandNestedForGroup?.(groupId);
+      scrollToGroup(groupId);
+    })();
   };
 
   const focusGroupItemChange = (groupId: string) => {
@@ -655,6 +673,7 @@ function InlineRecommendationGroups({
               advanceAfterGroupComplete={advanceAfterGroupComplete}
               onAppendTimelineKey={onAppendTimelineKey}
               onRemoveTimelineKey={onRemoveTimelineKey}
+              onEnsureOptionNest={onEnsureOptionNest}
             />
           );
         };
@@ -898,6 +917,8 @@ type Props = {
   /** Higher z-index when stacked inside another sheet. */
   stackClassName?: string;
   stackZIndex?: number;
+  menuQuery?: CustomerMenuQuery | null;
+  optionImageUrlForItem?: ((menuItemId: string) => string) | null;
   onClose: () => void;
   onDone: (result: NestedRecommendationResult) => void;
 };
@@ -906,18 +927,56 @@ export function NestedRecommendationSheet({
   open,
   parentGroupName,
   product,
-  attributeGroups,
+  attributeGroups: attributeGroupsProp,
   initialProductVariationId,
   parentConfigurationGroup,
   baseProductVariation = null,
   baseProductVariationShortLabel = null,
   stackClassName,
   stackZIndex,
+  menuQuery = null,
+  optionImageUrlForItem = null,
   onClose,
   onDone,
 }: Props) {
   const { t } = useTranslation();
   const { lang, resolve } = useBilingualText();
+  const [optionNestById, setOptionNestById] = useState<
+    Record<string, OptionNestedSheetPayload>
+  >({});
+  const attributeGroups = useMemo(
+    () =>
+      attributeGroupsProp.map((group) => ({
+        ...group,
+        items: group.items.map((item) => {
+          const nest = optionNestById[item.menuItemId];
+          if (!nest) return item;
+          return {
+            ...item,
+            nestedAttributeGroups: nest.nestedAttributeGroups,
+            personalizeGroups:
+              nest.personalizeGroups ?? item.personalizeGroups,
+            needsNestedSheet: false,
+          };
+        }),
+      })),
+    [attributeGroupsProp, optionNestById]
+  );
+  const ensureOptionNest = useCallback(
+    async (optionId: string) => {
+      if (optionNestById[optionId] || !menuQuery) return;
+      const payload = await fetchOptionNestedSheetPayload(
+        optionId,
+        menuQuery,
+        optionImageUrlForItem ?? (() => ''),
+        lang
+      );
+      if (payload) {
+        setOptionNestById((prev) => ({ ...prev, [optionId]: payload }));
+      }
+    },
+    [lang, menuQuery, optionImageUrlForItem, optionNestById]
+  );
   const [productVariationId, setProductVariationId] = useState(
     initialProductVariationId ?? ''
   );
@@ -1044,6 +1103,7 @@ export function NestedRecommendationSheet({
     setOptionVariationPicker(null);
     setCollapsedNestedGroupIds(new Set());
     setSelectionTimeline([]);
+    setOptionNestById({});
     setProductVariationId(initialProductVariationId ?? '');
   }, [
     open,
@@ -1754,6 +1814,7 @@ export function NestedRecommendationSheet({
             advanceAfterGroupComplete={advanceAfterGroupComplete}
             onAppendTimelineKey={appendTimelineKey}
             onRemoveTimelineKey={removeTimelineKey}
+            onEnsureOptionNest={ensureOptionNest}
           />
 
           {personalizeGroups.length > 0 ? (

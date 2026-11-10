@@ -1,7 +1,17 @@
+import { buildCustomerAttributeGroup } from '@/lib/menu/build-customer-attribute-group';
+import type { AttributeGroup } from '@/components/order/product-customize-dialog';
+import type { PersonalizeGroup } from '@/components/order/personalize-options-section';
+import type { UiLanguage } from '@/lib/i18n/resources';
+
 export type CustomerMenuQuery = {
   slug?: string | null;
   subdomain?: string | null;
   branchId?: string | null;
+};
+
+export type OptionNestedSheetPayload = {
+  nestedAttributeGroups: AttributeGroup[];
+  personalizeGroups: PersonalizeGroup[];
 };
 
 type DetailCacheEntry = {
@@ -9,8 +19,8 @@ type DetailCacheEntry = {
   expiresAt: number;
 };
 
-/** Prefetch-only TTL. Customize open always force-refreshes so add-on prices stay current. */
-const DETAIL_CACHE_TTL_MS = 15_000;
+/** Short TTL shared by prefetch and customize open. Live browse prices overlay on top. */
+const DETAIL_CACHE_TTL_MS = 120_000;
 const customerDetailCache = new Map<string, DetailCacheEntry>();
 const restaurantDetailCache = new Map<string, DetailCacheEntry>();
 const restaurantInflight = new Map<string, Promise<unknown>>();
@@ -107,8 +117,7 @@ export async function fetchCustomerMenuProductDetail<T>(
     if (!res.ok) return null;
     const body = (await res.json().catch(() => ({}))) as { data?: T };
     const data = body.data ?? null;
-    // Only warm the short TTL cache for prefetch; force responses are not reused.
-    if (data && !force) cacheSet(customerDetailCache, url, data);
+    if (data) cacheSet(customerDetailCache, url, data);
     return data;
   })().finally(() => {
     customerInflight.delete(url);
@@ -147,7 +156,7 @@ export async function fetchRestaurantMenuProductDetail<T>(
     if (!res.ok) return null;
     const body = (await res.json().catch(() => ({}))) as { data?: T };
     const data = body.data ?? null;
-    if (data && !force) cacheSet(restaurantDetailCache, key, data);
+    if (data) cacheSet(restaurantDetailCache, key, data);
     return data;
   })().finally(() => {
     restaurantInflight.delete(key);
@@ -168,6 +177,34 @@ export function prefetchCustomerMenuProductDetail(
   if (cacheGet(customerDetailCache, url)) return;
   if (customerInflight.has(url)) return;
   void fetchCustomerMenuProductDetail(itemId, query);
+}
+
+/**
+ * Load nested recommendation groups for one option card (on sheet open).
+ * Initial product detail stays shallow so the first customize paint is fast.
+ */
+export async function fetchOptionNestedSheetPayload(
+  optionId: string,
+  query: CustomerMenuQuery,
+  imageUrlForItem: (menuItemId: string) => string,
+  lang: UiLanguage = 'es'
+): Promise<OptionNestedSheetPayload | null> {
+  const detail = await fetchCustomerMenuProductDetail<{
+    attributeGroups?: Parameters<typeof buildCustomerAttributeGroup>[0][];
+    personalizeGroups?: PersonalizeGroup[];
+  }>(optionId, query);
+  if (!detail) return null;
+
+  const nestedAttributeGroups = (detail.attributeGroups ?? [])
+    .filter((g) => Boolean(g?.id) && Boolean(g?.selectionType))
+    .map((g) =>
+      buildCustomerAttributeGroup(g, optionId, imageUrlForItem, lang)
+    );
+
+  return {
+    nestedAttributeGroups,
+    personalizeGroups: detail.personalizeGroups ?? [],
+  };
 }
 
 /** Warm the POS customize cache (hover / focus) without blocking UI. */
