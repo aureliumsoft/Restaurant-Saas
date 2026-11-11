@@ -106,6 +106,7 @@ export type ProductDetailGroupHydrate = {
 export type ProgressiveProductDetailShape = {
   attributeGroups?: Array<{
     id?: string;
+    required?: boolean;
     sourceType?: string | null;
     linkedCategory?: {
       id?: string;
@@ -116,9 +117,18 @@ export type ProgressiveProductDetailShape = {
       id?: string;
       name?: string;
       attributeGroups?: unknown[] | null;
+      needsNestedSheet?: boolean;
     } | null;
   }> | null;
   progressiveShell?: boolean;
+};
+
+export type ProgressiveHydrateMeta = {
+  hydratedGroupIds: string[];
+  /** All required recommendation groups have been hydrated. */
+  requiredComplete: boolean;
+  /** Every shell group has been hydrated. */
+  allComplete: boolean;
 };
 
 /** Merge one hydrated group into a progressive shell product. */
@@ -144,6 +154,28 @@ export function mergeProductDetailGroup<T extends ProgressiveProductDetailShape>
       };
     }),
   };
+}
+
+/** Required groups first, then optional — keeps Add unblocked sooner. */
+export function orderGroupsForProgressiveHydrate<
+  T extends { id?: string; required?: boolean },
+>(groups: T[] | null | undefined): T[] {
+  const list = groups ?? [];
+  const required = list.filter((g) => Boolean(g.required));
+  const optional = list.filter((g) => !g.required);
+  return [...required, ...optional];
+}
+
+export function isProgressiveRequiredComplete(
+  groups: ProgressiveProductDetailShape['attributeGroups'],
+  hydratedGroupIds: Iterable<string>
+): boolean {
+  const done = new Set(hydratedGroupIds);
+  for (const g of groups ?? []) {
+    if (!g.required || !g.id) continue;
+    if (!done.has(g.id)) return false;
+  }
+  return true;
 }
 
 export function invalidateCustomerMenuProductDetail(itemId?: string) {
@@ -229,55 +261,92 @@ export async function fetchCustomerMenuProductGroup(
   return body.data ?? null;
 }
 
+type ProgressiveLoadOptions<T extends ProgressiveProductDetailShape> = {
+  force?: boolean;
+  signal?: { cancelled: () => boolean };
+  onShell?: (shell: T) => void;
+  onGroup?: (
+    product: T,
+    hydrate: ProductDetailGroupHydrate,
+    meta: ProgressiveHydrateMeta
+  ) => void;
+  /** Fires once when every required group has been hydrated. */
+  onRequiredComplete?: (product: T) => void;
+};
+
+async function runProgressiveGroupHydrate<T extends ProgressiveProductDetailShape>(
+  shell: T,
+  fetchGroup: (groupId: string) => Promise<ProductDetailGroupHydrate | null>,
+  options?: ProgressiveLoadOptions<T>
+): Promise<T | null> {
+  options?.onShell?.(shell);
+
+  const ordered = orderGroupsForProgressiveHydrate(shell.attributeGroups);
+  const hydratedGroupIds: string[] = [];
+  let requiredNotified = false;
+  let current: T = shell;
+
+  for (const group of ordered) {
+    if (options?.signal?.cancelled()) return null;
+    const groupId = group.id;
+    if (!groupId) continue;
+    const hydrate = await fetchGroup(groupId);
+    if (options?.signal?.cancelled()) return null;
+    if (!hydrate) continue;
+    current = mergeProductDetailGroup(current, hydrate);
+    hydratedGroupIds.push(groupId);
+    const requiredComplete = isProgressiveRequiredComplete(
+      shell.attributeGroups,
+      hydratedGroupIds
+    );
+    const allComplete = hydratedGroupIds.length >= ordered.length;
+    const meta: ProgressiveHydrateMeta = {
+      hydratedGroupIds: [...hydratedGroupIds],
+      requiredComplete,
+      allComplete,
+    };
+    options?.onGroup?.(current, hydrate, meta);
+    if (requiredComplete && !requiredNotified) {
+      requiredNotified = true;
+      options?.onRequiredComplete?.(current);
+    }
+  }
+
+  if (!requiredNotified) {
+    options?.onRequiredComplete?.(current);
+  }
+
+  return current;
+}
+
 /**
- * Open customize fast: shell → hydrate each group in order → paint as each
- * finishes. Caches the full product only after every group is merged.
+ * Open customize fast: shell → hydrate required groups first, then optional.
+ * Nested option trees stay deferred until nest-sheet open.
  */
 export async function loadCustomerMenuProductDetailProgressive<
   T extends ProgressiveProductDetailShape,
 >(
   itemId: string,
   query: CustomerMenuQuery,
-  options?: {
-    force?: boolean;
-    signal?: { cancelled: () => boolean };
-    onShell?: (shell: T) => void;
-    onGroup?: (product: T, hydrate: ProductDetailGroupHydrate) => void;
-  }
+  options?: ProgressiveLoadOptions<T>
 ): Promise<T | null> {
   const force = Boolean(options?.force);
   const fullUrl = buildCustomerMenuItemDetailUrl(itemId, query, {
     fresh: force,
   });
 
-  // Prefer progressive shell for first paint even when a full warm exists.
-  // Still reuse full cache when caller cancels mid-hydrate? No — always shell.
   const shell = await fetchCustomerMenuProductDetailShell<T>(itemId, query);
   if (!shell) return null;
   if (options?.signal?.cancelled()) return null;
 
-  options?.onShell?.(shell);
+  const current = await runProgressiveGroupHydrate(
+    shell,
+    (groupId) => fetchCustomerMenuProductGroup(itemId, groupId, query),
+    options
+  );
+  if (!current || options?.signal?.cancelled()) return null;
 
-  const groupIds = (shell.attributeGroups ?? [])
-    .map((g) => g.id)
-    .filter((id): id is string => Boolean(id));
-
-  let current: T = shell;
-  for (const groupId of groupIds) {
-    if (options?.signal?.cancelled()) return null;
-    const hydrate = await fetchCustomerMenuProductGroup(
-      itemId,
-      groupId,
-      query
-    );
-    if (options?.signal?.cancelled()) return null;
-    if (!hydrate) continue;
-    current = mergeProductDetailGroup(current, hydrate);
-    options?.onGroup?.(current, hydrate);
-  }
-
-  // Cache complete payload under the normal detail URL for prefetch reuse.
-  if (fullUrl && !options?.signal?.cancelled()) {
+  if (fullUrl) {
     const { progressiveShell: _shellFlag, ...rest } = current as T & {
       progressiveShell?: boolean;
     };
@@ -290,12 +359,67 @@ export async function loadCustomerMenuProductDetailProgressive<
   return current;
 }
 
+export async function fetchRestaurantMenuProductDetailShell<T>(
+  itemId: string
+): Promise<T | null> {
+  const res = await fetch(
+    `/api/restaurant/menu/items/${encodeURIComponent(itemId)}?shell=1`,
+    { cache: 'no-store' }
+  );
+  if (!res.ok) return null;
+  const body = (await res.json().catch(() => ({}))) as { data?: T };
+  return body.data ?? null;
+}
+
+export async function fetchRestaurantMenuProductGroup(
+  itemId: string,
+  groupId: string
+): Promise<ProductDetailGroupHydrate | null> {
+  const res = await fetch(
+    `/api/restaurant/menu/items/${encodeURIComponent(itemId)}/groups/${encodeURIComponent(groupId)}`,
+    { cache: 'no-store' }
+  );
+  if (!res.ok) return null;
+  const body = (await res.json().catch(() => ({}))) as {
+    data?: ProductDetailGroupHydrate;
+  };
+  return body.data ?? null;
+}
+
+/** POS progressive customize: shell → required groups → optional groups. */
+export async function loadRestaurantMenuProductDetailProgressive<
+  T extends ProgressiveProductDetailShape,
+>(
+  itemId: string,
+  options?: ProgressiveLoadOptions<T>
+): Promise<T | null> {
+  const shell = await fetchRestaurantMenuProductDetailShell<T>(itemId);
+  if (!shell) return null;
+  if (options?.signal?.cancelled()) return null;
+
+  const current = await runProgressiveGroupHydrate(
+    shell,
+    (groupId) => fetchRestaurantMenuProductGroup(itemId, groupId),
+    options
+  );
+  if (!current || options?.signal?.cancelled()) return null;
+
+  const key = `lite:v3:${itemId}`;
+  const { progressiveShell: _shellFlag, ...rest } = current as T & {
+    progressiveShell?: boolean;
+  };
+  void _shellFlag;
+  const complete = { ...rest, progressiveShell: undefined } as T;
+  cacheSet(restaurantDetailCache, key, complete);
+  return complete;
+}
+
 export async function fetchRestaurantMenuProductDetail<T>(
   itemId: string,
   options?: { force?: boolean }
 ): Promise<T | null> {
-  // Bump key when lite select shape changes so stale nests are not reused.
-  const key = `lite:v2:${itemId}`;
+  // Progressive shell→group cache (replaces heavy lite=1 blob for customize).
+  const key = `lite:v3:${itemId}`;
   const force = Boolean(options?.force);
 
   if (force) {
@@ -309,18 +433,10 @@ export async function fetchRestaurantMenuProductDetail<T>(
   if (existing && !force) return existing;
 
   const request = (async () => {
-    const res = await fetch(
-      `/api/restaurant/menu/items/${encodeURIComponent(itemId)}?lite=1`,
-      {
-        cache: 'no-store',
-        headers: force ? { 'Cache-Control': 'no-cache' } : undefined,
-      }
-    );
-    if (!res.ok) return null;
-    const body = (await res.json().catch(() => ({}))) as { data?: T };
-    const data = body.data ?? null;
-    if (data) cacheSet(restaurantDetailCache, key, data);
-    return data;
+    const data = await loadRestaurantMenuProductDetailProgressive<
+      T & ProgressiveProductDetailShape
+    >(itemId);
+    return (data as T | null) ?? null;
   })().finally(() => {
     restaurantInflight.delete(key);
   });
@@ -400,8 +516,8 @@ function buildNestedSheetPayload(
 
 /**
  * Load nested recommendation groups for one option card (on sheet open).
- * Progressive: shell first, then each group sequentially; optional onProgress
- * paints skeletons → groups as they arrive.
+ * Progressive: category shells first, then each group's option cards.
+ * Deeper nests stay deferred until that option is opened.
  */
 export async function fetchOptionNestedSheetPayload(
   optionId: string,
@@ -434,13 +550,54 @@ export async function fetchOptionNestedSheetPayload(
   return buildNestedSheetPayload(optionId, detail, imageUrlForItem, lang);
 }
 
+/** POS nested recommendation sheet — same progressive category→cards path. */
+export async function fetchRestaurantOptionNestedSheetPayload(
+  optionId: string,
+  imageUrlForItem: (menuItemId: string) => string,
+  lang: UiLanguage = 'es',
+  options?: {
+    signal?: { cancelled: () => boolean };
+    onProgress?: (payload: OptionNestedSheetPayload) => void;
+  }
+): Promise<OptionNestedSheetPayload | null> {
+  const detail = await loadRestaurantMenuProductDetailProgressive<{
+    attributeGroups?: Parameters<typeof buildCustomerAttributeGroup>[0][];
+    personalizeGroups?: PersonalizeGroup[];
+  }>(optionId, {
+    signal: options?.signal,
+    onShell: (shell) => {
+      options?.onProgress?.(
+        buildNestedSheetPayload(optionId, shell, imageUrlForItem, lang)
+      );
+    },
+    onGroup: (product) => {
+      options?.onProgress?.(
+        buildNestedSheetPayload(optionId, product, imageUrlForItem, lang)
+      );
+    },
+  });
+  if (!detail) return null;
+
+  return buildNestedSheetPayload(optionId, detail, imageUrlForItem, lang);
+}
+
 /** Warm the POS customize cache (hover / focus) without blocking UI. */
 export function prefetchRestaurantMenuProductDetail(itemId: string): void {
   if (!itemId) return;
-  const key = `lite:v2:${itemId}`;
+  const key = `lite:v3:${itemId}`;
   if (cacheGet(restaurantDetailCache, key)) return;
   if (restaurantInflight.has(key)) return;
-  void fetchRestaurantMenuProductDetail(itemId);
+  void (async () => {
+    await acquirePrefetchSlot();
+    try {
+      if (cacheGet(restaurantDetailCache, key) || restaurantInflight.has(key)) {
+        return;
+      }
+      await loadRestaurantMenuProductDetailProgressive(itemId);
+    } finally {
+      releasePrefetchSlot();
+    }
+  })();
 }
 
 export function productNeedsDetailFetch(product: {

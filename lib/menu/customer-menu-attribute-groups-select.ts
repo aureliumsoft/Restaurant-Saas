@@ -413,6 +413,45 @@ export function buildCustomerProductDetailAttributeGroupsSelect(
 }
 
 /**
+ * Fast customize shell: group rules + linked ids/names only.
+ * No option cards, variations trees, or nested product attribute groups.
+ */
+export function customerProductDetailShellGroupSelect(
+  mode: CustomerMenuSelectMode
+) {
+  const select: Record<string, unknown> = {
+    ...attributeGroupBaseSelect(mode),
+    linkedCategoryId: true,
+    linkedProductId: true,
+    linkedCategory: {
+      select: { id: true, name: true },
+    },
+    linkedProduct: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        salePrice: true,
+        updatedAt: true,
+        createdAt: true,
+      },
+    },
+  };
+  return select;
+}
+
+export function buildCustomerProductDetailShellAttributeGroupsSelect(
+  mode: CustomerMenuSelectMode
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  return {
+    orderBy: { sortOrder: 'asc' as const },
+    select: customerProductDetailShellGroupSelect(mode),
+  };
+}
+
+/**
  * POS ?lite=1 recommendations: linked option cards without nested personalize
  * trees on category items. Linked PRODUCT recommendations still include a leaf
  * attribute-group tree (see buildLeafAttributeGroupsSelect) so nested sheets

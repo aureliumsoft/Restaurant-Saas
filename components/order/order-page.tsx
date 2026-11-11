@@ -704,6 +704,7 @@ export default function OrderPageClient({
 
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [customizeLoading, setCustomizeLoading] = useState(false);
+  const [customizeHydrating, setCustomizeHydrating] = useState(false);
   const customizeLoadTokenRef = useRef(0);
   const [customizeProduct, setCustomizeProduct] =
     useState<CustomerMenuProduct | null>(null);
@@ -739,6 +740,7 @@ export default function OrderPageClient({
     setEditingLineId(line.lineId);
     const token = ++customizeLoadTokenRef.current;
     openCustomizeForProduct(product, { loading: true });
+    setCustomizeHydrating(true);
     const query = {
       slug: orderInfo?.restaurantSlug ?? undefined,
       subdomain: hostSubdomain ?? undefined,
@@ -757,14 +759,21 @@ export default function OrderPageClient({
             if (token !== customizeLoadTokenRef.current) return;
             setCustomizeProduct({ ...partial, categoryId: product.categoryId });
           },
+          onRequiredComplete: (partial) => {
+            if (token !== customizeLoadTokenRef.current) return;
+            setCustomizeProduct({ ...partial, categoryId: product.categoryId });
+            setCustomizeLoading(false);
+          },
         }
       );
     if (token !== customizeLoadTokenRef.current) return;
     if (full) {
       setCustomizeProduct({ ...full, categoryId: product.categoryId });
       setCustomizeLoading(false);
+      setCustomizeHydrating(false);
       return;
     }
+    setCustomizeHydrating(false);
     openCustomizeForProduct(product);
   };
 
@@ -1046,11 +1055,12 @@ export default function OrderPageClient({
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     const token = ++customizeLoadTokenRef.current;
     openCustomizeForProduct(p, { loading: true });
+    setCustomizeHydrating(true);
     const query = {
       slug: orderInfo?.restaurantSlug ?? undefined,
       subdomain: hostSubdomain ?? undefined,
     };
-    // Shell first for fast paint; hydrate each rec group sequentially.
+    // Shell → required groups first → optional; nests defer to sheet open.
     const full =
       await loadCustomerMenuProductDetailProgressive<CustomerMenuProduct>(
         p.id,
@@ -1065,14 +1075,21 @@ export default function OrderPageClient({
             if (token !== customizeLoadTokenRef.current) return;
             setCustomizeProduct({ ...partial, categoryId: p.categoryId });
           },
+          onRequiredComplete: (partial) => {
+            if (token !== customizeLoadTokenRef.current) return;
+            setCustomizeProduct({ ...partial, categoryId: p.categoryId });
+            setCustomizeLoading(false);
+          },
         }
       );
     if (token !== customizeLoadTokenRef.current) return;
     if (full) {
       setCustomizeProduct({ ...full, categoryId: p.categoryId });
       setCustomizeLoading(false);
+      setCustomizeHydrating(false);
       return;
     }
+    setCustomizeHydrating(false);
     openCustomizeForProduct(p);
   };
 
@@ -1895,6 +1912,7 @@ export default function OrderPageClient({
         <ProductCustomizeDialog
         open={customizeOpen}
         isLoading={customizeLoading}
+        isHydrating={customizeHydrating}
         menuQuery={{
           slug: orderInfo?.restaurantSlug ?? undefined,
           subdomain: hostSubdomain ?? undefined,
@@ -1911,6 +1929,7 @@ export default function OrderPageClient({
             setCustomizeProduct(null);
             setEditingLineId(null);
             setCustomizeLoading(false);
+            setCustomizeHydrating(false);
             customizeLoadTokenRef.current += 1;
           }
         }}

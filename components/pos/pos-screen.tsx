@@ -167,7 +167,7 @@ import { restaurantMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import {
-  fetchRestaurantMenuProductDetail,
+  loadRestaurantMenuProductDetailProgressive,
   overlayLiveCatalogPrices,
 } from '@/lib/menu/fetch-menu-product-detail';
 import {
@@ -572,6 +572,7 @@ export function PosScreen({
     useState<PosMenuProduct | null>(null);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [customizeLoading, setCustomizeLoading] = useState(false);
+  const [customizeHydrating, setCustomizeHydrating] = useState(false);
   const customizeLoadTokenRef = useRef(0);
   const [menuOfferOpen, setMenuOfferOpen] = useState(false);
   const [menuOfferProduct, setMenuOfferProduct] =
@@ -1928,38 +1929,62 @@ export function PosScreen({
     return bundle ?? null;
   };
 
+  const mapProgressivePosProduct = (
+    p: PosMenuProduct,
+    full: PosMenuProduct & { categoryIds?: string[] }
+  ): PosMenuProduct => ({
+    ...full,
+    categoryId: p.categoryId,
+    description: full.description ?? null,
+    imageUrl: full.imageUrl ?? null,
+    price: Number(full.price),
+    salePrice:
+      full.salePrice != null && Number.isFinite(Number(full.salePrice))
+        ? Number(full.salePrice)
+        : null,
+    attributeGroups: full.attributeGroups ?? [],
+    variations: (full.variations ?? []).map((v) => ({
+      ...v,
+      priceDelta: Number(v.priceDelta ?? 0),
+    })),
+  });
+
   const proceedWithProduct = async (p: PosMenuProduct) => {
-        const token = ++customizeLoadTokenRef.current;
-        openCustomize(p, { loading: true });
-    // Prefer prefetch / short client TTL; live browse prices overlay below.
-        const full = await fetchRestaurantMenuProductDetail<
-          PosMenuProduct & { categoryIds?: string[] }
-        >(p.id);
-        if (token !== customizeLoadTokenRef.current) return;
-        if (!full) {
-          setCustomizeOpen(false);
-          setCustomizeProduct(null);
+    const token = ++customizeLoadTokenRef.current;
+    openCustomize(p, { loading: true });
+    setCustomizeHydrating(true);
+    // Shell → required groups first → optional; nests defer to sheet open.
+    const full =
+      await loadRestaurantMenuProductDetailProgressive<
+        PosMenuProduct & { categoryIds?: string[] }
+      >(p.id, {
+        signal: { cancelled: () => token !== customizeLoadTokenRef.current },
+        onShell: (shell) => {
+          if (token !== customizeLoadTokenRef.current) return;
+          setCustomizeProduct(mapProgressivePosProduct(p, shell));
+        },
+        onGroup: (partial) => {
+          if (token !== customizeLoadTokenRef.current) return;
+          setCustomizeProduct(mapProgressivePosProduct(p, partial));
+        },
+        onRequiredComplete: (partial) => {
+          if (token !== customizeLoadTokenRef.current) return;
+          setCustomizeProduct(mapProgressivePosProduct(p, partial));
           setCustomizeLoading(false);
+        },
+      });
+    if (token !== customizeLoadTokenRef.current) return;
+    if (!full) {
+      setCustomizeOpen(false);
+      setCustomizeProduct(null);
+      setCustomizeLoading(false);
+      setCustomizeHydrating(false);
       toast.error(t('pos.toasts.couldNotLoadProductConfig'));
-          return;
-        }
-        setCustomizeProduct({
-          ...full,
-          categoryId: p.categoryId,
-          description: full.description ?? null,
-          imageUrl: full.imageUrl ?? null,
-          price: Number(full.price),
-          salePrice:
-            full.salePrice != null && Number.isFinite(Number(full.salePrice))
-              ? Number(full.salePrice)
-              : null,
-          attributeGroups: full.attributeGroups ?? [],
-          variations: (full.variations ?? []).map((v) => ({
-            ...v,
-            priceDelta: Number(v.priceDelta ?? 0),
-          })),
-        });
-        setCustomizeLoading(false);
+      return;
+    }
+    setCustomizeProduct(mapProgressivePosProduct(p, full));
+    setCustomizeLoading(false);
+    setCustomizeHydrating(false);
   };
 
   const handleProductSelect = (p: PosMenuProduct) => {
@@ -5389,12 +5414,16 @@ export function PosScreen({
         }))}
         open={customizeOpen}
         isLoading={customizeLoading}
+        isHydrating={customizeHydrating}
+        useRestaurantMenuDetail
+        optionImageUrlForItem={restaurantMenuItemImageUrl}
         onOpenChange={(open) => {
           setCustomizeOpen(open);
           if (!open) {
             customizeLoadTokenRef.current += 1;
             setCustomizeProduct(null);
             setCustomizeLoading(false);
+            setCustomizeHydrating(false);
           }
         }}
         onConfirm={(mods, variation, quantity = 1) => {
@@ -5415,6 +5444,7 @@ export function PosScreen({
           setCustomizeOpen(false);
           setCustomizeProduct(null);
           setCustomizeLoading(false);
+          setCustomizeHydrating(false);
         }}
       />
 

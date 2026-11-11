@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import {
   buildCustomerProductDetailAttributeGroupsSelect,
+  buildCustomerProductDetailShellAttributeGroupsSelect,
   customerProductDetailGroupSelect,
   customerProductDetailOptionCardSelect,
   type CustomerMenuSelectMode,
@@ -27,6 +28,7 @@ import {
 } from '@/lib/menu/map-attribute-group-items';
 import {
   attachCustomerLazyImages,
+  attachRestaurantLazyImages,
   customerMenuItemImageUrl,
   mapBrowseListItem,
   resolveCategoryImageUrl,
@@ -82,6 +84,25 @@ function buildCustomerProductDetailItemSelect(mode: CustomerMenuSelectMode) {
     categoryId: true,
     variations: customerProductDetailOptionCardSelect(mode).variations,
     attributeGroups: buildCustomerProductDetailAttributeGroupsSelect(mode),
+    personalizeGroups: personalizeGroupsSelectLite,
+  } as const;
+}
+
+/** Shell open: product + group metadata only (no option cards / nest trees). */
+function buildCustomerProductDetailShellItemSelect(
+  mode: CustomerMenuSelectMode
+) {
+  return {
+    id: true,
+    name: true,
+    description: true,
+    imageUrl: true,
+    price: true,
+    salePrice: true,
+    updatedAt: true,
+    categoryId: true,
+    variations: customerProductDetailOptionCardSelect(mode).variations,
+    attributeGroups: buildCustomerProductDetailShellAttributeGroupsSelect(mode),
     personalizeGroups: personalizeGroupsSelectLite,
   } as const;
 }
@@ -697,24 +718,22 @@ function shellAttributeGroups(rawGroups: DetailGroup[] | null | undefined) {
     });
 }
 
-async function loadCustomerMenuProductDetailShellUncached(options: {
+type ImageAttachOpts = {
   slug?: string | null;
   subdomain?: string | null;
-  itemId: string;
-}) {
-  return withMenuSelectMode(async (mode) => {
-    const restaurantId = await resolveRestaurantId(
-      options.slug,
-      options.subdomain
-    );
-    if (!restaurantId) return null;
+  /** When true, use restaurant image URL helpers instead of customer CDN. */
+  restaurantImages?: boolean;
+};
 
+async function loadProductDetailShellForRestaurant(
+  restaurantId: string,
+  itemId: string,
+  imageOpts?: ImageAttachOpts
+) {
+  return withMenuSelectMode(async (mode) => {
     const item = await db.menuItem.findFirst({
-      where: {
-        id: options.itemId,
-        restaurantId,
-      },
-      select: buildCustomerProductDetailItemSelect(mode),
+      where: { id: itemId, restaurantId },
+      select: buildCustomerProductDetailShellItemSelect(mode),
     });
     if (!item) return null;
 
@@ -722,54 +741,35 @@ async function loadCustomerMenuProductDetailShellUncached(options: {
       .attributeGroups;
     const shellGroups = shellAttributeGroups(rawGroups);
 
-    const withInline = attachCustomerLazyImages(
-      {
-        ...item,
-        attributeGroups: shellGroups,
-      },
-      {
-        slug: options.slug,
-        subdomain: options.subdomain,
-      }
-    );
-
-    return {
-      ...withInline,
+    const payload = {
+      ...item,
+      attributeGroups: shellGroups,
       categoryIds: [item.categoryId],
       progressiveShell: true as const,
     };
+
+    if (imageOpts?.restaurantImages) {
+      return attachRestaurantLazyImages(payload);
+    }
+
+    return attachCustomerLazyImages(payload, {
+      slug: imageOpts?.slug,
+      subdomain: imageOpts?.subdomain,
+    });
   });
 }
 
-/** Fast customize open: group metadata only; option cards hydrate per group. */
-export async function loadCustomerMenuProductDetailShell(options: {
-  slug?: string | null;
-  subdomain?: string | null;
-  itemId: string;
-}) {
-  return loadCustomerMenuProductDetailShellUncached(options);
-}
-
-/**
- * Hydrate one recommendation group's option cards for progressive customize.
- */
-export async function loadCustomerMenuProductDetailGroup(options: {
-  slug?: string | null;
-  subdomain?: string | null;
-  itemId: string;
-  groupId: string;
-}) {
+async function loadProductDetailGroupForRestaurant(
+  restaurantId: string,
+  itemId: string,
+  groupId: string,
+  imageOpts?: ImageAttachOpts
+) {
   return withMenuSelectMode(async (mode) => {
-    const restaurantId = await resolveRestaurantId(
-      options.slug,
-      options.subdomain
-    );
-    if (!restaurantId) return null;
-
     const group = await db.menuItemAttributeGroup.findFirst({
       where: {
-        id: options.groupId,
-        menuItemId: options.itemId,
+        id: groupId,
+        menuItemId: itemId,
         menuItem: { restaurantId },
       },
       select: customerProductDetailGroupSelect(mode),
@@ -783,47 +783,49 @@ export async function loadCustomerMenuProductDetailGroup(options: {
         detailGroup.linkedProductId || detailGroup.linkedProduct?.id || '';
       if (!productId || !detailGroup.linkedProduct) {
         return {
-          groupId: options.groupId,
+          groupId,
           sourceType: 'PRODUCT' as const,
           linkedProduct: detailGroup.linkedProduct ?? null,
           linkedCategory: null,
         };
       }
 
-      const nestedByProduct = await loadAttributeGroupsByMenuItemIds(
-        [productId],
-        mode
-      );
-      const nestedGroups = nestedByProduct.get(productId) ?? [];
-      const nestedCategoryIds = collectLinkedCategoryIdsFromGroups(nestedGroups);
-      const nestedItemsByCategory =
-        nestedCategoryIds.length > 0
-          ? await loadOptionCardsByCategoryIds(
-              restaurantId,
-              nestedCategoryIds,
-              mode
-            )
-          : new Map<string, Array<Record<string, unknown>>>();
-      await stampNeedsNestedSheetFlags(nestedItemsByCategory);
+      // Do not preload nested recommendation trees here — nest sheet opens with
+      // progressive shell→category cards for this linked product on demand.
+      const [hasAttrGroups, hasPersonalize] = await Promise.all([
+        db.menuItemAttributeGroup
+          .findFirst({
+            where: { menuItemId: productId },
+            select: { id: true },
+          })
+          .then((row) => Boolean(row)),
+        db.menuItemPersonalizeGroup
+          .findFirst({
+            where: { menuItemId: productId },
+            select: { id: true },
+          })
+          .then((row) => Boolean(row)),
+      ]);
 
       const linkedProduct = {
         ...detailGroup.linkedProduct,
-        attributeGroups: attachCategoryItemsToGroups(
-          nestedGroups,
-          nestedItemsByCategory
-        ),
+        attributeGroups: [],
+        needsNestedSheet: hasAttrGroups || hasPersonalize,
       };
 
-      const withInline = attachCustomerLazyImages(
-        { linkedProduct },
-        {
-          slug: options.slug,
-          subdomain: options.subdomain,
-        }
-      ) as { linkedProduct?: typeof linkedProduct };
+      const wrapped = imageOpts?.restaurantImages
+        ? attachRestaurantLazyImages({ linkedProduct })
+        : attachCustomerLazyImages(
+            { linkedProduct },
+            {
+              slug: imageOpts?.slug,
+              subdomain: imageOpts?.subdomain,
+            }
+          );
+      const withInline = wrapped as { linkedProduct?: typeof linkedProduct };
 
       return {
-        groupId: options.groupId,
+        groupId,
         sourceType: 'PRODUCT' as const,
         linkedProduct: withInline.linkedProduct ?? linkedProduct,
         linkedCategory: null,
@@ -834,7 +836,7 @@ export async function loadCustomerMenuProductDetailGroup(options: {
       detailGroup.linkedCategoryId || detailGroup.linkedCategory?.id || '';
     if (!categoryId) {
       return {
-        groupId: options.groupId,
+        groupId,
         sourceType: 'CATEGORY' as const,
         linkedCategory: detailGroup.linkedCategory
           ? { ...detailGroup.linkedCategory, items: [] }
@@ -843,6 +845,7 @@ export async function loadCustomerMenuProductDetailGroup(options: {
       };
     }
 
+    // Option cards for this recommendation category only — no nested trees.
     const itemsByCategory = await loadOptionCardsByCategoryIds(
       restaurantId,
       [categoryId],
@@ -857,21 +860,90 @@ export async function loadCustomerMenuProductDetailGroup(options: {
       items,
     };
 
-    const withInline = attachCustomerLazyImages(
-      { linkedCategory },
-      {
-        slug: options.slug,
-        subdomain: options.subdomain,
-      }
-    ) as { linkedCategory?: typeof linkedCategory };
+    const wrapped = imageOpts?.restaurantImages
+      ? attachRestaurantLazyImages({ linkedCategory })
+      : attachCustomerLazyImages(
+          { linkedCategory },
+          {
+            slug: imageOpts?.slug,
+            subdomain: imageOpts?.subdomain,
+          }
+        );
+    const withInline = wrapped as { linkedCategory?: typeof linkedCategory };
 
     return {
-      groupId: options.groupId,
+      groupId,
       sourceType: 'CATEGORY' as const,
       linkedCategory: withInline.linkedCategory ?? linkedCategory,
       linkedProduct: null,
     };
   });
+}
+
+/** Fast customize open: group metadata only; option cards hydrate per group. */
+export async function loadCustomerMenuProductDetailShell(options: {
+  slug?: string | null;
+  subdomain?: string | null;
+  itemId: string;
+}) {
+  const restaurantId = await resolveRestaurantId(
+    options.slug,
+    options.subdomain
+  );
+  if (!restaurantId) return null;
+  return loadProductDetailShellForRestaurant(restaurantId, options.itemId, {
+    slug: options.slug,
+    subdomain: options.subdomain,
+  });
+}
+
+/** POS / authenticated restaurant progressive shell. */
+export async function loadRestaurantMenuProductDetailShell(options: {
+  restaurantId: string;
+  itemId: string;
+}) {
+  return loadProductDetailShellForRestaurant(
+    options.restaurantId,
+    options.itemId,
+    { restaurantImages: true }
+  );
+}
+
+/**
+ * Hydrate one recommendation group's option cards for progressive customize.
+ * Nested option trees stay deferred until nest-sheet open.
+ */
+export async function loadCustomerMenuProductDetailGroup(options: {
+  slug?: string | null;
+  subdomain?: string | null;
+  itemId: string;
+  groupId: string;
+}) {
+  const restaurantId = await resolveRestaurantId(
+    options.slug,
+    options.subdomain
+  );
+  if (!restaurantId) return null;
+  return loadProductDetailGroupForRestaurant(
+    restaurantId,
+    options.itemId,
+    options.groupId,
+    { slug: options.slug, subdomain: options.subdomain }
+  );
+}
+
+/** POS / authenticated restaurant progressive group hydrate. */
+export async function loadRestaurantMenuProductDetailGroup(options: {
+  restaurantId: string;
+  itemId: string;
+  groupId: string;
+}) {
+  return loadProductDetailGroupForRestaurant(
+    options.restaurantId,
+    options.itemId,
+    options.groupId,
+    { restaurantImages: true }
+  );
 }
 
 async function loadCustomerMenuProductDetailUncached(options: {

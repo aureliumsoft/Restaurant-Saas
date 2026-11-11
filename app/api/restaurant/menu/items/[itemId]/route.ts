@@ -129,7 +129,25 @@ export async function GET(
 
   const itemId = resolveRouteId((await ctx.params).itemId);
   const lite = req.nextUrl.searchParams.get("lite") === "1";
+  const shell = req.nextUrl.searchParams.get("shell") === "1";
   const where = { id: itemId, restaurantId: auth.restaurant.id };
+
+  if (shell) {
+    const { loadRestaurantMenuProductDetailShell } = await import(
+      "@/lib/menu/load-customer-menu-progressive"
+    );
+    const data = await loadRestaurantMenuProductDetailShell({
+      restaurantId: auth.restaurant.id,
+      itemId,
+    });
+    if (!data) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+    return NextResponse.json(
+      { data },
+      { status: 200, headers: { "Cache-Control": "private, no-store" } }
+    );
+  }
 
   if (lite) {
     // Separate query so TS does not union with detailSelect (updatedAt vs imageUrl).

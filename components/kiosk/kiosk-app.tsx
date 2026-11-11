@@ -583,6 +583,7 @@ export function KioskApp({
     useState<CustomerMenuProduct | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [customizeLoading, setCustomizeLoading] = useState(false);
+  const [customizeHydrating, setCustomizeHydrating] = useState(false);
   const customizeLoadTokenRef = useRef(0);
   const productCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const cartFlyTargetRef = useRef<HTMLElement | null>(null);
@@ -1381,7 +1382,8 @@ export function KioskApp({
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     const token = ++customizeLoadTokenRef.current;
     openCustomize(p, { loading: true });
-    // Shell first for fast paint; hydrate each rec group sequentially.
+    setCustomizeHydrating(true);
+    // Shell → required groups first → optional; nests defer to sheet open.
     const full =
       await loadCustomerMenuProductDetailProgressive<CustomerMenuProduct>(
         p.id,
@@ -1396,6 +1398,11 @@ export function KioskApp({
             if (token !== customizeLoadTokenRef.current) return;
             setCustomizeProduct({ ...partial, categoryId: p.categoryId });
           },
+          onRequiredComplete: (partial) => {
+            if (token !== customizeLoadTokenRef.current) return;
+            setCustomizeProduct({ ...partial, categoryId: p.categoryId });
+            setCustomizeLoading(false);
+          },
         }
       );
     if (token !== customizeLoadTokenRef.current) return;
@@ -1403,11 +1410,13 @@ export function KioskApp({
       setDialogOpen(false);
       setCustomizeProduct(null);
       setCustomizeLoading(false);
+      setCustomizeHydrating(false);
       toast.error(t('productNotFoundToModify'));
       return;
     }
     setCustomizeProduct({ ...full, categoryId: p.categoryId });
     setCustomizeLoading(false);
+    setCustomizeHydrating(false);
   };
 
   const handleProductSelect = (p: CustomerMenuProduct) => {
@@ -3009,6 +3018,7 @@ export function KioskApp({
           }))}
           open={dialogOpen}
           isLoading={customizeLoading}
+          isHydrating={customizeHydrating}
           menuQuery={{ slug }}
           optionImageUrlForItem={(id) =>
             customerMenuItemImageUrl(id, { slug })
@@ -3019,6 +3029,7 @@ export function KioskApp({
               customizeLoadTokenRef.current += 1;
               setCustomizeProduct(null);
               setCustomizeLoading(false);
+              setCustomizeHydrating(false);
             }
           }}
           onConfirm={(mods, variation, quantity = 1) => {

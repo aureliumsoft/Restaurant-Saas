@@ -75,6 +75,7 @@ import type {
 } from '@/components/order/product-customize-dialog';
 import {
   fetchOptionNestedSheetPayload,
+  fetchRestaurantOptionNestedSheetPayload,
   type CustomerMenuQuery,
   type OptionNestedSheetPayload,
 } from '@/lib/menu/fetch-menu-product-detail';
@@ -922,6 +923,7 @@ type Props = {
   stackClassName?: string;
   stackZIndex?: number;
   menuQuery?: CustomerMenuQuery | null;
+  useRestaurantMenuDetail?: boolean;
   optionImageUrlForItem?: ((menuItemId: string) => string) | null;
   onClose: () => void;
   onDone: (result: NestedRecommendationResult) => void;
@@ -939,6 +941,7 @@ export function NestedRecommendationSheet({
   stackClassName,
   stackZIndex,
   menuQuery = null,
+  useRestaurantMenuDetail = false,
   optionImageUrlForItem = null,
   onClose,
   onDone,
@@ -1006,17 +1009,25 @@ export function NestedRecommendationSheet({
         opts?.onProgress?.(cached);
         return cached;
       }
-      if (!menuQuery) return null;
+      if (!useRestaurantMenuDetail && !menuQuery) return null;
 
       const request = (async () => {
         try {
-          const payload = await fetchOptionNestedSheetPayload(
-            optionId,
-            menuQuery,
-            optionImageUrlForItem ?? (() => ''),
-            lang,
-            { onProgress: notify }
-          );
+          const imageFn = optionImageUrlForItem ?? (() => '');
+          const payload = useRestaurantMenuDetail
+            ? await fetchRestaurantOptionNestedSheetPayload(
+                optionId,
+                imageFn,
+                lang,
+                { onProgress: notify }
+              )
+            : await fetchOptionNestedSheetPayload(
+                optionId,
+                menuQuery!,
+                imageFn,
+                lang,
+                { onProgress: notify }
+              );
           if (payload) notify(payload);
           return payload;
         } finally {
@@ -1027,7 +1038,7 @@ export function NestedRecommendationSheet({
       optionNestInflightRef.current[optionId] = request;
       return request;
     },
-    [lang, menuQuery, optionImageUrlForItem]
+    [lang, menuQuery, optionImageUrlForItem, useRestaurantMenuDetail]
   );
   const [productVariationId, setProductVariationId] = useState(
     initialProductVariationId ?? ''
@@ -1166,9 +1177,10 @@ export function NestedRecommendationSheet({
   }, [sheetIdentity]);
 
   // Self-heal: sheet opened with empty groups but the product needs nests.
-  // Progressive: paint shell groups first, then each hydrated group.
+  // Progressive: category shells first, then each group's option cards.
   useEffect(() => {
-    if (!open || !menuQuery) return;
+    if (!open) return;
+    if (!useRestaurantMenuDetail && !menuQuery) return;
     if ((attributeGroupsProp?.length ?? 0) > 0) return;
     if (!product.needsNestedSheet && (product.personalizeGroups?.length ?? 0) === 0) {
       return;
@@ -1186,16 +1198,23 @@ export function NestedRecommendationSheet({
         return next;
       });
     };
-    void fetchOptionNestedSheetPayload(
-      product.menuItemId,
-      menuQuery,
-      optionImageUrlForItem ?? (() => ''),
-      lang,
-      {
-        signal: { cancelled: () => cancelled },
-        onProgress: applyPayload,
-      }
-    )
+    const imageFn = optionImageUrlForItem ?? (() => '');
+    const request = useRestaurantMenuDetail
+      ? fetchRestaurantOptionNestedSheetPayload(product.menuItemId, imageFn, lang, {
+          signal: { cancelled: () => cancelled },
+          onProgress: applyPayload,
+        })
+      : fetchOptionNestedSheetPayload(
+          product.menuItemId,
+          menuQuery!,
+          imageFn,
+          lang,
+          {
+            signal: { cancelled: () => cancelled },
+            onProgress: applyPayload,
+          }
+        );
+    void request
       .then((payload) => {
         if (payload) applyPayload(payload);
       })
@@ -1208,6 +1227,7 @@ export function NestedRecommendationSheet({
   }, [
     open,
     menuQuery,
+    useRestaurantMenuDetail,
     attributeGroupsProp,
     product.menuItemId,
     product.needsNestedSheet,
@@ -2250,6 +2270,7 @@ export function NestedRecommendationSheet({
             preselectedProductVariationByGroup[activeProductGroup.id]
           }
           menuQuery={menuQuery}
+          useRestaurantMenuDetail={useRestaurantMenuDetail}
           optionImageUrlForItem={optionImageUrlForItem}
           onClose={() => setActiveProductGroupId(null)}
           onDone={(result) => {

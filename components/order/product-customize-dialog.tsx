@@ -92,6 +92,7 @@ import {
 } from '@/lib/menu/recommendation-option-utils';
 import {
   fetchOptionNestedSheetPayload,
+  fetchRestaurantOptionNestedSheetPayload,
   type CustomerMenuQuery,
   type OptionNestedSheetPayload,
 } from '@/lib/menu/fetch-menu-product-detail';
@@ -363,10 +364,20 @@ type Props = {
   personalizeGroups?: PersonalizeGroup[];
   variations?: ProductVariationOption[];
   open: boolean;
-  /** When true, sheet is open but recommendation data is still loading. */
+  /**
+   * True until required recommendation groups are hydrated.
+   * Optional groups may still load in the background (see isHydrating).
+   */
   isLoading?: boolean;
+  /** True while optional (or remaining) recommendation groups are still hydrating. */
+  isHydrating?: boolean;
   /** Storefront query used to lazy-load nested option recommendation trees. */
   menuQuery?: CustomerMenuQuery | null;
+  /**
+   * POS channel: nest sheets use authenticated restaurant progressive APIs
+   * instead of the public customer menu endpoints.
+   */
+  useRestaurantMenuDetail?: boolean;
   optionImageUrlForItem?: ((menuItemId: string) => string) | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: (
@@ -387,11 +398,14 @@ export function ProductCustomizeDialog({
   variations = [],
   open,
   isLoading = false,
+  isHydrating = false,
   menuQuery = null,
+  useRestaurantMenuDetail = false,
   optionImageUrlForItem = null,
   onOpenChange,
   onConfirm,
 }: Props) {
+  const awaitingGroupOptions = isLoading || isHydrating;
   const { t } = useTranslation();
   const { lang, resolve } = useBilingualText();
   const { formatMoney, regional } = useRestaurantRegional(undefined);
@@ -511,18 +525,26 @@ export function ProductCustomizeDialog({
         opts?.onProgress?.(cached);
         return cached;
       }
-      if (!menuQuery) return null;
+      if (!useRestaurantMenuDetail && !menuQuery) return null;
 
       setOptionNestLoadingId(optionId);
       const request = (async () => {
         try {
-          const payload = await fetchOptionNestedSheetPayload(
-            optionId,
-            menuQuery,
-            optionImageUrlForItem ?? (() => ''),
-            lang,
-            { onProgress: notify }
-          );
+          const imageFn = optionImageUrlForItem ?? (() => '');
+          const payload = useRestaurantMenuDetail
+            ? await fetchRestaurantOptionNestedSheetPayload(
+                optionId,
+                imageFn,
+                lang,
+                { onProgress: notify }
+              )
+            : await fetchOptionNestedSheetPayload(
+                optionId,
+                menuQuery!,
+                imageFn,
+                lang,
+                { onProgress: notify }
+              );
           if (payload) notify(payload);
           return payload;
         } finally {
@@ -534,7 +556,7 @@ export function ProductCustomizeDialog({
       optionNestInflightRef.current[optionId] = request;
       return request;
     },
-    [lang, menuQuery, optionImageUrlForItem]
+    [lang, menuQuery, optionImageUrlForItem, useRestaurantMenuDetail]
   );
 
   const mergeOptionNest = useCallback(
@@ -577,13 +599,13 @@ export function ProductCustomizeDialog({
   const visibleCategoryGroups = useMemo(
     () =>
       categoryGroups.filter((g) => {
-        if (isLoading && g.items.length === 0) return true;
+        if (awaitingGroupOptions && g.items.length === 0) return true;
         return isConfigurationGroupVisibleForFilters(
           g,
           baseProductVariationContext.parent
         );
       }),
-    [categoryGroups, baseProductVariationContext.parent, isLoading]
+    [categoryGroups, baseProductVariationContext.parent, awaitingGroupOptions]
   );
 
   const visibleProductRecommendationGroups = useMemo(
@@ -1134,7 +1156,17 @@ export function ProductCustomizeDialog({
   ]);
 
   const requiredMissing = useMemo(() => {
-    if (isLoading) return true;
+    // Only block on required groups that are still empty while hydrating /
+    // missing selections — optional groups may still be loading.
+    if (isLoading) {
+      const requiredStillEmpty = visibleCategoryGroups.some(
+        (g) => g.required && g.items.length === 0
+      );
+      const requiredProductEmpty = visibleProductRecommendationGroups.some(
+        (g) => g.required && g.items.length === 0
+      );
+      if (requiredStillEmpty || requiredProductEmpty) return true;
+    }
     const missingProductRecs = visibleProductRecommendationGroups.some((g) => {
       if (!g.required) return false;
       if (!recommendedProductNeedsSheet(g)) return false;
@@ -2070,7 +2102,7 @@ export function ProductCustomizeDialog({
                 {productRecommendationGroups.map((g, index) => {
                   const item = g.items[0];
                   if (!item) {
-                    if (!isLoading) return null;
+                    if (!awaitingGroupOptions) return null;
                     return (
                       <CustomizeGroupSkeleton
                         key={`product-rec-skel-${g.id || 'row'}-${index}`}
@@ -2161,7 +2193,8 @@ export function ProductCustomizeDialog({
                       ? g.required && count === 0
                       : (g.required && count < min) ||
                         (count > 0 && min > 0 && count < min);
-                  const awaitingOptions = isLoading && g.items.length === 0;
+                  const awaitingOptions =
+                    awaitingGroupOptions && g.items.length === 0;
                   if (awaitingOptions) {
                     return (
                       <CustomizeGroupSkeleton
@@ -2237,7 +2270,7 @@ export function ProductCustomizeDialog({
                             baseProductVariationContext.parent
                           );
                           if (visible.length === 0) {
-                            if (isLoading) {
+                            if (awaitingGroupOptions) {
                               return (
                                 <div className="flex h-[50px] w-full animate-pulse items-center justify-between px-[15px]">
                                   <div className="h-3 w-24 rounded bg-zinc-200" />
@@ -2292,7 +2325,7 @@ export function ProductCustomizeDialog({
                   );
                 })}
 
-                {isLoading &&
+                {awaitingGroupOptions &&
                 visibleCategoryGroups.length === 0 &&
                 productRecommendationGroups.length === 0 ? (
                   <div className="space-y-4" aria-busy="true">
@@ -2302,7 +2335,7 @@ export function ProductCustomizeDialog({
                   </div>
                 ) : null}
 
-                {!isLoading &&
+                {!awaitingGroupOptions &&
                 visibleCategoryGroups.length === 0 &&
                 visibleProductRecommendationGroups.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
@@ -2346,12 +2379,16 @@ export function ProductCustomizeDialog({
                 </div>
                 <button
                   type="button"
-                  disabled={isLoading}
+                  disabled={requiredMissing}
                   onClick={handleConfirm}
                   className="flex h-[50px] min-h-[50px] flex-1 items-center justify-between rounded-lg px-[30px] text-sm font-bold text-primary shadow-sm transition hover:brightness-95 active:scale-[0.99] disabled:opacity-60"
                   style={{ backgroundColor: ORDER_ACCENT_GOLD }}
                 >
-                  <span>{isLoading ? t('loadingMenu') : t('add')}</span>
+                  <span>
+                    {isLoading && requiredMissing
+                      ? t('loadingMenu')
+                      : t('add')}
+                  </span>
                   <span className="tabular-nums">
                     {formatMoney(selectedUnitTotal * quantity)}
                   </span>
@@ -2652,6 +2689,7 @@ export function ProductCustomizeDialog({
                 stackClassName="z-[120]"
                 stackZIndex={120}
                 menuQuery={menuQuery}
+                useRestaurantMenuDetail={useRestaurantMenuDetail}
                 optionImageUrlForItem={optionImageUrlForItem}
                 parentGroupName={recommendationGroupDisplayLabel(
                   activeCategoryOptionTarget.group.name,
@@ -2729,6 +2767,7 @@ export function ProductCustomizeDialog({
                 stackClassName="z-[120]"
                 stackZIndex={120}
                 menuQuery={menuQuery}
+                useRestaurantMenuDetail={useRestaurantMenuDetail}
                 optionImageUrlForItem={optionImageUrlForItem}
                 parentGroupName={recommendationGroupDisplayLabel(
                   activeProductGroup.name,
