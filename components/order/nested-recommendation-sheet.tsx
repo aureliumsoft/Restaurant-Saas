@@ -225,7 +225,9 @@ type InlineGroupsProps = {
   ) => void;
   onAppendTimelineKey?: (key: string) => void;
   onRemoveTimelineKey?: (key: string) => void;
-  onEnsureOptionNest?: (optionId: string) => Promise<void>;
+  onEnsureOptionNest?: (
+    optionId: string
+  ) => Promise<OptionNestedSheetPayload | null | void>;
 };
 
 type OptionNestedPanelProps = {
@@ -259,7 +261,9 @@ type OptionNestedPanelProps = {
   ) => void;
   onAppendTimelineKey?: (key: string) => void;
   onRemoveTimelineKey?: (key: string) => void;
-  onEnsureOptionNest?: (optionId: string) => Promise<void>;
+  onEnsureOptionNest?: (
+    optionId: string
+  ) => Promise<OptionNestedSheetPayload | null | void>;
 };
 
 function OptionNestedPanel({
@@ -944,9 +948,17 @@ export function NestedRecommendationSheet({
   const [optionNestById, setOptionNestById] = useState<
     Record<string, OptionNestedSheetPayload>
   >({});
+  const [rootNestGroups, setRootNestGroups] = useState<AttributeGroup[] | null>(
+    null
+  );
+  const [rootNestLoading, setRootNestLoading] = useState(false);
+  const effectiveAttributeGroupsProp =
+    (attributeGroupsProp?.length ?? 0) > 0
+      ? attributeGroupsProp
+      : (rootNestGroups ?? attributeGroupsProp);
   const attributeGroups = useMemo(
     () =>
-      attributeGroupsProp.map((group) => ({
+      effectiveAttributeGroupsProp.map((group) => ({
         ...group,
         items: group.items.map((item) => {
           const nest = optionNestById[item.menuItemId];
@@ -960,11 +972,16 @@ export function NestedRecommendationSheet({
           };
         }),
       })),
-    [attributeGroupsProp, optionNestById]
+    [effectiveAttributeGroupsProp, optionNestById]
   );
+  const optionNestByIdRef = useRef(optionNestById);
+  optionNestByIdRef.current = optionNestById;
+
   const ensureOptionNest = useCallback(
     async (optionId: string) => {
-      if (optionNestById[optionId] || !menuQuery) return;
+      const cached = optionNestByIdRef.current[optionId];
+      if (cached) return cached;
+      if (!menuQuery) return null;
       const payload = await fetchOptionNestedSheetPayload(
         optionId,
         menuQuery,
@@ -972,10 +989,15 @@ export function NestedRecommendationSheet({
         lang
       );
       if (payload) {
+        optionNestByIdRef.current = {
+          ...optionNestByIdRef.current,
+          [optionId]: payload,
+        };
         setOptionNestById((prev) => ({ ...prev, [optionId]: payload }));
       }
+      return payload;
     },
-    [lang, menuQuery, optionImageUrlForItem, optionNestById]
+    [lang, menuQuery, optionImageUrlForItem]
   );
   const [productVariationId, setProductVariationId] = useState(
     initialProductVariationId ?? ''
@@ -1077,12 +1099,15 @@ export function NestedRecommendationSheet({
     [configurationParentVariation, preselectedProductVariationByGroup, productGroupConfigs]
   );
 
+  // Reset only when the sheet opens / product changes — NOT when lazy-loaded
+  // nests enrich attributeGroups (that previously wiped optionNestById).
+  const sheetIdentity = `${open ? '1' : '0'}:${product.menuItemId}:${initialProductVariationId ?? ''}`;
   useEffect(() => {
     if (!open) return;
     const init: Record<string, string[]> = {};
-    for (const g of attributeGroups) init[g.id] = [];
+    for (const g of attributeGroupsProp) init[g.id] = [];
     const initProductConfigs: Record<string, NestedRecommendationResult> = {};
-    for (const g of productRecommendationGroups) {
+    for (const g of attributeGroupsProp.filter((x) => x.sourceType === 'PRODUCT')) {
       if (!recommendedProductNeedsSheet(g)) {
         initProductConfigs[g.id] = emptyOptionNestedConfig();
       }
@@ -1104,13 +1129,53 @@ export function NestedRecommendationSheet({
     setCollapsedNestedGroupIds(new Set());
     setSelectionTimeline([]);
     setOptionNestById({});
+    setRootNestGroups(null);
+    setRootNestLoading(false);
     setProductVariationId(initialProductVariationId ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional sheetIdentity gate
+  }, [sheetIdentity]);
+
+  // Self-heal: sheet opened with empty groups but the product needs nests.
+  useEffect(() => {
+    if (!open || !menuQuery) return;
+    if ((attributeGroupsProp?.length ?? 0) > 0) return;
+    if (!product.needsNestedSheet && (product.personalizeGroups?.length ?? 0) === 0) {
+      return;
+    }
+    let cancelled = false;
+    setRootNestLoading(true);
+    void fetchOptionNestedSheetPayload(
+      product.menuItemId,
+      menuQuery,
+      optionImageUrlForItem ?? (() => ''),
+      lang
+    )
+      .then((payload) => {
+        if (cancelled || !payload?.nestedAttributeGroups?.length) return;
+        setRootNestGroups(payload.nestedAttributeGroups);
+        setSelectedByGroup((prev) => {
+          const next = { ...prev };
+          for (const g of payload.nestedAttributeGroups) {
+            if (!next[g.id]) next[g.id] = [];
+          }
+          return next;
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setRootNestLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [
     open,
-    attributeGroups,
-    initialProductVariationId,
+    menuQuery,
+    attributeGroupsProp,
+    product.menuItemId,
+    product.needsNestedSheet,
     product.personalizeGroups,
-    productRecommendationGroups,
+    optionImageUrlForItem,
+    lang,
   ]);
 
   const visibleCategoryGroups = useMemo(
@@ -1790,6 +1855,12 @@ export function NestedRecommendationSheet({
             );
           })}
 
+          {rootNestLoading ? (
+            <p className="px-1 text-sm text-muted-foreground">
+              {t('loadingMenu')}
+            </p>
+          ) : null}
+
           <InlineRecommendationGroups
             groups={visibleCategoryGroups}
             rootGroups={visibleCategoryGroups}
@@ -2124,6 +2195,8 @@ export function NestedRecommendationSheet({
           initialProductVariationId={
             preselectedProductVariationByGroup[activeProductGroup.id]
           }
+          menuQuery={menuQuery}
+          optionImageUrlForItem={optionImageUrlForItem}
           onClose={() => setActiveProductGroupId(null)}
           onDone={(result) => {
             const groupId = activeProductGroup.id;

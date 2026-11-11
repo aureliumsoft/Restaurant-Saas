@@ -166,6 +166,30 @@ export async function fetchRestaurantMenuProductDetail<T>(
   return request;
 }
 
+/** Prefetch is background-only — never starve a user-opened customize fetch. */
+const PREFETCH_MAX_CONCURRENT = 1;
+let prefetchActive = 0;
+const prefetchWaiters: Array<() => void> = [];
+
+function acquirePrefetchSlot(): Promise<void> {
+  if (prefetchActive < PREFETCH_MAX_CONCURRENT) {
+    prefetchActive += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    prefetchWaiters.push(() => {
+      prefetchActive += 1;
+      resolve();
+    });
+  });
+}
+
+function releasePrefetchSlot() {
+  prefetchActive = Math.max(0, prefetchActive - 1);
+  const next = prefetchWaiters.shift();
+  if (next) next();
+}
+
 /** Warm the customer menu customize cache (hover / focus / touch) without blocking UI. */
 export function prefetchCustomerMenuProductDetail(
   itemId: string,
@@ -176,7 +200,18 @@ export function prefetchCustomerMenuProductDetail(
   if (!url) return;
   if (cacheGet(customerDetailCache, url)) return;
   if (customerInflight.has(url)) return;
-  void fetchCustomerMenuProductDetail(itemId, query);
+  void (async () => {
+    await acquirePrefetchSlot();
+    try {
+      // Re-check after waiting — another warm may have finished.
+      if (cacheGet(customerDetailCache, url) || customerInflight.has(url)) {
+        return;
+      }
+      await fetchCustomerMenuProductDetail(itemId, query);
+    } finally {
+      releasePrefetchSlot();
+    }
+  })();
 }
 
 /**

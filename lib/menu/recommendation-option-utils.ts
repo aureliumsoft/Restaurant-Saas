@@ -301,13 +301,15 @@ export function clearOptionDataForKey<T extends Record<string, unknown>>(
 }
 
 export function isOptionConfigComplete(
-  item: OptionItemLike,
+  item: OptionItemLike & { needsNestedSheet?: boolean },
   key: string,
   selectedNestedVariationByOption: Record<string, string>,
   optionNestedConfigs: Record<string, unknown>,
   context?: OptionConfigContext
 ): boolean {
-  const hasNested = (item.nestedAttributeGroups?.length ?? 0) > 0;
+  const hasNested =
+    (item.nestedAttributeGroups?.length ?? 0) > 0 ||
+    Boolean(item.needsNestedSheet);
   const usesParentVar = categoryItemUsesParentVariation(context?.group);
   const hasDefaultLinkedVar = Boolean(
     context?.group?.defaultLinkedRestaurantVariationId

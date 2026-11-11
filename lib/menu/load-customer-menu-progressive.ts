@@ -587,42 +587,6 @@ function collectCategoryOptionItemIds(
   return ids;
 }
 
-function attachNestedGroupsToCategoryItems(
-  groups: DetailGroup[] | null | undefined,
-  groupsByItemId: Map<string, DetailGroup[]>,
-  itemsByCategory: Map<string, Array<Record<string, unknown>>>
-): DetailGroup[] {
-  return (groups ?? []).map((group) => {
-    const linkedCategory = group.linkedCategory
-      ? {
-          ...group.linkedCategory,
-          items: (group.linkedCategory.items ?? []).map((item) => {
-            const nested = groupsByItemId.get(item.id) ?? [];
-            if (nested.length === 0) return item;
-            return {
-              ...item,
-              attributeGroups: attachCategoryItemsToGroups(
-                nested,
-                itemsByCategory
-              ),
-            };
-          }),
-        }
-      : group.linkedCategory;
-    const linkedProduct = group.linkedProduct
-      ? {
-          ...group.linkedProduct,
-          attributeGroups: attachNestedGroupsToCategoryItems(
-            group.linkedProduct.attributeGroups ?? [],
-            groupsByItemId,
-            itemsByCategory
-          ),
-        }
-      : group.linkedProduct;
-    return { ...group, linkedCategory, linkedProduct };
-  });
-}
-
 function attachCategoryItemsToGroups(
   groups: DetailGroup[] | null | undefined,
   itemsByCategory: Map<string, Array<Record<string, unknown>>>
@@ -772,6 +736,8 @@ async function loadCustomerMenuProductDetailUncached(options: {
       itemsByCategory.set(categoryId, items);
     }
 
+    // Flags only — nested trees load on sheet open via fetchOptionNestedSheetPayload.
+    // Pre-hydrating every flagged option made customize 10–40s+ on large menus.
     await stampNeedsNestedSheetFlags(itemsByCategory);
 
     const hydratedGroups = attachCategoryItemsToGroups(

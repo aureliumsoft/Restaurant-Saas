@@ -477,9 +477,13 @@ export function ProductCustomizeDialog({
     [attributeGroups]
   );
 
+  const optionNestByIdRef = useRef(optionNestById);
+  optionNestByIdRef.current = optionNestById;
+
   const ensureOptionNest = useCallback(
     async (optionId: string) => {
-      if (optionNestById[optionId]) return optionNestById[optionId];
+      const cached = optionNestByIdRef.current[optionId];
+      if (cached) return cached;
       if (!menuQuery) return null;
       setOptionNestLoadingId(optionId);
       try {
@@ -490,6 +494,10 @@ export function ProductCustomizeDialog({
           lang
         );
         if (payload) {
+          optionNestByIdRef.current = {
+            ...optionNestByIdRef.current,
+            [optionId]: payload,
+          };
           setOptionNestById((prev) => ({ ...prev, [optionId]: payload }));
         }
         return payload;
@@ -497,7 +505,25 @@ export function ProductCustomizeDialog({
         setOptionNestLoadingId((cur) => (cur === optionId ? null : cur));
       }
     },
-    [lang, menuQuery, optionImageUrlForItem, optionNestById]
+    [lang, menuQuery, optionImageUrlForItem]
+  );
+
+  const mergeOptionNest = useCallback(
+    <T extends { menuItemId: string; nestedAttributeGroups?: AttributeGroup[]; personalizeGroups?: PersonalizeGroup[]; needsNestedSheet?: boolean }>(
+      item: T
+    ): T => {
+      const nest =
+        optionNestById[item.menuItemId] ??
+        optionNestByIdRef.current[item.menuItemId];
+      if (!nest) return item;
+      return {
+        ...item,
+        nestedAttributeGroups: nest.nestedAttributeGroups,
+        personalizeGroups: nest.personalizeGroups ?? item.personalizeGroups,
+        needsNestedSheet: false,
+      };
+    },
+    [optionNestById]
   );
 
   const baseProductVariationContext = useMemo(() => {
@@ -848,10 +874,7 @@ export function ProductCustomizeDialog({
     if (next?.kind === 'category-option-sheet') {
       setPicker(null);
       setActiveProductGroupId(null);
-      setActiveCategoryOption({
-        groupId: next.groupId,
-        optionId: next.optionId,
-      });
+      openCategoryOptionFlow(next.groupId, next.optionId);
       return;
     }
     if (next?.kind === 'recommendation-product-variation') {
@@ -871,12 +894,12 @@ export function ProductCustomizeDialog({
       const group = categoryGroups.find((g) => g.id === next.groupId);
       const item = group?.items.find((it) => it.menuItemId === next.optionId);
       if (group && item && !optionNeedsManualVariationPicker(item, group)) {
-        if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
+        if (
+          (item.nestedAttributeGroups?.length ?? 0) > 0 ||
+          item.needsNestedSheet
+        ) {
           setPicker(null);
-          setActiveCategoryOption({
-            groupId: next.groupId,
-            optionId: next.optionId,
-          });
+          openCategoryOptionFlow(next.groupId, next.optionId);
           return;
         }
         setPicker(null);
@@ -898,16 +921,42 @@ export function ProductCustomizeDialog({
           setPicker({ kind: 'nested', groupId, optionId });
           return;
         }
-        if (
-          !(item.nestedAttributeGroups?.length ?? 0) &&
-          item.needsNestedSheet
-        ) {
-          await ensureOptionNest(optionId);
+        let nestedGroups = item.nestedAttributeGroups ?? [];
+        if (!nestedGroups.length && item.needsNestedSheet) {
+          const payload = await ensureOptionNest(optionId);
+          nestedGroups = payload?.nestedAttributeGroups ?? [];
+        }
+        if (!nestedGroups.length) {
+          // No nest groups to configure — mark complete without an empty sheet.
+          const key = optionSelectionKey(groupId, optionId);
+          const resolved = resolveCategoryItemVariationId(
+            item,
+            baseProductVariationContext.parent,
+            group
+          );
+          if (resolved) {
+            setSelectedNestedVariationByOption((prev) => ({
+              ...prev,
+              [key]: resolved,
+            }));
+          }
+          setNestedOptionConfigs((prev) => ({
+            ...prev,
+            [key]: {
+              ...emptyOptionNestedConfig(),
+              ...(resolved ? { productVariationId: resolved } : {}),
+            },
+          }));
+          return;
         }
         setActiveCategoryOption({ groupId, optionId });
       })();
     },
-    [categoryGroups, ensureOptionNest, menuQuery]
+    [
+      baseProductVariationContext.parent,
+      categoryGroups,
+      ensureOptionNest,
+    ]
   );
 
   useEffect(() => {
@@ -1467,16 +1516,17 @@ export function ProductCustomizeDialog({
       (it) => it.menuItemId === activeCategoryOption.optionId
     );
     if (!group || !item) return null;
+    const merged = mergeOptionNest(item);
     return {
       group,
-      item,
+      item: merged,
       optionId: activeCategoryOption.optionId,
       key: optionSelectionKey(
         activeCategoryOption.groupId,
         activeCategoryOption.optionId
       ),
     };
-  }, [activeCategoryOption, categoryGroups]);
+  }, [activeCategoryOption, categoryGroups, mergeOptionNest]);
 
   const pickerTitle = useMemo(() => {
     if (!picker) return '';

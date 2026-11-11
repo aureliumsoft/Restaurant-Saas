@@ -765,18 +765,28 @@ export default function OrderPageClient({
       slug: orderInfo?.restaurantSlug ?? undefined,
       subdomain: hostSubdomain ?? undefined,
     };
-    let warmed = 0;
-    for (const product of products) {
-      if (warmed >= 12) break;
-      if (
-        !productNeedsCustomizeDialog(product) ||
-        !productNeedsDetailFetch(product)
-      ) {
-        continue;
+    // Warm a few customize payloads sequentially — parallel storms starved
+    // the product the guest actually opened (60s+ detail waits).
+    let cancelled = false;
+    void (async () => {
+      let warmed = 0;
+      for (const product of products) {
+        if (cancelled || warmed >= 3) break;
+        if (
+          !productNeedsCustomizeDialog(product) ||
+          !productNeedsDetailFetch(product)
+        ) {
+          continue;
+        }
+        prefetchCustomerMenuProductDetail(product.id, query);
+        warmed += 1;
+        // Yield so hover/open fetches are not piled behind a burst.
+        await new Promise((r) => setTimeout(r, 50));
       }
-      prefetchCustomerMenuProductDetail(product.id, query);
-      warmed += 1;
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [
     mounted,
     products,
