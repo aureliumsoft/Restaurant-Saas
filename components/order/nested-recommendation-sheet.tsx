@@ -482,11 +482,14 @@ function InlineRecommendationGroups({
         onOpenOptionVariation(scopeParentOptionKey, groupId, optionId);
         return;
       }
-      if (
-        !(item.nestedAttributeGroups?.length ?? 0) &&
-        item.needsNestedSheet &&
-        onEnsureOptionNest
-      ) {
+      const nestIncomplete =
+        Boolean(item.needsNestedSheet) ||
+        !(item.nestedAttributeGroups?.length ?? 0) ||
+        (item.nestedAttributeGroups ?? []).some(
+          (g) => !(g.items?.length ?? 0)
+        );
+      if (nestIncomplete && onEnsureOptionNest) {
+        // Await full hydrate only — progressive shells are not treated as done.
         await onEnsureOptionNest(optionId);
       }
       const resolved = resolveCategoryItemVariationId(
@@ -923,6 +926,7 @@ type Props = {
   stackClassName?: string;
   stackZIndex?: number;
   menuQuery?: CustomerMenuQuery | null;
+  /** POS: use authenticated restaurant progressive nest APIs. */
   useRestaurantMenuDetail?: boolean;
   optionImageUrlForItem?: ((menuItemId: string) => string) | null;
   onClose: () => void;
@@ -983,6 +987,9 @@ export function NestedRecommendationSheet({
     Record<string, Promise<OptionNestedSheetPayload | null>>
   >({});
 
+  const optionNestCompleteRef = useRef<Record<string, true>>({});
+  const rootNestFetchKeyRef = useRef<string | null>(null);
+
   const ensureOptionNest = useCallback(
     async (
       optionId: string,
@@ -1004,11 +1011,16 @@ export function NestedRecommendationSheet({
         return inflight;
       }
 
-      const cached = optionNestByIdRef.current[optionId];
-      if (cached) {
-        opts?.onProgress?.(cached);
-        return cached;
+      // Only reuse cache after a full progressive hydrate finished — never treat
+      // an in-progress shell snapshot as the final nest (that caused reloads).
+      if (optionNestCompleteRef.current[optionId]) {
+        const cached = optionNestByIdRef.current[optionId];
+        if (cached) {
+          opts?.onProgress?.(cached);
+          return cached;
+        }
       }
+
       if (!useRestaurantMenuDetail && !menuQuery) return null;
 
       const request = (async () => {
@@ -1028,7 +1040,10 @@ export function NestedRecommendationSheet({
                 lang,
                 { onProgress: notify }
               );
-          if (payload) notify(payload);
+          if (payload) {
+            optionNestCompleteRef.current[optionId] = true;
+            notify(payload);
+          }
           return payload;
         } finally {
           delete optionNestInflightRef.current[optionId];
@@ -1170,21 +1185,35 @@ export function NestedRecommendationSheet({
     setCollapsedNestedGroupIds(new Set());
     setSelectionTimeline([]);
     setOptionNestById({});
+    optionNestCompleteRef.current = {};
     setRootNestGroups(null);
     setRootNestLoading(false);
+    rootNestFetchKeyRef.current = null;
     setProductVariationId(initialProductVariationId ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional sheetIdentity gate
   }, [sheetIdentity]);
 
   // Self-heal: sheet opened with empty groups but the product needs nests.
   // Progressive: category shells first, then each group's option cards.
+  // Guard with a ref so React Strict Mode / prop churn does not restart forever.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      rootNestFetchKeyRef.current = null;
+      return;
+    }
     if (!useRestaurantMenuDetail && !menuQuery) return;
-    if ((attributeGroupsProp?.length ?? 0) > 0) return;
+    // Parent already supplied groups (possibly progressive) — do not fight it.
+    if ((attributeGroupsProp?.length ?? 0) > 0) {
+      setRootNestLoading(false);
+      return;
+    }
     if (!product.needsNestedSheet && (product.personalizeGroups?.length ?? 0) === 0) {
       return;
     }
+    const fetchKey = `${product.menuItemId}:${useRestaurantMenuDetail ? 'r' : 'c'}`;
+    if (rootNestFetchKeyRef.current === fetchKey) return;
+    rootNestFetchKeyRef.current = fetchKey;
+
     let cancelled = false;
     setRootNestLoading(true);
     const applyPayload = (payload: OptionNestedSheetPayload) => {
@@ -1216,10 +1245,10 @@ export function NestedRecommendationSheet({
         );
     void request
       .then((payload) => {
-        if (payload) applyPayload(payload);
+        if (!cancelled && payload) applyPayload(payload);
       })
       .finally(() => {
-        if (!cancelled) setRootNestLoading(false);
+        setRootNestLoading(false);
       });
     return () => {
       cancelled = true;

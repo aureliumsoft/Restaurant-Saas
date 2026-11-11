@@ -3018,7 +3018,6 @@ export function KioskApp({
           }))}
           open={dialogOpen}
           isLoading={customizeLoading}
-          isHydrating={customizeHydrating}
           menuQuery={{ slug }}
           optionImageUrlForItem={(id) =>
             customerMenuItemImageUrl(id, { slug })
@@ -3029,7 +3028,6 @@ export function KioskApp({
               customizeLoadTokenRef.current += 1;
               setCustomizeProduct(null);
               setCustomizeLoading(false);
-              setCustomizeHydrating(false);
             }
           }}
           onConfirm={(mods, variation, quantity = 1) => {

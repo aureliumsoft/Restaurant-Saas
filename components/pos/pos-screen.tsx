@@ -1953,26 +1953,24 @@ export function PosScreen({
     const token = ++customizeLoadTokenRef.current;
     openCustomize(p, { loading: true });
     setCustomizeHydrating(true);
-    // Shell → required groups first → optional; nests defer to sheet open.
-    const full =
-      await loadRestaurantMenuProductDetailProgressive<
-        PosMenuProduct & { categoryIds?: string[] }
-      >(p.id, {
-        signal: { cancelled: () => token !== customizeLoadTokenRef.current },
-        onShell: (shell) => {
-          if (token !== customizeLoadTokenRef.current) return;
-          setCustomizeProduct(mapProgressivePosProduct(p, shell));
-        },
-        onGroup: (partial) => {
-          if (token !== customizeLoadTokenRef.current) return;
-          setCustomizeProduct(mapProgressivePosProduct(p, partial));
-        },
-        onRequiredComplete: (partial) => {
-          if (token !== customizeLoadTokenRef.current) return;
-          setCustomizeProduct(mapProgressivePosProduct(p, partial));
-          setCustomizeLoading(false);
-        },
-      });
+    const full = await loadRestaurantMenuProductDetailProgressive<
+      PosMenuProduct & { categoryIds?: string[] }
+    >(p.id, {
+      signal: { cancelled: () => token !== customizeLoadTokenRef.current },
+      onShell: (shell) => {
+        if (token !== customizeLoadTokenRef.current) return;
+        setCustomizeProduct(mapProgressivePosProduct(p, shell));
+      },
+      onGroup: (partial) => {
+        if (token !== customizeLoadTokenRef.current) return;
+        setCustomizeProduct(mapProgressivePosProduct(p, partial));
+      },
+      onRequiredComplete: (partial) => {
+        if (token !== customizeLoadTokenRef.current) return;
+        setCustomizeProduct(mapProgressivePosProduct(p, partial));
+        setCustomizeLoading(false);
+      },
+    });
     if (token !== customizeLoadTokenRef.current) return;
     if (!full) {
       setCustomizeOpen(false);

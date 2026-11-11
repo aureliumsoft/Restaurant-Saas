@@ -1912,7 +1912,6 @@ export default function OrderPageClient({
         <ProductCustomizeDialog
         open={customizeOpen}
         isLoading={customizeLoading}
-        isHydrating={customizeHydrating}
         menuQuery={{
           slug: orderInfo?.restaurantSlug ?? undefined,
           subdomain: hostSubdomain ?? undefined,
@@ -1929,8 +1928,8 @@ export default function OrderPageClient({
             setCustomizeProduct(null);
             setEditingLineId(null);
             setCustomizeLoading(false);
-            setCustomizeHydrating(false);
             customizeLoadTokenRef.current += 1;
+            setCustomizeHydrating(false);
           }
         }}
         productName={

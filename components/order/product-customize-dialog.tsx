@@ -496,6 +496,7 @@ export function ProductCustomizeDialog({
   const optionNestInflightRef = useRef<
     Record<string, Promise<OptionNestedSheetPayload | null>>
   >({});
+  const optionNestCompleteRef = useRef<Record<string, true>>({});
 
   const ensureOptionNest = useCallback(
     async (
@@ -519,12 +520,15 @@ export function ProductCustomizeDialog({
         return inflight;
       }
 
-      const cached = optionNestByIdRef.current[optionId];
-      // Progressive writes partials while inflight; only reuse when settled.
-      if (cached) {
-        opts?.onProgress?.(cached);
-        return cached;
+      // Never treat a progressive shell snapshot as the final nest.
+      if (optionNestCompleteRef.current[optionId]) {
+        const cached = optionNestByIdRef.current[optionId];
+        if (cached) {
+          opts?.onProgress?.(cached);
+          return cached;
+        }
       }
+
       if (!useRestaurantMenuDetail && !menuQuery) return null;
 
       setOptionNestLoadingId(optionId);
@@ -545,7 +549,10 @@ export function ProductCustomizeDialog({
                 lang,
                 { onProgress: notify }
               );
-          if (payload) notify(payload);
+          if (payload) {
+            optionNestCompleteRef.current[optionId] = true;
+            notify(payload);
+          }
           return payload;
         } finally {
           delete optionNestInflightRef.current[optionId];
@@ -985,48 +992,38 @@ export function ProductCustomizeDialog({
           openSheet(existingGroups);
         }
 
-        const needsNestFetch =
-          Boolean(item.needsNestedSheet) ||
-          existingGroups.length === 0 ||
-          Boolean(optionNestInflightRef.current[optionId]);
-
-        if (needsNestFetch) {
-          const payload = await ensureOptionNest(optionId, {
-            onProgress: (partial) =>
-              openSheet(partial.nestedAttributeGroups ?? []),
-          });
-          const nestedGroups = payload?.nestedAttributeGroups ?? [];
-          if (!opened) {
-            if (!nestedGroups.length) {
-              // No nest groups to configure — mark complete without an empty sheet.
-              const key = optionSelectionKey(groupId, optionId);
-              const resolved = resolveCategoryItemVariationId(
-                item,
-                baseProductVariationContext.parent,
-                group
-              );
-              if (resolved) {
-                setSelectedNestedVariationByOption((prev) => ({
-                  ...prev,
-                  [key]: resolved,
-                }));
-              }
-              setNestedOptionConfigs((prev) => ({
-                ...prev,
-                [key]: {
-                  ...emptyOptionNestedConfig(),
-                  ...(resolved ? { productVariationId: resolved } : {}),
-                },
-              }));
-              return;
-            }
-            openSheet(nestedGroups);
-          }
-          return;
-        }
-
+        // Always ensure nest — joins in-flight / returns only when fully hydrated.
+        // Do not skip on a progressive shell snapshot (empty items).
+        const payload = await ensureOptionNest(optionId, {
+          onProgress: (partial) =>
+            openSheet(partial.nestedAttributeGroups ?? []),
+        });
+        const nestedGroups = payload?.nestedAttributeGroups ?? existingGroups;
         if (!opened) {
-          openSheet(existingGroups);
+          if (!nestedGroups.length) {
+            // No nest groups to configure — mark complete without an empty sheet.
+            const key = optionSelectionKey(groupId, optionId);
+            const resolved = resolveCategoryItemVariationId(
+              item,
+              baseProductVariationContext.parent,
+              group
+            );
+            if (resolved) {
+              setSelectedNestedVariationByOption((prev) => ({
+                ...prev,
+                [key]: resolved,
+              }));
+            }
+            setNestedOptionConfigs((prev) => ({
+              ...prev,
+              [key]: {
+                ...emptyOptionNestedConfig(),
+                ...(resolved ? { productVariationId: resolved } : {}),
+              },
+            }));
+            return;
+          }
+          openSheet(nestedGroups);
         }
       })();
     },
@@ -1080,6 +1077,7 @@ export function ProductCustomizeDialog({
       setSelectionTimeline([]);
       setSkippedOptionalGroupIds({});
       setOptionNestById({});
+      optionNestCompleteRef.current = {};
       setOptionNestLoadingId(null);
       skippedOptionalGroupIdsRef.current = {};
       const autoNested = autoNestedForGroups({});
