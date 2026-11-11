@@ -59,7 +59,7 @@ function cacheDeleteMatching(
 export function buildCustomerMenuItemDetailUrl(
   itemId: string,
   query: CustomerMenuQuery,
-  options?: { fresh?: boolean }
+  options?: { fresh?: boolean; shell?: boolean }
 ): string | null {
   const slug = query.slug?.trim();
   const subdomain = query.subdomain?.trim();
@@ -69,7 +69,81 @@ export function buildCustomerMenuItemDetailUrl(
   if (subdomain) params.set('subdomain', subdomain);
   if (query.branchId?.trim()) params.set('branchId', query.branchId.trim());
   if (options?.fresh) params.set('fresh', '1');
+  if (options?.shell) params.set('shell', '1');
   return `/api/customer/menu/items/${encodeURIComponent(itemId)}?${params}`;
+}
+
+export function buildCustomerMenuItemGroupUrl(
+  itemId: string,
+  groupId: string,
+  query: CustomerMenuQuery
+): string | null {
+  const slug = query.slug?.trim();
+  const subdomain = query.subdomain?.trim();
+  if (!slug && !subdomain) return null;
+  const params = new URLSearchParams();
+  if (slug) params.set('slug', slug);
+  if (subdomain) params.set('subdomain', subdomain);
+  if (query.branchId?.trim()) params.set('branchId', query.branchId.trim());
+  return `/api/customer/menu/items/${encodeURIComponent(itemId)}/groups/${encodeURIComponent(groupId)}?${params}`;
+}
+
+export type ProductDetailGroupHydrate = {
+  groupId: string;
+  sourceType?: string | null;
+  linkedCategory?: {
+    id?: string;
+    name?: string;
+    items?: unknown[];
+  } | null;
+  linkedProduct?: {
+    id?: string;
+    name?: string;
+    attributeGroups?: unknown[] | null;
+  } | null;
+};
+
+export type ProgressiveProductDetailShape = {
+  attributeGroups?: Array<{
+    id?: string;
+    sourceType?: string | null;
+    linkedCategory?: {
+      id?: string;
+      name?: string;
+      items?: unknown[] | null;
+    } | null;
+    linkedProduct?: {
+      id?: string;
+      name?: string;
+      attributeGroups?: unknown[] | null;
+    } | null;
+  }> | null;
+  progressiveShell?: boolean;
+};
+
+/** Merge one hydrated group into a progressive shell product. */
+export function mergeProductDetailGroup<T extends ProgressiveProductDetailShape>(
+  product: T,
+  hydrate: ProductDetailGroupHydrate
+): T {
+  const groups = product.attributeGroups ?? [];
+  return {
+    ...product,
+    progressiveShell: false,
+    attributeGroups: groups.map((group) => {
+      if (group.id !== hydrate.groupId) return group;
+      if (hydrate.sourceType === 'PRODUCT' || hydrate.linkedProduct) {
+        return {
+          ...group,
+          linkedProduct: hydrate.linkedProduct ?? group.linkedProduct,
+        };
+      }
+      return {
+        ...group,
+        linkedCategory: hydrate.linkedCategory ?? group.linkedCategory,
+      };
+    }),
+  };
 }
 
 export function invalidateCustomerMenuProductDetail(itemId?: string) {
@@ -125,6 +199,95 @@ export async function fetchCustomerMenuProductDetail<T>(
 
   customerInflight.set(url, request);
   return request;
+}
+
+/** Shell only — never treated as a complete detail cache hit. */
+export async function fetchCustomerMenuProductDetailShell<T>(
+  itemId: string,
+  query: CustomerMenuQuery
+): Promise<T | null> {
+  const url = buildCustomerMenuItemDetailUrl(itemId, query, { shell: true });
+  if (!url) return null;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) return null;
+  const body = (await res.json().catch(() => ({}))) as { data?: T };
+  return body.data ?? null;
+}
+
+export async function fetchCustomerMenuProductGroup(
+  itemId: string,
+  groupId: string,
+  query: CustomerMenuQuery
+): Promise<ProductDetailGroupHydrate | null> {
+  const url = buildCustomerMenuItemGroupUrl(itemId, groupId, query);
+  if (!url) return null;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) return null;
+  const body = (await res.json().catch(() => ({}))) as {
+    data?: ProductDetailGroupHydrate;
+  };
+  return body.data ?? null;
+}
+
+/**
+ * Open customize fast: shell → hydrate each group in order → paint as each
+ * finishes. Caches the full product only after every group is merged.
+ */
+export async function loadCustomerMenuProductDetailProgressive<
+  T extends ProgressiveProductDetailShape,
+>(
+  itemId: string,
+  query: CustomerMenuQuery,
+  options?: {
+    force?: boolean;
+    signal?: { cancelled: () => boolean };
+    onShell?: (shell: T) => void;
+    onGroup?: (product: T, hydrate: ProductDetailGroupHydrate) => void;
+  }
+): Promise<T | null> {
+  const force = Boolean(options?.force);
+  const fullUrl = buildCustomerMenuItemDetailUrl(itemId, query, {
+    fresh: force,
+  });
+
+  // Prefer progressive shell for first paint even when a full warm exists.
+  // Still reuse full cache when caller cancels mid-hydrate? No — always shell.
+  const shell = await fetchCustomerMenuProductDetailShell<T>(itemId, query);
+  if (!shell) return null;
+  if (options?.signal?.cancelled()) return null;
+
+  options?.onShell?.(shell);
+
+  const groupIds = (shell.attributeGroups ?? [])
+    .map((g) => g.id)
+    .filter((id): id is string => Boolean(id));
+
+  let current: T = shell;
+  for (const groupId of groupIds) {
+    if (options?.signal?.cancelled()) return null;
+    const hydrate = await fetchCustomerMenuProductGroup(
+      itemId,
+      groupId,
+      query
+    );
+    if (options?.signal?.cancelled()) return null;
+    if (!hydrate) continue;
+    current = mergeProductDetailGroup(current, hydrate);
+    options?.onGroup?.(current, hydrate);
+  }
+
+  // Cache complete payload under the normal detail URL for prefetch reuse.
+  if (fullUrl && !options?.signal?.cancelled()) {
+    const { progressiveShell: _shellFlag, ...rest } = current as T & {
+      progressiveShell?: boolean;
+    };
+    void _shellFlag;
+    const complete = { ...rest, progressiveShell: undefined } as T;
+    cacheSet(customerDetailCache, fullUrl, complete);
+    return complete;
+  }
+
+  return current;
 }
 
 export async function fetchRestaurantMenuProductDetail<T>(
@@ -214,22 +377,15 @@ export function prefetchCustomerMenuProductDetail(
   })();
 }
 
-/**
- * Load nested recommendation groups for one option card (on sheet open).
- * Initial product detail stays shallow so the first customize paint is fast.
- */
-export async function fetchOptionNestedSheetPayload(
+function buildNestedSheetPayload(
   optionId: string,
-  query: CustomerMenuQuery,
-  imageUrlForItem: (menuItemId: string) => string,
-  lang: UiLanguage = 'es'
-): Promise<OptionNestedSheetPayload | null> {
-  const detail = await fetchCustomerMenuProductDetail<{
+  detail: {
     attributeGroups?: Parameters<typeof buildCustomerAttributeGroup>[0][];
     personalizeGroups?: PersonalizeGroup[];
-  }>(optionId, query);
-  if (!detail) return null;
-
+  },
+  imageUrlForItem: (menuItemId: string) => string,
+  lang: UiLanguage
+): OptionNestedSheetPayload {
   const nestedAttributeGroups = (detail.attributeGroups ?? [])
     .filter((g) => Boolean(g?.id) && Boolean(g?.selectionType))
     .map((g) =>
@@ -240,6 +396,42 @@ export async function fetchOptionNestedSheetPayload(
     nestedAttributeGroups,
     personalizeGroups: detail.personalizeGroups ?? [],
   };
+}
+
+/**
+ * Load nested recommendation groups for one option card (on sheet open).
+ * Progressive: shell first, then each group sequentially; optional onProgress
+ * paints skeletons → groups as they arrive.
+ */
+export async function fetchOptionNestedSheetPayload(
+  optionId: string,
+  query: CustomerMenuQuery,
+  imageUrlForItem: (menuItemId: string) => string,
+  lang: UiLanguage = 'es',
+  options?: {
+    signal?: { cancelled: () => boolean };
+    onProgress?: (payload: OptionNestedSheetPayload) => void;
+  }
+): Promise<OptionNestedSheetPayload | null> {
+  const detail = await loadCustomerMenuProductDetailProgressive<{
+    attributeGroups?: Parameters<typeof buildCustomerAttributeGroup>[0][];
+    personalizeGroups?: PersonalizeGroup[];
+  }>(optionId, query, {
+    signal: options?.signal,
+    onShell: (shell) => {
+      options?.onProgress?.(
+        buildNestedSheetPayload(optionId, shell, imageUrlForItem, lang)
+      );
+    },
+    onGroup: (product) => {
+      options?.onProgress?.(
+        buildNestedSheetPayload(optionId, product, imageUrlForItem, lang)
+      );
+    },
+  });
+  if (!detail) return null;
+
+  return buildNestedSheetPayload(optionId, detail, imageUrlForItem, lang);
 }
 
 /** Warm the POS customize cache (hover / focus) without blocking UI. */

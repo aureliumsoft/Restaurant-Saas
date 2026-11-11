@@ -39,7 +39,7 @@ import { normalizeUiLanguage } from '@/lib/i18n/language-cookie';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { productNeedsCustomizeDialog } from '@/lib/menu/personalize-options';
 import {
-  fetchCustomerMenuProductDetail,
+  loadCustomerMenuProductDetailProgressive,
   overlayLiveCatalogPrices,
   prefetchCustomerMenuProductDetail,
   productNeedsDetailFetch,
@@ -739,13 +739,26 @@ export default function OrderPageClient({
     setEditingLineId(line.lineId);
     const token = ++customizeLoadTokenRef.current;
     openCustomizeForProduct(product, { loading: true });
-    const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
-      product.id,
-      {
-        slug: orderInfo?.restaurantSlug ?? undefined,
-        subdomain: hostSubdomain ?? undefined,
-      }
-    );
+    const query = {
+      slug: orderInfo?.restaurantSlug ?? undefined,
+      subdomain: hostSubdomain ?? undefined,
+    };
+    const full =
+      await loadCustomerMenuProductDetailProgressive<CustomerMenuProduct>(
+        product.id,
+        query,
+        {
+          signal: { cancelled: () => token !== customizeLoadTokenRef.current },
+          onShell: (shell) => {
+            if (token !== customizeLoadTokenRef.current) return;
+            setCustomizeProduct({ ...shell, categoryId: product.categoryId });
+          },
+          onGroup: (partial) => {
+            if (token !== customizeLoadTokenRef.current) return;
+            setCustomizeProduct({ ...partial, categoryId: product.categoryId });
+          },
+        }
+      );
     if (token !== customizeLoadTokenRef.current) return;
     if (full) {
       setCustomizeProduct({ ...full, categoryId: product.categoryId });
@@ -1033,14 +1046,27 @@ export default function OrderPageClient({
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     const token = ++customizeLoadTokenRef.current;
     openCustomizeForProduct(p, { loading: true });
-    // Prefer prefetch / short client TTL; live browse prices overlay below.
-    const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
-      p.id,
-      {
-        slug: orderInfo?.restaurantSlug ?? undefined,
-        subdomain: hostSubdomain ?? undefined,
-      }
-    );
+    const query = {
+      slug: orderInfo?.restaurantSlug ?? undefined,
+      subdomain: hostSubdomain ?? undefined,
+    };
+    // Shell first for fast paint; hydrate each rec group sequentially.
+    const full =
+      await loadCustomerMenuProductDetailProgressive<CustomerMenuProduct>(
+        p.id,
+        query,
+        {
+          signal: { cancelled: () => token !== customizeLoadTokenRef.current },
+          onShell: (shell) => {
+            if (token !== customizeLoadTokenRef.current) return;
+            setCustomizeProduct({ ...shell, categoryId: p.categoryId });
+          },
+          onGroup: (partial) => {
+            if (token !== customizeLoadTokenRef.current) return;
+            setCustomizeProduct({ ...partial, categoryId: p.categoryId });
+          },
+        }
+      );
     if (token !== customizeLoadTokenRef.current) return;
     if (full) {
       setCustomizeProduct({ ...full, categoryId: p.categoryId });

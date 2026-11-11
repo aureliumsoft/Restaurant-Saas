@@ -479,31 +479,60 @@ export function ProductCustomizeDialog({
 
   const optionNestByIdRef = useRef(optionNestById);
   optionNestByIdRef.current = optionNestById;
+  const optionNestInflightRef = useRef<
+    Record<string, Promise<OptionNestedSheetPayload | null>>
+  >({});
 
   const ensureOptionNest = useCallback(
-    async (optionId: string) => {
-      const cached = optionNestByIdRef.current[optionId];
-      if (cached) return cached;
-      if (!menuQuery) return null;
-      setOptionNestLoadingId(optionId);
-      try {
-        const payload = await fetchOptionNestedSheetPayload(
-          optionId,
-          menuQuery,
-          optionImageUrlForItem ?? (() => ''),
-          lang
-        );
-        if (payload) {
-          optionNestByIdRef.current = {
-            ...optionNestByIdRef.current,
-            [optionId]: payload,
-          };
-          setOptionNestById((prev) => ({ ...prev, [optionId]: payload }));
-        }
-        return payload;
-      } finally {
-        setOptionNestLoadingId((cur) => (cur === optionId ? null : cur));
+    async (
+      optionId: string,
+      opts?: { onProgress?: (payload: OptionNestedSheetPayload) => void }
+    ) => {
+      const notify = (payload: OptionNestedSheetPayload) => {
+        optionNestByIdRef.current = {
+          ...optionNestByIdRef.current,
+          [optionId]: payload,
+        };
+        setOptionNestById((prev) => ({ ...prev, [optionId]: payload }));
+        opts?.onProgress?.(payload);
+      };
+
+      const inflight = optionNestInflightRef.current[optionId];
+      if (inflight) {
+        // Join in-flight load; still forward progress via current cache snapshots.
+        const cached = optionNestByIdRef.current[optionId];
+        if (cached) opts?.onProgress?.(cached);
+        return inflight;
       }
+
+      const cached = optionNestByIdRef.current[optionId];
+      // Progressive writes partials while inflight; only reuse when settled.
+      if (cached) {
+        opts?.onProgress?.(cached);
+        return cached;
+      }
+      if (!menuQuery) return null;
+
+      setOptionNestLoadingId(optionId);
+      const request = (async () => {
+        try {
+          const payload = await fetchOptionNestedSheetPayload(
+            optionId,
+            menuQuery,
+            optionImageUrlForItem ?? (() => ''),
+            lang,
+            { onProgress: notify }
+          );
+          if (payload) notify(payload);
+          return payload;
+        } finally {
+          delete optionNestInflightRef.current[optionId];
+          setOptionNestLoadingId((cur) => (cur === optionId ? null : cur));
+        }
+      })();
+
+      optionNestInflightRef.current[optionId] = request;
+      return request;
     },
     [lang, menuQuery, optionImageUrlForItem]
   );
@@ -921,35 +950,62 @@ export function ProductCustomizeDialog({
           setPicker({ kind: 'nested', groupId, optionId });
           return;
         }
-        let nestedGroups = item.nestedAttributeGroups ?? [];
-        if (!nestedGroups.length && item.needsNestedSheet) {
-          const payload = await ensureOptionNest(optionId);
-          nestedGroups = payload?.nestedAttributeGroups ?? [];
+
+        let opened = false;
+        const openSheet = (groups: AttributeGroup[]) => {
+          if (opened || groups.length === 0) return;
+          opened = true;
+          setActiveCategoryOption({ groupId, optionId });
+        };
+
+        const existingGroups = item.nestedAttributeGroups ?? [];
+        if (existingGroups.length > 0) {
+          openSheet(existingGroups);
         }
-        if (!nestedGroups.length) {
-          // No nest groups to configure — mark complete without an empty sheet.
-          const key = optionSelectionKey(groupId, optionId);
-          const resolved = resolveCategoryItemVariationId(
-            item,
-            baseProductVariationContext.parent,
-            group
-          );
-          if (resolved) {
-            setSelectedNestedVariationByOption((prev) => ({
-              ...prev,
-              [key]: resolved,
-            }));
+
+        const needsNestFetch =
+          Boolean(item.needsNestedSheet) ||
+          existingGroups.length === 0 ||
+          Boolean(optionNestInflightRef.current[optionId]);
+
+        if (needsNestFetch) {
+          const payload = await ensureOptionNest(optionId, {
+            onProgress: (partial) =>
+              openSheet(partial.nestedAttributeGroups ?? []),
+          });
+          const nestedGroups = payload?.nestedAttributeGroups ?? [];
+          if (!opened) {
+            if (!nestedGroups.length) {
+              // No nest groups to configure — mark complete without an empty sheet.
+              const key = optionSelectionKey(groupId, optionId);
+              const resolved = resolveCategoryItemVariationId(
+                item,
+                baseProductVariationContext.parent,
+                group
+              );
+              if (resolved) {
+                setSelectedNestedVariationByOption((prev) => ({
+                  ...prev,
+                  [key]: resolved,
+                }));
+              }
+              setNestedOptionConfigs((prev) => ({
+                ...prev,
+                [key]: {
+                  ...emptyOptionNestedConfig(),
+                  ...(resolved ? { productVariationId: resolved } : {}),
+                },
+              }));
+              return;
+            }
+            openSheet(nestedGroups);
           }
-          setNestedOptionConfigs((prev) => ({
-            ...prev,
-            [key]: {
-              ...emptyOptionNestedConfig(),
-              ...(resolved ? { productVariationId: resolved } : {}),
-            },
-          }));
           return;
         }
-        setActiveCategoryOption({ groupId, optionId });
+
+        if (!opened) {
+          openSheet(existingGroups);
+        }
       })();
     },
     [

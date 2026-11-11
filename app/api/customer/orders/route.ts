@@ -366,13 +366,14 @@ export async function POST(req: NextRequest) {
         );
         if (flatMods.length > 0) {
           await tx.orderItemModifier.createMany({
-            data: flatMods.map(({ selection: s, groupName }) => ({
+            data: flatMods.map(({ selection: s, groupName }, sortOrder) => ({
               orderItemId: orderItem.id,
               menuItemId: normalizePersonalizeModifierMenuItemId(s.menuItemId),
               name: s.name,
               groupName: groupName?.trim() || null,
               unitPrice: s.unitPrice,
               quantity: 1,
+              sortOrder,
             })),
           });
         }
@@ -401,10 +402,11 @@ export async function POST(req: NextRequest) {
               }))
             ),
           }))
-        ).map((row) => ({
+        ).map((row, sortOrder) => ({
           kitchenTicketId: ticket.id,
           productName: row.productName,
           quantity: row.quantity,
+          sortOrder,
         })),
       });
 

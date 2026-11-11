@@ -1,12 +1,20 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { loadCustomerMenuProductDetail } from '@/lib/menu/load-customer-menu-progressive';
+import {
+  loadCustomerMenuProductDetail,
+  loadCustomerMenuProductDetailShell,
+} from '@/lib/menu/load-customer-menu-progressive';
 import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query';
 import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const MENU_CACHE_HEADERS = {
   // Nested add-on prices change with product edits — do not CDN-cache this payload.
+  'Cache-Control': 'private, no-store',
+};
+
+const SHELL_CACHE_HEADERS = {
+  // Shell is short-lived metadata only — never treat as a complete detail hit.
   'Cache-Control': 'private, no-store',
 };
 
@@ -23,6 +31,23 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const resolved = resolveCustomerMenuQuery(req);
     if ('error' in resolved) {
       return NextResponse.json({ error: resolved.error }, { status: 400 });
+    }
+
+    const shell =
+      req.nextUrl.searchParams.get('shell')?.trim() === '1';
+
+    if (shell) {
+      const data = await loadCustomerMenuProductDetailShell({
+        ...resolved,
+        itemId: trimmed,
+      });
+      if (!data) {
+        return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
+      }
+      return NextResponse.json(
+        { data },
+        { status: 200, headers: SHELL_CACHE_HEADERS }
+      );
     }
 
     // Prefer the short in-memory cache. Only bypass when the client asks for

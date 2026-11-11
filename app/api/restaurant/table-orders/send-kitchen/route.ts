@@ -95,9 +95,12 @@ export async function POST(req: NextRequest) {
                 quantity: true,
                 menuItemId: true,
                 groupName: true,
+                sortOrder: true,
               },
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
             },
           },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         },
         kitchenTickets: {
           where: {
@@ -158,10 +161,11 @@ export async function POST(req: NextRequest) {
           },
         });
         await tx.kitchenTicketItem.createMany({
-          data: rows.map((r) => ({
+          data: rows.map((r, sortOrder) => ({
             kitchenTicketId: ticket.id,
             productName: r.productName,
             quantity: r.quantity,
+            sortOrder,
           })),
         });
         created.push(order.id);

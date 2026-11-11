@@ -59,12 +59,13 @@ export async function GET(_req: NextRequest) {
             productName: true,
             menuItem: { select: { name: true } },
             modifiers: {
-              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
               select: {
                 name: true,
                 quantity: true,
                 menuItemId: true,
                 groupName: true,
+                sortOrder: true,
               },
             },
           },

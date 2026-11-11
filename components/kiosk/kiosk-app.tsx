@@ -41,7 +41,7 @@ import {
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import {
-  fetchCustomerMenuProductDetail,
+  loadCustomerMenuProductDetailProgressive,
   overlayLiveCatalogPrices,
 } from '@/lib/menu/fetch-menu-product-detail';
 import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
@@ -1381,11 +1381,23 @@ export function KioskApp({
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
     const token = ++customizeLoadTokenRef.current;
     openCustomize(p, { loading: true });
-    // Prefer prefetch / short client TTL; live browse prices overlay below.
-    const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
-      p.id,
-      { slug }
-    );
+    // Shell first for fast paint; hydrate each rec group sequentially.
+    const full =
+      await loadCustomerMenuProductDetailProgressive<CustomerMenuProduct>(
+        p.id,
+        { slug },
+        {
+          signal: { cancelled: () => token !== customizeLoadTokenRef.current },
+          onShell: (shell) => {
+            if (token !== customizeLoadTokenRef.current) return;
+            setCustomizeProduct({ ...shell, categoryId: p.categoryId });
+          },
+          onGroup: (partial) => {
+            if (token !== customizeLoadTokenRef.current) return;
+            setCustomizeProduct({ ...partial, categoryId: p.categoryId });
+          },
+        }
+      );
     if (token !== customizeLoadTokenRef.current) return;
     if (!full) {
       setDialogOpen(false);

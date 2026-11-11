@@ -29,7 +29,7 @@ export async function createOrderItemsWithModifiers(
     if (flatMods.length === 0) continue;
 
     await tx.orderItemModifier.createMany({
-      data: flatMods.map(({ selection, groupName }) => ({
+      data: flatMods.map(({ selection, groupName }, sortOrder) => ({
         orderItemId: orderItem.id,
         menuItemId: normalizePersonalizeModifierMenuItemId(
           selection.menuItemId
@@ -38,6 +38,7 @@ export async function createOrderItemsWithModifiers(
         groupName: groupName?.trim() || null,
         unitPrice: selection.unitPrice,
         quantity: 1,
+        sortOrder,
       })),
     });
   }

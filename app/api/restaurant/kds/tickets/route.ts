@@ -96,6 +96,7 @@ type TicketItemRow = {
   kitchenTicketId: string;
   productName: string;
   quantity: number;
+  sortOrder?: number;
 };
 
 export async function GET(req: NextRequest) {
@@ -154,10 +155,10 @@ export async function GET(req: NextRequest) {
       ticketIds.length > 0
         ? await db.$queryRaw<TicketItemRow[]>(
             Prisma.sql`
-              SELECT "id", "kitchenTicketId", "productName", "quantity"
+              SELECT "id", "kitchenTicketId", "productName", "quantity", "sortOrder"
               FROM "KitchenTicketItem"
               WHERE "kitchenTicketId" IN (${Prisma.join(ticketIds)})
-              ORDER BY "id" ASC
+              ORDER BY "sortOrder" ASC, "id" ASC
             `
           )
         : [];
@@ -186,10 +187,11 @@ export async function GET(req: NextRequest) {
                   quantity: true,
                   menuItemId: true,
                   groupName: true,
+                  sortOrder: true,
                   createdAt: true,
                 },
-                // Insertion order — UUID id sort scrambled recommendation groups.
-                orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+                // Cart / recommendation selection order (sortOrder), not UUID id.
+                orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
               },
             },
             orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -209,25 +211,36 @@ export async function GET(req: NextRequest) {
       rows.map((r) => {
         const stored = itemsByTicket.get(r.id) ?? [];
         const orderItems = linesByOrderId.get(r.orderId) ?? [];
-        // Rebuild from order lines (createdAt order) so recommendation groups
-        // match the customize sheet top→bottom, including personalize last.
+        // Rebuild when modifiers carry selection sortOrder. Legacy rows are all
+        // sortOrder 0 — UUID id order scrambled them, so keep stored ticket rows.
+        const hasSelectionSortOrder = orderItems.some((line) =>
+          line.modifiers.some((m) => (m.sortOrder ?? 0) > 0)
+        );
         const hydratedRows =
           orderItems.length > 0
             ? buildKitchenTicketItemRowsFromOrder(orderItems)
             : null;
 
+        const shouldUseHydrated =
+          hydratedRows != null &&
+          (hasSelectionSortOrder ||
+            stored.length === 0 ||
+            kitchenTicketItemsLookLegacy(stored));
+
         const shouldPersistHydration =
+          shouldUseHydrated &&
           hydratedRows != null &&
           (stored.length === 0 ||
             kitchenTicketItemsLookLegacy(stored) ||
-            kitchenTicketItemsOrderDrift(stored, hydratedRows));
+            (hasSelectionSortOrder &&
+              kitchenTicketItemsOrderDrift(stored, hydratedRows)));
 
         if (shouldPersistHydration) {
           syncTicketIds.push(r.id);
         }
 
-        const displayItems = hydratedRows
-          ? hydratedRows.map((row, index) => ({
+        const displayItems = shouldUseHydrated
+          ? hydratedRows!.map((row, index) => ({
               id: `${r.id}-line-${index}`,
               kitchenTicketId: r.id,
               productName: row.productName,
@@ -256,10 +269,11 @@ export async function GET(req: NextRequest) {
           });
           if (rebuilt.length > 0) {
             await tx.kitchenTicketItem.createMany({
-              data: rebuilt.map((row) => ({
+              data: rebuilt.map((row, sortOrder) => ({
                 kitchenTicketId: ticketId,
                 productName: row.productName,
                 quantity: row.quantity,
+                sortOrder,
               })),
             });
           }
@@ -324,9 +338,12 @@ export async function POST(req: NextRequest) {
                 quantity: true,
                 menuItemId: true,
                 groupName: true,
+                sortOrder: true,
               },
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
             },
           },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         },
       },
     });
@@ -387,10 +404,11 @@ export async function POST(req: NextRequest) {
         });
         if (itemRows.length > 0) {
           await tx.kitchenTicketItem.createMany({
-            data: itemRows.map((row) => ({
+            data: itemRows.map((row, sortOrder) => ({
               kitchenTicketId: activeTicket.id,
               productName: row.productName,
               quantity: row.quantity,
+              sortOrder,
             })),
           });
         }
@@ -434,10 +452,11 @@ export async function POST(req: NextRequest) {
 
       if (itemRows.length > 0) {
         await tx.kitchenTicketItem.createMany({
-          data: itemRows.map((row) => ({
+          data: itemRows.map((row, sortOrder) => ({
             kitchenTicketId: created.id,
             productName: row.productName,
             quantity: row.quantity,
+            sortOrder,
           })),
         });
       }

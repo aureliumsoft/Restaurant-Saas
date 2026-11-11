@@ -1054,6 +1054,7 @@ export function fakeOrderItemModifierComplete() {
     groupName: undefined,
     unitPrice: faker.number.float(),
     quantity: 1,
+    sortOrder: 0,
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };
@@ -1281,6 +1282,7 @@ export function fakeKitchenTicketItemComplete() {
     kitchenTicketId: faker.string.uuid(),
     productName: faker.lorem.words(5),
     quantity: faker.number.int(),
+    sortOrder: 0,
   };
 }
 export function fakeExpense() {

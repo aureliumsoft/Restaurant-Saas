@@ -976,26 +976,56 @@ export function NestedRecommendationSheet({
   );
   const optionNestByIdRef = useRef(optionNestById);
   optionNestByIdRef.current = optionNestById;
+  const optionNestInflightRef = useRef<
+    Record<string, Promise<OptionNestedSheetPayload | null>>
+  >({});
 
   const ensureOptionNest = useCallback(
-    async (optionId: string) => {
-      const cached = optionNestByIdRef.current[optionId];
-      if (cached) return cached;
-      if (!menuQuery) return null;
-      const payload = await fetchOptionNestedSheetPayload(
-        optionId,
-        menuQuery,
-        optionImageUrlForItem ?? (() => ''),
-        lang
-      );
-      if (payload) {
+    async (
+      optionId: string,
+      opts?: { onProgress?: (payload: OptionNestedSheetPayload) => void }
+    ) => {
+      const notify = (payload: OptionNestedSheetPayload) => {
         optionNestByIdRef.current = {
           ...optionNestByIdRef.current,
           [optionId]: payload,
         };
         setOptionNestById((prev) => ({ ...prev, [optionId]: payload }));
+        opts?.onProgress?.(payload);
+      };
+
+      const inflight = optionNestInflightRef.current[optionId];
+      if (inflight) {
+        const cached = optionNestByIdRef.current[optionId];
+        if (cached) opts?.onProgress?.(cached);
+        return inflight;
       }
-      return payload;
+
+      const cached = optionNestByIdRef.current[optionId];
+      if (cached) {
+        opts?.onProgress?.(cached);
+        return cached;
+      }
+      if (!menuQuery) return null;
+
+      const request = (async () => {
+        try {
+          const payload = await fetchOptionNestedSheetPayload(
+            optionId,
+            menuQuery,
+            optionImageUrlForItem ?? (() => ''),
+            lang,
+            { onProgress: notify }
+          );
+          if (payload) notify(payload);
+          return payload;
+        } finally {
+          delete optionNestInflightRef.current[optionId];
+        }
+      })();
+
+      optionNestInflightRef.current[optionId] = request;
+      return request;
     },
     [lang, menuQuery, optionImageUrlForItem]
   );
@@ -1136,6 +1166,7 @@ export function NestedRecommendationSheet({
   }, [sheetIdentity]);
 
   // Self-heal: sheet opened with empty groups but the product needs nests.
+  // Progressive: paint shell groups first, then each hydrated group.
   useEffect(() => {
     if (!open || !menuQuery) return;
     if ((attributeGroupsProp?.length ?? 0) > 0) return;
@@ -1144,22 +1175,29 @@ export function NestedRecommendationSheet({
     }
     let cancelled = false;
     setRootNestLoading(true);
+    const applyPayload = (payload: OptionNestedSheetPayload) => {
+      if (cancelled || !payload.nestedAttributeGroups.length) return;
+      setRootNestGroups(payload.nestedAttributeGroups);
+      setSelectedByGroup((prev) => {
+        const next = { ...prev };
+        for (const g of payload.nestedAttributeGroups) {
+          if (!next[g.id]) next[g.id] = [];
+        }
+        return next;
+      });
+    };
     void fetchOptionNestedSheetPayload(
       product.menuItemId,
       menuQuery,
       optionImageUrlForItem ?? (() => ''),
-      lang
+      lang,
+      {
+        signal: { cancelled: () => cancelled },
+        onProgress: applyPayload,
+      }
     )
       .then((payload) => {
-        if (cancelled || !payload?.nestedAttributeGroups?.length) return;
-        setRootNestGroups(payload.nestedAttributeGroups);
-        setSelectedByGroup((prev) => {
-          const next = { ...prev };
-          for (const g of payload.nestedAttributeGroups) {
-            if (!next[g.id]) next[g.id] = [];
-          }
-          return next;
-        });
+        if (payload) applyPayload(payload);
       })
       .finally(() => {
         if (!cancelled) setRootNestLoading(false);
@@ -1177,6 +1215,22 @@ export function NestedRecommendationSheet({
     optionImageUrlForItem,
     lang,
   ]);
+
+  // Seed selection keys when progressive hydrate adds new groups.
+  useEffect(() => {
+    if (!open) return;
+    setSelectedByGroup((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const g of attributeGroups) {
+        if (next[g.id] === undefined) {
+          next[g.id] = [];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [open, attributeGroups]);
 
   const visibleCategoryGroups = useMemo(
     () =>

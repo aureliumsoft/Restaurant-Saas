@@ -463,57 +463,56 @@ async function loadOptionCardsByCategoryIds(
   const seenByCategory = new Map<string, Set<string>>();
 
   // Cap at DB per category — unbounded findMany then truncate was the slow path
-  // for large recommendation categories.
-  await Promise.all(
-    categoryIds.map(async (categoryId) => {
-      const [links, legacyItems] = await Promise.all([
-        db.menuItemCategory.findMany({
-          where: {
-            categoryId,
-            menuItem: { restaurantId },
-          },
-          orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
-          take: PRODUCT_DETAIL_OPTION_TAKE,
-          select: {
-            categoryId: true,
-            menuItemId: true,
-            menuItem: { select: optionSelect },
-          },
-        }),
-        db.menuItem.findMany({
-          where: {
-            restaurantId,
-            categoryId,
-          },
-          orderBy: [...MENU_ITEM_DATE_ORDER],
-          take: PRODUCT_DETAIL_OPTION_TAKE,
-          select: {
-            ...optionSelect,
-            categoryId: true,
-          },
-        }),
-      ]);
+  // for large recommendation categories. Load categories one-by-one so progressive
+  // hydrate / multi-group callers do not pile parallel category queries.
+  for (const categoryId of categoryIds) {
+    const [links, legacyItems] = await Promise.all([
+      db.menuItemCategory.findMany({
+        where: {
+          categoryId,
+          menuItem: { restaurantId },
+        },
+        orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
+        take: PRODUCT_DETAIL_OPTION_TAKE,
+        select: {
+          categoryId: true,
+          menuItemId: true,
+          menuItem: { select: optionSelect },
+        },
+      }),
+      db.menuItem.findMany({
+        where: {
+          restaurantId,
+          categoryId,
+        },
+        orderBy: [...MENU_ITEM_DATE_ORDER],
+        take: PRODUCT_DETAIL_OPTION_TAKE,
+        select: {
+          ...optionSelect,
+          categoryId: true,
+        },
+      }),
+    ]);
 
-      for (const link of links) {
-        pushUniqueItem(
-          itemsByCategory,
-          seenByCategory,
-          link.categoryId,
-          link.menuItemId,
-          link.menuItem as Record<string, unknown>
-        );
-      }
-      for (const item of legacyItems) {
-        pushUniqueItem(
-          itemsByCategory,
-          seenByCategory,
-          item.categoryId,
-          item.id,
-          item as Record<string, unknown>
-        );
-      }
-    })
-  );
+    for (const link of links) {
+      pushUniqueItem(
+        itemsByCategory,
+        seenByCategory,
+        link.categoryId,
+        link.menuItemId,
+        link.menuItem as Record<string, unknown>
+      );
+    }
+    for (const item of legacyItems) {
+      pushUniqueItem(
+        itemsByCategory,
+        seenByCategory,
+        item.categoryId,
+        item.id,
+        item as Record<string, unknown>
+      );
+    }
+  }
 
   return itemsByCategory;
 }
@@ -663,6 +662,218 @@ async function stampNeedsNestedSheetFlags(
   }
 }
 
+function shellAttributeGroups(rawGroups: DetailGroup[] | null | undefined) {
+  return (rawGroups ?? [])
+    .map((group) => {
+      const categoryId =
+        group.linkedCategoryId || group.linkedCategory?.id || '';
+      if (group.sourceType === 'PRODUCT') {
+        return {
+          ...group,
+          linkedProduct: group.linkedProduct
+            ? {
+                ...group.linkedProduct,
+                attributeGroups: [],
+              }
+            : group.linkedProduct,
+        };
+      }
+      if (!categoryId && !group.linkedCategory) return group;
+      return {
+        ...group,
+        linkedCategory: {
+          ...(group.linkedCategory ?? {}),
+          id: group.linkedCategory?.id ?? categoryId,
+          name: group.linkedCategory?.name ?? group.name ?? '',
+          items: [],
+        },
+      };
+    })
+    .filter((group) => {
+      if (group.sourceType === 'PRODUCT') return group.linkedProduct != null;
+      const categoryId =
+        group.linkedCategoryId || group.linkedCategory?.id || '';
+      return Boolean(categoryId);
+    });
+}
+
+async function loadCustomerMenuProductDetailShellUncached(options: {
+  slug?: string | null;
+  subdomain?: string | null;
+  itemId: string;
+}) {
+  return withMenuSelectMode(async (mode) => {
+    const restaurantId = await resolveRestaurantId(
+      options.slug,
+      options.subdomain
+    );
+    if (!restaurantId) return null;
+
+    const item = await db.menuItem.findFirst({
+      where: {
+        id: options.itemId,
+        restaurantId,
+      },
+      select: buildCustomerProductDetailItemSelect(mode),
+    });
+    if (!item) return null;
+
+    const rawGroups = (item as { attributeGroups?: DetailGroup[] })
+      .attributeGroups;
+    const shellGroups = shellAttributeGroups(rawGroups);
+
+    const withInline = attachCustomerLazyImages(
+      {
+        ...item,
+        attributeGroups: shellGroups,
+      },
+      {
+        slug: options.slug,
+        subdomain: options.subdomain,
+      }
+    );
+
+    return {
+      ...withInline,
+      categoryIds: [item.categoryId],
+      progressiveShell: true as const,
+    };
+  });
+}
+
+/** Fast customize open: group metadata only; option cards hydrate per group. */
+export async function loadCustomerMenuProductDetailShell(options: {
+  slug?: string | null;
+  subdomain?: string | null;
+  itemId: string;
+}) {
+  return loadCustomerMenuProductDetailShellUncached(options);
+}
+
+/**
+ * Hydrate one recommendation group's option cards for progressive customize.
+ */
+export async function loadCustomerMenuProductDetailGroup(options: {
+  slug?: string | null;
+  subdomain?: string | null;
+  itemId: string;
+  groupId: string;
+}) {
+  return withMenuSelectMode(async (mode) => {
+    const restaurantId = await resolveRestaurantId(
+      options.slug,
+      options.subdomain
+    );
+    if (!restaurantId) return null;
+
+    const group = await db.menuItemAttributeGroup.findFirst({
+      where: {
+        id: options.groupId,
+        menuItemId: options.itemId,
+        menuItem: { restaurantId },
+      },
+      select: customerProductDetailGroupSelect(mode),
+    });
+    if (!group) return null;
+
+    const detailGroup = group as DetailGroup;
+
+    if (detailGroup.sourceType === 'PRODUCT') {
+      const productId =
+        detailGroup.linkedProductId || detailGroup.linkedProduct?.id || '';
+      if (!productId || !detailGroup.linkedProduct) {
+        return {
+          groupId: options.groupId,
+          sourceType: 'PRODUCT' as const,
+          linkedProduct: detailGroup.linkedProduct ?? null,
+          linkedCategory: null,
+        };
+      }
+
+      const nestedByProduct = await loadAttributeGroupsByMenuItemIds(
+        [productId],
+        mode
+      );
+      const nestedGroups = nestedByProduct.get(productId) ?? [];
+      const nestedCategoryIds = collectLinkedCategoryIdsFromGroups(nestedGroups);
+      const nestedItemsByCategory =
+        nestedCategoryIds.length > 0
+          ? await loadOptionCardsByCategoryIds(
+              restaurantId,
+              nestedCategoryIds,
+              mode
+            )
+          : new Map<string, Array<Record<string, unknown>>>();
+      await stampNeedsNestedSheetFlags(nestedItemsByCategory);
+
+      const linkedProduct = {
+        ...detailGroup.linkedProduct,
+        attributeGroups: attachCategoryItemsToGroups(
+          nestedGroups,
+          nestedItemsByCategory
+        ),
+      };
+
+      const withInline = attachCustomerLazyImages(
+        { linkedProduct },
+        {
+          slug: options.slug,
+          subdomain: options.subdomain,
+        }
+      ) as { linkedProduct?: typeof linkedProduct };
+
+      return {
+        groupId: options.groupId,
+        sourceType: 'PRODUCT' as const,
+        linkedProduct: withInline.linkedProduct ?? linkedProduct,
+        linkedCategory: null,
+      };
+    }
+
+    const categoryId =
+      detailGroup.linkedCategoryId || detailGroup.linkedCategory?.id || '';
+    if (!categoryId) {
+      return {
+        groupId: options.groupId,
+        sourceType: 'CATEGORY' as const,
+        linkedCategory: detailGroup.linkedCategory
+          ? { ...detailGroup.linkedCategory, items: [] }
+          : null,
+        linkedProduct: null,
+      };
+    }
+
+    const itemsByCategory = await loadOptionCardsByCategoryIds(
+      restaurantId,
+      [categoryId],
+      mode
+    );
+    await stampNeedsNestedSheetFlags(itemsByCategory);
+    const items = itemsByCategory.get(categoryId) ?? [];
+    const linkedCategory = {
+      ...(detailGroup.linkedCategory ?? {}),
+      id: detailGroup.linkedCategory?.id ?? categoryId,
+      name: detailGroup.linkedCategory?.name ?? detailGroup.name ?? '',
+      items,
+    };
+
+    const withInline = attachCustomerLazyImages(
+      { linkedCategory },
+      {
+        slug: options.slug,
+        subdomain: options.subdomain,
+      }
+    ) as { linkedCategory?: typeof linkedCategory };
+
+    return {
+      groupId: options.groupId,
+      sourceType: 'CATEGORY' as const,
+      linkedCategory: withInline.linkedCategory ?? linkedCategory,
+      linkedProduct: null,
+    };
+  });
+}
+
 async function loadCustomerMenuProductDetailUncached(options: {
   slug?: string | null;
   subdomain?: string | null;
@@ -691,10 +902,16 @@ async function loadCustomerMenuProductDetailUncached(options: {
 
     // Fast path: group rules + option cards only. Nested option trees load
     // on demand when the guest opens a nested recommendation sheet.
-    const [nestedByProduct, parentItemsByCategory] = await Promise.all([
-      loadAttributeGroupsByMenuItemIds(parentProductIds, mode),
-      loadOptionCardsByCategoryIds(restaurantId, parentCategoryIds, mode),
-    ]);
+    // Load product nests and category cards sequentially (not parallel storms).
+    const nestedByProduct = await loadAttributeGroupsByMenuItemIds(
+      parentProductIds,
+      mode
+    );
+    const parentItemsByCategory = await loadOptionCardsByCategoryIds(
+      restaurantId,
+      parentCategoryIds,
+      mode
+    );
 
     const deeperProductIds = collectLinkedProductIdsFromGroups(
       [...nestedByProduct.values()].flat()
@@ -719,17 +936,14 @@ async function loadCustomerMenuProductDetailUncached(options: {
       (id) => !parentCategoryIds.includes(id)
     );
 
-    const [extraItemsByCategory] = await Promise.all([
+    const extraItemsByCategory =
       extraCategoryIds.length > 0
-        ? loadOptionCardsByCategoryIds(
+        ? await loadOptionCardsByCategoryIds(
             restaurantId,
             extraCategoryIds,
             mode
           )
-        : Promise.resolve(
-            new Map<string, Array<Record<string, unknown>>>()
-          ),
-    ]);
+        : new Map<string, Array<Record<string, unknown>>>();
 
     const itemsByCategory = new Map(parentItemsByCategory);
     for (const [categoryId, items] of extraItemsByCategory) {

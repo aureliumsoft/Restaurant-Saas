@@ -1929,37 +1929,37 @@ export function PosScreen({
   };
 
   const proceedWithProduct = async (p: PosMenuProduct) => {
-    const token = ++customizeLoadTokenRef.current;
-    openCustomize(p, { loading: true });
+        const token = ++customizeLoadTokenRef.current;
+        openCustomize(p, { loading: true });
     // Prefer prefetch / short client TTL; live browse prices overlay below.
-    const full = await fetchRestaurantMenuProductDetail<
-      PosMenuProduct & { categoryIds?: string[] }
-    >(p.id);
-    if (token !== customizeLoadTokenRef.current) return;
-    if (!full) {
-      setCustomizeOpen(false);
-      setCustomizeProduct(null);
-      setCustomizeLoading(false);
+        const full = await fetchRestaurantMenuProductDetail<
+          PosMenuProduct & { categoryIds?: string[] }
+        >(p.id);
+        if (token !== customizeLoadTokenRef.current) return;
+        if (!full) {
+          setCustomizeOpen(false);
+          setCustomizeProduct(null);
+          setCustomizeLoading(false);
       toast.error(t('pos.toasts.couldNotLoadProductConfig'));
-      return;
-    }
-    setCustomizeProduct({
-      ...full,
-      categoryId: p.categoryId,
-      description: full.description ?? null,
-      imageUrl: full.imageUrl ?? null,
-      price: Number(full.price),
-      salePrice:
-        full.salePrice != null && Number.isFinite(Number(full.salePrice))
-          ? Number(full.salePrice)
-          : null,
-      attributeGroups: full.attributeGroups ?? [],
-      variations: (full.variations ?? []).map((v) => ({
-        ...v,
-        priceDelta: Number(v.priceDelta ?? 0),
-      })),
-    });
-    setCustomizeLoading(false);
+          return;
+        }
+        setCustomizeProduct({
+          ...full,
+          categoryId: p.categoryId,
+          description: full.description ?? null,
+          imageUrl: full.imageUrl ?? null,
+          price: Number(full.price),
+          salePrice:
+            full.salePrice != null && Number.isFinite(Number(full.salePrice))
+              ? Number(full.salePrice)
+              : null,
+          attributeGroups: full.attributeGroups ?? [],
+          variations: (full.variations ?? []).map((v) => ({
+            ...v,
+            priceDelta: Number(v.priceDelta ?? 0),
+          })),
+        });
+        setCustomizeLoading(false);
   };
 
   const handleProductSelect = (p: PosMenuProduct) => {
@@ -2812,7 +2812,7 @@ export function PosScreen({
         }
         const kitchenItems = buildKitchenTicketItemRows(
           cart.map((l) => ({
-            quantity: l.qty,
+          quantity: l.qty,
             productName: l.productName,
             variationName: l.variationName,
             modifiers: l.modifiers.flatMap((g) =>
@@ -2913,8 +2913,8 @@ export function PosScreen({
         (savedOrder as { _kitchenItems?: Array<{ id: string; productName: string; quantity: number }> })
           ._kitchenItems ??
         buildKitchenTicketItemRows(
-          cart.map((l) => ({
-            quantity: l.qty,
+        cart.map((l) => ({
+          quantity: l.qty,
             productName: l.productName,
             variationName: l.variationName,
             modifiers: l.modifiers.flatMap((g) =>
