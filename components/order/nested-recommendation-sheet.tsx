@@ -959,10 +959,14 @@ export function NestedRecommendationSheet({
     null
   );
   const [rootNestLoading, setRootNestLoading] = useState(false);
-  const effectiveAttributeGroupsProp =
-    (attributeGroupsProp?.length ?? 0) > 0
-      ? attributeGroupsProp
-      : (rootNestGroups ?? attributeGroupsProp);
+  const propHasSelectableItems = attributeGroupsProp.some(
+    (g) => (g.items?.length ?? 0) > 0
+  );
+  // Prefer parent groups only once they have option cards. Empty shell stubs
+  // must yield to progressively hydrated rootNestGroups.
+  const effectiveAttributeGroupsProp = propHasSelectableItems
+    ? attributeGroupsProp
+    : (rootNestGroups ?? attributeGroupsProp);
   const attributeGroups = useMemo(
     () =>
       effectiveAttributeGroupsProp.map((group) => ({
@@ -989,6 +993,14 @@ export function NestedRecommendationSheet({
 
   const optionNestCompleteRef = useRef<Record<string, true>>({});
   const rootNestFetchKeyRef = useRef<string | null>(null);
+  const rootNestInflightRef = useRef<Promise<OptionNestedSheetPayload | null> | null>(
+    null
+  );
+  const rootNestLiveRef = useRef({
+    open: false,
+    menuItemId: product.menuItemId,
+  });
+  rootNestLiveRef.current = { open, menuItemId: product.menuItemId };
 
   const ensureOptionNest = useCallback(
     async (
@@ -1189,35 +1201,44 @@ export function NestedRecommendationSheet({
     setRootNestGroups(null);
     setRootNestLoading(false);
     rootNestFetchKeyRef.current = null;
+    rootNestInflightRef.current = null;
     setProductVariationId(initialProductVariationId ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional sheetIdentity gate
   }, [sheetIdentity]);
 
-  // Self-heal: sheet opened with empty groups but the product needs nests.
+  // Self-heal: sheet opened with empty / shell-only groups but the product needs nests.
   // Progressive: category shells first, then each group's option cards.
-  // Guard with a ref so React Strict Mode / prop churn does not restart forever.
+  // Parent re-renders often pass a fresh `[]` for attributeGroups — keep deps
+  // stable and join in-flight loads so Strict Mode / prop churn cannot cancel
+  // a progressive hydrate mid-flight (that left the nest sheet empty).
+  const attributeGroupsPropLength = attributeGroupsProp.length;
+  const personalizeGroupsLength = product.personalizeGroups?.length ?? 0;
   useEffect(() => {
     if (!open) {
       rootNestFetchKeyRef.current = null;
+      rootNestInflightRef.current = null;
       return;
     }
     if (!useRestaurantMenuDetail && !menuQuery) return;
-    // Parent already supplied groups (possibly progressive) — do not fight it.
-    if ((attributeGroupsProp?.length ?? 0) > 0) {
+
+    // Parent already supplied selectable option cards — do not fight it.
+    if (propHasSelectableItems) {
       setRootNestLoading(false);
       return;
     }
-    if (!product.needsNestedSheet && (product.personalizeGroups?.length ?? 0) === 0) {
-      return;
-    }
-    const fetchKey = `${product.menuItemId}:${useRestaurantMenuDetail ? 'r' : 'c'}`;
-    if (rootNestFetchKeyRef.current === fetchKey) return;
-    rootNestFetchKeyRef.current = fetchKey;
 
-    let cancelled = false;
-    setRootNestLoading(true);
+    const productNeedsNestLoad =
+      Boolean(product.needsNestedSheet) ||
+      personalizeGroupsLength > 0 ||
+      // Empty shell stubs from the parent still need progressive hydrate.
+      attributeGroupsPropLength > 0;
+    if (!productNeedsNestLoad) return;
+
+    const fetchKey = `${product.menuItemId}:${useRestaurantMenuDetail ? 'r' : 'c'}`;
     const applyPayload = (payload: OptionNestedSheetPayload) => {
-      if (cancelled || !payload.nestedAttributeGroups.length) return;
+      const live = rootNestLiveRef.current;
+      if (!live.open || live.menuItemId !== product.menuItemId) return;
+      if (!payload.nestedAttributeGroups.length) return;
       setRootNestGroups(payload.nestedAttributeGroups);
       setSelectedByGroup((prev) => {
         const next = { ...prev };
@@ -1227,10 +1248,20 @@ export function NestedRecommendationSheet({
         return next;
       });
     };
+
+    const existing = rootNestInflightRef.current;
+    if (rootNestFetchKeyRef.current === fetchKey && existing) {
+      void existing.then((payload) => {
+        if (payload) applyPayload(payload);
+      });
+      return;
+    }
+
+    rootNestFetchKeyRef.current = fetchKey;
+    setRootNestLoading(true);
     const imageFn = optionImageUrlForItem ?? (() => '');
     const request = useRestaurantMenuDetail
       ? fetchRestaurantOptionNestedSheetPayload(product.menuItemId, imageFn, lang, {
-          signal: { cancelled: () => cancelled },
           onProgress: applyPayload,
         })
       : fetchOptionNestedSheetPayload(
@@ -1238,29 +1269,32 @@ export function NestedRecommendationSheet({
           menuQuery!,
           imageFn,
           lang,
-          {
-            signal: { cancelled: () => cancelled },
-            onProgress: applyPayload,
-          }
+          { onProgress: applyPayload }
         );
+    rootNestInflightRef.current = request;
     void request
       .then((payload) => {
-        if (!cancelled && payload) applyPayload(payload);
+        if (payload) applyPayload(payload);
+        return payload;
       })
       .finally(() => {
-        setRootNestLoading(false);
+        if (rootNestInflightRef.current === request) {
+          rootNestInflightRef.current = null;
+        }
+        const live = rootNestLiveRef.current;
+        if (live.open && live.menuItemId === product.menuItemId) {
+          setRootNestLoading(false);
+        }
       });
-    return () => {
-      cancelled = true;
-    };
   }, [
     open,
     menuQuery,
     useRestaurantMenuDetail,
-    attributeGroupsProp,
+    propHasSelectableItems,
+    attributeGroupsPropLength,
+    personalizeGroupsLength,
     product.menuItemId,
     product.needsNestedSheet,
-    product.personalizeGroups,
     optionImageUrlForItem,
     lang,
   ]);

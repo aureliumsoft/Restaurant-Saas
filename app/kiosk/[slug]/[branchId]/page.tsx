@@ -56,7 +56,9 @@ export default async function KioskBranchPage({ params, searchParams }: Props) {
     kioskTableQrCookieMatches(qrCookie, decodedSlug, branchUrlId);
 
   const planGate = await getPublicModuleGate(decodedSlug, 'kiosk');
-  if (planGate.found && planGate.paid && !isTableQrNav) {
+  // Local/dev: allow kiosk UI so progressive nest fixes can be verified without a paid plan.
+  const skipPlanGate = process.env.NODE_ENV === 'development';
+  if (planGate.found && planGate.paid && !isTableQrNav && !skipPlanGate) {
     return (
       <PlanUpgradeScreen
         featureLabel="Kiosk"

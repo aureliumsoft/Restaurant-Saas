@@ -1937,18 +1937,23 @@ export function ProductCustomizeDialog({
           ...prev,
           [key]: v.id,
         }));
-        if ((item.nestedAttributeGroups?.length ?? 0) > 0) {
+        const nextVariations = {
+          ...selectedNestedVariationByOption,
+          [key]: v.id,
+        };
+        // Deferred nests (needsNestedSheet) must open even before groups hydrate.
+        if (
+          (item.nestedAttributeGroups?.length ?? 0) > 0 ||
+          item.needsNestedSheet
+        ) {
           setPicker(null);
-          setActiveCategoryOption({
-            groupId: picker.groupId,
-            optionId: picker.optionId,
-          });
+          openCategoryOptionFlow(picker.groupId, picker.optionId);
           return;
         }
         applyNextPendingPicker(
           selectedVariationId,
           selectedByGroup,
-          { ...selectedNestedVariationByOption, [key]: v.id },
+          nextVariations,
           productRecPickerContext()
         );
       },
@@ -1960,6 +1965,7 @@ export function ProductCustomizeDialog({
   }, [
     baseProductVariationContext,
     categoryGroups,
+    openCategoryOptionFlow,
     picker,
     preselectedRecommendationVariationByGroup,
     productImageUrl,
