@@ -1,73 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { Clock, Loader2, Mail, MessageCircle, Phone, SendHorizonal } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Clock, Mail, MessageCircle, Phone } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'react-toastify';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { marketingWhatsAppUrl } from '@/lib/marketing/whatsapp';
 
 export function LandingContactSection() {
   const { t } = useTranslation();
-  const [firstName, setFirstName] = useState('');
-  const [email, setEmail] = useState('');
-  const [company, setCompany] = useState('');
-  const [phone, setPhone] = useState('');
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const [status, setStatus] = useState<
-    { kind: 'success'; text: string } | { kind: 'error'; text: string } | null
-  >(null);
   const whatsappHref = marketingWhatsAppUrl(
     t('marketing.contact.whatsappPrefill')
   );
-
-  async function handleContactSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSending(true);
-    setStatus(null);
-    try {
-      const phoneNote = phone.trim()
-        ? `\nPhone/WhatsApp: ${phone.trim()}`
-        : '';
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName,
-          email,
-          company,
-          message: `${message.trim()}${phoneNote}`,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const text =
-          typeof data?.error === 'string'
-            ? data.error
-            : 'Something went wrong. Please try again.';
-        toast.error(text);
-        setStatus({ kind: 'error', text });
-        return;
-      }
-      const successText = 'Thanks — your message has been sent.';
-      toast.success(successText);
-      setStatus({ kind: 'success', text: successText });
-      setFirstName('');
-      setEmail('');
-      setCompany('');
-      setPhone('');
-      setMessage('');
-    } catch {
-      const text = 'Network error. Please try again.';
-      toast.error(text);
-      setStatus({ kind: 'error', text });
-    } finally {
-      setSending(false);
-    }
-  }
 
   return (
     <section id="contact" className="relative bg-white py-20 dark:bg-black md:py-24">
@@ -159,135 +103,19 @@ export function LandingContactSection() {
               <p className="relative mt-2 text-sm text-zinc-600 dark:text-white/75">
                 {t('marketing.contact.formSubtitle')}
               </p>
-
-              <form
-                className="relative mt-8 space-y-6"
-                onSubmit={handleContactSubmit}
+              <Button
+                asChild
+                className="relative mt-8 h-12 w-full rounded-2xl bg-gradient-to-r from-fire-500 via-fire-600 to-fire-500 text-sm font-semibold uppercase tracking-wide text-white shadow-[0_18px_40px_-12px] shadow-fire-500/60 transition-all hover:from-fire-400 hover:to-fire-500 hover:shadow-fire-500/80"
               >
-                <FormField
-                  id="contact-first-name"
-                  label={t('marketing.contact.firstNameLabel')}
-                  placeholder={t('marketing.contact.firstNamePlaceholder')}
-                  value={firstName}
-                  onChange={setFirstName}
-                  required
-                />
-                <FormField
-                  id="contact-email"
-                  label={t('marketing.contact.emailLabel')}
-                  placeholder={t('marketing.contact.emailPlaceholder')}
-                  type="email"
-                  value={email}
-                  onChange={setEmail}
-                  required
-                />
-                <FormField
-                  id="contact-company"
-                  label={t('marketing.contact.companyLabel')}
-                  placeholder={t('marketing.contact.companyPlaceholder')}
-                  value={company}
-                  onChange={setCompany}
-                />
-                <FormField
-                  id="contact-phone"
-                  label={t('marketing.contact.phoneLabel')}
-                  placeholder={t('marketing.contact.phonePlaceholder')}
-                  type="tel"
-                  value={phone}
-                  onChange={setPhone}
-                />
-                <div>
-                  <label
-                    htmlFor="contact-message"
-                    className="mb-2 block text-sm font-semibold text-zinc-900 dark:text-white"
-                  >
-                    {t('marketing.contact.messageLabel')}
-                  </label>
-                  <textarea
-                    id="contact-message"
-                    rows={3}
-                    required
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder={
-                      t('marketing.contact.messagePlaceholder') as string
-                    }
-                    className="w-full resize-none border-0 border-b border-zinc-300/80 bg-transparent px-0 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-fire-500 focus:outline-none focus:ring-0 dark:border-white/30 dark:text-white dark:placeholder:text-white/50 dark:focus:border-fire-400"
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  disabled={sending}
-                  className="mt-4 h-12 w-full rounded-2xl bg-gradient-to-r from-fire-500 via-fire-600 to-fire-500 text-sm font-semibold uppercase tracking-wide text-white shadow-[0_18px_40px_-12px] shadow-fire-500/60 transition-all hover:from-fire-400 hover:to-fire-500 hover:shadow-fire-500/80 disabled:opacity-60"
-                >
-                  {sending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      <span>Sending…</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>{t('marketing.contact.submit')}</span>
-                      <SendHorizonal className="ml-1 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
-                {status && (
-                  <div
-                    role="status"
-                    aria-live="polite"
-                    className={
-                      status.kind === 'success'
-                        ? 'rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300'
-                        : 'rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-700 dark:text-rose-300'
-                    }
-                  >
-                    {status.text}
-                  </div>
-                )}
-              </form>
+                <Link href="/register">
+                  <span>{t('marketing.hero.ctaPrimary')}</span>
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Link>
+              </Button>
             </div>
           </div>
         </div>
       </div>
     </section>
-  );
-}
-
-function FormField({
-  id,
-  label,
-  placeholder,
-  type = 'text',
-  value,
-  onChange,
-  required,
-}: {
-  id: string;
-  label: string;
-  placeholder: string;
-  type?: string;
-  value: string;
-  onChange: (v: string) => void;
-  required?: boolean;
-}) {
-  return (
-    <div>
-      <label
-        htmlFor={id}
-        className="mb-2 block text-sm font-semibold text-zinc-900 dark:text-white"
-      >
-        {label}
-      </label>
-      <Input
-        id={id}
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required={required}
-        className="h-11 rounded-none border-0 border-b border-zinc-300/80 bg-transparent px-0 text-sm text-zinc-900 shadow-none placeholder:text-zinc-500 focus-visible:border-fire-500 focus-visible:ring-0 focus-visible:ring-offset-0 dark:border-white/30 dark:text-white dark:placeholder:text-white/50 dark:focus-visible:border-fire-400"
-      />
-    </div>
   );
 }

@@ -8,7 +8,6 @@ import {
   Layers,
   LayoutGrid,
   Package,
-  Play,
   Smartphone,
   Sparkles,
   Star,
@@ -40,17 +39,17 @@ export function LandingHeroSection() {
 
   return (
     <section className="relative overflow-hidden bg-white dark:bg-black">
-      <div className="relative grid w-full grid-cols-1 items-center gap-10 px-6 pb-20 pt-10 sm:px-10 lg:px-16 xl:px-24 md:pb-28 md:pt-16 lg:grid-cols-2 2xl:px-32">
-        <div>
+      <div className="relative grid w-full grid-cols-1 items-center gap-8 px-6 pb-16 pt-10 sm:px-10 md:pb-24 md:pt-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-6 lg:px-16 xl:px-24">
+        <div className="relative z-10 min-w-0">
           <span className="inline-flex items-center gap-2 rounded-full border border-fire-500/40 bg-fire-500/5 px-4 py-1.5 text-xs font-medium text-fire-500 dark:text-fire-400">
             <Sparkles className="h-3.5 w-3.5 text-fire-500" />
             {t('marketing.hero.badge')}
           </span>
 
-          <h1 className="mt-6 text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
+          <h1 className="mt-6 text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
             {t('marketing.hero.headline')}
             <br />
-            <span className="text-fire-500">
+            <span className="block whitespace-nowrap text-[clamp(1.7rem,3.2vw,3.25rem)] text-fire-500">
               {t('marketing.hero.headlineHighlight')}
             </span>
           </h1>
@@ -69,11 +68,11 @@ export function LandingHeroSection() {
               className="h-12 rounded-lg bg-gradient-to-br from-fire-400 via-fire-500 to-fire-600 pl-2 pr-7 text-base font-semibold text-white shadow-[0_14px_40px_-10px] shadow-fire-500/60 transition-all hover:from-fire-500 hover:to-fire-700 hover:shadow-fire-500/80"
             >
               <Link
-                href="/demo-request"
+                href="/register"
                 className="inline-flex items-center gap-3"
               >
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-fire-500">
-                  <Play className="h-4 w-4 fill-current" />
+                  <ArrowRight className="h-4 w-4" />
                 </span>
                 {t('marketing.hero.ctaPrimary')}
               </Link>
@@ -90,21 +89,14 @@ export function LandingHeroSection() {
                 className="inline-flex items-center gap-3"
               >
                 {t('marketing.hero.ctaSecondary')}
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white">
-                  <ArrowRight className="h-3.5 w-3.5" />
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#25D366] text-white">
+                  <svg viewBox="0 0 24 24" aria-hidden className="h-3.5 w-3.5 fill-current">
+                    <path d="M20.52 3.48A11.86 11.86 0 0 0 12.06 0C5.5 0 .16 5.33.16 11.89c0 2.1.55 4.15 1.6 5.96L0 24l6.3-1.65a11.9 11.9 0 0 0 5.76 1.47h.01c6.56 0 11.9-5.34 11.9-11.9 0-3.18-1.24-6.16-3.45-8.44ZM12.07 21.8h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.64-.24-.37a9.86 9.86 0 0 1-1.51-5.27c0-5.45 4.44-9.89 9.9-9.89 2.64 0 5.12 1.03 6.99 2.9a9.82 9.82 0 0 1 2.9 6.98c0 5.45-4.44 9.9-9.9 9.9Zm5.43-7.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.47-1.75-1.64-2.05-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.23 1.36.2 1.87.12.57-.08 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.41-.07-.13-.27-.2-.57-.35Z" />
+                  </svg>
                 </span>
               </a>
             </Button>
           </div>
-
-          <p className="mt-3 text-sm">
-            <Link
-              href="/register"
-              className="font-medium text-fire-600 underline-offset-4 hover:underline dark:text-fire-400"
-            >
-              {t('marketing.hero.ctaTrial')}
-            </Link>
-          </p>
 
           <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-500">
             {t('marketing.hero.fineprint')}
@@ -125,14 +117,22 @@ export function LandingHeroSection() {
           </div>
         </div>
 
-        <div className="relative mx-auto my-10 w-full md:my-0 lg:ml-auto lg:mr-0 lg:max-w-none">
+        <div className="relative z-0 mx-auto w-full min-w-0 lg:max-w-none">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 top-[28%] -z-10"
+          >
+            <div className="absolute -bottom-6 left-1/2 h-[78%] w-[96%] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(240,90,32,0.95),rgba(255,122,61,0.55)_38%,transparent_70%)] blur-3xl" />
+            <div className="absolute bottom-0 left-[4%] h-[52%] w-[48%] rounded-full bg-[radial-gradient(circle,rgba(255,163,118,0.85),transparent_68%)] blur-2xl" />
+            <div className="absolute bottom-0 right-[2%] h-[56%] w-[46%] rounded-full bg-[radial-gradient(circle,rgba(225,68,17,0.8),transparent_66%)] blur-2xl" />
+          </div>
           <Image
             src="/circles.png"
-            alt="Foodluk on phone, tablet and laptop"
+            alt=""
             width={900}
             height={1200}
             priority
-            className="absolute left-0 top-[-5rem] h-auto w-full object-contain"
+            className="pointer-events-none absolute left-1/2 top-1/2 h-[115%] w-[115%] -translate-x-1/2 -translate-y-1/2 object-contain"
           />
           <Image
             src="/FoodLuk.png"
@@ -140,7 +140,7 @@ export function LandingHeroSection() {
             width={1280}
             height={1100}
             priority
-            className="h-auto w-full object-contain drop-shadow-[10px_-30px_100px_rgba(290,90,32,0.9)]"
+            className="relative h-auto w-full object-contain [filter:drop-shadow(0_36px_48px_rgba(240,90,32,0.45))]"
           />
         </div>
       </div>

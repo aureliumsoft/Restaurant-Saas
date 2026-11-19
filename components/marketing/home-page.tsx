@@ -11,6 +11,7 @@ import {
   LandingStatsSection,
 } from '@/components/marketing/landing-classic-sections';
 import { LandingProofSection } from '@/components/marketing/landing-proof-section';
+import { LandingWhatsAppButton } from '@/components/marketing/landing-whatsapp-button';
 import {
   ProductStoryFontScope,
   ProductStorySections,
@@ -21,6 +22,7 @@ export function HomePage() {
     <ProductStoryFontScope>
       <div className="marketing-site-shell relative min-h-screen w-full overflow-x-hidden bg-white text-zinc-900 transition-colors dark:bg-black dark:text-white">
         <Header />
+        <LandingWhatsAppButton />
 
         <main className="marketing-site-main relative w-full overflow-x-hidden">
           <LandingHeroSection />

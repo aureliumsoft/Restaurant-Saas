@@ -65,7 +65,7 @@ export default function OnboardingStep1Page() {
       const id = data?.restaurant?.id as string | undefined;
       if (id) setOnboardingRestaurantId(id);
       toast.success(t('onboarding.step1.created'));
-      router.push('/onboarding/2');
+      router.push('/dashboard');
     } catch (err: unknown) {
       toast.error(
         err instanceof Error ? err.message : t('onboarding.step1.requestFailed')

@@ -28,7 +28,7 @@ export function PrivacyPolicyContent() {
       <h2 id="contact">{t('marketing.legalPages.privacy.sections.contact.title')}</h2>
       <p>
         {t('marketing.legalPages.privacy.sections.contact.prefix')}{' '}
-        <Link href="/demo-request" className="text-primary underline">
+        <Link href="/#contact" className="text-primary underline">
           {t('marketing.legalPages.privacy.sections.contact.link')}
         </Link>
         .
@@ -116,7 +116,7 @@ export function SubscriptionReturnsContent() {
       </h2>
       <p>
         {t('marketing.legalPages.subscriptionReturns.sections.contact.bodyPrefix')}{' '}
-        <Link href="/demo-request" className="text-primary underline">
+        <Link href="/#contact" className="text-primary underline">
           {t('marketing.legalPages.subscriptionReturns.sections.contact.demoLink')}
         </Link>{' '}
         {t('marketing.legalPages.subscriptionReturns.sections.contact.bodyMiddle')}{' '}
@@ -155,7 +155,7 @@ export function RefundPolicyContent() {
       <h2 id="contact">{t('marketing.legalPages.refund.sections.contact.title')}</h2>
       <p>
         {t('marketing.legalPages.refund.sections.contact.prefix')}{' '}
-        <Link href="/demo-request" className="text-primary underline">
+        <Link href="/#contact" className="text-primary underline">
           {t('marketing.legalPages.refund.sections.contact.demoLink')}
         </Link>{' '}
         {t('marketing.legalPages.refund.sections.contact.middle')}{' '}
@@ -183,7 +183,7 @@ export function SitemapContent() {
         { label: t('marketing.legalPages.sitemap.sections.company.links.pricing'), href: '/pricing' },
         {
           label: t('marketing.legalPages.sitemap.sections.company.links.requestDemo'),
-          href: '/demo-request',
+          href: '/register',
         },
       ],
     },

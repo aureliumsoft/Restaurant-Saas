@@ -25,7 +25,6 @@ export default function Header() {
 
   const navLinks = [
     { href: '/#stations', label: t('marketing.nav.platform') },
-    { href: '/demo-request', label: t('marketing.nav.demoRequest') },
     { href: '/restaurant-signup', label: t('marketing.nav.restaurantSignup') },
     { href: '/pricing', label: t('marketing.nav.pricing') },
     { href: '/blog', label: t('marketing.nav.blog') },

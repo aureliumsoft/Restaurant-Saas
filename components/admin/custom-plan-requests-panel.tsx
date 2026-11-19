@@ -317,7 +317,11 @@ export function CustomPlanRequestsPanel() {
                               variant="outline"
                               disabled={busy}
                               className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-950/30"
-                              onClick={() => void decide(r, 'reject')}
+                              onClick={() => {
+                                if (window.confirm(t('admin.subscriptions.custom.rejectConfirm'))) {
+                                  void decide(r, 'reject');
+                                }
+                              }}
                             >
                               <X className="mr-1 h-4 w-4" />
                               {t('admin.subscriptions.custom.reject')}

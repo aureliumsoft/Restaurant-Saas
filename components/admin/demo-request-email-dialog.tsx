@@ -8,14 +8,6 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   buildDemoReplyEmailHtml,
   DEMO_REPLY_EMAIL_SUBJECT,
 } from '@/lib/demo-request-email';
@@ -76,21 +68,30 @@ export function DemoRequestEmailDialog({
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="space-y-2 border-b px-6 py-4 text-left">
-          <DialogTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-muted-foreground" />
-            {t('admin.demoEmail.title')}
-          </DialogTitle>
-          <DialogDescription>
-            {t('admin.demoEmail.description')}
-          </DialogDescription>
-        </DialogHeader>
+  if (!open || !request) return null;
 
-        {request ? (
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+  return (
+    <div className="mx-auto w-full max-w-2xl space-y-6">
+      <div className="space-y-1.5">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-auto px-0 text-muted-foreground"
+          disabled={sending}
+          onClick={() => onOpenChange(false)}
+        >
+          {t('cancel')}
+        </Button>
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+          <Mail className="h-5 w-5 text-muted-foreground" />
+          {t('admin.demoEmail.title')}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {t('admin.demoEmail.description')}
+        </p>
+      </div>
+
+      <div className="space-y-4">
             <dl className="grid gap-3 rounded-xl border bg-muted/20 p-4 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -127,23 +128,14 @@ export function DemoRequestEmailDialog({
                 />
               </div>
             </div>
-          </div>
-        ) : null}
+      </div>
 
-        <DialogFooter className="gap-2 border-t px-6 py-4 sm:gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={sending}
-            onClick={() => onOpenChange(false)}
-          >
-            {t('cancel')}
-          </Button>
-          <Button
-            type="button"
-            disabled={!request || sending}
-            onClick={() => void handleSend()}
-          >
+      <Button
+        type="button"
+        className="w-full"
+        disabled={sending}
+        onClick={() => void handleSend()}
+      >
             {sending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -155,9 +147,7 @@ export function DemoRequestEmailDialog({
                 {t('admin.demoEmail.send')}
               </>
             )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </Button>
+    </div>
   );
 }

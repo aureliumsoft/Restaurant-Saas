@@ -11,11 +11,9 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Save,
   Send,
   Trash2,
   Undo2,
-  X,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -30,13 +28,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -235,6 +226,88 @@ export default function AdminFaqsPage() {
     }
   }
 
+  if (dialogOpen) {
+    return (
+      <div className="mx-auto w-full max-w-lg space-y-6">
+        <div className="space-y-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-auto px-0 text-muted-foreground"
+            onClick={() => setDialogOpen(false)}
+            disabled={saving}
+          >
+            {t('cancel')}
+          </Button>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {editingId ? t('admin.faqsPage.editFaq') : t('admin.faqsPage.addFaq')}
+          </h1>
+        </div>
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="faq-question">{t('admin.faqsPage.questionLabel')}</Label>
+            <Input
+              id="faq-question"
+              value={form.question}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, question: e.target.value }))
+              }
+              placeholder={t('admin.faqsPage.questionPlaceholder')}
+              maxLength={500}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="faq-answer">{t('admin.faqsPage.answerLabel')}</Label>
+            <Textarea
+              id="faq-answer"
+              value={form.answer}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, answer: e.target.value }))
+              }
+              placeholder={t('admin.faqsPage.answerPlaceholder')}
+              className="min-h-[140px]"
+              maxLength={10_000}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="faq-status">{t('admin.dashboard.colStatus')}</Label>
+            <select
+              id="faq-status"
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              value={form.status}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  status: e.target.value === 'DRAFT' ? 'DRAFT' : 'PUBLISHED',
+                }))
+              }
+            >
+              <option className="text-black" value="PUBLISHED">
+                {t('admin.docsPage.statusPublished')}
+              </option>
+              <option className="text-black" value="DRAFT">
+                {t('admin.docsPage.statusDraft')}
+              </option>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {t('admin.faqsPage.orderHint')}
+            </p>
+          </div>
+        </div>
+        <Button type="button" className="w-full" disabled={saving} onClick={() => void save()}>
+          {saving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {t('admin.docsForm.saving')}
+            </>
+          ) : (
+            t('admin.faqsPage.saveFaq')
+          )}
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <AdminPageHeader
@@ -423,89 +496,6 @@ export default function AdminFaqsPage() {
           ) : null}
         </div>
       )}
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingId ? t('admin.faqsPage.editFaq') : t('admin.faqsPage.addFaq')}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="grid gap-2">
-              <Label htmlFor="faq-question">{t('admin.faqsPage.questionLabel')}</Label>
-              <Input
-                id="faq-question"
-                value={form.question}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, question: e.target.value }))
-                }
-                placeholder={t('admin.faqsPage.questionPlaceholder')}
-                maxLength={500}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="faq-answer">{t('admin.faqsPage.answerLabel')}</Label>
-              <Textarea
-                id="faq-answer"
-                value={form.answer}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, answer: e.target.value }))
-                }
-                placeholder={t('admin.faqsPage.answerPlaceholder')}
-                className="min-h-[140px]"
-                maxLength={10_000}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="faq-status">{t('admin.dashboard.colStatus')}</Label>
-              <select
-                id="faq-status"
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                value={form.status}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    status: e.target.value === 'DRAFT' ? 'DRAFT' : 'PUBLISHED',
-                  }))
-                }
-              >
-                <option className="text-black" value="PUBLISHED">
-                  {t('admin.docsPage.statusPublished')}
-                </option>
-                <option className="text-black" value="DRAFT">
-                  {t('admin.docsPage.statusDraft')}
-                </option>
-              </select>
-              <p className="text-xs text-muted-foreground">
-                {t('admin.faqsPage.orderHint')}
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setDialogOpen(false)}
-              disabled={saving}
-            >
-              <X className="mr-2 h-4 w-4" />
-              {t('cancel')}
-            </Button>
-            <Button type="button" disabled={saving} onClick={() => void save()}>
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t('admin.docsForm.saving')}
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  {t('admin.faqsPage.saveFaq')}
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog
         open={Boolean(deleteId)}

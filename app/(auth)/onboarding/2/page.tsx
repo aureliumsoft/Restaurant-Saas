@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ArrowRight, Loader2, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -76,7 +76,7 @@ export default function OnboardingStep2Page() {
       }
       if (goNext) {
         toast.success(t("onboarding.step2.saved"));
-        router.push("/onboarding/3");
+        router.push("/dashboard");
       }
     } catch (err: unknown) {
       toast.error(
@@ -89,17 +89,13 @@ export default function OnboardingStep2Page() {
     }
   }
 
-  const canContinue = useMemo(() => {
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
     const logo = logoUrl.trim();
     const main = mainBannerUrl.trim();
     const hasMenuBanner = menuBanners.some((u) => u.trim().length > 0);
-    return logo.length > 0 && main.length > 0 && hasMenuBanner;
-  }, [logoUrl, mainBannerUrl, menuBanners]);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!canContinue) {
-      toast.error(t("onboarding.step2.requiredFields"));
+    if (!logo && !main && !hasMenuBanner) {
+      router.push("/dashboard");
       return;
     }
     await save(true);
@@ -171,8 +167,17 @@ export default function OnboardingStep2Page() {
             </div>
           ))}
         </div>
-        <div className="flex justify-end">
-          <Button type="submit" className="w-full" disabled={loading || !canContinue}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            disabled={loading}
+            onClick={() => router.push("/dashboard")}
+          >
+            {t("onboarding.step2.skip")}
+          </Button>
+          <Button type="submit" className="w-full sm:w-auto" disabled={loading}>
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

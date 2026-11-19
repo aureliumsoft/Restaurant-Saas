@@ -6,6 +6,7 @@ import {
   documentationModuleInclude,
   documentationModuleWriteSchema,
   nullIfBlankCms,
+  nullIfEmptyDocHtml,
   resolveDocumentationLinks,
   sanitizeDocHtml,
 } from '@/lib/documentation/module';
@@ -63,19 +64,32 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
     const data: {
       name?: string;
+      nameEs?: string | null;
       shortDescription?: string;
+      shortDescriptionEs?: string | null;
       contentHtml?: string;
+      contentHtmlEs?: string | null;
       sortOrder?: number;
       status?: string;
       headingId?: string | null;
       subHeadingId?: string | null;
     } = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
+    if (parsed.data.nameEs !== undefined) {
+      data.nameEs = nullIfBlankCms(parsed.data.nameEs);
+    }
     if (parsed.data.shortDescription !== undefined) {
       data.shortDescription = parsed.data.shortDescription;
     }
+    if (parsed.data.shortDescriptionEs !== undefined) {
+      data.shortDescriptionEs = nullIfBlankCms(parsed.data.shortDescriptionEs);
+    }
     if (parsed.data.contentHtml !== undefined) {
       data.contentHtml = sanitizeDocHtml(parsed.data.contentHtml);
+    }
+    if (parsed.data.contentHtmlEs !== undefined) {
+      const spanishHtml = nullIfEmptyDocHtml(parsed.data.contentHtmlEs);
+      data.contentHtmlEs = spanishHtml ? sanitizeDocHtml(spanishHtml) : null;
     }
     if (parsed.data.sortOrder !== undefined) data.sortOrder = parsed.data.sortOrder;
     if (parsed.data.status !== undefined) data.status = parsed.data.status;
@@ -97,6 +111,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
               ? parsed.data.subHeadingId
               : existing.subHeadingId,
         subHeadingName: parsed.data.subHeadingName,
+        subHeadingNameEs: parsed.data.subHeadingNameEs,
       });
       if (!link.ok) {
         return NextResponse.json({ error: link.error }, { status: link.status });

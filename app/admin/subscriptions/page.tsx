@@ -1,18 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
-import { Loader2, Pencil } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { adminCardClass } from '@/components/admin/admin-surface';
-import { CustomPlanRequestsPanel } from '@/components/admin/custom-plan-requests-panel';
 import {
   AdminTable,
   AdminTableBody,
   AdminTableCell,
-  AdminTableChip,
   AdminTableEmpty,
   AdminTableHead,
   AdminTableHeader,
@@ -21,19 +19,15 @@ import {
   AdminTableRow,
   AdminTableWrapper,
 } from '@/components/admin/admin-table';
-import { PlanEditDialog, type CatalogPlan } from '@/components/admin/plan-edit-dialog';
-import { SubscriptionEditDialog } from '@/components/admin/subscription-edit-dialog';
+import {
+  ChangePlanDialog,
+  type ChangePlanSubscription,
+} from '@/components/admin/change-plan-dialog';
+import { RecordPaymentDialog } from '@/components/admin/record-payment-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { useUiLanguage } from '@/hooks/use-ui-language';
-import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import {
   formatInTimezone,
   getClientSubscriptionAdminTimezone,
@@ -46,16 +40,19 @@ type Subscription = {
   status: string;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
-  notes: string | null;
+  agreedPrice?: number | null;
   customSelectedModules?: string[];
 } | null;
 
 type Row = {
   id: string;
   name: string;
-  subdomain: string;
-  owner: { email: string | null };
   subscription: Subscription;
+};
+
+type CatalogPrice = {
+  plan: string;
+  price: number;
 };
 
 const ADMIN_TZ = getClientSubscriptionAdminTimezone();
@@ -75,12 +72,13 @@ function formatPeriodEnd(iso: string | null | undefined): string {
 
 export default function AdminSubscriptionsPage() {
   const { t } = useTranslation();
-  const uiLang = useUiLanguage();
   const [rows, setRows] = useState<Row[]>([]);
+  const [catalog, setCatalog] = useState<CatalogPrice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [edit, setEdit] = useState<Row | null>(null);
-  const [catalogPlans, setCatalogPlans] = useState<CatalogPlan[]>([]);
-  const [editingPlan, setEditingPlan] = useState<CatalogPlan | null>(null);
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<Row | null>(null);
+  const [planRow, setPlanRow] = useState<Row | null>(null);
+  const [payRow, setPayRow] = useState<Row | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -93,9 +91,9 @@ export default function AdminSubscriptionsPage() {
 
   const loadCatalog = useCallback(() => {
     axios
-      .get<{ data: CatalogPlan[] }>('/api/admin/pricing-plans')
-      .then((r) => setCatalogPlans(r.data.data ?? []))
-      .catch(() => setCatalogPlans([]));
+      .get<{ data: CatalogPrice[] }>('/api/admin/pricing-plans')
+      .then((r) => setCatalog(r.data.data ?? []))
+      .catch(() => setCatalog([]));
   }, []);
 
   useEffect(() => {
@@ -103,22 +101,121 @@ export default function AdminSubscriptionsPage() {
     loadCatalog();
   }, [load, loadCatalog]);
 
-  const localizedCatalog = useMemo(
-    () =>
-      catalogPlans.map((p) => ({
-        ...p,
-        name: resolveBilingualText(p.name, uiLang),
-        priceLabel: resolveBilingualText(p.priceLabel, uiLang),
-        description: resolveBilingualText(p.description, uiLang),
-      })),
-    [catalogPlans, uiLang]
-  );
-
   function planLabel(plan: string): string {
     const key = PLAN_I18N[plan.toUpperCase()];
     if (!key) return plan;
     const translated = t(key);
     return translated === key ? plan : translated;
+  }
+
+  function standardPrice(plan: string | undefined): number | null {
+    if (!plan) return null;
+    const match = catalog.find((item) => item.plan === plan);
+    return match ? match.price : null;
+  }
+
+  function priceLabel(subscription: Subscription): string {
+    if (!subscription) return '—';
+    const standard = standardPrice(subscription.plan);
+    const agreed = subscription.agreedPrice;
+    if (agreed == null) return standard == null ? '—' : `€${standard}`;
+    if (standard != null && agreed !== standard) {
+      return t('admin.subscriptions.priceInstead', {
+        price: `€${agreed}`,
+        standard: `€${standard}`,
+      });
+    }
+    return `€${agreed}`;
+  }
+
+  function suggestedAmount(subscription: Subscription): string {
+    if (!subscription) return '';
+    if (subscription.agreedPrice != null) return String(subscription.agreedPrice);
+    const standard = standardPrice(subscription.plan);
+    return standard == null ? '' : String(standard);
+  }
+
+  const filtered = rows.filter((row) => {
+    const plan = row.subscription?.plan ?? '';
+    const status = row.subscription?.status ?? '';
+    const haystack = `${row.name} ${plan} ${status}`.toLowerCase();
+    return haystack.includes(query.trim().toLowerCase());
+  });
+
+  if (planRow) {
+    return (
+      <ChangePlanDialog
+        open
+        onOpenChange={(open) => {
+          if (!open) setPlanRow(null);
+        }}
+        restaurantId={planRow.id}
+        restaurantName={planRow.name}
+        subscription={planRow.subscription as ChangePlanSubscription}
+        catalog={catalog}
+        onSaved={() => {
+          setSelected(null);
+          load();
+        }}
+      />
+    );
+  }
+
+  if (payRow) {
+    return (
+      <RecordPaymentDialog
+        open
+        onOpenChange={(open) => {
+          if (!open) setPayRow(null);
+        }}
+        restaurantId={payRow.id}
+        restaurantName={payRow.name}
+        suggestedAmount={suggestedAmount(payRow.subscription)}
+        onSaved={() => {
+          setSelected(null);
+          load();
+        }}
+      />
+    );
+  }
+
+  if (selected) {
+    const status = selected.subscription?.status ?? t('admin.subscriptions.notSet');
+    const until =
+      selected.subscription?.status === 'TRIAL'
+        ? formatPeriodEnd(selected.subscription.trialEndsAt)
+        : formatPeriodEnd(selected.subscription?.currentPeriodEnd ?? null);
+    return (
+      <div className="mx-auto w-full max-w-lg space-y-6">
+        <div className="space-y-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-auto px-0 text-muted-foreground"
+            onClick={() => setSelected(null)}
+          >
+            {t('admin.subscriptions.backToRestaurants')}
+          </Button>
+          <h1 className="text-2xl font-bold tracking-tight">{selected.name}</h1>
+          <p className="text-sm text-muted-foreground">
+            {status}
+            {' · '}
+            {selected.subscription ? planLabel(selected.subscription.plan) : t('admin.subscriptions.notSet')}
+            {' · '}
+            {priceLabel(selected.subscription)}
+            {until && until !== '—' ? ` · ${until}` : ''}
+          </p>
+        </div>
+        <div className="grid gap-2">
+          <Button type="button" onClick={() => setPlanRow(selected)}>
+            {t('admin.subscriptions.changePlan')}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setPayRow(selected)}>
+            {t('admin.subscriptions.recordPayment')}
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {
@@ -138,13 +235,16 @@ export default function AdminSubscriptionsPage() {
       <Card className={cn(adminCardClass, 'min-w-0 max-w-full')}>
         <CardHeader>
           <CardTitle>{t('admin.subscriptions.plansStatusTitle')}</CardTitle>
-          <CardDescription>
-            {t('admin.subscriptions.plansStatusDescription')}
-          </CardDescription>
         </CardHeader>
-        <CardContent className="min-w-0 p-0">
+        <CardContent className="min-w-0 space-y-4">
+          <Input
+            type="search"
+            value={query}
+            placeholder={t('admin.subscriptions.searchPlaceholder')}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           <AdminTableWrapper>
-            {rows.length === 0 ? (
+            {filtered.length === 0 ? (
               <AdminTableEmpty>
                 {t('admin.subscriptions.noRestaurants')}
               </AdminTableEmpty>
@@ -152,95 +252,58 @@ export default function AdminSubscriptionsPage() {
               <AdminTable minWidth={960}>
                 <AdminTableHeader>
                   <AdminTableRow>
-                    <AdminTableHead>
-                      {t('admin.subscriptions.colRestaurant')}
-                    </AdminTableHead>
-                    <AdminTableHead>
-                      {t('admin.subscriptions.colSubdomain')}
-                    </AdminTableHead>
-                    <AdminTableHead>
-                      {t('admin.subscriptions.colOwner')}
-                    </AdminTableHead>
-                    <AdminTableHead>
-                      {t('admin.subscriptions.colPlan')}
-                    </AdminTableHead>
-                    <AdminTableHead>
-                      {t('admin.subscriptions.colStatus')}
-                    </AdminTableHead>
-                    <AdminTableHead>
-                      {t('admin.subscriptions.colPeriodEnds')}
-                    </AdminTableHead>
-                    <AdminTableHead className="w-24 text-right">
-                      {t('admin.subscriptions.colEdit')}
-                    </AdminTableHead>
+                    <AdminTableHead>{t('admin.subscriptions.colRestaurant')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.subscriptions.colPlan')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.subscriptions.colPrice')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.subscriptions.paidUntil')}</AdminTableHead>
+                    <AdminTableHead>{t('admin.subscriptions.colStatus')}</AdminTableHead>
                   </AdminTableRow>
                 </AdminTableHeader>
                 <AdminTableBody>
-                  {rows.map((r) => (
-                    <AdminTableRow key={r.id}>
+                  {filtered.map((row) => (
+                    <AdminTableRow
+                      key={row.id}
+                      className="cursor-pointer"
+                      onClick={() => setSelected(row)}
+                    >
                       <AdminTableCell>
-                        <AdminTableLead title={r.name} />
+                        <AdminTableLead title={row.name} />
                       </AdminTableCell>
                       <AdminTableCell>
-                        <AdminTableChip>{r.subdomain}</AdminTableChip>
+                        {row.subscription ? (
+                          <Badge variant="secondary" className="rounded-md font-medium">
+                            {planLabel(row.subscription.plan)}
+                          </Badge>
+                        ) : (
+                          <AdminTableMuted>{t('admin.subscriptions.notSet')}</AdminTableMuted>
+                        )}
                       </AdminTableCell>
-                      <AdminTableCell className="max-w-[180px] whitespace-normal">
-                        <AdminTableMuted className="block truncate">
-                          {r.owner.email ?? '—'}
+                      <AdminTableCell>{priceLabel(row.subscription)}</AdminTableCell>
+                      <AdminTableCell>
+                        <AdminTableMuted>
+                          {row.subscription?.status === 'TRIAL'
+                            ? formatPeriodEnd(row.subscription.trialEndsAt)
+                            : formatPeriodEnd(row.subscription?.currentPeriodEnd ?? null)}
                         </AdminTableMuted>
                       </AdminTableCell>
                       <AdminTableCell>
-                        {r.subscription ? (
-                          <Badge
-                            variant="secondary"
-                            className="rounded-md font-medium"
-                          >
-                            {planLabel(r.subscription.plan)}
-                          </Badge>
-                        ) : (
-                          <AdminTableMuted>
-                            {t('admin.subscriptions.notSet')}
-                          </AdminTableMuted>
-                        )}
-                      </AdminTableCell>
-                      <AdminTableCell>
-                        {r.subscription ? (
+                        {row.subscription ? (
                           <Badge
                             variant={
-                              r.subscription.status === 'ACTIVE'
+                              row.subscription.status === 'ACTIVE'
                                 ? 'default'
-                                : r.subscription.status === 'TRIAL'
+                                : row.subscription.status === 'TRIAL'
                                   ? 'secondary'
                                   : 'destructive'
                             }
                             className="rounded-md"
                           >
-                            {r.subscription.status}
+                            {row.subscription.status}
                           </Badge>
                         ) : (
                           <AdminTableMuted>—</AdminTableMuted>
                         )}
                       </AdminTableCell>
-                      <AdminTableCell>
-                        <AdminTableMuted>
-                          {r.subscription?.status === 'TRIAL'
-                            ? formatPeriodEnd(r.subscription.trialEndsAt)
-                            : formatPeriodEnd(
-                                r.subscription?.currentPeriodEnd ?? null
-                              )}
-                        </AdminTableMuted>
-                      </AdminTableCell>
-                      <AdminTableCell className="text-right">
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                          onClick={() => setEdit(r)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </AdminTableCell>
                     </AdminTableRow>
                   ))}
                 </AdminTableBody>
@@ -250,111 +313,6 @@ export default function AdminSubscriptionsPage() {
         </CardContent>
       </Card>
 
-      <CustomPlanRequestsPanel />
-
-      <Card className={cn(adminCardClass, 'min-w-0 max-w-full')}>
-        <CardHeader>
-          <CardTitle>{t('admin.subscriptions.catalogTitle')}</CardTitle>
-          <CardDescription>
-            {t('admin.subscriptions.catalogDescription')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-w-0 p-0">
-          <AdminTableWrapper>
-            {localizedCatalog.length === 0 ? (
-              <AdminTableEmpty>
-                {t('admin.subscriptions.noCatalog')}
-              </AdminTableEmpty>
-            ) : (
-              <AdminTable minWidth={720}>
-                <AdminTableHeader>
-                  <AdminTableRow>
-                    <AdminTableHead>
-                      {t('admin.subscriptions.colPlanKey')}
-                    </AdminTableHead>
-                    <AdminTableHead>
-                      {t('admin.subscriptions.colName')}
-                    </AdminTableHead>
-                    <AdminTableHead>
-                      {t('admin.subscriptions.colPrice')}
-                    </AdminTableHead>
-                    <AdminTableHead>
-                      {t('admin.subscriptions.colDescription')}
-                    </AdminTableHead>
-                    <AdminTableHead className="w-24 text-right">
-                      {t('admin.subscriptions.colEdit')}
-                    </AdminTableHead>
-                  </AdminTableRow>
-                </AdminTableHeader>
-                <AdminTableBody>
-                  {localizedCatalog.map((p) => (
-                    <AdminTableRow key={p.id}>
-                      <AdminTableCell>
-                        <Badge
-                          variant="secondary"
-                          className="rounded-md font-mono text-[11px]"
-                        >
-                          {p.plan}
-                        </Badge>
-                      </AdminTableCell>
-                      <AdminTableCell>
-                        <AdminTableLead title={p.name} accent="#7c3aed" />
-                      </AdminTableCell>
-                      <AdminTableCell>
-                        <span className="font-semibold tabular-nums">
-                          {p.priceLabel}
-                        </span>
-                      </AdminTableCell>
-                      <AdminTableCell className="max-w-[320px] whitespace-normal">
-                        <AdminTableMuted className="block truncate">
-                          {p.description}
-                        </AdminTableMuted>
-                      </AdminTableCell>
-                      <AdminTableCell className="text-right">
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                          onClick={() =>
-                            setEditingPlan(
-                              catalogPlans.find((c) => c.id === p.id) ?? p
-                            )
-                          }
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </AdminTableCell>
-                    </AdminTableRow>
-                  ))}
-                </AdminTableBody>
-              </AdminTable>
-            )}
-          </AdminTableWrapper>
-        </CardContent>
-      </Card>
-
-      {edit && (
-        <SubscriptionEditDialog
-          open={!!edit}
-          onOpenChange={(o) => {
-            if (!o) setEdit(null);
-          }}
-          restaurantId={edit.id}
-          restaurantName={edit.name}
-          subscription={edit.subscription}
-          onSaved={load}
-        />
-      )}
-
-      <PlanEditDialog
-        open={!!editingPlan}
-        onOpenChange={(o) => {
-          if (!o) setEditingPlan(null);
-        }}
-        plan={editingPlan}
-        onSaved={loadCatalog}
-      />
     </div>
   );
 }

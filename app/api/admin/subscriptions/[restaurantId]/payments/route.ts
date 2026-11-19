@@ -102,35 +102,40 @@ export async function POST(
     const paidAt = parsed.data.paidAt ? new Date(parsed.data.paidAt) : new Date();
     const periodStart = toDateOrNull(parsed.data.periodStart);
     const periodEnd = toDateOrNull(parsed.data.periodEnd);
-    const setActive = parsed.data.setStatusActive ?? true;
+    const setActive = parsed.data.setStatusActive ?? false;
     const paymentId = `subpay_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const data = await db.$transaction(async (tx) => {
-      const sub = await tx.restaurantSubscription.upsert({
+      const subscriptionSelect = {
+        id: true,
+        status: true,
+        currentPeriodEnd: true,
+        plan: true,
+        paypalSubscriptionId: true,
+      } as const;
+      let sub = await tx.restaurantSubscription.findUnique({
         where: { restaurantId },
-        create: {
-          restaurantId,
-          plan: 'FREE',
-          status: setActive ? 'ACTIVE' : 'TRIAL',
-          currentPeriodEnd: periodEnd,
-        },
-        update: setActive
-          ? {
-              status: 'ACTIVE',
-              currentPeriodEnd: periodEnd,
-              adminPeriodEndAt: null,
-            }
-          : {
-              currentPeriodEnd: periodEnd,
-            },
-        select: {
-          id: true,
-          status: true,
-          currentPeriodEnd: true,
-          plan: true,
-          paypalSubscriptionId: true,
-        },
+        select: subscriptionSelect,
       });
+      if (!sub) {
+        sub = await tx.restaurantSubscription.create({
+          data: {
+            restaurantId,
+            plan: 'FREE',
+            status: 'TRIAL',
+          },
+          select: subscriptionSelect,
+        });
+      } else if (setActive || periodEnd) {
+        sub = await tx.restaurantSubscription.update({
+          where: { id: sub.id },
+          data: {
+            ...(setActive ? { status: 'ACTIVE' as const, adminPeriodEndAt: null } : {}),
+            ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
+          },
+          select: subscriptionSelect,
+        });
+      }
 
       const recordedBy =
         auth.session?.user?.id && typeof auth.session.user.id === 'string'

@@ -170,7 +170,7 @@ export function DocumentationPageContent({
       <p className="mt-12 text-sm text-zinc-600 dark:text-zinc-400">
         {t('marketingExtras.documentation.needWalkthrough')}{' '}
         <Link
-          href="/demo-request"
+          href="/register"
           className="text-fire-600 underline dark:text-fire-400"
         >
           {t('marketingExtras.demo.ctaLink')}

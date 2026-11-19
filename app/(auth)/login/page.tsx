@@ -13,56 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PublicAuthShell } from '@/components/marketing/public-auth-shell';
 import { IconBrandGoogleFilled } from '@tabler/icons-react';
-import { isPlatformAdminSession } from '@/lib/auth/admin';
+import { postLoginPath, safeCallbackUrl } from '@/lib/auth/post-login-path';
 import { useTranslation } from 'react-i18next';
-
-function safeCallbackUrl(raw: string | null): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) {
-    return '/dashboard';
-  }
-  return raw;
-}
-
-function roleDefaultPath(
-  user:
-    | {
-        role?: string | null;
-        roleName?: string | null;
-        isPlatformAdmin?: boolean;
-      }
-    | undefined,
-  roleName: string | null | undefined,
-  legacyRole: string | null | undefined
-): string {
-  if (isPlatformAdminSession(user)) return '/admin/dashboard';
-  const normalizedName = (roleName ?? '').trim().toLowerCase();
-  if (normalizedName === 'user') return '/';
-  if (legacyRole === 'USER') return '/';
-  return '/dashboard';
-}
-
-/**
- * Where to send the user after sign-in.
- * Platform admins (`ADMIN_EMAIL` / etc., or JWT `role === ADMIN`) go to SaaS admin.
- * All other users go directly to dashboard where role is checked for content display.
- */
-function postLoginPath(
-  user:
-    | {
-        email?: string | null;
-        roleId?: string | null;
-        roleName?: string | null;
-        role?: string | null;
-        isPlatformAdmin?: boolean;
-      }
-    | undefined,
-  hasExplicitCallback: boolean,
-  callbackUrl: string
-): string {
-  if (hasExplicitCallback) return callbackUrl;
-
-  return roleDefaultPath(user, user?.roleName, user?.role);
-}
 
 function LoginForm() {
   const { t } = useTranslation();
@@ -85,6 +37,11 @@ function LoginForm() {
   const [loadingGoogle, setLoadingGoogle] = useState(false);
 
   useEffect(() => {
+    router.prefetch('/dashboard');
+    router.prefetch('/admin/dashboard');
+  }, [router]);
+
+  useEffect(() => {
     if (status === 'authenticated') {
       router.replace(targetAfterLogin);
     }
@@ -94,14 +51,12 @@ function LoginForm() {
     setLoadingGoogle(true);
     try {
       await signIn('google', {
-        // Return to login so session-aware role routing can run consistently.
-        // Explicit callback URLs are still honored when present.
-        callbackUrl: hasExplicitCallback ? callbackUrl : '/login',
+        // Server page reads the new session and redirects. Skips painting this form again.
+        callbackUrl: hasExplicitCallback ? callbackUrl : '/login/continue',
       });
     } catch (e: any) {
-      toast.error(e?.message ?? t('auth.login.googleFailed'));
-    } finally {
       setLoadingGoogle(false);
+      toast.error(e?.message ?? t('auth.login.googleFailed'));
     }
   }
 
@@ -140,6 +95,7 @@ function LoginForm() {
                   ? t('auth.login.unauthorized')
                   : t('auth.login.failed')
         );
+        setLoading(false);
         return;
       }
       const fresh = await getSession();
@@ -148,12 +104,24 @@ function LoginForm() {
         hasExplicitCallback,
         callbackUrl
       );
-      router.push(nextPath);
+      router.replace(nextPath);
     } catch (e: any) {
-      toast.error(e?.message ?? t('auth.login.serverError'));
-    } finally {
       setLoading(false);
+      toast.error(e?.message ?? t('auth.login.serverError'));
     }
+  }
+
+  if (status === 'authenticated' || loading || loadingGoogle) {
+    return (
+      <PublicAuthShell title={t('auth.login.redirectingTitle')}>
+        <div className="flex flex-col items-center gap-3 py-6 text-center">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">
+            {t('auth.login.redirecting')}
+          </p>
+        </div>
+      </PublicAuthShell>
+    );
   }
 
   return (
@@ -203,6 +171,7 @@ function LoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
+            autoFocus
             required
           />
         </div>

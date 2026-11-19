@@ -20,13 +20,6 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { adminCardClass } from '@/components/admin/admin-surface';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
@@ -42,12 +35,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
+import { formatDocAdminName } from '@/lib/documentation/labels';
 import { cn } from '@/lib/utils';
 
 export type DocModuleFormValues = {
   headingId: string;
-  /** Optional free text; empty = page under heading only. */
+  /** Optional English sub heading; empty = page under heading only. */
   subHeadingName: string;
+  subHeadingNameEs: string;
   name: string;
   nameEs: string;
   shortDescription: string;
@@ -67,6 +62,7 @@ type Props = {
 const empty: DocModuleFormValues = {
   headingId: '',
   subHeadingName: '',
+  subHeadingNameEs: '',
   name: '',
   nameEs: '',
   shortDescription: '',
@@ -79,6 +75,7 @@ function snapshot(v: DocModuleFormValues & { status: string }) {
   return JSON.stringify({
     headingId: v.headingId,
     subHeadingName: v.subHeadingName.trim(),
+    subHeadingNameEs: v.subHeadingNameEs.trim(),
     name: v.name.trim(),
     nameEs: v.nameEs.trim(),
     shortDescription: v.shortDescription.trim(),
@@ -178,6 +175,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
     setForm({
       headingId: initial.headingId ?? '',
       subHeadingName: initial.subHeadingName ?? '',
+      subHeadingNameEs: initial.subHeadingNameEs ?? '',
       name: initial.name,
       nameEs: initial.nameEs ?? '',
       shortDescription: initial.shortDescription,
@@ -191,6 +189,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
     moduleId,
     initial?.headingId,
     initial?.subHeadingName,
+    initial?.subHeadingNameEs,
     initial?.name,
     initial?.nameEs,
     initial?.shortDescription,
@@ -210,6 +209,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
           ...f,
           headingId: value as string,
           subHeadingName: '',
+          subHeadingNameEs: '',
         };
       }
       return { ...f, [key]: value };
@@ -219,6 +219,10 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
   function validate(): boolean {
     if (!form.headingId) {
       toast.error(t('admin.docsForm.validateHeadingRequired'));
+      return false;
+    }
+    if (!form.subHeadingName.trim() && form.subHeadingNameEs.trim()) {
+      toast.error(t('admin.docsForm.validateSubHeadingEnglishRequired'));
       return false;
     }
     if (!form.name.trim()) {
@@ -277,11 +281,14 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
           ? form.shortDescriptionEs
           : '',
         contentHtml: form.contentHtml || '<p></p>',
-        contentHtmlEs: form.contentHtmlEs.trim() ? form.contentHtmlEs : '',
+        contentHtmlEs: plainFromHtml(form.contentHtmlEs)
+          ? form.contentHtmlEs
+          : '',
         status: nextStatus,
         sortOrder: initial?.sortOrder ?? 0,
         headingId: form.headingId,
         subHeadingName: form.subHeadingName.trim(),
+        subHeadingNameEs: form.subHeadingNameEs.trim(),
       };
       if (mode === 'create') {
         await axios.post('/api/admin/documentation', {
@@ -348,7 +355,7 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
                     </option>
                     {headings.map((h) => (
                       <option className="text-black" key={h.id} value={h.id}>
-                        {h.name}
+                        {formatDocAdminName(h.name)}
                       </option>
                     ))}
                   </select>
@@ -366,26 +373,105 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
                   {t('admin.docsForm.newHeading')}
                 </Button>
               </div>
+              {headingDialogOpen ? (
+                <div className="grid gap-3 rounded-xl border p-4">
+                  <p className="text-sm font-medium">{t('admin.docsForm.createHeadingTitle')}</p>
+                  <div className="grid gap-2">
+                    <Label htmlFor="new-heading-name">{t('admin.docsForm.nameEnLabel')}</Label>
+                    <Input
+                      id="new-heading-name"
+                      value={newHeadingName}
+                      onChange={(e) => setNewHeadingName(e.target.value)}
+                      placeholder={t('admin.docsForm.newHeadingPlaceholder')}
+                      maxLength={200}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void createHeading();
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="new-heading-name-es">{t('admin.docsForm.nameEsLabel')}</Label>
+                    <Input
+                      id="new-heading-name-es"
+                      value={newHeadingNameEs}
+                      onChange={(e) => setNewHeadingNameEs(e.target.value)}
+                      placeholder="p. ej. Primeros pasos"
+                      maxLength={200}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {t('admin.docsForm.newHeadingHelper')}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setHeadingDialogOpen(false)}
+                    >
+                      {t('cancel')}
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={creatingHeading}
+                      onClick={() => void createHeading()}
+                    >
+                      {creatingHeading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="mr-2 h-4 w-4" />
+                      )}
+                      {t('admin.docsForm.create')}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
 
-              <div className="grid gap-2">
-                <Label htmlFor="doc-sub-heading">
-                  {t('admin.docsForm.subHeadingLabel')}{' '}
-                  <span className="font-normal text-muted-foreground">
-                    {t('admin.docsForm.optional')}
-                  </span>
-                </Label>
-                <Input
-                  id="doc-sub-heading"
-                  value={form.subHeadingName}
-                  disabled={!form.headingId}
-                  onChange={(e) => setField('subHeadingName', e.target.value)}
-                  placeholder={
-                    form.headingId
-                      ? t('admin.docsForm.subHeadingPlaceholder')
-                      : t('admin.docsForm.subHeadingPlaceholderDisabled')
-                  }
-                  maxLength={200}
-                />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="doc-sub-heading">
+                    {t('admin.docsForm.subHeadingEnLabel')}{' '}
+                    <span className="font-normal text-muted-foreground">
+                      {t('admin.docsForm.optional')}
+                    </span>
+                  </Label>
+                  <Input
+                    id="doc-sub-heading"
+                    value={form.subHeadingName}
+                    disabled={!form.headingId}
+                    onChange={(e) => setField('subHeadingName', e.target.value)}
+                    placeholder={
+                      form.headingId
+                        ? t('admin.docsForm.subHeadingPlaceholder')
+                        : t('admin.docsForm.subHeadingPlaceholderDisabled')
+                    }
+                    maxLength={200}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="doc-sub-heading-es">
+                    {t('admin.docsForm.subHeadingEsLabel')}{' '}
+                    <span className="font-normal text-muted-foreground">
+                      {t('admin.docsForm.optional')}
+                    </span>
+                  </Label>
+                  <Input
+                    id="doc-sub-heading-es"
+                    value={form.subHeadingNameEs}
+                    disabled={!form.headingId}
+                    onChange={(e) =>
+                      setField('subHeadingNameEs', e.target.value)
+                    }
+                    placeholder={
+                      form.headingId
+                        ? t('admin.docsForm.subHeadingEsPlaceholder')
+                        : t('admin.docsForm.subHeadingPlaceholderDisabled')
+                    }
+                    maxLength={200}
+                  />
+                </div>
               </div>
             </>
           )}
@@ -522,62 +608,6 @@ export function AdminDocModuleForm({ mode, moduleId, initial }: Props) {
           </div>
         </CardContent>
       </Card>
-
-      <Dialog open={headingDialogOpen} onOpenChange={setHeadingDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('admin.docsForm.createHeadingTitle')}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-2 py-2">
-            <Label htmlFor="new-heading-name">{t('admin.docsForm.nameLabel')}</Label>
-            <Input
-              id="new-heading-name"
-              value={newHeadingName}
-              onChange={(e) => setNewHeadingName(e.target.value)}
-              placeholder={t('admin.docsForm.newHeadingPlaceholder')}
-              maxLength={200}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void createHeading();
-                }
-              }}
-            />
-            <Label htmlFor="new-heading-name-es">{t('admin.docsForm.nameEsLabel')}</Label>
-            <Input
-              id="new-heading-name-es"
-              value={newHeadingNameEs}
-              onChange={(e) => setNewHeadingNameEs(e.target.value)}
-              placeholder="p. ej. Primeros pasos"
-              maxLength={200}
-            />
-            <p className="text-xs text-muted-foreground">
-              {t('admin.docsForm.newHeadingHelper')}
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setHeadingDialogOpen(false)}
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              type="button"
-              disabled={creatingHeading}
-              onClick={() => void createHeading()}
-            >
-              {creatingHeading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              {t('admin.docsForm.create')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog
         open={leaveOpen}

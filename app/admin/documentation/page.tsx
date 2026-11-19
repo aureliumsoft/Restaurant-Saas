@@ -37,6 +37,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useTranslation } from 'react-i18next';
+import { formatDocAdminName } from '@/lib/documentation/labels';
 import { cn } from '@/lib/utils';
 
 type DocModule = {
@@ -203,6 +204,7 @@ export default function AdminDocumentationPage() {
                       <p className="text-xs text-muted-foreground">
                         {[item.heading?.name, item.subHeading?.name]
                           .filter(Boolean)
+                          .map((name) => formatDocAdminName(name))
                           .join(' → ')}
                       </p>
                     )}

@@ -100,11 +100,34 @@ export async function applyCustomPlanDecision(opts: {
   }
 
   const accept = opts.action === 'accept';
-  const plan = accept ? SubscriptionPlan.CUSTOM : SubscriptionPlan.FREE;
   const status = accept
     ? CustomPlanRequestStatus.ACCEPTED
     : CustomPlanRequestStatus.REJECTED;
-  const modules = accept ? request.selectedModules : [];
+
+  if (!accept) {
+    await db.customPlanRequest.update({
+      where: { id: request.id },
+      data: {
+        status,
+        restaurantId,
+        reviewedAt: new Date(),
+        reviewedByUserId: opts.reviewedByUserId ?? null,
+      },
+    });
+    const existing = await db.restaurantSubscription.findUnique({
+      where: { restaurantId },
+      select: { plan: true },
+    });
+    return {
+      ok: true,
+      status,
+      plan: existing?.plan ?? SubscriptionPlan.FREE,
+      restaurantId,
+    };
+  }
+
+  const plan = SubscriptionPlan.CUSTOM;
+  const modules = request.selectedModules;
   const periodEnd = new Date();
   periodEnd.setFullYear(periodEnd.getFullYear() + 1);
 
@@ -118,18 +141,14 @@ export async function applyCustomPlanDecision(opts: {
         currentPeriodEnd: periodEnd,
         autoRenew: false,
         customSelectedModules: modules,
-        notes: accept
-          ? `Custom plan accepted. Modules: ${modules.join(', ') || '—'}`
-          : 'Custom plan request rejected — Free plan applied.',
+        notes: `Custom plan accepted. Modules: ${modules.join(', ') || '—'}`,
       },
       update: {
         plan,
         status: SubscriptionStatus.ACTIVE,
         currentPeriodEnd: periodEnd,
         customSelectedModules: modules,
-        notes: accept
-          ? `Custom plan accepted. Modules: ${modules.join(', ') || '—'}`
-          : 'Custom plan request rejected — Free plan applied.',
+        notes: `Custom plan accepted. Modules: ${modules.join(', ') || '—'}`,
       },
     });
 

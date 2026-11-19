@@ -16,17 +16,8 @@ import { toast } from 'react-toastify';
 import { adminInsetClass } from '@/components/admin/admin-surface';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
 import {
   bilingualPlanPriceLabel,
   finalPrice,
@@ -173,7 +164,6 @@ export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
   const [yearlyDiscountOn, setYearlyDiscountOn] = useState(false);
   const [yearlyDiscountPct, setYearlyDiscountPct] = useState('0');
   const [saving, setSaving] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
   const [yearlyTouched, setYearlyTouched] = useState(false);
 
   const accent = plan ? PLAN_ACCENTS[plan.plan] : '#7c3aed';
@@ -250,7 +240,6 @@ export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
         yearlyDiscountPercent: yearlyPct,
       });
       toast.success('Pricing catalog updated');
-      setShowConfirmation(false);
       onOpenChange(false);
       onSaved();
     } catch (e: unknown) {
@@ -265,12 +254,20 @@ export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
     }
   };
 
-  if (!plan) return null;
+  if (!open || !plan) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-2xl flex-col gap-0 overflow-hidden rounded-2xl border-0 p-0 shadow-2xl">
-        <DialogHeader className="space-y-4 border-0 px-6 pb-4 pt-6 text-left">
+    <div className="mx-auto w-full max-w-2xl space-y-6">
+      <Button
+        variant="ghost"
+        type="button"
+        className="h-auto px-0 text-muted-foreground"
+        disabled={saving}
+        onClick={() => onOpenChange(false)}
+      >
+        Cancel
+      </Button>
+      <div className="space-y-4 text-left">
           <div className="flex items-start gap-4">
             <div
               className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-lg font-bold"
@@ -279,12 +276,12 @@ export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
               {plan.plan.charAt(0)}
             </div>
             <div className="min-w-0 flex-1 space-y-1">
-              <DialogTitle className="text-xl font-bold tracking-tight">
+              <h1 className="text-2xl font-bold tracking-tight">
                 Edit {plan.name}
-              </DialogTitle>
-              <DialogDescription className="text-sm">
+              </h1>
+              <p className="text-sm text-muted-foreground">
                 Update how this plan appears on the public pricing page.
-              </DialogDescription>
+              </p>
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <Badge
                   variant="secondary"
@@ -303,10 +300,9 @@ export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
               </div>
             </div>
           </div>
-        </DialogHeader>
+      </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-4">
-          <div className="grid gap-4">
+      <div className="grid gap-4">
             <SectionPanel
               icon={Tag}
               title="Plan identity"
@@ -544,24 +540,13 @@ export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
                 </p>
               )}
             </SectionPanel>
-          </div>
-        </div>
+      </div>
 
-        <DialogFooter className="gap-2 border-0 bg-zinc-50/80 px-6 py-4 dark:bg-zinc-900/50 sm:gap-3">
-          <Button
-            variant="ghost"
+      <Button
             type="button"
-            className="rounded-xl"
-            disabled={saving}
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            className="rounded-xl"
+            className="w-full rounded-xl"
             disabled={saving || !name.trim()}
-            onClick={() => setShowConfirmation(true)}
+            onClick={() => void save()}
           >
             {saving ? (
               <>
@@ -574,19 +559,7 @@ export function PlanEditDialog({ open, onOpenChange, plan, onSaved }: Props) {
                 Save plan
               </>
             )}
-          </Button>
-        </DialogFooter>
-
-        <SaveConfirmation
-          open={showConfirmation}
-          title="Save pricing plan"
-          description="Apply these changes to the public plan name, price, description, and features?"
-          itemName={plan.plan}
-          loading={saving}
-          onConfirm={() => void save()}
-          onCancel={() => setShowConfirmation(false)}
-        />
-      </DialogContent>
-    </Dialog>
+      </Button>
+    </div>
   );
 }

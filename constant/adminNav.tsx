@@ -5,12 +5,13 @@ import {
   CreditCard,
   FileText,
   HelpCircle,
+  Inbox,
   LayoutDashboard,
   Mail,
   Receipt,
   Search,
   Settings,
-  Inbox,
+  Tags,
 } from 'lucide-react';
 
 export type AdminNavItem = {
@@ -38,7 +39,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     ],
   },
   {
-    label: 'admin.nav.groupManagement',
+    label: 'admin.nav.groupRestaurants',
     items: [
       {
         title: 'admin.nav.restaurants',
@@ -47,10 +48,27 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         description: 'Tenant directory',
       },
       {
+        title: 'admin.nav.requests',
+        path: '/admin/requests',
+        icon: <Inbox className="h-4 w-4" />,
+        description: 'Demo leads and custom-plan asks',
+      },
+    ],
+  },
+  {
+    label: 'admin.nav.groupBilling',
+    items: [
+      {
         title: 'admin.nav.subscriptions',
         path: '/admin/subscriptions',
         icon: <CreditCard className="h-4 w-4" />,
-        description: 'Plans, billing & custom requests',
+        description: 'Plan, price, and paid-until for each restaurant',
+      },
+      {
+        title: 'admin.nav.planPrices',
+        path: '/admin/plan-prices',
+        icon: <Tags className="h-4 w-4" />,
+        description: 'Standard website prices',
       },
       {
         title: 'admin.nav.transactions',
@@ -58,12 +76,11 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         icon: <Receipt className="h-4 w-4" />,
         description: 'Subscription payments',
       },
-      {
-        title: 'admin.nav.requests',
-        path: '/admin/requests',
-        icon: <Inbox className="h-4 w-4" />,
-        description: 'Demo leads',
-      },
+    ],
+  },
+  {
+    label: 'admin.nav.groupWebsite',
+    items: [
       {
         title: 'admin.nav.newsletter',
         path: '/admin/newsletter',

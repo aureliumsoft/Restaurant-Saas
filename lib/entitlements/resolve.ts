@@ -109,17 +109,58 @@ export function resolveEntitlements(
   };
 }
 
+function trialGuestAccessOpen(sub: {
+  status: string;
+  trialEndsAt: Date | null;
+  currentPeriodEnd: Date | null;
+}): boolean {
+  if (sub.status !== 'TRIAL') return false;
+  const end = sub.trialEndsAt ?? sub.currentPeriodEnd;
+  return end != null && end.getTime() > Date.now();
+}
+
+/** During the open trial, guests can use the restaurant link before a plan is paid. */
+function withOpenTrialGuestAccess(entitlements: Entitlements): Entitlements {
+  const dashboard = entitlements.modules.dashboard;
+  const basicSettings = entitlements.modules.basicSettings;
+  return {
+    ...entitlements,
+    modules: {
+      ...entitlements.modules,
+      website: { access: 'full' },
+      dashboard: {
+        access: dashboard.access,
+        limits: { ...(dashboard.limits ?? {}), websiteButton: true },
+      },
+      basicSettings: {
+        access: basicSettings.access,
+        limits: { ...(basicSettings.limits ?? {}), websiteUrl: true },
+      },
+    },
+  };
+}
+
 export async function getRestaurantEntitlements(
   restaurantId: string
 ): Promise<Entitlements> {
   const sub = await db.restaurantSubscription.findUnique({
     where: { restaurantId },
-    select: { plan: true, customSelectedModules: true },
+    select: {
+      plan: true,
+      customSelectedModules: true,
+      status: true,
+      trialEndsAt: true,
+      currentPeriodEnd: true,
+    },
   });
-  return resolveEntitlements(
+  const entitlements = resolveEntitlements(
     sub?.plan ?? SubscriptionPlan.FREE,
     sub?.customSelectedModules ?? []
   );
+  if (sub && trialGuestAccessOpen(sub)) {
+    return withOpenTrialGuestAccess(entitlements);
+  }
+  return entitlements;
 }
 
 export function getModule(

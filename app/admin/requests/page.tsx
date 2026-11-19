@@ -7,6 +7,7 @@ import { Loader2, Mail } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { DemoRequestEmailDialog } from '@/components/admin/demo-request-email-dialog';
+import { CustomPlanRequestsPanel } from '@/components/admin/custom-plan-requests-panel';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { adminCardClass } from '@/components/admin/admin-surface';
 import {
@@ -98,6 +99,19 @@ export default function AdminRequestsPage() {
     setEmailDialogOpen(true);
   };
 
+  if (emailDialogOpen) {
+    return (
+      <DemoRequestEmailDialog
+        request={emailRequest}
+        open
+        onOpenChange={(open) => {
+          setEmailDialogOpen(open);
+          if (!open) setEmailRequest(null);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-8">
       <AdminPageHeader
@@ -170,14 +184,7 @@ export default function AdminRequestsPage() {
         </CardContent>
       </Card>
 
-      <DemoRequestEmailDialog
-        request={emailRequest}
-        open={emailDialogOpen}
-        onOpenChange={(open) => {
-          setEmailDialogOpen(open);
-          if (!open) setEmailRequest(null);
-        }}
-      />
+      <CustomPlanRequestsPanel />
     </div>
   );
 }

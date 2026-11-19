@@ -22,6 +22,7 @@ export default async function PricingPage() {
   const isLoggedIn = Boolean(session?.user?.email);
 
   let currentPlanSlug: string | null = null;
+  let subscriptionStatus: string | null = null;
   let subscriptionPeriodActive = false;
   let periodEndLabel: string | null = null;
 
@@ -45,6 +46,7 @@ export default async function PricingPage() {
         });
         if (sub?.plan) {
           currentPlanSlug = sub.plan;
+          subscriptionStatus = sub.status;
           subscriptionPeriodActive = isSubscriptionPeriodActive(sub);
           const end =
             sub.status === 'TRIAL' ? sub.trialEndsAt : sub.currentPeriodEnd;
@@ -145,6 +147,7 @@ export default async function PricingPage() {
     <PricingPageView
       isLoggedIn={isLoggedIn}
       currentPlanSlug={currentPlanSlug}
+      subscriptionStatus={subscriptionStatus}
       subscriptionPeriodActive={subscriptionPeriodActive}
       periodEndLabel={periodEndLabel}
       plans={plans}

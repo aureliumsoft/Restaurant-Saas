@@ -127,7 +127,8 @@ export const authOptions: NextAuthOptions = {
 
         const displayName =
           user.name ?? (profile as any)?.name ?? (profile as any)?.given_name;
-        await upsertNewsletterSubscriber({
+        // Do not block the redirect on the newsletter write or welcome email.
+        void upsertNewsletterSubscriber({
           email,
           name: typeof displayName === "string" ? displayName : null,
           source: "google",
@@ -138,10 +139,11 @@ export const authOptions: NextAuthOptions = {
     },
 
     async jwt(params: any) {
-      const { token, user } = params as {
+      const { token, user, account, trigger } = params as {
         token: any;
         user?: any;
-        account?: any;
+        account?: { provider?: string } | null;
+        trigger?: string;
       };
       if (user) {
         const u = user as any;
@@ -152,8 +154,19 @@ export const authOptions: NextAuthOptions = {
         if (u.roleId !== undefined) token.roleId = u.roleId;
       }
 
+      // Credentials authorize() already loaded the account. Google still needs one lookup.
+      const credentialsReady =
+        account?.provider === "credentials" && Boolean(token.id) && Boolean(token.role);
+      const shouldLoadAccount =
+        !credentialsReady &&
+        (Boolean(account) ||
+          trigger === "signIn" ||
+          trigger === "signUp" ||
+          trigger === "update" ||
+          !token.id);
+
       const email = token.email as string | undefined;
-      if (email) {
+      if (shouldLoadAccount && email) {
         const existing = await db.user.findUnique({
           where: { email },
           include: {
@@ -219,7 +232,7 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
     signOut: '/login',
     error: '/login',
-    newUser: '/dashboard',
+    newUser: '/login/continue',
   },
   secret:
     process.env.NEXTAUTH_SECRET ??

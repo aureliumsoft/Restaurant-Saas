@@ -6,6 +6,7 @@ import {
   documentationModuleInclude,
   documentationModuleWriteSchema,
   nullIfBlankCms,
+  nullIfEmptyDocHtml,
   resolveDocumentationLinks,
   sanitizeDocHtml,
 } from '@/lib/documentation/module';
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
       headingId: parsed.data.headingId,
       subHeadingId: parsed.data.subHeadingId,
       subHeadingName: parsed.data.subHeadingName,
+      subHeadingNameEs: parsed.data.subHeadingNameEs,
     });
     if (!link.ok) {
       return NextResponse.json({ error: link.error }, { status: link.status });
@@ -70,11 +72,15 @@ export async function POST(req: NextRequest) {
       sortOrder = (max._max.sortOrder ?? -1) + 1;
     }
 
+    const spanishHtml = nullIfEmptyDocHtml(parsed.data.contentHtmlEs);
     const item = await db.documentationModule.create({
       data: {
         name: parsed.data.name,
+        nameEs: nullIfBlankCms(parsed.data.nameEs),
         shortDescription: parsed.data.shortDescription,
+        shortDescriptionEs: nullIfBlankCms(parsed.data.shortDescriptionEs),
         contentHtml: sanitizeDocHtml(parsed.data.contentHtml),
+        contentHtmlEs: spanishHtml ? sanitizeDocHtml(spanishHtml) : null,
         sortOrder,
         status: parsed.data.status ?? 'PUBLISHED',
         headingId: link.headingId,

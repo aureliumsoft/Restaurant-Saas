@@ -96,7 +96,7 @@ export function OrderPathContent({ slug }: { slug: OrderPathSlug }) {
         </ol>
 
         <Link
-          href="/demo-request"
+          href="/register"
           className="mt-14 inline-flex items-center gap-2 text-sm font-semibold text-fire-600 hover:text-fire-500 dark:text-fire-400"
         >
           {t('marketingExtras.demo.ctaLink')}

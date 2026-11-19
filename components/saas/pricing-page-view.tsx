@@ -46,6 +46,7 @@ export type PricingPlanView = {
 type PricingPageViewProps = {
   isLoggedIn: boolean;
   currentPlanSlug: string | null;
+  subscriptionStatus: string | null;
   subscriptionPeriodActive: boolean;
   periodEndLabel: string | null;
   plans: PricingPlanView[];
@@ -76,6 +77,7 @@ function formatEuro(amount: number, lang: 'en' | 'es'): string {
 export function PricingPageView({
   isLoggedIn,
   currentPlanSlug,
+  subscriptionStatus,
   subscriptionPeriodActive,
   periodEndLabel,
   plans,
@@ -150,17 +152,19 @@ export function PricingPageView({
           <p className="mx-auto mt-3 max-w-2xl text-zinc-600 dark:text-zinc-300">
             {t('marketingExtras.pricing.subtitle')}
           </p>
-          <div className="mt-5">
-            <Button
-              variant="outline"
-              asChild
-              className="border-fire-300 bg-fire-50 text-fire-700 hover:bg-fire-100 dark:border-fire-500/40 dark:bg-white/5 dark:text-fire-200 dark:hover:bg-white/10"
-            >
-              <Link href="/demo-request">
-                {t('marketingExtras.pricing.requestDemoTrial')}
-              </Link>
-            </Button>
-          </div>
+          {!isLoggedIn ? (
+            <div className="mt-5">
+              <Button
+                variant="outline"
+                asChild
+                className="border-fire-300 bg-fire-50 text-fire-700 hover:bg-fire-100 dark:border-fire-500/40 dark:bg-white/5 dark:text-fire-200 dark:hover:bg-white/10"
+              >
+                <Link href="/register">
+                  {t('marketingExtras.pricing.requestDemoTrial')}
+                </Link>
+              </Button>
+            </div>
+          ) : null}
           <div
             className="mx-auto mt-8 inline-flex rounded-full border border-zinc-200/80 bg-white/80 p-1 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/70"
             role="group"
@@ -204,9 +208,11 @@ export function PricingPageView({
               const planMatches =
                 currentPlanSlug !== null &&
                 planKey === currentPlanSlug.toUpperCase();
-              const isCurrentPlan = planMatches && subscriptionPeriodActive;
+              const trialNotPaid = subscriptionStatus === 'TRIAL';
+              const isCurrentPlan =
+                planMatches && !trialNotPaid && subscriptionPeriodActive;
               const isExpiredCurrentPlan =
-                planMatches && !subscriptionPeriodActive;
+                planMatches && !trialNotPaid && !subscriptionPeriodActive;
               const isFeatured = planKey === 'GROWTH';
               const isCustom = planKey === 'CUSTOM';
               const isFree = planKey === 'FREE';
@@ -360,16 +366,18 @@ export function PricingPageView({
                           <ArrowRight className="ml-1 h-4 w-4" />
                         </Link>
                       </Button>
-                      <Button
-                        className="mt-2 w-full border-zinc-300 bg-white/70 text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-transparent dark:text-zinc-100 dark:hover:bg-zinc-800/60"
-                        variant="outline"
-                        asChild
-                      >
-                        <Link href="/demo-request">
-                          {t('marketingExtras.pricing.requestDemoForTrial')}{' '}
-                          <SendHorizonal className="ml-1 h-4 w-4" />
-                        </Link>
-                      </Button>
+                      {!isLoggedIn ? (
+                        <Button
+                          className="mt-2 w-full border-zinc-300 bg-white/70 text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-transparent dark:text-zinc-100 dark:hover:bg-zinc-800/60"
+                          variant="outline"
+                          asChild
+                        >
+                          <Link href="/register">
+                            {t('marketingExtras.pricing.requestDemoForTrial')}{' '}
+                            <SendHorizonal className="ml-1 h-4 w-4" />
+                          </Link>
+                        </Button>
+                      ) : null}
                     </>
                   )}
                   

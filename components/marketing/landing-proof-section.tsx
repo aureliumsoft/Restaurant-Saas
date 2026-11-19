@@ -48,7 +48,7 @@ export function LandingProofSection() {
             asChild
             className="h-12 rounded-lg bg-gradient-to-br from-fire-400 via-fire-500 to-fire-600 px-8 text-base font-semibold text-white shadow-[0_14px_40px_-10px] shadow-fire-500/60"
           >
-            <Link href="/demo-request">{t('marketing.proof.cta')}</Link>
+            <Link href="/register">{t('marketing.proof.cta')}</Link>
           </Button>
         </div>
       </div>

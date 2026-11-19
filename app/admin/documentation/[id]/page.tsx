@@ -8,6 +8,7 @@ import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
 import { AdminDocModuleForm } from '@/components/admin/admin-doc-module-form';
+import { splitStoredDocName } from '@/lib/documentation/labels';
 
 type ModuleDto = {
   id: string;
@@ -71,7 +72,8 @@ export default function AdminDocumentationEditPage() {
       moduleId={mod.id}
       initial={{
         headingId: mod.headingId ?? '',
-        subHeadingName: mod.subHeading?.name ?? '',
+        subHeadingName: splitStoredDocName(mod.subHeading?.name ?? '').en,
+        subHeadingNameEs: splitStoredDocName(mod.subHeading?.name ?? '').es,
         name: mod.name,
         nameEs: mod.nameEs ?? '',
         shortDescription: mod.shortDescription,

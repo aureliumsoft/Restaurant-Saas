@@ -45,14 +45,14 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       status?: string;
     } = {};
     if (parsed.data.name !== undefined) {
-      data.name = persistDocBilingualName(parsed.data.name);
+      data.name = persistDocBilingualName(parsed.data.name, parsed.data.nameEs);
     }
     if (parsed.data.sortOrder !== undefined) data.sortOrder = parsed.data.sortOrder;
     if (parsed.data.status !== undefined) data.status = parsed.data.status;
     if (parsed.data.slug !== undefined) {
       data.slug = parsed.data.slug;
     } else if (parsed.data.name !== undefined) {
-      data.slug = slugifyDocLabel(parsed.data.name);
+      data.slug = slugifyDocLabel(parsed.data.name, parsed.data.nameEs);
     }
 
     const item = await db.documentationHeading.update({ where: { id }, data });

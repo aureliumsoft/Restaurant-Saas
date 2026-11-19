@@ -30,7 +30,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
 import { SEO_SETTING_KEYS } from '@/lib/platform-settings';
 
 function gscOpenUrl(propertyUrl: string): string {
@@ -50,7 +49,6 @@ export default function AdminSeoPage() {
   const [map, setMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
   useEffect(() => {
     axios
@@ -92,7 +90,6 @@ export default function AdminSeoPage() {
       }));
       const res = await axios.put('/api/admin/settings', { entries });
       setMap(res.data.data ?? {});
-      setShowSaveConfirmation(false);
       toast.success(t('admin.seoPage.savedToast'));
     } catch {
       toast.error(t('admin.seoPage.saveFailed'));
@@ -348,7 +345,7 @@ export default function AdminSeoPage() {
         <Button
           type="button"
           disabled={saving}
-          onClick={() => setShowSaveConfirmation(true)}
+          onClick={() => void save()}
         >
           {saving ? (
             <>
@@ -404,15 +401,6 @@ export default function AdminSeoPage() {
           </ol>
         </CardContent>
       </Card>
-
-      <SaveConfirmation
-        open={showSaveConfirmation}
-        title={t('admin.seoPage.saveDialogTitle')}
-        description={t('admin.seoPage.saveDialogDescription')}
-        loading={saving}
-        onConfirm={() => void save()}
-        onCancel={() => setShowSaveConfirmation(false)}
-      />
     </div>
   );
 }

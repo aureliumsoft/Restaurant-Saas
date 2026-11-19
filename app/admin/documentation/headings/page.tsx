@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -30,13 +30,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -52,9 +45,9 @@ import {
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import {
-  bilingualInputFromStored,
-  parseBilingualInput,
-} from '@/lib/menu/bilingual-text';
+  formatDocAdminName,
+  splitStoredDocName,
+} from '@/lib/documentation/labels';
 
 type SubHeadingRow = {
   id: string;
@@ -96,6 +89,56 @@ function flattenApiError(err: unknown, t: (key: string) => string): string {
   return e.message || t('admin.docsForm.requestFailed');
 }
 
+function DocNameFields({
+  idPrefix,
+  name,
+  nameEs,
+  onName,
+  onNameEs,
+  onSubmit,
+}: {
+  idPrefix: string;
+  name: string;
+  nameEs: string;
+  onName: (value: string) => void;
+  onNameEs: (value: string) => void;
+  onSubmit?: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <div className="grid gap-2">
+        <Label htmlFor={`${idPrefix}-name`}>{t('admin.docsForm.nameEnLabel')}</Label>
+        <Input
+          id={`${idPrefix}-name`}
+          value={name}
+          onChange={(e) => onName(e.target.value)}
+          placeholder={t('admin.docsForm.newHeadingPlaceholder')}
+          maxLength={200}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && onSubmit) {
+              e.preventDefault();
+              onSubmit();
+            }
+          }}
+        />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor={`${idPrefix}-name-es`}>
+          {t('admin.docsForm.nameEsLabel')}
+        </Label>
+        <Input
+          id={`${idPrefix}-name-es`}
+          value={nameEs}
+          onChange={(e) => onNameEs(e.target.value)}
+          placeholder={t('admin.docsForm.nameEsPlaceholder')}
+          maxLength={200}
+        />
+      </div>
+    </>
+  );
+}
+
 function reorderByIds<T extends { id: string; sortOrder: number }>(
   list: T[],
   fromId: string,
@@ -128,10 +171,12 @@ export default function AdminDocumentationHeadingsPage() {
   const [createSubOpen, setCreateSubOpen] = useState(false);
   const [createSubHeadingId, setCreateSubHeadingId] = useState('');
   const [newName, setNewName] = useState('');
+  const [newNameEs, setNewNameEs] = useState('');
   const [creating, setCreating] = useState(false);
 
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
   const [editName, setEditName] = useState('');
+  const [editNameEs, setEditNameEs] = useState('');
   const [editSlug, setEditSlug] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -267,18 +312,26 @@ export default function AdminDocumentationHeadingsPage() {
     );
   }
 
+  function resetNewNames() {
+    setNewName('');
+    setNewNameEs('');
+  }
+
   async function createHeading() {
     const name = newName.trim();
-    if (!parseBilingualInput(name).en) {
+    if (!name) {
       toast.error(t('admin.docsHeadings.englishNameRequired'));
       return;
     }
     setCreating(true);
     try {
-      await axios.post('/api/admin/documentation-headings', { name });
+      await axios.post('/api/admin/documentation-headings', {
+        name,
+        nameEs: newNameEs.trim(),
+      });
       toast.success(t('admin.docsHeadings.headingCreatedToast'));
       setCreateHeadingOpen(false);
-      setNewName('');
+      resetNewNames();
       await load();
     } catch (e) {
       toast.error(flattenApiError(e, t));
@@ -293,7 +346,7 @@ export default function AdminDocumentationHeadingsPage() {
       toast.error(t('admin.docsForm.validateHeadingRequired'));
       return;
     }
-    if (!parseBilingualInput(name).en) {
+    if (!name) {
       toast.error(t('admin.docsHeadings.englishNameRequired'));
       return;
     }
@@ -302,10 +355,11 @@ export default function AdminDocumentationHeadingsPage() {
       await axios.post('/api/admin/documentation-sub-headings', {
         headingId: createSubHeadingId,
         name,
+        nameEs: newNameEs.trim(),
       });
       toast.success(t('admin.docsHeadings.subHeadingCreatedToast'));
       setCreateSubOpen(false);
-      setNewName('');
+      resetNewNames();
       setCreateSubHeadingId('');
       await load();
     } catch (e) {
@@ -316,31 +370,38 @@ export default function AdminDocumentationHeadingsPage() {
   }
 
   function openEditHeading(item: HeadingRow) {
+    const parts = splitStoredDocName(item.name);
     setEditTarget({ kind: 'heading', item });
-    setEditName(bilingualInputFromStored(item.name));
+    setEditName(parts.en);
+    setEditNameEs(parts.es);
     setEditSlug(item.slug);
   }
 
   function openEditSub(item: SubHeadingRow, headingName: string) {
+    const parts = splitStoredDocName(item.name);
     setEditTarget({
       kind: 'sub',
       item,
-      headingName: bilingualInputFromStored(headingName),
+      headingName: formatDocAdminName(headingName),
     });
-    setEditName(bilingualInputFromStored(item.name));
+    setEditName(parts.en);
+    setEditNameEs(parts.es);
     setEditSlug(item.slug);
   }
 
   async function saveEdit() {
     if (!editTarget) return;
     const name = editName.trim();
-    if (!parseBilingualInput(name).en) {
+    if (!name) {
       toast.error(t('admin.docsHeadings.englishNameRequired'));
       return;
     }
     setSavingEdit(true);
     try {
-      const body: { name: string; slug?: string } = { name };
+      const body: { name: string; nameEs: string; slug?: string } = {
+        name,
+        nameEs: editNameEs.trim(),
+      };
       const slug = editSlug.trim();
       if (slug) body.slug = slug;
       if (editTarget.kind === 'heading') {
@@ -429,6 +490,147 @@ export default function AdminDocumentationHeadingsPage() {
     }
   }
 
+  if (createHeadingOpen) {
+    return (
+      <div className="mx-auto w-full max-w-lg space-y-6">
+        <div className="space-y-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-auto px-0 text-muted-foreground"
+            disabled={creating}
+            onClick={() => setCreateHeadingOpen(false)}
+          >
+            {t('cancel')}
+          </Button>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {t('admin.docsHeadings.addHeading')}
+          </h1>
+        </div>
+        <DocNameFields
+          idPrefix="new-heading"
+          name={newName}
+          nameEs={newNameEs}
+          onName={setNewName}
+          onNameEs={setNewNameEs}
+          onSubmit={() => void createHeading()}
+        />
+        <Button
+          type="button"
+          className="w-full"
+          disabled={creating}
+          onClick={() => void createHeading()}
+        >
+          {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {t('admin.docsForm.create')}
+        </Button>
+      </div>
+    );
+  }
+
+  if (createSubOpen) {
+    return (
+      <div className="mx-auto w-full max-w-lg space-y-6">
+        <div className="space-y-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-auto px-0 text-muted-foreground"
+            disabled={creating}
+            onClick={() => setCreateSubOpen(false)}
+          >
+            {t('cancel')}
+          </Button>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {t('admin.docsHeadings.addSubheadingDialogTitle')}
+          </h1>
+        </div>
+        <div className="grid gap-2">
+          <Label>{t('admin.docsHeadings.underHeading')}</Label>
+          <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+            {formatDocAdminName(
+              items.find((h) => h.id === createSubHeadingId)?.name ?? ''
+            ) || '—'}
+          </p>
+        </div>
+        <DocNameFields
+          idPrefix="new-sub"
+          name={newName}
+          nameEs={newNameEs}
+          onName={setNewName}
+          onNameEs={setNewNameEs}
+          onSubmit={() => void createSubHeading()}
+        />
+        <Button
+          type="button"
+          className="w-full"
+          disabled={creating}
+          onClick={() => void createSubHeading()}
+        >
+          {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {t('admin.docsForm.create')}
+        </Button>
+      </div>
+    );
+  }
+
+  if (editTarget) {
+    return (
+      <div className="mx-auto w-full max-w-lg space-y-6">
+        <div className="space-y-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-auto px-0 text-muted-foreground"
+            disabled={savingEdit}
+            onClick={() => setEditTarget(null)}
+          >
+            {t('cancel')}
+          </Button>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {editTarget.kind === 'sub'
+              ? t('admin.docsHeadings.editSubHeading')
+              : t('admin.docsHeadings.editHeading')}
+          </h1>
+          {editTarget.kind === 'sub' ? (
+            <p className="text-sm text-muted-foreground">
+              {t('admin.docsHeadings.underHeadingName', { name: editTarget.headingName })}
+            </p>
+          ) : null}
+        </div>
+        <DocNameFields
+          idPrefix="edit"
+          name={editName}
+          nameEs={editNameEs}
+          onName={setEditName}
+          onNameEs={setEditNameEs}
+        />
+        <div className="grid gap-2">
+          <Label htmlFor="edit-slug">{t('admin.docsHeadings.slugLabel')}</Label>
+          <Input
+            id="edit-slug"
+            value={editSlug}
+            onChange={(e) => setEditSlug(e.target.value)}
+            maxLength={100}
+            className="font-mono text-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            {t('admin.docsHeadings.slugHelper')}
+          </p>
+        </div>
+        <Button
+          type="button"
+          className="w-full"
+          disabled={savingEdit}
+          onClick={() => void saveEdit()}
+        >
+          {savingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {t('admin.docsHeadings.save')}
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <AdminPageHeader
@@ -459,7 +661,7 @@ export default function AdminDocumentationHeadingsPage() {
               type="button"
               variant="default"
               onClick={() => {
-                setNewName('');
+                resetNewNames();
                 setCreateHeadingOpen(true);
               }}
             >
@@ -489,7 +691,7 @@ export default function AdminDocumentationHeadingsPage() {
             <Button
               type="button"
               onClick={() => {
-                setNewName('');
+                resetNewNames();
                 setCreateHeadingOpen(true);
               }}
             >
@@ -563,7 +765,7 @@ export default function AdminDocumentationHeadingsPage() {
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <CardTitle className="text-base">
-                          {bilingualInputFromStored(heading.name)}
+                          {formatDocAdminName(heading.name)}
                         </CardTitle>
                         <Badge
                           variant={
@@ -595,7 +797,7 @@ export default function AdminDocumentationHeadingsPage() {
                       disabled={busyId === heading.id || reordering}
                       onClick={() => {
                         setCreateSubHeadingId(heading.id);
-                        setNewName('');
+                        resetNewNames();
                         setCreateSubOpen(true);
                       }}
                     >
@@ -642,7 +844,7 @@ export default function AdminDocumentationHeadingsPage() {
                         setDeleteTarget({
                           kind: 'heading',
                           id: heading.id,
-                          name: bilingualInputFromStored(heading.name),
+                          name: formatDocAdminName(heading.name),
                         })
                       }
                     >
@@ -735,7 +937,7 @@ export default function AdminDocumentationHeadingsPage() {
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="text-sm font-medium">
-                                {bilingualInputFromStored(sub.name)}
+                                {formatDocAdminName(sub.name)}
                               </p>
                               <Badge
                                 variant={
@@ -800,7 +1002,7 @@ export default function AdminDocumentationHeadingsPage() {
                               setDeleteTarget({
                                 kind: 'sub',
                                 id: sub.id,
-                                name: bilingualInputFromStored(sub.name),
+                                name: formatDocAdminName(sub.name),
                               })
                             }
                           >
@@ -822,181 +1024,6 @@ export default function AdminDocumentationHeadingsPage() {
           ) : null}
         </div>
       )}
-
-      <Dialog open={createHeadingOpen} onOpenChange={setCreateHeadingOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('admin.docsHeadings.addHeading')}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-2 py-2">
-            <Label htmlFor="new-heading-name">{t('admin.docsForm.nameLabel')}</Label>
-            <Input
-              id="new-heading-name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder={t('admin.docsHeadings.bilingualNamePlaceholder')}
-              maxLength={500}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void createHeading();
-                }
-              }}
-            />
-            <p className="text-xs text-muted-foreground">
-              {t('admin.blogForm.bilingualHint')}
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setCreateHeadingOpen(false)}
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              type="button"
-              disabled={creating}
-              onClick={() => void createHeading()}
-            >
-              {creating ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              {t('admin.docsForm.create')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={createSubOpen} onOpenChange={setCreateSubOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('admin.docsHeadings.addSubheadingDialogTitle')}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3 py-2">
-            <div className="grid gap-2">
-              <Label>{t('admin.docsHeadings.underHeading')}</Label>
-              <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
-                {bilingualInputFromStored(
-                  items.find((h) => h.id === createSubHeadingId)?.name ?? ''
-                ) || '—'}
-              </p>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="new-sub-name">{t('admin.docsForm.nameLabel')}</Label>
-              <Input
-                id="new-sub-name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder={t('admin.docsHeadings.bilingualNamePlaceholder')}
-                maxLength={500}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    void createSubHeading();
-                  }
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                {t('admin.blogForm.bilingualHint')}
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setCreateSubOpen(false)}
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              type="button"
-              disabled={creating}
-              onClick={() => void createSubHeading()}
-            >
-              {creating ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              {t('admin.docsForm.create')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(editTarget)}
-        onOpenChange={(open) => {
-          if (!open) setEditTarget(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editTarget?.kind === 'sub'
-                ? t('admin.docsHeadings.editSubHeading')
-                : t('admin.docsHeadings.editHeading')}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3 py-2">
-            {editTarget?.kind === 'sub' ? (
-              <p className="text-xs text-muted-foreground">
-                {t('admin.docsHeadings.underHeadingName', { name: editTarget.headingName })}
-              </p>
-            ) : null}
-            <div className="grid gap-2">
-              <Label htmlFor="edit-name">{t('admin.docsForm.nameLabel')}</Label>
-              <Input
-                id="edit-name"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder={t('admin.docsHeadings.bilingualNamePlaceholder')}
-                maxLength={500}
-              />
-              <p className="text-xs text-muted-foreground">
-                {t('admin.blogForm.bilingualHint')}
-              </p>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-slug">{t('admin.docsHeadings.slugLabel')}</Label>
-              <Input
-                id="edit-slug"
-                value={editSlug}
-                onChange={(e) => setEditSlug(e.target.value)}
-                maxLength={100}
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground">
-                {t('admin.docsHeadings.slugHelper')}
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setEditTarget(null)}
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              type="button"
-              disabled={savingEdit}
-              onClick={() => void saveEdit()}
-            >
-              {savingEdit ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              {t('admin.docsHeadings.save')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog
         open={Boolean(deleteTarget)}

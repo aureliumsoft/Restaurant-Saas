@@ -2,30 +2,49 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
-import { hashPassword, isStrongPassword } from '@/lib/auth/password';
-import { GLOBAL_ROLE_SLUG, REGISTER_ROLE_SLUG, getGlobalRoleIdBySlug } from '@/lib/global-roles';
+import { hashPassword } from '@/lib/auth/password';
+import { ensureGlobalSignupRolesExist } from '@/lib/ensure-global-signup-roles';
+import { GLOBAL_ROLE_SLUG, getGlobalRoleIdBySlug } from '@/lib/global-roles';
+import { createRestaurantWithDefaults } from '@/lib/onboarding/create-restaurant';
+import { prismaErrorMessage, prismaErrorStatus } from '@/lib/prisma-errors';
 
 const signupSchema = z.object({
   name: z
     .string({ required_error: 'Full name is required.' })
+    .trim()
     .min(2, 'Full name must be at least 2 characters.')
     .max(120, 'Full name must be at most 120 characters.'),
-  username: z
-    .string({ required_error: 'Username is required.' })
-    .min(2, 'Username must be at least 2 characters.')
-    .max(60, 'Username must be at most 60 characters.'),
   email: z
     .string({ required_error: 'Email is required.' })
+    .trim()
     .email('Enter a valid email address.'),
   password: z
     .string({ required_error: 'Password is required.' })
     .min(8, 'Password must be at least 8 characters.')
     .max(200, 'Password must be at most 200 characters.'),
-  roleId: z
-    .string()
-    .uuid('Select a valid role.')
-    .optional(),
+  restaurantName: z
+    .string({ required_error: 'Restaurant name is required.' })
+    .trim()
+    .min(2, 'Restaurant name must be at least 2 characters.')
+    .max(120, 'Restaurant name must be at most 120 characters.'),
+  subdomain: z
+    .string({ required_error: 'Web address is required.' })
+    .trim()
+    .min(2, 'Web address must be at least 2 characters.')
+    .max(50, 'Web address must be at most 50 characters.')
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
+      message: 'Use lowercase letters, numbers, and single hyphens only.',
+    }),
 });
+
+function usernameFromEmail(email: string): string {
+  const base =
+    email
+      .split('@')[0]
+      .replace(/[^a-zA-Z0-9_]/g, '')
+      .slice(0, 20) || 'owner';
+  return `${base}_${Math.random().toString(36).slice(2, 6)}`;
+}
 
 export async function POST(req: Request) {
   const json = await req.json();
@@ -38,7 +57,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { name, username, email, password, roleId } = parsed.data;
+  const { name, email, password, restaurantName, subdomain } = parsed.data;
 
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) {
@@ -48,47 +67,52 @@ export async function POST(req: Request) {
     );
   }
 
-  const allowedSlugs = new Set(Object.values(REGISTER_ROLE_SLUG));
-  let resolvedRoleId: string | null = null;
-  if (roleId) {
-    const accountRole = await db.role.findFirst({
-      where: {
-        id: roleId,
-        restaurantId: null,
-        slug: { in: [...allowedSlugs] },
-      },
-      select: { id: true },
-    });
-    if (!accountRole) {
-      return NextResponse.json(
-        { error: 'Invalid or unavailable role selected.' },
-        { status: 400 }
-      );
-    }
-    resolvedRoleId = accountRole.id;
-  } else {
-    resolvedRoleId = await getGlobalRoleIdBySlug(GLOBAL_ROLE_SLUG.CUSTOMER_USER);
-    if (!resolvedRoleId) {
-      return NextResponse.json(
-        { error: 'Default User role is missing. Run seed.' },
-        { status: 503 }
-      );
-    }
+  const taken = await db.restaurant.findFirst({
+    where: { OR: [{ slug: subdomain }, { subdomain }] },
+    select: { id: true },
+  });
+  if (taken) {
+    return NextResponse.json(
+      { error: 'That web address is already taken. Try another.' },
+      { status: 409 }
+    );
+  }
+
+  await ensureGlobalSignupRolesExist();
+  const ownerRoleId = await getGlobalRoleIdBySlug(GLOBAL_ROLE_SLUG.PENDING_OWNER);
+  if (!ownerRoleId) {
+    return NextResponse.json(
+      { error: 'Owner role is missing. Run seed.' },
+      { status: 503 }
+    );
   }
 
   const passwordHash = await hashPassword(password);
-
   const user = await db.user.create({
     data: {
       name,
-      username,
+      username: usernameFromEmail(email),
       email,
       password: passwordHash,
-      roleId: resolvedRoleId,
+      roleId: ownerRoleId,
       image: null,
       emailVerified: new Date(),
     },
   });
 
-  return NextResponse.json({ ok: true, userId: user.id });
+  try {
+    const restaurant = await createRestaurantWithDefaults({
+      name: restaurantName,
+      subdomain,
+      ownerUserId: user.id,
+    });
+    return NextResponse.json({ ok: true, userId: user.id, restaurantId: restaurant.id });
+  } catch (error) {
+    await db.user.delete({ where: { id: user.id } }).catch(() => undefined);
+    console.error('[signup] restaurant create failed:', error);
+    return NextResponse.json(
+      { error: prismaErrorMessage(error) },
+      { status: prismaErrorStatus(error) }
+    );
+  }
 }

@@ -17,31 +17,28 @@ const AdminTable = React.forwardRef<HTMLTableElement, AdminTableProps>(
       <div className="relative w-full min-w-0 max-w-full">
         <div
           className={cn(
-            'admin-table-scroll overflow-x-auto overscroll-x-contain',
-            'scroll-smooth [-webkit-overflow-scrolling:touch]',
-            'rounded-xl pb-1'
+            'admin-table-scroll overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950',
+            className
           )}
-          tabIndex={0}
-          role="region"
-          aria-label={t('admin.table.scrollableRegion')}
         >
-          <table
-            ref={ref}
-            style={
-              minWidth
-                ? { width: '100%', minWidth: `max(100%, ${minWidth}px)` }
-                : { width: '100%' }
-            }
-            className={cn(
-              'w-full border-separate border-spacing-y-2 text-sm',
-              className
-            )}
-            {...props}
-          />
+          <div
+            className="overflow-x-auto overscroll-x-contain scroll-smooth [-webkit-overflow-scrolling:touch]"
+            tabIndex={0}
+            role="region"
+            aria-label={t('admin.table.scrollableRegion')}
+          >
+            <table
+              ref={ref}
+              style={
+                minWidth
+                  ? { width: '100%', minWidth: `max(100%, ${minWidth}px)` }
+                  : { width: '100%' }
+              }
+              className="w-full border-collapse text-left text-sm"
+              {...props}
+            />
+          </div>
         </div>
-        <p className="mt-2 text-center text-[10px] text-muted-foreground lg:hidden">
-          {t('admin.table.swipeHint')}
-        </p>
       </div>
     );
   }
@@ -63,7 +60,7 @@ const AdminTableBody = React.forwardRef<
   <tbody
     ref={ref}
     className={cn(
-      '[&_tr:hover_td]:bg-white [&_tr:hover_td]:shadow-sm dark:[&_tr:hover_td]:bg-zinc-800/80',
+      '[&_tr:last-child_td]:border-b-0 [&_tr:hover_td]:bg-[#fff4ed] dark:[&_tr:hover_td]:bg-zinc-800/70',
       className
     )}
     {...props}
@@ -86,7 +83,7 @@ const AdminTableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      'h-9 whitespace-nowrap px-4 pb-1 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 first:pl-5 last:pr-5',
+      'h-11 whitespace-nowrap border-b border-zinc-200 bg-zinc-50 px-4 text-left align-middle text-xs font-semibold text-zinc-500 first:pl-4 last:pr-4 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-400',
       className
     )}
     {...props}
@@ -101,7 +98,7 @@ const AdminTableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      'whitespace-nowrap bg-white/70 px-4 py-3.5 align-middle transition-all duration-150 first:rounded-xl first:pl-5 last:rounded-r-xl last:pr-5 dark:bg-zinc-900/40',
+      'whitespace-nowrap border-b border-zinc-200 px-4 py-3 align-middle text-zinc-900 dark:border-zinc-800 dark:text-zinc-100',
       className
     )}
     {...props}

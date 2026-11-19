@@ -61,7 +61,9 @@ export async function POST(req: NextRequest) {
       sortOrder = (max._max.sortOrder ?? -1) + 1;
     }
 
-    const baseSlug = parsed.data.slug ?? slugifyDocLabel(parsed.data.name);
+    const baseSlug =
+      parsed.data.slug ??
+      slugifyDocLabel(parsed.data.name, parsed.data.nameEs);
     let slug = baseSlug;
     for (let i = 0; i < 8; i++) {
       const clash = await db.documentationHeading.findUnique({
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest) {
 
     const item = await db.documentationHeading.create({
       data: {
-        name: persistDocBilingualName(parsed.data.name),
+        name: persistDocBilingualName(parsed.data.name, parsed.data.nameEs),
         slug,
         sortOrder,
         status: parsed.data.status ?? 'PUBLISHED',

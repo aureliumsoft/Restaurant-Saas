@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { SaveConfirmation } from '@/components/ui/confirmation-dialogs';
 import { Loader2, Save } from 'lucide-react';
 
 const KEYS = [
@@ -37,7 +36,6 @@ export default function AdminSettingsPage() {
   const [map, setMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
   useEffect(() => {
     axios
@@ -53,7 +51,6 @@ export default function AdminSettingsPage() {
       const entries = KEYS.map(({ key }) => ({ key, value: map[key] ?? '' }));
       const res = await axios.put('/api/admin/settings', { entries });
       setMap(res.data.data ?? {});
-      setShowSaveConfirmation(false);
       toast.success(t('admin.settingsPage.saveSuccess'));
     } catch {
       toast.error(t('admin.settingsPage.saveFailed'));
@@ -91,7 +88,7 @@ export default function AdminSettingsPage() {
               />
             </div>
           ))}
-          <Button type="button" disabled={saving} onClick={() => setShowSaveConfirmation(true)}>
+          <Button type="button" disabled={saving} onClick={() => void save()}>
             {saving ? <>
             <Loader2 className="h-4 w-4 animate-spin mr-2" />
             <span>{t('admin.settingsPage.saving')}</span>
@@ -102,15 +99,6 @@ export default function AdminSettingsPage() {
           </Button>
         </CardContent>
       </Card>
-
-      <SaveConfirmation
-        open={showSaveConfirmation}
-        title={t('admin.settingsPage.saveDialogTitle')}
-        description={t('admin.settingsPage.saveDialogDescription')}
-        loading={saving}
-        onConfirm={() => void save()}
-        onCancel={() => setShowSaveConfirmation(false)}
-      />
     </div>
   );
 }

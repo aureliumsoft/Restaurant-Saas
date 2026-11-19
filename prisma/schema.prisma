@@ -456,6 +456,8 @@ model RestaurantSubscription {
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
   notes                String?
+  /// Monthly price for this restaurant, in major units. Null uses the catalog price.
+  agreedPrice          Int?
   /// Custom plan: module ids granted when plan is CUSTOM (from accepted request).
   customSelectedModules String[]          @default([])
   /// PayPal Billing Subscriptions API id (I-…)
@@ -655,7 +657,7 @@ model PlatformFaq {
 /// Sidebar section (e.g. Getting Started, Core Tasks).
 model DocumentationHeading {
   id        String   @id @default(cuid())
-  /// Bilingual: JSON `{en,es}` or legacy `English &&&& Spanish` (same as menu products).
+  /// Bilingual JSON `{en,es}`. Editors send English and Spanish separately.
   name      String
   slug      String   @unique
   sortOrder Int      @default(0)
@@ -674,7 +676,7 @@ model DocumentationHeading {
 model DocumentationSubHeading {
   id        String   @id @default(cuid())
   headingId String
-  /// Bilingual: JSON `{en,es}` or legacy `English &&&& Spanish` (same as menu products).
+  /// Bilingual JSON `{en,es}`. Editors send English and Spanish separately.
   name      String
   slug      String
   sortOrder Int      @default(0)

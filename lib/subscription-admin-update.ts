@@ -19,6 +19,8 @@ export type AdminSubscriptionPatch = {
   trialEndsAt?: Date | null;
   currentPeriodEnd?: Date | null;
   notes?: string | null;
+  /** Monthly price for this restaurant. Null clears it back to the catalog price. */
+  agreedPrice?: number | null;
   /** Pricing comparison module ids; only applied for CUSTOM plan. */
   customSelectedModules?: string[];
 };
@@ -103,6 +105,7 @@ export async function applyAdminSubscriptionUpdate(
       trialEndsAt,
       currentPeriodEnd,
       notes: patch.notes ?? null,
+      agreedPrice: patch.agreedPrice ?? null,
       autoRenew: true,
       adminPeriodEndAt: currentPeriodEnd,
       customSelectedModules,
@@ -113,6 +116,7 @@ export async function applyAdminSubscriptionUpdate(
       trialEndsAt,
       currentPeriodEnd,
       notes: patch.notes === undefined ? undefined : patch.notes,
+      ...(patch.agreedPrice !== undefined ? { agreedPrice: patch.agreedPrice } : {}),
       customSelectedModules,
       ...(periodChanged
         ? { adminPeriodEndAt: currentPeriodEnd }

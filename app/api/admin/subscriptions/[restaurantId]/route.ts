@@ -21,6 +21,7 @@ const patchSchema = z.object({
   trialEndsAt: z.string().max(40).nullable().optional(),
   currentPeriodEnd: z.string().max(40).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+  agreedPrice: z.number().int().min(0).max(1_000_000).nullable().optional(),
   customSelectedModules: z.array(z.string().trim().min(1).max(64)).max(40).optional(),
 });
 
@@ -57,8 +58,15 @@ export async function PATCH(
     return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
   }
 
-  const { trialEndsAt, currentPeriodEnd, notes, plan, status, customSelectedModules } =
-    parsed.data;
+  const {
+    trialEndsAt,
+    currentPeriodEnd,
+    notes,
+    plan,
+    status,
+    agreedPrice,
+    customSelectedModules,
+  } = parsed.data;
 
   const normalizedModules =
     plan === 'CUSTOM'
@@ -74,6 +82,7 @@ export async function PATCH(
       trialEndsAt: parseDate(trialEndsAt),
       currentPeriodEnd: parseDate(currentPeriodEnd),
       notes: notes === undefined ? undefined : notes,
+      agreedPrice,
       customSelectedModules: normalizedModules,
     });
 

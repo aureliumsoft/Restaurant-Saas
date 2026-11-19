@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
@@ -11,19 +11,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PublicAuthShell } from '@/components/marketing/public-auth-shell';
-import { REGISTER_ROLE_SLUG } from '@/lib/global-roles';
 import { IconBrandGoogleFilled } from '@tabler/icons-react';
 import { Loader2, UserPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-
-type GoogleSignupRole = 'OWNER' | 'WORKER';
-
-type RegisterRoleOption = {
-  id: string;
-  name: string;
-  slug: string | null;
-};
 
 function loginAfterSignupErrorMessage(
   err: string | undefined,
@@ -42,56 +33,35 @@ export default function RegisterPage() {
   const router = useRouter();
 
   const [name, setName] = useState('');
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [roleId, setRoleId] = useState('');
-  const [registerRoles, setRegisterRoles] = useState<RegisterRoleOption[]>(
-    []
-  );
-  const [rolesLoading, setRolesLoading] = useState(true);
+  const [restaurantName, setRestaurantName] = useState('');
+  const [subdomain, setSubdomain] = useState('');
+  const [subdomainError, setSubdomainError] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/auth/register-roles');
-        const data = await res.json().catch(() => ({}));
-        const roles: RegisterRoleOption[] = Array.isArray(data?.roles)
-          ? data.roles
-          : [];
-        if (!cancelled) {
-          setRegisterRoles(roles);
-          if (roles.length > 0) {
-            setRoleId((prev) => prev || roles[0].id);
-          }
-        }
-      } catch {
-        if (!cancelled) {
-          toast.error(t('auth.register.rolesLoadFailed'));
-        }
-      } finally {
-        if (!cancelled) {
-          setRolesLoading(false);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [t]);
-
   async function handleEmailSignup(e: React.FormEvent) {
     e.preventDefault();
+    const webAddress = subdomain.trim().toLowerCase();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(webAddress)) {
+      setSubdomainError(t('auth.register.webAddressInvalid'));
+      return;
+    }
+    setSubdomainError('');
 
     setLoading(true);
     try {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, username, email, password, roleId }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          restaurantName,
+          subdomain: webAddress,
+        }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -109,7 +79,12 @@ export default function RegisterPage() {
                     .filter((x) => typeof x === 'string' && x.length > 0)[0]
                 : null;
 
-        toast.error(msg ?? t('auth.register.signupFailed'));
+        const message = msg ?? t('auth.register.signupFailed');
+        if (res.status === 409 && /web address|domain/i.test(String(message))) {
+          setSubdomainError(String(message));
+        } else {
+          toast.error(message);
+        }
         return;
       }
 
@@ -128,12 +103,7 @@ export default function RegisterPage() {
       }
 
       toast.success(t('auth.register.signupSuccess'));
-      const slug = registerRoles.find((r) => r.id === roleId)?.slug;
-      if (slug === REGISTER_ROLE_SLUG.OWNER) {
-        router.push('/onboarding/1');
-      } else {
-        router.push('/dashboard');
-      }
+      router.push('/dashboard');
     } catch (e: any) {
       toast.error(e?.message ?? t('auth.register.signupFailed'));
     } finally {
@@ -141,10 +111,10 @@ export default function RegisterPage() {
     }
   }
 
-  async function handleGoogleSignup(targetRole: GoogleSignupRole) {
+  async function handleGoogleSignup() {
     setLoadingGoogle(true);
     try {
-      await signIn('google', { callbackUrl: `/role?role=${targetRole}` });
+      await signIn('google', { callbackUrl: '/role?role=OWNER' });
     } catch (e: any) {
       toast.error(e?.message ?? t('auth.register.googleFailed'));
     } finally {
@@ -164,13 +134,8 @@ export default function RegisterPage() {
       <div className="flex flex-col gap-2">
         <Button
           type="button"
-          onClick={() => {
-            const selected = registerRoles.find((r) => r.id === roleId);
-            const targetRole: GoogleSignupRole =
-              selected?.slug === REGISTER_ROLE_SLUG.OWNER ? 'OWNER' : 'WORKER';
-            void handleGoogleSignup(targetRole);
-          }}
-          disabled={loadingGoogle || loading || rolesLoading || registerRoles.length === 0}
+          onClick={() => void handleGoogleSignup()}
+          disabled={loadingGoogle || loading}
           variant="secondary"
         >
           {loadingGoogle ? (
@@ -197,34 +162,18 @@ export default function RegisterPage() {
       </div>
 
       <form onSubmit={handleEmailSignup} className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="name" className="text-zinc-800 dark:text-zinc-200">
-              {t('auth.register.fullName')}
-            </Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoComplete="name"
-              required
-              className="h-11 border-zinc-300/80 bg-white/90 text-zinc-900 placeholder:text-zinc-500 focus-visible:border-fire-500 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-100"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="username" className="text-zinc-800 dark:text-zinc-200">
-              {t('auth.register.username')}
-            </Label>
-            <Input
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              required
-              className="h-11 border-zinc-300/80 bg-white/90 text-zinc-900 placeholder:text-zinc-500 focus-visible:border-fire-500 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-100"
-            />
-          </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="name" className="text-zinc-800 dark:text-zinc-200">
+            {t('auth.register.fullName')}
+          </Label>
+          <Input
+            id="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+            required
+            className="h-11 border-zinc-300/80 bg-white/90 text-zinc-900 placeholder:text-zinc-500 focus-visible:border-fire-500 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-100"
+          />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -260,32 +209,48 @@ export default function RegisterPage() {
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="role" className="text-zinc-800 dark:text-zinc-200">
-            {t('auth.register.role')}
+          <Label htmlFor="restaurant" className="text-zinc-800 dark:text-zinc-200">
+            {t('auth.register.restaurantName')}
           </Label>
-          <select
-            id="role"
-            value={roleId}
-            onChange={(e) => setRoleId(e.target.value)}
-            className="h-11 w-full rounded-md border border-zinc-300/80 bg-white/90 px-3 text-sm text-zinc-900 shadow-sm outline-none ring-0 focus:border-fire-500 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-100"
+          <Input
+            id="restaurant"
+            value={restaurantName}
+            onChange={(e) => setRestaurantName(e.target.value)}
+            autoComplete="organization"
             required
-            disabled={rolesLoading || registerRoles.length === 0}
-          >
-            {registerRoles.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-          {!rolesLoading && registerRoles.length === 0 ? (
-            <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              {t('auth.register.noRolesHint')}
-            </p>
+            className="h-11 border-zinc-300/80 bg-white/90 text-zinc-900 placeholder:text-zinc-500 focus-visible:border-fire-500 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-100"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="subdomain" className="text-zinc-800 dark:text-zinc-200">
+            {t('auth.register.webAddress')}
+          </Label>
+          <Input
+            id="subdomain"
+            value={subdomain}
+            onChange={(e) => {
+              setSubdomain(e.target.value.toLowerCase());
+              setSubdomainError('');
+            }}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            required
+            aria-invalid={Boolean(subdomainError)}
+            placeholder={t('auth.register.webAddressPlaceholder')}
+            className="h-11 border-zinc-300/80 bg-white/90 text-zinc-900 placeholder:text-zinc-500 focus-visible:border-fire-500 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-100"
+          />
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+            {t('auth.register.webAddressHint')}
+          </p>
+          {subdomainError ? (
+            <p className="text-sm text-destructive">{subdomainError}</p>
           ) : null}
         </div>
 
         <Button
-          disabled={loading || loadingGoogle || rolesLoading || registerRoles.length === 0}
+          disabled={loading || loadingGoogle}
           type="submit"
           className="h-11 w-full bg-gradient-to-r from-fire-500 via-fire-600 to-fire-500 text-white shadow-[0_16px_34px_-14px] shadow-fire-500/70 hover:from-fire-400 hover:to-fire-500"
         >
