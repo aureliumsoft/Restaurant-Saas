@@ -149,7 +149,8 @@ export function PosCompletedOrdersSheet({
 
   const fetchOrderDetail = async (row: PosCompletedOrderRow) => {
     const res = await axios.get<{ data: PosOrderDetail }>(
-      posOrderApiPath(row.id, '', row.urlId)
+      posOrderApiPath(row.id, '', row.urlId),
+      { params: { receipt: '1' } }
     );
     return res.data.data;
   };

@@ -29,7 +29,11 @@ import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfill
 import { PremiumDisabledControl } from '@/components/premium/premium-disabled-control';
 import { PlanCapOverLimitBanner } from '@/components/premium/plan-cap-over-limit-banner';
 import { TablesModule } from '@/components/dashboard/tables/tables-module';
-import { timezoneForRestaurantCountry } from '@/lib/restaurant-regional';
+import {
+  BRANCH_TIMEZONE_OPTIONS,
+  branchTimeZoneLabel,
+  resolveBranchTimeZone,
+} from '@/lib/branch-timezone';
 import {
   createDefaultOpeningHours,
   normalizeOpeningHours,
@@ -47,6 +51,7 @@ type BranchRow = {
   longitude: number | null;
   deliveryRadiusKm: number | null;
   openingHours: BranchOpeningHours | null;
+  timeZone?: string | null;
   isActive?: boolean;
   planQuotaLocked?: boolean;
   createdAt: string;
@@ -113,9 +118,11 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
   const { regional } = useOwnerRestaurantRegional();
   const { branches: scopedBranches } = useBranchContext();
   const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
-  const branchTimeZone = timezoneForRestaurantCountry(regional.countryCode);
-  const restaurantZoneLabel =
-    regional.countryCode === 'PK' ? 'Pakistan (Karachi)' : 'Spain (Madrid)';
+  const [timeZone, setTimeZone] = useState(() =>
+    resolveBranchTimeZone('', regional.countryCode)
+  );
+  const branchTimeZone = resolveBranchTimeZone(timeZone, regional.countryCode);
+  const restaurantZoneLabel = branchTimeZoneLabel(branchTimeZone);
   const [restaurantClock, setRestaurantClock] = useState('');
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -203,6 +210,7 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
     setLongitude(null);
     setDeliveryRadiusKm('');
     setOpeningHours(createDefaultOpeningHours());
+    setTimeZone(resolveBranchTimeZone('', regional.countryCode));
   }
 
   function openAddForm() {
@@ -232,6 +240,7 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
       branch.deliveryRadiusKm != null ? String(branch.deliveryRadiusKm) : ''
     );
     setOpeningHours(normalizeOpeningHours(branch.openingHours));
+    setTimeZone(resolveBranchTimeZone(branch.timeZone, regional.countryCode));
     setSelectedBranchId(branch.id);
     setFormOpen(true);
   }
@@ -268,6 +277,7 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
           ? parseFloat(deliveryRadiusKm)
           : null,
         openingHours,
+        timeZone: branchTimeZone,
       });
       toast.success(t('dashboard.branches.created'));
       setFormOpen(false);
@@ -304,6 +314,7 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
           ? parseFloat(deliveryRadiusKm)
           : null,
         openingHours,
+        timeZone: branchTimeZone,
       });
       toast.success(t('dashboard.branches.updated'));
       setFormOpen(false);
@@ -615,6 +626,26 @@ export function BranchedPage({ embedded = false }: { embedded?: boolean }) {
               />
             </div>
             <div className="space-y-2 rounded-lg border p-3">
+              <div className="grid gap-2">
+                <Label htmlFor="branch-timezone">
+                  {t('dashboard.branches.timezone')}
+                </Label>
+                <select
+                  id="branch-timezone"
+                  value={branchTimeZone}
+                  onChange={(event) => setTimeZone(event.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {BRANCH_TIMEZONE_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  {t('dashboard.branches.timezoneHint')}
+                </p>
+              </div>
               <div>
                 <p className="text-sm font-medium">
                   {t('dashboard.branches.weeklyHours')}

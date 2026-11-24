@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { claimPlatformOrderIntent } from '@/lib/order-intent-claim';
 import {
   createCustomerOrder,
   parseCustomerOrderPayload,
@@ -181,13 +182,30 @@ export async function applyPayPalPostCapture(opts: {
           orderSync = 'completed';
         }
       }
-    } else if (intent?.endpoint && intent.payload && intentKey) {
-      if (intent.status !== 'completed') {
+    } else if (intentKey) {
+      const claimed = await claimPlatformOrderIntent(intentKey);
+      if (claimed.state === 'completed') {
+        orderId =
+          typeof claimed.parsed.orderId === 'string'
+            ? claimed.parsed.orderId
+            : undefined;
+        shortOrderId =
+          typeof claimed.parsed.shortOrderId === 'string'
+            ? claimed.parsed.shortOrderId
+            : undefined;
+        ticketNumber =
+          typeof claimed.parsed.ticketNumber === 'number'
+            ? claimed.parsed.ticketNumber
+            : null;
+        orderSync = 'already_completed';
+      } else if (claimed.state === 'claimed') {
+        const claimedIntent = claimed.parsed as NonNullable<typeof intent>;
         try {
-          if (intent.endpoint === '/api/customer/orders') {
+          if (claimedIntent.endpoint === '/api/customer/orders') {
             const orderData = parseCustomerOrderPayload({
-              ...(typeof intent.payload === 'object' && intent.payload !== null
-                ? intent.payload
+              ...(typeof claimedIntent.payload === 'object' &&
+              claimedIntent.payload !== null
+                ? claimedIntent.payload
                 : {}),
               paymentStatus: 'completed',
               paymentMethod: 'PayPal',
@@ -197,7 +215,7 @@ export async function applyPayPalPostCapture(opts: {
             }
             const created = await createCustomerOrder({
               data: orderData,
-              customerAccountId: intent.customerAccountId ?? null,
+              customerAccountId: claimedIntent.customerAccountId ?? null,
               paidExternally: true,
             });
             if (!created.ok) {
@@ -215,7 +233,7 @@ export async function applyPayPalPostCapture(opts: {
               where: { key: intentKey },
               data: {
                 value: JSON.stringify({
-                  ...intent,
+                  ...claimedIntent,
                   status: 'completed',
                   paypalOrderId: orderToken,
                   orderId,
@@ -226,13 +244,14 @@ export async function applyPayPalPostCapture(opts: {
               },
             });
             orderSync = 'completed';
-          } else {
-            const res = await fetch(`${baseUrl}${intent.endpoint}`, {
+          } else if (claimedIntent.endpoint) {
+            const res = await fetch(`${baseUrl}${claimedIntent.endpoint}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                ...(typeof intent.payload === 'object' && intent.payload !== null
-                  ? intent.payload
+                ...(typeof claimedIntent.payload === 'object' &&
+                claimedIntent.payload !== null
+                  ? claimedIntent.payload
                   : {}),
                 paymentStatus: 'completed',
                 paymentMethod: 'PayPal',
@@ -266,8 +285,8 @@ export async function applyPayPalPostCapture(opts: {
               await db.platformSetting.update({
                 where: { key: intentKey },
                 data: {
-                  value: JSON.stringify({
-                    ...intent,
+                value: JSON.stringify({
+                    ...claimedIntent,
                     status: 'completed',
                     paypalOrderId: orderToken,
                     orderId,
@@ -275,13 +294,23 @@ export async function applyPayPalPostCapture(opts: {
                     ticketNumber,
                     completedAt: new Date().toISOString(),
                   }),
-                },
-              });
+              },
+            });
               orderSync = 'completed';
             }
           }
         } catch (e) {
           console.error('PayPal order intent sync failed:', e);
+          await db.platformSetting.update({
+            where: { key: intentKey },
+            data: {
+              value: JSON.stringify({
+                ...claimedIntent,
+                status: 'failed',
+                lastError: e instanceof Error ? e.message.slice(0, 500) : 'Order creation failed',
+              }),
+            },
+          });
         }
       }
     }

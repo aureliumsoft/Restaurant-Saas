@@ -6,6 +6,7 @@ import { getAppSession } from '@/lib/auth/app-session';
 import { getRestaurantForUser } from '@/lib/restaurant-owner';
 import { isSubscriptionPeriodActive } from '@/lib/subscription-access';
 import { processSubscriptionLifecycle } from '@/lib/subscription-lifecycle';
+import { ensureSubscriptionCatalog } from '@/lib/ensure-subscription-catalog';
 import { finalPrice } from '@/lib/subscription-catalog-pricing';
 
 function formatPeriodEnd(iso: Date | null): string {
@@ -54,6 +55,12 @@ export default async function PricingPage() {
         }
       }
     }
+  }
+
+  try {
+    await ensureSubscriptionCatalog();
+  } catch (error) {
+    console.error('Could not ensure subscription catalog', error);
   }
 
   let plans: Array<{

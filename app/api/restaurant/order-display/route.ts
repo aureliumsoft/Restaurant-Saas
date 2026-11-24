@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server';
 import { getBranchScopeFromRequest, orderBranchSql } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
-import { getOrderDisplayTimezone } from '@/lib/order-display-timezone';
+import { loadResolvedBranchTimeZone } from '@/lib/branch-timezone-server';
 
 export const runtime = 'nodejs';
 
@@ -47,7 +47,7 @@ export type OrderDisplayPayload = {
     inProgress: OrderDisplayTicket[];
     /** YYYY-MM-DD — calendar date used for the "today" filter in {@link filterTimezone}. */
     filterDate: string;
-    /** IANA zone used to compute "today" (from `ORDER_DISPLAY_TIMEZONE`, default UTC). */
+    /** IANA zone used to compute "today" (the active branch timezone). */
     filterTimezone: string;
   };
 };
@@ -81,7 +81,10 @@ export async function GET(req: NextRequest) {
     );
     const branchSql = orderBranchSql(branchScope?.activeBranchId ?? null);
 
-    const tz = getOrderDisplayTimezone();
+    const tz = await loadResolvedBranchTimeZone(
+      auth.restaurantId,
+      branchScope?.activeBranchId ?? null
+    );
     const [dateRow] = await db.$queryRaw<{ filterDate: Date | string }[]>(
       Prisma.sql`
         SELECT (timezone(${tz}::text, now()))::date AS "filterDate"

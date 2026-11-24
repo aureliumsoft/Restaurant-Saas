@@ -61,7 +61,10 @@ export async function GET(req: NextRequest) {
         activeBranchId,
         floor,
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: { 'Cache-Control': 'private, max-age=20' },
+      }
     );
   }
 

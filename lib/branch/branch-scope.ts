@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 
+import { resolveBranchTimeZone } from '@/lib/branch-timezone';
 import { db } from '@/lib/db';
 import { RESTAURANT_ROLE_SLUG } from '@/lib/restaurant-roles';
 import { resolveRouteId } from '@/lib/resolve-route-id';
@@ -12,6 +13,7 @@ export type BranchOption = {
   name: string;
   address: string | null;
   phone: string | null;
+  timeZone: string;
 };
 
 export type BranchScope = {
@@ -76,11 +78,26 @@ export async function resolveBranchScope(
   restaurantId: string,
   activeBranchIdFromRequest: string | null
 ): Promise<BranchScope | null> {
-  const branches = await db.branch.findMany({
-    where: { restaurantId, isActive: true },
-    orderBy: { name: 'asc' },
-    select: { id: true, name: true, address: true, phone: true },
+  const restaurant = await db.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: { countryCode: true },
   });
+  const branches = (
+    await db.branch.findMany({
+      where: { restaurantId, isActive: true },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        phone: true,
+        timeZone: true,
+      },
+    })
+  ).map((branch) => ({
+    ...branch,
+    timeZone: resolveBranchTimeZone(branch.timeZone, restaurant?.countryCode),
+  }));
 
   if (branches.length === 0) {
     return {

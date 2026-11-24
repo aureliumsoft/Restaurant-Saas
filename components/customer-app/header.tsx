@@ -18,6 +18,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import '@/lib/i18n/client';
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 import {
   buildCustomerLightSurfaceVars,
   buildThemeCssVars,
@@ -106,20 +107,9 @@ export function Header() {
   useEffect(() => {
     const run = async () => {
       try {
-        let url: string | null = null;
-        if (slugForApi) {
-          url = `/api/customer/restaurant?slug=${encodeURIComponent(slugForApi)}`;
-        } else {
-          const subdomain = inferredSubdomain;
-          if (!subdomain) return;
-          url = `/api/customer/restaurant?subdomain=${encodeURIComponent(subdomain)}`;
-        }
-
-        const res = await fetch(url);
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) return;
-
-        const r = data?.data;
+        const r = slugForApi
+          ? await fetchCustomerRestaurant({ slug: slugForApi })
+          : await fetchCustomerRestaurant({ subdomain: inferredSubdomain });
         if (!r) return;
         setBrand({
           name: r?.name ?? 'Restaurant',

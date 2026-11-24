@@ -100,9 +100,36 @@ export function useKioskPendingCash(branchId: string | null) {
   };
 }
 
+export function useKioskPendingCashCount(branchId: string | null) {
+  const key = branchId
+    ? ([...queryKeys.kioskPendingCash(branchId), 'count'] as const)
+    : null;
+  const { data, mutate } = useSWR(
+    key,
+    async () => {
+      const res = await axios.get<{ count?: number }>(
+        '/api/restaurant/kiosk-order/pending-cash',
+        { params: { branchId, count: '1' } }
+      );
+      return res.data.count ?? 0;
+    },
+    { revalidateOnFocus: false, dedupingInterval: 2_000 }
+  );
+  useRealtimeRefresh(
+    'refreshKioskOrders',
+    () => {
+      if (document.hidden) return;
+      void mutate();
+    },
+    { runOnMount: false }
+  );
+  return data ?? 0;
+}
+
 export function revalidateKioskPendingCash(branchId: string | null) {
   if (!branchId) return;
   void globalMutate(queryKeys.kioskPendingCash(branchId));
+  void globalMutate([...queryKeys.kioskPendingCash(branchId), 'count']);
 }
 
 export function removeKioskPendingCashOrder(

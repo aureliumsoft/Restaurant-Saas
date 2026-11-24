@@ -28,6 +28,7 @@ import { useRestaurantBranding } from '@/components/layout/restaurant-branding-p
 import { useCustomerAccount } from '@/components/customer-app/customer-account-context';
 import { useOrderInfo } from '@/hooks/use-order-info';
 import { inferHostSubdomainForMenu } from '@/lib/customer-menu-client';
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 import {
   buildCustomerLightSurfaceVars,
   buildStorefrontThemeVars,
@@ -213,6 +214,7 @@ export default function CheckoutPageClient({
     };
   } | null>(null);
   const [paymentConfigLoading, setPaymentConfigLoading] = useState(true);
+  const [paymentConfigAttempt, setPaymentConfigAttempt] = useState(0);
 
   const effectiveSlug = useMemo(() => {
     return (
@@ -273,25 +275,18 @@ export default function CheckoutPageClient({
             : null);
         const store = orderInfo?.storeId?.trim();
         const subdomain = inferHostSubdomainForMenu();
-        const lookup = slug
-          ? `/api/customer/restaurant?slug=${encodeURIComponent(slug)}`
-          : store || subdomain
-            ? `/api/customer/restaurant?subdomain=${encodeURIComponent(
-                store || subdomain || ''
-              )}`
-            : null;
-        if (!lookup) return;
-        const res = await fetch(lookup);
-        if (!res.ok) return;
-        const json = await res.json().catch(() => ({}));
-        if (cancelled) return;
+        if (!slug && !store && !subdomain) return;
+        const data = await fetchCustomerRestaurant(
+          slug ? { slug } : { subdomain: store || subdomain || '' }
+        );
+        if (cancelled || !data) return;
         const c =
-          typeof json?.data?.themePrimaryColor === 'string'
-            ? json.data.themePrimaryColor.trim()
+          typeof data.themePrimaryColor === 'string'
+            ? data.themePrimaryColor.trim()
             : '';
         setThemePrimaryColor(c || null);
         const fetchedSlug =
-          typeof json?.data?.slug === 'string' ? json.data.slug.trim() : '';
+          typeof data.slug === 'string' ? data.slug.trim() : '';
         if (fetchedSlug) {
           setResolvedSlug(fetchedSlug);
         }
@@ -368,7 +363,7 @@ export default function CheckoutPageClient({
     return () => {
       cancelled = true;
     };
-  }, [effectiveSlug]);
+  }, [effectiveSlug, paymentConfigAttempt]);
 
   useEffect(() => {
     setCart(parseCartFromStorage(localStorage.getItem(`cart-${orderId}`)));
@@ -391,10 +386,13 @@ export default function CheckoutPageClient({
     () => cart.reduce((sum, item) => sum + lineTotal(item), 0),
     [cart]
   );
-  const { serviceChargeAmount } = useRestaurantServiceCharges(
-    effectiveSlug || undefined,
-    'online'
-  );
+  const {
+    serviceChargeAmount,
+    loading: serviceChargeLoading,
+    error: serviceChargeError,
+    reload: reloadServiceCharge,
+  } = useRestaurantServiceCharges(effectiveSlug || undefined, 'online');
+  const serviceChargeBlocked = serviceChargeLoading || serviceChargeError;
   const { formatMoney, regional } = useRestaurantRegional(effectiveSlug || undefined);
   const grandTotal = total + serviceChargeAmount;
 
@@ -430,6 +428,7 @@ export default function CheckoutPageClient({
           quantity: line.quantity,
           unitPrice: lineUnitTotal(line),
           productName: cartLineTitle(line.productName, line.variationName, uiLang),
+          variationId: line.variationId ?? null,
           modifiers: line.modifiers,
         })),
         subtotal: total,
@@ -502,6 +501,7 @@ export default function CheckoutPageClient({
         quantity: line.quantity,
         unitPrice: lineUnitTotal(line),
         productName: cartLineTitle(line.productName, line.variationName, uiLang),
+        variationId: line.variationId ?? null,
         modifiers: line.modifiers,
       })),
       subtotal: total,
@@ -802,8 +802,22 @@ export default function CheckoutPageClient({
                 </div>
 
                 <div className="mt-4 space-y-2">
-                  {effectiveSlug ? (
-                    paymentConfigLoading ? (
+                  {serviceChargeError ? (
+                    <div className="space-y-2">
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        {t('feesCouldNotLoad')}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => reloadServiceCharge()}
+                      >
+                        {t('menuTryAgain')}
+                      </Button>
+                    </div>
+                  ) : effectiveSlug ? (
+                    paymentConfigLoading || serviceChargeLoading ? (
                       <div className="flex items-center justify-center py-4">
                         <Loader2 className="h-5 w-5 animate-spin text-primary" />
                       </div>
@@ -824,7 +838,7 @@ export default function CheckoutPageClient({
                           restaurantSlug: effectiveSlug,
                           orderType,
                         }}
-                        disabled={submitting}
+                        disabled={submitting || serviceChargeBlocked}
                         onProcessingChange={setSubmitting}
                         onApproved={async ({ capture }) => {
                           const slug = effectiveSlug;
@@ -879,12 +893,14 @@ export default function CheckoutPageClient({
                           `/order/${orderType}/${encodeURIComponent(orderId)}`,
                           orderInfo
                         )}
-                        disabled={submitting}
+                        disabled={submitting || serviceChargeBlocked}
                         onProcessingChange={setSubmitting}
                         onError={(msg) => toast.error(msg)}
                       />
                     ) : paymentConfig?.ready &&
-                      paymentConfig.provider === 'WALLETS' ? (
+                      paymentConfig.provider === 'WALLETS' &&
+                      (paymentConfig.wallets?.jazzcash?.ready ||
+                        paymentConfig.wallets?.easypaisa?.ready) ? (
                       <div className="flex flex-col gap-2">
                         {paymentConfig.wallets?.jazzcash?.ready ? (
                           <JazzCashCheckoutButton
@@ -916,7 +932,7 @@ export default function CheckoutPageClient({
                               )}`,
                               orderInfo
                             )}
-                            disabled={submitting}
+                            disabled={submitting || serviceChargeBlocked}
                             onProcessingChange={setSubmitting}
                             onError={(msg) => toast.error(msg)}
                           />
@@ -951,16 +967,28 @@ export default function CheckoutPageClient({
                               )}`,
                               orderInfo
                             )}
-                            disabled={submitting}
+                            disabled={submitting || serviceChargeBlocked}
                             onProcessingChange={setSubmitting}
                             onError={(msg) => toast.error(msg)}
                           />
                         ) : null}
                       </div>
                     ) : (
-                      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                        {t('websitePaymentsNotConfigured')}
-                      </p>
+                      <div className="space-y-2">
+                        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                          {t('websitePaymentsNotConfigured')}
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() =>
+                            setPaymentConfigAttempt((value) => value + 1)
+                          }
+                        >
+                          {t('menuTryAgain')}
+                        </Button>
+                      </div>
                     )
                   ) : (
                     <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">

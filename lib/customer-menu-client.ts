@@ -73,6 +73,23 @@ export function buildCustomerMenuCategoriesUrl(
   return `/api/customer/menu/categories?${query}`;
 }
 
+/** One request for every visible category and its dishes. */
+export function buildCustomerMenuBrowseUrl(
+  restaurantSlug: string | null | undefined,
+  storeId: string | null | undefined,
+  hostSubdomain: string | null,
+  branchId?: string | null
+): string | null {
+  const query = customerMenuQueryString(
+    restaurantSlug,
+    storeId,
+    hostSubdomain,
+    branchId
+  );
+  if (!query) return null;
+  return `/api/customer/menu/browse?${query}`;
+}
+
 /** Progressive menu: products for one category (optional page/limit batching). */
 export function buildCustomerMenuCategoryItemsUrl(
   categoryId: string,
@@ -92,6 +109,10 @@ export function buildCustomerMenuCategoryItemsUrl(
 /** Kiosk progressive menu helpers (slug-only). */
 export function buildKioskMenuCategoriesUrl(slug: string, branchId: string): string {
   return `/api/customer/menu/categories?slug=${encodeURIComponent(slug)}${branchQuery(branchId)}`;
+}
+
+export function buildKioskMenuBrowseUrl(slug: string, branchId: string): string {
+  return `/api/customer/menu/browse?slug=${encodeURIComponent(slug)}${branchQuery(branchId)}`;
 }
 
 export function buildKioskMenuCategoryItemsUrl(

@@ -7,6 +7,7 @@ import {
   orderBranchWhere,
   userIsOwnerOrAdmin,
 } from '@/lib/branch/branch-scope';
+import { loadResolvedBranchTimeZone } from '@/lib/branch-timezone-server';
 import { countDiningTables } from '@/lib/dining-tables-query';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
@@ -21,7 +22,6 @@ import {
   getTodayDayKeyInTimezone,
   lastNCalendarDayKeys,
   calendarDayKeyInTimezone,
-  salesOrderFilterTimezone,
 } from '@/lib/sales-order-period';
 import { getRestaurantPlanFeatures } from '@/lib/subscription-plan-enforcement';
 import { DEFAULT_UI_LANGUAGE } from '@/lib/i18n/resources';
@@ -114,7 +114,7 @@ export async function GET(_req: NextRequest) {
       canViewHistorical,
       planFeatures.advancedAnalytics
     );
-    const filterTz = salesOrderFilterTimezone();
+    const filterTz = await loadResolvedBranchTimeZone(restaurantId, branchId);
     const todayBounds = canViewHistorical
       ? null
       : await getTodayCreatedAtBounds(db, filterTz);

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { AcceptedPaymentMethods } from '@/components/payments/accepted-payment-methods';
 import { cn } from '@/lib/utils';
 import '@/lib/i18n/client';
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 import { parseStorefrontSlugFromPath } from '@/lib/customer-storefront-paths';
 import { writeCachedRestaurantThemePrimary } from '@/lib/restaurant-theme-persist';
 
@@ -50,13 +51,8 @@ export function Footer({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `/api/customer/restaurant?slug=${encodeURIComponent(slug)}`
-        );
-        const json = await res.json().catch(() => ({}));
+        const data = await fetchCustomerRestaurant({ slug });
         if (cancelled) return;
-
-        const data = json?.data;
         setRestaurantName(
           typeof data?.name === 'string' ? data.name.trim() : null
         );

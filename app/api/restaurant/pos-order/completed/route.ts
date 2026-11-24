@@ -6,11 +6,9 @@ import {
   orderBranchWhere,
   validateBranchForRestaurant,
 } from '@/lib/branch/branch-scope';
+import { loadResolvedBranchTimeZone } from '@/lib/branch-timezone-server';
 import { db } from '@/lib/db';
-import {
-  getTodayCreatedAtBounds,
-  salesOrderFilterTimezone,
-} from '@/lib/sales-order-period';
+import { getTodayCreatedAtBounds } from '@/lib/sales-order-period';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { withUrlIds } from '@/lib/with-url-id';
 
@@ -63,7 +61,7 @@ export async function GET(req: NextRequest) {
       ? Math.max(0, Math.floor(offsetRaw))
       : 0;
 
-    const tz = salesOrderFilterTimezone();
+    const tz = await loadResolvedBranchTimeZone(auth.restaurantId, branchId);
     const todayBounds = await getTodayCreatedAtBounds(db, tz);
 
     const where = {
@@ -72,6 +70,11 @@ export async function GET(req: NextRequest) {
       createdAt: todayBounds,
       status: { equals: 'completed', mode: 'insensitive' as const },
     };
+
+    if (req.nextUrl.searchParams.get('count') === '1') {
+      const count = await db.order.count({ where });
+      return NextResponse.json({ count });
+    }
 
     const [orders, total] = await Promise.all([
       db.order.findMany({

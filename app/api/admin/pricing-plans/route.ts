@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { requirePlatformAdmin } from '@/lib/auth/adminRequest';
 import { db } from '@/lib/db';
+import { ensureSubscriptionCatalog } from '@/lib/ensure-subscription-catalog';
 import {
   clampDiscountPercent,
   finalPrice,
@@ -60,6 +61,7 @@ export async function GET(req: NextRequest) {
   if ('error' in auth) return auth.error;
 
   try {
+    await ensureSubscriptionCatalog();
     const rows = await db.$queryRaw<CatalogRow[]>(Prisma.sql`
       SELECT
         "id",

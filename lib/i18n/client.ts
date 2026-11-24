@@ -85,6 +85,16 @@ export function hydrateUiLanguageFromStorage() {
   document.documentElement.lang = lang;
 }
 
+if (i18n.isInitialized) {
+  i18n.addResourceBundle(
+    DEFAULT_UI_LANGUAGE,
+    'translation',
+    defaultLocale.translation,
+    true,
+    true
+  );
+}
+
 export function setUiLanguage(lang: UiLanguage) {
   const next = normalizeUiLanguage(lang);
   if (typeof window !== 'undefined') {

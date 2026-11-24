@@ -13,6 +13,7 @@ import axios from 'axios';
 import eventBus from '@/lib/even';
 import type { BranchOption } from '@/lib/branch/branch-scope';
 import { publicQueryParam } from '@/lib/public-id';
+import { writeCachedPosBranchId } from '@/lib/pos-branch-memory';
 import {
   revalidateStaffBootstrap,
   useStaffBootstrapSWR,
@@ -77,6 +78,9 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   );
 
   const activeBranchId = scope?.activeBranchId ?? null;
+  useEffect(() => {
+    writeCachedPosBranchId(activeBranchId);
+  }, [activeBranchId]);
   const activeBranch = scope?.branches.find((b) => b.id === activeBranchId);
   const branchQuery = activeBranch
     ? publicQueryParam('branchId', activeBranch.id, activeBranch.urlId)

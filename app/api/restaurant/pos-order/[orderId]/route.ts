@@ -19,6 +19,11 @@ import {
 } from '@/lib/pos-order-lines';
 import { createOrderItemsWithModifiers } from '@/lib/pos-order-modifiers';
 import {
+  consumeIngredientsForOrder,
+  isMajorIngredientOutOfStockError,
+  restoreIngredientsForOrder,
+} from '@/lib/inventory/stock';
+import {
   parseRestaurantServiceCharges,
   RESTAURANT_SERVICE_CHARGE_DB_SELECT,
   resolveServiceChargeAmount,
@@ -70,6 +75,21 @@ const orderSelect = {
   },
 } as const;
 
+const receiptOrderSelect = {
+  ...orderSelect,
+  items: {
+    select: {
+      id: true,
+      menuItemId: true,
+      quantity: true,
+      price: true,
+      productName: true,
+      menuItem: { select: { name: true } },
+      modifiers: orderSelect.items.select.modifiers,
+    },
+  },
+} as const;
+
 function mapOrderDetail(order: {
   id: string;
   shortOrderId: string;
@@ -92,7 +112,7 @@ function mapOrderDetail(order: {
     quantity: number;
     price: number;
     productName: string | null;
-    menuItem: { name: string; imageUrl: string | null } | null;
+    menuItem: { name: string; imageUrl?: string | null } | null;
     modifiers: Array<{
       name: string;
       unitPrice: number;
@@ -163,6 +183,7 @@ export async function GET(
     }
 
     const { orderId } = await resolveRouteParams(ctx.params, ['orderId']);
+    const receiptOnly = req.nextUrl.searchParams.get('receipt') === '1';
     const order = await db.order.findFirst({
       where: {
         id: orderId,
@@ -175,7 +196,7 @@ export async function GET(
           ],
         },
       },
-      select: orderSelect,
+      select: receiptOnly ? receiptOrderSelect : orderSelect,
     });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
@@ -407,8 +428,20 @@ export async function PATCH(
     }
 
     await db.$transaction(async (tx) => {
+      await restoreIngredientsForOrder(tx, existing.id);
       await tx.orderItem.deleteMany({ where: { orderId: existing.id } });
       await createOrderItemsWithModifiers(tx, existing.id, normalizedItems);
+      await consumeIngredientsForOrder(tx, {
+        restaurantId: auth.restaurantId,
+        branchId,
+        orderId: existing.id,
+        lines: normalizedItems.map((line) => ({
+          menuItemId: line.menuItemId,
+          quantity: line.quantity,
+          variationId: line.variationId,
+          modifiers: line.modifiers,
+        })),
+      });
 
       await tx.order.update({
         where: { id: existing.id },
@@ -471,6 +504,12 @@ export async function PATCH(
       message: 'POS order updated',
     });
   } catch (error) {
+    if (isMajorIngredientOutOfStockError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof Error && error.message.includes('Select a variation')) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error('pos-order PATCH', error);
     return NextResponse.json(
       { error: 'Failed to update POS order' },

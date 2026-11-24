@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     const { page, pageSize } = parsePaginationParams(req.nextUrl.searchParams, {
       defaultPageSize: 24,
-      maxPageSize: 48,
+      maxPageSize: 200,
     });
 
     const data = await loadCustomerMenuCategoryItems({

@@ -24,6 +24,8 @@ import {
 } from '@/components/kds/kds-order-action-dialog';
 import { OrderCustomerExtras } from '@/components/order/order-customer-extras';
 import { kdsFetchErrorMessage } from '@/lib/kds-api-errors';
+import { formatBranchDateTime, formatBranchTime } from '@/lib/branch-timezone';
+import { useBranchContext } from '@/hooks/use-branch-context';
 import {
   buildKitchenTicketItemRows,
   parseKitchenTicketItemDisplay,
@@ -98,6 +100,9 @@ const MAX_CUSTOM_MINUTES = 240;
 export function KdsManagerBoard() {
   const { t } = useTranslation();
   const { formatMoney } = useOwnerRestaurantRegional();
+  const { branches, activeBranchId } = useBranchContext();
+  const branchTimeZone =
+    branches.find((branch) => branch.id === activeBranchId)?.timeZone ?? null;
   const { settings: fulfillmentSettings, loading: settingsLoading } =
     useRestaurantFulfillmentSettings();
   const [orders, setOrders] = useState<PendingOrder[]>([]);
@@ -153,12 +158,8 @@ export function KdsManagerBoard() {
 
   const lastUpdatedText = useMemo(() => {
     if (!lastUpdated) return '—';
-    return lastUpdated.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  }, [lastUpdated]);
+    return formatBranchTime(lastUpdated, branchTimeZone);
+  }, [lastUpdated, branchTimeZone]);
 
   function resolveMinutesForOrder(orderId: string): number | null {
     const raw = customMinutesText[orderId]?.trim();
@@ -345,12 +346,12 @@ export function KdsManagerBoard() {
                         {o.customer?.name || t('kds.walkIn')}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(o.createdAt).toLocaleString()}
+                        {formatBranchDateTime(o.createdAt, branchTimeZone)}
                       </p>
                       {o.orderScheduleMode === 'later' && o.orderScheduleAt ? (
                         <p className="text-xs font-medium text-primary">
                           {t('kds.scheduledFor', {
-                            time: new Date(o.orderScheduleAt).toLocaleString(),
+                            time: formatBranchDateTime(o.orderScheduleAt, branchTimeZone),
                           })}
                         </p>
                       ) : (
@@ -509,7 +510,7 @@ export function KdsManagerBoard() {
                       {o.orderScheduleMode === 'later' && o.orderScheduleAt ? (
                         <p className="text-xs text-muted-foreground">
                           {t('kds.scheduledKitchenNote', {
-                            time: new Date(o.orderScheduleAt).toLocaleString(),
+                            time: formatBranchDateTime(o.orderScheduleAt, branchTimeZone),
                           })}
                         </p>
                       ) : null}

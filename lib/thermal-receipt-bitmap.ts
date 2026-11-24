@@ -50,7 +50,7 @@ function wrapText(
   return lines;
 }
 
-async function loadLogo(url: string): Promise<HTMLImageElement | null> {
+async function loadLogoNow(url: string): Promise<HTMLImageElement | null> {
   let src = url;
   if (!url.startsWith('data:')) {
     try {
@@ -69,6 +69,16 @@ async function loadLogo(url: string): Promise<HTMLImageElement | null> {
     img.onerror = () => resolve(null);
     img.src = src;
   });
+}
+
+/** Don't hold the receipt for a slow logo. The name still prints. */
+async function loadLogo(url: string): Promise<HTMLImageElement | null> {
+  return Promise.race([
+    loadLogoNow(url),
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), 180);
+    }),
+  ]);
 }
 
 function contain(
@@ -90,8 +100,8 @@ function drawReceipt(
   const width = receipt.widthDots ?? PAPER_80MM_DOTS;
   const pad = Math.round(width * 0.03);
   const contentW = width - pad * 2;
-  const qtyW = Math.round(contentW * 0.14);
-  const amtW = Math.round(contentW * 0.28);
+  const qtyW = Math.round(contentW * 0.12);
+  const amtW = Math.round(contentW * 0.24);
   const itemW = contentW - qtyW - amtW;
   const kiosk = receipt.variant === 'kiosk';
   const normalSize = kiosk ? 20 : 10;
@@ -133,15 +143,18 @@ function drawReceipt(
   measure.font = `700 ${boldSize}px ${FONT}`;
   const metaBlocks = receipt.meta.map((row) => {
     const label = `${row.label}: `;
+    const keepTogether = row.label === 'Tracking ID';
     const labelW = measure.measureText(label).width;
     measure.font = `${normalSize}px ${FONT}`;
-    const lines = wrapText(
-      measure,
-      row.value,
-      Math.max(40, contentW - labelW)
-    );
+    const lines = keepTogether
+      ? [row.value]
+      : wrapText(measure, row.value, Math.max(40, contentW - labelW));
     measure.font = `700 ${boldSize}px ${FONT}`;
-    return { label, lines: lines.length ? lines : [''] };
+    return {
+      label,
+      lines: lines.length ? lines : [''],
+      keepTogether,
+    };
   });
 
   const sep = 10;
@@ -233,6 +246,18 @@ function drawReceipt(
 
   ctx.textAlign = 'left';
   for (const block of metaBlocks) {
+    if (block.keepTogether) {
+      const text = `${block.label}${block.lines[0] ?? ''}`;
+      let size = boldSize;
+      ctx.font = `700 ${size}px ${FONT}`;
+      while (size > 12 && ctx.measureText(text).width > contentW) {
+        size -= 1;
+        ctx.font = `700 ${size}px ${FONT}`;
+      }
+      ctx.fillText(text, pad, y);
+      y += size + lineGap;
+      continue;
+    }
     ctx.font = `700 ${boldSize}px ${FONT}`;
     const labelW = ctx.measureText(block.label).width;
     block.lines.forEach((line, index) => {

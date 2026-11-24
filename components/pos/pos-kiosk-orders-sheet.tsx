@@ -94,9 +94,14 @@ export function PosKioskOrdersSheet({
     }, 0);
   };
 
-  const fetchOrderDetail = async (orderId: string, orderUrlId?: string) => {
+  const fetchOrderDetail = async (
+    orderId: string,
+    orderUrlId?: string,
+    receipt = false
+  ) => {
     const res = await axios.get<{ data: PosOrderDetail }>(
-      kioskOrderApiPath(orderId, '', orderUrlId)
+      kioskOrderApiPath(orderId, '', orderUrlId),
+      { params: receipt ? { receipt: '1' } : undefined }
     );
     return res.data.data;
   };
@@ -104,7 +109,7 @@ export function PosKioskOrdersSheet({
   const handlePrint = async (order: KioskPendingOrderRow) => {
     setPrintBusyId(order.id);
     try {
-      const detail = await fetchOrderDetail(order.id, order.urlId);
+      const detail = await fetchOrderDetail(order.id, order.urlId, true);
       const subtotal = detail.items.reduce(
         (sum, item) => sum + item.unitPrice * item.quantity,
         0

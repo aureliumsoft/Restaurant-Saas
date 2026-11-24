@@ -7,11 +7,11 @@ import {
   orderBranchSql,
   userIsOwnerOrAdmin,
 } from '@/lib/branch/branch-scope';
+import { loadResolvedBranchTimeZone } from '@/lib/branch-timezone-server';
 import { db } from '@/lib/db';
 import {
   enforceSalesOrdersPeriod,
   parseSalesOrdersPeriod,
-  salesOrderFilterTimezone,
   salesOrderPeriodMenuSql,
   salesOrderPeriodTransactionSql,
 } from '@/lib/sales-order-period';
@@ -166,12 +166,6 @@ export async function GET(req: NextRequest) {
     );
     const search = (url.searchParams.get('search') ?? '').trim();
     const offset = (page - 1) * PAGE_SIZE;
-    const filterTz = salesOrderFilterTimezone();
-    const menuPeriodSql = salesOrderPeriodMenuSql(period, filterTz);
-    const transactionPeriodSql = salesOrderPeriodTransactionSql(
-      period,
-      filterTz
-    );
 
     const restaurant = await db.restaurant.findUnique({
       where: { id: auth.restaurantId },
@@ -197,6 +191,15 @@ export async function GET(req: NextRequest) {
       rid
     );
     const branchSql = orderBranchSql(branchScope?.activeBranchId ?? null);
+    const filterTz = await loadResolvedBranchTimeZone(
+      rid,
+      branchScope?.activeBranchId ?? null
+    );
+    const menuPeriodSql = salesOrderPeriodMenuSql(period, filterTz);
+    const transactionPeriodSql = salesOrderPeriodTransactionSql(
+      period,
+      filterTz
+    );
 
     // --- Channel stats (all orders, not filtered by search/status) ---
     const stats: SalesOrdersStats = {

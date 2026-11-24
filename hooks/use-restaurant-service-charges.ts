@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 import {
   computeCheckoutTotal,
   parseRestaurantServiceCharges,
@@ -18,30 +19,35 @@ export function useRestaurantServiceCharges(
 ) {
   const [charges, setCharges] = useState<RestaurantServiceCharges>(EMPTY_CHARGES);
   const [loading, setLoading] = useState(Boolean(restaurantSlug?.trim()));
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const slug = restaurantSlug?.trim();
     if (!slug) {
       setCharges(EMPTY_CHARGES);
       setLoading(false);
+      setError(false);
       return;
     }
 
     let cancelled = false;
     setLoading(true);
+    setError(false);
     (async () => {
       try {
-        const res = await fetch(
-          `/api/customer/restaurant?slug=${encodeURIComponent(slug)}`,
-          { cache: 'no-store' }
-        );
-        const body = (await res.json().catch(() => ({}))) as {
-          data?: { serviceCharges?: RestaurantServiceCharges } | null;
-        };
+        const data = await fetchCustomerRestaurant({ slug });
         if (cancelled) return;
-        setCharges(body.data?.serviceCharges ?? EMPTY_CHARGES);
+        if (!data) {
+          setError(true);
+          return;
+        }
+        setCharges(
+          (data.serviceCharges as RestaurantServiceCharges | undefined) ??
+            EMPTY_CHARGES
+        );
       } catch {
-        if (!cancelled) setCharges(EMPTY_CHARGES);
+        if (!cancelled) setError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -50,7 +56,7 @@ export function useRestaurantServiceCharges(
     return () => {
       cancelled = true;
     };
-  }, [restaurantSlug]);
+  }, [restaurantSlug, reloadKey]);
 
   const serviceChargeAmount = resolveServiceChargeAmount(charges, channel);
 
@@ -58,6 +64,8 @@ export function useRestaurantServiceCharges(
     charges,
     serviceChargeAmount,
     loading,
+    error,
+    reload: () => setReloadKey((value) => value + 1),
     computeTotal: (subtotal: number) =>
       computeCheckoutTotal(subtotal, charges, channel),
   };

@@ -33,7 +33,51 @@ type OrderIntentPayload = {
   payload?: unknown;
   customerAccountId?: string | null;
   status?: string;
+  orderId?: string;
+  shortOrderId?: string;
+  ticketNumber?: number | null;
 };
+
+/**
+ * One payment must create one order. The success page and the webhook both
+ * call this. The row lock makes the second caller wait, then see completed.
+ */
+async function claimStripeOrderIntent(key: string): Promise<
+  | { state: 'missing' }
+  | { state: 'invalid' }
+  | { state: 'completed'; parsed: OrderIntentPayload }
+  | { state: 'claimed'; parsed: OrderIntentPayload }
+> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const result = await db.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ value: string }>>`
+        SELECT value FROM "PlatformSetting" WHERE key = ${key} FOR UPDATE
+      `;
+      const row = rows[0];
+      if (!row) return { state: 'missing' as const };
+      let parsed: OrderIntentPayload;
+      try {
+        parsed = JSON.parse(row.value) as OrderIntentPayload;
+      } catch {
+        return { state: 'invalid' as const };
+      }
+      if (parsed.status === 'completed') {
+        return { state: 'completed' as const, parsed };
+      }
+      if (parsed.status === 'creating') {
+        return { state: 'busy' as const };
+      }
+      await tx.platformSetting.update({
+        where: { key },
+        data: { value: JSON.stringify({ ...parsed, status: 'creating' }) },
+      });
+      return { state: 'claimed' as const, parsed };
+    });
+    if (result.state !== 'busy') return result;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return { state: 'invalid' };
+}
 
 export async function processOrderIntentFromSession(
   session: Stripe.Checkout.Session,
@@ -51,41 +95,36 @@ export async function processOrderIntentFromSession(
   if (!intentId) return { status: 'skipped' };
 
   const key = `stripe_order_intent:${intentId}`;
-  const row = await db.platformSetting.findUnique({
-    where: { key },
-    select: { value: true },
-  });
-  if (!row) return { status: 'skipped' };
-
-  let parsed: OrderIntentPayload | undefined;
-  try {
-    parsed = JSON.parse(row.value) as OrderIntentPayload;
-  } catch {
-    throw new Error(`Invalid order intent payload for ${key}`);
+  const claimed = await claimStripeOrderIntent(key);
+  if (claimed.state === 'missing') return { status: 'skipped' };
+  if (claimed.state === 'invalid') {
+    return { status: 'failed', error: 'Order is still being saved' };
   }
-
-  if (!parsed?.endpoint || !parsed.payload) return { status: 'skipped' };
-  if (parsed.status === 'completed') {
-    const parsedCompleted = JSON.parse(row.value) as {
-      orderId?: string;
-      shortOrderId?: string;
-      ticketNumber?: number | null;
-    };
+  if (claimed.state === 'completed') {
     return {
       status: 'already_completed',
       orderId:
-        typeof parsedCompleted.orderId === 'string'
-          ? parsedCompleted.orderId
+        typeof claimed.parsed.orderId === 'string'
+          ? claimed.parsed.orderId
           : undefined,
       shortOrderId:
-        typeof parsedCompleted.shortOrderId === 'string'
-          ? parsedCompleted.shortOrderId
+        typeof claimed.parsed.shortOrderId === 'string'
+          ? claimed.parsed.shortOrderId
           : undefined,
       ticketNumber:
-        typeof parsedCompleted.ticketNumber === 'number'
-          ? parsedCompleted.ticketNumber
+        typeof claimed.parsed.ticketNumber === 'number'
+          ? claimed.parsed.ticketNumber
           : null,
     };
+  }
+
+  const parsed = claimed.parsed;
+  if (!parsed?.endpoint || !parsed.payload) {
+    await db.platformSetting.update({
+      where: { key },
+      data: { value: JSON.stringify({ ...parsed, status: 'failed' }) },
+    });
+    return { status: 'skipped' };
   }
 
   if (parsed.endpoint === '/api/customer/orders') {

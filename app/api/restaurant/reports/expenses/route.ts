@@ -6,6 +6,7 @@ import {
   getBranchScopeFromRequest,
   userIsOwnerOrAdmin,
 } from '@/lib/branch/branch-scope';
+import { loadResolvedBranchTimeZone } from '@/lib/branch-timezone-server';
 import { db } from '@/lib/db';
 import {
   buildPaginationMeta,
@@ -59,6 +60,7 @@ export async function GET(req: NextRequest) {
     canViewHistorical,
     fromParam: req.nextUrl.searchParams.get('from'),
     toParam: req.nextUrl.searchParams.get('to'),
+    timeZone: await loadResolvedBranchTimeZone(auth.restaurant.id, branchId),
   });
 
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';

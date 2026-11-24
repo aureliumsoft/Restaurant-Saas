@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { isValidIanaTimeZone, resolveBranchTimeZone } from '@/lib/branch-timezone';
 import { normalizeOpeningHours } from '@/lib/order-time-slots';
 import { Prisma } from '@prisma/client';
 
@@ -26,6 +27,7 @@ const updateBranchSchema = z.object({
     .optional()
     .default([])
     .transform((rows) => normalizeOpeningHours(rows)),
+  timeZone: z.string().trim().max(80).optional().default(''),
 });
 
 export async function PATCH(
@@ -48,6 +50,18 @@ export async function PATCH(
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
+    if (parsed.data.timeZone && !isValidIanaTimeZone(parsed.data.timeZone)) {
+      return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
+    }
+    const restaurant = await db.restaurant.findUnique({
+      where: { id: auth.restaurantId },
+      select: { countryCode: true },
+    });
+    const timeZone = resolveBranchTimeZone(
+      parsed.data.timeZone,
+      restaurant?.countryCode
+    );
+
     const updated = await db.branch.updateMany({
       where: {
         id: branchId,
@@ -61,6 +75,7 @@ export async function PATCH(
         longitude: parsed.data.longitude ?? null,
         deliveryRadiusKm: parsed.data.deliveryRadiusKm ?? null,
         openingHours: parsed.data.openingHours as Prisma.InputJsonValue,
+        timeZone,
       },
     });
 
@@ -79,6 +94,7 @@ export async function PATCH(
         longitude: true,
         deliveryRadiusKm: true,
         openingHours: true,
+        timeZone: true,
         createdAt: true,
       },
     });

@@ -45,8 +45,9 @@ export async function resolveReportDateRange(opts: {
   canViewHistorical: boolean;
   fromParam?: string | null;
   toParam?: string | null;
+  timeZone?: string | null;
 }): Promise<ReportDateRange> {
-  const tz = salesOrderFilterTimezone();
+  const tz = opts.timeZone?.trim() || salesOrderFilterTimezone();
   const todayKey = await getTodayDayKeyInTimezone(opts.database, tz);
 
   if (!opts.canViewHistorical) {
@@ -100,18 +101,24 @@ export function subscriptionPaidAtRangeSql(range: ReportDateRange): Prisma.Sql {
   return Prisma.sql`AND s."paidAt" >= ${range.from} AND s."paidAt" <= ${range.to}`;
 }
 
-export function defaultReportFromToKeys(_canViewHistorical?: boolean): {
+export function defaultReportFromToKeys(
+  _canViewHistorical?: boolean,
+  timeZone?: string | null
+): {
   from: string;
   to: string;
 } {
-  const tz = salesOrderFilterTimezone();
+  const tz = timeZone?.trim() || salesOrderFilterTimezone();
   const today = calendarDayKeyInTimezone(new Date(), tz);
   return { from: today, to: today };
 }
 
 /** Last 7 calendar days inclusive ending today (restaurant TZ). */
-export function weekReportFromToKeys(): { from: string; to: string } {
-  const tz = salesOrderFilterTimezone();
+export function weekReportFromToKeys(timeZone?: string | null): {
+  from: string;
+  to: string;
+} {
+  const tz = timeZone?.trim() || salesOrderFilterTimezone();
   const today = calendarDayKeyInTimezone(new Date(), tz);
   const [y, m, d] = today.split('-').map(Number);
   const start = new Date(Date.UTC(y, (m ?? 1) - 1, (d ?? 1) - 6));
@@ -119,8 +126,11 @@ export function weekReportFromToKeys(): { from: string; to: string } {
 }
 
 /** Calendar month containing today (restaurant TZ). */
-export function monthReportFromToKeys(): { from: string; to: string } {
-  const tz = salesOrderFilterTimezone();
+export function monthReportFromToKeys(timeZone?: string | null): {
+  from: string;
+  to: string;
+} {
+  const tz = timeZone?.trim() || salesOrderFilterTimezone();
   const today = calendarDayKeyInTimezone(new Date(), tz);
   const [y, m] = today.split('-').map(Number);
   const from = `${y}-${String(m ?? 1).padStart(2, '0')}-01`;

@@ -116,15 +116,26 @@ export async function ensurePresetRolesAndOwnerEmployee(
 
 export async function getEffectiveDashboardPermissionNames(
   userId: string,
-  restaurantId: string
+  restaurantId: string,
+  knownOwnerId?: string | null
 ): Promise<string[]> {
   const full = allRestaurantDashboardPermissionNames();
 
-  const restaurant = await db.restaurant.findUnique({
-    where: { id: restaurantId },
-    select: { ownerId: true },
-  });
-  if (!restaurant) return [];
+  // Owner login is the common path. Skip the extra restaurant and employee reads.
+  if (knownOwnerId != null && knownOwnerId === userId) {
+    return full;
+  }
+
+  let ownerId = knownOwnerId ?? null;
+  if (knownOwnerId === undefined) {
+    const restaurant = await db.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: { ownerId: true },
+    });
+    if (!restaurant) return [];
+    ownerId = restaurant.ownerId;
+  }
+  if (ownerId === userId) return full;
 
   const employee = await db.employee.findUnique({
     where: {
@@ -139,11 +150,6 @@ export async function getEffectiveDashboardPermissionNames(
       },
     },
   });
-
-  // Account owner: always full dashboard access (not limited by stale Role.permissions).
-  if (restaurant.ownerId === userId) {
-    return full;
-  }
 
   // Preset Owner role: same — all modules, including new ones added after the role was created.
   if (employee?.role.slug === RESTAURANT_ROLE_SLUG.OWNER) {

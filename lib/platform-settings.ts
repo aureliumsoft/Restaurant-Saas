@@ -55,6 +55,7 @@ type CacheEntry = {
 };
 
 const settingCache = new Map<string, CacheEntry>();
+const keyedSettingsInflight = new Map<string, Promise<Record<string, string>>>();
 let fullMapCache:
   | { expiresAt: number; map: Record<string, string> }
   | null = null;
@@ -147,24 +148,43 @@ export async function getPlatformSettingsMap(
 
   if (missing.length === 0) return map;
 
-  try {
-    const rows = await db.platformSetting.findMany({
-      where: { key: { in: missing } },
-      orderBy: { key: 'asc' },
-    });
-    for (const r of rows) {
-      map[r.key] = r.value;
-      cacheSet(r.key, r.value);
-    }
+  const inflightKey = [...missing].sort().join('\n');
+  const existing = keyedSettingsInflight.get(inflightKey);
+  if (existing) {
+    const shared = await existing;
     for (const key of missing) {
-      if (!rows.some((r) => r.key === key)) {
-        cacheSet(key, map[key] ?? defaultFor(key));
-      }
+      if (shared[key] !== undefined) map[key] = shared[key];
     }
-  } catch (e) {
-    console.error('getPlatformSettingsMap', e);
+    return map;
   }
-  return map;
+
+  const pending = (async () => {
+    try {
+      const rows = await db.platformSetting.findMany({
+        where: { key: { in: missing } },
+        orderBy: { key: 'asc' },
+      });
+      for (const r of rows) {
+        map[r.key] = r.value;
+        cacheSet(r.key, r.value);
+      }
+      for (const key of missing) {
+        if (!rows.some((r) => r.key === key)) {
+          cacheSet(key, map[key] ?? defaultFor(key));
+        }
+      }
+    } catch (e) {
+      console.error('getPlatformSettingsMap', e);
+    }
+    return map;
+  })();
+
+  keyedSettingsInflight.set(inflightKey, pending);
+  try {
+    return await pending;
+  } finally {
+    keyedSettingsInflight.delete(inflightKey);
+  }
 }
 
 /** Normalize GA4 Measurement IDs like `G-XXXXXXXX`. Empty string if invalid. */

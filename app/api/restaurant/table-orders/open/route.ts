@@ -68,6 +68,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ count });
     }
 
+    if (req.nextUrl.searchParams.get('tables') === '1') {
+      const rows = await db.order.findMany({
+        where: openTableOrdersWhere(auth.restaurantId, branchId),
+        distinct: ['diningTableId'],
+        select: { diningTableId: true },
+      });
+      return NextResponse.json({
+        count: rows.filter((row) => row.diningTableId).length,
+      });
+    }
+
     const cards = await loadOpenTableOrderCards({
       restaurantId: auth.restaurantId,
       branchId,

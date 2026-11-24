@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Sidebar } from '@/components/customer-app/sidebar';
 import { StorefrontBrandHero } from '@/components/customer-app/storefront/storefront-brand-hero';
 import { ORDER_SIDEBAR_WIDTH_PX } from '@/components/order/order-menu-header';
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 import { buildStorefrontThemeVars } from '@/lib/restaurant-theme';
 import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
 import {
@@ -78,23 +79,7 @@ export function WebAppStorefront({
     (async () => {
       setBrandLoading(true);
       try {
-        const res = await fetch(
-          `/api/customer/restaurant?slug=${encodeURIComponent(slug)}`
-        );
-        const json = await res.json().catch(() => ({}));
-        const data = json?.data as
-          | {
-              name?: string;
-              mainBannerUrl?: string | null;
-              logoUrl?: string | null;
-              themePrimaryColor?: string | null;
-              fulfillmentSettings?: {
-                deliveryEnabled?: boolean;
-                websiteEnabled?: boolean;
-              };
-            }
-          | null
-          | undefined;
+        const data = await fetchCustomerRestaurant({ slug });
         if (cancelled) return;
         const webOn = data?.fulfillmentSettings?.websiteEnabled !== false;
         setWebsiteEnabled(webOn);

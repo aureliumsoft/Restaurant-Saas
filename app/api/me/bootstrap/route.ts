@@ -22,8 +22,9 @@ import {
   RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
 } from '@/lib/restaurant-fulfillment-settings';
 import {
+  buildCapUsageSnapshot,
+  countCapUsage,
   entitlementsToClientPayload,
-  getCapUsage,
   getRestaurantEntitlements,
   resolveEntitlements,
 } from '@/lib/entitlements';
@@ -119,22 +120,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await db.user.findUnique({
-      where: { email },
-      select: { id: true },
-    });
-    if (!user) {
+    const sessionUserId = session.user.id;
+    const userId =
+      typeof sessionUserId === 'string' && sessionUserId.length > 0
+        ? sessionUserId
+        : (
+            await db.user.findUnique({
+              where: { email },
+              select: { id: true },
+            })
+          )?.id;
+    if (!userId) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Lean restaurant lookup — branding loaded in parallel below.
-    const restaurant = await db.restaurant.findFirst({
-      where: {
-        OR: [{ ownerId: user.id }, { employees: { some: { userId: user.id } } }],
-      },
+    // Owner lookup is indexed. Only staff who are not owners pay for the employee join.
+    const owned = await db.restaurant.findFirst({
+      where: { ownerId: userId },
       orderBy: { createdAt: 'asc' },
-      select: { id: true },
+      select: { id: true, ownerId: true },
     });
+    const restaurant =
+      owned ??
+      (await db.restaurant.findFirst({
+        where: { employees: { some: { userId } } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, ownerId: true },
+      }));
 
     if (!restaurant) {
       const payload: StaffBootstrapData = {
@@ -156,16 +168,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data: payload });
     }
 
-    const [branchScope, restaurantPayload, permissions, subscription, entitlements] =
+    const [branchScope, restaurantPayload, permissions, subscription, entitlements, usage] =
       await Promise.all([
-        getBranchScopeFromRequest(req, user.id, restaurant.id),
+        getBranchScopeFromRequest(req, userId, restaurant.id),
         loadRestaurantBootstrapPayload(restaurant.id),
-        getEffectiveDashboardPermissionNames(user.id, restaurant.id),
+        getEffectiveDashboardPermissionNames(
+          userId,
+          restaurant.id,
+          restaurant.ownerId
+        ),
         loadSubscriptionAccess(restaurant.id),
         getRestaurantEntitlements(restaurant.id),
+        countCapUsage(restaurant.id),
       ]);
 
-    const capUsage = await getCapUsage(restaurant.id, entitlements);
+    const capUsage = buildCapUsageSnapshot(entitlements, usage);
     const planPayload = entitlementsToClientPayload(entitlements);
 
     const payload: StaffBootstrapData = {

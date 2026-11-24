@@ -24,10 +24,12 @@ import {
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import type { OrderInfo } from '@/components/order/order-types';
 import {
+  buildCustomerMenuBrowseUrl,
   buildCustomerMenuCategoriesUrl,
   buildCustomerMenuCategoryItemsUrl,
   inferHostSubdomainForMenu,
 } from '@/lib/customer-menu-client';
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 import { useProgressiveCustomerMenu } from '@/hooks/use-progressive-customer-menu';
 import {
   CategoryPillSkeleton,
@@ -43,6 +45,8 @@ import {
   overlayLiveCatalogPrices,
   prefetchCustomerMenuProductDetail,
   productNeedsDetailFetch,
+  restoreKioskDetailCache,
+  WEBSITE_DETAIL_CACHE_TTL_MS,
 } from '@/lib/menu/fetch-menu-product-detail';
 import { customerMenuItemImageUrl } from '@/lib/menu/menu-item-image-utils';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
@@ -675,10 +679,26 @@ export default function OrderPageClient({
     restaurantMeta,
     categories: progressiveCategories,
     categoriesLoading,
+    menuComplete,
+    error: menuError,
+    reload: reloadMenu,
   } = useProgressiveCustomerMenu<CustomerMenuProduct>({
     categoriesUrl: mounted ? categoriesUrl : null,
+    browseUrl: mounted
+      ? buildCustomerMenuBrowseUrl(
+          orderInfo?.restaurantSlug,
+          orderInfo?.storeId,
+          hostSubdomain,
+          orderInfo?.storeId
+        )
+      : null,
     categoryItemsUrl,
     enabled: mounted && Boolean(categoriesUrl),
+    batchSize: 200,
+    categoryConcurrency: 4,
+    retainKey: orderInfo?.restaurantSlug
+      ? `order:${orderInfo.restaurantSlug}:${orderInfo.storeId ?? ''}`
+      : null,
   });
 
   const categories = useMemo<CustomerMenuCategory[]>(
@@ -750,6 +770,7 @@ export default function OrderPageClient({
         product.id,
         query,
         {
+          ttlMs: WEBSITE_DETAIL_CACHE_TTL_MS,
           signal: { cancelled: () => token !== customizeLoadTokenRef.current },
           onShell: (shell) => {
             if (token !== customizeLoadTokenRef.current) return;
@@ -774,7 +795,8 @@ export default function OrderPageClient({
       return;
     }
     setCustomizeHydrating(false);
-    openCustomizeForProduct(product);
+    setCustomizeLoading(true);
+    toast.error(t('menuCouldNotLoad'));
   };
 
   useEffect(() => {
@@ -782,35 +804,34 @@ export default function OrderPageClient({
   }, []);
 
   useEffect(() => {
-    if (!mounted) return;
+    const slug = orderInfo?.restaurantSlug?.trim();
+    if (slug) restoreKioskDetailCache(slug);
+  }, [orderInfo?.restaurantSlug]);
+
+  useEffect(() => {
+    if (!mounted || !menuComplete) return;
     const query = {
       slug: orderInfo?.restaurantSlug ?? undefined,
       subdomain: hostSubdomain ?? undefined,
     };
-    // Warm a few customize payloads sequentially — parallel storms starved
-    // the product the guest actually opened (60s+ detail waits).
-    let cancelled = false;
-    void (async () => {
-      let warmed = 0;
+    const timer = window.setTimeout(() => {
       for (const product of products) {
-        if (cancelled || warmed >= 3) break;
         if (
-          !productNeedsCustomizeDialog(product) ||
-          !productNeedsDetailFetch(product)
+          productNeedsCustomizeDialog(product) &&
+          productNeedsDetailFetch(product)
         ) {
-          continue;
+          prefetchCustomerMenuProductDetail(
+            product.id,
+            query,
+            WEBSITE_DETAIL_CACHE_TTL_MS
+          );
         }
-        prefetchCustomerMenuProductDetail(product.id, query);
-        warmed += 1;
-        // Yield so hover/open fetches are not piled behind a burst.
-        await new Promise((r) => setTimeout(r, 50));
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    }, 4000);
+    return () => window.clearTimeout(timer);
   }, [
     mounted,
+    menuComplete,
     products,
     orderInfo?.restaurantSlug,
     hostSubdomain,
@@ -887,43 +908,34 @@ export default function OrderPageClient({
   useEffect(() => {
     const loadBanners = async () => {
       try {
-        let restaurantUrl: string | null = null;
         const slug = orderInfo?.restaurantSlug?.trim();
-        if (slug) {
-          restaurantUrl = `/api/customer/restaurant?slug=${encodeURIComponent(slug)}`;
-        } else {
-          const subdomain = inferHostSubdomainForMenu();
-          const fallbackSub = orderInfo?.storeId?.trim() || subdomain;
-          if (fallbackSub) {
-            restaurantUrl = `/api/customer/restaurant?subdomain=${encodeURIComponent(
-              fallbackSub
-            )}`;
-          }
-        }
-        if (!restaurantUrl) return;
+        const subdomain = inferHostSubdomainForMenu();
+        const fallbackSub = orderInfo?.storeId?.trim() || subdomain;
+        if (!slug && !fallbackSub) return;
 
-        const res = await fetch(restaurantUrl);
-        if (!res.ok) return;
-        const json = await res.json().catch(() => ({}));
+        const data = slug
+          ? await fetchCustomerRestaurant({ slug })
+          : await fetchCustomerRestaurant({ subdomain: fallbackSub });
+        if (!data) return;
         const themeColor =
-          typeof json?.data?.themePrimaryColor === 'string'
-            ? json.data.themePrimaryColor.trim()
+          typeof data.themePrimaryColor === 'string'
+            ? data.themePrimaryColor.trim()
             : '';
         setThemePrimaryColor(themeColor || null);
         writeCachedRestaurantThemePrimary(slug, themeColor || null);
         const logo =
-          typeof json?.data?.logoUrl === 'string' && json.data.logoUrl.trim()
-            ? json.data.logoUrl.trim()
+          typeof data.logoUrl === 'string' && data.logoUrl.trim()
+            ? data.logoUrl.trim()
             : '';
         setLogoUrl(logo || null);
-        const menuUrls = Array.isArray(json?.data?.menuBannerUrls)
-          ? (json.data.menuBannerUrls as string[]).filter(
+        const menuUrls = Array.isArray(data.menuBannerUrls)
+          ? data.menuBannerUrls.filter(
               (u) => typeof u === 'string' && u.trim() !== ''
             )
           : [];
         const mainBanner =
-          typeof json?.data?.mainBannerUrl === 'string'
-            ? json.data.mainBannerUrl.trim()
+          typeof data.mainBannerUrl === 'string'
+            ? data.mainBannerUrl.trim()
             : '';
         const urls = [...menuUrls];
         if (mainBanner && !urls.includes(mainBanner)) {
@@ -969,17 +981,19 @@ export default function OrderPageClient({
         });
         if (!res.ok) return;
         const json = (await res.json().catch(() => ({}))) as {
-          data?: Array<{ id?: string; openingHours?: BranchOpeningHours | null }>;
+          data?: Array<{
+            id?: string;
+            openingHours?: BranchOpeningHours | null;
+            timeZone?: string | null;
+          }>;
           timeZone?: string;
         };
-        if (
-          !cancelled &&
-          typeof json.timeZone === 'string' &&
-          json.timeZone.trim().length > 0
-        ) {
-          setBranchesTimeZone(json.timeZone.trim());
-        }
         const branch = (json.data ?? []).find((item) => item.id === branchId);
+        const zone =
+          (typeof branch?.timeZone === 'string' && branch.timeZone.trim()) ||
+          (typeof json.timeZone === 'string' && json.timeZone.trim()) ||
+          '';
+        if (!cancelled && zone) setBranchesTimeZone(zone);
         if (!cancelled) {
           setBranchHours(branch?.openingHours ?? null);
         }
@@ -1066,6 +1080,7 @@ export default function OrderPageClient({
         p.id,
         query,
         {
+          ttlMs: WEBSITE_DETAIL_CACHE_TTL_MS,
           signal: { cancelled: () => token !== customizeLoadTokenRef.current },
           onShell: (shell) => {
             if (token !== customizeLoadTokenRef.current) return;
@@ -1090,7 +1105,8 @@ export default function OrderPageClient({
       return;
     }
     setCustomizeHydrating(false);
-    openCustomizeForProduct(p);
+    setCustomizeLoading(true);
+    toast.error(t('menuCouldNotLoad'));
   };
 
   const handleProductSelect = (product: CustomerMenuProduct) => {
@@ -1771,7 +1787,18 @@ export default function OrderPageClient({
           ) : null}
 
           <section className="min-w-0">
-            {menuLoading ? (
+            {menuError && categories.length === 0 ? (
+              <div className="space-y-3 py-8 text-center">
+                <p className="text-sm text-[#475569]">{t('menuCouldNotLoad')}</p>
+                <button
+                  type="button"
+                  className="rounded-full border border-[#e2e8f0] px-4 py-2 text-sm font-medium"
+                  onClick={() => reloadMenu()}
+                >
+                  {t('menuTryAgain')}
+                </button>
+              </div>
+            ) : menuLoading ? (
               <ProductCardSkeletonGrid
                 count={8}
                 variant="online"
@@ -1809,6 +1836,30 @@ export default function OrderPageClient({
                 }
 
                 const categoryProducts = category.items;
+
+                if (progressive?.failed) {
+                  return (
+                    <div
+                      key={category.id}
+                      id={category.id}
+                      data-category-section={category.id}
+                      className="mb-10 min-w-0"
+                    >
+                      <div className="space-y-2">
+                        <p className="text-sm text-[#8e8e9a]">
+                          {t('categoryCouldNotLoad')}
+                        </p>
+                        <button
+                          type="button"
+                          className="rounded-full border border-[#e2e8f0] px-4 py-2 text-sm font-medium"
+                          onClick={() => reloadMenu()}
+                        >
+                          {t('menuTryAgain')}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
 
                 if (categoryProducts.length === 0) {
                   return (
@@ -1912,6 +1963,7 @@ export default function OrderPageClient({
         <ProductCustomizeDialog
         open={customizeOpen}
         isLoading={customizeLoading}
+        isHydrating={customizeHydrating}
         menuQuery={{
           slug: orderInfo?.restaurantSlug ?? undefined,
           subdomain: hostSubdomain ?? undefined,

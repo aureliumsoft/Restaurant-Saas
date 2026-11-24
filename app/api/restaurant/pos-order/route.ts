@@ -184,14 +184,21 @@ export async function POST(req: NextRequest) {
         ? serviceChargeRaw
         : 0;
 
-    const restaurantCharges = await db.restaurant.findUnique({
+    const [restaurantCharges, normalizedItems] = await Promise.all([
+      db.restaurant.findUnique({
       where: { id: restaurantId },
       select: {
         ...RESTAURANT_SERVICE_CHARGE_DB_SELECT,
         ...RESTAURANT_FULFILLMENT_SETTINGS_DB_SELECT,
         dineInPaymentTiming: true,
       },
-    });
+    }),
+      normalizePosOrderLines({
+        restaurantId,
+        items,
+        db,
+      }),
+    ]);
     const fulfillmentSettings = parseRestaurantFulfillmentSettings(
       restaurantCharges
     );
@@ -281,11 +288,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const normalizedItems = await normalizePosOrderLines({
-      restaurantId,
-      items,
-      db,
-    });
     if (!normalizedItems) {
       return NextResponse.json(
         { error: 'No valid menu items found in cart' },
@@ -366,9 +368,14 @@ export async function POST(req: NextRequest) {
             });
             break;
           } catch (e) {
-            if (isPrismaUniqueViolation(e) && idempotencyKey) {
-              throw e;
-            }
+            const target = (e as { meta?: { target?: unknown } }).meta?.target;
+            const idempotencyClash =
+              isPrismaUniqueViolation(e) &&
+              Array.isArray(target) &&
+              target.some((field) =>
+                String(field).toLowerCase().includes('idempotency')
+              );
+            if (idempotencyClash && idempotencyKey) throw e;
             if (!isTicketNumberConflict(e) || attempt >= 7) throw e;
             ticketNumber += 1;
           }

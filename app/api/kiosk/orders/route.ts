@@ -333,32 +333,226 @@ export async function POST(req: NextRequest) {
         mobileTableQr,
       });
 
-      let order: Awaited<ReturnType<typeof tx.order.create>> | undefined;
+      // Table + unpaid → hold for the POS table sheet. Paid orders still go to the kitchen.
+      const resolvedPaymentStatus = paymentStatus ?? 'completed';
+      const isTableOpenCheck =
+        Boolean(selectedTableId) &&
+        resolvedPaymentStatus.toLowerCase() === 'pending';
+
+      const linePayload = JSON.stringify(
+        lines.map((line, idx) => ({
+          idx,
+          menuItemId: line.menuItemId,
+          productName: line.productName,
+          quantity: line.quantity,
+          price: line.unitPrice,
+        }))
+      );
+      const modifierPayload = JSON.stringify(
+        lines.flatMap((line, lineIdx) =>
+          line.modifiers
+            .flatMap((group) =>
+              group.selections.map((selection) => ({
+                groupName: group.groupName,
+                selection,
+              }))
+            )
+            .map(({ groupName, selection }, sortOrder) => ({
+              lineIdx,
+              menuItemId: normalizePersonalizeModifierMenuItemId(
+                selection.menuItemId
+              ),
+              name: selection.name,
+              groupName: groupName?.trim() || null,
+              unitPrice: selection.unitPrice,
+              sortOrder,
+            }))
+        )
+      );
+      const kitchenPayload = isTableOpenCheck
+        ? '[]'
+        : JSON.stringify(
+            buildKitchenTicketItemRows(
+              lines.map((line) => ({
+                quantity: line.quantity,
+                productName: line.productName,
+                modifiers: line.modifiers.flatMap((group) =>
+                  group.selections.map((sel) => ({
+                    name: sel.name,
+                    quantity: 1,
+                    menuItemId: sel.menuItemId,
+                    groupName: group.groupName,
+                  }))
+                ),
+              }))
+            ).map((row, sortOrder) => ({
+              productName: row.productName,
+              quantity: row.quantity,
+              sortOrder,
+            }))
+          );
+
+      let order:
+        | {
+            id: string;
+            shortOrderId: string;
+            branchId: string | null;
+          }
+        | undefined;
       for (let attempt = 0; attempt < 8; attempt++) {
         try {
-          order = await tx.order.create({
-            data: {
-              restaurantId: restaurant.id,
-              branchId,
-              customerId: customerId ?? undefined,
-              ticketDate,
-              ticketNumber,
-              status: 'pending',
-              total: computedTotal,
-              sourceType: OrderSourceType.KIOSK,
-              address: addressSnapshot || null,
-              customerComment: cookingNote?.trim() || null,
-              diningTableId: selectedTableId ?? undefined,
-              tableLabel: selectedTableName ?? undefined,
-              taxAmount: 0,
-              discountAmount: 0,
-              serviceChargeAmount,
-              idempotencyKey: idempotencyKey ?? undefined,
-            },
-          });
+          const inserted = await tx.$queryRaw<
+            Array<{
+              id: string;
+              shortOrderId: string;
+              branchId: string | null;
+            }>
+          >`
+            WITH new_order AS (
+              INSERT INTO "Order" (
+                id, "restaurantId", "branchId", "customerId", "ticketDate",
+                "ticketNumber", status, total, "sourceType", address,
+                "taxAmount", "discountAmount", "serviceChargeAmount",
+                "customerComment", "diningTableId", "tableLabel",
+                "idempotencyKey", "createdAt", "updatedAt"
+              )
+              VALUES (
+                gen_random_uuid(),
+                ${restaurant.id},
+                ${branchId},
+                ${customerId},
+                ${ticketDate}::date,
+                ${ticketNumber},
+                'pending',
+                ${computedTotal},
+                'KIOSK'::"OrderSourceType",
+                ${addressSnapshot || null},
+                0,
+                0,
+                ${serviceChargeAmount},
+                ${cookingNote?.trim() || null},
+                ${selectedTableId ?? null},
+                ${selectedTableName ?? null},
+                ${idempotencyKey},
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+              )
+              RETURNING id, "shortOrderId", "branchId"
+            ),
+            line_rows AS (
+              SELECT
+                gen_random_uuid() AS id,
+                (line->>'menuItemId') AS "menuItemId",
+                line->>'productName' AS "productName",
+                (line->>'quantity')::int AS quantity,
+                (line->>'price')::double precision AS price,
+                (line->>'idx')::int AS idx
+              FROM jsonb_array_elements(${linePayload}::jsonb) AS line
+            ),
+            inserted_items AS (
+              INSERT INTO "OrderItem" (
+                id, "orderId", "menuItemId", "productName", quantity, price,
+                "createdAt", "updatedAt"
+              )
+              SELECT
+                l.id, o.id, l."menuItemId", l."productName", l.quantity, l.price,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+              FROM line_rows l
+              CROSS JOIN new_order o
+              RETURNING id
+            ),
+            inserted_mods AS (
+              INSERT INTO "OrderItemModifier" (
+                id, "orderItemId", "menuItemId", name, "groupName",
+                "unitPrice", quantity, "sortOrder", "createdAt", "updatedAt"
+              )
+              SELECT
+                gen_random_uuid(),
+                l.id,
+                NULLIF(m->>'menuItemId', ''),
+                m->>'name',
+                NULLIF(m->>'groupName', ''),
+                (m->>'unitPrice')::double precision,
+                1,
+                (m->>'sortOrder')::int,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+              FROM jsonb_array_elements(${modifierPayload}::jsonb) AS m
+              JOIN line_rows l ON l.idx = (m->>'lineIdx')::int
+              RETURNING id
+            ),
+            inserted_ticket AS (
+              INSERT INTO "KitchenTicket" (
+                id, "restaurantId", "orderId", status, "selectedMinutes",
+                "startedAt", "createdAt", "updatedAt"
+              )
+              SELECT
+                gen_random_uuid()::text,
+                ${restaurant.id},
+                o.id,
+                'pending',
+                ${SELECTED_MINUTES_KIOSK},
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+              FROM new_order o
+              WHERE ${isTableOpenCheck} = FALSE
+                AND jsonb_array_length(${kitchenPayload}::jsonb) > 0
+              RETURNING id
+            ),
+            inserted_ticket_items AS (
+              INSERT INTO "KitchenTicketItem" (
+                id, "kitchenTicketId", "productName", quantity, "sortOrder"
+              )
+              SELECT
+                gen_random_uuid()::text,
+                t.id,
+                k->>'productName',
+                (k->>'quantity')::int,
+                (k->>'sortOrder')::int
+              FROM inserted_ticket t
+              CROSS JOIN jsonb_array_elements(${kitchenPayload}::jsonb) AS k
+              RETURNING id
+            ),
+            inserted_payment AS (
+              INSERT INTO "Payment" (
+                id, "orderId", amount, status, method, "restaurantId",
+                "createdAt", "updatedAt"
+              )
+              SELECT
+                gen_random_uuid(),
+                o.id,
+                ${computedTotal},
+                ${resolvedPaymentStatus},
+                ${paymentMethod?.trim() || 'Kiosk'},
+                ${restaurant.id},
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+              FROM new_order o
+              RETURNING id
+            )
+            SELECT
+              o.id,
+              o."shortOrderId",
+              o."branchId",
+              (SELECT count(*) FROM inserted_items) AS item_count,
+              (SELECT count(*) FROM inserted_mods) AS mod_count,
+              (SELECT count(*) FROM inserted_ticket) AS ticket_count,
+              (SELECT count(*) FROM inserted_ticket_items) AS ticket_item_count,
+              (SELECT count(*) FROM inserted_payment) AS payment_count
+            FROM new_order o
+          `;
+          const row = inserted[0];
+          if (!row?.id || !row.shortOrderId) {
+            throw new Error('Failed to create order');
+          }
+          order = row;
           break;
         } catch (e) {
-          if (!isTicketNumberConflict(e) || attempt >= 7) throw e;
+          const message = e instanceof Error ? e.message : '';
+          const ticketConflict =
+            isTicketNumberConflict(e) || /ticketNumber|ticketDate/i.test(message);
+          if (!ticketConflict || attempt >= 7) throw e;
           ticketNumber += 1;
         }
       }
@@ -366,90 +560,6 @@ export async function POST(req: NextRequest) {
       if (!order) {
         throw new Error('Failed to create order after ticket retries');
       }
-
-      await Promise.all(
-        lines.map(async (line) => {
-          const orderItem = await tx.orderItem.create({
-            data: {
-              orderId: order!.id,
-              menuItemId: line.menuItemId,
-              productName: line.productName,
-              quantity: line.quantity,
-              price: line.unitPrice,
-            },
-          });
-
-          const flatMods = line.modifiers.flatMap((g) =>
-            g.selections.map((s) => ({
-              selection: s,
-              groupName: g.groupName,
-            }))
-          );
-          if (flatMods.length > 0) {
-            await tx.orderItemModifier.createMany({
-              data: flatMods.map(({ selection: s, groupName }, sortOrder) => ({
-                orderItemId: orderItem.id,
-                menuItemId: normalizePersonalizeModifierMenuItemId(s.menuItemId),
-                name: s.name,
-                groupName: groupName?.trim() || null,
-                unitPrice: s.unitPrice,
-                quantity: 1,
-                sortOrder,
-              })),
-            });
-          }
-        })
-      );
-
-      // Table + unpaid (or pending) → hold for POS table sheet; do not send kitchen yet.
-      // Paid orders (cash completed / card) still get a kitchen ticket immediately.
-      const resolvedPaymentStatus = paymentStatus ?? 'completed';
-      const isTableOpenCheck =
-        Boolean(selectedTableId) &&
-        resolvedPaymentStatus.toLowerCase() === 'pending';
-
-      if (!isTableOpenCheck) {
-        const ticket = await tx.kitchenTicket.create({
-          data: {
-            restaurantId: restaurant.id,
-            orderId: order.id,
-            status: 'pending',
-            selectedMinutes: SELECTED_MINUTES_KIOSK,
-          },
-        });
-
-        await tx.kitchenTicketItem.createMany({
-          data: buildKitchenTicketItemRows(
-            lines.map((line) => ({
-              quantity: line.quantity,
-              productName: line.productName,
-              modifiers: line.modifiers.flatMap((group) =>
-                group.selections.map((sel) => ({
-                  name: sel.name,
-                  quantity: 1,
-                  menuItemId: sel.menuItemId,
-                  groupName: group.groupName,
-                }))
-              ),
-            }))
-          ).map((row, sortOrder) => ({
-            kitchenTicketId: ticket.id,
-            productName: row.productName,
-            quantity: row.quantity,
-            sortOrder,
-          })),
-        });
-      }
-
-      await tx.payment.create({
-        data: {
-          orderId: order.id,
-          amount: computedTotal,
-          status: resolvedPaymentStatus,
-          method: paymentMethod?.trim() || 'Kiosk',
-          restaurantId: restaurant.id,
-        },
-      });
 
       await consumeIngredientsForOrder(tx, {
         restaurantId: restaurant.id,
@@ -493,7 +603,11 @@ export async function POST(req: NextRequest) {
     if (e instanceof Error && e.message.includes('Select a variation')) {
       return NextResponse.json({ error: e.message }, { status: 400 });
     }
-    if (isPrismaUniqueViolation(e)) {
+    const conflictMessage = e instanceof Error ? e.message : '';
+    if (
+      isPrismaUniqueViolation(e) ||
+      /idempotency/i.test(conflictMessage)
+    ) {
       const recovered = await recoverOrderFromIdempotencyConflict(
         idempotencyKey,
         restaurant.id

@@ -13,6 +13,14 @@ function countByStatus(
 
 type RangePreset = "monthly" | "3m" | "6m" | "1y" | "custom";
 
+type OverviewBody = {
+  data: Record<string, unknown>;
+};
+
+const overviewCache = new Map<string, { at: number; body: OverviewBody }>();
+const overviewInflight = new Map<string, Promise<OverviewBody>>();
+const OVERVIEW_CACHE_MS = 20_000;
+
 function parseRange(req: NextRequest): {
   preset: RangePreset;
   from: Date;
@@ -53,13 +61,9 @@ function parseRange(req: NextRequest): {
   return { preset: "monthly", from: startOfMonth(now), to: endOfDay(now) };
 }
 
-export async function GET(req: NextRequest) {
-  const auth = await requirePlatformAdmin(req);
-  if ("error" in auth) return auth.error;
-
-  try {
-    const range = parseRange(req);
-    const createdAtFilter = { gte: range.from, lte: range.to };
+async function loadOverview(req: NextRequest): Promise<OverviewBody> {
+  const range = parseRange(req);
+  const createdAtFilter = { gte: range.from, lte: range.to };
 
     const [
       restaurantCount,
@@ -119,7 +123,7 @@ export async function GET(req: NextRequest) {
       noSubscription: Math.max(0, restaurantCount - subscribedTotal),
     };
 
-    return NextResponse.json({
+    return {
       data: {
         range: {
           preset: range.preset,
@@ -140,7 +144,37 @@ export async function GET(req: NextRequest) {
           createdAt: r.createdAt.toISOString(),
         })),
       },
-    });
+    };
+}
+
+export async function GET(req: NextRequest) {
+  const auth = await requirePlatformAdmin(req);
+  if ("error" in auth) return auth.error;
+
+  try {
+    const range = parseRange(req);
+    const cacheKey = `${range.preset}:${range.from.toISOString()}:${range.to.toISOString()}`;
+    const fresh = new URL(req.url).searchParams.get("fresh") === "1";
+    if (!fresh) {
+      const hit = overviewCache.get(cacheKey);
+      if (hit && Date.now() - hit.at < OVERVIEW_CACHE_MS) {
+        return NextResponse.json(hit.body);
+      }
+      const pending = overviewInflight.get(cacheKey);
+      if (pending) {
+        return NextResponse.json(await pending);
+      }
+    }
+
+    const pending = loadOverview(req);
+    overviewInflight.set(cacheKey, pending);
+    try {
+      const body = await pending;
+      overviewCache.set(cacheKey, { at: Date.now(), body });
+      return NextResponse.json(body);
+    } finally {
+      overviewInflight.delete(cacheKey);
+    }
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Failed to load overview" }, { status: 500 });

@@ -2343,7 +2343,7 @@ export function ProductCustomizeDialog({
                 visibleCategoryGroups.length === 0 &&
                 visibleProductRecommendationGroups.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No add-ons available.
+                    {t('noAddonsAvailable')}
                   </p>
                 ) : null}
 

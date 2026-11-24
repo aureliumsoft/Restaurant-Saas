@@ -5,6 +5,7 @@ import { useCallback, useMemo } from 'react';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useProgressiveCustomerMenu } from '@/hooks/use-progressive-customer-menu';
 import {
+  buildCustomerMenuBrowseUrl,
   buildCustomerMenuCategoriesUrl,
   buildCustomerMenuCategoryItemsUrl,
 } from '@/lib/customer-menu-client';
@@ -41,8 +42,12 @@ export function StoreMenu({ slug }: { slug: string }) {
     error,
   } = useProgressiveCustomerMenu<MenuItemLite>({
     categoriesUrl: buildCustomerMenuCategoriesUrl(slug, null, null),
+    browseUrl: buildCustomerMenuBrowseUrl(slug, null, null),
     categoryItemsUrl,
     enabled: Boolean(slug),
+    batchSize: 200,
+    categoryConcurrency: 4,
+    retainKey: slug ? `store:${slug}` : null,
   });
 
   const categories = useMemo(

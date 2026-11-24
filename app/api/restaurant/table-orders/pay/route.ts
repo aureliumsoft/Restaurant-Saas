@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
@@ -165,27 +166,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const paymentRows = orders.flatMap((order) =>
+      order.payments.map((payment) => ({
+        id: payment.id,
+        total: Number(order.total) || 0,
+      }))
+    );
     await db.$transaction(async (tx) => {
-      for (const order of orders) {
-        const orderTotal = Number(order.total) || 0;
-        for (const payment of order.payments) {
-          await tx.payment.update({
-            where: { id: payment.id },
-            data: {
-              status: 'completed',
-              amount: orderTotal,
-              method: methodLabel,
-            },
-          });
-        }
-        await tx.order.update({
-          where: { id: order.id },
-          data: {
-            posShiftId: openShift.id,
-            status: 'completed',
-          },
-        });
+      if (paymentRows.length > 0) {
+        const values = Prisma.join(
+          paymentRows.map(
+            (row) => Prisma.sql`(${row.id}, ${row.total}::double precision)`
+          )
+        );
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE "Payment" AS p
+          SET status = 'completed',
+              method = ${methodLabel},
+              amount = v.total,
+              "updatedAt" = CURRENT_TIMESTAMP
+          FROM (VALUES ${values}) AS v(id, total)
+          WHERE p.id = v.id
+        `);
       }
+      await tx.order.updateMany({
+        where: { id: { in: orders.map((order) => order.id) } },
+        data: {
+          posShiftId: openShift.id,
+          status: 'completed',
+        },
+      });
       await releaseDiningTableIfIdle(tx, diningTableId);
     });
 

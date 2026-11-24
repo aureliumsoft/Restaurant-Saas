@@ -44,6 +44,7 @@ import {
 } from '@/lib/dashboard-paths';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { useProgressiveRestaurantMenu } from '@/hooks/use-progressive-restaurant-menu';
+import { assemblePosCustomizeProduct } from '@/lib/menu/assemble-pos-customize';
 import {
   ProductCardSkeletonGrid,
   CategoryPillSkeleton,
@@ -63,6 +64,7 @@ import { PosKioskOrdersSheet } from '@/components/pos/pos-kiosk-orders-sheet';
 import { PosCompletedOrdersSheet } from '@/components/pos/pos-completed-orders-sheet';
 import { PosTableOrdersSheet } from '@/components/pos/pos-table-orders-sheet';
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
+import { formatBranchDateTime } from '@/lib/branch-timezone';
 import {
   PosOnScreenKeyboard,
 } from '@/components/pos/pos-on-screen-keyboard';
@@ -124,15 +126,15 @@ import { toast } from 'react-toastify';
 import axios from 'axios';
 import eventBus from '@/lib/even';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
-import { useKioskPendingCash, revalidateKioskPendingCash } from '@/hooks/use-kiosk-pending-cash';
+import { useKioskPendingCashCount, revalidateKioskPendingCash } from '@/hooks/use-kiosk-pending-cash';
 import { useShiftAwareLogout } from '@/hooks/use-shift-aware-logout';
-import { usePosCompletedOrders } from '@/hooks/use-pos-completed-orders';
+import { usePosCompletedOrdersCount } from '@/hooks/use-pos-completed-orders';
 import {
-  usePosWorkingOrders,
+  usePosWorkingOrdersCount,
   revalidatePosWorkingOrders,
 } from '@/hooks/use-pos-working-orders';
 import {
-  useOpenTableOrders,
+  useOpenTableCount,
   revalidateOpenTableOrders,
   upsertOptimisticOpenTableOrder,
   markOpenTableOrderKitchenSent,
@@ -190,7 +192,7 @@ const POS_GHOST_ICON_BTN =
 const POS_OUTLINE_BTN =
   'border-border/40 bg-transparent text-foreground hover:bg-muted/70';
 const POS_PRODUCT_CARD =
-  'group relative flex flex-col overflow-hidden rounded-xl bg-white text-left text-card-foreground shadow-sm transition-all duration-150 hover:shadow-md hover:shadow-fire-500/10 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fire-500/40 dark:bg-zinc-900';
+  'group relative flex flex-col overflow-hidden rounded-xl bg-white text-left text-card-foreground shadow-sm transition-all duration-150 hover:shadow-md hover:shadow-fire-500/10 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fire-500/40 dark:bg-zinc-900 [content-visibility:auto] [contain-intrinsic-size:auto_180px]';
 /** More products visible beside ticket */
 const POS_PRODUCT_GRID =
   'grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6';
@@ -581,7 +583,6 @@ export function PosScreen({
     []
   );
 
-  const [now, setNow] = useState<Date>(() => new Date());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [amountPaid, setAmountPaid] = useState('');
@@ -604,6 +605,9 @@ export function PosScreen({
   >();
   const cardPaymentCancelledRef = useRef(false);
   const cardPaymentResolvedRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const cardPayInFlightRef = useRef(false);
+  const orderSaveFailedRef = useRef(false);
   const [archivedOrdersOpen, setArchivedOrdersOpen] = useState(false);
   const [archivedOrders, setArchivedOrders] = useState<ArchivedOrder[]>([]);
   const [shiftSheetOpen, setShiftSheetOpen] = useState(false);
@@ -648,10 +652,10 @@ export function PosScreen({
     branchId: posBranchId,
     onEndShiftAndLogout: openEndShiftForLogout,
   });
-  const { count: kioskPendingCount } = useKioskPendingCash(posBranchId);
-  const { count: completedOrdersCount } = usePosCompletedOrders(posBranchId);
-  const { tableCount: openTableCount } = useOpenTableOrders(posBranchId);
-  const { count: workingOrdersCount } = usePosWorkingOrders(posBranchId);
+  const kioskPendingCount = useKioskPendingCashCount(posBranchId);
+  const completedOrdersCount = usePosCompletedOrdersCount(posBranchId);
+  const openTableCount = useOpenTableCount(posBranchId);
+  const workingOrdersCount = usePosWorkingOrdersCount(posBranchId);
 
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [editingOrderUrlId, setEditingOrderUrlId] = useState<string | null>(
@@ -802,6 +806,7 @@ export function PosScreen({
   const {
     meta: menuMeta,
     categories: progressiveCategories,
+    customizeIndex,
     categoriesLoading,
     error: menuLoadError,
     anyCategoryLoading,
@@ -815,44 +820,14 @@ export function PosScreen({
   const allowKioskChrome = limitFlag('pos', 'kioskButton', true);
   const allowKdsChrome = limitFlag('pos', 'kdsButton', true);
   const kioskModulePaid = isPaid('kiosk');
-  const [apiFulfillment, setApiFulfillment] =
-    useState<RestaurantFulfillmentSettings | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/restaurant/fulfillment-settings', {
-        cache: 'no-store',
-      });
-        if (!res.ok || cancelled) return;
-        const json = (await res.json()) as {
-          data?: RestaurantFulfillmentSettings;
-        };
-        if (cancelled || !json.data) return;
-        setApiFulfillment(parseRestaurantFulfillmentSettings(json.data));
-    } catch {
-        // ignore
-    }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const fulfillmentSettings = useMemo((): RestaurantFulfillmentSettings => {
-    if (apiFulfillment) return apiFulfillment;
     if (menuMeta?.fulfillmentSettings) {
       return parseRestaurantFulfillmentSettings(
         menuMeta.fulfillmentSettings as Partial<RestaurantFulfillmentSettings>
       );
     }
     return bootstrapFulfillment;
-  }, [
-    apiFulfillment,
-    menuMeta?.fulfillmentSettings,
-    bootstrapFulfillment,
-  ]);
+  }, [menuMeta?.fulfillmentSettings, bootstrapFulfillment]);
 
   const onscreenKeyboardEnabled = fulfillmentSettings.onscreenKeyboardEnabled;
 
@@ -917,7 +892,7 @@ export function PosScreen({
 
   const loadingMenu = categoriesLoading && progressiveCategories.length === 0;
 
-  const loadPendingKitchenOrders = useCallback(async () => {
+  const loadPendingKitchenOrders = useCallback(async (fresh = true) => {
     setLoadingPendingKitchen(true);
     try {
       const branchId = selectedBranchId || activeBranchId || '';
@@ -931,7 +906,7 @@ export function PosScreen({
         : '';
       const res = await fetch(
         `/api/restaurant/pos-order/pending-kitchen${query}`,
-        { cache: 'no-store' }
+        { cache: fresh ? 'reload' : 'default' }
       );
       if (!res.ok) throw new Error('Failed to load');
       const json = (await res.json()) as { data?: PosPendingKitchenOrder[] };
@@ -952,7 +927,7 @@ export function PosScreen({
     }
     pendingKitchenRefreshTimerRef.current = setTimeout(() => {
       pendingKitchenRefreshTimerRef.current = null;
-    void loadPendingKitchenOrders();
+    void loadPendingKitchenOrders(true);
     }, 800);
   }, [loadPendingKitchenOrders]);
 
@@ -988,11 +963,6 @@ export function PosScreen({
       schedulePendingKitchenRefresh();
     }
   );
-
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1074,7 +1044,7 @@ export function PosScreen({
           : '';
         const res = await fetch(`/api/restaurant/tables${branchQuery}`, {
           method: 'GET',
-          cache: 'no-store',
+          cache: 'default',
         });
         if (!res.ok) throw new Error('tables');
         const json = (await res.json()) as { data?: DiningTableOption[] };
@@ -1115,7 +1085,7 @@ export function PosScreen({
   }, [cart, setPosCartHasItems]);
 
   useEffect(() => {
-    void loadPendingKitchenOrders();
+    void loadPendingKitchenOrders(false);
   }, [loadPendingKitchenOrders]);
 
   useEffect(() => {
@@ -1442,6 +1412,10 @@ export function PosScreen({
   const selectedBranchName =
     posBranches.find((b) => b.id === selectedBranchId)?.name ??
     t('pos.toolbar.noBranchSelected');
+  const branchTimeZone =
+    scopedBranches.find(
+      (branch) => branch.id === (selectedBranchId || activeBranchId)
+    )?.timeZone ?? null;
   const hasPendingPosData = cart.length > 0 || archivedOrders.length > 0;
 
   const {
@@ -1664,6 +1638,7 @@ export function PosScreen({
       brandName: branding.name || 'Restaurant',
       branchName: selectedBranchName,
       logoUrl: branding.logoUrl,
+      timeZone: branchTimeZone,
       orderMode,
       paymentMethodLabel,
       tableLabel:
@@ -1950,6 +1925,12 @@ export function PosScreen({
   });
 
   const proceedWithProduct = async (p: PosMenuProduct) => {
+    const ready = assemblePosCustomizeProduct(p, customizeIndex);
+    if (ready) {
+      openCustomize(ready as PosMenuProduct, { loading: false });
+      setCustomizeHydrating(false);
+      return;
+    }
     const token = ++customizeLoadTokenRef.current;
     openCustomize(p, { loading: true });
     setCustomizeHydrating(true);
@@ -2083,6 +2064,12 @@ export function PosScreen({
           })),
         });
       }
+      const modifierTotal = modifiers.reduce(
+        (sum, group) =>
+          sum + group.selections.reduce((inner, sel) => inner + sel.unitPrice, 0),
+        0
+      );
+      const basePrice = Math.max(0, item.unitPrice - modifierTotal);
       return normalizeCartLine({
         lineId:
           typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -2090,7 +2077,8 @@ export function PosScreen({
             : `edit-${item.id}`,
         menuItemId: item.menuItemId,
         productName: item.name,
-        unitPrice: item.unitPrice,
+        unitPrice: basePrice,
+        baseUnitPrice: basePrice,
         qty: item.quantity,
         lineDiscPct: 0,
         imageUrl: item.imageUrl,
@@ -2489,6 +2477,7 @@ export function PosScreen({
     txnId?: string,
     force = false
   ) {
+    cardPayInFlightRef.current = false;
     if (cardPaymentResolvedRef.current && !force) return;
     cardPaymentResolvedRef.current = true;
     setCardProcessingOpen(false);
@@ -2597,11 +2586,16 @@ export function PosScreen({
   }
 
   async function handleCardPayClick() {
-    if (cardPaymentStatus === 'success') return;
-    if (!requireActiveShift()) return;
+    if (cardPayInFlightRef.current || cardPaymentStatus === 'success') return;
+    cardPayInFlightRef.current = true;
+    if (!requireActiveShift()) {
+      cardPayInFlightRef.current = false;
+      return;
+    }
     const stockError = await assertPosIngredientsAvailable();
     if (stockError) {
       toast.error(stockError);
+      cardPayInFlightRef.current = false;
       return;
     }
     cardPaymentCancelledRef.current = false;
@@ -2611,7 +2605,12 @@ export function PosScreen({
 
     const terminalBase =
       process.env.NEXT_PUBLIC_POS_TERMINAL_API?.trim().replace(/\/$/, '') || '';
-    if (!terminalBase) return;
+    if (!terminalBase) {
+      cardPayInFlightRef.current = false;
+      finalizeCardPayment('error');
+      toast.error(t('pos.toasts.terminalApiNotConfiguredShort'));
+      return;
+    }
 
     const result = await runTerminalCardCharge();
     if (cardPaymentCancelledRef.current) return;
@@ -2645,6 +2644,10 @@ export function PosScreen({
   const cashPaidCoversTotal = cashAmountPaid + 1e-9 >= grandTotal;
 
   async function saveOrder(opts?: { paymentMode?: string; payment?: string }) {
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    orderSaveFailedRef.current = false;
+    try {
     if (!requireActiveShift()) return;
     const effectivePaymentMode = opts?.paymentMode ?? paymentMode;
     const effectivePayment = opts?.payment ?? payment;
@@ -3157,6 +3160,7 @@ export function PosScreen({
         }
       }
     } catch (e: unknown) {
+      orderSaveFailedRef.current = true;
       const ex = e as { body?: { error?: unknown } };
       const fromBody =
         typeof ex.body?.error === 'string' ? ex.body.error : null;
@@ -3169,8 +3173,18 @@ export function PosScreen({
       if (status === 409) {
         promptStartShift();
       }
+      if (
+        (opts?.paymentMode ?? paymentMode) === 'card' ||
+        (opts?.paymentMode ?? paymentMode) === 'card_terminal'
+      ) {
+        setCardPaymentStatus('error');
+        cardPaymentResolvedRef.current = false;
+      }
     } finally {
       setSavingOrder(false);
+    }
+    } finally {
+      saveInFlightRef.current = false;
     }
   }
 
@@ -5034,7 +5048,7 @@ export function PosScreen({
                           : order.shortOrderId}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(order.createdAt).toLocaleString()} ·{' '}
+                        {formatBranchDateTime(order.createdAt, branchTimeZone)} ·{' '}
                         {formatMoney(order.total)}
                       </p>
                       {order.tableLabel ? (
@@ -5144,7 +5158,7 @@ export function PosScreen({
                         <div>
                           <p className="text-sm font-semibold">
                             {order.orderMode.toUpperCase()} -{' '}
-                            {new Date(order.createdAt).toLocaleString()}
+                            {formatBranchDateTime(order.createdAt, branchTimeZone)}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {t('pos.itemCount', {
@@ -5519,6 +5533,7 @@ export function PosScreen({
         brandName={branding.name || 'Restaurant'}
         branchName={selectedBranchName}
         logoUrl={branding.logoUrl}
+        timeZone={branchTimeZone}
         isOwnerOrAdmin={isOwnerOrAdmin}
         logoutAfterEnd={logoutEndShiftFlow}
         onShiftUpdated={handleShiftUpdated}

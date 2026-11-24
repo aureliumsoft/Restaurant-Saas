@@ -125,11 +125,13 @@ export type RestaurantRegionalInput = {
 };
 
 export function parseRestaurantRegionalSettings(
-  row: RestaurantRegionalInput | null | undefined
+  row: unknown
 ): RestaurantRegionalSettings {
-  const currencyCode = normalizeRestaurantCurrencyCode(row?.currencyCode);
+  const input =
+    row && typeof row === 'object' ? (row as RestaurantRegionalInput) : undefined;
+  const currencyCode = normalizeRestaurantCurrencyCode(input?.currencyCode);
   const countryCode = normalizeRestaurantCountryCode(
-    row?.countryCode ?? defaultCountryForCurrency(currencyCode)
+    input?.countryCode ?? defaultCountryForCurrency(currencyCode)
   );
   return { currencyCode, countryCode };
 }

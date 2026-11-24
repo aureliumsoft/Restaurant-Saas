@@ -9,6 +9,7 @@ import {
 import { usePathname, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 import { parseStorefrontSlugFromPath } from '@/lib/customer-storefront-paths';
 import { formatCurrency } from '@/lib/format-money';
 import {
@@ -32,14 +33,8 @@ const CustomerRegionalContext =
 async function fetchCustomerRegional(
   slug: string
 ): Promise<RestaurantRegionalSettings> {
-  const res = await fetch(
-    `/api/customer/restaurant?slug=${encodeURIComponent(slug)}`,
-    { cache: 'no-store' }
-  );
-  const body = (await res.json().catch(() => ({}))) as {
-    data?: { regional?: RestaurantRegionalSettings } | null;
-  };
-  return parseRestaurantRegionalSettings(body.data?.regional);
+  const data = await fetchCustomerRestaurant({ slug });
+  return parseRestaurantRegionalSettings(data?.regional);
 }
 
 function resolveSlugFromLocation(

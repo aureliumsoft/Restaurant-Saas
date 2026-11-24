@@ -4,14 +4,12 @@ import {
   getBranchScopeFromRequest,
   userIsOwnerOrAdmin,
 } from '@/lib/branch/branch-scope';
+import { loadResolvedBranchTimeZone } from '@/lib/branch-timezone-server';
 import { db } from '@/lib/db';
 import { resolveReportDateRange } from '@/lib/reports/date-range';
 import { queryTransactionLedger } from '@/lib/reports/transaction-ledger';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
-import {
-  getTodayCreatedAtBounds,
-  salesOrderFilterTimezone,
-} from '@/lib/sales-order-period';
+import { getTodayCreatedAtBounds } from '@/lib/sales-order-period';
 
 export async function GET(req: NextRequest) {
   try {
@@ -33,6 +31,10 @@ export async function GET(req: NextRequest) {
       restaurantId
     );
 
+    const branchTimeZone = await loadResolvedBranchTimeZone(
+      restaurantId,
+      branchScope?.activeBranchId ?? null
+    );
     const fromParam = req.nextUrl.searchParams.get('from');
     const toParam = req.nextUrl.searchParams.get('to');
     const hasExplicitRange = Boolean(fromParam || toParam);
@@ -48,14 +50,16 @@ export async function GET(req: NextRequest) {
             ? '1970-01-01'
             : null,
         toParam: hasExplicitRange ? toParam : null,
+        timeZone: branchTimeZone,
       });
     } else {
-      const tz = salesOrderFilterTimezone();
+      const tz = branchTimeZone;
       const bounds = await getTodayCreatedAtBounds(db, tz);
       const todayKey = (
         await resolveReportDateRange({
           database: db,
           canViewHistorical: false,
+          timeZone: branchTimeZone,
         })
       ).fromKey;
       range = {

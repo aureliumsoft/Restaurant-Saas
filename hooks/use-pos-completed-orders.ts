@@ -106,7 +106,34 @@ export function usePosCompletedOrders(branchId: string | null) {
   };
 }
 
+export function usePosCompletedOrdersCount(branchId: string | null) {
+  const key = branchId
+    ? ([...queryKeys.posCompletedOrders(branchId), 'count'] as const)
+    : null;
+  const { data, mutate } = useSWR(
+    key,
+    async () => {
+      const res = await axios.get<{ count?: number }>(
+        '/api/restaurant/pos-order/completed',
+        { params: { branchId, count: '1' } }
+      );
+      return res.data.count ?? 0;
+    },
+    { revalidateOnFocus: false, dedupingInterval: 2_000 }
+  );
+  useRealtimeRefresh(
+    ['refreshCompletedOrders', 'realtime:kds.tickets'],
+    () => {
+      if (document.hidden) return;
+      void mutate();
+    },
+    { runOnMount: false }
+  );
+  return data ?? 0;
+}
+
 export function revalidatePosCompletedOrders(branchId: string | null) {
   if (!branchId) return;
   void globalMutate(queryKeys.posCompletedOrders(branchId));
+  void globalMutate([...queryKeys.posCompletedOrders(branchId), 'count']);
 }

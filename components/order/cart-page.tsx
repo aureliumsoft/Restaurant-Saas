@@ -25,6 +25,7 @@ import {
 
 import type { OrderInfo } from '@/components/order/order-types';
 import { inferHostSubdomainForMenu } from '@/lib/customer-menu-client';
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 import { resolveWebCustomerName } from '@/lib/web-customer';
 import { ProductLineDetails } from '@/components/orders/product-line-details';
 import {
@@ -349,20 +350,14 @@ export default function CartPageClient({
         const slug = orderInfo?.restaurantSlug?.trim();
         const store = orderInfo?.storeId?.trim();
         const subdomain = inferHostSubdomainForMenu();
-        const lookup = slug
-          ? `/api/customer/restaurant?slug=${encodeURIComponent(slug)}`
-          : store || subdomain
-            ? `/api/customer/restaurant?subdomain=${encodeURIComponent(
-                store || subdomain || ''
-              )}`
-            : null;
-        if (!lookup) return;
-        const res = await fetch(lookup);
-        if (!res.ok) return;
-        const json = await res.json().catch(() => ({}));
+        if (!slug && !store && !subdomain) return;
+        const data = await fetchCustomerRestaurant(
+          slug ? { slug } : { subdomain: store || subdomain || '' }
+        );
+        if (!data) return;
         const c =
-          typeof json?.data?.themePrimaryColor === 'string'
-            ? json.data.themePrimaryColor.trim()
+          typeof data.themePrimaryColor === 'string'
+            ? data.themePrimaryColor.trim()
             : '';
         setThemePrimaryColor(c || null);
         writeCachedRestaurantThemePrimary(slug, c || null);

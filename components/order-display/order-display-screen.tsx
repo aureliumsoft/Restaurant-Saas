@@ -16,6 +16,7 @@ import type {
   OrderDisplayPayload,
   OrderDisplayTicket,
 } from '@/app/api/restaurant/order-display/route';
+import { formatBranchTime } from '@/lib/branch-timezone';
 import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
 import { getRestaurantCurrencySymbol } from '@/lib/restaurant-regional';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
@@ -647,12 +648,8 @@ export function OrderDisplayScreen() {
 
   const lastUpdatedText = useMemo(() => {
     if (!lastUpdated) return '—';
-    return lastUpdated.toLocaleTimeString(locale, {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  }, [lastUpdated, locale]);
+    return formatBranchTime(lastUpdated, filterTimezone, locale);
+  }, [lastUpdated, filterTimezone, locale]);
 
   const featured = completed[0] ?? null;
   const recentOthers = completed.slice(1, 3);

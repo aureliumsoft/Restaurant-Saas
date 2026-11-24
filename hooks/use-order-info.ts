@@ -13,6 +13,7 @@ import {
   ORDER_CONTEXT_QUERY_KEYS,
 } from '@/lib/order-search-params';
 import { LAST_CUSTOMER_RESTAURANT_SLUG_KEY } from '@/lib/restaurant-theme-persist';
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 
 function resolveOrderInfo(
   orderId: string,
@@ -54,13 +55,10 @@ async function fetchOrderInfoFromLastRestaurant(
   const slug = localStorage.getItem(LAST_CUSTOMER_RESTAURANT_SLUG_KEY)?.trim();
   if (!slug) return null;
   try {
-    const [restaurantRes, branchesRes] = await Promise.all([
-      fetch(`/api/customer/restaurant?slug=${encodeURIComponent(slug)}`),
+    const [restaurant, branchesRes] = await Promise.all([
+      fetchCustomerRestaurant({ slug }),
       fetch(`/api/customer/branches?slug=${encodeURIComponent(slug)}`),
     ]);
-    const restaurantJson = (await restaurantRes.json().catch(() => ({}))) as {
-      data?: { name?: string; slug?: string } | null;
-    };
     const branchesJson = (await branchesRes.json().catch(() => ({}))) as {
       data?: Array<{ id?: string; name?: string; address?: string | null }>;
     };
@@ -68,8 +66,8 @@ async function fetchOrderInfoFromLastRestaurant(
     if (!branch?.id) return null;
     return {
       mode: orderType,
-      restaurantSlug: restaurantJson.data?.slug || slug,
-      restaurantName: restaurantJson.data?.name || '',
+      restaurantSlug: restaurant?.slug || slug,
+      restaurantName: restaurant?.name || '',
       storeId: branch.id,
       storeName: branch.name || '',
       storeAddress: branch.address || '',

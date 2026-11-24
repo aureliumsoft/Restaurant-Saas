@@ -14,19 +14,14 @@ import {
   parseRestaurantRegionalSettings,
   type RestaurantRegionalSettings,
 } from '@/lib/restaurant-regional';
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 import { formatCurrency } from '@/lib/format-money';
 
 async function fetchCustomerRegionalBySlug(
   slug: string
 ): Promise<RestaurantRegionalSettings> {
-  const res = await fetch(
-    `/api/customer/restaurant?slug=${encodeURIComponent(slug)}`,
-    { cache: 'no-store' }
-  );
-  const body = (await res.json().catch(() => ({}))) as {
-    data?: { regional?: RestaurantRegionalSettings } | null;
-  };
-  return parseRestaurantRegionalSettings(body.data?.regional);
+  const data = await fetchCustomerRestaurant({ slug });
+  return parseRestaurantRegionalSettings(data?.regional);
 }
 
 /** Online web-app / customer flows — prefers shared CustomerRegionalProvider. */

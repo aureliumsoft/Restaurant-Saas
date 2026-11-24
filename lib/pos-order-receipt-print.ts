@@ -1,3 +1,4 @@
+import { formatBranchDateTime } from '@/lib/branch-timezone';
 import { formatCurrency } from '@/lib/format-money';
 import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
 import {
@@ -44,6 +45,7 @@ export type PrintPosOrderReceiptOptions = {
   paymentMode?: string;
   currencyCode?: string;
   countryCode?: string;
+  timeZone?: string | null;
 };
 
 export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
@@ -73,6 +75,7 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
     paymentMode = 'cash',
     currencyCode = DEFAULT_RESTAURANT_REGIONAL.currencyCode,
     countryCode = DEFAULT_RESTAURANT_REGIONAL.countryCode,
+    timeZone,
   } = options;
 
   const regional = parseRestaurantRegionalSettings({
@@ -110,10 +113,10 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
     .join('');
 
   const receiptHeader = buildThermalReceiptHeaderHtml({
-    logoUrl,
+    logoUrl: receiptLogoForPrint(logoUrl),
     brandName,
     branchName,
-    dateTime: new Date().toLocaleString(),
+    dateTime: formatBranchDateTime(new Date(), timeZone),
   });
 
   const html = `<!doctype html>
@@ -172,20 +175,51 @@ export function printPosOrderReceipt(options: PrintPosOrderReceiptOptions) {
 
   const doc = frame.contentWindow?.document;
   if (!doc || !frame.contentWindow) {
+    frame.remove();
     return false;
   }
 
   doc.open();
   doc.write(html);
   doc.close();
-  frame.onload = () => {
+
+  const win = frame.contentWindow;
+  let printed = false;
+  const trigger = () => {
+    if (printed) return;
+    printed = true;
     try {
-      frame.contentWindow?.focus();
-      frame.contentWindow?.print();
+      win?.focus();
+      win?.print();
     } finally {
-      window.setTimeout(() => frame.remove(), 1000);
+      const release = () => {
+        document.body.style.removeProperty('pointer-events');
+        document.body.removeAttribute('data-scroll-locked');
+        frame.remove();
+      };
+      win?.addEventListener('afterprint', release, { once: true });
+      window.setTimeout(release, 800);
     }
   };
 
+  const pending = Array.from(doc.images).filter((img) => !img.complete);
+  if (pending.length === 0) {
+    trigger();
+  } else {
+    for (const img of pending) {
+      img.addEventListener('load', trigger, { once: true });
+      img.addEventListener('error', trigger, { once: true });
+    }
+    window.setTimeout(trigger, 180);
+  }
+
   return true;
+}
+
+/** A multi-megabyte data URL blocks the print dialog. The name still prints. */
+function receiptLogoForPrint(logoUrl: string | null | undefined): string | null {
+  const value = logoUrl?.trim() || '';
+  if (!value) return null;
+  if (value.startsWith('data:') && value.length > 48_000) return null;
+  return value;
 }

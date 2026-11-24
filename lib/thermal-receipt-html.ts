@@ -105,8 +105,8 @@ const RECEIPT_CSS_SHARED = `
         text-transform: uppercase;
       }
       .receipt-branch, .receipt-datetime { margin-top: 2px; text-align: center; }
-      .receipt-line { margin-top: 2px; text-align: left; }
-      .receipt-line strong { font-weight: 700; }
+      .receipt-line { margin-top: 2px; text-align: left; overflow-wrap: normal; word-break: normal; }
+      .receipt-line strong { font-weight: 700; white-space: nowrap; }
       .receipt-ticket {
         font-weight: 700;
         line-height: 1.2;
@@ -115,12 +115,12 @@ const RECEIPT_CSS_SHARED = `
       }
       .sep { border-top: 1px dashed #111; margin: 6px 0; }
       table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      th, td { padding: 2px 0; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
+      th, td { padding: 2px 0; vertical-align: top; text-align: left; overflow-wrap: normal; word-break: normal; }
       th { text-align: left; font-weight: 700; }
       td.mod { padding-left: 8px; }
       .qty, .amt { white-space: nowrap; text-align: right; }
-      .qty { width: 48px; }
-      .amt { width: 112px; }
+      .qty { width: 32px; }
+      .amt { width: 72px; }
       .totals { margin-top: 4px; text-align: left; width: 100%; }
       .totals div { display: flex; justify-content: space-between; margin-top: 2px; }
       .grand { font-weight: 800; }
@@ -137,8 +137,8 @@ const DEFAULT_RECEIPT_CSS = `
 
 /** Kiosk receipt. Every size below is a fixed px value, about twice the POS type. */
 const KIOSK_RECEIPT_CSS = `
-      body, .muted, .receipt-branch, .receipt-datetime, .receipt-line, td, .totals { font-size: 20px; }
-      .receipt-line strong, th, .grand { font-size: 22px; }
+      body, .muted, .receipt-branch, .receipt-datetime, .receipt-line, td, .totals { font-size: 16px; }
+      .receipt-line strong, th, .grand { font-size: 16px; }
       .receipt-brand { font-size: 28px; }
       .receipt-ticket { font-size: 40px; }
       ${RECEIPT_CSS_SHARED}

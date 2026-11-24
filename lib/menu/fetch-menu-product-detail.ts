@@ -21,6 +21,10 @@ type DetailCacheEntry = {
 
 /** Short TTL shared by prefetch and customize open. Live browse prices overlay on top. */
 const DETAIL_CACHE_TTL_MS = 120_000;
+/** Website customize stays for the visit, including a reload in this tab. */
+export const WEBSITE_DETAIL_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
+/** Kiosk startup warms the whole menu. Keep it for the visit, not two minutes. */
+export const KIOSK_DETAIL_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const customerDetailCache = new Map<string, DetailCacheEntry>();
 const restaurantDetailCache = new Map<string, DetailCacheEntry>();
 const restaurantInflight = new Map<string, Promise<unknown>>();
@@ -42,9 +46,10 @@ function cacheGet<T>(
 function cacheSet(
   map: Map<string, DetailCacheEntry>,
   key: string,
-  data: unknown
+  data: unknown,
+  ttlMs = DETAIL_CACHE_TTL_MS
 ) {
-  map.set(key, { data, expiresAt: Date.now() + DETAIL_CACHE_TTL_MS });
+  map.set(key, { data, expiresAt: Date.now() + ttlMs });
 }
 
 function cacheDeleteMatching(
@@ -54,6 +59,17 @@ function cacheDeleteMatching(
   for (const key of map.keys()) {
     if (match(key)) map.delete(key);
   }
+}
+
+let detailPersistTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleDetailPersist(query: CustomerMenuQuery) {
+  const slug = query.slug?.trim();
+  if (!slug || typeof window === 'undefined') return;
+  if (detailPersistTimer) clearTimeout(detailPersistTimer);
+  detailPersistTimer = setTimeout(() => {
+    detailPersistTimer = null;
+    persistKioskDetailCache(slug);
+  }, 400);
 }
 
 export function buildCustomerMenuItemDetailUrl(
@@ -198,9 +214,10 @@ export function invalidateRestaurantMenuProductDetail(itemId?: string) {
 export async function fetchCustomerMenuProductDetail<T>(
   itemId: string,
   query: CustomerMenuQuery,
-  options?: { force?: boolean }
+  options?: { force?: boolean; ttlMs?: number }
 ): Promise<T | null> {
   const force = Boolean(options?.force);
+  const ttlMs = options?.ttlMs ?? DETAIL_CACHE_TTL_MS;
   const url = buildCustomerMenuItemDetailUrl(itemId, query, { fresh: force });
   if (!url) return null;
 
@@ -217,13 +234,16 @@ export async function fetchCustomerMenuProductDetail<T>(
 
   const request = (async () => {
     const res = await fetch(url, {
-      cache: 'no-store',
+      cache: force ? 'reload' : 'default',
       headers: force ? { 'Cache-Control': 'no-cache' } : undefined,
     });
     if (!res.ok) return null;
     const body = (await res.json().catch(() => ({}))) as { data?: T };
     const data = body.data ?? null;
-    if (data) cacheSet(customerDetailCache, url, data);
+    if (data) {
+      cacheSet(customerDetailCache, url, data, ttlMs);
+      scheduleDetailPersist(query);
+    }
     return data;
   })().finally(() => {
     customerInflight.delete(url);
@@ -240,7 +260,7 @@ export async function fetchCustomerMenuProductDetailShell<T>(
 ): Promise<T | null> {
   const url = buildCustomerMenuItemDetailUrl(itemId, query, { shell: true });
   if (!url) return null;
-  const res = await fetch(url, { cache: 'no-store' });
+  const res = await fetch(url, { cache: 'default' });
   if (!res.ok) return null;
   const body = (await res.json().catch(() => ({}))) as { data?: T };
   return body.data ?? null;
@@ -253,7 +273,7 @@ export async function fetchCustomerMenuProductGroup(
 ): Promise<ProductDetailGroupHydrate | null> {
   const url = buildCustomerMenuItemGroupUrl(itemId, groupId, query);
   if (!url) return null;
-  const res = await fetch(url, { cache: 'no-store' });
+  const res = await fetch(url, { cache: 'default' });
   if (!res.ok) return null;
   const body = (await res.json().catch(() => ({}))) as {
     data?: ProductDetailGroupHydrate;
@@ -272,6 +292,8 @@ type ProgressiveLoadOptions<T extends ProgressiveProductDetailShape> = {
   ) => void;
   /** Fires once when every required group has been hydrated. */
   onRequiredComplete?: (product: T) => void;
+  /** How long a finished detail stays in memory. */
+  ttlMs?: number;
 };
 
 async function runProgressiveGroupHydrate<T extends ProgressiveProductDetailShape>(
@@ -281,42 +303,52 @@ async function runProgressiveGroupHydrate<T extends ProgressiveProductDetailShap
 ): Promise<T | null> {
   options?.onShell?.(shell);
 
-  const ordered = orderGroupsForProgressiveHydrate(shell.attributeGroups);
+  const ordered = orderGroupsForProgressiveHydrate(shell.attributeGroups).filter(
+    (group) => Boolean(group.id)
+  );
   const hydratedGroupIds: string[] = [];
-  let requiredNotified = false;
   let current: T = shell;
+  let requiredFailed = false;
 
-  for (const group of ordered) {
+  const concurrency = 4;
+  for (let start = 0; start < ordered.length; start += concurrency) {
     if (options?.signal?.cancelled()) return null;
-    const groupId = group.id;
-    if (!groupId) continue;
-    const hydrate = await fetchGroup(groupId);
-    if (options?.signal?.cancelled()) return null;
-    if (!hydrate) continue;
-    current = mergeProductDetailGroup(current, hydrate);
-    hydratedGroupIds.push(groupId);
-    const requiredComplete = isProgressiveRequiredComplete(
-      shell.attributeGroups,
-      hydratedGroupIds
+    const slice = ordered.slice(start, start + concurrency);
+    const loaded = await Promise.all(
+      slice.map(async (group) => ({
+        group,
+        hydrate: group.id ? await fetchGroup(group.id) : null,
+      }))
     );
-    const allComplete = hydratedGroupIds.length >= ordered.length;
-    const meta: ProgressiveHydrateMeta = {
-      hydratedGroupIds: [...hydratedGroupIds],
-      requiredComplete,
-      allComplete,
-    };
-    options?.onGroup?.(current, hydrate, meta);
-    if (requiredComplete && !requiredNotified) {
-      requiredNotified = true;
-      options?.onRequiredComplete?.(current);
+    if (options?.signal?.cancelled()) return null;
+    for (const { group, hydrate } of loaded) {
+      const groupId = group.id;
+      if (!groupId) continue;
+      if (!hydrate) {
+        if (group.required) requiredFailed = true;
+        continue;
+      }
+      current = mergeProductDetailGroup(current, hydrate);
+      hydratedGroupIds.push(groupId);
+      const meta: ProgressiveHydrateMeta = {
+        hydratedGroupIds: [...hydratedGroupIds],
+        requiredComplete:
+          !requiredFailed &&
+          isProgressiveRequiredComplete(shell.attributeGroups, hydratedGroupIds),
+        allComplete: hydratedGroupIds.length >= ordered.length && !requiredFailed,
+      };
+      options?.onGroup?.(current, hydrate, meta);
     }
   }
 
-  if (!requiredNotified) {
+  if (
+    !requiredFailed &&
+    isProgressiveRequiredComplete(shell.attributeGroups, hydratedGroupIds)
+  ) {
     options?.onRequiredComplete?.(current);
   }
 
-  return current;
+  return requiredFailed ? null : current;
 }
 
 /**
@@ -335,6 +367,26 @@ export async function loadCustomerMenuProductDetailProgressive<
     fresh: force,
   });
 
+  if (!force && fullUrl) {
+    const cached = cacheGet<T>(customerDetailCache, fullUrl);
+    if (cached) {
+      options?.onShell?.(cached);
+      options?.onRequiredComplete?.(cached);
+      return cached;
+    }
+    const existing = customerInflight.get(fullUrl) as
+      | Promise<T | null>
+      | undefined;
+    if (existing) {
+      const data = await existing;
+      if (data) {
+        options?.onShell?.(data);
+        options?.onRequiredComplete?.(data);
+      }
+      return data;
+    }
+  }
+
   const shell = await fetchCustomerMenuProductDetailShell<T>(itemId, query);
   if (!shell) return null;
   if (options?.signal?.cancelled()) return null;
@@ -352,7 +404,13 @@ export async function loadCustomerMenuProductDetailProgressive<
     };
     void _shellFlag;
     const complete = { ...rest, progressiveShell: undefined } as T;
-    cacheSet(customerDetailCache, fullUrl, complete);
+    cacheSet(
+      customerDetailCache,
+      fullUrl,
+      complete,
+      options?.ttlMs ?? WEBSITE_DETAIL_CACHE_TTL_MS
+    );
+    scheduleDetailPersist(query);
     return complete;
   }
 
@@ -386,32 +444,108 @@ export async function fetchRestaurantMenuProductGroup(
   return body.data ?? null;
 }
 
-/** POS progressive customize: shell → required groups → optional groups. */
+/** POS progressive customize: one request for sizes and every recommendation list. */
 export async function loadRestaurantMenuProductDetailProgressive<
   T extends ProgressiveProductDetailShape,
 >(
   itemId: string,
   options?: ProgressiveLoadOptions<T>
 ): Promise<T | null> {
-  const shell = await fetchRestaurantMenuProductDetailShell<T>(itemId);
-  if (!shell) return null;
-  if (options?.signal?.cancelled()) return null;
-
-  const current = await runProgressiveGroupHydrate(
-    shell,
-    (groupId) => fetchRestaurantMenuProductGroup(itemId, groupId),
-    options
-  );
-  if (!current || options?.signal?.cancelled()) return null;
-
   const key = `lite:v3:${itemId}`;
-  const { progressiveShell: _shellFlag, ...rest } = current as T & {
-    progressiveShell?: boolean;
-  };
-  void _shellFlag;
-  const complete = { ...rest, progressiveShell: undefined } as T;
-  cacheSet(restaurantDetailCache, key, complete);
-  return complete;
+  restorePosDetailCache();
+  const force = Boolean(options?.force);
+  if (!force) {
+    const cached = cacheGet<T>(restaurantDetailCache, key);
+    if (cached) {
+      options?.onShell?.(cached);
+      options?.onRequiredComplete?.(cached);
+      return cached;
+    }
+    const existing = restaurantInflight.get(key) as Promise<T | null> | undefined;
+    if (existing) {
+      const data = await existing;
+      if (data) {
+        options?.onShell?.(data);
+        options?.onRequiredComplete?.(data);
+      }
+      return data;
+    }
+  }
+
+  const request = (async () => {
+    const res = await fetch(
+      `/api/restaurant/menu/items/${encodeURIComponent(itemId)}?configure=1`,
+      { cache: 'default' }
+    );
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => ({}))) as { data?: T };
+    const data = body.data ?? null;
+    if (!data) return null;
+    cacheSet(restaurantDetailCache, key, data, 10 * 60 * 60 * 1000);
+    schedulePosDetailPersist();
+    return data;
+  })().finally(() => {
+    restaurantInflight.delete(key);
+  });
+
+  restaurantInflight.set(key, request);
+  const data = await request;
+  if (!data || options?.signal?.cancelled()) return data;
+  options?.onShell?.(data);
+  options?.onRequiredComplete?.(data);
+  return data;
+}
+
+const POS_DETAIL_STORE_KEY = 'foodluk-pos-detail-cache';
+let posDetailRestored = false;
+let posDetailPersistTimer: ReturnType<typeof setTimeout> | null = null;
+
+function restorePosDetailCache() {
+  if (posDetailRestored || typeof sessionStorage === 'undefined') return;
+  posDetailRestored = true;
+  try {
+    const raw = sessionStorage.getItem(POS_DETAIL_STORE_KEY);
+    if (!raw) return;
+    const rows = JSON.parse(raw) as Array<{
+      key?: string;
+      data?: unknown;
+      expiresAt?: number;
+    }>;
+    if (!Array.isArray(rows)) return;
+    const now = Date.now();
+    for (const row of rows) {
+      if (!row?.key || row.data == null || typeof row.expiresAt !== 'number') continue;
+      if (now > row.expiresAt) continue;
+      if (!restaurantDetailCache.has(row.key)) {
+        restaurantDetailCache.set(row.key, {
+          data: row.data,
+          expiresAt: row.expiresAt,
+        });
+      }
+    }
+  } catch {
+    // A damaged store still leaves the network path.
+  }
+}
+
+function schedulePosDetailPersist() {
+  if (typeof sessionStorage === 'undefined') return;
+  if (posDetailPersistTimer) clearTimeout(posDetailPersistTimer);
+  posDetailPersistTimer = setTimeout(() => {
+    posDetailPersistTimer = null;
+    const now = Date.now();
+    const rows: Array<{ key: string; data: unknown; expiresAt: number }> = [];
+    for (const [cacheKey, entry] of restaurantDetailCache) {
+      if (!cacheKey.startsWith('lite:v3:')) continue;
+      if (now > entry.expiresAt) continue;
+      rows.push({ key: cacheKey, data: entry.data, expiresAt: entry.expiresAt });
+    }
+    try {
+      sessionStorage.setItem(POS_DETAIL_STORE_KEY, JSON.stringify(rows));
+    } catch {
+      // Memory still serves this page.
+    }
+  }, 400);
 }
 
 export async function fetchRestaurantMenuProductDetail<T>(
@@ -445,8 +579,100 @@ export async function fetchRestaurantMenuProductDetail<T>(
   return request;
 }
 
+const KIOSK_DETAIL_STORE_PREFIX = 'foodluk-kiosk-detail-cache:';
+
+/** Put this visit's dishes back after a full page load, so the next order does not download them. */
+export function restoreKioskDetailCache(slug: string): void {
+  if (typeof sessionStorage === 'undefined') return;
+  const key = `${KIOSK_DETAIL_STORE_PREFIX}${slug}`;
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return;
+    const rows = JSON.parse(raw) as Array<{
+      url?: string;
+      data?: unknown;
+      expiresAt?: number;
+    }>;
+    if (!Array.isArray(rows)) return;
+    const now = Date.now();
+    for (const row of rows) {
+      if (!row?.url || row.data == null || typeof row.expiresAt !== 'number') continue;
+      if (now > row.expiresAt) continue;
+      if (!customerDetailCache.has(row.url)) {
+        customerDetailCache.set(row.url, {
+          data: row.data,
+          expiresAt: row.expiresAt,
+        });
+      }
+    }
+  } catch {
+    // ignore a damaged or unavailable store
+  }
+}
+
+/** Remember warmed dishes for the rest of this kiosk visit. */
+export function persistKioskDetailCache(slug: string): void {
+  if (typeof sessionStorage === 'undefined') return;
+  const encoded = `slug=${encodeURIComponent(slug)}`;
+  const plain = `slug=${slug}`;
+  const now = Date.now();
+  const rows: Array<{ url: string; data: unknown; expiresAt: number }> = [];
+  for (const [url, entry] of customerDetailCache) {
+    if (!url.includes(encoded) && !url.includes(plain)) continue;
+    if (now > entry.expiresAt) continue;
+    rows.push({ url, data: entry.data, expiresAt: entry.expiresAt });
+  }
+  try {
+    sessionStorage.setItem(
+      `${KIOSK_DETAIL_STORE_PREFIX}${slug}`,
+      JSON.stringify(rows)
+    );
+  } catch {
+    // The memory cache still serves this page if the store is full.
+  }
+}
+
+/** Keep a dish that startup already loaded, so a later tap does not fetch it again. */
+export function retainCustomerMenuProductDetail(
+  itemId: string,
+  query: CustomerMenuQuery,
+  ttlMs = KIOSK_DETAIL_CACHE_TTL_MS
+): void {
+  const url = buildCustomerMenuItemDetailUrl(itemId, query);
+  if (!url) return;
+  const hit = customerDetailCache.get(url);
+  if (!hit || Date.now() > hit.expiresAt) return;
+  const expiresAt = Date.now() + ttlMs;
+  if (hit.expiresAt < expiresAt) hit.expiresAt = expiresAt;
+}
+
+/** Full detail already stored by prefetch or a finished customize open. */
+export function peekCustomerMenuProductDetail<T>(
+  itemId: string,
+  query: CustomerMenuQuery
+): T | null {
+  const url = buildCustomerMenuItemDetailUrl(itemId, query);
+  if (!url) return null;
+  return cacheGet<T>(customerDetailCache, url);
+}
+
+/** Nested add-on sheet when that product was already loaded at startup. */
+export function peekOptionNestedSheetPayload(
+  optionId: string,
+  query: CustomerMenuQuery,
+  imageUrlForItem: (menuItemId: string) => string,
+  lang: UiLanguage = 'es'
+): OptionNestedSheetPayload | null {
+  const detail = peekCustomerMenuProductDetail<{
+    attributeGroups?: Parameters<typeof buildCustomerAttributeGroup>[0][];
+    personalizeGroups?: PersonalizeGroup[];
+  }>(optionId, query);
+  if (!detail) return null;
+  return buildNestedSheetPayload(optionId, detail, imageUrlForItem, lang);
+}
+
 /** Prefetch is background-only — never starve a user-opened customize fetch. */
-const PREFETCH_MAX_CONCURRENT = 1;
+const PREFETCH_MAX_CONCURRENT = 2;
 let prefetchActive = 0;
 const prefetchWaiters: Array<() => void> = [];
 
@@ -472,7 +698,8 @@ function releasePrefetchSlot() {
 /** Warm the customer menu customize cache (hover / focus / touch) without blocking UI. */
 export function prefetchCustomerMenuProductDetail(
   itemId: string,
-  query: CustomerMenuQuery
+  query: CustomerMenuQuery,
+  ttlMs = WEBSITE_DETAIL_CACHE_TTL_MS
 ): void {
   if (!itemId) return;
   const url = buildCustomerMenuItemDetailUrl(itemId, query);
@@ -486,7 +713,7 @@ export function prefetchCustomerMenuProductDetail(
       if (cacheGet(customerDetailCache, url) || customerInflight.has(url)) {
         return;
       }
-      await fetchCustomerMenuProductDetail(itemId, query);
+      await fetchCustomerMenuProductDetail(itemId, query, { ttlMs });
     } finally {
       releasePrefetchSlot();
     }

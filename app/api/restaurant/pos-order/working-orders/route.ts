@@ -26,27 +26,32 @@ export async function GET(req: NextRequest) {
     const orderBranchFilter = orderBranchWhere(
       branchScope?.activeBranchId ?? null
     );
-
-    const workingOrders = await db.order.findMany({
-      where: {
-        restaurantId: auth.restaurantId,
-        ...orderBranchFilter,
-        status: {
-          in: ['pending', 'pedding', 'making', 'in_progress', 'preparing', 'confirmed'],
-        },
-        NOT: [
-          // Pending cash kiosk orders stay in the Kiosk Orders sheet until paid
-          {
-            sourceType: OrderSourceType.KIOSK,
-            payments: {
-              some: {
-                status: 'pending',
-                method: { equals: 'Cash', mode: 'insensitive' },
-              },
+    const workingWhere = {
+      restaurantId: auth.restaurantId,
+      ...orderBranchFilter,
+      status: {
+        in: ['pending', 'pedding', 'making', 'in_progress', 'preparing', 'confirmed'],
+      },
+      NOT: [
+        {
+          sourceType: OrderSourceType.KIOSK,
+          payments: {
+            some: {
+              status: 'pending',
+              method: { equals: 'Cash', mode: 'insensitive' as const },
             },
           },
-        ],
-      },
+        },
+      ],
+    };
+
+    if (req.nextUrl.searchParams.get('count') === '1') {
+      const count = await db.order.count({ where: workingWhere });
+      return NextResponse.json({ count });
+    }
+
+    const workingOrders = await db.order.findMany({
+      where: workingWhere,
       orderBy: { createdAt: 'desc' },
       take: 100,
       select: {
@@ -73,7 +78,7 @@ export async function GET(req: NextRequest) {
             productName: true,
             menuItem: { select: { name: true } },
             modifiers: {
-              select: { name: true, quantity: true, unitPrice: true },
+              select: { name: true, quantity: true },
             },
           },
         },

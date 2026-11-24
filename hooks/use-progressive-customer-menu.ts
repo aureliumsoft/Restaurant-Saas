@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export type ProgressiveMenuCategory<TItem> = {
   id: string;
@@ -9,6 +9,7 @@ export type ProgressiveMenuCategory<TItem> = {
   items: TItem[];
   loaded: boolean;
   loading: boolean;
+  failed?: boolean;
 };
 
 type UseProgressiveCustomerMenuOptions = {
@@ -22,16 +23,69 @@ type UseProgressiveCustomerMenuOptions = {
   enabled?: boolean;
   /** Products per request batch (default 24). */
   batchSize?: number;
+  /** How many categories to fetch at once (default 1). */
+  categoryConcurrency?: number;
+  /**
+   * When set, the menu is one request. Category-by-category fetching is the
+   * fallback when this is omitted.
+   */
+  browseUrl?: string | null;
+  /**
+   * When set, a finished menu is kept for the visit and reused on the next
+   * mount instead of downloading every category again.
+   */
+  retainKey?: string | null;
 };
 
 const DEFAULT_BATCH = 24;
+const RETAIN_PREFIX = 'foodluk-menu-retain:';
+
+type RetainedMenu<TItem> = {
+  restaurantMeta: Record<string, unknown> | null;
+  categories: ProgressiveMenuCategory<TItem>[];
+  complete: true;
+};
+
+const retainedMenus = new Map<string, RetainedMenu<unknown>>();
+
+function readRetainedMenu<TItem>(
+  key: string | null | undefined
+): RetainedMenu<TItem> | null {
+  if (!key) return null;
+  const memory = retainedMenus.get(key) as RetainedMenu<TItem> | undefined;
+  if (memory?.complete) return memory;
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(RETAIN_PREFIX + key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RetainedMenu<TItem>;
+    if (!parsed?.complete || !Array.isArray(parsed.categories)) return null;
+    retainedMenus.set(key, parsed as RetainedMenu<unknown>);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeRetainedMenu<TItem>(key: string, value: RetainedMenu<TItem>) {
+  retainedMenus.set(key, value as RetainedMenu<unknown>);
+  try {
+    sessionStorage.setItem(RETAIN_PREFIX + key, JSON.stringify(value));
+  } catch {
+    // A full store still leaves the in-memory copy for this page.
+  }
+}
 
 export function useProgressiveCustomerMenu<TItem>({
   categoriesUrl,
   categoryItemsUrl,
   enabled = true,
   batchSize = DEFAULT_BATCH,
+  categoryConcurrency = 1,
+  browseUrl = null,
+  retainKey = null,
 }: UseProgressiveCustomerMenuOptions) {
+  const [reloadKey, setReloadKey] = useState(0);
   const [restaurantMeta, setRestaurantMeta] = useState<Record<
     string,
     unknown
@@ -52,9 +106,29 @@ export function useProgressiveCustomerMenu<TItem>({
     setError(null);
   }, []);
 
+  useLayoutEffect(() => {
+    const retained = readRetainedMenu<TItem>(retainKey);
+    if (!retained) return;
+    setRestaurantMeta(retained.restaurantMeta);
+    setCategories(retained.categories);
+    setMenuComplete(true);
+    setCategoriesLoading(false);
+    setError(null);
+  }, [retainKey]);
+
   useEffect(() => {
-    if (!enabled || !categoriesUrl) {
+    if (!enabled || (!categoriesUrl && !browseUrl)) {
       reset();
+      return;
+    }
+
+    const retained = readRetainedMenu<TItem>(retainKey);
+    if (retained) {
+      setRestaurantMeta(retained.restaurantMeta);
+      setCategories(retained.categories);
+      setMenuComplete(true);
+      setCategoriesLoading(false);
+      setError(null);
       return;
     }
 
@@ -67,6 +141,62 @@ export function useProgressiveCustomerMenu<TItem>({
       reset();
       setCategoriesLoading(true);
       setError(null);
+
+      if (browseUrl) {
+        try {
+          const browseRes = await fetch(browseUrl, { cache: 'default' });
+          const browseBody = (await browseRes.json().catch(() => ({}))) as {
+            data?: Record<string, unknown> | null;
+            error?: string;
+          };
+          if (isStale()) return;
+          if (!browseRes.ok || !browseBody.data) {
+            setError(
+              typeof browseBody.error === 'string'
+                ? browseBody.error
+                : 'Could not load menu.'
+            );
+            setCategoriesLoading(false);
+            return;
+          }
+          const menus = Array.isArray(browseBody.data.menus)
+            ? (browseBody.data.menus as Array<{
+                id: string;
+                name: string;
+                imageUrl?: string | null;
+                items?: TItem[];
+              }>)
+            : [];
+          const { menus: _menus, ...meta } = browseBody.data;
+          const loaded: ProgressiveMenuCategory<TItem>[] = menus.map((c) => ({
+            id: c.id,
+            name: c.name,
+            imageUrl: c.imageUrl ?? null,
+            items: Array.isArray(c.items) ? c.items : [],
+            loaded: true,
+            loading: false,
+          }));
+          setRestaurantMeta(meta);
+          setCategories(loaded);
+          setCategoriesLoading(false);
+          if (retainKey) {
+            writeRetainedMenu(retainKey, {
+              restaurantMeta: meta,
+              categories: loaded,
+              complete: true,
+            });
+          }
+          setMenuComplete(true);
+        } catch {
+          if (!isStale()) {
+            setError('Could not load menu.');
+            setCategoriesLoading(false);
+          }
+        }
+        return;
+      }
+
+      if (!categoriesUrl) return;
 
       try {
         const metaRes = await fetch(categoriesUrl, { cache: 'default' });
@@ -82,6 +212,7 @@ export function useProgressiveCustomerMenu<TItem>({
               ? metaBody.error
               : 'Could not load menu categories.'
           );
+          setCategoriesLoading(false);
           return;
         }
 
@@ -106,9 +237,11 @@ export function useProgressiveCustomerMenu<TItem>({
         }));
         setCategories(initial);
         setCategoriesLoading(false);
+        const loadedById = new Map<string, ProgressiveMenuCategory<TItem>>();
 
-        // Categories sequentially; within each category, batches of products.
-        for (const category of initial) {
+        const loadCategory = async (
+          category: ProgressiveMenuCategory<TItem>
+        ) => {
           if (isStale()) return;
 
           setCategories((prev) =>
@@ -119,7 +252,16 @@ export function useProgressiveCustomerMenu<TItem>({
 
           let page = 1;
           let hasMore = true;
+          let failed = false;
           let accumulated: TItem[] = [];
+          const remember = (loaded: boolean, loading: boolean) => {
+            loadedById.set(category.id, {
+              ...category,
+              items: accumulated,
+              loaded,
+              loading,
+            });
+          };
 
           while (hasMore) {
             if (isStale()) return;
@@ -141,6 +283,11 @@ export function useProgressiveCustomerMenu<TItem>({
                 error?: string;
               };
               if (isStale()) return;
+              if (!itemsRes.ok) {
+                failed = true;
+                hasMore = false;
+                break;
+              }
 
               const batch = Array.isArray(itemsBody.data?.items)
                 ? itemsBody.data!.items!
@@ -148,7 +295,7 @@ export function useProgressiveCustomerMenu<TItem>({
               accumulated = [...accumulated, ...batch];
               hasMore = Boolean(itemsBody.data?.hasMore) && batch.length > 0;
 
-              // Paint after each batch so the UI populates progressively.
+              remember(!hasMore, hasMore);
               setCategories((prev) =>
                 prev.map((c) =>
                   c.id === category.id
@@ -166,21 +313,61 @@ export function useProgressiveCustomerMenu<TItem>({
               if (batch.length === 0) hasMore = false;
             } catch {
               if (isStale()) return;
+              failed = true;
               hasMore = false;
             }
           }
 
           if (isStale()) return;
+          remember(!failed, false);
           setCategories((prev) =>
             prev.map((c) =>
               c.id === category.id
-                ? { ...c, items: accumulated, loaded: true, loading: false }
+                ? {
+                    ...c,
+                    items: accumulated,
+                    loaded: !failed,
+                    loading: false,
+                    failed,
+                  }
                 : c
             )
           );
-        }
+        };
 
-        if (!isStale()) setMenuComplete(true);
+        const workers = Math.max(
+          1,
+          Math.min(categoryConcurrency, initial.length || 1)
+        );
+        let cursor = 0;
+        await Promise.all(
+          Array.from({ length: workers }, async () => {
+            while (!isStale()) {
+              const category = initial[cursor];
+              cursor += 1;
+              if (!category) return;
+              await loadCategory(category);
+            }
+          })
+        );
+
+        if (!isStale()) {
+          if (retainKey) {
+            writeRetainedMenu(retainKey, {
+              restaurantMeta: meta,
+              categories: initial.map(
+                (category) =>
+                  loadedById.get(category.id) ?? {
+                    ...category,
+                    loaded: true,
+                    loading: false,
+                  }
+              ),
+              complete: true,
+            });
+          }
+          setMenuComplete(true);
+        }
       } catch {
         if (!isStale()) {
           setError('Could not load menu.');
@@ -192,7 +379,17 @@ export function useProgressiveCustomerMenu<TItem>({
     return () => {
       cancelled = true;
     };
-  }, [categoriesUrl, categoryItemsUrl, enabled, reset, batchSize]);
+  }, [
+    categoriesUrl,
+    categoryItemsUrl,
+    enabled,
+    reset,
+    batchSize,
+    categoryConcurrency,
+    browseUrl,
+    retainKey,
+    reloadKey,
+  ]);
 
   return {
     restaurantMeta,
@@ -200,6 +397,7 @@ export function useProgressiveCustomerMenu<TItem>({
     categoriesLoading,
     menuComplete,
     error,
+    reload: () => setReloadKey((value) => value + 1),
     anyCategoryLoading: categories.some((c) => c.loading),
   };
 }

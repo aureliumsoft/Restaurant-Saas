@@ -60,6 +60,21 @@ const orderSelect = {
   },
 } as const;
 
+const receiptOrderSelect = {
+  ...orderSelect,
+  items: {
+    select: {
+      id: true,
+      menuItemId: true,
+      quantity: true,
+      price: true,
+      productName: true,
+      menuItem: { select: { name: true } },
+      modifiers: orderSelect.items.select.modifiers,
+    },
+  },
+} as const;
+
 function mapOrderDetail(order: {
   id: string;
   shortOrderId: string;
@@ -82,7 +97,7 @@ function mapOrderDetail(order: {
     quantity: number;
     price: number;
     productName: string | null;
-    menuItem: { name: string; imageUrl: string | null } | null;
+    menuItem: { name: string; imageUrl?: string | null } | null;
     modifiers: Array<{
       name: string;
       unitPrice: number;
@@ -151,13 +166,14 @@ export async function GET(
     }
 
     const { orderId } = await resolveRouteParams(ctx.params, ['orderId']);
+    const receiptOnly = req.nextUrl.searchParams.get('receipt') === '1';
     const order = await db.order.findFirst({
       where: {
         id: orderId,
         restaurantId: auth.restaurantId,
         sourceType: OrderSourceType.KIOSK,
       },
-      select: orderSelect,
+      select: receiptOnly ? receiptOrderSelect : orderSelect,
     });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });

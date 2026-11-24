@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import {
   buildCustomerProductDetailAttributeGroupsSelect,
   buildCustomerProductDetailShellAttributeGroupsSelect,
@@ -32,6 +33,7 @@ import {
   customerMenuItemImageUrl,
   mapBrowseListItem,
   resolveCategoryImageUrl,
+  restaurantMenuItemImageUrl,
   stampBrowseVariationImages,
 } from '@/lib/menu/menu-item-image-utils';
 import { resolveStoredImageUrl } from '@/lib/resolve-stored-image-url';
@@ -52,9 +54,6 @@ import {
 const restaurantPublicSelectCore = {
   id: true,
   name: true,
-  logoUrl: true,
-  mainBannerUrl: true,
-  menuBannerUrls: true,
   themePrimaryColor: true,
   subdomain: true,
   slug: true,
@@ -110,58 +109,148 @@ function buildCustomerProductDetailShellItemSelect(
 async function findRestaurantPublic(
   where: { slug: string } | { subdomain: string }
 ) {
-  try {
-    return await db.restaurant.findUnique({
-      where,
-      select: restaurantPublicSelect,
-    });
-  } catch (error) {
-    if (!isPrismaFulfillmentSettingsFieldError(error)) throw error;
+  const imageWhere =
+    'slug' in where
+      ? db.$queryRaw<RestaurantImageHead[]>`
+          SELECT
+            CASE WHEN left(coalesce("logoUrl", ''), 4) = 'http' THEN "logoUrl" ELSE NULL END AS "logoUrl",
+            ("logoUrl" IS NOT NULL AND btrim("logoUrl") <> '') AS "hasLogo",
+            CASE WHEN left(coalesce("mainBannerUrl", ''), 4) = 'http' THEN "mainBannerUrl" ELSE NULL END AS "mainBannerUrl",
+            ("mainBannerUrl" IS NOT NULL AND btrim("mainBannerUrl") <> '') AS "hasMainBanner",
+            "menuBannerUrls"
+          FROM "Restaurant"
+          WHERE slug = ${where.slug}
+          LIMIT 1
+        `
+      : db.$queryRaw<RestaurantImageHead[]>`
+          SELECT
+            CASE WHEN left(coalesce("logoUrl", ''), 4) = 'http' THEN "logoUrl" ELSE NULL END AS "logoUrl",
+            ("logoUrl" IS NOT NULL AND btrim("logoUrl") <> '') AS "hasLogo",
+            CASE WHEN left(coalesce("mainBannerUrl", ''), 4) = 'http' THEN "mainBannerUrl" ELSE NULL END AS "mainBannerUrl",
+            ("mainBannerUrl" IS NOT NULL AND btrim("mainBannerUrl") <> '') AS "hasMainBanner",
+            "menuBannerUrls"
+          FROM "Restaurant"
+          WHERE subdomain = ${where.subdomain}
+          LIMIT 1
+        `;
+
+  const loadRow = async () => {
     try {
       return await db.restaurant.findUnique({
         where,
-        select: restaurantPublicSelectBase,
+        select: restaurantPublicSelect,
       });
-    } catch (baseError) {
-      if (!isPrismaFulfillmentSettingsFieldError(baseError)) throw baseError;
-      return db.restaurant.findUnique({
-        where,
-        select: restaurantPublicSelectCore,
-      });
+    } catch (error) {
+      if (!isPrismaFulfillmentSettingsFieldError(error)) throw error;
+      try {
+        return await db.restaurant.findUnique({
+          where,
+          select: restaurantPublicSelectBase,
+        });
+      } catch (baseError) {
+        if (!isPrismaFulfillmentSettingsFieldError(baseError)) throw baseError;
+        return db.restaurant.findUnique({
+          where,
+          select: restaurantPublicSelectCore,
+        });
+      }
     }
-  }
+  };
+
+  const [row, images] = await Promise.all([loadRow(), imageWhere]);
+  if (!row) return null;
+  const image = images[0];
+  return {
+    ...row,
+    logoUrl: image?.logoUrl ?? null,
+    hasLogo: Boolean(image?.hasLogo),
+    mainBannerUrl: image?.mainBannerUrl ?? null,
+    hasMainBanner: Boolean(image?.hasMainBanner),
+    menuBannerUrls: image?.menuBannerUrls ?? [],
+  };
+}
+
+type RestaurantImageHead = {
+  logoUrl: string | null;
+  hasLogo: boolean;
+  mainBannerUrl: string | null;
+  hasMainBanner: boolean;
+  menuBannerUrls: string[] | null;
+};
+
+const RESTAURANT_LOOKUP_MS = 60_000;
+const restaurantLookupCache = new Map<
+  string,
+  { at: number; value: Awaited<ReturnType<typeof findRestaurantPublic>> }
+>();
+const restaurantLookupInflight = new Map<
+  string,
+  Promise<Awaited<ReturnType<typeof findRestaurantPublic>>>
+>();
+const restaurantIdCache = new Map<string, { at: number; value: string | null }>();
+const restaurantIdInflight = new Map<string, Promise<string | null>>();
+
+function restaurantLookupKey(slug?: string | null, subdomain?: string | null) {
+  const s = slug?.trim();
+  if (s) return `slug:${s}`;
+  const sub = subdomain?.trim();
+  if (sub) return `sub:${sub}`;
+  return '';
 }
 
 async function resolveRestaurant(
   slug?: string | null,
   subdomain?: string | null
 ) {
-  const s = slug?.trim();
-  if (s) return findRestaurantPublic({ slug: s });
-  const sub = subdomain?.trim();
-  if (sub) return findRestaurantPublic({ subdomain: sub });
-  return null;
+  const key = restaurantLookupKey(slug, subdomain);
+  if (!key) return null;
+  const hit = restaurantLookupCache.get(key);
+  if (hit && Date.now() - hit.at < RESTAURANT_LOOKUP_MS) return hit.value;
+  const pending = restaurantLookupInflight.get(key);
+  if (pending) return pending;
+  const request = (async () => {
+    const s = slug?.trim();
+    const value = s
+      ? await findRestaurantPublic({ slug: s })
+      : await findRestaurantPublic({ subdomain: subdomain!.trim() });
+    restaurantLookupCache.set(key, { at: Date.now(), value });
+    return value;
+  })().finally(() => {
+    restaurantLookupInflight.delete(key);
+  });
+  restaurantLookupInflight.set(key, request);
+  return request;
 }
 
 async function resolveRestaurantId(
   slug?: string | null,
   subdomain?: string | null
 ): Promise<string | null> {
-  const s = slug?.trim();
-  if (s) {
-    const row = await db.restaurant.findUnique({
-      where: { slug: s },
-      select: { id: true },
-    });
-    return row?.id ?? null;
-  }
-  const sub = subdomain?.trim();
-  if (!sub) return null;
-  const row = await db.restaurant.findUnique({
-      where: { subdomain: sub },
-    select: { id: true },
-    });
-  return row?.id ?? null;
+  const key = restaurantLookupKey(slug, subdomain);
+  if (!key) return null;
+  const hit = restaurantIdCache.get(key);
+  if (hit && Date.now() - hit.at < RESTAURANT_LOOKUP_MS) return hit.value;
+  const pending = restaurantIdInflight.get(key);
+  if (pending) return pending;
+  const request = (async () => {
+    const s = slug?.trim();
+    const row = s
+      ? await db.restaurant.findUnique({
+          where: { slug: s },
+          select: { id: true },
+        })
+      : await db.restaurant.findUnique({
+          where: { subdomain: subdomain!.trim() },
+          select: { id: true },
+        });
+    const value = row?.id ?? null;
+    restaurantIdCache.set(key, { at: Date.now(), value });
+    return value;
+  })().finally(() => {
+    restaurantIdInflight.delete(key);
+  });
+  restaurantIdInflight.set(key, request);
+  return request;
 }
 
 async function withMenuSelectMode<T>(
@@ -202,7 +291,9 @@ function restaurantMetaPayload<
     id: string;
     slug: string;
     logoUrl?: string | null;
+    hasLogo?: boolean;
     mainBannerUrl?: string | null;
+    hasMainBanner?: boolean;
     menuBannerUrls?: string[] | null;
     updatedAt?: Date | string | number | null;
   } & RestaurantServiceChargeRow & {
@@ -215,7 +306,9 @@ function restaurantMetaPayload<
     ...restaurant,
     ...publicRestaurantImageUrls(restaurant.slug, {
       logoUrl: restaurant.logoUrl,
+      hasLogo: restaurant.hasLogo,
       mainBannerUrl: restaurant.mainBannerUrl,
+      hasMainBanner: restaurant.hasMainBanner,
       menuBannerUrls: restaurant.menuBannerUrls,
       updatedAt: restaurant.updatedAt,
     }),
@@ -301,7 +394,7 @@ export async function loadCustomerMenuCategoryItems(options: {
     if (!branch) return null;
 
     const page = Math.max(1, options.page ?? 1);
-    const limit = Math.min(48, Math.max(1, options.limit ?? 24));
+    const limit = Math.min(200, Math.max(1, options.limit ?? 24));
     const skip = (page - 1) * limit;
 
     const category = await loadSingleCategoryWithLinkedItems({
@@ -330,36 +423,7 @@ export async function loadCustomerMenuCategoryItems(options: {
       subdomain: options.subdomain,
     };
 
-    const items = stampBrowseVariationImages(
-      category.items.map((item) => {
-        const mapped = mapBrowseListItem(item, imageQuery);
-        const deals = dealsFromBrowseItem(mapped);
-        if (deals.length > 0) {
-          (mapped as unknown as { dealsFromThis: BrowseDealLink[] }).dealsFromThis =
-            deals.map((deal) => {
-              const did = deal.dealItem?.id;
-              if (!did || !deal.dealItem) return deal;
-              const dealUrl = resolveStoredImageUrl(
-                deal.dealItem.imageUrl,
-                customerMenuItemImageUrl(did, {
-                  ...imageQuery,
-                  updatedAt: (deal.dealItem as { updatedAt?: Date }).updatedAt,
-                })
-              );
-              return {
-                ...deal,
-                dealItem: {
-                  ...deal.dealItem,
-                  hasImage: Boolean(dealUrl),
-                  imageUrl: dealUrl,
-                },
-              };
-            });
-        }
-        return mapped;
-      }),
-      imageQuery
-    );
+    const items = presentCustomerBrowseItems(category.items, imageQuery);
 
     return {
       categoryId: category.id,
@@ -372,9 +436,340 @@ export async function loadCustomerMenuCategoryItems(options: {
   });
 }
 
+type BrowseImageQuery = {
+  slug?: string | null;
+  subdomain?: string | null;
+};
+
+function presentCustomerBrowseItems<
+  T extends {
+    id: string;
+    imageUrl?: string | null;
+    updatedAt?: Date | string | number | null;
+    variations?: Array<{
+      id: string;
+      imageUrl?: string | null;
+      updatedAt?: Date | string | number | null;
+    }>;
+  },
+>(items: T[], imageQuery: BrowseImageQuery) {
+  return stampBrowseVariationImages(
+    items.map((item) => {
+      const mapped = mapBrowseListItem(item, imageQuery);
+      const deals = dealsFromBrowseItem(mapped);
+      if (deals.length > 0) {
+        (mapped as unknown as { dealsFromThis: BrowseDealLink[] }).dealsFromThis =
+          deals.map((deal) => {
+            const did = deal.dealItem?.id;
+            if (!did || !deal.dealItem) return deal;
+            const dealUrl = resolveStoredImageUrl(
+              deal.dealItem.imageUrl,
+              customerMenuItemImageUrl(did, {
+                ...imageQuery,
+                updatedAt: (deal.dealItem as { updatedAt?: Date }).updatedAt,
+              })
+            );
+            return {
+              ...deal,
+              dealItem: {
+                ...deal.dealItem,
+                hasImage: Boolean(dealUrl),
+                imageUrl: dealUrl,
+              },
+            };
+          });
+      }
+      return mapped;
+    }),
+    imageQuery
+  );
+}
+
+const BROWSE_CACHE_MS = 60_000;
+
+type CustomerMenuBrowse = NonNullable<
+  Awaited<ReturnType<typeof loadCustomerMenuBrowseUncached>>
+>;
+
+const browseCache = new Map<
+  string,
+  { at: number; data: CustomerMenuBrowse }
+>();
+const browseInflight = new Map<string, Promise<CustomerMenuBrowse | null>>();
+
+function browseCacheKey(options: {
+  slug?: string | null;
+  subdomain?: string | null;
+  branchId: string;
+}) {
+  return `${options.slug?.trim() ?? ''}|${options.subdomain?.trim() ?? ''}|${options.branchId}`;
+}
+
+/** Drop the one-request menu so the next visit reads the saved catalog. */
+export function clearCustomerMenuBrowseCache() {
+  browseCache.clear();
+}
+
+/**
+ * Whole storefront menu in one round of queries.
+ * Category-by-category loading repeated the restaurant lookup and kept the
+ * first screen waiting behind every other category.
+ */
+export async function loadCustomerMenuBrowse(options: {
+  slug?: string | null;
+  subdomain?: string | null;
+  branchId: string;
+}): Promise<CustomerMenuBrowse | null> {
+  const key = browseCacheKey(options);
+  const hit = browseCache.get(key);
+  if (hit && Date.now() - hit.at < BROWSE_CACHE_MS) return hit.data;
+  const pending = browseInflight.get(key);
+  if (pending) return pending;
+  const request = loadCustomerMenuBrowseUncached(options)
+    .then((data) => {
+      if (data) browseCache.set(key, { at: Date.now(), data });
+      return data;
+    })
+    .finally(() => {
+      browseInflight.delete(key);
+    });
+  browseInflight.set(key, request);
+  return request;
+}
+
+type CustomerGridRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  hasImage: boolean;
+  price: number;
+  salePrice: number | null;
+  updatedAt: string | null;
+  variations: Array<{
+    id: string;
+    name: string;
+    title: string;
+    swatchHex: string | null;
+    priceDelta: number;
+    sortOrder: number;
+  }>;
+  attributeGroups: Array<{ id: string; sourceType: string; required: boolean }>;
+  personalizeGroups: Array<{ id: string; options: Array<{ id: string }> }>;
+  dealsFromThis: Array<{
+    id: string;
+    sortOrder: number;
+    dealItem: {
+      id: string;
+      name: string;
+      description: string | null;
+      imageUrl: string | null;
+      hasImage: boolean;
+      price: number;
+      salePrice: number | null;
+    };
+  }>;
+};
+
+/** One database round trip for the whole grid. Nested Prisma reads were one trip per relation. */
+async function loadCustomerGridRows(itemIds: string[]): Promise<CustomerGridRow[]> {
+  if (itemIds.length === 0) return [];
+  const rows = await db.$queryRaw<Array<{ item: CustomerGridRow }>>`
+    SELECT json_build_object(
+      'id', i.id,
+      'name', i.name,
+      'description', i.description,
+      'imageUrl', CASE WHEN left(coalesce(i."imageUrl", ''), 4) = 'http' THEN i."imageUrl" ELSE NULL END,
+      'hasImage', (i."imageUrl" IS NOT NULL AND btrim(i."imageUrl") <> ''),
+      'price', i.price,
+      'salePrice', i."salePrice",
+      'updatedAt', i."updatedAt",
+      'variations', (
+        SELECT coalesce(json_agg(json_build_object(
+          'id', v.id,
+          'name', v.name,
+          'title', v.title,
+          'swatchHex', v."swatchHex",
+          'priceDelta', v."priceDelta",
+          'sortOrder', v."sortOrder"
+        ) ORDER BY v."sortOrder"), '[]'::json)
+        FROM "MenuItemVariation" v
+        LEFT JOIN "RestaurantVariation" rv ON rv.id = v."restaurantVariationId"
+        WHERE v."menuItemId" = i.id
+          AND (v."restaurantVariationId" IS NULL OR rv."isActive" = true)
+      ),
+      'attributeGroups', (
+        SELECT coalesce(json_agg(json_build_object(
+          'id', g.id,
+          'sourceType', g."sourceType",
+          'required', g.required
+        ) ORDER BY g."sortOrder"), '[]'::json)
+        FROM "MenuItemAttributeGroup" g
+        WHERE g."menuItemId" = i.id
+      ),
+      'personalizeGroups', (
+        SELECT coalesce(json_agg(json_build_object(
+          'id', p.id,
+          'options', coalesce(
+            (
+              SELECT json_build_array(json_build_object('id', o.id))
+              FROM "MenuItemPersonalizeOption" o
+              WHERE o."groupId" = p.id
+              ORDER BY o."sortOrder"
+              LIMIT 1
+            ),
+            '[]'::json
+          )
+        ) ORDER BY p."sortOrder"), '[]'::json)
+        FROM "MenuItemPersonalizeGroup" p
+        WHERE p."menuItemId" = i.id
+      ),
+      'dealsFromThis', (
+        SELECT coalesce(json_agg(json_build_object(
+          'id', d.id,
+          'sortOrder', d."sortOrder",
+          'dealItem', json_build_object(
+            'id', di.id,
+            'name', di.name,
+            'description', di.description,
+            'imageUrl', CASE WHEN left(coalesce(di."imageUrl", ''), 4) = 'http' THEN di."imageUrl" ELSE NULL END,
+            'hasImage', (di."imageUrl" IS NOT NULL AND btrim(di."imageUrl") <> ''),
+            'price', di.price,
+            'salePrice', di."salePrice"
+          )
+        ) ORDER BY d."sortOrder"), '[]'::json)
+        FROM "MenuItemDeal" d
+        JOIN "MenuItem" di ON di.id = d."dealItemId"
+        WHERE d."baseItemId" = i.id
+      )
+    ) AS item
+    FROM "MenuItem" i
+    WHERE i.id IN (${Prisma.join(itemIds)})
+      AND i."isActive" = true
+  `;
+  return rows.map((row) => row.item);
+}
+
+async function loadCustomerMenuBrowseUncached(options: {
+  slug?: string | null;
+  subdomain?: string | null;
+  branchId: string;
+}) {
+  return withMenuSelectMode(async () => {
+    const restaurant = await resolveRestaurant(options.slug, options.subdomain);
+    if (!restaurant) return null;
+    const [branch, categories] = await Promise.all([
+      db.branch.findFirst({
+        where: {
+          id: options.branchId,
+          restaurantId: restaurant.id,
+          isActive: true,
+        },
+        select: { id: true },
+      }),
+      db.menuCategory.findMany({
+        where: {
+          restaurantId: restaurant.id,
+          ...CUSTOMER_MENU_CATEGORY_WHERE,
+          ...categoryVisibleForBranch(options.branchId),
+        },
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          sortOrder: true,
+          updatedAt: true,
+          imageUrl: true,
+        },
+      }),
+    ]);
+    if (!branch) return null;
+
+    const imageQuery = {
+      slug: options.slug,
+      subdomain: options.subdomain,
+    };
+    const categoryIds = categories.map((category) => category.id);
+    const idsByCategory = new Map<string, string[]>();
+    const seenByCategory = new Map<string, Set<string>>();
+    const pushId = (categoryId: string, itemId: string) => {
+      const seen = seenByCategory.get(categoryId) ?? new Set<string>();
+      if (seen.has(itemId)) return;
+      seen.add(itemId);
+      seenByCategory.set(categoryId, seen);
+      const list = idsByCategory.get(categoryId) ?? [];
+      list.push(itemId);
+      idsByCategory.set(categoryId, list);
+    };
+
+    if (categoryIds.length > 0) {
+      const [links, legacyItems] = await Promise.all([
+        db.menuItemCategory.findMany({
+          where: {
+            categoryId: { in: categoryIds },
+            menuItem: { isActive: true },
+          },
+          orderBy: [...MENU_ITEM_CATEGORY_LINK_DATE_ORDER],
+          select: { categoryId: true, menuItemId: true },
+        }),
+        db.menuItem.findMany({
+          where: {
+            restaurantId: restaurant.id,
+            categoryId: { in: categoryIds },
+            isActive: true,
+          },
+          orderBy: [...MENU_ITEM_DATE_ORDER],
+          select: { id: true, categoryId: true },
+        }),
+      ]);
+      for (const link of links) pushId(link.categoryId, link.menuItemId);
+      for (const item of legacyItems) pushId(item.categoryId, item.id);
+    }
+
+    const pageIds = [...new Set([...idsByCategory.values()].flat())];
+    const loaded = await loadCustomerGridRows(pageIds);
+    const imageFor = (id: string, imageUrl: string | null, hasImage: boolean) =>
+      imageUrl ??
+      (hasImage ? customerMenuItemImageUrl(id, { ...imageQuery, updatedAt: null }) : null);
+    const byId = new Map(
+      loaded.map((item) => [
+        item.id,
+        {
+          ...item,
+          imageUrl: imageFor(item.id, item.imageUrl, item.hasImage),
+          hasImage: item.hasImage || Boolean(item.imageUrl),
+          dealsFromThis: item.dealsFromThis.map((deal) => ({
+            ...deal,
+            dealItem: {
+              ...deal.dealItem,
+              imageUrl: imageFor(
+                deal.dealItem.id,
+                deal.dealItem.imageUrl,
+                deal.dealItem.hasImage
+              ),
+            },
+          })),
+        },
+      ])
+    );
+
+    return {
+      ...restaurantMetaPayload(restaurant),
+      menus: categories.map((category) => ({
+        id: category.id,
+        name: category.name,
+        imageUrl: resolveCategoryImageUrl(category, imageQuery),
+        items: (idsByCategory.get(category.id) ?? [])
+          .map((id) => byId.get(id))
+          .filter((item): item is NonNullable<ReturnType<typeof byId.get>> => Boolean(item)),
+      })),
+    };
+  });
+}
+
 const PRODUCT_DETAIL_OPTION_TAKE = 40;
-/** Restaurant menu writes clear this cache explicitly. */
-const PRODUCT_DETAIL_CACHE_TTL_MS = 120_000;
+/** Menu saves clear this. Kept for the kiosk visit so a tap does not rebuild the dish. */
+const PRODUCT_DETAIL_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 type CachedProductDetail = {
   expiresAt: number;
@@ -397,6 +792,8 @@ function productDetailCacheKey(options: {
 
 /** Drop cached customize payloads so recommendation prices refresh after edits. */
 export function clearCustomerMenuProductDetailCache(itemId?: string) {
+  clearCustomerMenuBrowseCache();
+  clearRestaurantMenuConfigureCache();
   if (!itemId) {
     productDetailCache.clear();
     return;
@@ -895,6 +1292,297 @@ export async function loadCustomerMenuProductDetailShell(options: {
     slug: options.slug,
     subdomain: options.subdomain,
   });
+}
+
+const RESTAURANT_CONFIGURE_MS = 10 * 60 * 1000;
+const restaurantConfigureCache = new Map<
+  string,
+  { at: number; data: unknown }
+>();
+const restaurantConfigureInflight = new Map<string, Promise<unknown>>();
+
+export function clearRestaurantMenuConfigureCache() {
+  restaurantConfigureCache.clear();
+}
+
+function stampConfiguredImages(node: unknown, fallbackItemId?: string): void {
+  if (!node || typeof node !== 'object') return;
+  const row = node as {
+    id?: string;
+    imageUrl?: string | null;
+    hasImage?: boolean;
+    variations?: Array<{ imageUrl?: string | null; hasImage?: boolean }>;
+    attributeGroups?: unknown[];
+    linkedCategory?: { items?: unknown[] } | null;
+    linkedProduct?: unknown;
+    dealsFromThis?: Array<{ dealItem?: unknown }>;
+  };
+  if (row.id && row.hasImage && !row.imageUrl) {
+    row.imageUrl = restaurantMenuItemImageUrl(row.id);
+  }
+  const imageOwner = row.id ?? fallbackItemId;
+  for (const variation of row.variations ?? []) {
+    if (imageOwner && variation.hasImage && !variation.imageUrl) {
+      variation.imageUrl = restaurantMenuItemImageUrl(imageOwner);
+    }
+  }
+  for (const group of row.attributeGroups ?? []) {
+    stampConfiguredImages(group, row.id);
+  }
+  for (const item of row.linkedCategory?.items ?? []) {
+    stampConfiguredImages(item);
+  }
+  if (row.linkedProduct) stampConfiguredImages(row.linkedProduct);
+  for (const deal of row.dealsFromThis ?? []) {
+    if (deal.dealItem) stampConfiguredImages(deal.dealItem);
+  }
+}
+
+/**
+ * POS customize in one database round trip: sizes, personalize, and every
+ * recommendation list. The old path paid a full query per group.
+ */
+async function loadRestaurantMenuProductConfiguredUncached(options: {
+  restaurantId: string;
+  itemId: string;
+}) {
+  const rows = await db.$queryRaw<Array<{ item: Record<string, unknown> | null }>>`
+    SELECT json_build_object(
+      'id', i.id,
+      'name', i.name,
+      'description', i.description,
+      'imageUrl', CASE WHEN left(coalesce(i."imageUrl", ''), 4) = 'http' THEN i."imageUrl" ELSE NULL END,
+      'hasImage', (i."imageUrl" IS NOT NULL AND btrim(i."imageUrl") <> ''),
+      'price', i.price,
+      'salePrice', i."salePrice",
+      'updatedAt', i."updatedAt",
+      'categoryId', i."categoryId",
+      'categoryIds', json_build_array(i."categoryId"),
+      'variations', (
+        SELECT coalesce(json_agg(json_build_object(
+          'id', v.id,
+          'name', v.name,
+          'title', v.title,
+          'imageUrl', CASE WHEN left(coalesce(v."imageUrl", ''), 4) = 'http' THEN v."imageUrl" ELSE NULL END,
+          'hasImage', (v."imageUrl" IS NOT NULL AND btrim(v."imageUrl") <> ''),
+          'swatchHex', v."swatchHex",
+          'priceDelta', v."priceDelta",
+          'sortOrder', v."sortOrder",
+          'restaurantVariationId', v."restaurantVariationId",
+          'restaurantVariation', CASE WHEN rv.id IS NULL THEN NULL ELSE json_build_object(
+            'id', rv.id,
+            'name', rv.name,
+            'shortLabel', rv."shortLabel"
+          ) END
+        ) ORDER BY v."sortOrder"), '[]'::json)
+        FROM "MenuItemVariation" v
+        LEFT JOIN "RestaurantVariation" rv ON rv.id = v."restaurantVariationId"
+        WHERE v."menuItemId" = i.id
+          AND (v."restaurantVariationId" IS NULL OR rv."isActive" = true)
+      ),
+      'personalizeGroups', (
+        SELECT coalesce(json_agg(json_build_object(
+          'id', pg.id,
+          'parentName', pg."parentName",
+          'maxItems', pg."maxItems",
+          'sortOrder', pg."sortOrder",
+          'options', (
+            SELECT coalesce(json_agg(json_build_object(
+              'id', po.id,
+              'name', po.name,
+              'sortOrder', po."sortOrder"
+            ) ORDER BY po."sortOrder"), '[]'::json)
+            FROM "MenuItemPersonalizeOption" po
+            WHERE po."groupId" = pg.id
+          )
+        ) ORDER BY pg."sortOrder"), '[]'::json)
+        FROM "MenuItemPersonalizeGroup" pg
+        WHERE pg."menuItemId" = i.id
+      ),
+      'attributeGroups', (
+        SELECT coalesce(json_agg(json_build_object(
+          'id', g.id,
+          'name', g.name,
+          'selectionType', g."selectionType",
+          'sourceType', g."sourceType",
+          'multipleMode', g."multipleMode",
+          'freeQuantity', g."freeQuantity",
+          'categoryDiscountPercent', g."categoryDiscountPercent",
+          'categoryExtraCostPercent', g."categoryExtraCostPercent",
+          'productOverrides', g."productOverrides",
+          'required', g.required,
+          'minItems', g."minItems",
+          'maxItems', g."maxItems",
+          'sortOrder', g."sortOrder",
+          'productCategoryIds', g."productCategoryIds",
+          'defaultLinkedMenuItemId', g."defaultLinkedMenuItemId",
+          'defaultLinkedRestaurantVariationId', g."defaultLinkedRestaurantVariationId",
+          'includeDefaultLinkedVariationPrice', g."includeDefaultLinkedVariationPrice",
+          'useVariationPricing', g."useVariationPricing",
+          'linkedCategoryId', g."linkedCategoryId",
+          'linkedProductId', g."linkedProductId",
+          'defaultLinkedRestaurantVariation', (
+            SELECT json_build_object('id', drv.id, 'name', drv.name, 'shortLabel', drv."shortLabel")
+            FROM "RestaurantVariation" drv
+            WHERE drv.id = g."defaultLinkedRestaurantVariationId"
+          ),
+          'variationLimits', (
+            SELECT coalesce(json_agg(json_build_object(
+              'variationId', vl."variationId",
+              'minItems', vl."minItems",
+              'maxItems', vl."maxItems"
+            )), '[]'::json)
+            FROM "MenuItemAttributeGroupVariationLimit" vl
+            WHERE vl."groupId" = g.id
+          ),
+          'linkedProduct', CASE WHEN g."sourceType"::text = 'PRODUCT' THEN (
+            SELECT json_build_object(
+              'id', lp.id,
+              'name', lp.name,
+              'imageUrl', CASE WHEN left(coalesce(lp."imageUrl", ''), 4) = 'http' THEN lp."imageUrl" ELSE NULL END,
+              'hasImage', (lp."imageUrl" IS NOT NULL AND btrim(lp."imageUrl") <> ''),
+              'price', lp.price,
+              'salePrice', lp."salePrice",
+              'categoryId', lp."categoryId",
+              'needsNestedSheet', (
+                EXISTS (SELECT 1 FROM "MenuItemAttributeGroup" ng WHERE ng."menuItemId" = lp.id)
+                OR EXISTS (SELECT 1 FROM "MenuItemPersonalizeGroup" np WHERE np."menuItemId" = lp.id)
+              ),
+              'variations', (
+                SELECT coalesce(json_agg(json_build_object(
+                  'id', lv.id,
+                  'name', lv.name,
+                  'title', lv.title,
+                  'swatchHex', lv."swatchHex",
+                  'priceDelta', lv."priceDelta",
+                  'sortOrder', lv."sortOrder",
+                  'restaurantVariationId', lv."restaurantVariationId"
+                ) ORDER BY lv."sortOrder"), '[]'::json)
+                FROM "MenuItemVariation" lv
+                LEFT JOIN "RestaurantVariation" lrv ON lrv.id = lv."restaurantVariationId"
+                WHERE lv."menuItemId" = lp.id
+                  AND (lv."restaurantVariationId" IS NULL OR lrv."isActive" = true)
+              )
+            )
+            FROM "MenuItem" lp
+            WHERE lp.id = g."linkedProductId" AND lp."restaurantId" = ${options.restaurantId}
+          ) ELSE NULL END,
+          'linkedCategory', CASE WHEN g."sourceType"::text = 'CATEGORY' AND g."linkedCategoryId" IS NOT NULL THEN json_build_object(
+            'id', c.id,
+            'name', c.name,
+            'items', (
+              SELECT coalesce(json_agg(card.item ORDER BY card.ord), '[]'::json)
+              FROM (
+                SELECT src.ord, json_build_object(
+                  'id', mi.id,
+                  'name', mi.name,
+                  'imageUrl', CASE WHEN left(coalesce(mi."imageUrl", ''), 4) = 'http' THEN mi."imageUrl" ELSE NULL END,
+                  'hasImage', (mi."imageUrl" IS NOT NULL AND btrim(mi."imageUrl") <> ''),
+                  'price', mi.price,
+                  'salePrice', mi."salePrice",
+                  'needsNestedSheet', (
+                    EXISTS (SELECT 1 FROM "MenuItemAttributeGroup" ng WHERE ng."menuItemId" = mi.id)
+                    OR EXISTS (SELECT 1 FROM "MenuItemPersonalizeGroup" np WHERE np."menuItemId" = mi.id)
+                  ),
+                  'variations', (
+                    SELECT coalesce(json_agg(json_build_object(
+                      'id', ov.id,
+                      'name', ov.name,
+                      'title', ov.title,
+                      'swatchHex', ov."swatchHex",
+                      'priceDelta', ov."priceDelta",
+                      'sortOrder', ov."sortOrder",
+                      'restaurantVariationId', ov."restaurantVariationId"
+                    ) ORDER BY ov."sortOrder"), '[]'::json)
+                    FROM "MenuItemVariation" ov
+                    LEFT JOIN "RestaurantVariation" orv ON orv.id = ov."restaurantVariationId"
+                    WHERE ov."menuItemId" = mi.id
+                      AND (ov."restaurantVariationId" IS NULL OR orv."isActive" = true)
+                  )
+                ) AS item
+                FROM (
+                  SELECT picked."menuItemId", picked.ord
+                  FROM (
+                    SELECT ranked."menuItemId", ranked.ord
+                    FROM (
+                      SELECT link."menuItemId",
+                        row_number() OVER (
+                          ORDER BY link.legacy, link."sortOrder", link."createdAt", link.item_created
+                        ) AS ord
+                      FROM (
+                        SELECT l."menuItemId", l."sortOrder", l."createdAt", mi_link."createdAt" AS item_created, 0 AS legacy
+                        FROM "MenuItemCategory" l
+                        JOIN "MenuItem" mi_link ON mi_link.id = l."menuItemId" AND mi_link."isActive" = true
+                        WHERE l."categoryId" = g."linkedCategoryId"
+                        UNION ALL
+                        SELECT mi_legacy.id, 0, mi_legacy."createdAt", mi_legacy."createdAt", 1
+                        FROM "MenuItem" mi_legacy
+                        WHERE mi_legacy."categoryId" = g."linkedCategoryId"
+                          AND mi_legacy."restaurantId" = ${options.restaurantId}
+                          AND mi_legacy."isActive" = true
+                          AND NOT EXISTS (
+                            SELECT 1 FROM "MenuItemCategory" l2
+                            WHERE l2."categoryId" = g."linkedCategoryId"
+                              AND l2."menuItemId" = mi_legacy.id
+                          )
+                      ) link
+                    ) ranked
+                    WHERE ranked.ord <= 40
+                  ) picked
+                ) src
+                JOIN "MenuItem" mi ON mi.id = src."menuItemId"
+              ) card
+            )
+          ) ELSE NULL END
+        ) ORDER BY g."sortOrder"), '[]'::json)
+        FROM "MenuItemAttributeGroup" g
+        LEFT JOIN "MenuCategory" c ON c.id = g."linkedCategoryId"
+        WHERE g."menuItemId" = i.id
+      )
+    ) AS item
+    FROM "MenuItem" i
+    WHERE i.id = ${options.itemId}
+      AND i."restaurantId" = ${options.restaurantId}
+    LIMIT 1
+  `;
+  const item = rows[0]?.item;
+  if (!item) return null;
+  const groups = Array.isArray(item.attributeGroups) ? item.attributeGroups : [];
+  item.attributeGroups = groups.filter((group) => {
+    if (!group || typeof group !== 'object') return false;
+    const row = group as {
+      sourceType?: string;
+      linkedProduct?: unknown;
+      linkedCategoryId?: string | null;
+      linkedCategory?: { id?: string } | null;
+    };
+    if (row.sourceType === 'PRODUCT') return row.linkedProduct != null;
+    return Boolean(row.linkedCategoryId || row.linkedCategory?.id);
+  });
+  stampConfiguredImages(item);
+  return item;
+}
+
+/** Sizes and recommendations for one POS dish, shared across taps in this process. */
+export async function loadRestaurantMenuProductConfigured(options: {
+  restaurantId: string;
+  itemId: string;
+}) {
+  const key = `${options.restaurantId}|${options.itemId}`;
+  const hit = restaurantConfigureCache.get(key);
+  if (hit && Date.now() - hit.at < RESTAURANT_CONFIGURE_MS) return hit.data;
+  const pending = restaurantConfigureInflight.get(key);
+  if (pending) return pending;
+  const request = loadRestaurantMenuProductConfiguredUncached(options)
+    .then((data) => {
+      if (data) restaurantConfigureCache.set(key, { at: Date.now(), data });
+      return data;
+    })
+    .finally(() => {
+      restaurantConfigureInflight.delete(key);
+    });
+  restaurantConfigureInflight.set(key, request);
+  return request;
 }
 
 /** POS / authenticated restaurant progressive shell. */

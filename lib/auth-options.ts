@@ -15,6 +15,50 @@ const credentialsSchema = z.object({
   password: z.string().min(8),
 });
 
+type CachedAccount = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  password: string | null;
+  roleId: string | null;
+  accountRole: {
+    slug: string | null;
+    name: string;
+    restaurantId: string | null;
+  } | null;
+};
+
+/** Sign-in and the JWT callback both need this row. Keep the second read in memory. */
+const accountCache = new Map<string, { at: number; user: CachedAccount }>();
+const ACCOUNT_CACHE_MS = 20_000;
+
+async function loadAccountByEmail(email: string): Promise<CachedAccount | null> {
+  const key = email.toLowerCase();
+  const hit = accountCache.get(key);
+  if (hit && Date.now() - hit.at < ACCOUNT_CACHE_MS) return hit.user;
+
+  const user = await db.user.findUnique({
+    where: { email },
+    include: {
+      accountRole: {
+        select: { slug: true, name: true, restaurantId: true },
+      },
+    },
+  });
+  if (!user) return null;
+
+  const cached: CachedAccount = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    password: user.password,
+    roleId: user.roleId,
+    accountRole: user.accountRole,
+  };
+  accountCache.set(key, { at: Date.now(), user: cached });
+  return cached;
+}
+
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -29,14 +73,7 @@ const providers = [
       const parsed = credentialsSchema.safeParse(credentials);
       if (!parsed.success) return null;
 
-      const user = await db.user.findUnique({
-        where: { email: parsed.data.email },
-        include: {
-          accountRole: {
-            select: { slug: true, name: true, restaurantId: true },
-          },
-        },
-      });
+      const user = await loadAccountByEmail(parsed.data.email);
 
       if (!user?.password) {
         console.warn("[auth][credentials] user not found or no password", {
@@ -90,9 +127,7 @@ export const authOptions: NextAuthOptions = {
         const email = user.email ?? (profile as any)?.email;
         if (!email) return false;
 
-        const existing = await db.user.findUnique({
-          where: { email },
-        });
+        const existing = await loadAccountByEmail(email);
 
         if (!existing) {
           const name =
@@ -167,14 +202,7 @@ export const authOptions: NextAuthOptions = {
 
       const email = token.email as string | undefined;
       if (shouldLoadAccount && email) {
-        const existing = await db.user.findUnique({
-          where: { email },
-          include: {
-            accountRole: {
-              select: { slug: true, name: true, restaurantId: true },
-            },
-          },
-        });
+        const existing = await loadAccountByEmail(email);
         if (existing) {
           token.id = existing.id;
           const legacy = legacyRoleFromAccountRole(existing.accountRole ?? null);

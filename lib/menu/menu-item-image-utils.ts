@@ -315,7 +315,9 @@ function applyInlineImageFlags(
       if (!variation.id) continue;
       if (restaurantProxy) {
         // Staff variation image proxy is not wired; reuse product thumb when present.
-        const vUrl = resolveStoredImageUrl(variation.imageUrl, imageUrl);
+        const vUrl = variation.imageUrl?.trim()
+          ? resolveStoredImageUrl(variation.imageUrl, imageUrl)
+          : imageUrl;
         variation.hasImage = Boolean(vUrl);
         variation.imageUrl = vUrl;
       } else {

@@ -11,11 +11,10 @@ export function resolveStoredImageUrl(
   fallbackProxy?: string | null
 ): string | null {
   const value = stored?.trim() ?? '';
-  if (value && isHttpImageUrl(value)) return value;
-  const proxy = fallbackProxy?.trim() || null;
-  if (!value) return proxy;
+  if (!value) return null;
+  if (isHttpImageUrl(value)) return value;
   // Legacy base64 / data URL — never embed in JSON; use proxy when available.
-  return proxy;
+  return fallbackProxy?.trim() || null;
 }
 
 export function hasStoredImageValue(stored: string | null | undefined): boolean {

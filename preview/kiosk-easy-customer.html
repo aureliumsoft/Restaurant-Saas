@@ -1,0 +1,2116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FoodLuk Kiosk — easy customer view</title>
+  <style>
+    :root {
+      --ink: #1c1410;
+      --muted: #5c4f48;
+      --line: #f0e4d8;
+      --bg: #fffaf5;
+      --orange: #c2410c;
+      --orange-dark: #9a3412;
+      --paper: #fff;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #231c18;
+      color: var(--ink);
+      font-family: "Segoe UI", "Segoe UI Emoji", "Trebuchet MS", system-ui, sans-serif;
+      touch-action: manipulation;
+    }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+    [hidden] { display: none !important; }
+
+    #app {
+      height: 100%;
+      max-width: 1180px;
+      margin: 0 auto;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 0 0 12px #1a1411;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 12px 18px;
+      background: var(--paper);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { margin-right: auto; font-weight: 800; font-size: 22px; color: var(--orange); }
+    main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .screen { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .screen-body { flex: 1; min-height: 0; overflow: auto; padding: 20px 22px 24px; }
+    .screen-action {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 22px 18px;
+      background: #fffaf5;
+      border-top: 1px solid var(--line);
+    }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.03em; line-height: 1.15; }
+    h2 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
+    .lead { margin: 0; color: var(--muted); font-size: 18px; font-weight: 650; }
+
+    .btn {
+      min-height: 64px;
+      padding: 12px 18px;
+      border-radius: 16px;
+      border: 2px solid transparent;
+      background: var(--paper);
+      font-weight: 800;
+      font-size: 18px;
+    }
+    .btn.small { min-height: 52px; padding: 8px 14px; font-size: 16px; border-color: var(--line); }
+    .btn.primary { background: var(--orange); color: #fff; border-color: var(--orange); }
+    .btn.primary:hover { background: var(--orange-dark); }
+    .btn.ghost { background: var(--paper); border-color: #e7d9cc; }
+    .btn.danger { background: var(--paper); color: #9f1239; border-color: #fecdd3; }
+    .btn.xl { min-height: 80px; font-size: 24px; width: 100%; border-radius: 20px; }
+    .btn:disabled { background: #e7d9cc; color: #6b5e56; border-color: #e7d9cc; cursor: not-allowed; }
+    .btn.is-on, #noTableBtn.is-selected { border-color: var(--orange); background: #fff7ed; }
+    .btn:active, .card:active, .choice:active, .key:active, .table-btn:active, .cat:active, .opt:active {
+      transform: scale(0.98);
+    }
+
+    #steps {
+      list-style: none;
+      display: flex;
+      gap: 8px;
+      margin: 0;
+      padding: 10px 22px 0;
+    }
+    #steps li {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 48px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--paper);
+      color: var(--muted);
+      font-weight: 800;
+      border: 2px solid transparent;
+    }
+    #steps li em { font-style: normal; font-size: 15px; }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: #f0e4d8; font-size: 14px; flex: none;
+    }
+    #steps li.is-on { color: var(--orange-dark); background: #fff7ed; border-color: #fdba74; }
+    #steps li.is-on .step-num { background: var(--orange); color: #fff; }
+    #steps li.is-done { color: #166534; background: #f0fdf4; }
+    #steps li.is-done .step-num { background: #166534; color: #fff; }
+    .action-step {
+      margin: 8px 22px 0;
+      min-height: 28px;
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--orange-dark);
+    }
+    .pick-item { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; font-size: 22px; font-weight: 800; }
+    .pick-art { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; font-size: 34px; }
+    .main-cards { grid-template-columns: 1fr 1fr; gap: 16px; }
+    .main-cards .var-card, .main-cards .rec-card { min-height: 210px; border-width: 4px; border-radius: 24px; }
+    .main-cards .var-art, .main-cards .rec-art { height: 112px; font-size: 58px; }
+    .main-cards .var-name, .main-cards .rec-name { font-size: 24px; padding: 12px 14px 0; }
+    .main-cards .var-price, .main-cards .rec-price { font-size: 18px; padding: 4px 14px 14px; }
+    #screen-recommend .main-cards .rec-card { min-height: 180px; }
+    #screen-recommend .main-cards .rec-art { height: 96px; font-size: 48px; }
+    #screen-recommend .main-cards .rec-name { font-size: 22px; padding: 10px 14px 0; }
+    #screen-recommend .main-cards .rec-price { font-size: 17px; padding: 2px 14px 12px; }
+    #screen-recommend .pick-art { width: 56px; height: 56px; font-size: 30px; }
+    #screen-recommend .pick-item { margin-bottom: 10px; font-size: 20px; }
+    #screen-recommend h1 { margin-bottom: 4px; }
+    #screen-recommend .screen-action { gap: 8px; padding-top: 8px; padding-bottom: 12px; }
+    .one-pick { display: flex; justify-content: center; margin-top: 8px; }
+    .rec-grid:has(.one-pick) { display: block; }
+    .one-card {
+      width: min(440px, 100%);
+      border-radius: 28px;
+      border: 4px solid var(--line);
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      font: inherit;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .one-card:active { transform: scale(0.98); }
+    .one-card.is-on { border-color: #15803d; background: #f0fdf4; }
+    .one-art { height: 180px; display: grid; place-items: center; font-size: 88px; }
+    .one-name { display: block; font-size: 32px; font-weight: 800; padding: 16px 18px 0; }
+    .one-price { display: block; font-size: 22px; font-weight: 800; color: var(--orange-dark); padding: 4px 18px 18px; }
+    #screen-recommend .btn.xl { min-height: 64px; }
+    .pick-qty { justify-content: center; }
+    .pick-qty .qty-num { min-width: 48px; font-size: 28px; }
+    .pick-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; }
+    .pick-main-col { min-height: 0; display: flex; flex-direction: column; grid-column: 1; }
+    .pick-main { flex: 1; min-height: 0; }
+    .pick-side {
+      grid-column: 2;
+      min-height: 0;
+      overflow: auto;
+      padding: 18px 16px;
+      background: #fff;
+      border-left: 1px solid var(--line);
+    }
+    .pick-side .todo { flex-direction: column; flex-wrap: nowrap; }
+    .pick-side .todo li { width: 100%; border-radius: 14px; min-height: 52px; font-size: 17px; }
+    .todo { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .todo li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 2px solid var(--line);
+      background: #fff;
+      font-size: 16px;
+      font-weight: 800;
+    }
+    .todo li em { font-style: normal; font-size: 12px; font-weight: 800; color: var(--muted); }
+    .todo li.is-done { background: #f0fdf4; border-color: #86efac; color: #166534; }
+    .todo li.is-need { background: #fff7ed; border-color: #fdba74; color: #9a3412; }
+    .todo li.is-need em { color: #9a3412; }
+    .todo li.is-empty { color: var(--muted); }
+    .todo .mark {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: grid; place-items: center; flex: none;
+      background: #fff; border: 2px solid #d6c4b4; color: var(--muted); font-size: 14px;
+    }
+    .todo li.is-done .mark { background: #166534; border-color: #166534; color: #fff; }
+    .todo li.is-need .mark { background: var(--orange); border-color: var(--orange); color: #fff; }
+
+    .context {
+      margin: 10px 22px 0;
+      min-height: 56px;
+      width: calc(100% - 44px);
+      border-radius: 16px;
+      border: 2px solid var(--line);
+      background: var(--paper);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      font-weight: 800;
+      font-size: 18px;
+    }
+    #contextChange { color: var(--orange); }
+
+    #screen-attract {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 12px;
+      padding: 32px 24px;
+      background:
+        radial-gradient(circle at 15% 10%, #ffedd5, transparent 42%),
+        radial-gradient(circle at 90% 0%, #fee2e2, transparent 36%),
+        linear-gradient(180deg, #fff7ed, #ffedd5);
+    }
+    .brand-xl { margin: 0; font-size: 22px; font-weight: 800; color: var(--orange); letter-spacing: 0.08em; text-transform: uppercase; }
+    .halo {
+      position: relative;
+      width: min(480px, 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    .halo-track {
+      position: absolute;
+      inset: -128px -160px;
+      z-index: 2;
+      pointer-events: none;
+    }
+    .halo-track span {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: 46px;
+      line-height: 1;
+      offset-path: ellipse(50% 50% at 50% 50%);
+      offset-rotate: 0deg;
+      offset-anchor: center;
+      animation: lap 18s linear infinite;
+      animation-delay: calc(var(--i) * -4.5s);
+    }
+    @keyframes lap { to { offset-distance: 100%; } }
+    #screen-attract .btn.xl, #screen-attract .lang-row { width: min(460px, 100%); }
+    .lang-row { display: flex; gap: 12px; }
+    .lang-row .btn { flex: 1; }
+    .fine { margin: 0; max-width: 42ch; font-size: 15px; font-weight: 700; color: var(--muted); }
+    #startBtn { animation: pulse 1.8s ease-in-out infinite; }
+    @keyframes pulse { 50% { transform: scale(1.03); } }
+
+    .choices-wrap { display: flex; flex-direction: column; gap: 16px; }
+    .choices, .pay-choices { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .choice {
+      width: 100%;
+      min-height: 220px;
+      border-radius: 28px;
+      border: 4px solid transparent;
+      text-align: left;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 8px;
+    }
+    .choice.eat { background: #fff7ed; border-color: #fdba74; }
+    .choice.take { background: #f0fdf4; border-color: #86efac; }
+    .choice.cash { background: #fffbeb; border-color: #fcd34d; }
+    .choice.cardpay { background: #eff6ff; border-color: #93c5fd; }
+    .choice.is-selected { outline: 4px solid var(--ink); outline-offset: 2px; }
+    .choice-emoji { font-size: 64px; line-height: 1; }
+    .choice-title { font-size: clamp(26px, 3vw, 34px); font-weight: 800; }
+    .choice-hint { font-size: 18px; font-weight: 700; color: var(--muted); }
+    .pill {
+      background: var(--orange); color: #fff;
+      border-radius: 999px; padding: 4px 10px;
+      font-size: 14px; font-weight: 800;
+    }
+
+    .tables { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+    .table-btn {
+      min-height: 108px;
+      border-radius: 18px;
+      border: 3px solid var(--line);
+      background: var(--paper);
+      font-weight: 800;
+    }
+    .table-num { display: block; font-size: 34px; line-height: 1.1; }
+    .table-state { display: block; min-height: 18px; font-size: 14px; font-weight: 800; color: #166534; }
+    .table-btn.is-busy { background: #e7e5e4; color: #57534e; }
+    .table-btn.is-busy .table-state { color: #57534e; }
+    .table-btn.is-selected { background: var(--orange); color: #fff; border-color: var(--orange); }
+    .table-btn.is-selected .table-state { color: #fff; }
+    #noTableBtn { width: 100%; margin-top: 12px; }
+
+    .menu-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px 1fr; }
+    #cats {
+      overflow: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: #fff7f0;
+      border-right: 1px solid var(--line);
+    }
+    .cat {
+      display: flex; align-items: center; gap: 10px;
+      min-height: 72px; border-radius: 16px; border: 3px solid transparent;
+      background: var(--paper); padding: 8px 12px;
+      font-weight: 800; font-size: 18px; text-align: left;
+    }
+    .cat.is-on { background: var(--orange); color: #fff; }
+    .cat-emoji { font-size: 28px; }
+    #grid {
+      overflow: auto;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 12px;
+      align-content: start;
+    }
+    .coach {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: #fff7ed;
+      border: 2px solid #fdba74;
+    }
+    .coach p { margin: 0; font-size: 18px; font-weight: 800; }
+    .card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      text-align: left;
+      padding: 0;
+      overflow: hidden;
+      border-radius: 22px;
+      border: 2px solid var(--line);
+      background: var(--paper);
+      min-height: 280px;
+      box-shadow: 0 8px 24px rgba(28, 20, 16, 0.05);
+    }
+    .card:hover { border-color: #fdba74; }
+    .badge {
+      position: absolute; top: 10px; left: 10px;
+      background: #fff; color: var(--orange-dark);
+      border-radius: 999px; padding: 6px 10px;
+      font-size: 14px; font-weight: 800;
+    }
+    .card-art { height: 132px; display: grid; place-items: center; font-size: 64px; }
+    .card-name { font-size: 20px; font-weight: 800; margin: 10px 12px 0; }
+    .card-price { font-size: 18px; font-weight: 800; color: var(--orange-dark); margin: 4px 12px 10px; }
+    .card-add {
+      margin-top: auto;
+      background: var(--orange);
+      color: #fff;
+      text-align: center;
+      padding: 14px 12px;
+      font-weight: 800;
+      font-size: 18px;
+    }
+    .card.is-sold .card-art { filter: grayscale(1); }
+    .card.is-sold .card-name, .card.is-sold .card-price { color: #57534e; }
+    .card.is-sold .card-add { background: #e7d9cc; color: #57534e; }
+    .card:disabled { cursor: not-allowed; }
+
+    #cartbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 20px;
+      background: #1c1410;
+      color: #fff;
+    }
+    #barCount { font-size: 18px; font-weight: 800; }
+    #barSum { margin-left: 10px; font-size: 28px; font-weight: 800; }
+    #barBtn { margin-left: auto; min-width: 190px; background: var(--orange); color: #fff; border-color: var(--orange); }
+    #cartbar.is-bump #barSum,
+    #cartbar.is-bump #barBtn { animation: cartPop 0.34s ease; }
+    @keyframes cartPop {
+      40% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+    .fly-ghost {
+      position: fixed;
+      z-index: 80;
+      pointer-events: none;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      font-size: 42px;
+      box-shadow: 0 14px 28px rgba(28, 20, 16, 0.28);
+    }
+
+    .line {
+      display: grid;
+      grid-template-columns: 72px 1fr auto;
+      gap: 12px;
+      background: var(--paper);
+      border: 2px solid var(--line);
+      border-radius: 20px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .line-art { width: 72px; height: 72px; border-radius: 16px; display: grid; place-items: center; font-size: 36px; }
+    .line h3 { margin: 0; font-size: 20px; }
+    .line p { margin: 2px 0; color: var(--muted); font-weight: 700; }
+    .line-qty { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .stepper {
+      width: 64px; height: 64px; border-radius: 16px;
+      border: 2px solid var(--line); background: #fff;
+      font-size: 28px; font-weight: 800;
+    }
+    .stepper:disabled { color: #c4b5a8; }
+    .qty-num { min-width: 28px; text-align: center; font-size: 24px; font-weight: 800; }
+    .remove-btn.is-armed { background: #9f1239; color: #fff; border-color: #9f1239; }
+    .line-total { font-size: 20px; font-weight: 800; }
+    .total-row { display: flex; justify-content: space-between; align-items: baseline; font-weight: 800; font-size: 18px; }
+    .total-row strong, .pay-total strong { font-size: 36px; }
+    .empty-state { text-align: center; padding: 28px 8px; }
+    .empty-state p { font-size: 22px; font-weight: 800; }
+    .pay-total { margin: 8px 0; font-size: 18px; font-weight: 800; }
+    .pay-total strong { display: block; }
+
+    #screen-name .screen-body { padding-top: 12px; padding-bottom: 8px; }
+    #screen-name h1 { font-size: 30px; margin-bottom: 4px; }
+    #screen-name .screen-action { padding-top: 8px; padding-bottom: 12px; }
+    #screen-name .btn.xl { min-height: 64px; font-size: 22px; }
+    .name-display {
+      min-height: 68px;
+      margin-top: 8px;
+      border-radius: 20px;
+      background: #fff;
+      border: 3px solid #fdba74;
+      display: flex;
+      align-items: center;
+      padding: 10px 18px;
+      font-size: 32px;
+      font-weight: 800;
+    }
+    .name-display.is-empty { color: #8a7568; font-size: 26px; }
+    .error { color: #9f1239; font-weight: 800; margin: 8px 0 0; }
+    .keyrow { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 6px; }
+    .key {
+      width: 56px; min-height: 48px;
+      border: 0; border-radius: 12px;
+      background: #fff;
+      box-shadow: inset 0 0 0 2px #f0e4d8;
+      font-weight: 800; font-size: 20px;
+    }
+    .key.space { width: 220px; }
+    .key.del { width: 128px; }
+    #keyboard { margin-top: 12px; }
+    .shake { animation: shake 0.35s linear; }
+    @keyframes shake {
+      25% { transform: translateX(-6px); }
+      50% { transform: translateX(6px); }
+      75% { transform: translateX(-4px); }
+    }
+
+    .center-screen { align-items: center; justify-content: center; text-align: center; padding: 32px 24px; gap: 10px; }
+    .spinner {
+      width: 88px; height: 88px; border-radius: 50%;
+      border: 8px solid #f3e6da; border-top-color: var(--orange);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .card-icon { font-size: 72px; }
+    .progress { width: min(360px, 86%); height: 12px; background: #f3e6da; border-radius: 99px; overflow: hidden; }
+    #cardBar { display: block; height: 100%; width: 0; background: var(--orange); }
+    .ticket { margin: 4px 0; font-size: clamp(72px, 12vw, 128px); font-weight: 800; letter-spacing: -0.04em; line-height: 0.95; }
+    .done.screen-body { display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .where { font-size: 22px; font-weight: 800; margin: 8px 0; }
+    .paybox { width: min(520px, 100%); border-radius: 18px; padding: 16px 18px; font-size: 22px; font-weight: 800; }
+    .paybox.cash { background: #fffbeb; color: #7c2d12; }
+    .paybox.paid { background: #f0fdf4; color: #14532d; }
+    .done-lines { list-style: none; padding: 0; margin: 8px 0; text-align: left; width: min(460px, 100%); }
+    .done-lines li {
+      display: flex; justify-content: space-between; gap: 12px;
+      padding: 8px 0; border-bottom: 1px solid var(--line); font-weight: 800;
+    }
+    .done-lines small { display: block; font-weight: 700; color: var(--muted); }
+    .countline { margin: 0; text-align: center; color: var(--muted); font-weight: 700; }
+
+    .overlay {
+      position: absolute; inset: 0;
+      background: rgba(28, 20, 16, 0.5);
+      display: flex; align-items: center; justify-content: center;
+      padding: 18px; z-index: 20;
+    }
+    #helpOverlay { z-index: 25; }
+    #resetOverlay { z-index: 30; }
+    #idleOverlay { z-index: 40; }
+    .dialog, .sheet {
+      background: #fff;
+      border-radius: 28px;
+      width: min(560px, 100%);
+      max-height: 100%;
+      overflow: auto;
+      box-shadow: 0 16px 40px rgba(28, 20, 16, 0.18);
+    }
+    .dialog { display: flex; flex-direction: column; gap: 10px; padding: 22px; }
+    .dialog .btn { width: 100%; }
+    .help-step { display: flex; gap: 12px; align-items: center; font-size: 18px; font-weight: 750; }
+    .num {
+      width: 48px; height: 48px; border-radius: 50%; flex: none;
+      display: grid; place-items: center;
+      background: #fff7ed; color: var(--orange-dark); font-weight: 800;
+    }
+    .staff { margin: 0; padding: 12px 14px; border-radius: 16px; background: #fff7ed; font-weight: 750; }
+    .sheet {
+      width: min(720px, 100%);
+      height: min(920px, calc(100% - 8px));
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sheet-top { padding: 10px 12px 0; flex: none; }
+    .sheet-body { flex: 1; min-height: 0; overflow: auto; padding: 8px 18px 16px; }
+    .sheet-action { flex: none; padding: 12px 18px 18px; border-top: 1px solid var(--line); background: #fff; }
+    #draftSummary { margin: 0 0 8px; min-height: 24px; font-weight: 800; color: var(--muted); }
+    .hero { height: 96px; border-radius: 20px; display: grid; place-items: center; font-size: 56px; margin-bottom: 10px; }
+    .section-label { margin: 16px 0 8px; font-size: 18px; font-weight: 800; }
+    .section-help { margin: -4px 0 8px; color: var(--muted); font-weight: 700; }
+    .opt-grid { display: grid; gap: 8px; }
+    .opt {
+      min-height: 72px;
+      border-radius: 16px;
+      border: 3px solid var(--line);
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      font-size: 20px;
+      font-weight: 800;
+      text-align: left;
+    }
+    .opt.is-on { border-color: var(--orange); background: #fff7ed; }
+    .choice-block { margin-top: 18px; }
+    .group-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .group-head .section-label { margin: 0; }
+    .tag {
+      flex: none;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .tag-required { background: #fff7ed; color: #9a3412; }
+    .tag-optional { background: #f0fdf4; color: #166534; }
+    .var-grid, .rec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .var-card, .rec-card {
+      min-height: 132px;
+      border-radius: 18px;
+      border: 3px solid var(--line);
+      background: #fff;
+      overflow: hidden;
+      padding: 0;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+    }
+    .var-card.is-on { border-color: var(--orange); background: #fff7ed; }
+    .var-art, .rec-art { height: 72px; display: grid; place-items: center; font-size: 36px; }
+    .var-name, .rec-name { display: block; font-size: 18px; font-weight: 800; padding: 8px 12px 0; }
+    .var-price, .rec-price { display: block; font-size: 16px; font-weight: 800; color: var(--orange-dark); padding: 2px 12px 12px; }
+    .rec-card { position: relative; }
+    .rec-card.is-on { border-color: #15803d; background: #f0fdf4; }
+    .rec-state {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      border-radius: 999px;
+      background: #fff;
+      color: #1c1410;
+      padding: 4px 8px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .rec-card.is-on .rec-state { background: #15803d; color: #fff; }
+    .qty-row { display: flex; align-items: center; gap: 12px; }
+
+    #toast {
+      position: absolute;
+      top: 16px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 45;
+      max-width: calc(100% - 32px);
+      background: #14532d;
+      color: #fff;
+      padding: 16px 22px;
+      border-radius: 16px;
+      font-size: 20px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    @media (max-width: 800px) {
+      .choices, .pay-choices, .menu-layout { grid-template-columns: 1fr; }
+      .menu-layout { grid-template-rows: auto 1fr; }
+      #cats { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+      .cat { min-width: 150px; }
+      .tables { grid-template-columns: repeat(3, 1fr); }
+      .line { grid-template-columns: 64px 1fr; }
+      .line-total { grid-column: 2; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #startBtn, .spinner, .halo-track span, #cartbar.is-bump #barSum, #cartbar.is-bump #barBtn { animation: none; }
+      .halo-track span { offset-distance: calc(var(--i) * 25%); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header id="header">
+      <button type="button" class="btn small" id="backBtn" data-i18n="back">Back</button>
+      <div class="brand">FoodLuk</div>
+      <button type="button" class="btn small" id="langToggle">Español</button>
+      <button type="button" class="btn small" id="helpBtn" data-i18n="help">Help</button>
+      <button type="button" class="btn small" id="resetBtn" data-i18n="startOver">Start over</button>
+    </header>
+    <ol id="steps" hidden>
+      <li data-step="1"><span class="step-num">1</span><em data-i18n="stepStart">Start</em></li>
+      <li data-step="2"><span class="step-num">2</span><em data-i18n="stepFood">Food</em></li>
+      <li data-step="3"><span class="step-num">3</span><em data-i18n="stepCheck">Check</em></li>
+      <li data-step="4"><span class="step-num">4</span><em data-i18n="stepPay">Pay</em></li>
+    </ol>
+    <p id="actionStep" class="action-step" hidden></p>
+    <button type="button" id="contextBar" class="context" hidden>
+      <span id="contextLabel"></span>
+      <span id="contextChange">Change</span>
+    </button>
+    <main>
+      <section id="screen-attract" class="screen">
+        <div class="halo">
+          <div class="halo-track" aria-hidden="true">
+            <span style="--i:0">🍔</span>
+            <span style="--i:1">🍕</span>
+            <span style="--i:2">🥗</span>
+            <span style="--i:3">🥤</span>
+          </div>
+          <p class="brand-xl">FoodLuk</p>
+          <h1 data-i18n="orderHere">Order your food here</h1>
+          <p class="lead" data-i18n="touchStart">Touch the big orange button to begin.</p>
+          <button type="button" class="btn primary xl" id="startBtn" data-i18n="start">Start order</button>
+          <div class="lang-row">
+            <button type="button" class="btn ghost is-on" data-set-lang="en" aria-pressed="true">English</button>
+            <button type="button" class="btn ghost" data-set-lang="es" aria-pressed="false">Español</button>
+          </div>
+          <p class="fine" data-i18n="needHelpStaff">Need help? Ask a member of staff.</p>
+          <p class="fine" data-i18n="previewNote">Design preview. This screen is not connected to a live kitchen.</p>
+        </div>
+      </section>
+
+      <section id="screen-mode" class="screen" hidden>
+        <div class="screen-body choices-wrap">
+          <h1 data-i18n="eatQuestion">Where will you eat?</h1>
+          <p id="cartStays" class="lead" hidden>Your food is still saved.</p>
+          <div class="choices">
+            <button type="button" class="choice eat" id="pickDine">
+              <span class="choice-emoji" aria-hidden="true">🍽️</span>
+              <span class="choice-title" data-i18n="eatHere">Eat here</span>
+              <span class="choice-hint" data-i18n="eatHereHint">We bring the food to your table.</span>
+            </button>
+            <button type="button" class="choice take" id="pickTake">
+              <span class="choice-emoji" aria-hidden="true">🥡</span>
+              <span class="choice-title" data-i18n="takeAway">Take away</span>
+              <span class="choice-hint" data-i18n="takeAwayHint">You pick it up at the counter.</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-table" class="screen" hidden>
+        <div class="screen-body">
+          <h1 data-i18n="pickTable">Tap your table number</h1>
+          <p class="lead" data-i18n="tableHint">White numbers are free. Gray numbers are already in use.</p>
+          <div class="tables" id="tables"></div>
+        </div>
+        <div class="screen-action">
+          <button type="button" class="btn ghost" id="noTableBtn" data-i18n="noTable">I don't know my table</button>
+          <p class="fine" id="noTableHint" data-i18n="noTableHint">Staff can help you. You can still order.</p>
+          <button type="button" class="btn primary xl" id="tableContinue" disabled>Tap your table number first</button>
+        </div>
+      </section>
+
+      <section id="screen-menu" class="screen" hidden>
+        <div class="menu-layout">
+          <nav id="cats" aria-label="Food categories"></nav>
+          <div id="grid"></div>
+        </div>
+      </section>
+
+      <section id="screen-vary" class="screen" hidden>
+        <div class="pick-layout">
+          <div class="pick-main-col">
+            <div class="screen-body pick-main">
+              <p class="pick-item" id="varyItem"></p>
+              <h1 data-i18n="chooseSize">Choose one size</h1>
+              <p class="lead" id="varyHint"></p>
+              <div id="varyGrid" class="var-grid main-cards"></div>
+            </div>
+            <div class="screen-action" hidden>
+              <div class="qty-row pick-qty" id="varyQtyWrap">
+                <button type="button" class="stepper" id="varyLess" aria-label="Less">−</button>
+                <span class="qty-num" id="varyQty">1</span>
+                <button type="button" class="stepper" id="varyMore" aria-label="More">+</button>
+              </div>
+              <button type="button" class="btn primary xl" id="varyNext">Continue</button>
+            </div>
+          </div>
+          <aside class="pick-side todo-box" id="varyTodo" aria-label="Choices for this item"></aside>
+        </div>
+      </section>
+
+      <section id="screen-recommend" class="screen" hidden>
+        <div class="pick-layout">
+          <div class="pick-main-col">
+            <div class="screen-body pick-main">
+              <p class="pick-item" id="recItem"></p>
+              <h1 id="recTitle">Want to add anything?</h1>
+              <p class="lead" id="recHint"></p>
+              <div id="recGrid" class="rec-grid main-cards"></div>
+              <div id="extraBlock"></div>
+            </div>
+            <div class="screen-action">
+              <div class="qty-row pick-qty" id="recQtyWrap">
+                <button type="button" class="stepper" id="recLess" aria-label="Less">−</button>
+                <span class="qty-num" id="recQty">1</span>
+                <button type="button" class="stepper" id="recMore" aria-label="More">+</button>
+              </div>
+              <button type="button" class="btn ghost" id="recSkip">No thanks</button>
+            </div>
+          </div>
+          <aside class="pick-side todo-box" id="recTodo" aria-label="Choices for this item"></aside>
+        </div>
+      </section>
+
+      <section id="screen-cart" class="screen" hidden>
+        <div class="screen-body" id="cartList"></div>
+        <div class="screen-action" id="cartActions">
+          <div class="total-row">
+            <span data-i18n="total">Total to pay</span>
+            <strong id="cartTotal">$0.00</strong>
+          </div>
+          <button type="button" class="btn primary xl" id="cartNext">Continue to payment</button>
+          <button type="button" class="btn ghost" id="cartMore" data-i18n="addMore">Add more food</button>
+        </div>
+      </section>
+
+      <section id="screen-name" class="screen" hidden>
+        <div class="screen-body">
+          <h1 data-i18n="nameQuestion">What name should we call?</h1>
+          <p class="lead" data-i18n="nameHint">We call this name when the food is ready.</p>
+          <div id="nameDisplay" class="name-display is-empty" aria-live="polite">Your name</div>
+          <p id="nameError" class="error" hidden></p>
+          <div id="keyboard"></div>
+        </div>
+        <div class="screen-action">
+          <button type="button" class="btn primary xl" id="nameContinue">Continue to payment</button>
+          <button type="button" class="btn ghost" id="nameSkip">Skip — call me Guest</button>
+        </div>
+      </section>
+
+      <section id="screen-pay" class="screen" hidden>
+        <div class="screen-body">
+          <h1 data-i18n="payQuestion">How do you want to pay?</h1>
+          <p class="pay-total"><span data-i18n="total">Total to pay</span> <strong id="payTotal">$0.00</strong></p>
+          <p class="lead" id="payCount"></p>
+          <div class="pay-choices">
+            <button type="button" class="choice cash" id="pickCash" aria-pressed="false">
+              <span class="pill" data-i18n="easiest">Easiest</span>
+              <span class="choice-emoji" aria-hidden="true">💵</span>
+              <span class="choice-title" data-i18n="cash">Cash at the counter</span>
+              <span class="choice-hint" data-i18n="cashHint">Pay a person at the counter.</span>
+            </button>
+            <button type="button" class="choice cardpay" id="pickCard" aria-pressed="false">
+              <span class="choice-emoji" aria-hidden="true">💳</span>
+              <span class="choice-title" data-i18n="card">Card on this screen</span>
+              <span class="choice-hint" data-i18n="cardHint">Tap or insert your card here.</span>
+            </button>
+          </div>
+          <p class="lead" id="payNext" style="margin-top:14px"></p>
+        </div>
+        <div class="screen-action">
+          <button type="button" class="btn primary xl" id="placeBtn" disabled>Choose cash or card above</button>
+        </div>
+      </section>
+
+      <section id="screen-card" class="screen center-screen" hidden>
+        <div class="card-icon" aria-hidden="true">💳</div>
+        <h1 data-i18n="cardWaitTitle">Hold your card on the reader</h1>
+        <p id="cardAmount" class="ticket" style="font-size:56px">$0.00</p>
+        <p class="lead" data-i18n="cardWaitHint">Tap, insert, or swipe. Wait for the beep.</p>
+        <div class="progress" aria-hidden="true"><span id="cardBar"></span></div>
+        <button type="button" class="btn ghost" id="cancelCard" data-i18n="cancelPay">Choose a different way to pay</button>
+      </section>
+
+      <section id="screen-sending" class="screen center-screen" hidden aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <h1 data-i18n="sending">Sending your order</h1>
+        <p class="lead" data-i18n="sendingHint">One moment. Please stay at the screen.</p>
+      </section>
+
+      <section id="screen-done" class="screen" hidden>
+        <div class="screen-body done">
+          <p class="lead" data-i18n="yourNumber">Your order number</p>
+          <p id="ticket" class="ticket">#128</p>
+          <p class="where" id="rememberLine" data-i18n="remember">Please remember this number.</p>
+          <div id="donePayBox" class="paybox cash"></div>
+          <p id="doneWhere" class="where"></p>
+          <ul id="doneLines" class="done-lines"></ul>
+          <p class="fine" data-i18n="takeReceipt">Please take the receipt when it prints.</p>
+        </div>
+        <div class="screen-action">
+          <button type="button" class="btn primary xl" id="newOrder" data-i18n="newOrder">New order</button>
+          <p id="doneCount" class="countline" aria-live="polite"></p>
+        </div>
+      </section>
+    </main>
+
+    <footer id="cartbar" hidden>
+      <span id="barCount">Tap a picture to add food</span>
+      <span id="barSum" hidden>$0.00</span>
+      <button type="button" class="btn" id="barBtn" hidden>See my order</button>
+    </footer>
+
+    <div class="overlay" id="helpOverlay" hidden>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+        <h2 id="helpTitle" data-i18n="helpTitle">We can help</h2>
+        <div class="help-step"><span class="num">1</span><span data-i18n="help1">Tap pictures of the food you want.</span></div>
+        <div class="help-step"><span class="num">2</span><span data-i18n="help2">Check the order and the total.</span></div>
+        <div class="help-step"><span class="num">3</span><span data-i18n="help3">Pay, then remember your number.</span></div>
+        <button type="button" class="btn ghost" id="callStaff" data-i18n="callStaff">I need a person to help</button>
+        <p id="staffPanel" class="staff" hidden data-i18n="callStaffBody">Please wave to a member of staff. You can show them this screen. You do not have to start over.</p>
+        <button type="button" class="btn primary" id="closeHelp" data-i18n="close">Close</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="resetOverlay" hidden>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="resetTitle">
+        <h2 id="resetTitle" data-i18n="resetTitle">Start a new order?</h2>
+        <p class="lead" data-i18n="resetBody">This clears the food you picked.</p>
+        <button type="button" class="btn primary xl" id="resetNo" data-i18n="resetNo">No, keep my order</button>
+        <button type="button" class="btn danger" id="resetYes" data-i18n="resetYes">Yes, clear it</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="idleOverlay" hidden>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="idleTitle">
+        <h2 id="idleTitle" data-i18n="stillThere">Are you still there?</h2>
+        <p class="lead" data-i18n="stillHint">Press the orange button to keep your food.</p>
+        <p id="idleCount" class="lead" aria-live="polite"></p>
+        <button type="button" class="btn primary xl" id="idleStay" data-i18n="idleStay">Yes, I'm still ordering</button>
+        <button type="button" class="btn ghost" id="idleLeave" data-i18n="idleLeave">Start over</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="itemOverlay" hidden>
+      <div class="sheet" id="itemSheet" role="dialog" aria-modal="true" aria-labelledby="itemTitle">
+        <div class="sheet-top">
+          <button type="button" class="btn small" data-act="close" data-i18n="close">Close</button>
+        </div>
+        <div class="sheet-body" id="itemBody"></div>
+        <div class="sheet-action">
+          <p id="draftSummary"></p>
+          <button type="button" class="btn primary xl" id="addBtn" data-act="add">Add 1 to my order</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" role="status" hidden></div>
+  </div>
+
+  <script>
+    const I18N = {
+      en: {
+        back: 'Back', help: 'Help', startOver: 'Start over',
+        stepStart: 'Start', stepFood: 'Food', stepCheck: 'Check', stepPay: 'Pay',
+        orderHere: 'Order your food here',
+        touchStart: 'Touch the big orange button to begin.',
+        start: 'Start order',
+        needHelpStaff: 'Need help? Ask a member of staff.',
+        previewNote: 'Design preview. This screen is not connected to a live kitchen.',
+        eatQuestion: 'Where will you eat?',
+        eatHere: 'Eat here', eatHereHint: 'We bring the food to your table.',
+        takeAway: 'Take away', takeAwayHint: 'You pick it up at the counter.',
+        cartStays: 'Your food is still saved.',
+        pickTable: 'Tap your table number',
+        tableHint: 'White numbers are free. Gray numbers are already in use.',
+        noTable: "I don't know my table",
+        noTableHint: 'Staff can help you. You can still order.',
+        thisTable: 'Continue with table {n}',
+        thisCounter: 'Continue without a table',
+        tapTableFirst: 'Tap your table number first',
+        free: 'Free', inUse: 'In use', yourTable: 'Your table',
+        tableBusy: 'That table is in use. Please choose another number.',
+        coach: 'Tap a picture. Then press the orange Add button.',
+        coachClose: 'Hide this tip',
+        yourOrder: 'Your order',
+        emptyOrder: 'Your order is empty',
+        emptyHint: 'Go back and tap a picture of the food you want.',
+        seeMenu: 'Back to the food',
+        total: 'Total to pay',
+        continuePay: 'Continue to payment',
+        continueName: 'Next: your name',
+        addMore: 'Add more food',
+        nameQuestion: 'What name should we call?',
+        nameHint: 'We call this name when the food is ready.',
+        namePlaceholder: 'Your name',
+        nameEmpty: 'Type your name, or press the white button to skip.',
+        skipName: 'Skip — call me Guest',
+        continueToPay: 'Continue to payment',
+        deleteKey: 'Delete', spaceKey: 'Space',
+        payQuestion: 'How do you want to pay?',
+        easiest: 'Easiest',
+        cash: 'Cash at the counter', cashHint: 'Pay a person at the counter.',
+        card: 'Card on this screen', cardHint: 'Tap or insert your card here.',
+        cashNext: 'Next you will get a number. Please pay that number at the counter.',
+        cardNext: 'Next, hold your card on the reader. The amount is shown above.',
+        choosePayFirst: 'Choose cash or card above',
+        placeOrder: 'Place my order',
+        cardWaitTitle: 'Hold your card on the reader',
+        cardWaitHint: 'Tap, insert, or swipe. Wait for the beep.',
+        cancelPay: 'Choose a different way to pay',
+        sending: 'Sending your order',
+        sendingHint: 'One moment. Please stay at the screen.',
+        yourNumber: 'Your order number',
+        remember: 'Please remember this number.',
+        takeReceipt: 'Please take the receipt when it prints.',
+        newOrder: 'New order',
+        goingHome: 'This screen goes back to the start in {n} seconds.',
+        stillThere: 'Are you still there?',
+        stillHint: 'Press the orange button to keep your food.',
+        idleStay: "Yes, I'm still ordering",
+        idleLeave: 'Start over',
+        idleSeconds: 'Starting over in {n} seconds',
+        helpTitle: 'We can help',
+        help1: 'Tap pictures of the food you want.',
+        help2: 'Check the order and the total.',
+        help3: 'Pay, then remember your number.',
+        callStaff: 'I need a person to help',
+        callStaffBody: 'Please wave to a member of staff. You can show them this screen. You do not have to start over.',
+        close: 'Close',
+        resetTitle: 'Start a new order?',
+        resetBody: 'This clears the food you picked.',
+        resetNo: 'No, keep my order',
+        resetYes: 'Yes, clear it',
+        change: 'Change',
+        eatingHere: 'Eating here', takingAway: 'Take away',
+        counter: 'Counter', theCounter: 'the counter',
+        guest: 'Guest', tableWord: 'Table',
+        seeOrder: 'See my order',
+        tapPicture: 'Tap a picture to add food',
+        items: '{n} items', itemOne: '1 item',
+        add: 'Add', popular: 'Popular', notToday: 'Not available today',
+        howMany: 'How many?', less: 'Less', more: 'More',
+        chooseSize: 'Choose one size',
+        variationTitle: 'Variation',
+        variationHint: 'Tap the size you want.',
+        continueNext: 'Continue',
+        recQuestion: 'Want to add anything?',
+        recSkip: 'No thanks',
+        askAdd: 'Add {name}?',
+        askLeave: 'Leave out {name}?',
+        tapToAdd: 'Tap it to add it.',
+        tapToLeave: 'Tap it to leave it out.',
+        skipOrder: 'No thanks · {price}',
+        sizeStep: 'Size',
+        addOnStep: 'Add-on',
+        actionOf: '{n} of {total} · {name}',
+        todoSize: 'Choose a size',
+        todoSizeDone: 'Size · {name}',
+        todoAddon: 'Add a side or drink',
+        todoExtra: 'Add extras',
+        todoLeave: 'Leave something out',
+        chooseSizeFirst: 'Choose a size first',
+        requiredTag: 'Required',
+        recommendTitle: 'Recommendations',
+        recommendHint: 'Optional. Tap a picture to add it with this item.',
+        optionalTag: 'Optional',
+        addRec: 'Add',
+        addedRec: 'Added',
+        addExtras: 'Add extras if you want',
+        extrasOptional: 'You can skip this.',
+        leaveOut: 'Leave something out?',
+        leaveOutOptional: 'Optional. Tap only what you do not want.',
+        noChoices: 'Nothing else to choose. Pick how many, then press the orange button.',
+        contains: 'Contains', added: 'Added',
+        size_regular: 'Regular', size_large: 'Large',
+        extra_cheese: 'Cheese', extra_sauce: 'Extra sauce',
+        extra_bacon: 'Bacon', extra_extraCheese: 'Extra cheese',
+        note_noOnion: 'No onion', note_noSauce: 'No sauce',
+        cat_all: 'All food', cat_burgers: 'Burgers', cat_pizza: 'Pizza',
+        cat_drinks: 'Drinks', cat_sweets: 'Sweets', cat_sides: 'Sides',
+        addButton: 'Add {qty} to my order · {price}',
+        paidBox: 'Paid {price}. You are all set.',
+        cashBox: 'Please pay {price} at the counter now.',
+        bringTo: 'We will bring the food to {place}.',
+        callNameLine: 'We will call {name} when it is ready.',
+        remove: 'Remove', removeConfirm: 'Tap again to remove',
+        each: '{price} each'
+      },
+      es: {
+        back: 'Atrás', help: 'Ayuda', startOver: 'Empezar de nuevo',
+        stepStart: 'Inicio', stepFood: 'Comida', stepCheck: 'Revisar', stepPay: 'Pagar',
+        orderHere: 'Pide tu comida aquí',
+        touchStart: 'Toca el botón naranja grande para empezar.',
+        start: 'Empezar pedido',
+        needHelpStaff: '¿Necesitas ayuda? Pide a un empleado.',
+        previewNote: 'Vista de diseño. Esta pantalla no está conectada a una cocina real.',
+        eatQuestion: '¿Dónde vas a comer?',
+        eatHere: 'Comer aquí', eatHereHint: 'Llevamos la comida a tu mesa.',
+        takeAway: 'Para llevar', takeAwayHint: 'La recoges en el mostrador.',
+        cartStays: 'Tu comida sigue guardada.',
+        pickTable: 'Toca el número de tu mesa',
+        tableHint: 'Los números blancos están libres. Los grises ya están ocupados.',
+        noTable: 'No sé mi mesa',
+        noTableHint: 'El personal puede ayudarte. Igual puedes pedir.',
+        thisTable: 'Seguir con la mesa {n}',
+        thisCounter: 'Seguir sin mesa',
+        tapTableFirst: 'Primero toca el número de tu mesa',
+        free: 'Libre', inUse: 'Ocupada', yourTable: 'Tu mesa',
+        tableBusy: 'Esa mesa está ocupada. Elige otro número.',
+        coach: 'Toca una foto. Luego pulsa el botón naranja Añadir.',
+        coachClose: 'Ocultar este aviso',
+        yourOrder: 'Tu pedido',
+        emptyOrder: 'Tu pedido está vacío',
+        emptyHint: 'Vuelve y toca la foto de la comida que quieres.',
+        seeMenu: 'Volver a la comida',
+        total: 'Total a pagar',
+        continuePay: 'Seguir al pago',
+        continueName: 'Siguiente: tu nombre',
+        addMore: 'Añadir más comida',
+        nameQuestion: '¿Qué nombre llamamos?',
+        nameHint: 'Llamamos este nombre cuando la comida está lista.',
+        namePlaceholder: 'Tu nombre',
+        nameEmpty: 'Escribe tu nombre, o pulsa el botón blanco para saltar.',
+        skipName: 'Saltar — llámame Invitado',
+        continueToPay: 'Seguir al pago',
+        deleteKey: 'Borrar', spaceKey: 'Espacio',
+        payQuestion: '¿Cómo quieres pagar?',
+        easiest: 'Más fácil',
+        cash: 'Efectivo en el mostrador', cashHint: 'Pagas a una persona en el mostrador.',
+        card: 'Tarjeta en esta pantalla', cardHint: 'Acerca o inserta tu tarjeta aquí.',
+        cashNext: 'Después verás un número. Paga ese número en el mostrador.',
+        cardNext: 'Después, acerca tu tarjeta al lector. El importe está arriba.',
+        choosePayFirst: 'Elige efectivo o tarjeta arriba',
+        placeOrder: 'Hacer mi pedido',
+        cardWaitTitle: 'Acerca tu tarjeta al lector',
+        cardWaitHint: 'Acerca, inserta o desliza. Espera el pitido.',
+        cancelPay: 'Elegir otra forma de pago',
+        sending: 'Enviando tu pedido',
+        sendingHint: 'Un momento. Quédate en la pantalla.',
+        yourNumber: 'Tu número de pedido',
+        remember: 'Recuerda este número.',
+        takeReceipt: 'Toma el recibo cuando se imprima.',
+        newOrder: 'Pedido nuevo',
+        goingHome: 'Esta pantalla vuelve al inicio en {n} segundos.',
+        stillThere: '¿Sigues ahí?',
+        stillHint: 'Pulsa el botón naranja para guardar tu comida.',
+        idleStay: 'Sí, sigo pidiendo',
+        idleLeave: 'Empezar de nuevo',
+        idleSeconds: 'Empezamos de nuevo en {n} segundos',
+        helpTitle: 'Te ayudamos',
+        help1: 'Toca las fotos de la comida que quieres.',
+        help2: 'Revisa el pedido y el total.',
+        help3: 'Paga y recuerda tu número.',
+        callStaff: 'Necesito que me ayude una persona',
+        callStaffBody: 'Llama a un empleado con la mano. Puedes enseñarle esta pantalla. No hace falta empezar de nuevo.',
+        close: 'Cerrar',
+        resetTitle: '¿Empezar un pedido nuevo?',
+        resetBody: 'Esto borra la comida que elegiste.',
+        resetNo: 'No, guardar mi pedido',
+        resetYes: 'Sí, borrarlo',
+        change: 'Cambiar',
+        eatingHere: 'Comer aquí', takingAway: 'Para llevar',
+        counter: 'Mostrador', theCounter: 'el mostrador',
+        guest: 'Invitado', tableWord: 'Mesa',
+        seeOrder: 'Ver mi pedido',
+        tapPicture: 'Toca una foto para añadir comida',
+        items: '{n} productos', itemOne: '1 producto',
+        add: 'Añadir', popular: 'Popular', notToday: 'No disponible hoy',
+        howMany: '¿Cuántos?', less: 'Menos', more: 'Más',
+        chooseSize: 'Elige un tamaño',
+        variationTitle: 'Variación',
+        variationHint: 'Toca el tamaño que quieres.',
+        continueNext: 'Continuar',
+        recQuestion: '¿Quieres añadir algo?',
+        recSkip: 'No, gracias',
+        askAdd: '¿Añadir {name}?',
+        askLeave: '¿Quitar {name}?',
+        tapToAdd: 'Tócalo para añadirlo.',
+        tapToLeave: 'Tócalo para quitarlo.',
+        skipOrder: 'No, gracias · {price}',
+        sizeStep: 'Tamaño',
+        addOnStep: 'Extra',
+        actionOf: '{n} de {total} · {name}',
+        todoSize: 'Elige un tamaño',
+        todoSizeDone: 'Tamaño · {name}',
+        todoAddon: 'Añade un acompañamiento o bebida',
+        todoExtra: 'Añade extras',
+        todoLeave: 'Quita algo',
+        chooseSizeFirst: 'Primero elige un tamaño',
+        requiredTag: 'Obligatorio',
+        recommendTitle: 'Recomendaciones',
+        recommendHint: 'Opcional. Toca una foto para añadirla con este producto.',
+        optionalTag: 'Opcional',
+        addRec: 'Añadir',
+        addedRec: 'Añadido',
+        addExtras: 'Añade extras si quieres',
+        extrasOptional: 'Puedes saltarte esto.',
+        leaveOut: '¿Quitamos algo?',
+        leaveOutOptional: 'Opcional. Toca solo lo que no quieres.',
+        noChoices: 'No hay más opciones. Elige cuántos y pulsa el botón naranja.',
+        contains: 'Contiene', added: 'Añadido',
+        size_regular: 'Normal', size_large: 'Grande',
+        extra_cheese: 'Queso', extra_sauce: 'Salsa extra',
+        extra_bacon: 'Bacon', extra_extraCheese: 'Queso extra',
+        note_noOnion: 'Sin cebolla', note_noSauce: 'Sin salsa',
+        cat_all: 'Toda la comida', cat_burgers: 'Hamburguesas', cat_pizza: 'Pizza',
+        cat_drinks: 'Bebidas', cat_sweets: 'Dulces', cat_sides: 'Acompañamientos',
+        addButton: 'Añadir {qty} a mi pedido · {price}',
+        paidBox: 'Pagado {price}. Todo listo.',
+        cashBox: 'Por favor paga {price} en el mostrador ahora.',
+        bringTo: 'Llevaremos la comida a {place}.',
+        callNameLine: 'Llamaremos a {name} cuando esté listo.',
+        remove: 'Quitar', removeConfirm: 'Toca otra vez para quitar',
+        each: '{price} cada uno'
+      }
+    };
+
+    const CATS = [
+      { id: 'all', emoji: '🍽️' },
+      { id: 'burgers', emoji: '🍔' },
+      { id: 'pizza', emoji: '🍕' },
+      { id: 'drinks', emoji: '🥤' },
+      { id: 'sweets', emoji: '🍰' },
+      { id: 'sides', emoji: '🍟' }
+    ];
+    const EXTRAS = { cheese: 1, sauce: 0.5, bacon: 1.5, extraCheese: 1.5 };
+    const BUSY = new Set(['3', '7', '11']);
+    const PRODUCTS = [
+      { id: 'classic', cat: 'burgers', price: 8.5, emoji: '🍔', grad: 'linear-gradient(160deg,#fdba74,#fff7ed)', popular: true, sizes: [{ id: 'regular', delta: 0 }, { id: 'large', delta: 2 }], extras: ['cheese', 'sauce'], recs: ['fries', 'cola'], notes: ['noOnion', 'noSauce'], en: { name: 'Classic Burger', desc: 'Beef, lettuce, tomato and sauce', contains: 'wheat' }, es: { name: 'Hamburguesa clásica', desc: 'Carne, lechuga, tomate y salsa', contains: 'trigo' } },
+      { id: 'cheese', cat: 'burgers', price: 9.5, emoji: '🧀', grad: 'linear-gradient(160deg,#fbbf24,#fef3c7)', sizes: [{ id: 'regular', delta: 0 }, { id: 'large', delta: 2 }], extras: ['bacon', 'sauce'], recs: ['fries', 'cola'], notes: ['noOnion'], en: { name: 'Cheese Burger', desc: 'Beef with melted cheese', contains: 'wheat, milk' }, es: { name: 'Hamburguesa con queso', desc: 'Carne con queso fundido', contains: 'trigo, leche' } },
+      { id: 'chicken', cat: 'burgers', price: 9, emoji: '🍗', grad: 'linear-gradient(160deg,#fb923c,#ffedd5)', sizes: [{ id: 'regular', delta: 0 }, { id: 'large', delta: 2 }], extras: ['cheese', 'sauce'], recs: ['fries', 'juice'], notes: ['noSauce'], en: { name: 'Chicken Burger', desc: 'Crispy chicken and lettuce', contains: 'wheat' }, es: { name: 'Hamburguesa de pollo', desc: 'Pollo crujiente y lechuga', contains: 'trigo' } },
+      { id: 'marg', cat: 'pizza', price: 11, emoji: '🍕', grad: 'linear-gradient(160deg,#f87171,#fee2e2)', popular: true, sizes: [{ id: 'regular', delta: 0 }, { id: 'large', delta: 3 }], extras: ['extraCheese'], recs: ['cola', 'brownie'], notes: [], en: { name: 'Margherita Pizza', desc: 'Tomato, cheese and basil', contains: 'wheat, milk' }, es: { name: 'Pizza margarita', desc: 'Tomate, queso y albahaca', contains: 'trigo, leche' } },
+      { id: 'pep', cat: 'pizza', price: 12.5, emoji: '🍕', grad: 'linear-gradient(160deg,#ef4444,#fecaca)', sizes: [{ id: 'regular', delta: 0 }, { id: 'large', delta: 3 }], extras: ['extraCheese'], recs: ['cola', 'fries'], notes: [], en: { name: 'Pepperoni Pizza', desc: 'Cheese and pepperoni', contains: 'wheat, milk' }, es: { name: 'Pizza pepperoni', desc: 'Queso y pepperoni', contains: 'trigo, leche' } },
+      { id: 'cola', cat: 'drinks', price: 2.5, emoji: '🥤', grad: 'linear-gradient(160deg,#60a5fa,#dbeafe)', sizes: [{ id: 'regular', delta: 0 }, { id: 'large', delta: 1 }], extras: [], notes: [], en: { name: 'Cola', desc: 'Cold and fizzy', contains: '' }, es: { name: 'Cola', desc: 'Fría y con gas', contains: '' } },
+      { id: 'water', cat: 'drinks', price: 1.5, emoji: '💧', grad: 'linear-gradient(160deg,#38bdf8,#e0f2fe)', sizes: null, extras: [], notes: [], en: { name: 'Water', desc: 'Still water', contains: '' }, es: { name: 'Agua', desc: 'Agua sin gas', contains: '' } },
+      { id: 'juice', cat: 'drinks', price: 3, emoji: '🍊', grad: 'linear-gradient(160deg,#fb923c,#ffedd5)', sizes: [{ id: 'regular', delta: 0 }, { id: 'large', delta: 1 }], extras: [], notes: [], en: { name: 'Orange Juice', desc: 'Fresh orange juice', contains: '' }, es: { name: 'Zumo de naranja', desc: 'Zumo de naranja fresco', contains: '' } },
+      { id: 'brownie', cat: 'sweets', price: 4, emoji: '🍫', grad: 'linear-gradient(160deg,#b45309,#fef3c7)', sizes: null, extras: [], notes: [], en: { name: 'Brownie', desc: 'Warm chocolate brownie', contains: 'wheat, milk' }, es: { name: 'Brownie', desc: 'Brownie de chocolate caliente', contains: 'trigo, leche' } },
+      { id: 'ice', cat: 'sweets', price: 3.5, emoji: '🍨', grad: 'linear-gradient(160deg,#f472b6,#fce7f3)', sizes: null, extras: [], notes: [], en: { name: 'Ice Cream', desc: 'Vanilla ice cream', contains: 'milk' }, es: { name: 'Helado', desc: 'Helado de vainilla', contains: 'leche' } },
+      { id: 'fries', cat: 'sides', price: 3.5, emoji: '🍟', grad: 'linear-gradient(160deg,#facc15,#fef9c3)', popular: true, sizes: null, extras: [], notes: [], en: { name: 'Fries', desc: 'Crispy potato fries', contains: '' }, es: { name: 'Patatas fritas', desc: 'Patatas fritas crujientes', contains: '' } },
+      { id: 'salad', cat: 'sides', price: 4.5, emoji: '🥗', grad: 'linear-gradient(160deg,#4ade80,#dcfce7)', sizes: null, extras: [], notes: ['noOnion'], en: { name: 'Side Salad', desc: 'Leaves, tomato and cucumber', contains: '' }, es: { name: 'Ensalada', desc: 'Hojas, tomate y pepino', contains: '' } },
+      { id: 'rings', cat: 'sides', price: 4, emoji: '🧅', grad: 'linear-gradient(160deg,#d6d3d1,#f5f5f4)', soldOut: true, sizes: null, extras: [], notes: [], en: { name: 'Onion Rings', desc: 'Crispy onion rings', contains: 'wheat' }, es: { name: 'Aros de cebolla', desc: 'Aros de cebolla crujientes', contains: 'trigo' } }
+    ];
+
+    const SCREENS = ['attract', 'mode', 'table', 'menu', 'vary', 'recommend', 'cart', 'name', 'pay', 'card', 'sending', 'done'];
+    const state = {
+      screen: 'attract', lang: 'en', mode: null, table: null, category: 'all',
+      cart: [], draft: null, nameRaw: '', name: '', guest: false, pay: null,
+      ticket: null, coachSeen: false, removeArmed: null
+    };
+    let nextTicket = 128;
+    let cardTimer = null;
+    let doneTick = null;
+    let idleTimer = null;
+    let idleTick = null;
+    let idleLeft = 0;
+    let toastTimer = null;
+    let removeTimer = null;
+    let bumpTimer = null;
+    let flyOrigin = null;
+    function hasSizes(p) { return !!(p && p.sizes && p.sizes.length); }
+    function pickSteps(p) {
+      const steps = [];
+      if (!p) return steps;
+      (p.recs || []).forEach((id) => { if (product(id)) steps.push({ kind: 'rec', id }); });
+      (p.extras || []).forEach((id) => steps.push({ kind: 'extra', id }));
+      (p.notes || []).forEach((id) => steps.push({ kind: 'note', id }));
+      return steps;
+    }
+    function needsOptional(p) { return pickSteps(p).length > 0; }
+    function stepChosen(step, d) {
+      if (step.kind === 'rec') return (d.recs || []).includes(step.id);
+      if (step.kind === 'extra') return d.extras.includes(step.id);
+      return d.notes.includes(step.id);
+    }
+    function stepLabel(step) {
+      if (step.kind === 'rec') return loc(product(step.id)).name;
+      if (step.kind === 'extra') return t('extra_' + step.id);
+      return t('note_' + step.id);
+    }
+    function previewPrice(d, step, yes) {
+      const p = product(d.id);
+      const recs = (d.recs || []).filter((id) => step.kind !== 'rec' || id !== step.id);
+      const extras = d.extras.filter((id) => step.kind !== 'extra' || id !== step.id);
+      if (yes && step.kind === 'rec') recs.push(step.id);
+      if (yes && step.kind === 'extra') extras.push(step.id);
+      const recTotal = recs.reduce((sum, id) => sum + product(id).price, 0);
+      return (unitOf(p, d.sizeId, extras) + recTotal) * d.qty;
+    }
+    function draftPrice() {
+      const d = state.draft;
+      const p = product(d.id);
+      const recTotal = (d.recs || []).reduce((sum, id) => sum + product(id).price, 0);
+      return (unitOf(p, d.sizeId, d.extras) + recTotal) * d.qty;
+    }
+    function renderActionStep() {
+      const el = $('actionStep');
+      const picking = state.screen === 'vary' || state.screen === 'recommend';
+      const p = picking && state.draft ? product(state.draft.id) : null;
+      if (!p) { el.hidden = true; return; }
+      el.hidden = false;
+      const steps = pickSteps(p);
+      const total = (hasSizes(p) ? 1 : 0) + steps.length;
+      if (state.screen === 'vary') {
+        el.textContent = tf('actionOf', { n: 1, total: total || 1, name: t('sizeStep') });
+        return;
+      }
+      const step = steps[state.draft.step] || steps[0];
+      const n = (hasSizes(p) ? 1 : 0) + (state.draft.step || 0) + 1;
+      el.textContent = step ? tf('actionOf', { n, total, name: stepLabel(step) }) : t('addOnStep');
+    }
+    function todoHtml(p, d) {
+      const rows = [];
+      if (hasSizes(p)) {
+        if (d.sizeId) rows.push({ state: 'done', text: tf('todoSizeDone', { name: t('size_' + d.sizeId) }) });
+        else rows.push({ state: 'need', text: t('todoSize'), tag: t('requiredTag') });
+      }
+      pickSteps(p).forEach((step, i) => {
+        const chosen = stepChosen(step, d);
+        const current = state.screen === 'recommend' && d.step === i && !chosen;
+        rows.push({
+          state: chosen ? 'done' : current ? 'need' : 'open',
+          text: stepLabel(step),
+          tag: chosen ? '' : t('optionalTag')
+        });
+      });
+      const chip = (r) => '<li class="is-' + r.state + '"><span class="mark" aria-hidden="true">' + (r.state === 'done' ? '✓' : '') + '</span><span>' + esc(r.text) + '</span>' + (r.tag ? '<em>' + esc(r.tag) + '</em>' : '') + '</li>';
+      return '<ul class="todo">' + rows.map(chip).join('') + '</ul>';
+    }
+    function renderVary() {
+      const d = state.draft;
+      if (!d || state.screen !== 'vary') return;
+      const p = product(d.id);
+      $('varyItem').innerHTML = '<span class="pick-art" style="background:' + p.grad + '">' + p.emoji + '</span><span>' + esc(loc(p).name) + '</span>';
+      $('varyHint').textContent = t('variationHint');
+      $('varyTodo').innerHTML = todoHtml(p, d);
+      $('varyGrid').innerHTML = (p.sizes || []).map((s) => {
+        const on = d.sizeId === s.id;
+        return '<button type="button" class="var-card' + (on ? ' is-on' : '') + '" data-size="' + s.id + '"><span class="var-art" style="background:' + p.grad + '">' + p.emoji + '</span><span class="var-name">' + esc(t('size_' + s.id)) + '</span><span class="var-price">' + esc(money(p.price + s.delta)) + (on ? '  ✓' : '') + '</span></button>';
+      }).join('');
+      const last = !needsOptional(p);
+      $('varyQtyWrap').hidden = !last;
+      $('varyQty').textContent = String(d.qty);
+      $('varyLess').disabled = d.qty <= 1;
+      $('varyMore').disabled = d.qty >= 10;
+      $('varyLess').setAttribute('aria-label', t('less'));
+      $('varyMore').setAttribute('aria-label', t('more'));
+      const sizeMissing = hasSizes(p) && !d.sizeId;
+      $('varyNext').disabled = sizeMissing;
+      $('varyNext').textContent = sizeMissing ? t('chooseSizeFirst') : last ? tf('addButton', { qty: d.qty, price: money(draftPrice()) }) : t('continueNext');
+    }
+    function renderRecommend() {
+      const d = state.draft;
+      if (!d || state.screen !== 'recommend') return;
+      const p = product(d.id);
+      const steps = pickSteps(p);
+      if (!steps.length) return;
+      if (d.step == null || d.step < 0 || d.step >= steps.length) d.step = 0;
+      const step = steps[d.step];
+      const on = stepChosen(step, d);
+      const last = d.step === steps.length - 1;
+      const name = stepLabel(step);
+      $('recItem').innerHTML = '<span class="pick-art" style="background:' + p.grad + '">' + p.emoji + '</span><span>' + esc(loc(p).name) + '</span>';
+      $('recTodo').innerHTML = todoHtml(p, d);
+      $('recTitle').textContent = step.kind === 'note' ? tf('askLeave', { name }) : tf('askAdd', { name });
+      $('recHint').textContent = step.kind === 'note' ? t('tapToLeave') : t('tapToAdd');
+      $('extraBlock').innerHTML = '';
+      $('recGrid').hidden = false;
+      let art = '<span class="one-art" style="background:' + p.grad + '">' + p.emoji + '</span>';
+      let price = '';
+      if (step.kind === 'rec') {
+        const r = product(step.id);
+        art = '<span class="one-art" style="background:' + r.grad + '">' + r.emoji + '</span>';
+        price = '<span class="one-price">' + esc(money(r.price)) + '</span>';
+      } else if (step.kind === 'extra') {
+        price = '<span class="one-price">+' + esc(money(EXTRAS[step.id] || 0)) + '</span>';
+      }
+      $('recGrid').innerHTML = '<div class="one-pick"><button type="button" class="one-card' + (on ? ' is-on' : '') + '">' + art + '<span class="one-name">' + esc(name) + '</span>' + price + '</button></div>';
+      $('recQtyWrap').hidden = !last;
+      $('recQty').textContent = String(d.qty);
+      $('recLess').disabled = d.qty <= 1;
+      $('recMore').disabled = d.qty >= 10;
+      $('recLess').setAttribute('aria-label', t('less'));
+      $('recMore').setAttribute('aria-label', t('more'));
+      $('recSkip').textContent = last ? tf('skipOrder', { price: money(previewPrice(d, step, false)) }) : t('recSkip');
+    }
+    function answerStep(yes) {
+      const d = state.draft;
+      if (!d) return;
+      const p = product(d.id);
+      const steps = pickSteps(p);
+      const step = steps[d.step];
+      if (!step) { addDraft(); return; }
+      const list = step.kind === 'rec' ? d.recs : step.kind === 'extra' ? d.extras : d.notes;
+      const has = list.includes(step.id);
+      if (yes && !has) list.push(step.id);
+      if (!yes && has) list.splice(list.indexOf(step.id), 1);
+      if (d.step < steps.length - 1) {
+        d.step += 1;
+        renderPick();
+      } else addDraft();
+    }
+    function renderPick() {
+      renderActionStep();
+      renderVary();
+      renderRecommend();
+    }
+
+    const $ = (id) => document.getElementById(id);
+    function t(key) {
+      const pack = I18N[state.lang] || I18N.en;
+      return pack[key] ?? I18N.en[key] ?? key;
+    }
+    function tf(key, vars) {
+      return t(key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+    }
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    function money(n) { return '$' + n.toFixed(2); }
+    function product(id) { return PRODUCTS.find((p) => p.id === id); }
+    function loc(p) { return p[state.lang] || p.en; }
+    function itemsLabel(n) { return n === 1 ? t('itemOne') : tf('items', { n }); }
+    function unitOf(p, sizeId, extras) {
+      let n = p.price;
+      if (p.sizes && sizeId) {
+        const s = p.sizes.find((x) => x.id === sizeId);
+        if (s) n += s.delta;
+      }
+      (extras || []).forEach((id) => { n += EXTRAS[id] || 0; });
+      return n;
+    }
+    function cartCount() { return state.cart.reduce((s, l) => s + l.qty, 0); }
+    function cartTotal() {
+      return state.cart.reduce((s, l) => s + unitOf(product(l.productId), l.sizeId, l.extras) * l.qty, 0);
+    }
+    function lineDetail(l) {
+      const p = product(l.productId);
+      const bits = [];
+      if (p.sizes && l.sizeId) bits.push(t('size_' + l.sizeId));
+      l.extras.forEach((id) => bits.push(t('extra_' + id)));
+      l.notes.forEach((id) => bits.push(t('note_' + id)));
+      return bits.join(' · ');
+    }
+    function displayName() {
+      return state.nameRaw.replace(/\s+/g, ' ').replace(/(^|\s)([a-z])/g, (_, a, b) => a + b.toUpperCase());
+    }
+    function visibleProducts() {
+      const list = PRODUCTS.filter((p) => state.category === 'all' || p.cat === state.category);
+      if (state.category !== 'all') return list;
+      return [...list].sort((a, b) => Number(!!b.popular) - Number(!!a.popular));
+    }
+
+    function applyI18n() {
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        el.textContent = t(el.dataset.i18n);
+      });
+      document.documentElement.lang = state.lang === 'es' ? 'es' : 'en';
+    }
+    function toast(msg) {
+      const el = $('toast');
+      el.hidden = false;
+      el.textContent = msg;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.hidden = true; }, 2200);
+    }
+    function stepIndex() {
+      switch (state.screen) {
+        case 'mode':
+        case 'table': return 1;
+        case 'menu':
+        case 'vary':
+        case 'recommend': return 2;
+        case 'cart':
+        case 'name': return 3;
+        case 'pay':
+        case 'card': return 4;
+        default: return 0;
+      }
+    }
+    function renderSteps() {
+      const idx = stepIndex();
+      $('steps').hidden = idx === 0;
+      $('steps').querySelectorAll('li').forEach((li) => {
+        const n = Number(li.dataset.step);
+        li.classList.toggle('is-on', n === idx);
+        li.classList.toggle('is-done', n < idx);
+      });
+    }
+    function contextText() {
+      const how = state.mode === 'dine' ? t('eatingHere') : t('takingAway');
+      if (state.mode !== 'dine') return how;
+      const table = state.table === 'counter' ? t('counter') : state.table ? t('tableWord') + ' ' + state.table : '';
+      return table ? how + ' · ' + table : how;
+    }
+    function renderContext() {
+      const show = ['menu', 'vary', 'recommend', 'cart', 'name', 'pay'].includes(state.screen) && !!state.mode;
+      $('contextBar').hidden = !show;
+      if (!show) return;
+      $('contextLabel').textContent = contextText();
+      $('contextChange').textContent = t('change');
+    }
+    function renderChrome() {
+      const screen = state.screen;
+      $('header').hidden = screen === 'attract';
+      $('backBtn').hidden = ['attract', 'sending', 'done'].includes(screen);
+      $('langToggle').hidden = ['attract', 'sending'].includes(screen);
+      $('helpBtn').hidden = screen === 'sending';
+      $('resetBtn').hidden = ['attract', 'sending', 'done'].includes(screen);
+      $('langToggle').textContent = state.lang === 'en' ? 'Español' : 'English';
+      document.querySelectorAll('[data-set-lang]').forEach((btn) => {
+        const on = btn.dataset.setLang === state.lang;
+        btn.classList.toggle('is-on', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+    function renderCartStays() {
+      const show = state.screen === 'mode' && state.cart.length > 0;
+      $('cartStays').hidden = !show;
+      if (show) $('cartStays').textContent = t('cartStays');
+    }
+    function renderTables() {
+      let html = '';
+      for (let n = 1; n <= 12; n += 1) {
+        const id = String(n);
+        const busy = BUSY.has(id);
+        const sel = state.table === id;
+        let label = t('free');
+        if (busy) label = t('inUse');
+        if (sel) label = t('yourTable');
+        html += '<button type="button" class="table-btn' + (sel ? ' is-selected' : '') + (busy ? ' is-busy' : '') + '" data-table="' + id + '" data-busy="' + (busy ? '1' : '0') + '"><span class="table-num">' + id + '</span><span class="table-state">' + esc(label) + '</span></button>';
+      }
+      $('tables').innerHTML = html;
+      $('noTableBtn').classList.toggle('is-selected', state.table === 'counter');
+      const btn = $('tableContinue');
+      if (!state.table) {
+        btn.disabled = true;
+        btn.textContent = t('tapTableFirst');
+      } else if (state.table === 'counter') {
+        btn.disabled = false;
+        btn.textContent = t('thisCounter');
+      } else {
+        btn.disabled = false;
+        btn.textContent = tf('thisTable', { n: state.table });
+      }
+    }
+    function renderCats() {
+      $('cats').innerHTML = CATS.map((c) => {
+        const on = state.category === c.id;
+        return '<button type="button" class="cat' + (on ? ' is-on' : '') + '" data-cat="' + c.id + '" aria-pressed="' + on + '"><span class="cat-emoji" aria-hidden="true">' + c.emoji + '</span><span>' + esc(t('cat_' + c.id)) + '</span></button>';
+      }).join('');
+    }
+    function renderGrid() {
+      const grid = $('grid');
+      const sc = grid.scrollTop;
+      const coach = state.coachSeen ? '' : '<div class="coach"><p>' + esc(t('coach')) + '</p><button type="button" class="btn small" data-act="hide-coach">' + esc(t('coachClose')) + '</button></div>';
+      grid.innerHTML = coach + visibleProducts().map((p) => {
+        const sold = !!p.soldOut;
+        const badge = p.popular && !sold ? '<span class="badge">' + esc(t('popular')) + '</span>' : '';
+        return '<button type="button" class="card' + (sold ? ' is-sold' : '') + '" data-id="' + p.id + '"' + (sold ? ' disabled' : '') + '>' + badge +
+          '<span class="card-art" style="background:' + p.grad + '">' + p.emoji + '</span>' +
+          '<span class="card-name">' + esc(loc(p).name) + '</span>' +
+          '<span class="card-price">' + esc(money(p.price)) + '</span>' +
+          '<span class="card-add">' + esc(sold ? t('notToday') : t('add')) + '</span></button>';
+      }).join('');
+      grid.scrollTop = sc;
+    }
+    function renderCartBar() {
+      const bar = $('cartbar');
+      bar.hidden = state.screen !== 'menu';
+      if (state.screen !== 'menu') return;
+      const n = cartCount();
+      if (n === 0) {
+        $('barCount').textContent = t('tapPicture');
+        $('barSum').hidden = true;
+        $('barBtn').hidden = true;
+      } else {
+        $('barCount').textContent = itemsLabel(n);
+        $('barSum').hidden = false;
+        $('barSum').textContent = money(cartTotal());
+        $('barBtn').hidden = false;
+        $('barBtn').textContent = t('seeOrder');
+      }
+    }
+    function renderCart() {
+      const list = $('cartList');
+      const sc = list.scrollTop;
+      $('cartActions').hidden = state.cart.length === 0;
+      if (state.cart.length === 0) {
+        list.innerHTML = '<div class="empty-state"><p>' + esc(t('emptyOrder')) + '</p><p class="lead">' + esc(t('emptyHint')) + '</p><button type="button" class="btn primary" data-act="more">' + esc(t('seeMenu')) + '</button></div>';
+      } else {
+        list.innerHTML = '<h1>' + esc(t('yourOrder')) + '</h1>' + state.cart.map((l) => {
+          const p = product(l.productId);
+          const detail = lineDetail(l);
+          const armed = state.removeArmed === l.key;
+          const unit = unitOf(p, l.sizeId, l.extras);
+          return '<article class="line"><div class="line-art" style="background:' + p.grad + '">' + p.emoji + '</div><div><h3>' + esc(loc(p).name) + '</h3>' +
+            (detail ? '<p>' + esc(detail) + '</p>' : '') +
+            '<p>' + esc(tf('each', { price: money(unit) })) + '</p><div class="line-qty">' +
+            '<button type="button" class="stepper" data-act="dec" data-key="' + l.key + '" aria-label="' + esc(t('less')) + '"' + (l.qty <= 1 ? ' disabled' : '') + '>−</button>' +
+            '<span class="qty-num">' + l.qty + '</span>' +
+            '<button type="button" class="stepper" data-act="inc" data-key="' + l.key + '" aria-label="' + esc(t('more')) + '"' + (l.qty >= 10 ? ' disabled' : '') + '>+</button>' +
+            '<button type="button" class="btn small remove-btn' + (armed ? ' is-armed' : '') + '" data-act="remove" data-key="' + l.key + '">' + esc(armed ? t('removeConfirm') : t('remove')) + '</button>' +
+            '</div></div><strong class="line-total">' + esc(money(unit * l.qty)) + '</strong></article>';
+        }).join('');
+        $('cartTotal').textContent = money(cartTotal());
+        $('cartNext').textContent = state.mode === 'take' ? t('continueName') : t('continuePay');
+      }
+      list.scrollTop = sc;
+    }
+    function renderName() {
+      const empty = state.nameRaw.length === 0;
+      const box = $('nameDisplay');
+      box.textContent = empty ? t('namePlaceholder') : displayName();
+      box.classList.toggle('is-empty', empty);
+      if (!$('nameError').hidden) $('nameError').textContent = t('nameEmpty');
+      $('nameContinue').textContent = t('continueToPay');
+      $('nameSkip').textContent = t('skipName');
+    }
+    function renderKeyboardLabels() {
+      const space = $('keyboard').querySelector('[data-key="space"]');
+      const del = $('keyboard').querySelector('[data-key="del"]');
+      if (space) space.textContent = t('spaceKey');
+      if (del) del.textContent = t('deleteKey');
+    }
+    function renderPay() {
+      $('payTotal').textContent = money(cartTotal());
+      $('payCount').textContent = itemsLabel(cartCount());
+      $('pickCash').classList.toggle('is-selected', state.pay === 'cash');
+      $('pickCard').classList.toggle('is-selected', state.pay === 'card');
+      $('pickCash').setAttribute('aria-pressed', state.pay === 'cash' ? 'true' : 'false');
+      $('pickCard').setAttribute('aria-pressed', state.pay === 'card' ? 'true' : 'false');
+      $('payNext').textContent = state.pay === 'cash' ? t('cashNext') : state.pay === 'card' ? t('cardNext') : '';
+      $('placeBtn').disabled = !state.pay || state.cart.length === 0;
+      $('placeBtn').textContent = state.pay ? t('placeOrder') : t('choosePayFirst');
+    }
+    function renderDone() {
+      if (state.ticket == null) {
+        $('ticket').textContent = '';
+        $('donePayBox').textContent = '';
+        $('doneWhere').textContent = '';
+        $('doneLines').innerHTML = '';
+        $('doneCount').textContent = '';
+        return;
+      }
+      $('ticket').textContent = '#' + state.ticket;
+      const total = money(cartTotal());
+      const box = $('donePayBox');
+      box.className = 'paybox ' + (state.pay === 'cash' ? 'cash' : 'paid');
+      box.textContent = state.pay === 'cash' ? tf('cashBox', { price: total }) : tf('paidBox', { price: total });
+      if (state.mode === 'dine') {
+        const place = !state.table || state.table === 'counter' ? t('theCounter') : t('tableWord') + ' ' + state.table;
+        $('doneWhere').textContent = tf('bringTo', { place });
+      } else {
+        const who = state.guest || !state.name ? t('guest') : state.name;
+        $('doneWhere').textContent = tf('callNameLine', { name: who });
+      }
+      $('doneLines').innerHTML = state.cart.map((l) => {
+        const p = product(l.productId);
+        const detail = lineDetail(l);
+        return '<li><span>' + esc(l.qty + ' × ' + loc(p).name) + (detail ? '<small>' + esc(detail) + '</small>' : '') + '</span><span>' + esc(money(unitOf(p, l.sizeId, l.extras) * l.qty)) + '</span></li>';
+      }).join('');
+    }
+    function renderItem() {
+      if (!state.draft) return;
+      const p = product(state.draft.id);
+      const body = $('itemBody');
+      const sc = body.scrollTop;
+      const d = state.draft;
+      let html = '<div class="hero" style="background:' + p.grad + '">' + p.emoji + '</div><h2 id="itemTitle">' + esc(loc(p).name) + '</h2><p class="lead">' + esc(loc(p).desc) + '</p>';
+      if (loc(p).contains) html += '<p class="section-help">' + esc(t('contains')) + ': ' + esc(loc(p).contains) + '</p>';
+      html += '<p class="section-label">' + esc(t('howMany')) + '</p><div class="qty-row"><button type="button" class="stepper" data-act="qty" data-dir="-1" aria-label="' + esc(t('less')) + '"' + (d.qty <= 1 ? ' disabled' : '') + '>−</button><span class="qty-num">' + d.qty + '</span><button type="button" class="stepper" data-act="qty" data-dir="1" aria-label="' + esc(t('more')) + '"' + (d.qty >= 10 ? ' disabled' : '') + '>+</button></div>';
+      if (p.sizes) {
+        html += '<section class="choice-block"><div class="group-head"><p class="section-label">' + esc(t('variationTitle')) + '</p><span class="tag tag-required">' + esc(t('requiredTag')) + '</span></div><p class="section-help">' + esc(t('variationHint')) + '</p><div class="var-grid">';
+        p.sizes.forEach((s) => {
+          const on = d.sizeId === s.id;
+          html += '<button type="button" class="var-card' + (on ? ' is-on' : '') + '" data-act="size" data-value="' + s.id + '"><span class="var-art" style="background:' + p.grad + '">' + p.emoji + '</span><span class="var-name">' + esc(t('size_' + s.id)) + '</span><span class="var-price">' + esc(money(p.price + s.delta)) + (on ? '  ✓' : '') + '</span></button>';
+        });
+        html += '</div></section>';
+      }
+      const recs = (p.recs || []).map(product).filter(Boolean);
+      if (recs.length) {
+        html += '<section class="choice-block rec-block"><div class="group-head"><p class="section-label">' + esc(t('recommendTitle')) + '</p><span class="tag tag-optional">' + esc(t('optionalTag')) + '</span></div><p class="section-help">' + esc(t('recommendHint')) + '</p><div class="rec-grid">';
+        recs.forEach((r) => {
+          const on = (d.recs || []).includes(r.id);
+          html += '<button type="button" class="rec-card' + (on ? ' is-on' : '') + '" data-act="rec" data-value="' + r.id + '"><span class="rec-state">' + esc(on ? t('addedRec') : t('addRec')) + '</span><span class="rec-art" style="background:' + r.grad + '">' + r.emoji + '</span><span class="rec-name">' + esc(loc(r).name) + '</span><span class="rec-price">' + esc(money(r.price)) + '</span></button>';
+        });
+        html += '</div></section>';
+      }
+      if (p.extras && p.extras.length) {
+        html += '<p class="section-label">' + esc(t('addExtras')) + '</p><p class="section-help">' + esc(t('extrasOptional')) + '</p><div class="opt-grid">';
+        p.extras.forEach((id) => {
+          const on = d.extras.includes(id);
+          html += '<button type="button" class="opt' + (on ? ' is-on' : '') + '" data-act="extra" data-value="' + id + '"><span>' + esc(t('extra_' + id)) + '  +' + esc(money(EXTRAS[id])) + '</span><span>' + (on ? '✓' : '') + '</span></button>';
+        });
+        html += '</div>';
+      }
+      if (p.notes && p.notes.length) {
+        html += '<p class="section-label">' + esc(t('leaveOut')) + '</p><p class="section-help">' + esc(t('leaveOutOptional')) + '</p><div class="opt-grid">';
+        p.notes.forEach((id) => {
+          const on = d.notes.includes(id);
+          html += '<button type="button" class="opt' + (on ? ' is-on' : '') + '" data-act="note" data-value="' + id + '"><span>' + esc(t('note_' + id)) + '</span><span>' + (on ? '✓' : '') + '</span></button>';
+        });
+        html += '</div>';
+      }
+      if (!p.sizes && !(p.extras && p.extras.length) && !(p.notes && p.notes.length)) {
+        html += '<p class="section-help">' + esc(t('noChoices')) + '</p>';
+      }
+      body.innerHTML = html;
+      body.scrollTop = sc;
+      const bits = [];
+      if (p.sizes && d.sizeId) bits.push(t('size_' + d.sizeId));
+      d.extras.forEach((id) => bits.push(t('extra_' + id)));
+      (d.recs || []).forEach((id) => bits.push(loc(product(id)).name));
+      d.notes.forEach((id) => bits.push(t('note_' + id)));
+      $('draftSummary').textContent = bits.join(' · ');
+      const recTotal = (d.recs || []).reduce((sum, id) => sum + product(id).price, 0);
+      $('addBtn').textContent = tf('addButton', { qty: d.qty, price: money((unitOf(p, d.sizeId, d.extras) + recTotal) * d.qty) });
+    }
+    function refresh() {
+      applyI18n();
+      renderChrome();
+      renderSteps();
+      renderContext();
+      renderCartStays();
+      renderTables();
+      renderCats();
+      renderGrid();
+      renderCart();
+      renderName();
+      renderKeyboardLabels();
+      renderPay();
+      renderDone();
+      renderCartBar();
+      if (!$('itemOverlay').hidden) renderItem();
+      renderPick();
+    }
+
+    function clearIdleTimers() {
+      clearTimeout(idleTimer);
+      clearInterval(idleTick);
+    }
+    function hideIdle() {
+      $('idleOverlay').hidden = true;
+      clearInterval(idleTick);
+    }
+    function bumpIdle() {
+      clearIdleTimers();
+      hideIdle();
+      if (['attract', 'sending', 'card', 'done'].includes(state.screen)) return;
+      idleTimer = setTimeout(showIdle, 70000);
+    }
+    function showIdle() {
+      idleLeft = 15;
+      $('idleOverlay').hidden = false;
+      $('idleCount').textContent = tf('idleSeconds', { n: idleLeft });
+      clearInterval(idleTick);
+      idleTick = setInterval(() => {
+        if ($('idleOverlay').hidden) { clearInterval(idleTick); return; }
+        idleLeft -= 1;
+        $('idleCount').textContent = tf('idleSeconds', { n: Math.max(idleLeft, 0) });
+        if (idleLeft <= 0) {
+          clearInterval(idleTick);
+          resetOrder();
+        }
+      }, 1000);
+    }
+    function show(name) {
+      clearTimeout(cardTimer);
+      clearInterval(doneTick);
+      state.screen = name;
+      SCREENS.forEach((s) => { $('screen-' + s).hidden = s !== name; });
+      refresh();
+      bumpIdle();
+    }
+    function resetOrder() {
+      clearTimeout(cardTimer);
+      clearInterval(doneTick);
+      clearIdleTimers();
+      state.cart = [];
+      state.mode = null;
+      state.table = null;
+      state.pay = null;
+      state.nameRaw = '';
+      state.name = '';
+      state.guest = false;
+      state.ticket = null;
+      state.category = 'all';
+      state.coachSeen = false;
+      state.removeArmed = null;
+      state.draft = null;
+      $('itemOverlay').hidden = true;
+      $('helpOverlay').hidden = true;
+      $('resetOverlay').hidden = true;
+      $('idleOverlay').hidden = true;
+      $('nameError').hidden = true;
+      show('attract');
+    }
+    function goBack() {
+      $('helpOverlay').hidden = true;
+      $('itemOverlay').hidden = true;
+      switch (state.screen) {
+        case 'mode': show('attract'); break;
+        case 'table': show('mode'); break;
+        case 'menu': show(state.mode === 'dine' ? 'table' : 'mode'); break;
+        case 'vary':
+          state.draft = null;
+          show('menu');
+          break;
+        case 'recommend':
+          if (state.draft && state.draft.step > 0) {
+            state.draft.step -= 1;
+            renderPick();
+          } else if (state.draft && hasSizes(product(state.draft.id))) show('vary');
+          else { state.draft = null; show('menu'); }
+          break;
+        case 'cart': show('menu'); break;
+        case 'name': show('cart'); break;
+        case 'pay': show(state.mode === 'take' ? 'name' : 'cart'); break;
+        case 'card': show('pay'); break;
+        default: break;
+      }
+    }
+    function closeItem() {
+      $('itemOverlay').hidden = true;
+      state.draft = null;
+    }
+    function openItem(id, fromRect) {
+      const p = product(id);
+      if (!p || p.soldOut) return;
+      state.draft = {
+        id,
+        qty: 1,
+        sizeId: null,
+        extras: [],
+        recs: [],
+        notes: [],
+        step: 0
+      };
+      flyOrigin = fromRect || null;
+      $('itemOverlay').hidden = true;
+      if (hasSizes(p)) show('vary');
+      else if (needsOptional(p)) show('recommend');
+      else addDraft();
+    }
+    function toggleIn(list, id) {
+      const i = list.indexOf(id);
+      if (i >= 0) list.splice(i, 1);
+      else list.push(id);
+    }
+    function bumpCart() {
+      const bar = $('cartbar');
+      bar.classList.remove('is-bump');
+      void bar.offsetWidth;
+      bar.classList.add('is-bump');
+      clearTimeout(bumpTimer);
+      bumpTimer = setTimeout(() => bar.classList.remove('is-bump'), 360);
+    }
+    function flyToCart(p, fromRect) {
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const target = $('barBtn').hidden ? $('cartbar') : $('barBtn');
+      const to = target.getBoundingClientRect();
+      if (reduced || !fromRect || to.width < 2) {
+        bumpCart();
+        return;
+      }
+      const size = 76;
+      const startLeft = fromRect.left + fromRect.width / 2 - size / 2;
+      const startTop = fromRect.top + fromRect.height / 2 - size / 2;
+      const dx = to.left + to.width / 2 - size / 2 - startLeft;
+      const dy = to.top + to.height / 2 - size / 2 - startTop;
+      const ghost = document.createElement('div');
+      ghost.className = 'fly-ghost';
+      ghost.setAttribute('aria-hidden', 'true');
+      ghost.textContent = p.emoji;
+      ghost.style.background = p.grad;
+      ghost.style.left = startLeft + 'px';
+      ghost.style.top = startTop + 'px';
+      ghost.style.width = size + 'px';
+      ghost.style.height = size + 'px';
+      document.body.appendChild(ghost);
+      const midX = dx * 0.42;
+      const midY = dy * 0.28 - 72;
+      const anim = ghost.animate(
+        [
+          { transform: 'translate3d(0,0,0) scale(1)', opacity: 1 },
+          { transform: 'translate3d(' + midX + 'px,' + midY + 'px,0) scale(0.86)', opacity: 1, offset: 0.55 },
+          { transform: 'translate3d(' + dx + 'px,' + dy + 'px,0) scale(0.28)', opacity: 0.15 }
+        ],
+        { duration: 680, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: 'forwards' }
+      );
+      anim.finished.then(() => {
+        ghost.remove();
+        bumpCart();
+      }).catch(() => ghost.remove());
+    }
+    function addDraft() {
+      const d = state.draft;
+      if (!d) return;
+      const p = product(d.id);
+      const source = document.querySelector('#varyGrid .var-card.is-on, #recGrid .rec-card.is-on, #varyItem .pick-art, #recItem .pick-art');
+      const fromRect = source ? source.getBoundingClientRect() : flyOrigin;
+      const key = [p.id, d.sizeId || '', [...d.extras].sort().join('+'), [...d.notes].sort().join('+')].join('~');
+      const existing = state.cart.find((l) => l.key === key);
+      if (existing) existing.qty = Math.min(10, existing.qty + d.qty);
+      else state.cart.push({ key, productId: p.id, qty: d.qty, sizeId: d.sizeId, extras: [...d.extras], notes: [...d.notes] });
+      (d.recs || []).forEach((id) => {
+        const recKey = id + '~rec';
+        const recLine = state.cart.find((l) => l.key === recKey);
+        if (recLine) recLine.qty = Math.min(10, recLine.qty + d.qty);
+        else state.cart.push({ key: recKey, productId: id, qty: d.qty, sizeId: null, extras: [], notes: [] });
+      });
+      const name = loc(p).name;
+      state.draft = null;
+      flyOrigin = null;
+      $('itemOverlay').hidden = true;
+      state.coachSeen = true;
+      toast(t('added') + ' · ' + name);
+      show('menu');
+      flyToCart(p, fromRect);
+    }
+    function startDoneTimer() {
+      clearInterval(doneTick);
+      let left = 20;
+      const paint = () => { $('doneCount').textContent = tf('goingHome', { n: left }); };
+      paint();
+      doneTick = setInterval(() => {
+        left -= 1;
+        if (left <= 0) {
+          clearInterval(doneTick);
+          resetOrder();
+          return;
+        }
+        paint();
+      }, 1000);
+    }
+    function finishOrder() {
+      state.ticket = nextTicket;
+      nextTicket += 1;
+      show('done');
+      startDoneTimer();
+    }
+    function sendOrder() {
+      show('sending');
+      cardTimer = setTimeout(finishOrder, 1000);
+    }
+    function beginCard() {
+      show('card');
+      $('cardAmount').textContent = money(cartTotal());
+      const bar = $('cardBar');
+      bar.style.animation = 'none';
+      void bar.offsetWidth;
+      bar.style.animation = 'load 3.5s linear forwards';
+      cardTimer = setTimeout(sendOrder, 3500);
+    }
+    function typeChar(ch) {
+      if (state.nameRaw.length >= 18) return;
+      if (ch === ' ' && (state.nameRaw.length === 0 || state.nameRaw.endsWith(' '))) return;
+      state.nameRaw += ch;
+      $('nameError').hidden = true;
+      renderName();
+    }
+    function typeDelete() {
+      state.nameRaw = state.nameRaw.slice(0, -1);
+      $('nameError').hidden = true;
+      renderName();
+    }
+    function buildKeyboard() {
+      const rows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+      $('keyboard').innerHTML = rows.map((row) => {
+        const keys = row.split('').map((ch) => '<button type="button" class="key" data-key="' + ch + '">' + ch.toUpperCase() + '</button>').join('');
+        return '<div class="keyrow">' + keys + '</div>';
+      }).join('') + '<div class="keyrow"><button type="button" class="key space" data-key="space"></button><button type="button" class="key del" data-key="del"></button></div>';
+    }
+
+    function init() {
+      buildKeyboard();
+      $('startBtn').addEventListener('click', () => show('mode'));
+      document.querySelectorAll('[data-set-lang]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.lang = btn.dataset.setLang;
+          if (state.screen === 'attract') show('mode');
+          else refresh();
+        });
+      });
+      $('langToggle').addEventListener('click', () => {
+        state.lang = state.lang === 'en' ? 'es' : 'en';
+        refresh();
+      });
+      $('backBtn').addEventListener('click', goBack);
+      $('helpBtn').addEventListener('click', () => {
+        $('staffPanel').hidden = true;
+        $('helpOverlay').hidden = false;
+      });
+      $('closeHelp').addEventListener('click', () => { $('helpOverlay').hidden = true; });
+      $('callStaff').addEventListener('click', () => { $('staffPanel').hidden = false; });
+      $('helpOverlay').addEventListener('click', (e) => { if (e.target === $('helpOverlay')) $('helpOverlay').hidden = true; });
+      $('resetBtn').addEventListener('click', () => { $('resetOverlay').hidden = false; });
+      $('resetNo').addEventListener('click', () => { $('resetOverlay').hidden = true; });
+      $('resetYes').addEventListener('click', resetOrder);
+      $('resetOverlay').addEventListener('click', (e) => { if (e.target === $('resetOverlay')) $('resetOverlay').hidden = true; });
+      $('pickDine').addEventListener('click', () => { state.mode = 'dine'; show('table'); });
+      $('pickTake').addEventListener('click', () => { state.mode = 'take'; state.table = null; show('menu'); });
+      $('contextBar').addEventListener('click', () => {
+        if (state.mode === 'dine') show('table');
+        else show('mode');
+      });
+      $('tables').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-table]');
+        if (!b) return;
+        if (b.dataset.busy === '1') { toast(t('tableBusy')); return; }
+        state.table = b.dataset.table;
+        renderTables();
+      });
+      $('noTableBtn').addEventListener('click', () => { state.table = 'counter'; renderTables(); });
+      $('tableContinue').addEventListener('click', () => { if (state.table) show('menu'); });
+      $('cats').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-cat]');
+        if (!b) return;
+        state.category = b.dataset.cat;
+        renderCats();
+        renderGrid();
+        $('grid').scrollTop = 0;
+      });
+      $('grid').addEventListener('click', (e) => {
+        if (e.target.closest('[data-act="hide-coach"]')) {
+          state.coachSeen = true;
+          renderGrid();
+          return;
+        }
+        const card = e.target.closest('[data-id]');
+        if (!card || card.disabled) return;
+        openItem(card.dataset.id, card.getBoundingClientRect());
+      });
+      $('varyGrid').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-size]');
+        if (!b || !state.draft) return;
+        const p = product(state.draft.id);
+        state.draft.sizeId = b.dataset.size;
+        if (needsOptional(p)) { state.draft.step = 0; show('recommend'); }
+        else addDraft();
+      });
+      $('varyLess').addEventListener('click', () => {
+        if (!state.draft || state.draft.qty <= 1) return;
+        state.draft.qty -= 1;
+        renderVary();
+      });
+      $('varyMore').addEventListener('click', () => {
+        if (!state.draft || state.draft.qty >= 10) return;
+        state.draft.qty += 1;
+        renderVary();
+      });
+      $('varyNext').addEventListener('click', () => {
+        if (!state.draft) return;
+        const p = product(state.draft.id);
+        if (hasSizes(p) && !state.draft.sizeId) return;
+        if (needsOptional(p)) { state.draft.step = 0; show('recommend'); }
+        else addDraft();
+      });
+      $('recLess').addEventListener('click', () => {
+        if (!state.draft || state.draft.qty <= 1) return;
+        state.draft.qty -= 1;
+        renderRecommend();
+      });
+      $('recMore').addEventListener('click', () => {
+        if (!state.draft || state.draft.qty >= 10) return;
+        state.draft.qty += 1;
+        renderRecommend();
+      });
+      $('recGrid').addEventListener('click', (e) => {
+        if (e.target.closest('.one-card')) answerStep(true);
+      });
+      $('recSkip').addEventListener('click', () => answerStep(false));
+      $('barBtn').addEventListener('click', () => { if (cartCount()) show('cart'); });
+      $('cartList').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-act]');
+        if (!b) return;
+        if (b.dataset.act === 'more') { show('menu'); return; }
+        const line = state.cart.find((l) => l.key === b.dataset.key);
+        if (!line) return;
+        if (b.dataset.act === 'inc' && line.qty < 10) line.qty += 1;
+        if (b.dataset.act === 'dec' && line.qty > 1) line.qty -= 1;
+        if (b.dataset.act === 'remove') {
+          if (state.removeArmed === line.key) {
+            state.cart = state.cart.filter((l) => l.key !== line.key);
+            state.removeArmed = null;
+          } else {
+            state.removeArmed = line.key;
+            clearTimeout(removeTimer);
+            removeTimer = setTimeout(() => {
+              if (state.removeArmed === line.key) state.removeArmed = null;
+              renderCart();
+            }, 4000);
+          }
+        }
+        renderCart();
+        renderCartBar();
+      });
+      $('cartNext').addEventListener('click', () => {
+        if (!state.cart.length) return;
+        show(state.mode === 'take' ? 'name' : 'pay');
+      });
+      $('cartMore').addEventListener('click', () => show('menu'));
+      $('keyboard').addEventListener('click', (e) => {
+        const key = e.target.closest('[data-key]');
+        if (!key) return;
+        if (key.dataset.key === 'del') typeDelete();
+        else if (key.dataset.key === 'space') typeChar(' ');
+        else typeChar(key.dataset.key);
+      });
+      $('nameContinue').addEventListener('click', () => {
+        const shown = displayName().trim();
+        if (!shown) {
+          $('nameError').hidden = false;
+          $('nameError').textContent = t('nameEmpty');
+          const box = $('nameDisplay');
+          box.classList.remove('shake');
+          void box.offsetWidth;
+          box.classList.add('shake');
+          return;
+        }
+        state.guest = false;
+        state.name = shown;
+        show('pay');
+      });
+      $('nameSkip').addEventListener('click', () => {
+        state.guest = true;
+        state.name = '';
+        $('nameError').hidden = true;
+        show('pay');
+      });
+      $('pickCash').addEventListener('click', () => { state.pay = 'cash'; renderPay(); });
+      $('pickCard').addEventListener('click', () => { state.pay = 'card'; renderPay(); });
+      $('placeBtn').addEventListener('click', () => {
+        if (!state.pay || !state.cart.length) return;
+        if (state.pay === 'card') beginCard();
+        else sendOrder();
+      });
+      $('cancelCard').addEventListener('click', () => show('pay'));
+      $('newOrder').addEventListener('click', resetOrder);
+      $('screen-done').addEventListener('pointerdown', (e) => {
+        if (e.target.closest('#newOrder')) return;
+        if (state.screen === 'done') startDoneTimer();
+      });
+      $('itemSheet').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-act]');
+        if (!b || !state.draft) return;
+        const act = b.dataset.act;
+        if (act === 'close') { closeItem(); return; }
+        if (act === 'add') { addDraft(); return; }
+        if (act === 'qty') {
+          const dir = Number(b.dataset.dir);
+          state.draft.qty = Math.min(10, Math.max(1, state.draft.qty + dir));
+        }
+        if (act === 'size') state.draft.sizeId = b.dataset.value;
+        if (act === 'extra') toggleIn(state.draft.extras, b.dataset.value);
+        if (act === 'rec') toggleIn(state.draft.recs, b.dataset.value);
+        if (act === 'note') toggleIn(state.draft.notes, b.dataset.value);
+        renderItem();
+      });
+      $('idleStay').addEventListener('click', () => { hideIdle(); bumpIdle(); });
+      $('idleLeave').addEventListener('click', resetOrder);
+      document.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('#idleOverlay')) return;
+        bumpIdle();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (!$('idleOverlay').hidden) return;
+        if (!$('resetOverlay').hidden) { $('resetOverlay').hidden = true; return; }
+        if (!$('helpOverlay').hidden) { $('helpOverlay').hidden = true; return; }
+        if (!$('itemOverlay').hidden) closeItem();
+      });
+      const style = document.createElement('style');
+      style.textContent = '@keyframes load { to { width: 100%; } }';
+      document.head.appendChild(style);
+      show('attract');
+    }
+    init();
+  </script>
+</body>
+</html>

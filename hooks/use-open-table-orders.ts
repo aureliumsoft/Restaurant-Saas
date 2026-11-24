@@ -144,6 +144,32 @@ export function useOpenTableOrders(branchId: string | null) {
   };
 }
 
+export function useOpenTableCount(branchId: string | null) {
+  const key = branchId
+    ? ([...queryKeys.tableOpenOrders(branchId), 'count'] as const)
+    : null;
+  const { data, mutate } = useSWR(
+    key,
+    async () => {
+      const res = await axios.get<{ count?: number }>(
+        '/api/restaurant/table-orders/open',
+        { params: { branchId, tables: '1' } }
+      );
+      return res.data.count ?? 0;
+    },
+    { revalidateOnFocus: false, dedupingInterval: 2_000 }
+  );
+  useRealtimeRefresh(
+    'refreshTableOrders',
+    () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      void mutate();
+    },
+    { runOnMount: false }
+  );
+  return data ?? 0;
+}
+
 /** Instant UI update after place / kitchen — no network round-trip. */
 export function upsertOptimisticOpenTableOrder(
   branchId: string | null,
@@ -204,11 +230,14 @@ export function revalidateOpenTableOrders(
 ) {
   if (!branchId) return;
   const key = queryKeys.tableOpenOrders(branchId);
+  const countKey = [...queryKeys.tableOpenOrders(branchId), 'count'];
   if (delayMs <= 0) {
     void globalMutate(key);
+    void globalMutate(countKey);
     return;
   }
   window.setTimeout(() => {
     void globalMutate(key);
+    void globalMutate(countKey);
   }, delayMs);
 }

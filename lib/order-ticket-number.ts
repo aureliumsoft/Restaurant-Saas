@@ -19,8 +19,7 @@ export async function allocateTicketNumber(
     restaurantId: string;
     ticketDate: Date;
     branchId: string | null;
-  },
-  maxAttempts = 16
+  }
 ): Promise<number> {
   const scopedPrevious = await tx.order.findFirst({
     where: {
@@ -32,23 +31,7 @@ export async function allocateTicketNumber(
     select: { ticketNumber: true },
   });
 
-  let candidate = (scopedPrevious?.ticketNumber ?? 0) + 1;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const scopedTaken = await tx.order.findFirst({
-      where: {
-        restaurantId: args.restaurantId,
-        ticketDate: args.ticketDate,
-        branchId: args.branchId,
-        ticketNumber: candidate,
-      },
-      select: { id: true },
-    });
-    if (!scopedTaken) return candidate;
-    candidate += 1;
-  }
-
-  throw new Error('Could not allocate ticket number');
+  return (scopedPrevious?.ticketNumber ?? 0) + 1;
 }
 
 export function isTicketNumberConflict(e: unknown): boolean {

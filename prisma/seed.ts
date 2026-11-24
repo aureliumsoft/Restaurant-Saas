@@ -28,7 +28,7 @@ async function main() {
   await ensureAllRestaurantsOwnerRoles(prisma);
   await refreshAllRestaurantOwnerRoles(prisma);
   await seedDemoRestaurant(prisma);
-  await seedSubscriptionPlans(prisma);
+  await seedSubscriptionPlans(prisma, { missingOnly: true });
 
   if (process.env.SEED_LEGACY_PRODUCT_STOCK === 'true') {
     await prisma.productStock.deleteMany({});

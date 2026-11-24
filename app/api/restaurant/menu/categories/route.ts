@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { estimateDataUrlBytes, isAcceptedImageValue } from '@/lib/image-data-url';
 import {
   loadRestaurantMenuCategoriesMeta,
+  loadRestaurantPosCustomizeIndex,
   loadRestaurantPosMenuCatalog,
 } from '@/lib/menu/load-restaurant-menu-progressive';
 import {
@@ -132,7 +133,13 @@ export async function GET(req: NextRequest) {
       if (!branch) {
         return NextResponse.json({ error: 'Invalid branch.' }, { status: 400 });
       }
-      const data = await loadRestaurantPosMenuCatalog(auth.restaurant.id, branchId);
+      const [data, customizeIndex] = await Promise.all([
+        loadRestaurantPosMenuCatalog(auth.restaurant.id, branchId),
+        loadRestaurantPosCustomizeIndex(auth.restaurant.id).catch((error) => {
+          console.error('pos customize index', error);
+          return null;
+        }),
+      ]);
       if (!data) {
         return NextResponse.json(
           { error: 'Restaurant not found' },
@@ -140,11 +147,11 @@ export async function GET(req: NextRequest) {
         );
       }
       return NextResponse.json(
-        { data },
+        { data: customizeIndex ? { ...data, customizeIndex } : data },
         {
           status: 200,
           headers: {
-            'Cache-Control': 'private, no-store',
+            'Cache-Control': 'private, max-age=20',
           },
         }
       );

@@ -304,6 +304,57 @@ export function getNextBranchOpenAt(
   return null;
 }
 
+/** 09:00 → 09:00 am, 17:00 → 05:00 pm. */
+export function formatOpeningClock(time: string | null | undefined): string {
+  const normalized = normalizeTimeValue(time);
+  const [hourText, minuteText] = normalized.split(':');
+  let hours = Number(hourText);
+  const suffix = hours >= 12 ? 'pm' : 'am';
+  hours %= 12;
+  if (hours === 0) hours = 12;
+  return `${String(hours).padStart(2, '0')}:${minuteText} ${suffix}`;
+}
+
+export type BranchStatusWindow = {
+  dayOffset: number;
+  dayOfWeek: number;
+  openTime: string;
+  closeTime: string;
+};
+
+/** Today's open window, or the next day the branch is scheduled to open. */
+export function getBranchStatusWindow(
+  branchHours: BranchOpeningHours | null | undefined,
+  now = new Date(),
+  timeZone?: string | null
+): BranchStatusWindow | null {
+  const hours = Array.isArray(branchHours) ? branchHours : [];
+  if (hours.length === 0) return null;
+
+  const zonedNow = getZonedParts(now, timeZone);
+  for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
+    const civil = addCivilDays(
+      zonedNow.year,
+      zonedNow.month,
+      zonedNow.day,
+      dayOffset
+    );
+    const noon = timeZone
+      ? zonedWallToUtc(civil.year, civil.month, civil.day, 12, 0, timeZone)
+      : new Date(civil.year, civil.month - 1, civil.day, 12, 0, 0);
+    const dayOfWeek = getZonedParts(noon, timeZone).dayOfWeek;
+    const openingHour = getBranchOpeningHour(hours, dayOfWeek);
+    if (!openingHour?.isOpen) continue;
+    return {
+      dayOffset,
+      dayOfWeek,
+      openTime: openingHour.openTime,
+      closeTime: openingHour.closeTime,
+    };
+  }
+  return null;
+}
+
 export function getBranchCloseTimeToday(
   branchHours: BranchOpeningHours | null | undefined,
   now = new Date(),

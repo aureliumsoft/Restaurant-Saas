@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { claimPlatformOrderIntent } from '@/lib/order-intent-claim';
 import {
   createCustomerOrder,
   parseCustomerOrderPayload,
@@ -27,22 +28,12 @@ async function fulfillWalletOrderIntent(params: {
   providerTxnId: string;
   baseUrl: string;
 }): Promise<WalletOrderIntentResult> {
-  const row = await db.platformSetting.findUnique({
-    where: { key: params.intentKey },
-    select: { value: true },
-  });
-  if (!row) return { status: 'skipped' };
-
-  let parsed: OrderIntentPayload | undefined;
-  try {
-    parsed = JSON.parse(row.value) as OrderIntentPayload;
-  } catch {
-    throw new Error(`Invalid order intent payload for ${params.intentKey}`);
+  const claimed = await claimPlatformOrderIntent(params.intentKey);
+  if (claimed.state === 'missing' || claimed.state === 'invalid') {
+    return { status: claimed.state === 'missing' ? 'skipped' : 'failed' };
   }
-
-  if (!parsed?.endpoint || !parsed.payload) return { status: 'skipped' };
-
-  if (parsed.status === 'completed') {
+  if (claimed.state === 'completed') {
+    const parsed = claimed.parsed as OrderIntentPayload;
     return {
       status: 'already_completed',
       orderId:
@@ -54,6 +45,15 @@ async function fulfillWalletOrderIntent(params: {
       ticketNumber:
         typeof parsed.ticketNumber === 'number' ? parsed.ticketNumber : null,
     };
+  }
+
+  const parsed = claimed.parsed as OrderIntentPayload;
+  if (!parsed?.endpoint || !parsed.payload) {
+    await db.platformSetting.update({
+      where: { key: params.intentKey },
+      data: { value: JSON.stringify({ ...parsed, status: 'failed' }) },
+    });
+    return { status: 'skipped' };
   }
 
   if (parsed.endpoint === '/api/customer/orders') {

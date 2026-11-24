@@ -233,13 +233,16 @@ export function PosRecentOrdersSheet({
   const fetchOrderDetail = async (
     orderId: string,
     source: 'pos' | 'kiosk',
-    urlId?: string
+    urlId?: string,
+    receipt = false
   ) => {
     const path =
       source === 'kiosk'
         ? kioskOrderApiPath(orderId, '', urlId)
         : posOrderApiPath(orderId, '', urlId);
-    const res = await axios.get<{ data: PosOrderDetail }>(path);
+    const res = await axios.get<{ data: PosOrderDetail }>(path, {
+      params: receipt ? { receipt: '1' } : undefined,
+    });
     return res.data.data;
   };
 
@@ -247,7 +250,7 @@ export function PosRecentOrdersSheet({
     setPrintBusyId(order.id);
     try {
       const source = orderSource(order);
-      const detail = await fetchOrderDetail(order.id, source, order.urlId);
+      const detail = await fetchOrderDetail(order.id, source, order.urlId, true);
       const subtotal = detail.items.reduce(
         (sum, item) => sum + item.unitPrice * item.quantity,
         0

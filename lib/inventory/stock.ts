@@ -1,11 +1,10 @@
-import type { IngredientUnit, Prisma } from '@prisma/client';
+import { Prisma, type IngredientUnit } from '@prisma/client';
 
 import { db } from '@/lib/db';
 
 import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
 import { INGREDIENT_UNIT_VALUES } from '@/lib/inventory/validation';
 import {
-  decrementBranchIngredientStock,
   loadBranchStockQuantities,
   resolveBranchIdForStock,
 } from '@/lib/inventory/branch-stock';
@@ -84,7 +83,10 @@ type InventoryReadTx = Pick<typeof db, 'menuItem' | 'branchIngredientStock'>;
 type InventoryTx = Pick<
   typeof db,
   'menuItem' | 'ingredient' | 'branchIngredientStock' | 'ingredientStockEntry'
->;
+> & {
+  $queryRaw: <T = unknown>(query: Prisma.Sql) => Promise<T>;
+  $executeRaw: (query: Prisma.Sql) => Promise<number>;
+};
 
 function collectMenuItemIds(lines: StockOrderLine[]): string[] {
   const ids = new Set<string>();
@@ -107,7 +109,7 @@ function recipesForLine(
   strictVariation: boolean
 ) {
   if (item.variations.length > 0) {
-    const vid = variationId?.trim() || item.variations[0]?.id || null;
+    const vid = variationId?.trim() || null;
     if (!vid) {
       if (strictVariation) {
         throw new Error('Select a variation for this product.');
@@ -339,6 +341,134 @@ export async function assertIngredientsAvailableForOrder(
 }
 
 /**
+ * One update for every ingredient on the order, then one catalog total refresh.
+ * The old path ran three queries per ingredient and held the order transaction open.
+ */
+async function deductBranchIngredients(
+  tx: InventoryTx,
+  branchId: string,
+  needed: Map<string, { name: string; needed: number; onHand: number }>,
+  requireAvailableStock: boolean
+): Promise<void> {
+  const rows = [...needed.entries()].filter(([, row]) => row.needed > 0);
+  if (rows.length === 0) return;
+
+  const values = Prisma.join(
+    rows.map(
+      ([ingredientId, row]) =>
+        Prisma.sql`(${ingredientId}, ${row.needed}::double precision)`
+    )
+  );
+
+  const updated = await tx.$queryRaw<Array<{ ingredientId: string }>>(
+    Prisma.sql`
+      UPDATE "BranchIngredientStock" AS s
+      SET quantity = s.quantity - v.amount,
+          "updatedAt" = CURRENT_TIMESTAMP
+      FROM (VALUES ${values}) AS v(ingredient_id, amount)
+      WHERE s."branchId" = ${branchId}
+        AND s."ingredientId" = v.ingredient_id
+        AND (
+          ${requireAvailableStock} = FALSE
+          OR s.quantity >= v.amount
+        )
+      RETURNING s."ingredientId" AS "ingredientId"
+    `
+  );
+
+  if (requireAvailableStock) {
+    const updatedIds = new Set(updated.map((row) => row.ingredientId));
+    for (const [ingredientId, row] of rows) {
+      if (!updatedIds.has(ingredientId)) {
+        throw new MajorIngredientOutOfStockError(row.name);
+      }
+    }
+  }
+
+  const ids = rows.map(([ingredientId]) => ingredientId);
+  await tx.$executeRaw(
+    Prisma.sql`
+      UPDATE "Ingredient" AS i
+      SET quantity = COALESCE(sums.total, 0),
+          "updatedAt" = CURRENT_TIMESTAMP
+      FROM (
+        SELECT b."ingredientId" AS id, SUM(b.quantity) AS total
+        FROM "BranchIngredientStock" b
+        WHERE b."ingredientId" IN (${Prisma.join(ids)})
+        GROUP BY b."ingredientId"
+      ) AS sums
+      WHERE i.id = sums.id
+    `
+  );
+}
+
+/**
+ * Put an order's previous consumption back on the branch, then drop those
+ * ledger rows so a later edit can deduct the new cart once.
+ */
+export async function restoreIngredientsForOrder(
+  tx: InventoryTx,
+  orderId: string
+): Promise<void> {
+  const entries = await tx.ingredientStockEntry.findMany({
+    where: { orderId, source: 'ORDER' },
+    select: { id: true, branchId: true, ingredientId: true, quantity: true },
+  });
+  if (entries.length === 0) return;
+
+  const byBranch = new Map<string, Map<string, number>>();
+  for (const entry of entries) {
+    if (!entry.branchId || !(entry.quantity > 0)) continue;
+    const amounts = byBranch.get(entry.branchId) ?? new Map<string, number>();
+    amounts.set(
+      entry.ingredientId,
+      (amounts.get(entry.ingredientId) ?? 0) + entry.quantity
+    );
+    byBranch.set(entry.branchId, amounts);
+  }
+
+  for (const [branchId, amounts] of byBranch) {
+    const rows = [...amounts.entries()];
+    if (rows.length === 0) continue;
+    const values = Prisma.join(
+      rows.map(
+        ([ingredientId, amount]) =>
+          Prisma.sql`(${ingredientId}, ${amount}::double precision)`
+      )
+    );
+    await tx.$executeRaw(
+      Prisma.sql`
+        UPDATE "BranchIngredientStock" AS s
+        SET quantity = s.quantity + v.amount,
+            "updatedAt" = CURRENT_TIMESTAMP
+        FROM (VALUES ${values}) AS v(ingredient_id, amount)
+        WHERE s."branchId" = ${branchId}
+          AND s."ingredientId" = v.ingredient_id
+      `
+    );
+    const ids = rows.map(([ingredientId]) => ingredientId);
+    await tx.$executeRaw(
+      Prisma.sql`
+        UPDATE "Ingredient" AS i
+        SET quantity = COALESCE(sums.total, 0),
+            "updatedAt" = CURRENT_TIMESTAMP
+        FROM (
+          SELECT b."ingredientId" AS id, SUM(b.quantity) AS total
+          FROM "BranchIngredientStock" b
+          WHERE b."ingredientId" IN (${Prisma.join(ids)})
+          GROUP BY b."ingredientId"
+        ) AS sums
+        WHERE i.id = sums.id
+      `
+    );
+  }
+
+  await tx.ingredientStockEntry.deleteMany({
+    where: { id: { in: entries.map((entry) => entry.id) } },
+  });
+}
+
+/**
  * Deduct recipe quantities for an order from the order branch only.
  */
 export async function consumeIngredientsForOrder(
@@ -380,19 +510,7 @@ export async function consumeIngredientsForOrder(
     }
   }
 
-  for (const [ingredientId, row] of needed) {
-    const deduct = row.needed;
-    if (!(deduct > 0)) continue;
-    const ok = await decrementBranchIngredientStock(tx, {
-      branchId,
-      ingredientId,
-      amount: deduct,
-      requireAvailable: requireAvailableStock,
-    });
-    if (requireAvailableStock && !ok) {
-      throw new MajorIngredientOutOfStockError(row.name);
-    }
-  }
+  await deductBranchIngredients(tx, branchId, needed, requireAvailableStock);
 
   const entries: Prisma.IngredientStockEntryCreateManyInput[] = [];
   for (const part of parts.values()) {

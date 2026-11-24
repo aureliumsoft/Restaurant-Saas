@@ -205,12 +205,13 @@ export function publicRestaurantImageUrls(
       : hasStoredImageValue(row.mainBannerUrl);
 
   return {
-    // Prefer Supabase/public URLs already on the row; proxy only for legacy base64.
+    // Prefer a public URL already on the row. Legacy base64 stays on the image route.
     logoUrl: hasLogo
-      ? resolveStoredImageUrl(row.logoUrl, proxy('logo'))
+      ? (resolveStoredImageUrl(row.logoUrl, proxy('logo')) ?? proxy('logo'))
       : null,
     mainBannerUrl: hasMainBanner
-      ? resolveStoredImageUrl(row.mainBannerUrl, proxy('mainBanner'))
+      ? (resolveStoredImageUrl(row.mainBannerUrl, proxy('mainBanner')) ??
+        proxy('mainBanner'))
       : null,
     menuBannerUrls: (row.menuBannerUrls ?? [])
       .map((url, index) =>

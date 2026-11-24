@@ -6,6 +6,7 @@ import {
   getBranchScopeFromRequest,
   userIsOwnerOrAdmin,
 } from '@/lib/branch/branch-scope';
+import { loadResolvedBranchTimeZone } from '@/lib/branch-timezone-server';
 import { db } from '@/lib/db';
 import { listBranchStockForIngredients } from '@/lib/inventory/branch-stock';
 import {
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest) {
     canViewHistorical,
     fromParam: req.nextUrl.searchParams.get('from'),
     toParam: req.nextUrl.searchParams.get('to'),
+    timeZone: await loadResolvedBranchTimeZone(rid, branchId),
   });
 
   const branchSql = branchId

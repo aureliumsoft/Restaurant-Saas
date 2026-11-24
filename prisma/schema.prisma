@@ -392,6 +392,8 @@ model Branch {
   longitude           Float?
   deliveryRadiusKm    Float?
   openingHours        Json?    @default("[]")
+  /// IANA timezone for hours, receipts, the website, kiosk, and kitchen.
+  timeZone            String   @default("")
   /// Guest order time-slot length in minutes (15 | 30 | 60).
   slotDurationMinutes Int      @default(30)
   /// Dining floor plan grid size for this branch.

@@ -341,7 +341,10 @@ export function PayPalCheckoutButtons({
     if (paypalSlot) paypalSlot.innerHTML = '';
     if (cardSlot) cardSlot.innerHTML = '';
 
-    const createOrder = async () => {
+    let createInFlight: Promise<string> | null = null;
+    const createOrder = () => {
+      if (createInFlight) return createInFlight;
+      createInFlight = (async () => {
       const {
         amount: latestAmount,
         currency: latestCurrency,
@@ -377,6 +380,10 @@ export function PayPalCheckoutButtons({
         );
       }
       return body.id;
+      })().finally(() => {
+        createInFlight = null;
+      });
+      return createInFlight;
     };
 
     const onApprove = async (data: { orderID: string }) => {

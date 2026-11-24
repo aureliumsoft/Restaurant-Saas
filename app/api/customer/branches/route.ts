@@ -3,11 +3,9 @@ import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { withUrlIds } from '@/lib/with-url-id';
+import { resolveBranchTimeZone } from '@/lib/branch-timezone';
 import { normalizeOpeningHours } from '@/lib/order-time-slots';
-import {
-  parseRestaurantRegionalSettings,
-  timezoneForRestaurantCountry,
-} from '@/lib/restaurant-regional';
+import { parseRestaurantRegionalSettings } from '@/lib/restaurant-regional';
 
 function getSubdomainFromHost(hostname: string) {
   if (hostname.endsWith('.localhost')) {
@@ -60,22 +58,24 @@ export async function GET(req: NextRequest) {
             longitude: true,
             deliveryRadiusKm: true,
             openingHours: true,
+            timeZone: true,
           },
         },
       },
     });
 
     const regional = parseRestaurantRegionalSettings(restaurant);
-    const timeZone = timezoneForRestaurantCountry(regional.countryCode);
+    const branches = withUrlIds(restaurant?.branches ?? []).map((branch) => ({
+      ...branch,
+      openingHours: normalizeOpeningHours(branch.openingHours),
+      timeZone: resolveBranchTimeZone(branch.timeZone, regional.countryCode),
+    }));
 
     return NextResponse.json(
       {
-        data: withUrlIds(restaurant?.branches ?? []).map((branch) => ({
-          ...branch,
-          openingHours: normalizeOpeningHours(branch.openingHours),
-        })),
+        data: branches,
         countryCode: regional.countryCode,
-        timeZone,
+        timeZone: branches[0]?.timeZone ?? resolveBranchTimeZone('', regional.countryCode),
       },
       { status: 200 }
     );

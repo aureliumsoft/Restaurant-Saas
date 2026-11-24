@@ -11,11 +11,7 @@ import {
 } from '@/lib/restaurant-regional';
 import { isKioskSyntheticCustomerPhone } from '@/lib/kiosk-customer';
 import { receiptLinesFromOrderItem } from '@/lib/receipt-item-lines';
-import {
-  buildThermalReceiptHeaderHtml,
-  escapeHtml,
-  getThermalReceiptDocumentCss,
-} from '@/lib/thermal-receipt-html';
+import { formatBranchDateTime } from '@/lib/branch-timezone';
 import {
   PAPER_80MM_DOTS,
   renderThermalReceiptPng,
@@ -27,6 +23,56 @@ export type PrintKioskReceiptParams = {
   branchId: string;
   orderId: string;
 };
+
+const RECEIPT_SNAPSHOT_KEY = 'foodluk-kiosk-receipt-snapshot';
+const PRINTER_BASE_KEY = 'foodluk-kiosk-printer-base';
+/** Localhost should answer quickly. A dead address must not hold the customer. */
+const PRINTER_TRY_MS = 700;
+
+export type KioskReceiptSnapshot = {
+  orderId: string;
+  trackingId: string;
+  sent?: boolean;
+  restaurantName: string;
+  branchName: string | null;
+  dateTime: string;
+  ticketNo: number | null;
+  paymentMethod: string;
+  paymentState: string;
+  tableName: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  mode: string;
+  note: string | null;
+  items: ReceiptLineItem[];
+  subtotal: number;
+  tax: number;
+  discount: number;
+  paidAmount: number;
+  change: number;
+  total: number;
+  regional?: Partial<RestaurantRegionalSettings> | null;
+};
+
+export function saveKioskReceiptSnapshot(snapshot: KioskReceiptSnapshot) {
+  try {
+    sessionStorage.setItem(RECEIPT_SNAPSHOT_KEY, JSON.stringify(snapshot));
+  } catch {
+    // ignore
+  }
+}
+
+export function retargetKioskReceiptSnapshot(orderId: string) {
+  const snapshot = readSnapshotRecord();
+  if (!snapshot) return;
+  saveKioskReceiptSnapshot({ ...snapshot, orderId });
+}
+
+export function kioskReceiptAlreadySent(orderId: string): boolean {
+  const snapshot = readSnapshotRecord();
+  if (!snapshot?.sent) return false;
+  return snapshot.orderId === orderId || snapshot.trackingId === orderId;
+}
 
 type ReceiptLineItem = {
   name: string;
@@ -147,10 +193,11 @@ function localPrintBaseUrls(): string[] {
  */
 async function printViaLocalApiOnce(
   base: string,
-  text: string
+  text: string,
+  timeoutMs = PRINTER_TRY_MS
 ): Promise<boolean> {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 8_000);
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`${base}/print`, {
       method: 'POST',
@@ -175,22 +222,115 @@ async function printViaLocalApiOnce(
   }
 }
 
-async function printViaLocalApi(text: string): Promise<boolean> {
-  for (const base of localPrintBaseUrls()) {
-    if (await printViaLocalApiOnce(base, text)) return true;
+function rememberedPrinterBase(): string {
+  try {
+    return localStorage.getItem(PRINTER_BASE_KEY)?.trim() || '';
+  } catch {
+    return '';
   }
-  return false;
+}
+
+function rememberPrinterBase(base: string) {
+  try {
+    localStorage.setItem(PRINTER_BASE_KEY, base);
+  } catch {
+    // ignore
+  }
+}
+
+async function printViaLocalApi(text: string): Promise<boolean> {
+  const urls = localPrintBaseUrls();
+  const remembered = rememberedPrinterBase();
+  const ordered = [
+    ...(remembered ? [remembered] : []),
+    ...urls.filter((url) => url !== remembered),
+  ];
+  if (ordered.length === 0) return false;
+
+  const [first, ...rest] = ordered;
+  if (first && (await printViaLocalApiOnce(first, text, PRINTER_TRY_MS))) {
+    rememberPrinterBase(first);
+    return true;
+  }
+
+  const winner = await Promise.all(
+    rest.map(async (base) =>
+      (await printViaLocalApiOnce(base, text, PRINTER_TRY_MS)) ? base : ''
+    )
+  );
+  const found = winner.find(Boolean);
+  if (!found) return false;
+  rememberPrinterBase(found);
+  return true;
+}
+
+function readSnapshotRecord(): KioskReceiptSnapshot | null {
+  try {
+    const raw = sessionStorage.getItem(RECEIPT_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const snapshot = JSON.parse(raw) as KioskReceiptSnapshot;
+    if (!snapshot || !Array.isArray(snapshot.items)) return null;
+    return snapshot;
+  } catch {
+    return null;
+  }
+}
+
+function markSnapshotSent() {
+  const snapshot = readSnapshotRecord();
+  if (!snapshot) return;
+  saveKioskReceiptSnapshot({ ...snapshot, sent: true });
+}
+
+function modelFromSnapshot(snapshot: KioskReceiptSnapshot): ReceiptModel {
+  const regional = parseRestaurantRegionalSettings(snapshot.regional);
+  const phone = isKioskSyntheticCustomerPhone(snapshot.customerPhone)
+    ? null
+    : snapshot.customerPhone;
+  return {
+    restaurantName: snapshot.restaurantName || 'Restaurant',
+    logoUrl: null,
+    branchName: snapshot.branchName,
+    dateTime: snapshot.dateTime,
+    ticketNo: snapshot.ticketNo,
+    trackingId: snapshot.trackingId,
+    paymentMethod: snapshot.paymentMethod,
+    paymentState: snapshot.paymentState,
+    tableName: snapshot.tableName,
+    customerName: snapshot.customerName,
+    customerPhone: phone,
+    address: null,
+    mode: snapshot.mode,
+    cutleryRequested: false,
+    note: snapshot.note,
+    items: snapshot.items,
+    subtotal: snapshot.subtotal,
+    tax: snapshot.tax,
+    discount: snapshot.discount,
+    paidAmount: snapshot.paidAmount,
+    change: snapshot.change,
+    total: snapshot.total,
+    money: (n: number) => formatCurrency(n, regional),
+  };
+}
+
+function snapshotForOrder(orderId: string): ReceiptModel | null {
+  const snapshot = readSnapshotRecord();
+  if (!snapshot) return null;
+  if (snapshot.orderId !== orderId && snapshot.trackingId !== orderId) return null;
+  return modelFromSnapshot(snapshot);
 }
 
 export async function printKioskReceipt({
   slug,
   branchId,
   orderId,
-}: PrintKioskReceiptParams): Promise<void> {
-  if (typeof window === 'undefined') return;
+}: PrintKioskReceiptParams): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
 
   try {
-    const model = await loadReceiptModel({ slug, branchId, orderId });
+    const ready = snapshotForOrder(orderId);
+    const model = ready ?? (await loadReceiptModel({ slug, branchId, orderId }));
     const plain = buildReceiptPlainText(model);
 
     const bridge = detectSunmiPrinterBridge();
@@ -201,33 +341,33 @@ export async function printKioskReceipt({
 
     if (bridge) {
       const printed = await printViaSunmiBridge(bridge, model);
-      if (printed) return;
+      if (printed) {
+        markSnapshotSent();
+        return true;
+      }
       console.warn(
         '[kiosk-print] Sunmi JS bridge present but print failed; skipping browser print'
       );
       // Chrome + separate Foodluk printer driver may still listen on loopback.
       // Native kiosk APK has no 5055 server — skip HTTP there.
-      if (!inNativeKioskBridge && (await printViaLocalApi(plain))) return;
-      return;
+      if (!inNativeKioskBridge && (await printViaLocalApi(plain))) {
+        markSnapshotSent();
+        return true;
+      }
+      return false;
     }
 
-    // Sunmi K2 Chrome has no JS printer bridge — optional Foodluk Printer driver APK.
-    if (await printViaLocalApi(plain)) return;
+    // Sunmi K2 Chrome has no JS printer bridge — Foodluk Printer driver on this device.
+    if (await printViaLocalApi(plain)) {
+      markSnapshotSent();
+      return true;
+    }
 
-    await printHtmlInHiddenFrame(buildReceiptHtml(model));
+    console.warn('[kiosk-print] no kiosk printer available');
+    return false;
   } catch (e) {
     console.warn('[kiosk-print] receipt print failed', e);
-    // Browser print is desktop-only; skip inside native kiosk WebView bridge.
-    const inNativeKioskBridge =
-      typeof window !== 'undefined' &&
-      Boolean((window as Window & { __FOODLUK_SUNMI_BRIDGE__?: boolean })
-        .__FOODLUK_SUNMI_BRIDGE__);
-    if (inNativeKioskBridge) return;
-    try {
-      window.print();
-    } catch {
-      // ignore
-    }
+    return false;
   }
 }
 
@@ -288,16 +428,22 @@ async function loadReceiptModel({
     } | null;
   };
   const branchesBody = (await branchesRes.json().catch(() => ({}))) as {
-    data?: Array<{ id?: string; urlId?: string; name?: string | null }>;
+    data?: Array<{
+      id?: string;
+      urlId?: string;
+      name?: string | null;
+      timeZone?: string | null;
+    }>;
   };
 
   const details = orderBody.data;
   const namedBranches = (branchesBody.data ?? []).filter((b) => b.name?.trim());
+  const matchedBranch = namedBranches.find(
+    (b) => b.id === branchId || b.urlId === branchId
+  );
   const branchName =
     details?.branchName?.trim() ||
-    namedBranches
-      .find((b) => b.id === branchId || b.urlId === branchId)
-      ?.name?.trim() ||
+    matchedBranch?.name?.trim() ||
     (namedBranches.length === 1 ? namedBranches[0]?.name?.trim() : '') ||
     null;
 
@@ -370,9 +516,10 @@ async function loadReceiptModel({
     restaurantName,
     logoUrl,
     branchName,
-    dateTime: details?.createdAt
-      ? new Date(details.createdAt).toLocaleString()
-      : new Date().toLocaleString(),
+    dateTime: formatBranchDateTime(
+      details?.createdAt ?? new Date(),
+      matchedBranch?.timeZone
+    ),
     ticketNo,
     trackingId,
     paymentMethod,
@@ -403,27 +550,56 @@ function fulfillmentMode(address: string | null | undefined): string {
   return value || 'kiosk';
 }
 
+const RECEIPT_WIDTH = 48;
+
+/** Wrap on spaces. A tracking id has no spaces, so it stays in one piece. */
+function wrapReceiptWords(text: string, width: number): string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [''];
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= width) {
+      current = next;
+      continue;
+    }
+    if (current) lines.push(current);
+    current = word;
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 function buildReceiptPlainText(model: ReceiptModel): string {
-  const line = (left: string, right = '') => {
-    const width = 48;
-    const l = left.slice(0, width);
-    if (!right) return l;
-    const r = right.slice(0, width);
-    const gap = Math.max(1, width - l.length - r.length);
-    return `${l}${' '.repeat(gap)}${r}`;
+  const pair = (left: string, right = '') => {
+    if (!right) return wrapReceiptWords(left, RECEIPT_WIDTH);
+    const gap = 1;
+    const nameWidth = Math.max(12, RECEIPT_WIDTH - right.length - gap);
+    const nameLines = wrapReceiptWords(left, nameWidth);
+    return nameLines.map((name, index) => {
+      if (index !== 0) return name;
+      const spaces = Math.max(gap, RECEIPT_WIDTH - name.length - right.length);
+      return `${name}${' '.repeat(spaces)}${right}`;
+    });
   };
-  const sep = '-'.repeat(48);
+  const sep = '-'.repeat(RECEIPT_WIDTH);
 
   const lines: string[] = [];
-  lines.push(centerText(model.restaurantName.toUpperCase(), 48));
-  if (model.branchName) lines.push(centerText(model.branchName, 48));
-  lines.push(centerText(model.dateTime, 48));
+  lines.push(centerText(model.restaurantName.toUpperCase(), RECEIPT_WIDTH));
+  if (model.branchName) lines.push(centerText(model.branchName, RECEIPT_WIDTH));
+  lines.push(centerText(model.dateTime, RECEIPT_WIDTH));
   lines.push(sep);
   if (model.ticketNo != null) {
-    lines.push(centerText(`Token: #${model.ticketNo}`, 48));
+    lines.push(centerText(`Token: #${model.ticketNo}`, RECEIPT_WIDTH));
     lines.push(sep);
   }
-  lines.push(`Tracking ID: ${model.trackingId}`);
+  const tracking = `Tracking ID: ${model.trackingId}`;
+  if (tracking.length <= RECEIPT_WIDTH) lines.push(tracking);
+  else {
+    lines.push('Tracking ID:');
+    lines.push(model.trackingId);
+  }
   lines.push(`Mode: ${model.mode}`);
   lines.push(`Payment: ${model.paymentMethod}`);
   lines.push(`Status: ${model.paymentState}`);
@@ -436,20 +612,20 @@ function buildReceiptPlainText(model: ReceiptModel): string {
   if (model.cutleryRequested) lines.push('Cutlery: yes');
   if (model.note) lines.push(`Note: ${model.note}`);
   lines.push(sep);
-  lines.push(line('Item', 'Amt'));
+  lines.push(...pair('Item', 'Amt'));
   for (const it of model.items) {
     const qty = it.quantity != null && it.quantity > 0 ? String(it.quantity) : '';
     const amt = it.lineTotal != null ? model.money(it.lineTotal) : '';
-    lines.push(line(it.name, [qty, amt].filter(Boolean).join('  ')));
+    lines.push(...pair(it.name, [qty, amt].filter(Boolean).join('  ')));
   }
   if (model.items.length === 0) lines.push('No items');
   lines.push(sep);
-  lines.push(line('Subtotal', model.money(model.subtotal)));
-  lines.push(line('Tax', model.money(model.tax)));
-  lines.push(line('Discount', model.money(model.discount)));
-  lines.push(line('Paid', model.money(model.paidAmount)));
-  lines.push(line('Change', model.money(model.change)));
-  lines.push(line('TOTAL', model.money(model.total)));
+  lines.push(...pair('Subtotal', model.money(model.subtotal)));
+  lines.push(...pair('Tax', model.money(model.tax)));
+  lines.push(...pair('Discount', model.money(model.discount)));
+  lines.push(...pair('Paid', model.money(model.paidAmount)));
+  lines.push(...pair('Change', model.money(model.change)));
+  lines.push(...pair('TOTAL', model.money(model.total)));
   lines.push(sep);
   lines.push(centerText('Thank you!', 48));
   lines.push('');
@@ -623,139 +799,3 @@ async function printViaSunmiBridge(
   }
 }
 
-function buildReceiptHtml(model: ReceiptModel): string {
-  const isDineInDisplayName =
-    !!model.customerName &&
-    model.customerName.toLowerCase().endsWith(' customer');
-  const metaLines = [
-    model.tableName && !isDineInDisplayName
-      ? `<div class="receipt-line"><strong>Table:</strong> ${escapeHtml(model.tableName)}</div>`
-      : '',
-    model.customerName
-      ? `<div class="receipt-line"><strong>Customer:</strong> ${escapeHtml(model.customerName)}</div>`
-      : '',
-    model.address
-      ? `<div class="receipt-line"><strong>Address:</strong> ${escapeHtml(model.address.replace(/\s*\n\s*/g, ' '))}</div>`
-      : '',
-    `<div class="receipt-line"><strong>Phone:</strong> ${escapeHtml(model.customerPhone || 'N/A')}</div>`,
-  ]
-    .filter(Boolean)
-    .join('');
-
-  const rows = model.items
-    .map((it) => {
-      const isMod =
-        it.name.startsWith('↳') ||
-        it.name.startsWith('-') ||
-        it.quantity == null;
-      const qtyCell =
-        it.quantity != null && it.quantity > 0 ? String(it.quantity) : '';
-      const amtCell =
-        it.lineTotal != null ? escapeHtml(model.money(it.lineTotal)) : '';
-      return `<tr>
-<td${isMod ? ' class="mod"' : ''}>${escapeHtml(it.name)}</td>
-<td class="qty">${qtyCell}</td>
-<td class="amt">${amtCell}</td>
-</tr>`;
-    })
-    .join('');
-
-  const receiptHeader = buildThermalReceiptHeaderHtml({
-    logoUrl: model.logoUrl,
-    brandName: model.restaurantName,
-    branchName: model.branchName,
-    dateTime: model.dateTime,
-  });
-
-  const extras = [
-    model.cutleryRequested
-      ? `<div class="receipt-line"><strong>Cutlery:</strong> yes</div>`
-      : '',
-    model.note
-      ? `<div class="receipt-line"><strong>Note:</strong> ${escapeHtml(model.note)}</div>`
-      : '',
-  ]
-    .filter(Boolean)
-    .join('');
-
-  return `<!doctype html>
-<html>
-<head>
-  <title>Kiosk Ticket</title>
-  <style>${getThermalReceiptDocumentCss({ variant: 'kiosk' })}</style>
-</head>
-<body>
-  <div class="r">
-    ${receiptHeader}
-    <div class="sep"></div>
-    ${model.ticketNo != null ? `<div class="receipt-ticket">Token: #${model.ticketNo}</div><div class="sep"></div>` : ''}
-    <div class="receipt-line"><strong>Tracking ID:</strong> ${escapeHtml(model.trackingId)}</div>
-    <div class="receipt-line"><strong>Mode:</strong> ${escapeHtml(model.mode)}</div>
-    <div class="receipt-line"><strong>Payment:</strong> ${escapeHtml(model.paymentMethod)}</div>
-    <div class="receipt-line"><strong>Status:</strong> ${escapeHtml(model.paymentState)}</div>
-    ${metaLines}
-    ${extras}
-    <div class="sep"></div>
-    <table>
-      <thead>
-        <tr><th>Item</th><th class="qty">Qty</th><th class="amt">Amt</th></tr>
-      </thead>
-      <tbody>${rows || '<tr><td colspan="3" class="muted">No items</td></tr>'}</tbody>
-    </table>
-    <div class="sep"></div>
-    <div class="totals">
-      <div><span>Subtotal</span><span>${escapeHtml(model.money(model.subtotal))}</span></div>
-      <div><span>Tax</span><span>${escapeHtml(model.money(model.tax))}</span></div>
-      <div><span>Discount</span><span>${escapeHtml(model.money(model.discount))}</span></div>
-      <div><span>Paid</span><span>${escapeHtml(model.money(model.paidAmount))}</span></div>
-      <div><span>Change</span><span>${escapeHtml(model.money(model.change))}</span></div>
-      <div class="grand"><span>Total</span><span>${escapeHtml(model.money(model.total))}</span></div>
-    </div>
-    <div class="sep"></div>
-    <div class="center muted">Thank you!</div>
-  </div>
-</body>
-</html>`;
-}
-
-function printHtmlInHiddenFrame(html: string): Promise<void> {
-  return new Promise((resolve) => {
-    const frame = document.createElement('iframe');
-    frame.style.position = 'fixed';
-    frame.style.right = '0';
-    frame.style.bottom = '0';
-    frame.style.width = '0';
-    frame.style.height = '0';
-    frame.style.border = '0';
-    frame.setAttribute('aria-hidden', 'true');
-    document.body.appendChild(frame);
-
-    let cleaned = false;
-    const cleanup = () => {
-      if (cleaned) return;
-      cleaned = true;
-      window.setTimeout(() => {
-        frame.remove();
-        resolve();
-      }, 300);
-    };
-
-    const doc = frame.contentWindow?.document;
-    if (!doc || !frame.contentWindow) {
-      cleanup();
-      return;
-    }
-
-    doc.open();
-    doc.write(html);
-    doc.close();
-    frame.onload = () => {
-      try {
-        frame.contentWindow?.focus();
-        frame.contentWindow?.print();
-      } finally {
-        cleanup();
-      }
-    };
-  });
-}

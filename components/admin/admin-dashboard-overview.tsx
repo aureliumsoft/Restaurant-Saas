@@ -186,7 +186,8 @@ export function AdminDashboardOverview() {
     setError(null);
 
     try {
-      const r = await axios.get(`/api/admin/overview?${queryString}`);
+      const fresh = isRefresh ? `${queryString ? '&' : ''}fresh=1` : '';
+      const r = await axios.get(`/api/admin/overview?${queryString}${fresh}`);
       setData(r.data.data);
     } catch {
       setError(t('admin.dashboard.loadError'));
@@ -199,12 +200,6 @@ export function AdminDashboardOverview() {
   useEffect(() => {
     load();
   }, [load]);
-
-  // Auto-refresh when a non-custom preset changes.
-  useEffect(() => {
-    if (preset === 'custom') return;
-    load();
-  }, [preset, load]);
 
   const conversionRate = useMemo(() => {
     if (!data || data.restaurantCount === 0) return 0;

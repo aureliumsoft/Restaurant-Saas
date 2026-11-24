@@ -108,7 +108,10 @@ export async function GET(req: NextRequest) {
               null)
             : null,
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: { 'Cache-Control': 'private, max-age=15' },
+      }
     );
   } catch (e) {
     console.error('pos pending-kitchen', e);

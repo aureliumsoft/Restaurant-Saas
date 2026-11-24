@@ -29,7 +29,7 @@ export type PosWorkingOrderRow = {
     price: number;
     productName: string | null;
     menuItem: { name: string } | null;
-    modifiers: Array<{ name: string; quantity: number; unitPrice: number }>;
+    modifiers: Array<{ name: string; quantity: number }>;
   }>;
   paymentStatus: string | null;
   paymentMethod: string | null;
@@ -57,7 +57,7 @@ export function usePosWorkingOrders(branchId?: string | null) {
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: true,
-      dedupingInterval: 0,
+      dedupingInterval: 2_000,
       keepPreviousData: true,
     }
   );
@@ -102,7 +102,7 @@ export function usePosWorkingOrders(branchId?: string | null) {
     ],
     () => {
       if (typeof document !== 'undefined' && document.hidden) return;
-      refresh();
+      confirmInBackground();
     },
     { runOnMount: false }
   );
@@ -119,10 +119,44 @@ export function usePosWorkingOrders(branchId?: string | null) {
   };
 }
 
+export function usePosWorkingOrdersCount(branchId: string | null) {
+  const key = branchId
+    ? ([...queryKeys.posWorkingOrders(branchId), 'count'] as const)
+    : null;
+  const { data, mutate } = useSWR(
+    key,
+    async () => {
+      const res = await axios.get<{ count?: number }>(
+        '/api/restaurant/pos-order/working-orders',
+        { params: { count: '1' } }
+      );
+      return res.data.count ?? 0;
+    },
+    { revalidateOnFocus: false, dedupingInterval: 2_000 }
+  );
+  useRealtimeRefresh(
+    [
+      'refreshWorkingOrders',
+      'refreshRecentOrders',
+      'refreshSalesOrders',
+      'refreshKioskOrders',
+      'realtime:kds.tickets',
+      'realtime:order_display',
+    ],
+    () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      void mutate();
+    },
+    { runOnMount: false }
+  );
+  return data ?? 0;
+}
+
 export function revalidatePosWorkingOrders(branchId?: string | null) {
   void globalMutate(queryKeys.posWorkingOrders(branchId));
   if (branchId) {
     void globalMutate(queryKeys.posWorkingOrders(null));
+    void globalMutate([...queryKeys.posWorkingOrders(branchId), 'count']);
   }
 }
 

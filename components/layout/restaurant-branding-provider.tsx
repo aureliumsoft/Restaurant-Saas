@@ -23,7 +23,8 @@ import {
   pageTitleSuffixForPath,
   restoreDefaultDocumentBranding,
 } from '@/lib/restaurant-document-branding';
-import { isCustomerAppRoute } from '@/lib/customer-storefront-paths';
+import { isRestaurantStaffRoute } from '@/lib/restaurant-staff-route';
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 
 type RestaurantBranding = {
   restaurantName: string;
@@ -34,38 +35,6 @@ type RestaurantBranding = {
 };
 
 const RestaurantBrandingContext = createContext<RestaurantBranding | null>(null);
-
-/** Staff dashboard / POS / KDS routes (authenticated). */
-function isRestaurantStaffRoute(pathname: string): boolean {
-  const path = pathname.split('?')[0] ?? pathname;
-  if (path.startsWith('/admin')) return false;
-  if (path.startsWith('/login') || path.startsWith('/register')) return false;
-  if (path === '/' || path.startsWith('/pricing')) return false;
-  if (isCustomerAppRoute(path)) return false;
-  if (path.startsWith('/kiosk') || path.startsWith('/invite')) {
-    return false;
-  }
-  return (
-    path.startsWith('/dashboard') ||
-    path.startsWith('/sales') ||
-    path.startsWith('/pos') ||
-    path.startsWith('/kds') ||
-    path.startsWith('/order-display') ||
-    path.startsWith('/branched') ||
-    path.startsWith('/categories') ||
-    path.startsWith('/product') ||
-    path.startsWith('/variations') ||
-    path.startsWith('/tables') ||
-    path.startsWith('/recommendations') ||
-    path.startsWith('/configurations') ||
-    path.startsWith('/records') ||
-    path.startsWith('/expenses') ||
-    path.startsWith('/reports') ||
-    path.startsWith('/settings') ||
-    path.startsWith('/no-access') ||
-    path === '/kds-screen'
-  );
-}
 
 export function RestaurantBrandingProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '';
@@ -141,32 +110,33 @@ export function RestaurantBrandingProvider({ children }: { children: ReactNode }
 
     const load = async () => {
       try {
-        let url: string | null = null;
-
         if (isStaff) {
-          // Only after bootstrap settled without a restaurant (edge / failure).
-          url = '/api/restaurant';
-        } else if (customerRoute?.slug) {
-          url = `/api/customer/restaurant?slug=${encodeURIComponent(customerRoute.slug)}`;
-        } else {
-          const subdomain = inferCustomerSubdomainFromHost();
-          if (subdomain) {
-            url = `/api/customer/restaurant?subdomain=${encodeURIComponent(subdomain)}`;
-          }
+          const res = await fetch('/api/restaurant', { cache: 'no-store' });
+          const json = (await res.json().catch(() => ({}))) as {
+            data?: {
+              name?: string | null;
+              slug?: string | null;
+              logoUrl?: string | null;
+            } | null;
+          };
+          if (cancelled) return;
+          const d = json?.data;
+          setRestaurantName(d?.name?.trim() || 'Restaurant');
+          const slug = d?.slug?.trim();
+          setRestaurantSlug(slug && slug.length > 0 ? slug : null);
+          const logo = d?.logoUrl?.trim();
+          setLogoUrl(logo && logo.length > 0 ? logo : null);
+          setLogoFailed(false);
+          return;
         }
 
-        if (!url) return;
-
-        const res = await fetch(url, { cache: 'no-store' });
-        const json = (await res.json().catch(() => ({}))) as {
-          data?: {
-            name?: string | null;
-            slug?: string | null;
-            logoUrl?: string | null;
-          } | null;
-        };
-        if (cancelled) return;
-        const d = json?.data;
+        const data = customerRoute?.slug
+          ? await fetchCustomerRestaurant({ slug: customerRoute.slug })
+          : await fetchCustomerRestaurant({
+              subdomain: inferCustomerSubdomainFromHost(),
+            });
+        if (cancelled || !data) return;
+        const d = data;
         setRestaurantName(d?.name?.trim() || 'Restaurant');
         const slug = d?.slug?.trim();
         setRestaurantSlug(slug && slug.length > 0 ? slug : null);

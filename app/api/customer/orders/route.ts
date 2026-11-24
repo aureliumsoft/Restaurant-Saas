@@ -5,10 +5,12 @@ import { z } from 'zod';
 
 import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
+import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
+import { createOrderItemsWithModifiers } from '@/lib/pos-order-modifiers';
 import {
-  isPersonalizeModifierMenuItemId,
-  normalizePersonalizeModifierMenuItemId,
-} from '@/lib/menu/personalize-modifiers';
+  consumeIngredientsForOrder,
+  isMajorIngredientOutOfStockError,
+} from '@/lib/inventory/stock';
 import { buildKitchenTicketItemRows } from '@/lib/kitchen-ticket-items';
 import {
   isPrismaUniqueViolation,
@@ -51,6 +53,11 @@ const lineSchema = z.object({
   /** Per-unit line price (base + modifiers), same convention as POS `OrderItem.price`. */
   unitPrice: z.number().finite().nonnegative(),
   productName: z.string().min(1),
+  variationId: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() === '' ? null : value,
+    z.string().uuid().optional().nullable()
+  ),
   modifiers: z.array(modifierGroupSchema).default([]),
 });
 
@@ -183,7 +190,6 @@ export async function POST(req: NextRequest) {
     cutlery,
     comment,
     schedule,
-    paymentStatus,
     paymentMethod,
   } =
     parsed.data;
@@ -347,37 +353,18 @@ export async function POST(req: NextRequest) {
         throw new Error('Failed to create order after ticket retries');
       }
 
-      for (const line of lines) {
-        const orderItem = await tx.orderItem.create({
-          data: {
-            orderId: order.id,
-            menuItemId: line.menuItemId,
-            productName: line.productName,
-            quantity: line.quantity,
-            price: line.unitPrice,
-          },
-        });
-
-        const flatMods = line.modifiers.flatMap((g) =>
-          g.selections.map((s) => ({
-            selection: s,
-            groupName: g.groupName,
-          }))
-        );
-        if (flatMods.length > 0) {
-          await tx.orderItemModifier.createMany({
-            data: flatMods.map(({ selection: s, groupName }, sortOrder) => ({
-              orderItemId: orderItem.id,
-              menuItemId: normalizePersonalizeModifierMenuItemId(s.menuItemId),
-              name: s.name,
-              groupName: groupName?.trim() || null,
-              unitPrice: s.unitPrice,
-              quantity: 1,
-              sortOrder,
-            })),
-          });
-        }
-      }
+      await createOrderItemsWithModifiers(
+        tx,
+        order.id,
+        lines.map((line) => ({
+          menuItemId: line.menuItemId,
+          productName: line.productName,
+          quantity: line.quantity,
+          price: line.unitPrice,
+          variationId: line.variationId ?? null,
+          modifiers: line.modifiers,
+        }))
+      );
 
       const ticket = await tx.kitchenTicket.create({
         data: {
@@ -414,10 +401,22 @@ export async function POST(req: NextRequest) {
         data: {
           orderId: order.id,
           amount: computedTotal,
-          status: paymentStatus ?? 'completed',
+          status: 'pending',
           method: paymentMethod?.trim() || 'Online checkout',
           restaurantId: restaurant.id,
         },
+      });
+
+      await consumeIngredientsForOrder(tx, {
+        restaurantId: restaurant.id,
+        branchId,
+        orderId: order.id,
+        lines: lines.map((line) => ({
+          menuItemId: line.menuItemId,
+          quantity: line.quantity,
+          variationId: line.variationId,
+          modifiers: line.modifiers,
+        })),
       });
 
       return { order, ticketNumber };
@@ -442,6 +441,12 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (e) {
+    if (isMajorIngredientOutOfStockError(e)) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
+    if (e instanceof Error && e.message.includes('Select a variation')) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
     if (isPrismaUniqueViolation(e)) {
       const recovered = await recoverOrderFromIdempotencyConflict(
         idempotencyKey,

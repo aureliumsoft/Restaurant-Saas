@@ -6,7 +6,7 @@ import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query
 import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const MENU_CACHE_HEADERS = {
-  'Cache-Control': 'private, no-store',
+  'Cache-Control': 'private, max-age=120, stale-while-revalidate=600',
 };
 
 type RouteContext = {

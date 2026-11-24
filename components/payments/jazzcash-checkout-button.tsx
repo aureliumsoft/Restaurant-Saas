@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { CreditCard, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -61,8 +61,11 @@ export function JazzCashCheckoutButton({
   onError,
 }: JazzCashCheckoutButtonProps) {
   const [loading, setLoading] = useState(false);
+  const payLock = useRef(false);
 
   async function handlePay() {
+    if (payLock.current || disabled) return;
+    payLock.current = true;
     setLoading(true);
     onProcessingChange?.(true);
     try {
@@ -102,6 +105,7 @@ export function JazzCashCheckoutButton({
       const msg =
         e instanceof Error ? e.message : 'Could not start JazzCash checkout.';
       onError?.(msg);
+      payLock.current = false;
       setLoading(false);
       onProcessingChange?.(false);
     }

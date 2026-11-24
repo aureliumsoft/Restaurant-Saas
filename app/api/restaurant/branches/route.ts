@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { assertCreateCap } from '@/lib/subscription-plan-enforcement';
+import { isValidIanaTimeZone, resolveBranchTimeZone } from '@/lib/branch-timezone';
 import { normalizeOpeningHours } from '@/lib/order-time-slots';
 import { Prisma } from '@prisma/client';
 
@@ -27,6 +28,7 @@ const createBranchSchema = z.object({
     .optional()
     .default([])
     .transform((rows) => normalizeOpeningHours(rows)),
+  timeZone: z.string().trim().max(80).optional().default(''),
 });
 
 export async function GET(_req: NextRequest) {
@@ -57,6 +59,7 @@ export async function GET(_req: NextRequest) {
         longitude: true,
         deliveryRadiusKm: true,
         openingHours: true,
+        timeZone: true,
         isActive: true,
         planQuotaLocked: true,
         createdAt: true,
@@ -108,6 +111,18 @@ export async function POST(req: NextRequest) {
     );
     if (limitDenied) return limitDenied;
 
+    if (parsed.data.timeZone && !isValidIanaTimeZone(parsed.data.timeZone)) {
+      return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
+    }
+    const restaurant = await db.restaurant.findUnique({
+      where: { id: auth.restaurantId },
+      select: { countryCode: true },
+    });
+    const timeZone = resolveBranchTimeZone(
+      parsed.data.timeZone,
+      restaurant?.countryCode
+    );
+
     const branch = await db.branch.create({
       data: {
         restaurantId: auth.restaurantId,
@@ -118,6 +133,7 @@ export async function POST(req: NextRequest) {
         longitude: parsed.data.longitude ?? null,
         deliveryRadiusKm: parsed.data.deliveryRadiusKm ?? null,
         openingHours: parsed.data.openingHours as Prisma.InputJsonValue,
+        timeZone,
       },
       select: {
         id: true,
@@ -128,6 +144,7 @@ export async function POST(req: NextRequest) {
         longitude: true,
         deliveryRadiusKm: true,
         openingHours: true,
+        timeZone: true,
         createdAt: true,
       },
     });

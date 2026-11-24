@@ -34,7 +34,7 @@ export function LazyMenuProductImage({
           className
         )}
       >
-        {hasImage ? '…' : emptyLabel}
+        {hasImage && !failed ? '…' : emptyLabel}
       </div>
     );
   }

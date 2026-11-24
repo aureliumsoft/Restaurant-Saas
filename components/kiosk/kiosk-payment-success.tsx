@@ -1,11 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { printKioskReceipt } from '@/lib/kiosk-print-receipt';
+import {
+  kioskReceiptAlreadySent,
+  printKioskReceipt,
+} from '@/lib/kiosk-print-receipt';
 import { kioskBasePath, kioskCartStorageKey, kioskCheckoutDraftKey } from '@/lib/kiosk-path';
 import { IconHome } from '@tabler/icons-react';
 
@@ -33,6 +37,7 @@ export function KioskPaymentSuccess({
   isMobile = false,
 }: Props) {
   const { t } = useTranslation();
+  const router = useRouter();
   const [ticket, setTicket] = useState<number | null>(ticketFromQuery);
   const [paymentStatus, setPaymentStatus] = useState<string>(
     initialPayStatus ?? (sessionId || token ? 'pending' : initialMethod?.toLowerCase().includes('cash') ? 'pending' : 'completed')
@@ -112,32 +117,36 @@ export function KioskPaymentSuccess({
   }, [orderId]);
 
   const autoPrintedRef = useRef(false);
-  const homePath =
-    isMobile
-      ? `${kioskBasePath(slug, branchId)}?Mobile=true`
-      : kioskBasePath(slug, branchId);
+  const homePath = kioskBasePath(slug, branchId);
+  const [printState, setPrintState] = useState<'printing' | 'ready' | 'missed'>(
+    isMobile || !orderId ? 'ready' : 'printing'
+  );
   const [homeInSeconds, setHomeInSeconds] = useState(10);
 
   const goHome = () => {
-    const path = window.location.pathname.replace(/\/success\/?$/, '') || homePath;
-    const target = path.startsWith('http')
-      ? path
-      : `${window.location.origin}${path.startsWith('/') ? path : `/${path}`}`;
-    window.location.replace(isMobile ? `${target}?Mobile=true` : target);
+    router.replace(isMobile ? `${homePath}?Mobile=true` : homePath);
   };
 
   useEffect(() => {
     if (isMobile) return;
     if (!orderId || autoPrintedRef.current) return;
+    if (kioskReceiptAlreadySent(orderId)) {
+      setPrintState('ready');
+      return;
+    }
     autoPrintedRef.current = true;
-    const timer = window.setTimeout(() => {
-      void printKioskReceipt({ slug, branchId, orderId });
-    }, 400);
-    return () => window.clearTimeout(timer);
+    const cap = window.setTimeout(() => {
+      setPrintState((current) => (current === 'printing' ? 'ready' : current));
+    }, 900);
+    void printKioskReceipt({ slug, branchId, orderId }).then((ok) => {
+      window.clearTimeout(cap);
+      setPrintState(ok ? 'ready' : 'missed');
+    });
+    return () => window.clearTimeout(cap);
   }, [orderId, slug, branchId, isMobile]);
 
   useEffect(() => {
-    if (isMobile) return;
+    if (isMobile || printState === 'printing') return;
     setHomeInSeconds(10);
     const startedAt = Date.now();
     let left = false;
@@ -154,7 +163,7 @@ export function KioskPaymentSuccess({
       }
     }, 250);
     return () => window.clearInterval(tick);
-  }, [homePath, isMobile]);
+  }, [homePath, isMobile, printState]);
 
   const isCash = (paymentMethod ?? '').toLowerCase().includes('cash');
   const isPending =
@@ -172,6 +181,27 @@ export function KioskPaymentSuccess({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="rounded-2xl bg-[#fff7ed] px-4 py-5 text-center">
+              <p className="text-2xl font-extrabold text-[#9a3412]">
+                {printState === 'printing'
+                  ? t('kioskPrintingReceipt')
+                  : printState === 'missed'
+                    ? t('kioskReceiptNotPrinted')
+                    : t('kioskTakeReceipt')}
+              </p>
+              <p className="mt-2 text-base text-[#9a3412]">
+                {printState === 'printing'
+                  ? t('kioskPrintingReceiptHint')
+                  : printState === 'missed'
+                    ? t('kioskReceiptNotPrintedHint')
+                    : t('kioskReturningHome', { seconds: homeInSeconds })}
+              </p>
+              {printState === 'missed' ? (
+                <p className="mt-2 text-sm text-[#9a3412]">
+                  {t('kioskReturningHome', { seconds: homeInSeconds })}
+                </p>
+              ) : null}
+            </div>
             <div className="rounded-lg border border-[#e2e8f0] bg-white p-4 text-center dark:border-[#e2e8f0] dark:bg-white">
               <p className="text-xs text-[#64748b] dark:text-[#64748b]">
                 {t('ticketNumber')}
@@ -207,6 +237,21 @@ export function KioskPaymentSuccess({
                 </div>
               ) : null}
             </div>
+            {!isMobile && printState === 'missed' && orderId ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setPrintState('printing');
+                  void printKioskReceipt({ slug, branchId, orderId }).then((ok) => {
+                    setPrintState(ok ? 'ready' : 'missed');
+                  });
+                }}
+              >
+                {t('kioskPrintReceiptAgain')}
+              </Button>
+            ) : null}
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -215,12 +260,11 @@ export function KioskPaymentSuccess({
               >
                 <IconHome className="w-4 h-4 mr-2" />
                 {t('backToHome')}
-                {homeInSeconds > 0 ? ` (${homeInSeconds})` : ''}
+                {printState !== 'printing' && homeInSeconds > 0
+                  ? ` (${homeInSeconds})`
+                  : ''}
               </Button>
             </div>
-            <p className="text-center text-xs text-[#64748b]">
-              {t('kioskReturningHome', { seconds: homeInSeconds })}
-            </p>
           </CardContent>
         </Card>
       </div>

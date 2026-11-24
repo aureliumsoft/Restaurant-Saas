@@ -9,13 +9,12 @@ import { resolveCustomerMenuQuery } from '@/lib/menu/resolve-customer-menu-query
 import { resolveRouteParams } from '@/lib/resolve-route-id';
 
 const MENU_CACHE_HEADERS = {
-  // Nested add-on prices change with product edits — do not CDN-cache this payload.
-  'Cache-Control': 'private, no-store',
+  // Private to this browser. Product edits show on the next visit.
+  'Cache-Control': 'private, max-age=120, stale-while-revalidate=600',
 };
 
 const SHELL_CACHE_HEADERS = {
-  // Shell is short-lived metadata only — never treat as a complete detail hit.
-  'Cache-Control': 'private, no-store',
+  'Cache-Control': 'private, max-age=120, stale-while-revalidate=600',
 };
 
 type RouteContext = { params: Promise<{ itemId: string }> };

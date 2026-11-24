@@ -1,3 +1,4 @@
+import { formatBranchDateTime, formatBranchTime } from '@/lib/branch-timezone';
 import { formatCurrency } from '@/lib/format-money';
 import {
   DEFAULT_RESTAURANT_REGIONAL,
@@ -81,6 +82,7 @@ export type PrintPosShiftRecordOptions = {
   logoUrl?: string | null;
   currencyCode?: string;
   countryCode?: string;
+  timeZone?: string | null;
 };
 
 export function printPosShiftRecord(options: PrintPosShiftRecordOptions) {
@@ -94,6 +96,7 @@ export function printPosShiftRecord(options: PrintPosShiftRecordOptions) {
     logoUrl,
     currencyCode,
     countryCode,
+    timeZone,
   } = options;
   const regional = parseRestaurantRegionalSettings({
     currencyCode: currencyCode ?? DEFAULT_RESTAURANT_REGIONAL.currencyCode,
@@ -114,10 +117,7 @@ export function printPosShiftRecord(options: PrintPosShiftRecordOptions) {
           ? `#${String(order.ticketNumber).padStart(2, '0')}`
           : order.shortOrderId;
       const canceled = isCanceledOrderStatus(order.status);
-      const time = new Date(order.createdAt).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      const time = formatBranchTime(order.createdAt, timeZone);
       const pay = (order.paymentMethod ?? '—').slice(0, 6);
       return `<tr class="${canceled ? 'canceled' : ''}">
         <td>${escapeHtml(ticket)}${canceled ? ' <span class="cancel-tag">X</span>' : ''}</td>
@@ -132,7 +132,7 @@ export function printPosShiftRecord(options: PrintPosShiftRecordOptions) {
     logoUrl,
     brandName,
     branchName,
-    dateTime: new Date().toLocaleString(),
+    dateTime: formatBranchDateTime(new Date(), timeZone),
   });
 
   const html = `<!doctype html>
@@ -150,7 +150,7 @@ export function printPosShiftRecord(options: PrintPosShiftRecordOptions) {
       <div class="sep"></div>
 
       <div class="section-title">Shift details</div>
-      <div class="receipt-line"><strong>Started:</strong> ${escapeHtml(new Date(shift.startedAt).toLocaleString())}</div>
+      <div class="receipt-line"><strong>Started:</strong> ${escapeHtml(formatBranchDateTime(shift.startedAt, timeZone))}</div>
       <div class="receipt-line"><strong>Opened by:</strong> ${escapeHtml(shift.openedByName ?? '—')}</div>
       <div class="receipt-line"><strong>Status:</strong> ${escapeHtml(shift.status)}</div>
       <div class="receipt-line"><strong>Orders:</strong> ${shift.orderCount}</div>
@@ -183,7 +183,7 @@ export function printPosShiftRecord(options: PrintPosShiftRecordOptions) {
         <div><span>Previous cash left</span><span>${shift.previousClosingCashInLocker != null ? escapeHtml(money(shift.previousClosingCashInLocker)) : '—'}</span></div>
         ${
           shift.previousShiftEndedAt
-            ? `<div class="muted"><span>Last shift ended</span><span>${escapeHtml(new Date(shift.previousShiftEndedAt).toLocaleString())}</span></div>`
+            ? `<div class="muted"><span>Last shift ended</span><span>${escapeHtml(formatBranchDateTime(shift.previousShiftEndedAt, timeZone))}</span></div>`
             : ''
         }
         <div><span>Cash sales</span><span>${escapeHtml(money(shift.cashSalesTotal))}</span></div>

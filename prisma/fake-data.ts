@@ -283,6 +283,7 @@ export function fakeBranchComplete() {
     longitude: undefined,
     deliveryRadiusKm: undefined,
     openingHours: [],
+    timeZone: '',
     slotDurationMinutes: 30,
     tableFloorRows: 4,
     tableFloorCols: 4,

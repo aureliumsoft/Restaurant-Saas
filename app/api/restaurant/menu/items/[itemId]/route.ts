@@ -18,7 +18,11 @@ import {
   customerMenuItemCoreSelect,
   customerMenuLinkedItemCoreSelect,
 } from "@/lib/menu/customer-menu-attribute-groups-select";
-import { clearCustomerMenuProductDetailCache } from "@/lib/menu/load-customer-menu-progressive";
+import { clearPosCustomizeIndexCache } from '@/lib/menu/load-restaurant-menu-progressive';
+import {
+  clearCustomerMenuProductDetailCache,
+  loadRestaurantMenuProductConfigured,
+} from '@/lib/menu/load-customer-menu-progressive';
 import { personalizeGroupsSelect } from "@/lib/menu/personalize-groups-select";
 import { attachRestaurantLazyImages } from "@/lib/menu/menu-item-image-utils";
 import { resolveStoredImageUrl } from "@/lib/resolve-stored-image-url";
@@ -130,7 +134,22 @@ export async function GET(
   const itemId = resolveRouteId((await ctx.params).itemId);
   const lite = req.nextUrl.searchParams.get("lite") === "1";
   const shell = req.nextUrl.searchParams.get("shell") === "1";
+  const configure = req.nextUrl.searchParams.get("configure") === "1";
   const where = { id: itemId, restaurantId: auth.restaurant.id };
+
+  if (configure) {
+    const data = await loadRestaurantMenuProductConfigured({
+      restaurantId: auth.restaurant.id,
+      itemId,
+    });
+    if (!data) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+    return NextResponse.json(
+      { data },
+      { status: 200, headers: { "Cache-Control": "private, max-age=120" } }
+    );
+  }
 
   if (shell) {
     const { loadRestaurantMenuProductDetailShell } = await import(
@@ -485,6 +504,7 @@ export async function PATCH(
       parsed.data.salePrice !== undefined
     ) {
       clearCustomerMenuProductDetailCache();
+      clearPosCustomizeIndexCache();
     }
 
     return NextResponse.json(

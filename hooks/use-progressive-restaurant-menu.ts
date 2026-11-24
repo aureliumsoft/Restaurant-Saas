@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { PosCustomizeIndex } from '@/lib/menu/assemble-pos-customize';
 import { useBranchContext, withBranchQuery } from '@/hooks/use-branch-context';
+import { readCachedPosBranchId } from '@/lib/pos-branch-memory';
 
 import type { ProgressiveMenuCategory } from '@/hooks/use-progressive-customer-menu';
 import { isBrowserOffline } from '@/lib/offline/db';
@@ -25,6 +27,7 @@ type RestaurantMenuMeta = {
 type PosMenuCachePayload<TItem> = {
   meta: RestaurantMenuMeta;
   categories: ProgressiveMenuCategory<TItem>[];
+  customizeIndex?: PosCustomizeIndex | null;
 };
 
 type UseProgressiveRestaurantMenuOptions = {
@@ -35,11 +38,15 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
   enabled = true,
 }: UseProgressiveRestaurantMenuOptions = {}) {
   const { activeBranchId } = useBranchContext();
+  const menuBranchId = activeBranchId || readCachedPosBranchId();
   const [meta, setMeta] = useState<RestaurantMenuMeta | null>(null);
   const [categories, setCategories] = useState<
     ProgressiveMenuCategory<TItem>[]
   >([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [customizeIndex, setCustomizeIndex] = useState<PosCustomizeIndex | null>(
+    null
+  );
   const [menuComplete, setMenuComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fromOfflineCache, setFromOfflineCache] = useState(false);
@@ -48,6 +55,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
   const reset = useCallback(() => {
     setMeta(null);
     setCategories([]);
+    setCustomizeIndex(null);
     setCategoriesLoading(false);
     setMenuComplete(false);
     setError(null);
@@ -55,7 +63,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
   }, []);
 
   useEffect(() => {
-    if (!enabled || !activeBranchId) {
+    if (!enabled || !menuBranchId) {
       reset();
       return;
     }
@@ -81,6 +89,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
             loading: false,
           }))
         );
+        setCustomizeIndex(cached.customizeIndex ?? null);
         setCategoriesLoading(false);
         setMenuComplete(true);
         setFromOfflineCache(true);
@@ -109,7 +118,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
         const catalogRes = await fetch(
           withBranchQuery(
             '/api/restaurant/menu/categories?catalog=1',
-            activeBranchId
+            menuBranchId
           ),
           { cache: 'default' }
         );
@@ -129,6 +138,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
               imageUrl?: string | null;
               items?: TItem[];
             }>;
+            customizeIndex?: PosCustomizeIndex;
           };
           error?: string;
         };
@@ -167,6 +177,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
 
         setMeta(nextMeta);
         setCategories(loadedCategories);
+        setCustomizeIndex(catalogBody.data.customizeIndex ?? null);
         setCategoriesLoading(false);
         setMenuComplete(true);
         setFromOfflineCache(false);
@@ -175,6 +186,7 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
         void setOfflineCache(OFFLINE_CACHE_KEYS.posMenu, {
           meta: nextMeta,
           categories: loadedCategories,
+          customizeIndex: catalogBody.data.customizeIndex ?? null,
         } satisfies PosMenuCachePayload<TItem>);
       } catch {
         if (isStale()) return;
@@ -191,11 +203,12 @@ export function useProgressiveRestaurantMenu<TItem extends { id: string }>({
     return () => {
       cancelled = true;
     };
-  }, [activeBranchId, enabled, reset]);
+  }, [menuBranchId, enabled, reset]);
 
   return {
     meta,
     categories,
+    customizeIndex,
     categoriesLoading,
     menuComplete,
     error,

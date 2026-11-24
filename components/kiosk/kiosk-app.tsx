@@ -22,6 +22,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -34,16 +35,21 @@ import { toast } from 'react-toastify';
 import { MenuOfferChoiceDialog } from '@/components/order/menu-offer-choice-dialog';
 import { TableFloorPickerDialog } from '@/components/dashboard/tables/table-floor-picker';
 import {
-  ProductCustomizeDialog,
   type AttributeGroup,
   type SelectedProductVariation,
 } from '@/components/order/product-customize-dialog';
+import { KioskItemFlow } from '@/components/kiosk/kiosk-item-flow';
 import { getCategoryDisplayImageUrl } from '@/lib/menu/category-display-image';
 import { findBundleParentProducts } from '@/lib/menu/find-bundle-parent-products';
 import {
-  loadCustomerMenuProductDetailProgressive,
+  fetchCustomerMenuProductDetail,
+  KIOSK_DETAIL_CACHE_TTL_MS,
   overlayLiveCatalogPrices,
+  peekCustomerMenuProductDetail,
+  persistKioskDetailCache,
+  restoreKioskDetailCache,
 } from '@/lib/menu/fetch-menu-product-detail';
+import { warmKioskCatalog } from '@/lib/kiosk/warm-kiosk-catalog';
 import { LazyMenuProductImage } from '@/components/menu/lazy-menu-product-image';
 import { LanguageSwitcher } from '@/components/main/language-switcher';
 import { Button } from '@/components/ui/button';
@@ -104,6 +110,7 @@ import {
   saveKioskQrContext,
 } from '@/lib/kiosk-qr-context-storage';
 import {
+  buildKioskMenuBrowseUrl,
   buildKioskMenuCategoriesUrl,
   buildKioskMenuCategoryItemsUrl,
 } from '@/lib/customer-menu-client';
@@ -126,7 +133,9 @@ import {
   useCardPaymentFlow,
 } from '../payments/card-payment-flow';
 import { PosOnScreenKeyboard } from '@/components/pos/pos-on-screen-keyboard';
-import { encodeUrlIdClient } from '@/lib/encode-url-id-client';
+import { saveKioskReceiptSnapshot } from '@/lib/kiosk-print-receipt';
+import { formatBranchDateTime } from '@/lib/branch-timezone';
+import { receiptLinesFromCartLine } from '@/lib/receipt-item-lines';
 import { publicId } from '@/lib/public-id';
 import { FeatureDisabledScreen } from '@/components/common/feature-disabled-screen';
 
@@ -559,6 +568,60 @@ function cartSummaryLines(cart: CartLine[], maxLines: number): string[] {
 
 type Step = 'mode' | 'menu' | 'cart' | 'checkout' | 'done';
 
+function KioskStartSlideshow({ urls }: { urls: string[] }) {
+  const [index, setIndex] = useState(0);
+  const [hidden, setHidden] = useState<Record<string, true>>({});
+  const visible = urls.filter((url) => !hidden[url]);
+  const safeIndex = visible.length === 0 ? 0 : index % visible.length;
+
+  useEffect(() => {
+    setIndex(0);
+  }, [visible.length]);
+
+  useEffect(() => {
+    if (visible.length < 2) return;
+    const id = window.setInterval(() => {
+      setIndex((current) => current + 1);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [visible.length]);
+
+  if (visible.length === 0) return null;
+
+  return (
+    <>
+      <div
+        className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+        aria-hidden
+      >
+        <div
+          className="flex h-full transition-transform duration-700 ease-out"
+          style={{ transform: `translateX(-${safeIndex * 100}vw)` }}
+        >
+          {visible.map((src) => (
+            // eslint-disable-next-line @next/next/no-img-element -- menu and banner URLs
+            <img
+              key={src}
+              src={src}
+              alt=""
+              className="h-full w-screen shrink-0 object-cover"
+              onError={() =>
+                setHidden((current) =>
+                  current[src] ? current : { ...current, [src]: true }
+                )
+              }
+            />
+          ))}
+        </div>
+      </div>
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-[1] bg-black/40"
+      />
+    </>
+  );
+}
+
 export function KioskApp({
   slug,
   branchId,
@@ -630,6 +693,7 @@ export function KioskApp({
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [lastTicketNumber, setLastTicketNumber] = useState<number | null>(null);
   const [branchName, setBranchName] = useState<string | null>(null);
+  const [branchTimeZone, setBranchTimeZone] = useState<string | null>(null);
   const [branchValid, setBranchValid] = useState<boolean | null>(null);
   const { t, i18n } = useTranslation();
   const uiLang = normalizeUiLanguage(i18n.resolvedLanguage ?? i18n.language);
@@ -701,11 +765,16 @@ export function KioskApp({
     restaurantMeta,
     categories: progressiveCategories,
     categoriesLoading,
+    menuComplete,
     error: menuError,
   } = useProgressiveCustomerMenu<CustomerMenuProduct>({
     categoriesUrl: buildKioskMenuCategoriesUrl(slug, branchId),
+    browseUrl: slug && branchId ? buildKioskMenuBrowseUrl(slug, branchId) : null,
     categoryItemsUrl,
     enabled: Boolean(slug),
+    batchSize: 100,
+    categoryConcurrency: 4,
+    retainKey: slug && branchId ? `kiosk:${slug}:${branchId}` : null,
   });
 
   const menu = useMemo((): MenuRestaurant | null => {
@@ -731,6 +800,99 @@ export function KioskApp({
     };
   }, [restaurantMeta, progressiveCategories, slug, uiLang]);
 
+  const catalogCategories = useMemo(
+    () =>
+      progressiveCategories.map((category) => ({
+        id: category.id,
+        productIds: category.items.map((item) => item.id),
+      })),
+    [progressiveCategories]
+  );
+  const [catalogWarm, setCatalogWarm] = useState({
+    loaded: 0,
+    total: 0,
+    done: false,
+  });
+
+  useLayoutEffect(() => {
+    if (!slug || !menuComplete) {
+      setCatalogWarm({ loaded: 0, total: 0, done: false });
+      return;
+    }
+    if (catalogCategories.length === 0) {
+      setCatalogWarm({ loaded: 0, total: 0, done: true });
+      return;
+    }
+
+    restoreKioskDetailCache(slug);
+    const detailQuery = { slug };
+    const alreadyWarm = catalogCategories.every((category) =>
+      category.productIds.every((id) =>
+        peekCustomerMenuProductDetail(id, detailQuery)
+      )
+    );
+    if (alreadyWarm) {
+      setCatalogWarm({
+        loaded: catalogCategories.length,
+        total: catalogCategories.length,
+        done: true,
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setCatalogWarm({
+      loaded: 0,
+      total: catalogCategories.length,
+      done: false,
+    });
+    void warmKioskCatalog({
+      categories: catalogCategories,
+      query: { slug },
+      signal: { cancelled: () => cancelled },
+      onProgress: (progress) => {
+        if (!cancelled) setCatalogWarm({ ...progress, done: false });
+      },
+    }).finally(() => {
+      if (!cancelled) {
+        persistKioskDetailCache(slug);
+        setCatalogWarm((current) => ({ ...current, done: true }));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId, catalogCategories, menuComplete, slug]);
+
+  const catalogReady = Boolean(menuComplete && catalogWarm.done && !menuError);
+  const catalogFraction =
+    progressiveCategories.length === 0
+      ? 0
+      : progressiveCategories.filter((category) => category.loaded).length /
+        progressiveCategories.length;
+  const startupStatus =
+    catalogWarm.total > 0
+      ? t('kioskProductsLoaded', {
+          loaded: catalogWarm.loaded,
+          total: catalogWarm.total,
+        })
+      : catalogCategories.length > 0
+        ? t('kioskCategoriesFound', {
+            loaded: progressiveCategories.filter((category) => category.loaded)
+              .length,
+            total: catalogCategories.length,
+          })
+        : '';
+  const startupPercent = !menuComplete
+    ? Math.round(catalogFraction * 40)
+    : catalogWarm.total === 0
+      ? 100
+      : Math.min(
+          100,
+          40 + Math.round((catalogWarm.loaded / catalogWarm.total) * 60)
+        );
+
   const fulfillmentSettings = useMemo(
     (): RestaurantFulfillmentSettings =>
       parseRestaurantFulfillmentSettings(
@@ -753,7 +915,7 @@ export function KioskApp({
   };
 
   useEffect(() => {
-    if (!restaurantMeta || fromTableQr) return;
+    if (!restaurantMeta || fromTableQr || !catalogReady) return;
     if (!fulfillmentSettings.dineInEnabled && step === 'mode') {
       setFulfillment('take_away');
       setStep('menu');
@@ -761,6 +923,7 @@ export function KioskApp({
   }, [
     restaurantMeta,
     fromTableQr,
+    catalogReady,
     fulfillmentSettings.dineInEnabled,
     step,
   ]);
@@ -867,7 +1030,12 @@ export function KioskApp({
           `/api/customer/branches?slug=${encodeURIComponent(slug)}`
         );
         const json = (await res.json().catch(() => ({}))) as {
-          data?: { id: string; urlId?: string; name: string }[];
+          data?: {
+            id: string;
+            urlId?: string;
+            name: string;
+            timeZone?: string | null;
+          }[];
         };
         if (cancelled) return;
         const match = (json.data ?? []).find(
@@ -879,9 +1047,11 @@ export function KioskApp({
         if (match) {
           setBranchValid(true);
           setBranchName(match.name);
+          setBranchTimeZone(match.timeZone?.trim() || null);
         } else {
           setBranchValid(false);
           setBranchName(null);
+          setBranchTimeZone(null);
         }
       } catch {
         if (!cancelled) {
@@ -1021,6 +1191,26 @@ export function KioskApp({
       c.items.map((p) => ({ ...p, categoryName: c.name }))
     );
   }, [menu]);
+
+  const startSlideUrls = useMemo(() => {
+    const urls: string[] = [];
+    const push = (value: unknown) => {
+      if (typeof value !== 'string') return;
+      const trimmed = value.trim();
+      if (!trimmed || urls.includes(trimmed)) return;
+      urls.push(trimmed);
+    };
+    push(restaurantMeta?.mainBannerUrl);
+    const banners = restaurantMeta?.menuBannerUrls;
+    if (Array.isArray(banners)) {
+      for (const banner of banners) push(banner);
+    }
+    for (const product of allProducts) {
+      if (urls.length >= 12) break;
+      push(product.imageUrl);
+    }
+    return urls;
+  }, [allProducts, restaurantMeta]);
 
   const productImageById = useMemo(
     () => buildProductImageByIdMap(allProducts),
@@ -1380,31 +1570,27 @@ export function KioskApp({
   };
 
   const proceedWithProduct = async (p: CustomerMenuProduct) => {
+    const cached = peekCustomerMenuProductDetail<CustomerMenuProduct>(p.id, {
+      slug,
+    });
+    if (cached) {
+      openCustomize(
+        { ...cached, categoryId: p.categoryId },
+        { loading: false }
+      );
+      setCustomizeLoading(false);
+      setCustomizeHydrating(false);
+      return;
+    }
+
     const token = ++customizeLoadTokenRef.current;
     openCustomize(p, { loading: true });
     setCustomizeHydrating(true);
-    // Shell → required groups first → optional; nests defer to sheet open.
-    const full =
-      await loadCustomerMenuProductDetailProgressive<CustomerMenuProduct>(
-        p.id,
-        { slug },
-        {
-          signal: { cancelled: () => token !== customizeLoadTokenRef.current },
-          onShell: (shell) => {
-            if (token !== customizeLoadTokenRef.current) return;
-            setCustomizeProduct({ ...shell, categoryId: p.categoryId });
-          },
-          onGroup: (partial) => {
-            if (token !== customizeLoadTokenRef.current) return;
-            setCustomizeProduct({ ...partial, categoryId: p.categoryId });
-          },
-          onRequiredComplete: (partial) => {
-            if (token !== customizeLoadTokenRef.current) return;
-            setCustomizeProduct({ ...partial, categoryId: p.categoryId });
-            setCustomizeLoading(false);
-          },
-        }
-      );
+    const full = await fetchCustomerMenuProductDetail<CustomerMenuProduct>(
+      p.id,
+      { slug },
+      { ttlMs: KIOSK_DETAIL_CACHE_TTL_MS }
+    );
     if (token !== customizeLoadTokenRef.current) return;
     if (!full) {
       setDialogOpen(false);
@@ -1564,6 +1750,54 @@ export function KioskApp({
       const ticketNumber = result.data.ticketNumber ?? null;
       setLastOrderId(placedId);
       setLastTicketNumber(ticketNumber);
+      const tableRaw =
+        fulfillment === 'dine_in'
+          ? diningTables.find((table) => table.id === selectedTableId)?.name?.trim() ||
+            ''
+          : '';
+      const tableLabel = tableRaw
+        ? /^(table|mesa)\b/i.test(tableRaw)
+          ? tableRaw
+          : `${t('table')} ${tableRaw}`
+        : null;
+      saveKioskReceiptSnapshot({
+        orderId: placedId,
+        trackingId: placedId,
+        restaurantName: String(menu?.name || restaurantMeta?.name || slug),
+        branchName: branchName?.trim() || null,
+        dateTime: formatBranchDateTime(new Date(), branchTimeZone),
+        ticketNo: ticketNumber,
+        paymentMethod: payment.paymentMethod,
+        paymentState: payment.paymentStatus,
+        tableName: tableLabel,
+        customerName: customerName.trim() || null,
+        customerPhone: customerPhone.trim() || null,
+        mode: fulfillment === 'dine_in' ? 'dine_in' : 'take_away',
+        note: cookingNote.trim() || null,
+        items: cart.flatMap((line) =>
+          receiptLinesFromCartLine(
+            {
+              productName: line.productName,
+              variationName: line.variationName,
+              quantity: line.quantity,
+              lineTotal: lineTotal(line),
+              modifiers: line.modifiers,
+            },
+            uiLang
+          ).map((row) => ({
+            name: row.name,
+            quantity: row.qty,
+            lineTotal: row.lineTotal,
+          }))
+        ),
+        subtotal: cartSubtotal,
+        tax: 0,
+        discount: 0,
+        paidAmount: cartGrandTotal,
+        change: 0,
+        total: cartGrandTotal,
+        regional,
+      });
       clearCart();
       cardPayment.resetCardPayment();
       setPaymentMode('cash');
@@ -1576,9 +1810,8 @@ export function KioskApp({
           ? 'Order placed — pay at counter when ready.'
           : 'Order placed'
       );
-      const publicOrderId = await encodeUrlIdClient(placedId);
       const queryParams = new URLSearchParams({
-        orderId: publicOrderId,
+        orderId: placedId,
         method: payment.paymentMethod,
         payStatus: payment.paymentStatus,
       });
@@ -1588,7 +1821,7 @@ export function KioskApp({
       if (isMobileScan) {
         queryParams.set('Mobile', 'true');
       }
-      window.location.assign(
+      router.push(
         `${kioskSuccessPath(slug, kioskPublicBranchId)}?${queryParams.toString()}`
       );
     } catch (e: unknown) {
@@ -1762,8 +1995,6 @@ export function KioskApp({
     })),
   };
 
-  const bannerSrc = displayMenu.mainBannerUrl?.trim() ?? '';
-  const hasBanner = Boolean(bannerSrc);
   const kioskThemeVars = buildThemeCssVars(
     displayMenu.themePrimaryColor
   ) as CSSProperties;
@@ -1783,7 +2014,8 @@ export function KioskApp({
       <div
         className={cn(
           'relative z-10 flex min-h-screen flex-1 flex-col',
-          !hasBanner && 'bg-[#f8fafc]'
+          dialogOpen && 'h-dvh max-h-dvh overflow-hidden',
+          'bg-[#f8fafc]'
         )}
       >
         <KioskQrSignInDialog
@@ -1911,32 +2143,108 @@ export function KioskApp({
           </div>
         </header>
 
-        {qrCustomerReady && step === 'mode' && (
+        {dialogOpen && customizeProduct ? (
+          <KioskItemFlow
+            key={customizeProduct.id}
+            productName={resolveBilingualText(customizeProduct.name, uiLang)}
+            productImageUrl={customizeProduct.imageUrl}
+            productBaseUnitPrice={effectiveUnitPrice(
+              customizeProduct.price,
+              customizeProduct.salePrice
+            )}
+            variations={(customizeProduct.variations ?? []).map((v) => ({
+              id: v.id,
+              name:
+                (v.name && resolveBilingualText(v.name, uiLang)) ||
+                (v.title && resolveBilingualText(v.title, uiLang)) ||
+                'Variation',
+              imageUrl: v.imageUrl ?? null,
+              swatchHex: v.swatchHex,
+              priceDelta: v.priceDelta,
+              restaurantVariationId:
+                (v as { restaurantVariationId?: string | null })
+                  .restaurantVariationId ?? null,
+              variationShortLabel:
+                (v as { variationShortLabel?: string | null })
+                  .variationShortLabel ?? null,
+            }))}
+            attributeGroups={attributeGroupsForDialog}
+            personalizeGroups={customizeProduct.personalizeGroups ?? []}
+            ready={!customizeLoading && !customizeHydrating}
+            lang={uiLang}
+            slug={slug}
+            formatMoney={formatMoney}
+            regional={regional}
+            onClose={() => {
+              customizeLoadTokenRef.current += 1;
+              setDialogOpen(false);
+              setCustomizeProduct(null);
+              setCustomizeLoading(false);
+              setCustomizeHydrating(false);
+            }}
+            onConfirm={(mods, variation, quantity = 1) => {
+              const mapped: CartModifierSelection[] = mods.map((m) => ({
+                attributeGroupId: m.attributeGroupId,
+                groupName: m.groupName,
+                parentSelectionKey: m.parentSelectionKey,
+                selections: m.selections.map((s) => ({
+                  menuItemId: s.menuItemId,
+                  name: String(s.name ?? 'Option'),
+                  unitPrice: Number.isFinite(Number(s.unitPrice))
+                    ? Number(s.unitPrice)
+                    : 0,
+                })),
+              }));
+              const times = Math.max(1, Math.floor(quantity));
+              for (let i = 0; i < times; i += 1) {
+                addToCart(
+                  customizeProduct,
+                  mapped,
+                  variation ?? null,
+                  i > 0 ? { skipFly: true } : undefined
+                );
+              }
+              setDialogOpen(false);
+              setCustomizeProduct(null);
+              setCustomizeLoading(false);
+              setCustomizeHydrating(false);
+            }}
+          />
+        ) : null}
+
+        {qrCustomerReady && !dialogOpen && step === 'mode' && (
           <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 py-12 relative z-10">
-            {hasBanner ? (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary CDN URLs */}
-                <img
-                  src={bannerSrc}
-                  alt=""
-                  aria-hidden
-                  decoding="async"
-                  className="pointer-events-none fixed inset-0 z-0 h-[100dvh] min-h-[100svh] w-full object-cover object-center"
-                />
-                <div
-                  aria-hidden
-                  className="pointer-events-none fixed inset-0 z-[1] h-[100dvh] min-h-[100svh] bg-black/25"
-                />
-              </>
-            ) : null}
+            <KioskStartSlideshow urls={startSlideUrls} />
             <div className="text-center bg-black/25 backdrop-blur p-6 rounded-lg shadow-lg relative z-20">
               <h1 className="text-2xl font-bold tracking-tight sm:text-3xl text-primary">
-                {t('whereEatingToday')}
+                {catalogReady ? t('whereEatingToday') : t('kioskWelcomeWait')}
               </h1>
               <p className="mt-2 text-sm text-white">
-                {t('tapOptionToBrowse')}
+                {catalogReady ? t('tapOptionToBrowse') : t('kioskPreparingMenu')}
               </p>
+              {!catalogReady ? (
+                <div className="mx-auto mt-5 w-full max-w-sm text-left">
+                  <div
+                    className="h-3 overflow-hidden rounded-full bg-white/25"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={startupPercent}
+                  >
+                    <div
+                      className="h-full rounded-full bg-primary transition-[width] duration-300"
+                      style={{ width: `${startupPercent}%` }}
+                    />
+                  </div>
+                  {startupStatus ? (
+                    <p className="mt-2 text-center text-sm font-medium text-white">
+                      {startupStatus}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
+            {catalogReady ? (
             <div className="grid w-full max-w-md grid-cols-2 gap-4 relative z-20">
               {fulfillmentSettings.dineInEnabled ? (
               <button
@@ -1962,10 +2270,39 @@ export function KioskApp({
                 <span className="font-semibold">{t('takeAway')}</span>
               </button>
             </div>
+            ) : null}
           </div>
         )}
 
-        {qrCustomerReady && step === 'menu' && (
+        {qrCustomerReady && !dialogOpen && !catalogReady && step !== 'mode' ? (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#fffaf5]/95 p-6">
+            <div className="w-full max-w-md rounded-2xl border border-[#e2e8f0] bg-white p-8 text-center shadow-lg">
+              <p className="text-lg font-semibold text-[#0f172a]">
+                {t('kioskWelcomeWait')}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {t('kioskPreparingMenu')}
+              </p>
+              <div
+                className="mx-auto mt-5 h-3 overflow-hidden rounded-full bg-[#e2e8f0]"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={startupPercent}
+              >
+                <div
+                  className="h-full rounded-full bg-primary transition-[width] duration-300"
+                  style={{ width: `${startupPercent}%` }}
+                />
+              </div>
+              {startupStatus ? (
+                <p className="mt-3 text-sm text-[#64748b]">{startupStatus}</p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {qrCustomerReady && !dialogOpen && step === 'menu' && (
           <>
             <div className="mx-auto flex w-full flex-1 gap-0">
               <aside className="fixed bottom-28 left-0 top-[73px] z-20 hidden w-36 shrink-0 overflow-hidden border-r border-[#e2e8f0] bg-[#fafafa] py-4 md:block">
@@ -2214,7 +2551,7 @@ export function KioskApp({
           </>
         )}
 
-        {qrCustomerReady && step === 'cart' && (
+        {qrCustomerReady && !dialogOpen && step === 'cart' && (
           <div className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 py-6">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-bold">{t('yourCart')}</h1>
@@ -2513,7 +2850,7 @@ export function KioskApp({
           </div>
         )}
 
-        {qrCustomerReady && step === 'checkout' && (
+        {qrCustomerReady && !dialogOpen && step === 'checkout' && (
           <div className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 py-6">
             <h1 className="text-2xl font-bold">{t('checkout')}</h1>
             <p className="text-sm text-[#64748b]">
@@ -2758,7 +3095,7 @@ export function KioskApp({
           </div>
         )}
 
-        {qrCustomerReady && step === 'done' && (
+        {qrCustomerReady && !dialogOpen && step === 'done' && (
           <div className="mx-auto flex max-w-lg flex-1 flex-col items-center justify-center gap-6 px-6 py-16 text-center">
             <div className="rounded-full bg-[#fff7ed] p-6 text-primary">
               <ShoppingBag className="h-12 w-12" />
@@ -2983,81 +3320,6 @@ export function KioskApp({
           }}
         />
 
-        <ProductCustomizeDialog
-          productName={
-            customizeProduct
-              ? resolveBilingualText(customizeProduct.name, uiLang)
-              : ''
-          }
-          productImageUrl={customizeProduct?.imageUrl ?? null}
-          productDescription={
-            customizeProduct?.description
-              ? resolveBilingualText(customizeProduct.description, uiLang)
-              : null
-          }
-          themePrimaryColor={displayMenu?.themePrimaryColor ?? null}
-          productBaseUnitPrice={
-            customizeProduct
-              ? effectiveUnitPrice(
-                  customizeProduct.price,
-                  customizeProduct.salePrice
-                )
-              : 0
-          }
-          attributeGroups={attributeGroupsForDialog}
-          personalizeGroups={customizeProduct?.personalizeGroups ?? []}
-          variations={(customizeProduct?.variations ?? []).map((v) => ({
-            id: v.id,
-            name:
-              (v.name && resolveBilingualText(v.name, uiLang)) ||
-              (v.title && resolveBilingualText(v.title, uiLang)) ||
-              'Variation',
-            imageUrl: v.imageUrl ?? null,
-            swatchHex: v.swatchHex,
-            priceDelta: v.priceDelta,
-          }))}
-          open={dialogOpen}
-          isLoading={customizeLoading}
-          menuQuery={{ slug }}
-          optionImageUrlForItem={(id) =>
-            customerMenuItemImageUrl(id, { slug })
-          }
-          onOpenChange={(open) => {
-            setDialogOpen(open);
-            if (!open) {
-              customizeLoadTokenRef.current += 1;
-              setCustomizeProduct(null);
-              setCustomizeLoading(false);
-            }
-          }}
-          onConfirm={(mods, variation, quantity = 1) => {
-            if (!customizeProduct) return;
-            const mapped: CartModifierSelection[] = mods.map((m) => ({
-              attributeGroupId: m.attributeGroupId,
-              groupName: m.groupName,
-              parentSelectionKey: m.parentSelectionKey,
-              selections: m.selections.map((s) => ({
-                menuItemId: s.menuItemId,
-                name: String(s.name ?? 'Option'),
-                unitPrice: Number.isFinite(Number(s.unitPrice))
-                  ? Number(s.unitPrice)
-                  : 0,
-              })),
-            }));
-            const times = Math.max(1, Math.floor(quantity));
-            for (let i = 0; i < times; i += 1) {
-              addToCart(
-                customizeProduct,
-                mapped,
-                variation ?? null,
-                i > 0 ? { skipFly: true } : undefined
-              );
-            }
-            setDialogOpen(false);
-            setCustomizeProduct(null);
-            setCustomizeLoading(false);
-          }}
-        />
       </div>
     </div>
   );

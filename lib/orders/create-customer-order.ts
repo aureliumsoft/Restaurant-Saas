@@ -4,10 +4,8 @@ import { z } from 'zod';
 import { validateBranchForRestaurant } from '@/lib/branch/branch-scope';
 import { buildKitchenTicketItemRows } from '@/lib/kitchen-ticket-items';
 import { db } from '@/lib/db';
-import {
-  isPersonalizeModifierMenuItemId,
-  normalizePersonalizeModifierMenuItemId,
-} from '@/lib/menu/personalize-modifiers';
+import { isPersonalizeModifierMenuItemId } from '@/lib/menu/personalize-modifiers';
+import { createOrderItemsWithModifiers } from '@/lib/pos-order-modifiers';
 import {
   isPrismaUniqueViolation,
   parseOrderIdempotencyKey,
@@ -258,13 +256,11 @@ export async function createCustomerOrder(options: {
     return { ok: false, status: 200, error: 'idempotent', response: idempotentHit };
   }
 
-  const paidExternally = options.paidExternally === true;
-
   const computedSubtotal = lines.reduce(
     (sum, l) => sum + l.unitPrice * l.quantity,
     0
   );
-  if (!paidExternally && Math.abs(computedSubtotal - subtotal) > 0.02) {
+  if (Math.abs(computedSubtotal - subtotal) > 0.02) {
     return {
       ok: false,
       status: 400,
@@ -278,11 +274,9 @@ export async function createCustomerOrder(options: {
     serviceCharges,
     'online'
   );
-  const orderTotal = paidExternally ? total : computedTotal;
-  const orderServiceCharge = paidExternally
-    ? Math.max(0, Number((total - computedSubtotal).toFixed(2)))
-    : serviceChargeAmount;
-  if (!paidExternally && !totalsMatch(computedTotal, total)) {
+  const orderTotal = computedTotal;
+  const orderServiceCharge = serviceChargeAmount;
+  if (!totalsMatch(computedTotal, total)) {
     return {
       ok: false,
       status: 400,
@@ -316,12 +310,9 @@ export async function createCustomerOrder(options: {
 
   const menuRows = await db.menuItem.findMany({
     where: { restaurantId: restaurant.id, id: { in: [...menuIds] } },
-    select: {
-      id: true,
-      variations: { select: { id: true }, orderBy: { sortOrder: 'asc' } },
-    },
+    select: { id: true },
   });
-  if (!paidExternally && menuRows.length !== menuIds.size) {
+  if (menuRows.length !== menuIds.size) {
     return {
       ok: false,
       status: 400,
@@ -330,15 +321,7 @@ export async function createCustomerOrder(options: {
   }
   const validMenuIds = new Set(menuRows.map((m) => m.id));
 
-  const variationsByItemId = new Map(
-    menuRows.map((row) => [row.id, row.variations])
-  );
-  const resolvedLines = lines.map((line) => {
-    if (line.variationId?.trim()) return line;
-    const fallback = variationsByItemId.get(line.menuItemId)?.[0]?.id;
-    if (!fallback) return line;
-    return { ...line, variationId: fallback };
-  });
+  const resolvedLines = lines;
 
   let trustedAccountId: string | null = null;
   let accountEmail: string | null = null;
@@ -477,39 +460,20 @@ export async function createCustomerOrder(options: {
           throw new Error('Failed to create order after ticket retries');
         }
 
-        for (const line of resolvedLines) {
-          const orderItem = await tx.orderItem.create({
-            data: {
-              orderId: order.id,
-              menuItemId: validMenuIds.has(line.menuItemId)
-                ? line.menuItemId
-                : null,
-              productName: line.productName,
-              quantity: line.quantity,
-              price: line.unitPrice,
-            },
-          });
-
-          const flatMods = line.modifiers.flatMap((g) =>
-            g.selections.map((s) => ({
-              selection: s,
-              groupName: g.groupName,
-            }))
-          );
-          if (flatMods.length > 0) {
-            await tx.orderItemModifier.createMany({
-              data: flatMods.map(({ selection: s, groupName }, sortOrder) => ({
-                orderItemId: orderItem.id,
-                menuItemId: normalizePersonalizeModifierMenuItemId(s.menuItemId),
-                name: s.name,
-                groupName: groupName?.trim() || null,
-                unitPrice: s.unitPrice,
-                quantity: 1,
-                sortOrder,
-              })),
-            });
-          }
-        }
+        await createOrderItemsWithModifiers(
+          tx,
+          order.id,
+          resolvedLines.map((line) => ({
+            menuItemId: validMenuIds.has(line.menuItemId)
+              ? line.menuItemId
+              : null,
+            productName: line.productName,
+            quantity: line.quantity,
+            price: line.unitPrice,
+            variationId: line.variationId ?? null,
+            modifiers: line.modifiers,
+          }))
+        );
 
         const ticket = await tx.kitchenTicket.create({
           data: {
@@ -556,8 +520,6 @@ export async function createCustomerOrder(options: {
           restaurantId: restaurant.id,
           branchId,
           orderId: order.id,
-          requireAvailableStock: !paidExternally,
-          requireVariation: !paidExternally,
           lines: resolvedLines.map((line) => ({
             menuItemId: line.menuItemId,
             quantity: line.quantity,

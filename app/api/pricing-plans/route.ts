@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 
 import { db } from '@/lib/db';
+import { ensureSubscriptionCatalog } from '@/lib/ensure-subscription-catalog';
 import { finalPrice } from '@/lib/subscription-catalog-pricing';
 
 type CatalogRow = {
@@ -20,6 +21,7 @@ type CatalogRow = {
 
 export async function GET() {
   try {
+    await ensureSubscriptionCatalog();
     const rows = await db.$queryRaw<CatalogRow[]>(Prisma.sql`
       SELECT
         "plan"::text AS "plan",

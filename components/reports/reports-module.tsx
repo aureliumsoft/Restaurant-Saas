@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentType,
   type ReactNode,
@@ -431,12 +432,29 @@ export function ReportsModule() {
   } = useBranchContext();
   const activeBranchName =
     branches.find((b) => b.id === activeBranchId)?.name ?? null;
+  const branchTimeZone =
+    branches.find((b) => b.id === activeBranchId)?.timeZone ?? null;
 
-  const defaults = useMemo(() => defaultReportFromToKeys(true), []);
+  const defaults = useMemo(
+    () => defaultReportFromToKeys(true, branchTimeZone),
+    [branchTimeZone]
+  );
   const [fromDate, setFromDate] = useState(defaults.from);
   const [toDate, setToDate] = useState(defaults.to);
   const [appliedFrom, setAppliedFrom] = useState(defaults.from);
   const [appliedTo, setAppliedTo] = useState(defaults.to);
+  const previousDefaultsRef = useRef(defaults);
+  useEffect(() => {
+    const previous = previousDefaultsRef.current;
+    previousDefaultsRef.current = defaults;
+    if (previous.from === defaults.from && previous.to === defaults.to) return;
+    setFromDate((current) => (current === previous.from ? defaults.from : current));
+    setToDate((current) => (current === previous.to ? defaults.to : current));
+    setAppliedFrom((current) =>
+      current === previous.from ? defaults.from : current
+    );
+    setAppliedTo((current) => (current === previous.to ? defaults.to : current));
+  }, [defaults]);
 
   const [reportType, setReportType] = useState<ReportType>(() =>
     parseReportType(searchParams.get('type'))
@@ -1085,7 +1103,7 @@ export function ReportsModule() {
               variant="secondary"
               disabled={historicalLocked}
               onClick={() => {
-                const r = weekReportFromToKeys();
+                const r = weekReportFromToKeys(branchTimeZone);
                 applyDates(r.from, r.to);
               }}
             >
@@ -1097,7 +1115,7 @@ export function ReportsModule() {
               variant="secondary"
               disabled={historicalLocked}
               onClick={() => {
-                const r = monthReportFromToKeys();
+                const r = monthReportFromToKeys(branchTimeZone);
                 applyDates(r.from, r.to);
               }}
             >

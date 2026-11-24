@@ -5,6 +5,7 @@ import {
   getBranchScopeFromRequest,
   userIsOwnerOrAdmin,
 } from '@/lib/branch/branch-scope';
+import { loadResolvedBranchTimeZone } from '@/lib/branch-timezone-server';
 import { db } from '@/lib/db';
 import { resolveReportDateRange } from '@/lib/reports/date-range';
 import { queryTransactionLedger } from '@/lib/reports/transaction-ledger';
@@ -33,6 +34,10 @@ export async function GET(req: NextRequest) {
     canViewHistorical,
     fromParam: req.nextUrl.searchParams.get('from'),
     toParam: req.nextUrl.searchParams.get('to'),
+    timeZone: await loadResolvedBranchTimeZone(
+      auth.restaurant.id,
+      branchScope?.activeBranchId ?? null
+    ),
   });
 
   const kindRaw = req.nextUrl.searchParams.get('kind');

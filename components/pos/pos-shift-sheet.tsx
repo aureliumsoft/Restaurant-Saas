@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/sheet';
 import type { PosShiftPayload, PosShiftSummary } from '@/lib/pos-shift';
 import { printPosShiftRecord } from '@/lib/pos-shift-print';
+import { formatBranchDateTime } from '@/lib/branch-timezone';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { isCanceledOrderStatus } from '@/lib/sales-order-status';
@@ -34,6 +35,7 @@ type Props = {
   brandName?: string;
   branchName?: string | null;
   logoUrl?: string | null;
+  timeZone?: string | null;
   isOwnerOrAdmin?: boolean;
   /** After end shift, always sign out (logout flow). */
   logoutAfterEnd?: boolean;
@@ -51,6 +53,7 @@ export function PosShiftSheet({
   brandName = 'Restaurant',
   branchName,
   logoUrl,
+  timeZone,
   isOwnerOrAdmin = false,
   logoutAfterEnd = false,
   onShiftUpdated,
@@ -155,6 +158,7 @@ export function PosShiftSheet({
       brandName,
       branchName,
       logoUrl,
+      timeZone,
       currencyCode: regional.currencyCode,
       countryCode: regional.countryCode,
     });
@@ -230,7 +234,7 @@ export function PosShiftSheet({
                 <div>
                   <p className="text-xs text-muted-foreground">{t('pos.sheets.shift.started')}</p>
                   <p className="font-medium">
-                    {new Date(shift.startedAt).toLocaleString()}
+                    {formatBranchDateTime(shift.startedAt, timeZone)}
                   </p>
                 </div>
                 <div>
@@ -293,7 +297,7 @@ export function PosShiftSheet({
                               ) : null}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              {new Date(order.createdAt).toLocaleString()}
+                              {formatBranchDateTime(order.createdAt, timeZone)}
                               {order.paymentMethod
                                 ? ` · ${order.paymentMethod}`
                                 : ''}
@@ -332,7 +336,7 @@ export function PosShiftSheet({
                   {shift.previousShiftEndedAt ? (
                     <p className="text-xs text-muted-foreground">
                       {t('pos.sheets.shift.lastShiftEnded', {
-                        time: new Date(shift.previousShiftEndedAt).toLocaleString(),
+                        time: formatBranchDateTime(shift.previousShiftEndedAt, timeZone),
                       })}
                     </p>
                   ) : null}

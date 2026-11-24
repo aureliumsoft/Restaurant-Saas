@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { fetchCustomerRestaurant } from '@/lib/customer-restaurant-client';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,10 +28,9 @@ import { WEB_CUSTOMER_TAKEAWAY_NAME } from '@/lib/web-customer';
 import { writeOrderContext } from '@/lib/order-context-storage';
 import { encodeUrlIdClient } from '@/lib/encode-url-id-client';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
-import { timezoneForRestaurantCountry } from '@/lib/restaurant-regional';
 import {
-  getBranchCloseTimeToday,
-  getNextBranchOpenAt,
+  formatOpeningClock,
+  getBranchStatusWindow,
   isBranchOpenNow,
   type BranchOpeningHours,
 } from '@/lib/order-time-slots';
@@ -60,27 +60,24 @@ const WEEKDAY_I18N_KEYS = [
 function branchHoursStatusLabel(
   openingHours: BranchOpeningHours | null | undefined,
   timeZone: string | null | undefined,
-  methodLabel: string,
   t: (key: string, options?: Record<string, string>) => string
 ) {
   const now = new Date();
-  if (isBranchOpenNow(openingHours, now, timeZone)) {
-    const closeTime = getBranchCloseTimeToday(openingHours, now, timeZone);
-    return t('orderMethodAvailableTill', {
-      method: methodLabel,
-      time: closeTime ?? '',
+  const openNow = isBranchOpenNow(openingHours, now, timeZone);
+  const status = t(openNow ? 'branchOpen' : 'branchClosed');
+  const window = getBranchStatusWindow(openingHours, now, timeZone);
+  if (!window) return status;
+  const open = formatOpeningClock(window.openTime);
+  const close = formatOpeningClock(window.closeTime);
+  if (window.dayOffset > 0) {
+    return t('branchHoursStatusOnDay', {
+      status,
+      day: t(WEEKDAY_I18N_KEYS[window.dayOfWeek] ?? 'weekdaySunday'),
+      open,
+      close,
     });
   }
-  const next = getNextBranchOpenAt(openingHours, now, timeZone);
-  if (!next) return t('branchClosed');
-  if (next.dayOffset === 0) return t('branchOpensAt', { time: next.time });
-  if (next.dayOffset === 1) {
-    return t('branchOpensTomorrowAt', { time: next.time });
-  }
-  return t('branchOpensOnDayAt', {
-    day: t(WEEKDAY_I18N_KEYS[next.dayOfWeek] ?? 'weekdaySunday'),
-    time: next.time,
-  });
+  return t('branchHoursStatus', { status, open, close });
 }
 
 type Store = {
@@ -93,6 +90,7 @@ type Store = {
   longitude?: number | null;
   deliveryRadiusKm?: number | null;
   openingHours?: BranchOpeningHours | null;
+  timeZone?: string | null;
 };
 
 type SidebarProps = {
@@ -145,14 +143,7 @@ export function Sidebar({
   deliveryEnabled = true,
 }: SidebarProps) {
   const { t } = useTranslation();
-  const { regional, loading: regionalLoading } =
-    useRestaurantRegional(restaurantSlug);
-  const [branchesTimeZone, setBranchesTimeZone] = useState<string | null>(null);
-  const branchTimeZone =
-    branchesTimeZone ??
-    (regionalLoading
-      ? undefined
-      : timezoneForRestaurantCountry(regional.countryCode));
+  const { regional } = useRestaurantRegional(restaurantSlug);
   const customerAccount = useCustomerAccountOptional();
   const customerName = customerAccount?.account?.name?.trim() ?? '';
   const [activeStores, setActiveStores] = useState<Store[]>();
@@ -167,14 +158,14 @@ export function Sidebar({
   const selectDeliveryBranch = (storeId: string) => {
     setSelectedStoreId(storeId);
     const store = activeStores?.find((s) => s.id === storeId);
-    if (!isBranchOpenNow(store?.openingHours, new Date(), branchTimeZone)) return;
+    if (!isBranchOpenNow(store?.openingHours, new Date(), store?.timeZone)) return;
     setDeliveryInfoOpen(true);
   };
 
   const selectTakeawayBranch = (storeId: string) => {
     setSelectedStoreId(storeId);
     const store = activeStores?.find((s) => s.id === storeId);
-    if (!isBranchOpenNow(store?.openingHours, new Date(), branchTimeZone) || isStartingOrder) return;
+    if (!isBranchOpenNow(store?.openingHours, new Date(), store?.timeZone) || isStartingOrder) return;
     void createOrder(storeId);
   };
 
@@ -204,7 +195,6 @@ export function Sidebar({
   useEffect(() => {
     if (!restaurantSlug?.trim()) return;
     let cancelled = false;
-    setBranchesTimeZone(null);
     (async () => {
       setBranchesLoading(true);
       try {
@@ -214,12 +204,6 @@ export function Sidebar({
         const json = await res.json().catch(() => ({}));
         const rows = Array.isArray(json?.data) ? json.data : [];
         if (cancelled) return;
-        if (
-          typeof json?.timeZone === 'string' &&
-          json.timeZone.trim().length > 0
-        ) {
-          setBranchesTimeZone(json.timeZone.trim());
-        }
         if (rows.length === 0) {
           setActiveStores([]);
           return;
@@ -235,6 +219,7 @@ export function Sidebar({
               longitude?: number | null;
               deliveryRadiusKm?: number | null;
               openingHours?: BranchOpeningHours | null;
+              timeZone?: string | null;
             }) => ({
               id: String(b.id),
               name: String(b.name || t('branchFallbackName')),
@@ -244,6 +229,7 @@ export function Sidebar({
               longitude: b.longitude,
               deliveryRadiusKm: b.deliveryRadiusKm,
               openingHours: Array.isArray(b.openingHours) ? b.openingHours : null,
+              timeZone: typeof b.timeZone === 'string' ? b.timeZone : null,
             })
           )
         );
@@ -263,18 +249,15 @@ export function Sidebar({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `/api/customer/restaurant?slug=${encodeURIComponent(restaurantSlug)}`
-        );
-        const json = await res.json().catch(() => ({}));
-        const urls = Array.isArray(json?.data?.menuBannerUrls)
-          ? (json.data.menuBannerUrls as string[]).filter(
+        const data = await fetchCustomerRestaurant({ slug: restaurantSlug });
+        const urls = Array.isArray(data?.menuBannerUrls)
+          ? data.menuBannerUrls.filter(
             (u) => typeof u === 'string' && u.trim() !== ''
           )
           : [];
         if (!cancelled) {
           const name =
-            typeof json?.data?.name === 'string' ? json.data.name.trim() : '';
+            typeof data?.name === 'string' ? data.name.trim() : '';
           setRestaurantName(name);
           setMenuBanners(urls);
           setBannerIndex(0);
@@ -488,14 +471,11 @@ export function Sidebar({
           const openNow = isBranchOpenNow(
             store.openingHours,
             new Date(),
-            branchTimeZone
+            store.timeZone
           );
-          const methodLabel =
-            mode === 'delivery' ? t('delivery') : t('takeAwayLabel');
           const statusLabel = branchHoursStatusLabel(
             store.openingHours,
-            branchTimeZone,
-            methodLabel,
+            store.timeZone,
             t
           );
           return (
@@ -827,14 +807,11 @@ export function Sidebar({
               const openNow = isBranchOpenNow(
                 store.openingHours,
                 new Date(),
-                branchTimeZone
+                store.timeZone
               );
-              const methodLabel =
-                mode === 'delivery' ? t('delivery') : t('takeAwayLabel');
               const statusLabel = branchHoursStatusLabel(
                 store.openingHours,
-                branchTimeZone,
-                methodLabel,
+                store.timeZone,
                 t
               );
 
