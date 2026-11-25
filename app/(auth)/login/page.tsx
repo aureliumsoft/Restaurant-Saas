@@ -42,10 +42,10 @@ function LoginForm() {
   }, [router]);
 
   useEffect(() => {
-    if (status === 'authenticated') {
-      router.replace(targetAfterLogin);
-    }
-  }, [status, router, targetAfterLogin]);
+    if (status !== 'authenticated') return;
+    if (window.location.pathname === targetAfterLogin) return;
+    window.location.replace(targetAfterLogin);
+  }, [status, targetAfterLogin]);
 
   async function handleGoogle() {
     setLoadingGoogle(true);
@@ -104,7 +104,7 @@ function LoginForm() {
         hasExplicitCallback,
         callbackUrl
       );
-      router.replace(nextPath);
+      window.location.assign(nextPath);
     } catch (e: any) {
       setLoading(false);
       toast.error(e?.message ?? t('auth.login.serverError'));
