@@ -276,9 +276,9 @@ export function RecommendationPreviewPanel({
   if (!selected) {
     return (
       <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 p-6 text-center">
-        <p className="text-sm font-medium text-foreground">Customer preview</p>
+        <p className="text-sm font-medium text-foreground">{t('dashboard.menuManager.recommendations.customerPreview')}</p>
         <p className="max-w-[240px] text-xs text-muted-foreground">
-          Choose a product above to see how guests view it when ordering.
+          {t('dashboard.menuManager.recommendations.customerPreviewHint')}
         </p>
       </div>
     );
@@ -288,10 +288,10 @@ export function RecommendationPreviewPanel({
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden h-full max-h-full">
       <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 bg-card shrink-0">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Customer preview
+          {t('dashboard.menuManager.recommendations.customerPreview')}
         </p>
         <Badge variant="secondary" className="text-[10px] font-medium">
-          Live
+          {t('dashboard.menuManager.recommendations.live')}
         </Badge>
       </div>
 
@@ -375,27 +375,26 @@ export function RecommendationPreviewPanel({
 
       <div className="border-t border-border pt-4">
         <h4 className="text-sm font-medium text-foreground">
-          What guests can choose
+          {t('dashboard.menuManager.recommendations.whatGuestsChoose')}
         </h4>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Live customer preview — edits are saved on the left.
+          {t('dashboard.menuManager.recommendations.previewSavedHint')}
         </p>
       </div>
 
       {previewGroups.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No configuration groups yet. Add categories or products in the
-          sections on the left.
+          {t('dashboard.menuManager.recommendations.noGroupsYet')}
         </p>
       ) : visiblePreviewGroups.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {hasVariationPricingGroups
-            ? 'No add-on categories are available for this product variation.'
+            ? t('dashboard.menuManager.recommendations.noAddonsForVariation')
             : hasDefaultVariationGroups
-              ? 'No add-ons match the configured default variation yet. Load products in those categories or check variation rates.'
+              ? t('dashboard.menuManager.recommendations.noAddonsMatchDefault')
               : loadingPreviewProducts
-                ? 'Loading add-on products for preview…'
-                : 'No configuration groups are available to preview yet.'}
+                ? t('dashboard.menuManager.recommendations.loadingAddons')
+                : t('dashboard.menuManager.recommendations.noGroupsToPreview')}
         </p>
       ) : (
         <div className="space-y-4">
@@ -441,7 +440,7 @@ export function RecommendationPreviewPanel({
       {loadingPersonalize ? (
         <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading personalize items…
+          {t('dashboard.menuManager.recommendations.loadingPersonalize')}
         </div>
       ) : personalizePreviewGroups.length > 0 ? (
         <div className="space-y-3 border-t border-border pt-4">
@@ -471,10 +470,10 @@ export function RecommendationPreviewPanel({
           <div className="flex items-center justify-between gap-2">
             <div>
               <h4 className="text-sm font-bold uppercase tracking-wide text-foreground">
-                Recommended deals
+                {t('dashboard.menuManager.wizard.recommendedDeals')}
               </h4>
               <p className="text-xs text-muted-foreground">
-                Popup offered to guests selecting this product
+                {t('dashboard.menuManager.recommendations.dealsPopupHint')}
               </p>
             </div>
             <Button
@@ -485,7 +484,7 @@ export function RecommendationPreviewPanel({
               onClick={() => setDealChoiceOpen(true)}
             >
               <Sparkles className="h-3.5 w-3.5 text-primary" />
-              Test deal popup
+              {t('dashboard.menuManager.recommendations.testDealPopup')}
             </Button>
           </div>
           <ul className="space-y-2">
@@ -519,12 +518,12 @@ export function RecommendationPreviewPanel({
                     {resolveBilingualText(item.name, uiLang)}
                   </span>
                   <span className="block text-[11px] text-muted-foreground">
-                    Click to test "Select a deal" preview
+                    {t('dashboard.menuManager.recommendations.clickToTestDeal')}
                   </span>
                 </div>
                 {item.isDraft ? (
                   <Badge variant="outline" className="shrink-0 text-[10px]">
-                    Draft
+                    {t('dashboard.menuManager.recommendations.draft')}
                   </Badge>
                 ) : null}
               </li>
@@ -537,10 +536,10 @@ export function RecommendationPreviewPanel({
         <div className="space-y-3 border-t border-border pt-4">
           <div>
             <h4 className="text-sm font-bold uppercase tracking-wide text-foreground">
-              Recommended products (Cart)
+              {t('dashboard.menuManager.wizard.recommendedProductsCart')}
             </h4>
             <p className="text-xs text-muted-foreground">
-              Add-ons shown on the cart drawer / checkout
+              {t('dashboard.menuManager.recommendations.cartUpsellHint')}
             </p>
           </div>
           <ul className="space-y-2">
@@ -571,12 +570,12 @@ export function RecommendationPreviewPanel({
                     {resolveBilingualText(item.name, uiLang)}
                   </span>
                   <span className="block text-[11px] text-muted-foreground">
-                    Shown in customer cart upsell
+                    {t('dashboard.menuManager.recommendations.shownInCart')}
                   </span>
                 </div>
                 {item.isDraft ? (
                   <Badge variant="outline" className="shrink-0 text-[10px]">
-                    Draft
+                    {t('dashboard.menuManager.recommendations.draft')}
                   </Badge>
                 ) : null}
               </li>
@@ -694,7 +693,9 @@ function PreviewGroupCard({
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary" className="tabular-nums text-[10px]">
-              Step {(group.sortOrder ?? 0) + 1}
+              {t('dashboard.menuManager.recommendations.previewStep', {
+                step: (group.sortOrder ?? 0) + 1,
+              })}
             </Badge>
             <Label className="text-sm font-semibold">{groupTitle}</Label>
             {group.isEditing ? (
@@ -702,18 +703,18 @@ function PreviewGroupCard({
                 variant="outline"
                 className="border-primary/40 bg-primary/5 text-[10px] uppercase text-primary"
               >
-                Edit
+                {t('dashboard.menuManager.recommendations.editBadge')}
               </Badge>
             ) : group.isDraft ? (
               <Badge variant="outline" className="text-[10px] uppercase">
-                Draft
+                {t('dashboard.menuManager.recommendations.draft')}
               </Badge>
             ) : (
               <Badge
                 variant="outline"
                 className="border-emerald-200 bg-emerald-50 text-[10px] uppercase text-emerald-700"
               >
-                Saved
+                {t('dashboard.menuManager.wizard.saved')}
               </Badge>
             )}
             {group.required ? (
@@ -721,11 +722,13 @@ function PreviewGroupCard({
                 variant="outline"
                 className="border-red-200 bg-red-50 text-[10px] font-semibold uppercase text-red-700"
               >
-                Required
+                {t('dashboard.menuManager.wizard.required')}
               </Badge>
             ) : null}
             <Badge variant="secondary" className="text-[10px] uppercase">
-              {group.selectionType === 'SINGLE' ? 'Single' : 'Multiple'}
+              {group.selectionType === 'SINGLE'
+                ? t('dashboard.menuManager.wizard.single')
+                : t('dashboard.menuManager.wizard.multiple')}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -753,7 +756,9 @@ function PreviewGroupCard({
                 onClick={onEdit}
                 disabled={deleting}
                 aria-label={
-                  group.isDraft ? 'Edit draft' : 'Edit rule'
+                  group.isDraft
+                    ? t('dashboard.menuManager.recommendations.editDraft')
+                    : t('dashboard.menuManager.wizard.editRule')
                 }
               >
                 <Pencil className="h-4 w-4" />
@@ -768,7 +773,9 @@ function PreviewGroupCard({
                 onClick={onCancel}
                 disabled={deleting}
                 aria-label={
-                  group.isEditing ? 'Cancel edit' : 'Discard draft'
+                  group.isEditing
+                    ? t('dashboard.menuManager.recommendations.cancelEdit')
+                    : t('dashboard.menuManager.recommendations.discardDraft')
                 }
               >
                 <X className="h-4 w-4" />
@@ -782,7 +789,7 @@ function PreviewGroupCard({
                 className="shrink-0 text-destructive hover:text-destructive"
                 onClick={onDelete}
                 disabled={deleting}
-                aria-label="Remove rule"
+                aria-label={t('dashboard.menuManager.wizard.removeRule')}
               >
                 {deleting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

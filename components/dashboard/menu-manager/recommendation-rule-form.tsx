@@ -93,6 +93,8 @@ export type RecommendationRuleDraft = {
     string,
     Record<string, RecommendationProductOverrideDraft>
   >;
+  /** Enhanced view: one guest-facing title for every category group in this save. */
+  guestTitle?: string;
 };
 
 type Props = {

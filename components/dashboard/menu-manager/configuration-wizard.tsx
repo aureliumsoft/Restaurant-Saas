@@ -21,7 +21,6 @@ import {
   reservedRecommendationProductIds,
 } from '@/lib/menu/recommendation-reserved-ids';
 import {
-  RECOMMENDATION_SECTION_LABELS,
   type RecommendationFormVariant,
 } from '@/lib/menu/recommendation-preview-groups';
 import { buildRestaurantDefaultVariationOptions } from '@/lib/menu/recommendation-default-variation-options';
@@ -58,12 +57,12 @@ import type { AttrGroupRow, MenuCategoryRow, MenuItemRow } from './types';
 
 type ProductWithCategory = MenuItemRow & { categoryName: string };
 
-type WizardStep = 0 | 1 | 2 | 3 | 4 | 5 | 'done';
+export type WizardStep = 0 | 1 | 2 | 3 | 4 | 5 | 'done';
 type ChoiceKind = WizardChoiceKind;
 
 export type ConfigurationWizardProps = {
-  viewMode?: 'classic' | 'advanced';
-  onViewModeChange?: (mode: 'classic' | 'advanced') => void;
+  viewMode?: 'classic' | 'advanced' | 'enhanced';
+  onViewModeChange?: (mode: 'classic' | 'advanced' | 'enhanced') => void;
   selected: ProductWithCategory;
   localCategories: MenuCategoryRow[];
   allProducts: ProductWithCategory[];
@@ -129,7 +128,7 @@ export type ConfigurationWizardProps = {
   >;
 };
 
-function ChoiceCard({
+export function ChoiceCard({
   active,
   title,
   description,
@@ -178,7 +177,7 @@ function ChoiceCard({
 
 
 
-function WizardProgress({ step }: { step: WizardStep }) {
+export function WizardProgress({ step }: { step: WizardStep }) {
   const current = step === 'done' ? 5 : typeof step === 'number' ? step : 0;
   const total = 6;
   const ratio = step === 'done' ? 1 : current / (total - 1);
@@ -202,7 +201,7 @@ function WizardProgress({ step }: { step: WizardStep }) {
   );
 }
 
-function StepHeader({
+export function StepHeader({
   title,
   hint,
 }: {
@@ -219,7 +218,7 @@ function StepHeader({
   );
 }
 
-function WizardActions({ children }: { children: React.ReactNode }) {
+export function WizardActions({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-2 pt-1">{children}</div>
   );
@@ -1040,7 +1039,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                Classic View
+                {t('dashboard.menuManager.wizard.classicView')}
               </button>
               <button
                 type="button"
@@ -1052,7 +1051,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                Advanced View
+                {t('dashboard.menuManager.wizard.advancedView')}
               </button>
             </div>
           ) : null}
@@ -1116,38 +1115,6 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                       )}
                       onClick={() => applyKindDefaults('cat-many')}
                     />
-                    <ChoiceCard
-                      active={kind === 'cat-one'}
-                      title={t('dashboard.menuManager.wizard.oneFromCategory')}
-                      description={t(
-                        'dashboard.menuManager.wizard.oneFromCategoryDesc'
-                      )}
-                      onClick={() => applyKindDefaults('cat-one')}
-                    />
-                    <ChoiceCard
-                      active={kind === 'prod-many'}
-                      title={t('dashboard.menuManager.wizard.manyProducts')}
-                      description={t(
-                        'dashboard.menuManager.wizard.manyProductsDesc'
-                      )}
-                      onClick={() => applyKindDefaults('prod-many')}
-                    />
-                    <ChoiceCard
-                      active={kind === 'prod-one'}
-                      title={t('dashboard.menuManager.wizard.oneProduct')}
-                      description={t(
-                        'dashboard.menuManager.wizard.oneProductDesc'
-                      )}
-                      onClick={() => applyKindDefaults('prod-one')}
-                    />
-                    <ChoiceCard
-                      active={kind === 'prefs'}
-                      title={t('dashboard.menuManager.wizard.freePreferences')}
-                      description={t(
-                        'dashboard.menuManager.wizard.freePreferencesDesc'
-                      )}
-                      onClick={() => applyKindDefaults('prefs')}
-                    />
                   </div>
                   <WizardActions>
                     <Button
@@ -1157,7 +1124,11 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                     >
                       {t('dashboard.common.back')}
                     </Button>
-                    <Button type="button" onClick={() => setStep(2)}>
+                    <Button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      disabled={!kind}
+                    >
                       {t('continue')}
                     </Button>
                   </WizardActions>
@@ -1281,19 +1252,21 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               {step === 4 ? (
                 <div className="space-y-4">
                   <StepHeader
-                    title={`What recommended deals should appear with ${resolveBilingualText(selected.name, uiLang)}?`}
-                    hint="Optional. When guests tap this item, a popup will ask if they want the product alone or one of these deals."
+                    title={t('dashboard.menuManager.wizard.dealsWithProduct', {
+                      name: resolveBilingualText(selected.name, uiLang),
+                    })}
+                    hint={t('dashboard.menuManager.wizard.dealsHint')}
                   />
 
                   <div>
                     <p className="mb-2 text-xs font-medium text-muted-foreground">
-                      From categories
+                      {t('dashboard.menuManager.wizard.fromCategories')}
                     </p>
                     <SelectableList
                       search={dealCategorySearch}
                       onSearchChange={setDealCategorySearch}
-                      searchPlaceholder="Search categories…"
-                      emptyMessage="No categories match your search."
+                      searchPlaceholder={t('dashboard.menuManager.wizard.searchCategories')}
+                      emptyMessage={t('dashboard.menuManager.wizard.noCategoriesMatch')}
                     >
                       {filteredDealCategories.map((cat) => (
                         <SelectableRow
@@ -1316,18 +1289,18 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                   {dealCategoryIds.length > 0 ? (
                     <div>
                       <p className="mb-2 text-xs font-medium text-muted-foreground">
-                        Recommended deals to offer
+                        {t('dashboard.menuManager.wizard.dealsToOffer')}
                       </p>
                       {dealProductsFromSelectedCategories.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                          No products in these categories (or already offered as deals).
+                          {t('dashboard.menuManager.wizard.noDealProducts')}
                         </p>
                       ) : (
                         <SelectableList
                           search={dealProductSearch}
                           onSearchChange={setDealProductSearch}
-                          searchPlaceholder="Search products…"
-                          emptyMessage="No products match your search."
+                          searchPlaceholder={t('dashboard.menuManager.recommendations.searchProductsPlaceholder')}
+                          emptyMessage={t('dashboard.menuManager.wizard.noProductsMatch')}
                         >
                           {filteredDealProducts.map((p) => (
                             <SelectableRow
@@ -1365,7 +1338,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                       variant="outline"
                       onClick={() => setStep(5)}
                     >
-                      Skip
+                      {t('dashboard.menuManager.wizard.skip')}
                     </Button>
                     <Button
                       type="button"
@@ -1388,19 +1361,21 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
               {step === 5 ? (
                 <div className="space-y-4">
                   <StepHeader
-                    title={`What products should we recommend in the cart with ${resolveBilingualText(selected.name, uiLang)}?`}
-                    hint="Optional. Add-on items suggested on the cart page/drawer when this product is in the cart."
+                    title={t('dashboard.menuManager.wizard.cartWithProduct', {
+                      name: resolveBilingualText(selected.name, uiLang),
+                    })}
+                    hint={t('dashboard.menuManager.wizard.cartHintDrawer')}
                   />
 
                   <div>
                     <p className="mb-2 text-xs font-medium text-muted-foreground">
-                      From categories
+                      {t('dashboard.menuManager.wizard.fromCategories')}
                     </p>
                     <SelectableList
                       search={offerCategorySearch}
                       onSearchChange={setOfferCategorySearch}
-                      searchPlaceholder="Search categories…"
-                      emptyMessage="No categories match your search."
+                      searchPlaceholder={t('dashboard.menuManager.wizard.searchCategories')}
+                      emptyMessage={t('dashboard.menuManager.wizard.noCategoriesMatch')}
                     >
                       {filteredOfferCategories.map((cat) => (
                         <SelectableRow
@@ -1423,18 +1398,18 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                   {offerCategoryIds.length > 0 ? (
                     <div>
                       <p className="mb-2 text-xs font-medium text-muted-foreground">
-                        Products to recommend in cart
+                        {t('dashboard.menuManager.wizard.cartProducts')}
                       </p>
                       {offeredProductsFromSelectedCategories.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                          No products in these categories (or already offered).
+                          {t('dashboard.menuManager.wizard.noCartProducts')}
                         </p>
                       ) : (
                         <SelectableList
                           search={offerProductSearch}
                           onSearchChange={setOfferProductSearch}
-                          searchPlaceholder="Search products…"
-                          emptyMessage="No products match your search."
+                          searchPlaceholder={t('dashboard.menuManager.recommendations.searchProductsPlaceholder')}
+                          emptyMessage={t('dashboard.menuManager.wizard.noProductsMatch')}
                         >
                           {filteredOfferProducts.map((p) => (
                             <SelectableRow
@@ -1472,7 +1447,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                       variant="outline"
                       onClick={() => setStep('done')}
                     >
-                      Skip
+                      {t('dashboard.menuManager.wizard.skip')}
                     </Button>
                     <Button
                       type="button"
@@ -1507,7 +1482,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
                         setStep(0);
                       }}
                     >
-                      Add more
+                      {t('dashboard.menuManager.wizard.addMore')}
                     </Button>
                   </WizardActions>
                 </div>
@@ -1608,6 +1583,11 @@ function ClassicConfigSections({
     draftByVariant,
   };
 
+  void personalizeDraft;
+  void onPersonalizeDraftChange;
+  void loadingPersonalize;
+  void onSavePersonalize;
+
   return (
     <div className="space-y-5">
       {(
@@ -1621,7 +1601,15 @@ function ClassicConfigSections({
         <RecommendationConfigSectionShell
           key={variant}
           step={index + 1}
-          title={RECOMMENDATION_SECTION_LABELS[variant]}
+          title={t(
+            variant === 'category-single'
+              ? 'dashboard.menuManager.recommendations.sectionCategorySingle'
+              : variant === 'category-multiple'
+                ? 'dashboard.menuManager.recommendations.sectionCategoryMultiple'
+                : variant === 'product-single'
+                  ? 'dashboard.menuManager.recommendations.sectionProductSingle'
+                  : 'dashboard.menuManager.recommendations.sectionProductMultiple'
+          )}
           description=""
         >
           <SavedGroupList
@@ -1646,8 +1634,28 @@ function ClassicConfigSections({
             }
             saveLabel={
               editingVariant === variant && editingGroupId
-                ? `Update ${RECOMMENDATION_SECTION_LABELS[variant]}`
-                : `Save ${RECOMMENDATION_SECTION_LABELS[variant]}`
+                ? t('dashboard.menuManager.recommendations.updateSection', {
+                    section: t(
+                      variant === 'category-single'
+                        ? 'dashboard.menuManager.recommendations.sectionCategorySingle'
+                        : variant === 'category-multiple'
+                          ? 'dashboard.menuManager.recommendations.sectionCategoryMultiple'
+                          : variant === 'product-single'
+                            ? 'dashboard.menuManager.recommendations.sectionProductSingle'
+                            : 'dashboard.menuManager.recommendations.sectionProductMultiple'
+                    ),
+                  })
+                : t('dashboard.menuManager.recommendations.saveSection', {
+                    section: t(
+                      variant === 'category-single'
+                        ? 'dashboard.menuManager.recommendations.sectionCategorySingle'
+                        : variant === 'category-multiple'
+                          ? 'dashboard.menuManager.recommendations.sectionCategoryMultiple'
+                          : variant === 'product-single'
+                            ? 'dashboard.menuManager.recommendations.sectionProductSingle'
+                            : 'dashboard.menuManager.recommendations.sectionProductMultiple'
+                    ),
+                  })
             }
             onDraftChange={draftChangeHandlers[variant]}
           />
@@ -1656,29 +1664,15 @@ function ClassicConfigSections({
 
       <RecommendationConfigSectionShell
         step={5}
-        title={t('dashboard.menuManager.wizard.personalizeTitle')}
-        description={t('dashboard.menuManager.wizard.personalizeDesc')}
-      >
-        <PersonalizeConfigSection
-          groups={personalizeDraft}
-          onChange={onPersonalizeDraftChange}
-          saving={savingPersonalize}
-          loading={loadingPersonalize}
-          onSave={() => void onSavePersonalize()}
-        />
-      </RecommendationConfigSectionShell>
-
-      <RecommendationConfigSectionShell
-        step={6}
         title={t('dashboard.menuManager.wizard.recommendedDeals')}
         description={t('dashboard.menuManager.wizard.recommendedDealsDesc')}
       >
         <div>
           <p className="mb-2 text-xs font-medium text-muted-foreground">
-            Categories to offer deals from (scrollable list)
+            {t('dashboard.menuManager.wizard.categoriesForDeals')}
           </p>
           <SelectableList
-            emptyMessage="No categories available."
+            emptyMessage={t('dashboard.menuManager.wizard.noCategoriesAvailable')}
             maxHeightClass="max-h-48"
           >
             {linkedOptions.map((cat) => {
@@ -1709,7 +1703,7 @@ function ClassicConfigSections({
           dealProductsFromSelectedCategories.length > 0 ? (
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">
-              Select specific products for the deal (scrollable)
+              {t('dashboard.menuManager.wizard.selectDealProducts')}
             </p>
             <div className="max-h-72 overflow-y-auto overscroll-contain p-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 rounded-xl border border-border bg-muted/10">
               {dealProductsFromSelectedCategories.map((p) => {
@@ -1810,16 +1804,16 @@ function ClassicConfigSections({
       </RecommendationConfigSectionShell>
 
       <RecommendationConfigSectionShell
-        step={7}
+        step={6}
         title={t('dashboard.menuManager.wizard.recommendedProductsCart')}
         description={t('dashboard.menuManager.wizard.recommendedProductsCartDesc')}
       >
         <div>
           <p className="mb-2 text-xs font-medium text-muted-foreground">
-            Categories to recommend products in cart from (scrollable list)
+            {t('dashboard.menuManager.wizard.categoriesForCart')}
           </p>
           <SelectableList
-            emptyMessage="No categories available."
+            emptyMessage={t('dashboard.menuManager.wizard.noCategoriesAvailable')}
             maxHeightClass="max-h-48"
           >
             {linkedOptions.map((cat) => {
@@ -1850,7 +1844,7 @@ function ClassicConfigSections({
           offeredProductsFromSelectedCategories.length > 0 ? (
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">
-              Select specific products for cart recommendations (scrollable)
+              {t('dashboard.menuManager.wizard.selectCartProducts')}
             </p>
             <div className="max-h-72 overflow-y-auto overscroll-contain p-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 rounded-xl border border-border bg-muted/10">
               {offeredProductsFromSelectedCategories.map((p) => {
@@ -1910,12 +1904,12 @@ function ClassicConfigSections({
           {savingOffers ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving…
+              {t('dashboard.menuManager.wizard.saving')}
             </>
           ) : (
             <>
               <Save className="mr-2 h-4 w-4" />
-              Save recommended products
+              {t('dashboard.menuManager.wizard.saveRecommendedProducts')}
             </>
           )}
         </Button>
@@ -1962,11 +1956,12 @@ function SavedGroupList({
   onDelete: (groupId: string) => void;
   onEdit?: (groupId: string) => void;
 }) {
+  const { t } = useTranslation();
   const uiLang = useUiLanguage();
   if (groups.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        No saved rules in this section yet.
+        {t('dashboard.menuManager.wizard.noSavedRules')}
       </p>
     );
   }
@@ -1983,9 +1978,16 @@ function SavedGroupList({
             </p>
             <p className="text-xs text-muted-foreground">
               {g.sourceType === 'PRODUCT'
-                ? `Product · ${resolveBilingualText(g.linkedProduct?.name, uiLang) || '—'}`
-                : `Category · ${resolveBilingualText(g.linkedCategory?.name, uiLang) || '—'}`}
-              {g.required ? ' · Required' : ' · Optional'}
+                ? t('dashboard.menuManager.wizard.productLinked', {
+                    name: resolveBilingualText(g.linkedProduct?.name, uiLang) || '—',
+                  })
+                : t('dashboard.menuManager.wizard.categoryLinked', {
+                    name: resolveBilingualText(g.linkedCategory?.name, uiLang) || '—',
+                  })}
+              {' · '}
+              {g.required
+                ? t('dashboard.menuManager.wizard.requiredSuffix')
+                : t('dashboard.menuManager.wizard.optionalSuffix')}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
@@ -1996,7 +1998,7 @@ function SavedGroupList({
                 variant="ghost"
                 className="shrink-0"
                 onClick={() => onEdit(g.id)}
-                aria-label="Edit rule"
+                aria-label={t('dashboard.menuManager.wizard.editRule')}
               >
                 <Pencil className="h-4 w-4" />
               </Button>
@@ -2007,7 +2009,7 @@ function SavedGroupList({
               variant="ghost"
               className="shrink-0 text-destructive"
               onClick={() => onDelete(g.id)}
-              aria-label="Remove rule"
+              aria-label={t('dashboard.menuManager.wizard.removeRule')}
             >
               <Trash2 className="h-4 w-4" />
             </Button>

@@ -33,6 +33,7 @@ import {
   serializeBilingualInput,
   serializeBilingualText,
 } from '@/lib/menu/bilingual-text';
+import type { UiLanguage } from '@/lib/i18n/resources';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   Popover,
@@ -97,7 +98,6 @@ import {
   draftHasContent,
   recommendationDraftKey,
   RECOMMENDATION_FORM_VARIANTS,
-  RECOMMENDATION_SECTION_LABELS,
   variantFromDraft,
   type RecommendationFormVariant,
   type PreviewAttrGroup,
@@ -115,6 +115,7 @@ import {
 } from './personalize-config-section';
 import type { PersonalizeGroupRow } from './types';
 import { ConfigurationWizard } from './configuration-wizard';
+import { EnhancedRecommendationView } from './enhanced-recommendation-view';
 import { RecommendationPreviewPanel } from './recommendation-preview-panel';
 import type { RecommendationRuleDraft } from './recommendation-rule-form';
 import type { AttrGroupRow, MenuCategoryRow, MenuItemRow } from './types';
@@ -127,10 +128,12 @@ function validateRecommendationDraft(
   draft: RecommendationRuleDraft,
   localCategories: MenuCategoryRow[],
   selected: MenuItemRow,
-  productLookup?: (id: string) => MenuItemRow | undefined
+  productLookup: ((id: string) => MenuItemRow | undefined) | undefined,
+  uiLang: UiLanguage,
+  t: (key: string, options?: Record<string, string>) => string
 ): string | null {
   if (draft.sourceType === 'CATEGORY' && draft.ruleCategoryIds.length === 0) {
-    return 'Choose at least one recommendation category.';
+    return t('dashboard.menuManager.recommendations.chooseCategory');
   }
   const linkedProductIds =
     draft.linkedProductIds.length > 0
@@ -139,10 +142,10 @@ function validateRecommendationDraft(
         ? [draft.linkedProductId]
         : [];
   if (draft.sourceType === 'PRODUCT' && linkedProductIds.length === 0) {
-    return 'Choose at least one product.';
+    return t('dashboard.menuManager.recommendations.chooseOneProduct');
   }
   if (draft.sourceType === 'PRODUCT' && draft.productCategoryIds.length === 0) {
-    return 'Choose at least one category for product recommendations.';
+    return t('dashboard.menuManager.recommendations.chooseProductCategory');
   }
 
   if (draft.selectionType !== 'MULTIPLE') return null;
@@ -152,7 +155,9 @@ function validateRecommendationDraft(
   if (draft.sourceType === 'CATEGORY') {
     for (const catId of draft.ruleCategoryIds) {
       const cat = localCategories.find((c) => c.id === catId);
-      const catName = cat?.name ?? 'Category';
+      const catName =
+        resolveBilingualText(cat?.name, uiLang) ||
+        t('dashboard.menuManager.wizard.categoryFallback');
       if (
         categoryUsesVariationLimits(
           baseVariationCount,
@@ -161,14 +166,14 @@ function validateRecommendationDraft(
       ) {
         for (const row of draft.categoryVariationLimits[catId] ?? []) {
           if (row.maxItems < row.minItems) {
-            return `${catName}: maximum must be >= minimum.`;
+            return t('dashboard.menuManager.recommendations.maxGteMin', { name: catName });
           }
         }
       } else {
         const limits =
           draft.categoryMinMax[catId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
         if (limits.maxItems < limits.minItems) {
-          return `${catName}: maximum must be >= minimum.`;
+          return t('dashboard.menuManager.recommendations.maxGteMin', { name: catName });
         }
       }
     }
@@ -183,11 +188,12 @@ function validateRecommendationDraft(
           : [];
     for (const productId of linkedProductIds) {
       const productName =
-        productLookup?.(productId)?.name ?? 'Product';
+        resolveBilingualText(productLookup?.(productId)?.name, uiLang) ||
+        t('dashboard.menuManager.wizard.productFallback');
       const limits =
         draft.productMinMax[productId] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
       if (limits.maxItems < limits.minItems) {
-        return `${productName}: maximum must be >= minimum.`;
+        return t('dashboard.menuManager.recommendations.maxGteMin', { name: productName });
       }
     }
   }
@@ -229,8 +235,9 @@ function buildRecommendationPayloads(
         draft.categoryMinMax[cat.id] ?? { ...DEFAULT_CATEGORY_MIN_MAX };
 
       payloads.push({
-        name:
-          draft.selectionType === 'SINGLE'
+        name: draft.guestTitle?.trim()
+          ? serializeBilingualInput(draft.guestTitle)
+          : draft.selectionType === 'SINGLE'
             ? serializeBilingualChooseTitle(cat.name, 'choose')
             : serializeBilingualChooseTitle(cat.name, 'chooseFrom'),
         sourceType: 'CATEGORY',
@@ -253,8 +260,15 @@ function buildRecommendationPayloads(
         ...(draft.selectionType === 'MULTIPLE'
           ? {
               multipleMode: draft.multipleMode,
-              freeQuantity:
-                draft.multipleMode === 'QUANTITY'
+              freeQuantity: Object.prototype.hasOwnProperty.call(
+                draft.categoryFreeQuantity,
+                cat.id
+              )
+                ? resolveCategoryFreeQuantity(
+                    draft.categoryFreeQuantity,
+                    cat.id
+                  )
+                : draft.multipleMode === 'QUANTITY'
                   ? resolveCategoryFreeQuantity(
                       draft.categoryFreeQuantity,
                       cat.id
@@ -277,7 +291,9 @@ function buildRecommendationPayloads(
     linkedProductIds.forEach((productId, index) => {
       const product = allProducts.find((p) => p.id === productId);
       payloads.push({
-        name: product
+        name: draft.guestTitle?.trim()
+          ? serializeBilingualInput(draft.guestTitle)
+          : product
           ? catNames.length > 1
             ? serializeBilingualChooseAddonsTitle(catNames)
             : draft.selectionType === 'SINGLE'
@@ -485,7 +501,9 @@ export function RecommendationsTab(_props?: Props) {
 
   const [selectedId, setSelectedId] = useState<string>('');
   const [pendingProductId, setPendingProductId] = useState<string | null>(null);
-  const [editorViewMode, setEditorViewMode] = useState<'classic' | 'advanced'>('advanced');
+  const [editorViewMode, setEditorViewMode] = useState<
+    'classic' | 'advanced' | 'enhanced'
+  >('advanced');
   /** Checked category ids for the product strip + search. Empty = none. */
   const [filterCategoryIds, setFilterCategoryIds] = useState<string[]>([]);
   const [productSearch, setProductSearch] = useState('');
@@ -1047,7 +1065,7 @@ export function RecommendationsTab(_props?: Props) {
   );
 
   const chooseEditorView = useCallback(
-    (viewMode: 'classic' | 'advanced') => {
+    (viewMode: 'classic' | 'advanced' | 'enhanced') => {
       if (!pendingProductId) return;
       setEditorViewMode(viewMode);
       setSelectedId(pendingProductId);
@@ -1305,7 +1323,9 @@ export function RecommendationsTab(_props?: Props) {
       draft,
       localCategories,
       selected,
-      productLookup
+      productLookup,
+      uiLang,
+      t
     );
     if (validationError) {
       toast.error(validationError);
@@ -1787,10 +1807,10 @@ export function RecommendationsTab(_props?: Props) {
       {localCategories.length === 0 && !categoriesLoading ? (
     <div className="flex flex-col gap-3 rounded-3xl border border-dashed border-border/80 bg-muted/20 p-6 sm:p-8">
       <p className="text-sm text-muted-foreground">
-        Add products first — configuration rules are attached to a product.
+        {t('dashboard.menuManager.recommendations.addProductsFirst')}
       </p>
       <Button type="button" asChild className="w-fit">
-        <Link href="/product">Go to Products</Link>
+        <Link href="/product">{t('dashboard.menuManager.recommendations.goToProducts')}</Link>
       </Button>
     </div>
   ) : (
@@ -1798,14 +1818,13 @@ export function RecommendationsTab(_props?: Props) {
       <section className="min-w-0 max-w-full space-y-4 overflow-hidden rounded-3xl border border-border/80 bg-card p-4 sm:p-5">
         <div className="space-y-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Step 1
+            {t('dashboard.menuManager.recommendations.step1')}
           </p>
           <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
-            Choose a product
+            {t('dashboard.menuManager.recommendations.chooseProduct')}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Search or filter, then tap a product to configure what guests can
-            choose.
+            {t('dashboard.menuManager.recommendations.chooseProductHint')}
           </p>
         </div>
         <div className="flex min-w-0 w-full max-w-full flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
@@ -1832,7 +1851,7 @@ export function RecommendationsTab(_props?: Props) {
                 className="h-11 min-h-11 w-full shrink-0 gap-2 bg-background px-3 sm:h-10 sm:min-h-10 sm:w-auto sm:min-w-[10rem]"
               >
                 <ListFilter className="h-4 w-4 shrink-0" />
-                <span className="shrink-0">Filter</span>
+                <span className="shrink-0">{t('dashboard.menuManager.recommendations.filter')}</span>
                 <Badge
                   variant="secondary"
                   className="min-w-0 max-w-[9rem] truncate font-normal sm:max-w-[140px]"
@@ -1848,7 +1867,7 @@ export function RecommendationsTab(_props?: Props) {
               collisionPadding={16}
             >
               <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
-                <p className="text-sm font-medium">Categories</p>
+                <p className="text-sm font-medium">{t('dashboard.menuManager.recommendations.categories')}</p>
                 <div className="flex shrink-0 gap-1">
                   <Button
                     type="button"
@@ -1861,7 +1880,7 @@ export function RecommendationsTab(_props?: Props) {
                       )
                     }
                   >
-                    All
+                    {t('dashboard.menuManager.recommendations.all')}
                   </Button>
                   <Button
                     type="button"
@@ -1870,7 +1889,7 @@ export function RecommendationsTab(_props?: Props) {
                     className="h-8 px-2 text-xs"
                     onClick={() => setFilterCategoryIds([])}
                   >
-                    Clear
+                    {t('dashboard.menuManager.recommendations.clear')}
                   </Button>
                 </div>
               </div>
@@ -1908,7 +1927,7 @@ export function RecommendationsTab(_props?: Props) {
                 </div>
               </ScrollArea>
               <p className="border-t px-3 py-2 text-[11px] leading-snug text-muted-foreground">
-                Search only applies to products in checked categories.
+                {t('dashboard.menuManager.recommendations.searchOnlyChecked')}
               </p>
             </PopoverContent>
           </Popover>
@@ -1926,8 +1945,7 @@ export function RecommendationsTab(_props?: Props) {
               </div>
             ) : (
             <p className="rounded-lg border border-dashed border-border bg-background/80 px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
-              Turn on at least one category in the filter, or tap{' '}
-              <span className="font-medium text-foreground">All</span>.
+              {t('dashboard.menuManager.recommendations.turnOnCategory')}
             </p>
             )
           ) : stripLoading && stripProducts.length === 0 ? (
@@ -1943,8 +1961,7 @@ export function RecommendationsTab(_props?: Props) {
             </div>
           ) : stripProducts.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border bg-background/80 px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
-              No products match the checked categories and search. Adjust
-              the filter or clear the search.
+              {t('dashboard.menuManager.recommendations.noProductsMatchFilter')}
             </p>
           ) : (
             <div className="relative isolate w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-border/60 bg-background/50">
@@ -2040,9 +2057,12 @@ export function RecommendationsTab(_props?: Props) {
               </div>
               {stripTotal > 0 ? (
                 <p className="px-3 pb-2 text-[11px] text-muted-foreground">
-                  Showing {stripProducts.length} of {stripTotal}
+                  {t('dashboard.menuManager.recommendations.showingCount', {
+                    shown: stripProducts.length,
+                    total: stripTotal,
+                  })}
                   {stripLoadingMore && stripHasMore
-                    ? ' · loading more in background…'
+                    ? ` · ${t('dashboard.menuManager.recommendations.loadingMoreBackground')}`
                     : ''}
                 </p>
               ) : null}
@@ -2062,7 +2082,7 @@ export function RecommendationsTab(_props?: Props) {
             >
               <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
-                Loading product configuration…
+                {t('dashboard.menuManager.recommendations.loadingConfiguration')}
               </p>
                     </div>
           ) : selected ? (
@@ -2070,9 +2090,18 @@ export function RecommendationsTab(_props?: Props) {
               {editingGroupId && editingVariant ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
                   <p className="font-medium text-foreground">
-                    Editing step{' '}
-                    {(editingSortOrder ?? 0) + 1} ·{' '}
-                    {RECOMMENDATION_SECTION_LABELS[editingVariant]}
+                    {t('dashboard.menuManager.recommendations.editingStep', {
+                      step: (editingSortOrder ?? 0) + 1,
+                      section: t(
+                        editingVariant === 'category-single'
+                          ? 'dashboard.menuManager.recommendations.sectionCategorySingle'
+                          : editingVariant === 'category-multiple'
+                            ? 'dashboard.menuManager.recommendations.sectionCategoryMultiple'
+                            : editingVariant === 'product-single'
+                              ? 'dashboard.menuManager.recommendations.sectionProductSingle'
+                              : 'dashboard.menuManager.recommendations.sectionProductMultiple'
+                      ),
+                    })}
                   </p>
                   <Button
                     type="button"
@@ -2080,10 +2109,78 @@ export function RecommendationsTab(_props?: Props) {
                     variant="outline"
                     onClick={cancelEdit}
                   >
-                    Cancel edit
+                    {t('dashboard.menuManager.recommendations.cancelEdit')}
                   </Button>
                 </div>
               ) : null}
+            {editorViewMode === 'enhanced' ? (
+            <EnhancedRecommendationView
+              selected={selected}
+              localCategories={previewCategories}
+              allProducts={allProducts}
+              linkedOptions={linkedOptions}
+              savedGroupsByType={savedGroupsByType}
+              savingRules={savingRules}
+              savingAll={false}
+              onSaveDraft={(draft) => saveRecommendationDraft(draft)}
+              draftChangeHandlers={draftChangeHandlers}
+              onDeleteGroup={(groupId) => {
+                setDeletingRuleId(groupId);
+                setDeleteRuleConfirmOpen(true);
+              }}
+              onEditGroup={(groupId) => beginEditSavedGroup(groupId)}
+              editSeedRequest={editSeedRequest}
+              editingGroupId={editingGroupId}
+              editingVariant={editingVariant}
+              onCancelEdit={cancelEdit}
+              dealCategoryIds={dealCategoryIds}
+              setDealCategoryIds={setDealCategoryIds}
+              selectedDealProductIds={selectedDealProductIds}
+              setSelectedDealProductIds={setSelectedDealProductIds}
+              dealProductsFromSelectedCategories={
+                dealProductsFromSelectedCategories
+              }
+              currentDeals={currentDeals}
+              savingDeals={savingDeals}
+              onSaveDeals={() => saveDealProducts()}
+              onDeleteDeal={(dealId) => {
+                setDeletingDealId(dealId);
+                setDeleteDealConfirmOpen(true);
+              }}
+              deletingDeal={deletingDeal}
+              deletingDealId={deletingDealId}
+              offerCategoryIds={offerCategoryIds}
+              setOfferCategoryIds={setOfferCategoryIds}
+              selectedOfferProductIds={selectedOfferProductIds}
+              setSelectedOfferProductIds={setSelectedOfferProductIds}
+              offeredProductsFromSelectedCategories={
+                offeredProductsFromSelectedCategories
+              }
+              currentOffers={currentOffers}
+              savingOffers={savingOffers}
+              onSaveOffers={() => saveOfferedProducts()}
+              onDeleteOffer={(offerId) => {
+                setDeletingOfferId(offerId);
+                setDeleteOfferConfirmOpen(true);
+              }}
+              deletingOffer={deletingOffer}
+              deletingOfferId={deletingOfferId}
+              toggleInArray={toggleInArray}
+              personalizeDraft={personalizeDraft}
+              onPersonalizeDraftChange={(groups) => {
+                setPersonalizeDraft(groups);
+                setPersonalizeDirty(true);
+              }}
+              savingPersonalize={savingPersonalize}
+              loadingPersonalize={loadingPersonalize}
+              onSavePersonalize={(groups) =>
+                savePersonalize(groups ? { groups } : undefined)
+              }
+              formResetKeys={formResetKeys}
+              configureResetKey={configureResetKey}
+              draftByVariant={draftByVariant}
+            />
+          ) : (
             <ConfigurationWizard
               viewMode={editorViewMode}
               onViewModeChange={setEditorViewMode}
@@ -2152,14 +2249,15 @@ export function RecommendationsTab(_props?: Props) {
               configureResetKey={configureResetKey}
               draftByVariant={draftByVariant}
             />
+            )}
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-12 text-center">
               <p className="text-sm font-medium text-foreground">
-                Select a product above
+                {t('dashboard.menuManager.recommendations.selectProductAbove')}
               </p>
               <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted-foreground">
-                Then set what customers can choose when they order it.
+                {t('dashboard.menuManager.recommendations.selectProductAboveHint')}
               </p>
             </div>
           )}
@@ -2197,11 +2295,11 @@ export function RecommendationsTab(_props?: Props) {
             previewPersonalizeByGroup={previewPersonalizeByGroup}
             onPersonalizePreviewChange={(groupId, ids) =>
               setPreviewPersonalizeByGroup((prev) => ({
-                                          ...prev,
+                ...prev,
                 [groupId]: ids,
-                                        }))
-                                      }
-                                    />
+              }))
+            }
+          />
         </aside>
       </div>
     </div>
@@ -2233,12 +2331,12 @@ export function RecommendationsTab(_props?: Props) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Choose recommendation view</AlertDialogTitle>
+            <AlertDialogTitle>{t('dashboard.menuManager.recommendations.chooseViewTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Select which view you want to use for configuring recommendations on this product:
+              {t('dashboard.menuManager.recommendations.chooseViewDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <Button
               type="button"
               variant="outline"
@@ -2246,9 +2344,9 @@ export function RecommendationsTab(_props?: Props) {
               onClick={() => chooseEditorView('classic')}
             >
               <span>
-                <span className="block font-semibold text-base">Classic recommendation view</span>
+                <span className="block font-semibold text-base">{t('dashboard.menuManager.recommendations.classicViewTitle')}</span>
                 <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                  Show the full classic recommendation view with all configuration sections directly.
+                  {t('dashboard.menuManager.recommendations.classicViewDesc')}
                 </span>
               </span>
             </Button>
@@ -2258,15 +2356,28 @@ export function RecommendationsTab(_props?: Props) {
               onClick={() => chooseEditorView('advanced')}
             >
               <span>
-                <span className="block font-semibold text-base">New Advanced recommendation view</span>
+                <span className="block font-semibold text-base">{t('dashboard.menuManager.recommendations.advancedViewTitle')}</span>
                 <span className="mt-1 block text-xs font-normal opacity-90">
-                  Open the new main view for recommendation categories with step-by-step guidance.
+                  {t('dashboard.menuManager.recommendations.advancedViewDesc')}
+                </span>
+              </span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-auto items-start justify-start whitespace-normal p-4 text-left border-2 hover:border-primary"
+              onClick={() => chooseEditorView('enhanced')}
+            >
+              <span>
+                <span className="block font-semibold text-base">{t('dashboard.menuManager.recommendations.enhancedViewTitle')}</span>
+                <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                  {t('dashboard.menuManager.recommendations.enhancedViewDesc')}
                 </span>
               </span>
             </Button>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <AlertDialogCancel type="button">{t('cancel')}</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -2315,20 +2426,20 @@ export function RecommendationsTab(_props?: Props) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogTitle>{t('dashboard.menuManager.recommendations.discardChanges')}</AlertDialogTitle>
             <AlertDialogDescription>{leaveMessage}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel type="button">
               <>
                 <X className="h-4 w-4 mr-2" />
-                <span>Keep Editing</span>
+                <span>{t('dashboard.menuManager.recommendations.keepEditing')}</span>
               </>
             </AlertDialogCancel>
             <AlertDialogAction type="button" onClick={confirmLeave}>
               <>
                 <Trash2 className="h-4 w-4 mr-2" />
-                <span>Leave Without Saving</span>
+                <span>{t('dashboard.menuManager.recommendations.leaveWithoutSaving')}</span>
               </>
             </AlertDialogAction>
           </AlertDialogFooter>
