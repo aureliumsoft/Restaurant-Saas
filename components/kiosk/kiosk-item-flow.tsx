@@ -86,6 +86,7 @@ type FlowStep = {
 type Props = {
   productName: string;
   productImageUrl?: string | null;
+  productDescription?: string | null;
   productBaseUnitPrice: number;
   variations: ProductVariationOption[];
   attributeGroups: AttributeGroup[];
@@ -115,6 +116,12 @@ function bagOf(draft: Draft, scope: string): Bag {
 
 function textOf(value: unknown, lang: UiLanguage): string {
   return resolveBilingualText(value as string, lang);
+}
+
+function cleanDescription(value: string): string {
+  return value
+    .replace(/^\s*(?:€|\$|£)?\s*\d+[.,]\d{2}\s*[€$£]?\s*/u, '')
+    .trim();
 }
 
 function parentFrom(
@@ -198,10 +205,45 @@ function pushGroupSteps(
 ) {
   if (depth > 4) return;
   const bag = bagOf(draft, scope);
-  const category = groups.filter((g) => g.sourceType !== 'PRODUCT');
-  const recs = groups.filter((g) => g.sourceType === 'PRODUCT');
 
-  for (const group of category) {
+  for (const group of groups) {
+    if (group.sourceType === 'PRODUCT') {
+      const raw = group.items[0];
+      if (!raw) continue;
+      const item = mergeItem(raw, draft.nestsLoaded);
+      const selected = bag.selectedByGroup[group.id] ?? [];
+      const name = textOf(item.name, ctx.lang);
+      const required = Boolean(group.required);
+      steps.push({
+        id: `yes:${scope}:${group.id}:${item.menuItemId}`,
+        scope,
+        kind: 'yes',
+        title: ctx.t('kioskAskAdd', { name }),
+        hint: ctx.t('kioskTapToAdd'),
+        sidebar: name,
+        required,
+        allowSkip: !required,
+        stayUntilMin: false,
+        group,
+        item,
+        minItems: required ? 1 : 0,
+        maxItems: 1,
+      });
+      if (selected.includes(item.menuItemId)) {
+        pushItemNest(
+          steps,
+          group,
+          item,
+          `rec:${scope}:${group.id}`,
+          parent,
+          draft,
+          ctx,
+          depth
+        );
+      }
+      continue;
+    }
+
     if (!isConfigurationGroupVisibleForFilters(group, parent)) continue;
     const items = filterConfigurationItemsForGroup(group.items, {
       parentVariation: parent,
@@ -279,42 +321,6 @@ function pushGroupSteps(
         group,
         item,
         `opt:${scope}:${group.id}:${item.menuItemId}`,
-        parent,
-        draft,
-        ctx,
-        depth
-      );
-    }
-  }
-
-  for (const group of recs) {
-    const raw = group.items[0];
-    if (!raw) continue;
-    const item = mergeItem(raw, draft.nestsLoaded);
-    const selected = bag.selectedByGroup[group.id] ?? [];
-    const name = textOf(item.name, ctx.lang);
-    const required = Boolean(group.required);
-    steps.push({
-      id: `yes:${scope}:${group.id}:${item.menuItemId}`,
-      scope,
-      kind: 'yes',
-      title: ctx.t('kioskAskAdd', { name }),
-      hint: ctx.t('kioskTapToAdd'),
-      sidebar: name,
-      required,
-      allowSkip: !required,
-      stayUntilMin: false,
-      group,
-      item,
-      minItems: required ? 1 : 0,
-      maxItems: 1,
-    });
-    if (selected.includes(item.menuItemId)) {
-      pushItemNest(
-        steps,
-        group,
-        item,
-        `rec:${scope}:${group.id}`,
         parent,
         draft,
         ctx,
@@ -634,6 +640,7 @@ function itemPriceLabel(
 export function KioskItemFlow({
   productName,
   productImageUrl,
+  productDescription,
   productBaseUnitPrice,
   variations,
   attributeGroups,
@@ -681,6 +688,15 @@ export function KioskItemFlow({
   );
   const step = steps[index] ?? null;
   const last = step != null && index === steps.length - 1;
+  const stepRailRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const rail = stepRailRef.current;
+    if (!rail || !step) return;
+    rail.querySelector<HTMLElement>('[data-now="true"]')?.scrollIntoView({
+      block: 'nearest',
+    });
+  }, [step]);
 
   function go(next: Draft, fromId: string) {
     const list = buildSteps(next, ctx);
@@ -766,6 +782,17 @@ export function KioskItemFlow({
         if (picked && countOf(ids, optionId) > 0) {
           next = pinSingleVariation(next, step.scope, step.group, picked);
         }
+        const before = countOf(
+          bag.selectedByGroup[step.group.id] ?? [],
+          optionId
+        );
+        const added = countOf(ids, optionId) > before;
+        const reachedMax = step.maxItems > 0 && ids.length >= step.maxItems;
+        const finishedLast =
+          last &&
+          ids.length >= step.minItems &&
+          (step.minItems > 0 || ids.length > 0);
+        if (added && (reachedMax || finishedLast)) return go(next, step.id);
         return next;
       } else if (step.kind === 'yes' && step.group && step.item) {
         const ids = [...(bag.selectedByGroup[step.group.id] ?? [])];
@@ -928,17 +955,24 @@ export function KioskItemFlow({
         <div className="kiosk-pick-layout min-h-0 flex-1">
           <div className="flex h-full min-h-0 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="h-14 w-14 overflow-hidden rounded-2xl bg-[#ffedd5]">
+              <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start">
+                <div className="w-full max-w-[560px] shrink-0 overflow-hidden rounded-lg border border-[#e2e8f0] bg-white p-3 shadow-sm">
                   <LazyMenuProductImage
                     src={productImageUrl}
                     hasImage={Boolean(productImageUrl)}
-                    alt=""
-                    className="h-full w-full"
+                    alt={productName}
+                    className="aspect-square w-full rounded-lg"
                     emptyLabel={productName.slice(0, 1)}
                   />
                 </div>
-                <p className="text-lg font-extrabold">{productName}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-2xl font-extrabold leading-tight">{productName}</p>
+                  {productDescription ? (
+                    <p className="mt-2 text-sm leading-relaxed text-[#57534e]">
+                      {cleanDescription(productDescription)}
+                    </p>
+                  ) : null}
+                </div>
               </div>
               <h1 className="text-3xl font-extrabold tracking-tight">{step.title}</h1>
               <p className="mt-1 text-base text-[#57534e]">{step.hint}</p>
@@ -1028,6 +1062,11 @@ export function KioskItemFlow({
                         >
                           <CardArt imageUrl={item.imageUrl} name={textOf(item.name, lang)} />
                           <span className="kiosk-pick-name">{textOf(item.name, lang)}</span>
+                          {item.description ? (
+                            <span className="kiosk-pick-desc">
+                              {cleanDescription(textOf(item.description, lang))}
+                            </span>
+                          ) : null}
                           {price ? <span className="kiosk-pick-price">{price}</span> : null}
                         </button>
                       );
@@ -1066,6 +1105,11 @@ export function KioskItemFlow({
                           >
                             <CardArt imageUrl={item.imageUrl} name={name} />
                             <span className="kiosk-pick-name">{name}</span>
+                            {item.description ? (
+                              <span className="kiosk-pick-desc">
+                                {cleanDescription(textOf(item.description, lang))}
+                              </span>
+                            ) : null}
                             {price ? (
                               <span className="kiosk-pick-price">{price}</span>
                             ) : null}
@@ -1114,6 +1158,11 @@ export function KioskItemFlow({
                       name={textOf(step.item.name, lang)}
                     />
                     <span className="kiosk-pick-name">{textOf(step.item.name, lang)}</span>
+                    {step.item.description ? (
+                      <span className="kiosk-pick-desc">
+                        {cleanDescription(textOf(step.item.description, lang))}
+                      </span>
+                    ) : null}
                     {step.group ? (
                       <PriceLine
                         label={itemPriceLabel(
@@ -1165,7 +1214,9 @@ export function KioskItemFlow({
             </div>
             {step.kind === 'pool' ? (
               <div className="px-4 pb-4">
-                {poolSelected.length >= step.minItems &&
+                {!last &&
+                poolSelected.length >= step.minItems &&
+                poolSelected.length < step.maxItems &&
                 (poolSelected.length > 0 || step.minItems > 0) ? (
                   <button
                     type="button"
@@ -1200,14 +1251,19 @@ export function KioskItemFlow({
               </div>
             ) : null}
           </div>
-          <aside className="kiosk-pick-side" aria-label={t('kioskChoiceList')}>
-            <ul className="flex flex-col gap-2">
-              {steps.map((row) => {
+          <aside
+            ref={stepRailRef}
+            className="kiosk-pick-side"
+            aria-label={t('kioskChoiceList')}
+          >
+            <ul className="flex flex-col gap-1.5">
+              {steps.map((row, rowIndex) => {
                 const on = row.id === step.id;
                 const done = chosen(row, draft) && !on;
                 return (
                   <li
                     key={row.id}
+                    data-now={on ? 'true' : undefined}
                     className={cn(
                       'kiosk-pick-row',
                       on && 'is-now',
@@ -1215,7 +1271,7 @@ export function KioskItemFlow({
                     )}
                   >
                     <span className="kiosk-pick-mark" aria-hidden>
-                      {done ? <Check className="h-3.5 w-3.5" /> : null}
+                      {done ? <Check className="h-3 w-3" /> : rowIndex + 1}
                     </span>
                     <span className="min-w-0 flex-1 truncate">{row.sidebar}</span>
                     {!done && !on ? (

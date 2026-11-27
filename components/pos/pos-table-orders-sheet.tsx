@@ -1026,12 +1026,15 @@ export function PosTableOrdersSheet({
                       )}
                       inputMode={onscreenKeyboardEnabled ? 'none' : 'decimal'}
                       autoComplete="off"
+                      readOnly={onscreenKeyboardEnabled}
                       placeholder="0.00"
                       value={paidInput}
                       disabled={paying}
                       onChange={(e) => setPaidInput(e.target.value)}
-                      onPointerDown={() => {
-                        if (onscreenKeyboardEnabled) setPaidKeyboardOpen(true);
+                      onPointerDown={(e) => {
+                        if (!onscreenKeyboardEnabled) return;
+                        e.preventDefault();
+                        setPaidKeyboardOpen(true);
                       }}
                       onFocus={() => {
                         if (onscreenKeyboardEnabled) setPaidKeyboardOpen(true);

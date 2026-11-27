@@ -8,6 +8,7 @@ import {
 } from '@/lib/branch/branch-scope';
 import { db } from '@/lib/db';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
+import { isPendingPaymentStatus } from '@/lib/sales-order-status';
 
 export async function GET(_req: NextRequest) {
   try {
@@ -78,15 +79,25 @@ export async function GET(_req: NextRequest) {
       },
     });
 
-    const data = pending.map((order) => {
+    const data = pending.flatMap((order) => {
       const latestPayment = order.payments[0] ?? null;
+      const paymentMethod = latestPayment?.method ?? null;
+      const paymentStatus = latestPayment?.status ?? null;
+      // Cash kiosk orders wait at the POS. Prep time is chosen when cash is taken.
+      const cashKiosk =
+        order.sourceType === OrderSourceType.KIOSK &&
+        String(paymentMethod ?? '').toLowerCase() === 'cash' &&
+        isPendingPaymentStatus(paymentStatus);
+      if (cashKiosk) return [];
       const { payments: _payments, ...rest } = order;
-      return {
-        ...rest,
-        paymentStatus: latestPayment?.status ?? null,
-        paymentMethod: latestPayment?.method ?? null,
-        paymentAmount: latestPayment?.amount ?? null,
-      };
+      return [
+        {
+          ...rest,
+          paymentStatus,
+          paymentMethod,
+          paymentAmount: latestPayment?.amount ?? null,
+        },
+      ];
     });
 
     return NextResponse.json({ data }, { status: 200 });

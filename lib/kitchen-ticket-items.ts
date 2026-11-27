@@ -158,10 +158,7 @@ export function buildKitchenTicketItemRows(
     for (const mod of others) {
       const modName = resolveBilingualText(mod.name, lang).trim();
       if (!modName) continue;
-      const header = recommendationGroupDisplayLabel(
-        mod.groupName || 'Add-ons',
-        lang
-      );
+      const header = recommendationGroupDisplayLabel(mod.groupName, lang);
       const qty = mod.quantity > 0 ? mod.quantity : 1;
       const previous = folded[folded.length - 1];
       if (

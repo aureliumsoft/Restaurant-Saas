@@ -4,26 +4,37 @@ import { useTranslation } from 'react-i18next';
 
 type Props = {
   secondsLeft: number;
+  onStay: () => void;
+  onStartOver: () => void;
 };
 
-/** Full-screen idle warning: large 5…1 before returning to kiosk home. */
-export function KioskIdleCountdown({ secondsLeft }: Props) {
+/** Rest dialog shown after the kiosk has been idle. */
+export function KioskIdleCountdown({
+  secondsLeft,
+  onStay,
+  onStartOver,
+}: Props) {
   const { t } = useTranslation();
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/70 px-6 text-center text-white animate-in fade-in-0 duration-200"
+      className="kiosk-idle"
       role="alertdialog"
-      aria-live="assertive"
       aria-modal="true"
+      aria-labelledby="kiosk-idle-title"
+      onPointerDown={(e) => e.stopPropagation()}
     >
-      <p className="text-8xl font-bold tabular-nums leading-none sm:text-9xl">
-        {secondsLeft}
-      </p>
-      <p className="mt-6 max-w-md text-lg font-medium text-white/90 sm:text-xl">
-        {t('kioskReturningHome', { seconds: secondsLeft })}
-      </p>
-      <p className="mt-2 text-sm text-white/70">{t('kioskIdleTouchToStay')}</p>
+      <div className="kiosk-idle-card">
+        <h2 id="kiosk-idle-title">{t('kioskStillThere')}</h2>
+        <p>{t('kioskStillHint')}</p>
+        <p aria-live="polite">{t('kioskIdleSeconds', { seconds: secondsLeft })}</p>
+        <button type="button" className="kiosk-idle-stay" onClick={onStay}>
+          {t('kioskIdleStay')}
+        </button>
+        <button type="button" className="kiosk-idle-leave" onClick={onStartOver}>
+          {t('kioskIdleLeave')}
+        </button>
+      </div>
     </div>
   );
 }

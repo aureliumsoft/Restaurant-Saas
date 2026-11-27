@@ -67,7 +67,7 @@ function KeyButton({
     <button
       type="button"
       className={cn(
-        'flex h-11 items-center justify-center rounded-lg bg-background text-sm font-semibold text-foreground ring-1 ring-border/50 transition active:scale-[0.97] active:bg-fire-500 active:text-white',
+        'flex h-11 touch-manipulation select-none items-center justify-center rounded-lg bg-background text-sm font-semibold text-foreground ring-1 ring-border/50 transition active:scale-[0.97] active:bg-fire-500 active:text-white',
         wide ? 'col-span-2' : '',
         className
       )}
@@ -111,6 +111,12 @@ export function PosOnScreenKeyboard({
     portal ? null : { x: 0, y: 0 }
   );
   const panelRef = useRef<HTMLDivElement>(null);
+  const valueRef = useRef(value);
+  const pendingRef = useRef<string | null>(null);
+  if (pendingRef.current == null || value === pendingRef.current) {
+    valueRef.current = value;
+    pendingRef.current = null;
+  }
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -119,6 +125,7 @@ export function PosOnScreenKeyboard({
     origY: number;
   } | null>(null);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
+  const userMovedRef = useRef(false);
 
   useEffect(() => {
     if (!portal) return;
@@ -134,12 +141,24 @@ export function PosOnScreenKeyboard({
         el?.offsetWidth ??
         (mode === 'text' ? Math.min(720, window.innerWidth - 24) : 280);
       const height = el?.offsetHeight ?? (mode === 'text' ? 280 : 320);
+      const ticket = document
+        .querySelector('[data-pos-ticket]')
+        ?.getBoundingClientRect();
+      const gap = 12;
+      const beside =
+        ticket && ticket.width > 80 && ticket.left > width + gap + 8
+          ? {
+              x: ticket.left - width - gap,
+              y: ticket.top + (ticket.height - height) / 2,
+            }
+          : {
+              x: window.innerWidth - width - gap,
+              y: window.innerHeight - height - gap,
+            };
       const preferred =
-        lastPosRef.current ??
-        {
-          x: Math.max(12, (window.innerWidth - width) / 2),
-          y: Math.max(12, window.innerHeight - height - 24),
-        };
+        userMovedRef.current && lastPosRef.current
+          ? lastPosRef.current
+          : beside;
       const next = clampPosition(preferred.x, preferred.y, width, height);
       lastPosRef.current = next;
       setPos(next);
@@ -147,6 +166,10 @@ export function PosOnScreenKeyboard({
 
     const id = window.requestAnimationFrame(placeDefault);
     const onResize = () => {
+      if (!userMovedRef.current) {
+        placeDefault();
+        return;
+      }
       const el = panelRef.current;
       if (!el || !lastPosRef.current) return;
       const next = clampPosition(
@@ -165,18 +188,26 @@ export function PosOnScreenKeyboard({
     };
   }, [mounted, mode, portal]);
 
+  const commit = (next: string) => {
+    valueRef.current = next;
+    pendingRef.current = next;
+    onChange(next);
+  };
+
   const append = (char: string) => {
-    if (value.length >= maxLength) return;
-    onChange(value + char);
+    const current = valueRef.current;
+    if (current.length >= maxLength) return;
+    commit(current + char);
   };
 
   const backspace = () => {
-    onChange(value.slice(0, -1));
+    commit(valueRef.current.slice(0, -1));
   };
 
-  const clear = () => onChange('');
+  const clear = () => commit('');
 
   const pressNumeric = (key: string) => {
+    const current = valueRef.current;
     if (key === 'back') {
       backspace();
       return;
@@ -184,12 +215,12 @@ export function PosOnScreenKeyboard({
     if (key === '') return;
     if (key === '.') {
       if (mode !== 'numeric') return;
-      if (value.includes('.')) return;
-      append(value.length === 0 ? '0.' : '.');
+      if (current.includes('.')) return;
+      commit(current.length === 0 ? '0.' : current + '.');
       return;
     }
-    if (mode === 'numeric' && value === '0' && key !== '.') {
-      onChange(key);
+    if (mode === 'numeric' && current === '0' && key !== '.') {
+      commit(key);
       return;
     }
     append(key);
@@ -222,6 +253,7 @@ export function PosOnScreenKeyboard({
       height
     );
     lastPosRef.current = next;
+    userMovedRef.current = true;
     setPos(next);
   };
 
@@ -375,7 +407,7 @@ export function PosOnScreenKeyboard({
       role="group"
       aria-label={t('pos.keyboard.onScreenKeyboard')}
       className={cn(
-        'rounded-2xl border border-border/50 bg-card p-2 shadow-2xl ring-1 ring-border/40',
+        'touch-manipulation select-none rounded-2xl border border-border/50 bg-card p-2 shadow-2xl ring-1 ring-border/40',
         portal
           ? cn(
               'fixed z-[300]',
@@ -396,6 +428,10 @@ export function PosOnScreenKeyboard({
           : undefined
       }
       onMouseDown={(e) => e.preventDefault()}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
     >
       {header}
       {body}

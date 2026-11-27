@@ -3,9 +3,8 @@
 
 import React, { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
-import { getSession, useSession } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
+import { signIn, useSession } from 'next-auth/react';
 import { toast } from 'react-toastify';
 import { Eye, EyeOff, Loader2, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,22 +12,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PublicAuthShell } from '@/components/marketing/public-auth-shell';
 import { IconBrandGoogleFilled } from '@tabler/icons-react';
-import { postLoginPath, safeCallbackUrl } from '@/lib/auth/post-login-path';
+import { safeCallbackUrl } from '@/lib/auth/post-login-path';
 import { useTranslation } from 'react-i18next';
 
 function LoginForm() {
   const { t } = useTranslation();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrlParam = searchParams.get('callbackUrl');
   const callbackUrl = safeCallbackUrl(callbackUrlParam);
   const hasExplicitCallback = Boolean(callbackUrlParam);
-  const { data: session, status } = useSession();
-  const targetAfterLogin = postLoginPath(
-    session?.user,
-    hasExplicitCallback,
-    callbackUrl
-  );
+  const { status } = useSession();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,15 +30,12 @@ function LoginForm() {
   const [loadingGoogle, setLoadingGoogle] = useState(false);
 
   useEffect(() => {
-    router.prefetch('/dashboard');
-    router.prefetch('/admin/dashboard');
-  }, [router]);
-
-  useEffect(() => {
     if (status !== 'authenticated') return;
-    if (window.location.pathname === targetAfterLogin) return;
-    window.location.replace(targetAfterLogin);
-  }, [status, targetAfterLogin]);
+    const next = hasExplicitCallback
+      ? `/login/continue?callbackUrl=${encodeURIComponent(callbackUrl)}`
+      : '/login/continue';
+    window.location.replace(next);
+  }, [status, hasExplicitCallback, callbackUrl]);
 
   async function handleGoogle() {
     setLoadingGoogle(true);
@@ -98,13 +88,10 @@ function LoginForm() {
         setLoading(false);
         return;
       }
-      const fresh = await getSession();
-      const nextPath = postLoginPath(
-        fresh?.user,
-        hasExplicitCallback,
-        callbackUrl
-      );
-      window.location.assign(nextPath);
+      const next = hasExplicitCallback
+        ? `/login/continue?callbackUrl=${encodeURIComponent(callbackUrl)}`
+        : '/login/continue';
+      window.location.assign(next);
     } catch (e: any) {
       setLoading(false);
       toast.error(e?.message ?? t('auth.login.serverError'));

@@ -34,6 +34,7 @@ import {
   serializeBilingualText,
 } from '@/lib/menu/bilingual-text';
 import type { UiLanguage } from '@/lib/i18n/resources';
+import { uiText } from '@/lib/i18n/ui-text';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   Popover,
@@ -303,8 +304,8 @@ function buildRecommendationPayloads(
                   'chooseFrom'
                 )
           : serializeBilingualText({
-              en: 'Recommended products',
-              es: 'Recommended products',
+              en: uiText('en', 'recommendedProducts'),
+              es: uiText('es', 'recommendedProducts'),
             }),
         sourceType: 'PRODUCT',
         selectionType: draft.selectionType,

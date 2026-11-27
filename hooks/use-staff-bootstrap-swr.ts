@@ -16,10 +16,12 @@ import type { StaffBootstrapResponse } from '@/types/staff-bootstrap';
 /** Shared SWR cache for staff bootstrap — one HTTP + one DB bundle per session. */
 export function useStaffBootstrapSWR() {
   const pathname = usePathname() ?? '';
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const email =
     typeof session?.user?.email === 'string' ? session.user.email : null;
-  const enabled = Boolean(email) && isRestaurantStaffRoute(pathname);
+  // Fetch as soon as the session is authenticated. Waiting on email left the
+  // dashboard spinner up when the client session had no email yet.
+  const enabled = status === 'authenticated' && isRestaurantStaffRoute(pathname);
 
   const fallbackData = useMemo(
     () => (enabled ? readStaffBootstrapSessionCache(email) : undefined),

@@ -7,7 +7,11 @@ import { Base64ImageUploadField } from '@/components/ui/base64-image-upload';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { bilingualInputFromStored } from '@/lib/menu/bilingual-text';
+import { uiText } from '@/lib/i18n/ui-text';
+import {
+  BILINGUAL_SEPARATOR,
+  bilingualInputFromStored,
+} from '@/lib/menu/bilingual-text';
 
 import type { PersonalizeGroupRow } from './types';
 
@@ -72,7 +76,7 @@ export function personalizeDraftToPreviewGroups(
 
 export function emptyPersonalizeGroup(sortOrder = 0): PersonalizeGroupDraft {
   return {
-    parentName: 'Personalize',
+    parentName: `${uiText('en', 'personalizeFallback')} ${BILINGUAL_SEPARATOR} ${uiText('es', 'personalizeFallback')}`,
     maxItems: 2,
     sortOrder,
     options: [{ name: '', imageUrl: '', sortOrder: 0 }],

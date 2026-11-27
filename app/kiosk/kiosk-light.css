@@ -25,6 +25,56 @@
   color-scheme: light;
 }
 
+.kiosk-flow-steps {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.kiosk-flow-steps li {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: #fff;
+  color: #5c4f48;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.kiosk-flow-steps li.is-on {
+  border-color: #fdba74;
+  background: #fff7ed;
+  color: #9a3412;
+}
+.kiosk-flow-steps li.is-done {
+  background: #f0fdf4;
+  color: #166534;
+}
+.kiosk-flow-num {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  border-radius: 999px;
+  background: #f0e4d8;
+  font-size: 13px;
+}
+.kiosk-flow-steps li.is-on .kiosk-flow-num {
+  background: #c2410c;
+  color: #fff;
+}
+.kiosk-flow-steps li.is-done .kiosk-flow-num {
+  background: #166534;
+  color: #fff;
+}
 .kiosk-pick-back,
 .kiosk-pick-skip,
 .kiosk-pick-stepper,
@@ -52,7 +102,7 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 200px;
 }
 .kiosk-pick-side {
   min-height: 0;
@@ -60,37 +110,36 @@
   overflow: auto;
   border-left: 1px solid #f1e6dc;
   background: #fff;
-  padding: 16px;
+  padding: 10px;
 }
-.kiosk-pick-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
+.kiosk-pick-grid,
 .kiosk-pick-grid.is-pool {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  align-items: stretch;
 }
-.kiosk-pick-grid.is-pool .kiosk-pick-card { min-height: 0; }
-.kiosk-pick-grid.is-pool .kiosk-pick-art { height: 110px; }
-.kiosk-pick-grid.is-pool .kiosk-pick-name { font-size: 18px; }
 .kiosk-pick-card {
   display: flex;
   width: 100%;
-  min-height: 180px;
+  height: 100%;
+  min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 24px;
-  border: 4px solid #e7e5e4;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
   background: #fff;
-  padding: 0;
+  padding: 12px;
   text-align: left;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
-.kiosk-pick-card:active { transform: scale(0.98); }
-.kiosk-pick-card.is-on { border-color: #15803d; background: #f0fdf4; }
-.kiosk-pick-one { width: min(440px, 100%); }
+.kiosk-pick-card:active { transform: scale(0.99); }
+.kiosk-pick-card.is-on { border-color: #15803d; box-shadow: 0 0 0 2px #15803d; }
+.kiosk-pick-one { width: min(280px, 100%); height: auto; }
 .kiosk-pick-hit {
   display: flex;
   width: 100%;
+  flex: 1;
   flex-direction: column;
   border: 0;
   background: transparent;
@@ -123,21 +172,41 @@
 .kiosk-pick-next:disabled { opacity: 0.45; }
 .kiosk-pick-art {
   display: block;
-  height: 148px;
-  background: #fff7ed;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background: #f8fafc;
 }
 .kiosk-pick-name {
-  display: block;
-  padding: 12px 14px 0;
-  font-size: 22px;
-  font-weight: 800;
+  display: -webkit-box;
+  margin-top: 8px;
+  padding: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.kiosk-pick-desc {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #64748b;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .kiosk-pick-price {
   display: block;
-  padding: 4px 14px 14px;
-  font-size: 18px;
-  font-weight: 800;
-  color: #9a3412;
+  margin-top: auto;
+  padding: 8px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary);
 }
 .kiosk-pick-skip {
   width: 100%;
@@ -160,14 +229,14 @@
 .kiosk-pick-stepper:disabled { opacity: 0.4; }
 .kiosk-pick-row {
   display: flex;
-  min-height: 52px;
+  min-height: 36px;
   align-items: center;
-  gap: 10px;
-  border-radius: 14px;
+  gap: 6px;
+  border-radius: 10px;
   border: 1px solid #e7e5e4;
   background: #fff;
-  padding: 8px 10px;
-  font-size: 16px;
+  padding: 4px 6px;
+  font-size: 12px;
   font-weight: 700;
 }
 .kiosk-pick-row.is-now {
@@ -181,16 +250,19 @@
 }
 .kiosk-pick-mark {
   display: grid;
-  height: 22px;
-  width: 22px;
+  height: 18px;
+  width: 18px;
   flex: none;
   place-items: center;
   border-radius: 999px;
   border: 2px solid #d6d3d1;
+  font-size: 10px;
+  font-weight: 800;
 }
 .kiosk-pick-row.is-now .kiosk-pick-mark {
   border-color: var(--primary);
   background: var(--primary);
+  color: #fff;
 }
 .kiosk-pick-row.is-done .kiosk-pick-mark {
   border-color: #15803d;
@@ -199,13 +271,234 @@
 }
 .kiosk-pick-tag {
   flex: none;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   color: #78716c;
 }
 @media (max-width: 720px) {
-  .kiosk-pick-layout { grid-template-columns: minmax(0, 1fr) 168px; }
-  .kiosk-pick-grid,
-  .kiosk-pick-grid.is-pool { grid-template-columns: 1fr 1fr; }
-  .kiosk-pick-name { font-size: 18px; }
+  .kiosk-pick-layout { grid-template-columns: minmax(0, 1fr) 148px; }
+}
+
+.kiosk-name-field {
+  min-height: 68px;
+  border-radius: 20px !important;
+  border: 3px solid #fdba74 !important;
+  background: #fff !important;
+  padding: 10px 18px !important;
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  color: #1c1410;
+}
+
+.kiosk-name-field::placeholder {
+  color: #8a7568;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.kiosk-keys-wrap {
+  width: min(640px, calc(100vw - 24px));
+  margin-top: 8px;
+  margin-left: calc(50% - min(320px, 50vw - 12px));
+}
+
+.kiosk-keys {
+  margin-top: 4px;
+}
+
+.kiosk-keyrow {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.kiosk-key {
+  flex: 1 1 0;
+  width: auto;
+  max-width: 56px;
+  min-width: 0;
+  min-height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px #f0e4d8;
+  color: #1c1410;
+  font-weight: 800;
+  font-size: 20px;
+}
+
+.kiosk-key:active {
+  background: #fff7ed;
+}
+
+.kiosk-key.is-space {
+  flex: 3.2 1 0;
+  max-width: 220px;
+}
+
+.kiosk-key.is-del {
+  flex: 1.8 1 0;
+  max-width: 128px;
+}
+
+.kiosk-idle {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(28, 20, 16, 0.5);
+}
+
+.kiosk-idle-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(560px, 100%);
+  padding: 22px;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(28, 20, 16, 0.18);
+  color: #1c1410;
+}
+
+.kiosk-idle-card h2 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.kiosk-idle-card p {
+  margin: 0;
+  color: #5c4f48;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.kiosk-idle-stay,
+.kiosk-idle-leave {
+  width: 100%;
+  border-radius: 16px;
+  font-weight: 800;
+}
+
+.kiosk-idle-stay {
+  min-height: 80px;
+  margin-top: 6px;
+  border: 2px solid #c2410c;
+  border-radius: 20px;
+  background: #c2410c;
+  color: #fff;
+  font-size: 24px;
+}
+
+.kiosk-idle-stay:active {
+  background: #9a3412;
+}
+
+.kiosk-idle-leave {
+  min-height: 64px;
+  border: 2px solid #e7d9cc;
+  background: #fff;
+  color: #1c1410;
+  font-size: 18px;
+}
+
+.kiosk-pay-question {
+  margin: 0 0 8px;
+  color: #1c1410;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+
+.kiosk-pay-count {
+  margin: 0 0 10px;
+  color: #5c4f48;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.kiosk-pay-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.kiosk-pay-choice {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  border-radius: 22px;
+  border: 2px solid transparent;
+  padding: 18px 20px 16px;
+  text-align: left;
+}
+
+.kiosk-pay-choice.is-cash {
+  background: #fffbeb;
+  border-color: #f6c445;
+}
+
+.kiosk-pay-choice.is-card {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.kiosk-pay-choice.is-selected.is-cash {
+  border-color: #d97706;
+}
+
+.kiosk-pay-choice.is-selected.is-card {
+  border-color: #3b82f6;
+}
+
+.kiosk-pay-choice:active {
+  transform: scale(0.98);
+}
+
+.kiosk-pay-emoji {
+  font-size: 36px;
+  line-height: 1;
+}
+
+.kiosk-pay-title {
+  color: #1c1410;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.kiosk-pay-hint {
+  color: #5c4f48;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.kiosk-pay-pill {
+  border-radius: 999px;
+  background: #c2410c;
+  padding: 3px 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.kiosk-pay-next {
+  margin: 12px 0 0;
+  color: #5c4f48;
+  font-size: 16px;
+  font-weight: 700;
 }

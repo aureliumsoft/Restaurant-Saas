@@ -6,11 +6,11 @@ import { toast } from 'react-toastify';
 import { useRealtimeRefresh } from '@/hooks/use-realtime-refresh';
 import {
   RefreshCw,
-  CheckCircle2,
   XCircle,
   Clock3,
   Loader2,
   Check,
+  Printer,
   Trash2,
 } from 'lucide-react';
 
@@ -26,6 +26,10 @@ import eventBus from '@/lib/even';
 import { kdsTicketApiPath } from '@/lib/dashboard-paths';
 import { kdsAxiosErrorMessage } from '@/lib/kds-api-errors';
 import { parseKitchenTicketItemDisplay } from '@/lib/kitchen-ticket-items';
+import {
+  printKitchenHandoverSticker,
+  type KitchenHandoverLine,
+} from '@/lib/kitchen-handover-sticker-print';
 import {
   parseCutleryFromAddressSnapshot,
   parseNoteFromAddressSnapshot,
@@ -305,10 +309,38 @@ export function KdsKitchenScreen() {
     [tickets]
   );
 
+  function printHandoverSticker(ticket: Ticket | undefined) {
+    if (!ticket) return;
+    const lang = normalizeUiLanguage(i18n.language);
+    const lines = ticket.items.flatMap((item): KitchenHandoverLine[] => {
+      const row = parseKitchenTicketItemDisplay(item.productName, item.quantity);
+      const name = getLocalizedName(row.name, lang);
+      if (!name) return [];
+      if (row.kind === 'main' || row.kind === 'addon' || row.kind === 'nested') {
+        return [{ name, quantity: row.quantity, kind: row.kind }];
+      }
+      return [{ name, kind: row.kind }];
+    });
+    const printed = printKitchenHandoverSticker({
+      ticketNumber: tokenLabel(ticket),
+      heading: tr('kds.handoverHeading'),
+      customerName: ticket.customerName,
+      orderMethod: getOrderMethodLabel(ticket, tr),
+      lines,
+    });
+    if (!printed) {
+      toast.warning(tr('kds.handoverPrintFailed'));
+    }
+  }
+
   async function updateStatus(
     ticketId: string,
     status: 'completed' | 'canceled'
   ): Promise<boolean> {
+    const completingTicket =
+      status === 'completed'
+        ? tickets.find((t) => t.id === ticketId)
+        : undefined;
     if (status === 'completed') {
       setActiveCompleteCount((prev) => prev + 1);
       setActiveCompletingTicketId(ticketId);
@@ -333,6 +365,7 @@ export function KdsKitchenScreen() {
         }
         // Drop from in-memory board immediately.
         setTickets((prev) => prev.filter((t) => t.id !== ticketId && t.id !== localTicket?.id));
+        if (status === 'completed') printHandoverSticker(completingTicket);
         toast.success(
           status === 'completed'
             ? tr('kds.ticketCompletedOffline')
@@ -365,6 +398,7 @@ export function KdsKitchenScreen() {
           );
         }
         setTickets((prev) => prev.filter((t) => t.id !== ticketId));
+        if (status === 'completed') printHandoverSticker(completingTicket);
         toast.success(
           status === 'completed'
             ? tr('kds.ticketCompletedOffline')
@@ -376,6 +410,7 @@ export function KdsKitchenScreen() {
       const ticketUrlId = tickets.find((t) => t.id === ticketId)?.urlId;
 
       await axios.patch(kdsTicketApiPath(ticketId, '', ticketUrlId), { status });
+      if (status === 'completed') printHandoverSticker(completingTicket);
       toast.success(
         status === 'completed'
           ? tr('kds.orderMarkedComplete')
@@ -594,8 +629,9 @@ export function KdsKitchenScreen() {
                         />
                       );
                     })()}
-                    <div className="flex w-full justify-between gap-2">
+                    <div className="flex w-full gap-2">
                       <Button
+                        className="flex-1"
                         type="button"
                         variant="destructive"
                         disabled={
@@ -634,6 +670,7 @@ export function KdsKitchenScreen() {
 
                       <Button
                         type="button"
+                        className="flex-1"
                         disabled={
                           (activeCompleteCount > 0 &&
                             activeCompletingTicketId !== t.id) ||
@@ -655,14 +692,14 @@ export function KdsKitchenScreen() {
                           <>
                             <Loader2 className="mr-2 h-5 w-5 animate-spin" />{' '}
                             <span className="text-sm font-medium">
-                              {tr('kds.completing')}
+                              {tr('kds.printAndCompleting')}
                             </span>
                           </>
                         ) : (
                           <>
-                            <CheckCircle2 className="mr-2 h-5 w-5" />{' '}
+                            <Printer className="mr-2 h-5 w-5" />{' '}
                             <span className="text-sm font-medium">
-                              {tr('kds.complete')}
+                              {tr('kds.printAndComplete')}
                             </span>
                           </>
                         )}

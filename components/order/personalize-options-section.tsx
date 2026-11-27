@@ -1,6 +1,7 @@
 'use client';
 
 import { Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Label } from '@/components/ui/label';
 import { useBilingualText } from '@/hooks/use-bilingual-text';
@@ -17,6 +18,15 @@ export type PersonalizeGroup = {
   }>;
 };
 
+function personalizeGroupTitle(
+  name: string,
+  t: (key: string) => string
+) {
+  return name.trim().toLowerCase() === 'personalize'
+    ? t('personalizeFallback')
+    : name;
+}
+
 type Props = {
   groups: PersonalizeGroup[];
   selectedByGroup: Record<string, string[]>;
@@ -28,6 +38,7 @@ export function PersonalizeOptionsSection({
   selectedByGroup,
   onToggle,
 }: Props) {
+  const { t } = useTranslation();
   const { resolve } = useBilingualText();
 
   if (groups.length === 0) return null;
@@ -44,10 +55,10 @@ export function PersonalizeOptionsSection({
           >
             <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-3">
               <Label className="text-sm font-semibold text-foreground">
-                {resolve(group.parentName)}
+                {personalizeGroupTitle(resolve(group.parentName), t)}
               </Label>
               <span className="text-xs font-medium text-muted-foreground">
-                {count}/{group.maxItems} max.
+                {t('customizeMaxCount', { count, max: group.maxItems })}
               </span>
             </div>
             <ul className="divide-y divide-border">

@@ -4,13 +4,19 @@ import { OrderSourceType } from '@prisma/client';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
+import { buildKitchenTicketItemRows } from '@/lib/kitchen-ticket-items';
 import { getOpenPosShift } from '@/lib/pos-shift';
 import { getRestaurantIdForRequest } from '@/lib/restaurant-owner';
 import { publishOrderLifecycleUpdate } from '@/lib/realtime/publish';
 import { resolveRouteParams } from '@/lib/resolve-route-id';
 
+const MIN_PREP_MINUTES = 1;
+const MAX_PREP_MINUTES = 240;
+
 const paySchema = z.object({
   paid: z.number().min(0),
+  /** Set on the POS when cash is taken, so the order skips the KDS time queue. */
+  selectedMinutes: z.number().int().min(MIN_PREP_MINUTES).max(MAX_PREP_MINUTES).optional(),
 });
 
 export async function POST(
@@ -38,6 +44,23 @@ export async function POST(
         total: true,
         status: true,
         branchId: true,
+        items: {
+          select: {
+            quantity: true,
+            productName: true,
+            menuItem: { select: { name: true } },
+            modifiers: {
+              select: {
+                name: true,
+                quantity: true,
+                menuItemId: true,
+                groupName: true,
+              },
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+            },
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        },
         payments: {
           where: {
             status: 'pending',
@@ -84,6 +107,7 @@ export async function POST(
 
     const orderTotal = Number(order.total) || 0;
     const paid = parsed.data.paid;
+    const selectedMinutes = parsed.data.selectedMinutes;
     if (paid + 0.001 < orderTotal) {
       return NextResponse.json(
         { error: 'Paid amount is less than order total.' },
@@ -102,6 +126,15 @@ export async function POST(
       );
     }
 
+    const itemRows = buildKitchenTicketItemRows(
+      order.items.map((line) => ({
+        quantity: line.quantity,
+        productName: line.productName,
+        menuItem: line.menuItem,
+        modifiers: line.modifiers,
+      }))
+    );
+
     await db.$transaction(async (tx) => {
       await tx.payment.update({
         where: { id: payment.id },
@@ -111,10 +144,67 @@ export async function POST(
           method: 'Cash',
         },
       });
+
+      if (selectedMinutes == null) {
+        await tx.order.update({
+          where: { id: order.id },
+          data: { posShiftId: openShift.id },
+        });
+        return;
+      }
+
       await tx.order.update({
         where: { id: order.id },
-        data: { posShiftId: openShift.id },
+        data: { posShiftId: openShift.id, status: 'making' },
       });
+
+      const existing = await tx.kitchenTicket.findFirst({
+        where: {
+          orderId: order.id,
+          status: { in: ['pending', 'making', 'Pending', 'Making'] },
+        },
+        select: { id: true, status: true },
+      });
+
+      const ticketId = existing
+        ? existing.id
+        : (
+            await tx.kitchenTicket.create({
+              data: {
+                restaurantId: auth.restaurantId,
+                orderId: order.id,
+                status: 'making',
+                selectedMinutes,
+                startedAt: new Date(),
+              },
+              select: { id: true },
+            })
+          ).id;
+
+      if (existing) {
+        await tx.kitchenTicket.update({
+          where: { id: existing.id },
+          data: {
+            status: 'making',
+            selectedMinutes,
+            startedAt: new Date(),
+          },
+        });
+        await tx.kitchenTicketItem.deleteMany({
+          where: { kitchenTicketId: existing.id },
+        });
+      }
+
+      if (itemRows.length > 0) {
+        await tx.kitchenTicketItem.createMany({
+          data: itemRows.map((row, sortOrder) => ({
+            kitchenTicketId: ticketId,
+            productName: row.productName,
+            quantity: row.quantity,
+            sortOrder,
+          })),
+        });
+      }
     });
 
     publishOrderLifecycleUpdate({

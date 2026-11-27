@@ -9,7 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { resolveBilingualText } from '@/lib/menu/bilingual-text';
+import { uiText } from '@/lib/i18n/ui-text';
+import {
+  BILINGUAL_SEPARATOR,
+  resolveBilingualText,
+} from '@/lib/menu/bilingual-text';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 import {
   isCategoryEligibleForRecommendations,
@@ -859,7 +863,7 @@ export function ConfigurationWizard(props: ConfigurationWizardProps) {
           ? personalizeDraft
           : [
             {
-              parentName: 'Personalize',
+              parentName: `${uiText('en', 'personalizeFallback')} ${BILINGUAL_SEPARATOR} ${uiText('es', 'personalizeFallback')}`,
               maxItems: 2,
               sortOrder: 0,
               options: [

@@ -51,33 +51,33 @@ export function KdsOrderActionDialog({
     ? kind === 'proceed'
       ? t('kds.actionProceedWithToken', { name: itemName })
       : kind === 'complete'
-        ? t('kds.actionCompleteWithToken', { name: itemName })
+        ? t('kds.actionPrintCompleteWithToken', { name: itemName })
         : t('kds.actionCancelWithToken', { name: itemName })
     : kind === 'proceed'
       ? t('kds.actionProceedTitle')
       : kind === 'complete'
-        ? t('kds.actionCompleteTitle')
+        ? t('kds.actionPrintCompleteTitle')
         : t('kds.actionCancelTitle');
 
   const description =
     kind === 'proceed'
       ? t('kds.actionProceedDescription')
       : kind === 'complete'
-        ? t('kds.actionCompleteDescription')
+        ? t('kds.actionPrintCompleteDescription')
         : t('kds.actionCancelDescription');
 
   const confirmLabel =
     kind === 'proceed'
       ? t('kds.proceed')
       : kind === 'complete'
-        ? t('kds.complete')
+        ? t('kds.printAndComplete')
         : t('kds.cancelOrder');
 
   const loadingLabel =
     kind === 'proceed'
       ? t('kds.proceeding')
       : kind === 'complete'
-        ? t('kds.completing')
+        ? t('kds.printAndCompleting')
         : t('kds.canceling');
 
   return (

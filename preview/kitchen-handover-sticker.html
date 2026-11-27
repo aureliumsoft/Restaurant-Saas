@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FoodLuk — handover sticker</title>
+  <style>
+    :root {
+      --ink: #1c1410;
+      --muted: #6b5e56;
+      --line: #eadfd4;
+      --paper: #fffdfb;
+      --bg: #1a1411;
+      --orange: #c2410c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(900px 420px at 50% -10%, #3a2c24 0%, transparent 60%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+    }
+    .stage {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 36px 20px 64px;
+    }
+    .intro {
+      color: #f6efe8;
+      margin-bottom: 28px;
+    }
+    .intro h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+    }
+    .intro p {
+      margin: 0;
+      max-width: 46ch;
+      color: #cbbfb6;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    .desk {
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+    @media (max-width: 800px) {
+      .desk { grid-template-columns: 1fr; }
+    }
+
+    /* The thing the chef sticks on the food. */
+    .slip {
+      width: min(100%, 320px);
+      margin: 0 auto;
+      background: var(--paper);
+      border-radius: 22px;
+      padding: 22px 22px 26px;
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.7) inset,
+        0 24px 50px rgba(0,0,0,0.35);
+    }
+    .kicker {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .number {
+      margin: 2px 0 0;
+      font-size: 92px;
+      font-weight: 800;
+      line-height: 0.85;
+      letter-spacing: -0.05em;
+    }
+    .method {
+      display: inline-flex;
+      margin: 10px 0 0;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: #f3ebe4;
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .rule {
+      border: 0;
+      border-top: 1px solid var(--line);
+      margin: 16px 0 14px;
+    }
+    .product {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .product span {
+      color: var(--orange);
+      margin-right: 6px;
+    }
+    .pack {
+      margin: 14px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .pack li { margin-top: 10px; }
+    .group {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .choice {
+      margin: 3px 0 0;
+      padding-left: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    .choice b {
+      font-weight: 800;
+    }
+
+    .notes {
+      color: #f6efe8;
+    }
+    .notes h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+    .notes ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .notes li {
+      margin-top: 10px;
+      padding-left: 14px;
+      border-left: 3px solid #c2410c;
+      color: #e7ddd4;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .notes strong { color: #fff; }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <header class="intro">
+      <h1>Handover sticker</h1>
+      <p>What the chef sticks on the food. The ticket number is for the person collecting it. The list is only what is inside that product.</p>
+    </header>
+    <div class="desk">
+      <article class="slip" aria-label="Sticker for ticket 01">
+        <p class="kicker">Ticket</p>
+        <p class="number">01</p>
+        <p class="method">Delivery</p>
+        <hr class="rule" />
+        <p class="product"><span>1×</span>Wrap Box</p>
+        <ul class="pack">
+          <li>
+            <p class="group">Little Wraps</p>
+            <p class="choice">Little Kentucky Wrap</p>
+          </li>
+          <li>
+            <p class="group">Little Wraps 2</p>
+            <p class="choice">Little Wrap Ranch</p>
+          </li>
+          <li>
+            <p class="group">8 Nuggets</p>
+            <p class="choice">Nuggets x8</p>
+          </li>
+          <li>
+            <p class="group">Loaded Fries</p>
+            <p class="choice">Loaded Fries</p>
+          </li>
+          <li>
+            <p class="group">Sauces</p>
+            <p class="choice">Barbecue <b>×2</b></p>
+            <p class="choice">Biggy Burger</p>
+          </li>
+          <li>
+            <p class="group">Drinks Menu</p>
+            <p class="choice">7up Exotic 33cl</p>
+          </li>
+        </ul>
+      </article>
+      <aside class="notes">
+        <h2>On the sticker</h2>
+        <ul>
+          <li><strong>Ticket 01</strong> is the largest thing, so the counter can match the bag to the customer.</li>
+          <li><strong>Delivery</strong> sits under the number. Takeaway and table use the same spot.</li>
+          <li><strong>1× Wrap Box</strong> is the product the sticker goes on. The lines under it are what is packed inside.</li>
+          <li>The kitchen timer, tracking code, Cancel, and Print stay on the kitchen screen. They are not printed.</li>
+        </ul>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

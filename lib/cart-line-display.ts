@@ -4,6 +4,7 @@ import {
   DEFAULT_UI_LANGUAGE,
   type UiLanguage,
 } from '@/lib/i18n/resources';
+import { uiText } from '@/lib/i18n/ui-text';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 
 export type CartModifierSelectionLike = {
@@ -193,7 +194,9 @@ export function cartLineTitle(
   variationName?: string | null,
   lang: UiLanguage = DEFAULT_UI_LANGUAGE
 ): string {
-  const base = resolveBilingualText(productName, lang).trim() || 'Item';
+  const base =
+    resolveBilingualText(productName, lang).trim() ||
+    uiText(lang, 'itemFallback');
   const variation = variationName
     ? resolveBilingualText(variationName, lang).trim()
     : '';
@@ -212,7 +215,10 @@ export function recommendationGroupDisplayLabel(
 ): string {
   const resolved = resolveBilingualText(raw, lang).trim();
   const source = resolved || String(raw ?? '').trim();
-  if (!source) return 'Add-ons';
+  if (!source) return uiText(lang, 'addonsFallback');
+  if (source.toLowerCase() === 'recommended products') {
+    return uiText(lang, 'recommendedProducts');
+  }
 
   const stripPart = (part: string): string => {
     let s = part.trim();
@@ -342,11 +348,11 @@ export function orderModifierDisplayTree(
       quantity: mod.quantity,
     };
     if (!mod.menuItemId) {
-      pushBlock(blocks, 'Personalize', line, true);
+      pushBlock(blocks, uiText(lang, 'personalizeFallback'), line, true);
     } else {
       pushBlock(
         blocks,
-        recommendationGroupDisplayLabel(mod.groupName || 'Add-ons', lang),
+        recommendationGroupDisplayLabel(mod.groupName, lang),
         line,
         false
       );
@@ -386,10 +392,7 @@ export function cartModifierDisplaySections(
       if (isPersonalizeModifierMenuItemId(sel.menuItemId)) {
         personalizeLines.push(line);
       } else {
-        const label = recommendationGroupDisplayLabel(
-          group.groupName?.trim() || 'Add-ons',
-          lang
-        );
+        const label = recommendationGroupDisplayLabel(group.groupName, lang);
         const existing = recommendationByGroup.get(label) ?? [];
         existing.push(line);
         recommendationByGroup.set(label, existing);
@@ -401,7 +404,7 @@ export function cartModifierDisplaySections(
   if (personalizeLines.length > 0) {
     sections.push({
       kind: 'personalize',
-      label: 'Personalize',
+      label: uiText(lang, 'personalizeFallback'),
       lines: personalizeLines,
     });
   }
@@ -439,10 +442,7 @@ export function orderModifierDisplaySections(
     if (!mod.menuItemId) {
       personalizeLines.push(line);
     } else {
-      const label = recommendationGroupDisplayLabel(
-        mod.groupName?.trim() || 'Add-ons',
-        lang
-      );
+      const label = recommendationGroupDisplayLabel(mod.groupName, lang);
       const existing = recommendationByGroup.get(label) ?? [];
       existing.push(line);
       recommendationByGroup.set(label, existing);
@@ -453,7 +453,7 @@ export function orderModifierDisplaySections(
   if (personalizeLines.length > 0) {
     sections.push({
       kind: 'personalize',
-      label: 'Personalize',
+      label: uiText(lang, 'personalizeFallback'),
       lines: personalizeLines,
     });
   }

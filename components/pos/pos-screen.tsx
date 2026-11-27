@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ComponentType } from 'react';
+import type { ComponentType, PointerEvent as ReactPointerEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Check,
@@ -437,7 +437,8 @@ function lineUnitTotal(line: CartLine) {
 }
 
 function normalizeCartLine(
-  raw: Partial<CartLine> & { productId?: string; name?: string }
+  raw: Partial<CartLine> & { productId?: string; name?: string },
+  itemFallback: string
 ): CartLine {
   if (raw.lineId && raw.menuItemId && raw.productName) {
     return {
@@ -457,7 +458,7 @@ function normalizeCartLine(
     };
   }
 
-  const legacyName = raw.name?.trim() || 'Item';
+  const legacyName = raw.name?.trim() || itemFallback;
   const legacyId =
     raw.productId?.trim() || raw.menuItemId?.trim() || legacyName;
   return {
@@ -593,7 +594,10 @@ export function PosScreen({
     | 'apartment'
     | 'doorNumber'
     | 'amount'
-    | 'prepCustom';
+    | 'prepCustom'
+    | 'search'
+    | 'tax'
+    | 'discount';
   const [keyboardField, setKeyboardField] = useState<PosKeyboardField | null>(
     null
   );
@@ -840,6 +844,22 @@ export function PosScreen({
     setKeyboardField(field);
   };
 
+  const bindOnscreenField = (field: PosKeyboardField) =>
+    onscreenKeyboardEnabled
+      ? {
+          readOnly: true as const,
+          inputMode: 'none' as const,
+          onPointerDown: (
+            e: ReactPointerEvent<HTMLInputElement | HTMLTextAreaElement>
+          ) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openKeyboardField(field);
+          },
+          onFocus: () => openKeyboardField(field),
+        }
+      : {};
+
   const categories = useMemo<Category[]>(() => {
     const next: Category[] = [
       {
@@ -979,7 +999,8 @@ export function PosScreen({
                 line as Partial<CartLine> & {
                   productId?: string;
                   name?: string;
-                }
+                },
+                t('itemFallback')
               )
             ),
           }))
@@ -2070,21 +2091,24 @@ export function PosScreen({
         0
       );
       const basePrice = Math.max(0, item.unitPrice - modifierTotal);
-      return normalizeCartLine({
-        lineId:
-          typeof crypto !== 'undefined' && 'randomUUID' in crypto
-            ? crypto.randomUUID()
-            : `edit-${item.id}`,
-        menuItemId: item.menuItemId,
-        productName: item.name,
-        unitPrice: basePrice,
-        baseUnitPrice: basePrice,
-        qty: item.quantity,
-        lineDiscPct: 0,
-        imageUrl: item.imageUrl,
-        modifiers,
-        modifiersSignature: getModifiersSignature(modifiers, null),
-      });
+      return normalizeCartLine(
+        {
+          lineId:
+            typeof crypto !== 'undefined' && 'randomUUID' in crypto
+              ? crypto.randomUUID()
+              : `edit-${item.id}`,
+          menuItemId: item.menuItemId,
+          productName: item.name,
+          unitPrice: basePrice,
+          baseUnitPrice: basePrice,
+          qty: item.quantity,
+          lineDiscPct: 0,
+          imageUrl: item.imageUrl,
+          modifiers,
+          modifiersSignature: getModifiersSignature(modifiers, null),
+        },
+        t('itemFallback')
+      );
     });
     const loadedSubtotal = lines.reduce(
       (sum, line) => sum + lineUnitTotal(line) * line.qty,
@@ -2159,7 +2183,7 @@ export function PosScreen({
   }
 
   function restoreArchivedOrder(order: ArchivedOrder) {
-    setCart(order.lines.map((line) => normalizeCartLine(line)));
+    setCart(order.lines.map((line) => normalizeCartLine(line, t('itemFallback'))));
     setOrderMode(order.orderMode);
     setTaxPct(order.taxPct || '0');
     setDisPct(order.discountPct || '0');
@@ -3479,6 +3503,7 @@ export function PosScreen({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             disabled={posBusy}
+            {...bindOnscreenField('search')}
             title={
               search.trim()
                 ? t('pos.toolbar.searchHint')
@@ -3658,7 +3683,11 @@ export function PosScreen({
 
       <div
         className="grid min-h-0 flex-1 grid-cols-1 gap-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:grid-rows-1"
-        onPointerDown={() => setKeyboardField(null)}
+        onPointerDown={(e) => {
+          const target = e.target as HTMLElement | null;
+          if (target?.closest?.('[data-pos-osk]')) return;
+          setKeyboardField(null);
+        }}
       >
         {/* Menu area */}
         <div className="flex min-h-0 flex-col gap-2 overflow-hidden px-3 pt-2.5 sm:px-4 sm:pt-3 lg:pr-2">
@@ -3842,6 +3871,7 @@ export function PosScreen({
 
         {/* Order ticket / inline payment */}
         <div
+          data-pos-ticket=""
           className={cn(
             POS_TICKET_SIDEBAR,
             checkoutOpen && 'max-h-[70dvh] bg-white/90 dark:bg-zinc-950/90',
@@ -4141,11 +4171,7 @@ export function PosScreen({
                             e.target.value.replace(/\D/g, '')
                           )
                         }
-                        onPointerDown={(e) => {
-                          e.stopPropagation();
-                          openKeyboardField('prepCustom');
-                        }}
-                        onFocus={() => openKeyboardField('prepCustom')}
+                        {...bindOnscreenField('prepCustom')}
                       />
                     </div>
                   </>
@@ -4231,11 +4257,7 @@ export function PosScreen({
                         inputMode={onscreenKeyboardEnabled ? 'none' : 'text'}
                         autoComplete="off"
                         onChange={(e) => setCustomerName(e.target.value)}
-                        onPointerDown={(e) => {
-                          e.stopPropagation();
-                          openKeyboardField('name');
-                        }}
-                        onFocus={() => openKeyboardField('name')}
+                        {...bindOnscreenField('name')}
                       />
                     </div>
                     <div className="space-y-1">
@@ -4257,11 +4279,7 @@ export function PosScreen({
                         onChange={(e) =>
                           setCustomerPhone(e.target.value.replace(/\D/g, ''))
                         }
-                        onPointerDown={(e) => {
-                          e.stopPropagation();
-                          openKeyboardField('phone');
-                        }}
-                        onFocus={() => openKeyboardField('phone')}
+                        {...bindOnscreenField('phone')}
                       />
                     </div>
                     {isDeliveryMode ? (
@@ -4287,11 +4305,7 @@ export function PosScreen({
                               autoComplete="off"
                               placeholder={t('pos.apartmentHint')}
                               onChange={(e) => setOrderApartment(e.target.value)}
-                              onPointerDown={(e) => {
-                                e.stopPropagation();
-                                openKeyboardField('apartment');
-                              }}
-                              onFocus={() => openKeyboardField('apartment')}
+                              {...bindOnscreenField('apartment')}
                             />
                           </div>
                           <div className="space-y-1">
@@ -4314,11 +4328,7 @@ export function PosScreen({
                               autoComplete="off"
                               placeholder={t('pos.doorNumberHint')}
                               onChange={(e) => setOrderDoorNumber(e.target.value)}
-                              onPointerDown={(e) => {
-                                e.stopPropagation();
-                                openKeyboardField('doorNumber');
-                              }}
-                              onFocus={() => openKeyboardField('doorNumber')}
+                              {...bindOnscreenField('doorNumber')}
                             />
                           </div>
                         </div>
@@ -4342,12 +4352,8 @@ export function PosScreen({
                             }
                             autoComplete="off"
                             onChange={(e) => setOrderAddress(e.target.value)}
-                            onPointerDown={(e) => {
-                              e.stopPropagation();
-                              openKeyboardField('address');
-                            }}
-                            onFocus={() => openKeyboardField('address')}
                             rows={3}
+                            {...bindOnscreenField('address')}
                           />
                         </div>
                       </div>
@@ -4482,11 +4488,7 @@ export function PosScreen({
                           placeholder="0.00"
                           value={amountPaid}
                           onChange={(e) => setAmountPaid(e.target.value)}
-                          onPointerDown={(e) => {
-                            e.stopPropagation();
-                            openKeyboardField('amount');
-                          }}
-                          onFocus={() => openKeyboardField('amount')}
+                          {...bindOnscreenField('amount')}
                         />
                         <div className="flex items-end justify-between gap-3 pt-2">
                           <span className="pb-1 text-sm font-medium text-muted-foreground">
@@ -4540,60 +4542,6 @@ export function PosScreen({
                   </div>
                 ) : null}
               </div>
-
-              {onscreenKeyboardEnabled && keyboardField ? (
-                <div onPointerDown={(e) => e.stopPropagation()}>
-                  <PosOnScreenKeyboard
-                  mode={
-                    keyboardField === 'amount'
-                      ? 'numeric'
-                      : keyboardField === 'phone' ||
-                          keyboardField === 'prepCustom'
-                        ? 'phone'
-                        : 'text'
-                  }
-                  value={
-                    keyboardField === 'name'
-                      ? customerName
-                      : keyboardField === 'phone'
-                        ? customerPhone
-                        : keyboardField === 'apartment'
-                          ? orderApartment
-                          : keyboardField === 'doorNumber'
-                            ? orderDoorNumber
-                            : keyboardField === 'address'
-                              ? orderAddress
-                              : keyboardField === 'prepCustom'
-                                ? tableCheckoutCustomMinutes
-                                : amountPaid
-                  }
-                  maxLength={
-                    keyboardField === 'phone'
-                      ? 20
-                      : keyboardField === 'amount'
-                        ? 12
-                        : keyboardField === 'prepCustom'
-                          ? 3
-                          : 160
-                  }
-                  onChange={(next) => {
-                    if (keyboardField === 'name') setCustomerName(next);
-                    else if (keyboardField === 'phone')
-                      setCustomerPhone(next.replace(/\D/g, ''));
-                    else if (keyboardField === 'apartment')
-                      setOrderApartment(next);
-                    else if (keyboardField === 'doorNumber')
-                      setOrderDoorNumber(next);
-                    else if (keyboardField === 'address')
-                      setOrderAddress(next);
-                    else if (keyboardField === 'prepCustom')
-                      setTableCheckoutCustomMinutes(next.replace(/\D/g, ''));
-                    else setAmountPaid(next);
-                  }}
-                  onClose={() => setKeyboardField(null)}
-                />
-                </div>
-              ) : null}
 
               <div className="shrink-0 space-y-2 px-3 py-3 sm:px-4">
                 <Button
@@ -4828,6 +4776,8 @@ export function PosScreen({
                             )}
                   value={taxPct}
                   onChange={(e) => setTaxPct(e.target.value)}
+                  inputMode={onscreenKeyboardEnabled ? 'none' : 'decimal'}
+                  {...bindOnscreenField('tax')}
                 />
               </div>
               <div className="space-y-1">
@@ -4841,6 +4791,8 @@ export function PosScreen({
                             )}
                   value={disPct}
                   onChange={(e) => setDisPct(e.target.value)}
+                  inputMode={onscreenKeyboardEnabled ? 'none' : 'decimal'}
+                  {...bindOnscreenField('discount')}
                 />
               </div>
                         {(taxAmount > 0 ||
@@ -4977,6 +4929,69 @@ export function PosScreen({
           )}
       </div>
       </div>
+
+      {onscreenKeyboardEnabled && keyboardField ? (
+        <PosOnScreenKeyboard
+          mode={
+            keyboardField === 'amount' ||
+            keyboardField === 'tax' ||
+            keyboardField === 'discount'
+              ? 'numeric'
+              : keyboardField === 'phone' || keyboardField === 'prepCustom'
+                ? 'phone'
+                : 'text'
+          }
+          value={
+            keyboardField === 'name'
+              ? customerName
+              : keyboardField === 'phone'
+                ? customerPhone
+                : keyboardField === 'apartment'
+                  ? orderApartment
+                  : keyboardField === 'doorNumber'
+                    ? orderDoorNumber
+                    : keyboardField === 'address'
+                      ? orderAddress
+                      : keyboardField === 'prepCustom'
+                        ? tableCheckoutCustomMinutes
+                        : keyboardField === 'search'
+                          ? search
+                          : keyboardField === 'tax'
+                            ? taxPct
+                            : keyboardField === 'discount'
+                              ? disPct
+                              : amountPaid
+          }
+          maxLength={
+            keyboardField === 'phone'
+              ? 20
+              : keyboardField === 'amount'
+                ? 12
+                : keyboardField === 'prepCustom'
+                  ? 3
+                  : keyboardField === 'tax' || keyboardField === 'discount'
+                    ? 6
+                    : keyboardField === 'search'
+                      ? 80
+                      : 160
+          }
+          onChange={(next) => {
+            if (keyboardField === 'name') setCustomerName(next);
+            else if (keyboardField === 'phone')
+              setCustomerPhone(next.replace(/\D/g, ''));
+            else if (keyboardField === 'apartment') setOrderApartment(next);
+            else if (keyboardField === 'doorNumber') setOrderDoorNumber(next);
+            else if (keyboardField === 'address') setOrderAddress(next);
+            else if (keyboardField === 'prepCustom')
+              setTableCheckoutCustomMinutes(next.replace(/\D/g, ''));
+            else if (keyboardField === 'search') setSearch(next);
+            else if (keyboardField === 'tax') setTaxPct(next);
+            else if (keyboardField === 'discount') setDisPct(next);
+            else setAmountPaid(next);
+          }}
+          onClose={() => setKeyboardField(null)}
+        />
+      ) : null}
 
       <AlertDialog
         open={posLeaveGuardOpen}
@@ -5307,13 +5322,17 @@ export function PosScreen({
                   className="cursor-pointer"
                   inputMode="none"
                   autoComplete="off"
+                  readOnly
                   placeholder={t('pos.dialogs.sendToKitchen.customPlaceholder', { min: KITCHEN_PREP_MIN, max: KITCHEN_PREP_MAX })}
                   value={kitchenCustomMinutes}
                   disabled={sendingToKitchen}
                   onChange={(e) =>
                     setKitchenCustomMinutes(e.target.value.replace(/\D/g, ''))
                   }
-                  onPointerDown={() => setKitchenPrepKeyboardOpen(true)}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    setKitchenPrepKeyboardOpen(true);
+                  }}
                   onFocus={() => setKitchenPrepKeyboardOpen(true)}
                 />
                 {kitchenPrepKeyboardOpen ? (
@@ -5417,7 +5436,7 @@ export function PosScreen({
           name:
             (v.name && resolveProductText(v.name)) ||
             (v.title && resolveProductText(v.title)) ||
-            'Variation',
+            t('variationLabel'),
           imageUrl: v.imageUrl ?? null,
           swatchHex: v.swatchHex ?? null,
           priceDelta: v.priceDelta,

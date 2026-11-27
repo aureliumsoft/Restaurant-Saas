@@ -6,6 +6,7 @@ import { Loader2, Monitor, Pencil, Printer } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
+import { PosOnScreenKeyboard } from '@/components/pos/pos-on-screen-keyboard';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -34,6 +35,8 @@ import {
 } from '@/hooks/use-kiosk-pending-cash';
 import { revalidatePosWorkingOrders } from '@/hooks/use-pos-working-orders';
 import { useOwnerRestaurantRegional } from '@/hooks/use-restaurant-regional';
+import { useRestaurantFulfillmentSettings } from '@/hooks/use-restaurant-fulfillment-settings';
+import { cn } from '@/lib/utils';
 import { printPosOrderReceipt } from '@/lib/pos-order-receipt-print';
 import { receiptLinesFromOrderItem } from '@/lib/receipt-item-lines';
 import {
@@ -67,6 +70,10 @@ export function PosKioskOrdersSheet({
 }: Props) {
   const { t } = useTranslation();
   const { formatMoney, regional } = useOwnerRestaurantRegional();
+  const { settings: fulfillmentSettings } = useRestaurantFulfillmentSettings();
+  const onscreenKeyboardEnabled = fulfillmentSettings.onscreenKeyboardEnabled;
+  const kdsEnabled = fulfillmentSettings.kdsEnabled;
+  const PREP_PRESETS = [10, 15, 30] as const;
   const { orders, loading, removeOrder, confirmInBackground, refresh } =
     useKioskPendingCash(branchId);
   const [printBusyId, setPrintBusyId] = useState<string | null>(null);
@@ -74,6 +81,11 @@ export function PosKioskOrdersSheet({
   const [cancelBusyId, setCancelBusyId] = useState<string | null>(null);
   const [payOrder, setPayOrder] = useState<KioskPendingOrderRow | null>(null);
   const [paidInput, setPaidInput] = useState('');
+  const [prepMinutes, setPrepMinutes] = useState<number>(15);
+  const [customMinutes, setCustomMinutes] = useState('');
+  const [keyboardField, setKeyboardField] = useState<'paid' | 'prep' | null>(
+    null
+  );
   const [paying, setPaying] = useState(false);
 
   useEffect(() => {
@@ -198,12 +210,28 @@ export function PosKioskOrdersSheet({
   const openPayDialog = (order: KioskPendingOrderRow) => {
     setPayOrder(order);
     setPaidInput(order.total.toFixed(2));
+    setPrepMinutes(15);
+    setCustomMinutes('');
+    setKeyboardField(onscreenKeyboardEnabled ? 'paid' : null);
   };
 
   const closePayDialog = () => {
     if (paying) return;
     setPayOrder(null);
     setPaidInput('');
+    setCustomMinutes('');
+    setKeyboardField(null);
+  };
+
+  const resolvedPrepMinutes = (): number | null => {
+    const raw = customMinutes.trim();
+    if (raw) {
+      const n = Math.round(Number(raw));
+      if (Number.isFinite(n) && n >= 1 && n <= 240) return n;
+      return null;
+    }
+    if (prepMinutes >= 1 && prepMinutes <= 240) return prepMinutes;
+    return null;
   };
 
   const payChange =
@@ -218,15 +246,22 @@ export function PosKioskOrdersSheet({
       toast.warn(t('pos.toasts.paidAmountAtLeastTotal'));
       return;
     }
+    const minutes = kdsEnabled ? resolvedPrepMinutes() : null;
+    if (kdsEnabled && minutes == null) {
+      toast.warn(
+        t('pos.toasts.selectPresetOrEnterPrepTime', { min: 1, max: 240 })
+      );
+      return;
+    }
     setPaying(true);
     const paidOrderId = payOrder.id;
     try {
       const res = await axios.post<{
         data: { paid: number; change: number; paymentStatus: string };
-      }>(
-        kioskOrderApiPath(paidOrderId, 'pay', payOrder.urlId),
-        { paid }
-      );
+      }>(kioskOrderApiPath(paidOrderId, 'pay', payOrder.urlId), {
+        paid,
+        ...(minutes != null ? { selectedMinutes: minutes } : {}),
+      });
       const change = res.data.data?.change ?? payChange;
       removeOrder(paidOrderId);
       setPayOrder(null);
@@ -401,7 +436,7 @@ export function PosKioskOrdersSheet({
           if (!open) closePayDialog();
         }}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{t('pos.dialogs.payWithCash.title')}</DialogTitle>
           </DialogHeader>
@@ -413,17 +448,105 @@ export function PosKioskOrdersSheet({
                   {formatMoney(payOrder.total)}
                 </span>
               </div>
+              {kdsEnabled ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    {t('pos.dialogs.payWithCash.prepTime')}
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {PREP_PRESETS.map((m) => (
+                      <Button
+                        key={m}
+                        type="button"
+                        variant={
+                          prepMinutes === m && !customMinutes.trim()
+                            ? 'default'
+                            : 'outline'
+                        }
+                        disabled={paying}
+                        onClick={() => {
+                          setPrepMinutes(m);
+                          setCustomMinutes('');
+                          if (keyboardField === 'prep') setKeyboardField(null);
+                        }}
+                      >
+                        {t('pos.dialogs.sendToKitchen.minSuffix', { count: m })}
+                      </Button>
+                    ))}
+                  </div>
+                  <Input
+                    className={cn(
+                      'h-9 bg-background',
+                      onscreenKeyboardEnabled && 'cursor-pointer',
+                      keyboardField === 'prep' && 'ring-2 ring-fire-500/40'
+                    )}
+                    inputMode={onscreenKeyboardEnabled ? 'none' : 'numeric'}
+                    readOnly={onscreenKeyboardEnabled}
+                    autoComplete="off"
+                    placeholder={t('pos.dialogs.sendToKitchen.customPlaceholder', {
+                      min: 1,
+                      max: 240,
+                    })}
+                    value={customMinutes}
+                    disabled={paying}
+                    onChange={(e) =>
+                      setCustomMinutes(e.target.value.replace(/\D/g, ''))
+                    }
+                    onPointerDown={(e) => {
+                      if (!onscreenKeyboardEnabled) return;
+                      e.preventDefault();
+                      setKeyboardField('prep');
+                    }}
+                    onFocus={() => {
+                      if (onscreenKeyboardEnabled) setKeyboardField('prep');
+                    }}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    {t('pos.dialogs.payWithCash.prepHint')}
+                  </p>
+                </div>
+              ) : null}
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">{t('pos.dialogs.payWithCash.paid')}</label>
                 <Input
-                  className="h-9 bg-background"
-                  inputMode="decimal"
+                  className={cn(
+                    'h-9 bg-background tabular-nums',
+                    onscreenKeyboardEnabled && 'cursor-pointer',
+                    keyboardField === 'paid' && 'ring-2 ring-fire-500/40'
+                  )}
+                  inputMode={onscreenKeyboardEnabled ? 'none' : 'decimal'}
+                  readOnly={onscreenKeyboardEnabled}
+                  autoComplete="off"
                   placeholder="0.00"
                   value={paidInput}
                   disabled={paying}
                   onChange={(e) => setPaidInput(e.target.value)}
+                  onPointerDown={(e) => {
+                    if (!onscreenKeyboardEnabled) return;
+                    e.preventDefault();
+                    setKeyboardField('paid');
+                  }}
+                  onFocus={() => {
+                    if (onscreenKeyboardEnabled) setKeyboardField('paid');
+                  }}
                 />
               </div>
+              {onscreenKeyboardEnabled && keyboardField ? (
+                <PosOnScreenKeyboard
+                  portal={false}
+                  mode={keyboardField === 'prep' ? 'phone' : 'numeric'}
+                  value={keyboardField === 'prep' ? customMinutes : paidInput}
+                  maxLength={keyboardField === 'prep' ? 3 : 12}
+                  onChange={(next) => {
+                    if (keyboardField === 'prep') {
+                      setCustomMinutes(next.replace(/\D/g, ''));
+                    } else {
+                      setPaidInput(next);
+                    }
+                  }}
+                  onClose={() => setKeyboardField(null)}
+                />
+              ) : null}
               <div className="flex items-end justify-between gap-3 pt-1">
                 <span className="pb-1 text-sm font-medium text-muted-foreground">
                   {t('pos.change')}

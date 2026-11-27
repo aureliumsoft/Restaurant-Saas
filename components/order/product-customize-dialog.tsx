@@ -332,6 +332,7 @@ function CustomizeGroupSkeleton({
   title?: string | null;
   required?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="overflow-hidden rounded-[10px]" aria-busy="true">
       <div className="flex items-center justify-between gap-3 border-b border-[#f4f4f4] px-[15px] py-3">
@@ -341,7 +342,7 @@ function CustomizeGroupSkeleton({
           <div className="h-4 w-36 animate-pulse rounded bg-zinc-200" />
         )}
         {required ? (
-          <span className={GROUP_REQUIRED_LABEL}>Required</span>
+          <span className={GROUP_REQUIRED_LABEL}>{t('customizeRequired')}</span>
         ) : (
           <div className="h-4 w-14 animate-pulse rounded bg-zinc-200" />
         )}

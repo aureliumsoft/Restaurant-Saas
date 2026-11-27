@@ -4,8 +4,6 @@ import {
   ArrowLeft,
   Banknote,
   CheckCircle,
-  CheckCircle2,
-  CreditCard,
   Loader2,
   Minus,
   Plus,
@@ -15,7 +13,6 @@ import {
   Store,
   Trash2,
   UtensilsCrossed,
-  XCircle,
 } from 'lucide-react';
 import { useRestaurantRegional } from '@/hooks/use-restaurant-regional';
 import {
@@ -132,7 +129,7 @@ import {
   CardPaymentDialogs,
   useCardPaymentFlow,
 } from '../payments/card-payment-flow';
-import { PosOnScreenKeyboard } from '@/components/pos/pos-on-screen-keyboard';
+import { KioskKeyboard } from '@/components/kiosk/kiosk-keyboard';
 import { saveKioskReceiptSnapshot } from '@/lib/kiosk-print-receipt';
 import { formatBranchDateTime } from '@/lib/branch-timezone';
 import { receiptLinesFromCartLine } from '@/lib/receipt-item-lines';
@@ -148,6 +145,20 @@ const KIOSK_PRODUCT_GRID =
   'grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6';
 
 type KioskKeyboardField = 'name' | 'phone' | 'instructions';
+
+function titleCaseKioskName(raw: string) {
+  return raw.replace(
+    /(^|\s)([a-z])/g,
+    (_, gap: string, letter: string) => gap + letter.toUpperCase()
+  );
+}
+
+function applyKioskKey(prev: string, key: string, maxLength: number) {
+  if (key === 'del') return prev.slice(0, -1);
+  if (prev.length >= maxLength) return prev;
+  if (key === ' ' && (prev.length === 0 || prev.endsWith(' '))) return prev;
+  return prev + key;
+}
 
 function formatKioskOrderApiError(
   body: unknown,
@@ -513,7 +524,11 @@ function lineTotal(line: CartLine) {
   return cartLineTotal(line);
 }
 
-function loadCart(slug: string, branchId: string): CartLine[] {
+function loadCart(
+  slug: string,
+  branchId: string,
+  itemFallback: string
+): CartLine[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(kioskCartStorageKey(slug, branchId));
@@ -530,7 +545,7 @@ function loadCart(slug: string, branchId: string): CartLine[] {
       )
       .map((row) => ({
         ...row,
-        productName: String(row.productName ?? 'Item'),
+        productName: String(row.productName ?? itemFallback),
         baseUnitPrice: Number.isFinite(Number(row.baseUnitPrice))
           ? Number(row.baseUnitPrice)
           : 0,
@@ -690,6 +705,7 @@ export function KioskApp({
   );
   const [placing, setPlacing] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'cash' | 'card'>('cash');
+  const [paymentPicked, setPaymentPicked] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [lastTicketNumber, setLastTicketNumber] = useState<number | null>(null);
   const [branchName, setBranchName] = useState<string | null>(null);
@@ -914,6 +930,33 @@ export function KioskApp({
     setKeyboardField(field);
   };
 
+  const renderKioskKeyboard = (field: KioskKeyboardField) => {
+    if (step !== 'cart' || !onscreenKeyboardEnabled || keyboardField !== field) {
+      return null;
+    }
+    return (
+      <div className="kiosk-keys-wrap">
+        <KioskKeyboard
+          mode={field === 'phone' ? 'phone' : 'text'}
+          onKey={(key) => {
+            const maxLength = field === 'phone' ? 40 : field === 'name' ? 120 : 500;
+            if (field === 'name') {
+              setCustomerName((prev) =>
+                titleCaseKioskName(applyKioskKey(prev, key, maxLength))
+              );
+            } else if (field === 'phone') {
+              setCustomerPhone((prev) =>
+                applyKioskKey(prev, key, maxLength).replace(/\D/g, '')
+              );
+            } else {
+              setCookingNote((prev) => applyKioskKey(prev, key, maxLength));
+            }
+          }}
+        />
+      </div>
+    );
+  };
+
   useEffect(() => {
     if (!restaurantMeta || fromTableQr || !catalogReady) return;
     if (!fulfillmentSettings.dineInEnabled && step === 'mode') {
@@ -938,12 +981,6 @@ export function KioskApp({
       setStep('menu');
     }
   }, [restaurantMeta, fromTableQr, fulfillmentSettings.dineInEnabled]);
-
-  useEffect(() => {
-    if (!fulfillmentSettings.cardPaymentsEnabled && paymentMode === 'card') {
-      setPaymentMode('cash');
-    }
-  }, [fulfillmentSettings.cardPaymentsEnabled, paymentMode]);
 
   const menuLoading = categoriesLoading && progressiveCategories.length === 0;
 
@@ -987,17 +1024,17 @@ export function KioskApp({
       })();
       return;
     }
-    setCart(loadCart(slug, branchId));
-  }, [slug, branchId, kioskPath, searchParams, router]);
+    setCart(loadCart(slug, branchId, t('itemFallback')));
+  }, [slug, branchId, kioskPath, searchParams, router, t]);
 
   useEffect(() => {
     if (step !== 'checkout') return;
     if (cart.length > 0) return;
-    const restored = loadCart(slug, branchId);
+    const restored = loadCart(slug, branchId, t('itemFallback'));
     if (restored.length > 0) {
       setCart(restored);
     }
-  }, [step, cart.length, slug, branchId]);
+  }, [step, cart.length, slug, branchId, t]);
 
   const persistCart = useCallback(
     (next: CartLine[]) => {
@@ -1313,7 +1350,12 @@ export function KioskApp({
     for (const p of allProducts) {
       priceById.set(p.id, { price: p.price, salePrice: p.salePrice });
     }
-    const built = customizeProduct.attributeGroups.map((g) =>
+    const ordered = [...customizeProduct.attributeGroups].sort(
+      (a, b) =>
+        Number((a as { sortOrder?: number }).sortOrder ?? 0) -
+        Number((b as { sortOrder?: number }).sortOrder ?? 0)
+    );
+    const built = ordered.map((g) =>
       buildCustomerAttributeGroup(
         g,
         customizeProduct.id,
@@ -1687,6 +1729,7 @@ export function KioskApp({
 
   function handleSelectPaymentMode(mode: 'cash' | 'card') {
     setPaymentMode(mode);
+    setPaymentPicked(true);
     cardPayment.resetCardPayment();
   }
 
@@ -1893,10 +1936,14 @@ export function KioskApp({
     qrCustomerReady &&
     !placing &&
     (step === 'menu' || step === 'cart' || step === 'checkout');
-  const { secondsLeft: idleSecondsLeft } = useKioskIdleHome({
+  const {
+    secondsLeft: idleSecondsLeft,
+    stay: stayOnKiosk,
+    leave: leaveKioskIdle,
+  } = useKioskIdleHome({
     enabled: idleEnabled,
     idleMs: 60_000,
-    warnSeconds: 5,
+    warnSeconds: 15,
     onTimeout: resetIdleSessionToHome,
   });
 
@@ -2009,7 +2056,11 @@ export function KioskApp({
       onPointerDown={() => setKeyboardField(null)}
     >
       {idleSecondsLeft != null ? (
-        <KioskIdleCountdown secondsLeft={idleSecondsLeft} />
+        <KioskIdleCountdown
+          secondsLeft={idleSecondsLeft}
+          onStay={stayOnKiosk}
+          onStartOver={leaveKioskIdle}
+        />
       ) : null}
       <div
         className={cn(
@@ -2141,6 +2192,41 @@ export function KioskApp({
               ) : null}
             </div>
           </div>
+          {step !== 'done' ? (
+            <ol className="kiosk-flow-steps" aria-label={t('kioskOrderSteps')}>
+              {(
+                [
+                  ['mode', t('kioskStepStart')],
+                  ['menu', t('kioskStepFood')],
+                  ['cart', t('kioskStepCheck')],
+                  ['checkout', t('kioskStepPay')],
+                ] as const
+              ).map(([id, label], flowIndex) => {
+                const current =
+                  step === 'mode'
+                    ? 0
+                    : step === 'menu'
+                      ? 1
+                      : step === 'cart'
+                        ? 2
+                        : 3;
+                const on = flowIndex === current;
+                const done = flowIndex < current;
+                return (
+                  <li
+                    key={id}
+                    className={cn(on && 'is-on', done && 'is-done')}
+                    aria-current={on ? 'step' : undefined}
+                  >
+                    <span className="kiosk-flow-num" aria-hidden>
+                      {flowIndex + 1}
+                    </span>
+                    <span>{label}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : null}
         </header>
 
         {dialogOpen && customizeProduct ? (
@@ -2148,6 +2234,11 @@ export function KioskApp({
             key={customizeProduct.id}
             productName={resolveBilingualText(customizeProduct.name, uiLang)}
             productImageUrl={customizeProduct.imageUrl}
+            productDescription={
+              customizeProduct.description
+                ? resolveBilingualText(customizeProduct.description, uiLang)
+                : null
+            }
             productBaseUnitPrice={effectiveUnitPrice(
               customizeProduct.price,
               customizeProduct.salePrice
@@ -2157,7 +2248,7 @@ export function KioskApp({
               name:
                 (v.name && resolveBilingualText(v.name, uiLang)) ||
                 (v.title && resolveBilingualText(v.title, uiLang)) ||
-                'Variation',
+                t('variationLabel'),
               imageUrl: v.imageUrl ?? null,
               swatchHex: v.swatchHex,
               priceDelta: v.priceDelta,
@@ -2305,7 +2396,7 @@ export function KioskApp({
         {qrCustomerReady && !dialogOpen && step === 'menu' && (
           <>
             <div className="mx-auto flex w-full flex-1 gap-0">
-              <aside className="fixed bottom-28 left-0 top-[73px] z-20 hidden w-36 shrink-0 overflow-hidden border-r border-[#e2e8f0] bg-[#fafafa] py-4 md:block">
+              <aside className="fixed bottom-28 left-0 top-[132px] z-20 hidden w-36 shrink-0 overflow-hidden border-r border-[#e2e8f0] bg-[#fafafa] py-4 md:block">
                 <ScrollArea className="h-full">
                   <nav className="flex flex-col gap-1 px-2">
                     {menuLoading ? (
@@ -2723,13 +2814,13 @@ export function KioskApp({
                         onFocus={() => openKeyboardField('name')}
                         maxLength={120}
                         autoComplete="name"
+                        readOnly={onscreenKeyboardEnabled}
                         className={cn(
                           'border-[#e2e8f0] bg-white text-[#0f172a]',
-                          onscreenKeyboardEnabled &&
-                            keyboardField === 'name' &&
-                            'ring-2 ring-primary/40'
+                          onscreenKeyboardEnabled && 'kiosk-name-field'
                         )}
                       />
+                      {renderKioskKeyboard('name')}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="kiosk-customer-phone">
@@ -2752,13 +2843,15 @@ export function KioskApp({
                         onFocus={() => openKeyboardField('phone')}
                         maxLength={40}
                         autoComplete="tel"
+                        readOnly={onscreenKeyboardEnabled}
                         className={cn(
                           'border-[#e2e8f0] bg-white text-[#0f172a]',
                           onscreenKeyboardEnabled &&
                             keyboardField === 'phone' &&
-                            'ring-2 ring-primary/40'
+                            'ring-2 ring-[#fdba74]'
                         )}
                       />
+                      {renderKioskKeyboard('phone')}
                     </div>
                   </div>
                 ) : null}
@@ -2784,42 +2877,10 @@ export function KioskApp({
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ea580c] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f8fafc]',
                     onscreenKeyboardEnabled &&
                       keyboardField === 'instructions' &&
-                      'ring-2 ring-primary/40'
+                      'ring-2 ring-[#fdba74]'
                   )}
                 />
-                {step === 'cart' &&
-                onscreenKeyboardEnabled &&
-                keyboardField ? (
-                  <div onPointerDown={(e) => e.stopPropagation()}>
-                    <PosOnScreenKeyboard
-                    mode={keyboardField === 'phone' ? 'phone' : 'text'}
-                    value={
-                      keyboardField === 'name'
-                        ? customerName
-                        : keyboardField === 'phone'
-                          ? customerPhone
-                          : cookingNote
-                    }
-                    onChange={(next) => {
-                      if (keyboardField === 'name') {
-                        setCustomerName(next);
-                      } else if (keyboardField === 'phone') {
-                        setCustomerPhone(next.replace(/\D/g, ''));
-                      } else {
-                        setCookingNote(next);
-                      }
-                    }}
-                    onClose={() => setKeyboardField(null)}
-                    maxLength={
-                      keyboardField === 'phone'
-                        ? 40
-                        : keyboardField === 'name'
-                          ? 120
-                          : 500
-                    }
-                  />
-                  </div>
-                ) : null}
+                {renderKioskKeyboard('instructions')}
                 <Button
                   type="button"
                   className="w-full bg-primary py-6 text-base font-semibold text-primary-foreground hover:brightness-95"
@@ -2829,6 +2890,7 @@ export function KioskApp({
                       return;
                     }
                     setPaymentMode('cash');
+                    setPaymentPicked(false);
                     cardPayment.resetCardPayment();
                     setStep('checkout');
                   }}
@@ -2851,7 +2913,7 @@ export function KioskApp({
         )}
 
         {qrCustomerReady && !dialogOpen && step === 'checkout' && (
-          <div className="mx-auto w-full max-w-lg flex-1 space-y-4 px-4 py-6">
+          <div className="mx-auto w-full max-w-6xl flex-1 space-y-4 px-4 py-6">
             <h1 className="text-2xl font-bold">{t('checkout')}</h1>
             <p className="text-sm text-[#64748b]">
               {(() => {
@@ -2927,10 +2989,8 @@ export function KioskApp({
               </div>
             </div>
             <div className="space-y-3">
-              <div className="rounded-xl border border-[#e2e8f0] bg-white p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#64748b]">
-                  {t('paymentMethodLabel')}
-                </p>
+              <div>
+                <p className="kiosk-pay-question">{t('kioskPayQuestion')}</p>
                 {fromTableQr ? (
                   <div className="flex items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3 py-3">
                     <Banknote className="h-5 w-5 shrink-0 text-primary" />
@@ -2945,93 +3005,53 @@ export function KioskApp({
                   </div>
                 ) : (
                   <>
-                    <div
-                      className={cn(
-                        'grid grid-cols-1 gap-2'
-                        // ,
-                        // fulfillmentSettings.cardPaymentsEnabled
-                        //   ? 'grid-cols-2'
-                        //   : 'grid-cols-1'
-                      )}
-                    >
-                      <Button
+                    <p className="kiosk-pay-count">
+                      {cartCount === 1
+                        ? t('kioskItemOne')
+                        : t('kioskItemCount', { n: cartCount })}
+                    </p>
+                    <div className="kiosk-pay-choices">
+                      <button
                         type="button"
-                        variant={paymentMode === 'cash' ? 'default' : 'outline'}
-                        className="h-12 justify-start gap-2"
+                        className={cn(
+                          'kiosk-pay-choice is-cash',
+                          paymentPicked && paymentMode === 'cash' && 'is-selected'
+                        )}
+                        aria-pressed={paymentPicked && paymentMode === 'cash'}
                         onClick={() => handleSelectPaymentMode('cash')}
                       >
-                        <Banknote className="h-4 w-4" />
-                        {t('cash')}
-                      </Button>
-                      {/* {fulfillmentSettings.cardPaymentsEnabled ? (
-                      <Button
+                        <span className="kiosk-pay-pill">{t('kioskPayEasiest')}</span>
+                        <span className="kiosk-pay-emoji" aria-hidden="true">
+                          💵
+                        </span>
+                        <span className="kiosk-pay-title">{t('kioskPayCash')}</span>
+                        <span className="kiosk-pay-hint">{t('kioskPayCashHint')}</span>
+                      </button>
+                      <button
                         type="button"
-                        variant={paymentMode === 'card' ? 'default' : 'outline'}
-                        className="h-12 justify-start gap-2"
+                        className={cn(
+                          'kiosk-pay-choice is-card',
+                          paymentPicked && paymentMode === 'card' && 'is-selected'
+                        )}
+                        aria-pressed={paymentPicked && paymentMode === 'card'}
                         onClick={() => handleSelectPaymentMode('card')}
                       >
-                        <CreditCard className="h-4 w-4" />
-                        {t('card')}
-                      </Button>
-                      ) : null} */}
+                        <span className="kiosk-pay-emoji" aria-hidden="true">
+                          💳
+                        </span>
+                        <span className="kiosk-pay-title">{t('kioskPayCard')}</span>
+                        <span className="kiosk-pay-hint">{t('kioskPayCardHint')}</span>
+                      </button>
                     </div>
-                    {/* {fulfillmentSettings.cardPaymentsEnabled &&
-                    paymentMode === 'card' ? (
-                      <div className="mt-3 space-y-2">
-                        <Button
-                          type="button"
-                          className={cn(
-                            'w-full gap-2',
-                            cardPayment.cardPaymentStatus === 'success' &&
-                              'bg-emerald-600 hover:bg-emerald-600/90',
-                            (cardPayment.cardPaymentStatus === 'error' ||
-                              cardPayment.cardPaymentStatus === 'cancelled') &&
-                              'bg-destructive hover:bg-destructive/90'
-                          )}
-                          disabled={
-                            cardPayment.cardPaymentStatus === 'processing' ||
-                            cardPayment.cardPaymentStatus === 'success'
-                          }
-                          onClick={() => void cardPayment.handleCardPayClick()}
-                        >
-                          {cardPayment.cardPaymentStatus === 'success' ? (
-                            <>
-                              <CheckCircle2 className="h-4 w-4" />
-                              {t('paid')}
-                            </>
-                          ) : cardPayment.cardPaymentStatus === 'error' ||
-                            cardPayment.cardPaymentStatus === 'cancelled' ? (
-                            <>
-                              <XCircle className="h-4 w-4" />
-                              {t('payAmount', {
-                                amount: formatMoney(cartGrandTotal),
-                              })}
-                            </>
-                          ) : cardPayment.cardPaymentStatus === 'processing' ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              {t('processing')}
-                            </>
-                          ) : (
-                            <>
-                              <CreditCard className="h-4 w-4" />
-                              {t('payAmount', {
-                                amount: formatMoney(cartGrandTotal),
-                              })}
-                            </>
-                          )}
-                        </Button>
-                        <p className="text-xs text-[#64748b]">
-                          {cardPayment.isCardPaymentComplete
+                    {paymentPicked ? (
+                      <p className="kiosk-pay-next">
+                        {paymentMode === 'card'
+                          ? cardPayment.isCardPaymentComplete
                             ? t('paymentCompleteConfirmBelow')
-                            : t('payByCardBeforeConfirm')}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="mt-3 text-xs text-[#64748b]">
-                        {t('cashAtCounterOrderHint')}
+                            : t('kioskPayCardNext')
+                          : t('kioskPayCashNext')}
                       </p>
-                    )} */}
+                    ) : null}
                   </>
                 )}
               </div>
@@ -3042,22 +3062,32 @@ export function KioskApp({
                 disabled={
                   placing ||
                   cart.length === 0 ||
-                  (!fromTableQr &&
-                    (cardPayment.cardPaymentStatus === 'processing' ||
-                      (paymentMode === 'card' &&
-                        !cardPayment.isCardPaymentComplete)))
+                  (!fromTableQr && !paymentPicked) ||
+                  cardPayment.cardPaymentStatus === 'processing'
                 }
-                onClick={confirmCheckoutOrder}
+                onClick={() => {
+                  if (
+                    !fromTableQr &&
+                    paymentMode === 'card' &&
+                    !cardPayment.isCardPaymentComplete
+                  ) {
+                    void cardPayment.handleCardPayClick();
+                    return;
+                  }
+                  confirmCheckoutOrder();
+                }}
               >
                 {placing ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {t('placingOrder')}
                   </>
+                ) : !fromTableQr && !paymentPicked ? (
+                  t('kioskChoosePayFirst')
                 ) : (
                   <>
                     <CheckCircle className="mr-2 h-4 w-4" />
-                    {t('confirmOrder')}
+                    {t('kioskPlaceOrder')}
                   </>
                 )}
               </Button>
@@ -3069,6 +3099,7 @@ export function KioskApp({
                 onClick={() => {
                   cardPayment.resetCardPayment();
                   setPaymentMode('cash');
+                  setPaymentPicked(false);
                   setStep('cart');
                 }}
               >

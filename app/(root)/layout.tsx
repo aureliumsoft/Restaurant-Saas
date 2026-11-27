@@ -11,7 +11,7 @@ import { NavbarSheet } from '@/components/dashboard/NavbarSheet';
 import { ShiftAwareUserMenu } from '@/components/dashboard/shift-aware-user-menu';
 import Bread from '@/components/dashboard/breadcrumb';
 import { usePathname, useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { getSession, useSession } from 'next-auth/react';
 import { toast } from 'react-toastify';
 import { cn } from '@/lib/utils';
 import { DASHBOARD_MODULES } from '@/constant/dashboardModules';
@@ -71,7 +71,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
-  const { status: sessionStatus } = useSession();
+  const { status: sessionStatus, update: updateSession } = useSession();
   const {
     restaurantName,
     restaurantSlug,
@@ -84,6 +84,7 @@ const RootLayout = ({ children }: RootLayoutProps) => {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const openedForSessionRef = useRef(false);
   const redirectedToPricingRef = useRef(false);
+  const sessionProbeRef = useRef(false);
   const [accessGateVisible, setAccessGateVisible] = useState(true);
   /** Keep SSR and the first client paint identical (loading only). */
   const [clientMounted, setClientMounted] = useState(false);
@@ -159,11 +160,42 @@ const RootLayout = ({ children }: RootLayoutProps) => {
   }, [securityReady]);
 
   useEffect(() => {
-    if (sessionStatus === 'unauthenticated') {
-      const callback = encodeURIComponent(pathname ?? '/dashboard');
-      router.replace(`/login?callbackUrl=${callback}`);
+    if (sessionStatus !== 'authenticated') return;
+    try {
+      sessionStorage.removeItem('dashboard-session-reload');
+    } catch {
+      /* ignore */
     }
-  }, [sessionStatus, pathname, router]);
+  }, [sessionStatus]);
+
+  useEffect(() => {
+    if (sessionStatus !== 'unauthenticated') return;
+    if (sessionProbeRef.current) return;
+    sessionProbeRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      // The provider can still hold the pre-login null session after the
+      // cookie is set. Read the cookie once, then reload so the shell mounts
+      // with the server session instead of spinning until a manual refresh.
+      const fresh = await getSession();
+      if (cancelled) return;
+      if (fresh?.user) {
+        if (sessionStorage.getItem('dashboard-session-reload') === '1') {
+          return;
+        }
+        sessionStorage.setItem('dashboard-session-reload', '1');
+        await updateSession();
+        window.location.reload();
+        return;
+      }
+      sessionStorage.removeItem('dashboard-session-reload');
+      const callback = encodeURIComponent(pathname ?? '/dashboard');
+      window.location.replace(`/login?callbackUrl=${callback}`);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus, pathname, updateSession]);
 
   useEffect(() => {
     if (!accessReady) return;

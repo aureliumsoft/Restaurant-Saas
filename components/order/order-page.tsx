@@ -1987,7 +1987,7 @@ export default function OrderPageClient({
         productName={
           customizeProduct
             ? resolveBilingualText(customizeProduct.name, uiLang)
-            : 'Product'
+            : t('productFallback')
         }
         productImageUrl={customizeProduct?.imageUrl ?? null}
         productDescription={
@@ -2011,7 +2011,7 @@ export default function OrderPageClient({
           name:
             (v.name && resolveBilingualText(v.name, uiLang)) ||
             (v.title && resolveBilingualText(v.title, uiLang)) ||
-            'Variation',
+            t('variationLabel'),
           imageUrl: v.imageUrl ?? null,
           swatchHex: v.swatchHex ?? null,
           priceDelta: v.priceDelta,
