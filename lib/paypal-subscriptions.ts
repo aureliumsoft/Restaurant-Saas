@@ -1,9 +1,13 @@
-import type { RestaurantSubscription, SubscriptionPlan } from '@prisma/client';
-import { SubscriptionStatus } from '@prisma/client';
+import {
+  SubscriptionPlan,
+  SubscriptionStatus,
+  type RestaurantSubscription,
+} from '@prisma/client';
 
 import { db } from '@/lib/db';
 import { syncPlanQuotaLocks } from '@/lib/entitlements/sync-plan-quota-locks';
 import { isPayPalNetworkError } from '@/lib/paypal-network';
+import { ensureRegistrationFeeFlagOnPaidPlan } from '@/lib/registration-fee';
 import {
   hasActiveAdminPeriodLock,
   resolveRenewalPeriodEnd,
@@ -364,6 +368,14 @@ export async function syncRestaurantSubscriptionFromPayPal(opts: {
         paypalPlanId: details.planId,
         autoRenew: true,
         adminPeriodEndAt: null,
+        registrationFeePaid:
+          plan !== SubscriptionPlan.FREE &&
+          status === SubscriptionStatus.ACTIVE,
+        registrationFeePaidAt:
+          plan !== SubscriptionPlan.FREE &&
+          status === SubscriptionStatus.ACTIVE
+            ? new Date()
+            : null,
       },
       update: {
         plan,
@@ -404,6 +416,10 @@ export async function syncRestaurantSubscriptionFromPayPal(opts: {
 
   if (previousPlan !== plan) {
     await syncPlanQuotaLocks(opts.restaurantId);
+  }
+
+  if (plan !== SubscriptionPlan.FREE && status === SubscriptionStatus.ACTIVE) {
+    await ensureRegistrationFeeFlagOnPaidPlan(opts.restaurantId);
   }
 
   return details;

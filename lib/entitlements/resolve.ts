@@ -101,9 +101,14 @@ export function resolveEntitlements(
       customSelectedModules: [...customSelectedModules],
     };
   }
+  const modules = modulesForPlan(normalized);
+  if (normalized === SubscriptionPlan.PRO) {
+    modules.menuLayout = { access: 'full' };
+    modules.expenses = { access: 'full' };
+  }
   return {
     plan: normalized,
-    modules: modulesForPlan(normalized),
+    modules,
     caps: capsForPlan(normalized),
     customSelectedModules: [],
   };

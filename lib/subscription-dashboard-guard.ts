@@ -42,6 +42,8 @@ export async function getDashboardSubscriptionAccess(): Promise<{
       status: true,
       trialEndsAt: true,
       currentPeriodEnd: true,
+      plan: true,
+      registrationFeePaid: true,
     },
   });
 

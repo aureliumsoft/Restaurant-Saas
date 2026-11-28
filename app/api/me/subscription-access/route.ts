@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
             trialEndsAt: true,
             currentPeriodEnd: true,
             plan: true,
+            registrationFeePaid: true,
           },
         },
       },
@@ -59,6 +60,7 @@ export async function GET(req: NextRequest) {
         currentPeriodEnd: true,
         plan: true,
         autoRenew: true,
+        registrationFeePaid: true,
       },
     });
 
@@ -71,6 +73,7 @@ export async function GET(req: NextRequest) {
           ...access,
           plan,
           status: subscription?.status ?? null,
+          registrationFeePaid: subscription?.registrationFeePaid ?? false,
           trialEndsAt: subscription?.trialEndsAt?.toISOString() ?? null,
           currentPeriodEnd: subscription?.currentPeriodEnd?.toISOString() ?? null,
           autoRenew: subscription?.autoRenew ?? true,

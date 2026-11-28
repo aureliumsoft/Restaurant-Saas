@@ -1,8 +1,6 @@
 import { db } from '@/lib/db';
 import { ensurePresetRolesAndOwnerEmployee } from '@/lib/restaurant-roles';
 
-const TRIAL_DAYS = 30;
-
 export async function createRestaurantWithDefaults(opts: {
   name: string;
   subdomain: string;
@@ -19,18 +17,17 @@ export async function createRestaurantWithDefaults(opts: {
 
   await ensurePresetRolesAndOwnerEmployee(restaurant.id, opts.ownerUserId);
 
-  const trialEndsAt = new Date();
-  trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DAYS);
-
+  // Locked until registration fee (Free) or a paid plan is activated.
   await db.restaurantSubscription.upsert({
     where: { restaurantId: restaurant.id },
     create: {
       restaurantId: restaurant.id,
       plan: 'FREE',
-      status: 'TRIAL',
-      trialEndsAt,
-      currentPeriodEnd: trialEndsAt,
+      status: 'CANCELED',
+      trialEndsAt: null,
+      currentPeriodEnd: null,
       autoRenew: true,
+      registrationFeePaid: false,
     },
     update: {},
   });

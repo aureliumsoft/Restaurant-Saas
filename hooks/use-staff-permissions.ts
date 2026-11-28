@@ -70,6 +70,7 @@ export function useStaffSubscription() {
       warning: null,
       plan: null,
       status: null,
+      registrationFeePaid: false,
     },
     ready: Boolean(bootstrap),
     failed: Boolean(error) && !bootstrap,

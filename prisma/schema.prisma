@@ -469,6 +469,11 @@ model RestaurantSubscription {
   autoRenew            Boolean            @default(true)
   /// Admin-set period end; PayPal refresh won't overwrite until renewal payment clears it.
   adminPeriodEndAt     DateTime?
+  /// One-time registration fee unlock (required for Free plan dashboard access).
+  registrationFeePaid     Boolean   @default(false)
+  registrationFeePaidAt   DateTime?
+  registrationFeeAmount   Float?
+  registrationFeeCurrency String?   @default("EUR")
 
   restaurant Restaurant            @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   payments   SubscriptionPayment[]

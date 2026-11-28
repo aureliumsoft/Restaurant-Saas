@@ -20,6 +20,7 @@ export const MARKETING_ANALYTICS_SKIP_PREFIXES = [
   '/expenses',
   '/reports',
   '/inventory',
+  '/final-view',
   '/settings',
   '/invite',
   '/employees',

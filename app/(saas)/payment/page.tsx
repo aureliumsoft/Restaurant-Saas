@@ -10,6 +10,7 @@ import {
   PRICING_MODULE_ROWS,
 } from '@/lib/pricing-comparison';
 import { getRestaurantForUser } from '@/lib/restaurant-owner';
+import { getSaasDisplayCurrency } from '@/lib/saas-display-currency.server';
 import {
   bilingualPlanPriceLabel,
   parseBillingInterval,
@@ -82,15 +83,25 @@ export default async function PaymentPage({ searchParams }: PaymentPageProps) {
     yearlyDiscountPercent: catalog.yearlyDiscountPercent,
   });
 
-  const isQuote =
-    plan === SubscriptionPlan.FREE || plan === SubscriptionPlan.CUSTOM;
-  const priceMajor =
-    Number.isFinite(finalAmount) && finalAmount > 0 ? finalAmount : null;
+  const isCustom = plan === SubscriptionPlan.CUSTOM;
+  const isFree = plan === SubscriptionPlan.FREE;
+  // Free uses catalog.price as one-time registration fee (not a free quote).
+  const isQuote = isCustom;
+  const registrationFeeMajor =
+    isFree && Number.isFinite(catalog.price) && catalog.price > 0
+      ? catalog.price
+      : null;
+  const priceMajor = isFree
+    ? registrationFeeMajor
+    : Number.isFinite(finalAmount) && finalAmount > 0
+      ? finalAmount
+      : null;
   const priceLabel = isQuote
     ? catalog.priceLabel
-    : bilingualPlanPriceLabel(finalAmount, interval);
+    : isFree
+      ? catalog.priceLabel
+      : bilingualPlanPriceLabel(finalAmount, interval);
 
-  const isCustom = plan === SubscriptionPlan.CUSTOM;
   let selectedModules: string[] = [];
   if (isCustom) {
     const fromQuery = parseModulesParam(params?.modules);
@@ -103,6 +114,8 @@ export default async function PaymentPage({ searchParams }: PaymentPageProps) {
         ? [...new Set([...base, ...limitedIds, ...fromQuery])]
         : [...new Set([...base, ...limitedIds])];
   }
+
+  const display = await getSaasDisplayCurrency();
 
   return (
     <PaymentCheckoutClient
@@ -119,6 +132,8 @@ export default async function PaymentPage({ searchParams }: PaymentPageProps) {
       signedIn={Boolean(userEmail)}
       userEmail={userEmail}
       restaurantId={restaurantId}
+      displayCurrency={display.code}
+      exchangeRate={display.rate}
     />
   );
 }

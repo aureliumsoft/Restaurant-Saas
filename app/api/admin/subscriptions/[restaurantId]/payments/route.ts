@@ -16,6 +16,8 @@ const postSchema = z.object({
   periodEnd: z.string().max(40).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
   setStatusActive: z.boolean().optional(),
+  /** When true, treat this payment as the Free-plan registration fee unlock. */
+  markRegistrationFeePaid: z.boolean().optional(),
 });
 
 function toDateOrNull(input: string | null | undefined): Date | null {
@@ -103,6 +105,9 @@ export async function POST(
     const periodStart = toDateOrNull(parsed.data.periodStart);
     const periodEnd = toDateOrNull(parsed.data.periodEnd);
     const setActive = parsed.data.setStatusActive ?? false;
+    const markRegistrationFee =
+      parsed.data.markRegistrationFeePaid === true ||
+      (parsed.data.notes ?? '').toLowerCase().includes('registration_fee');
     const paymentId = `subpay_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const data = await db.$transaction(async (tx) => {
@@ -122,16 +127,36 @@ export async function POST(
           data: {
             restaurantId,
             plan: 'FREE',
-            status: 'TRIAL',
+            status: markRegistrationFee ? 'ACTIVE' : 'CANCELED',
+            registrationFeePaid: markRegistrationFee,
+            registrationFeePaidAt: markRegistrationFee ? paidAt : null,
+            registrationFeeAmount: markRegistrationFee
+              ? parsed.data.amount
+              : null,
+            registrationFeeCurrency: markRegistrationFee ? currency : null,
+            currentPeriodEnd: markRegistrationFee ? null : undefined,
           },
           select: subscriptionSelect,
         });
-      } else if (setActive || periodEnd) {
+      } else if (setActive || periodEnd || markRegistrationFee) {
         sub = await tx.restaurantSubscription.update({
           where: { id: sub.id },
           data: {
-            ...(setActive ? { status: 'ACTIVE' as const, adminPeriodEndAt: null } : {}),
+            ...(setActive || markRegistrationFee
+              ? { status: 'ACTIVE' as const, adminPeriodEndAt: null }
+              : {}),
             ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
+            ...(markRegistrationFee
+              ? {
+                  registrationFeePaid: true,
+                  registrationFeePaidAt: paidAt,
+                  registrationFeeAmount: parsed.data.amount,
+                  registrationFeeCurrency: currency,
+                  plan: 'FREE' as const,
+                  currentPeriodEnd: null,
+                  trialEndsAt: null,
+                }
+              : {}),
           },
           select: subscriptionSelect,
         });

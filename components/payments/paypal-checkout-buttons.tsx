@@ -389,28 +389,62 @@ export function PayPalCheckoutButtons({
     const onApprove = async (data: { orderID: string }) => {
       setProcessingState(true, 'capture');
       try {
-        const slug = latestRef.current.metadata?.restaurantSlug;
-        const res = await fetch('/api/paypal/capture-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: data.orderID,
-            ...(typeof slug === 'string' && slug.trim()
-              ? { restaurantSlug: slug.trim() }
-              : {}),
-          }),
-        });
-        const body = (await res.json().catch(() => ({}))) as PayPalCaptureResponse;
-        if (!res.ok || !body.paid) {
-          throw new Error(
-            typeof body.error === 'string'
-              ? body.error
-              : 'Payment could not be confirmed.'
-          );
+        const latest = latestRef.current;
+        const isRegistrationFee =
+          latest.source === 'subscription' &&
+          (latest.metadata?.kind === 'registration_fee' ||
+            String(latest.metadata?.plan ?? '').toUpperCase() === 'FREE');
+
+        let body: PayPalCaptureResponse;
+        if (isRegistrationFee) {
+          const restaurantId = latest.metadata?.restaurantId?.trim();
+          if (!restaurantId) {
+            throw new Error('restaurantId is required for registration fee.');
+          }
+          const res = await fetch('/api/paypal/complete-registration-fee', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: data.orderID,
+              restaurantId,
+            }),
+          });
+          const json = (await res.json().catch(() => ({}))) as {
+            data?: { synced?: boolean };
+            error?: unknown;
+          };
+          if (!res.ok || !json.data?.synced) {
+            throw new Error(
+              typeof json.error === 'string'
+                ? json.error
+                : 'Registration fee could not be confirmed.'
+            );
+          }
+          body = { paid: true, planSynced: true, status: 'completed' };
+        } else {
+          const slug = latest.metadata?.restaurantSlug;
+          const res = await fetch('/api/paypal/capture-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: data.orderID,
+              ...(typeof slug === 'string' && slug.trim()
+                ? { restaurantSlug: slug.trim() }
+                : {}),
+            }),
+          });
+          body = (await res.json().catch(() => ({}))) as PayPalCaptureResponse;
+          if (!res.ok || !body.paid) {
+            throw new Error(
+              typeof body.error === 'string'
+                ? body.error
+                : 'Payment could not be confirmed.'
+            );
+          }
         }
         setPhase('complete');
         await Promise.resolve(
-          latestRef.current.onApproved({
+          latest.onApproved({
             paypalOrderId: data.orderID,
             capture: body,
           })

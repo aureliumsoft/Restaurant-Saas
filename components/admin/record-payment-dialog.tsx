@@ -38,6 +38,7 @@ export function RecordPaymentDialog({
   const [paidOn, setPaidOn] = useState('');
   const [amountError, setAmountError] = useState('');
   const [dateError, setDateError] = useState('');
+  const [markRegistrationFee, setMarkRegistrationFee] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export function RecordPaymentDialog({
     setPaidOn(new Date().toISOString().slice(0, 10));
     setAmountError('');
     setDateError('');
+    setMarkRegistrationFee(false);
   }, [open, suggestedAmount]);
 
   async function save() {
@@ -62,7 +64,9 @@ export function RecordPaymentDialog({
         amount: parsed,
         currency: 'EUR',
         paidAt: subscriptionDateInputToIso(`${paidOn}T12:00`, ADMIN_TZ),
-        setStatusActive: false,
+        setStatusActive: markRegistrationFee,
+        markRegistrationFeePaid: markRegistrationFee,
+        notes: markRegistrationFee ? 'registration_fee_manual' : null,
       });
       toast.success(t('admin.subscriptions.paymentRecorded'));
       onOpenChange(false);
@@ -122,6 +126,20 @@ export function RecordPaymentDialog({
             />
             {dateError ? <p className="text-sm text-destructive">{dateError}</p> : null}
           </div>
+          <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={markRegistrationFee}
+              onChange={(e) => setMarkRegistrationFee(e.target.checked)}
+            />
+            <span>
+              {t('admin.subscriptions.markRegistrationFee', {
+                defaultValue:
+                  'Mark as registration fee (unlock Free plan dashboard access)',
+              })}
+            </span>
+          </label>
       </div>
       <Button type="button" className="w-full" onClick={() => void save()} disabled={saving}>
         {saving ? (

@@ -23,6 +23,7 @@ const patchSchema = z.object({
   notes: z.string().max(2000).nullable().optional(),
   agreedPrice: z.number().int().min(0).max(1_000_000).nullable().optional(),
   customSelectedModules: z.array(z.string().trim().min(1).max(64)).max(40).optional(),
+  registrationFeePaid: z.boolean().optional(),
 });
 
 function parseDate(s: string | null | undefined): Date | null | undefined {
@@ -66,6 +67,7 @@ export async function PATCH(
     status,
     agreedPrice,
     customSelectedModules,
+    registrationFeePaid,
   } = parsed.data;
 
   const normalizedModules =
@@ -84,6 +86,7 @@ export async function PATCH(
       notes: notes === undefined ? undefined : notes,
       agreedPrice,
       customSelectedModules: normalizedModules,
+      registrationFeePaid,
     });
 
     return NextResponse.json(

@@ -42,6 +42,7 @@ type Subscription = {
   currentPeriodEnd: string | null;
   agreedPrice?: number | null;
   customSelectedModules?: string[];
+  registrationFeePaid?: boolean;
 } | null;
 
 type Row = {

@@ -25,6 +25,10 @@ import {
   getCustomBaseModuleIds,
   PRICING_MODULE_ROWS,
 } from '@/lib/pricing-comparison';
+import {
+  formatSaasDisplayPrice,
+  type SaasDisplayCurrencyCode,
+} from '@/lib/saas-display-currency';
 import { cn } from '@/lib/utils';
 
 export type PricingPlanView = {
@@ -50,6 +54,8 @@ type PricingPageViewProps = {
   subscriptionPeriodActive: boolean;
   periodEndLabel: string | null;
   plans: PricingPlanView[];
+  displayCurrency?: SaasDisplayCurrencyCode;
+  exchangeRate?: number | null;
 };
 
 type BillingInterval = 'monthly' | 'yearly';
@@ -69,11 +75,6 @@ function buildPaymentHref(
   return `/login?callbackUrl=${encodeURIComponent(path)}`;
 }
 
-function formatEuro(amount: number, lang: 'en' | 'es'): string {
-  const n = Math.max(0, Math.floor(amount));
-  return lang === 'es' ? `${n} €` : `€${n}`;
-}
-
 export function PricingPageView({
   isLoggedIn,
   currentPlanSlug,
@@ -81,9 +82,21 @@ export function PricingPageView({
   subscriptionPeriodActive,
   periodEndLabel,
   plans,
+  displayCurrency = 'EUR',
+  exchangeRate = null,
 }: PricingPageViewProps) {
   const { t } = useTranslation();
   const uiLang = useUiLanguage();
+  const formatPrice = useCallback(
+    (amount: number) =>
+      formatSaasDisplayPrice(amount, {
+        code: displayCurrency,
+        rate: exchangeRate,
+        lang: uiLang,
+      }),
+    [displayCurrency, exchangeRate, uiLang]
+  );
+  const showPkrNote = displayCurrency === 'PKR';
   const [billingInterval, setBillingInterval] =
     useState<BillingInterval>('monthly');
 
@@ -195,6 +208,14 @@ export function PricingPageView({
               {t('marketingExtras.pricing.billing.yearly')}
             </button>
           </div>
+          {showPkrNote ? (
+            <p className="mx-auto mt-3 max-w-xl text-center text-xs text-zinc-500 dark:text-zinc-400">
+              {t('marketingExtras.pricing.pkrApproxNote', {
+                defaultValue:
+                  'Prices shown in PKR are approximate and billed in EUR.',
+              })}
+            </p>
+          ) : null}
         </div>
 
         {localizedPlans.length === 0 ? (
@@ -270,7 +291,24 @@ export function PricingPageView({
                   ) : null}
                   
                   <h2 className="text-3xl font-semibold">{plan.name}</h2>
-                  {isCustom || isFree ? (
+                  {isFree ? (
+                    <div className="mt-2">
+                      <p className="text-4xl font-bold tracking-tight text-fire-600 tabular-nums dark:text-fire-400">
+                        {formatPrice(0)}
+                        <span className="ml-1 text-base font-semibold text-zinc-500 dark:text-zinc-400">
+                          {t('marketingExtras.pricing.billing.perMonth')}
+                        </span>
+                      </p>
+                      {plan.price > 0 ? (
+                        <p className="mt-1 text-sm font-medium tabular-nums text-zinc-600 dark:text-zinc-300">
+                          {t('marketingExtras.pricing.registrationFeeAmount', {
+                            amount: formatPrice(plan.price),
+                            defaultValue: '{{amount}} registration fee',
+                          })}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : isCustom ? (
                     <p className="mt-2 text-4xl font-bold tracking-tight text-fire-600 dark:text-fire-400">
                       {plan.priceLabel}
                     </p>
@@ -278,14 +316,14 @@ export function PricingPageView({
                     <div className="mt-2">
                       {discountOn ? (
                         <p className="text-base font-medium text-zinc-400 line-through tabular-nums dark:text-zinc-500">
-                          {formatEuro(listPrice, uiLang)}
+                          {formatPrice(listPrice)}
                           <span className="ml-1 text-sm no-underline">
                             {periodSuffix}
                           </span>
                         </p>
                       ) : null}
                       <p className="text-4xl font-bold tracking-tight text-fire-600 tabular-nums dark:text-fire-400">
-                        {formatEuro(salePrice, uiLang)}
+                        {formatPrice(salePrice)}
                         <span className="ml-1 text-base font-semibold text-zinc-500 dark:text-zinc-400">
                           {periodSuffix}
                         </span>

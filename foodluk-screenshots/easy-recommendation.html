@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Easy recommendations — Belorder-style</title>
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --card: #fff;
+    --ink: #171717;
+    --muted: #6b7280;
+    --line: #e7e5e4;
+    --red: #e11d2e;
+    --red-soft: #fff1f2;
+    --black: #111;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.04);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.45;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  a { color: inherit; }
+
+  .top {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 18px;
+    padding: 12px 22px;
+    background: #111;
+    color: #fff;
+  }
+  .brand { font-weight: 700; letter-spacing: .04em; font-size: 13px; }
+  .brand span { color: #fb7185; }
+  .tabs { display: flex; gap: 6px; margin-left: 12px; }
+  .tabs button {
+    background: transparent; color: #d4d4d4; border: 0;
+    padding: 8px 12px; border-radius: 999px; font-size: 13px;
+  }
+  .tabs button.on { background: #fff; color: #111; font-weight: 600; }
+  .top .hint { margin-left: auto; font-size: 12px; color: #a3a3a3; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 18px 64px; }
+  .view { display: none; }
+  .view.on { display: block; }
+
+  h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -.03em; }
+  .lead { color: var(--muted); margin: 0 0 18px; max-width: 720px; }
+
+  .steps {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    margin-bottom: 18px;
+  }
+  .step {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .step b { display: block; font-size: 13px; }
+  .step span { color: var(--muted); font-size: 12px; }
+  .num {
+    display: inline-grid; place-items: center;
+    width: 22px; height: 22px; border-radius: 999px;
+    background: var(--red); color: #fff; font-size: 12px; font-weight: 700;
+    margin-right: 6px;
+  }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .card-pad { padding: 18px 18px 8px; }
+  .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .palier-title { font-weight: 700; font-size: 16px; }
+  .rule-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .seg {
+    display: flex; background: #f4f4f5; border: 1px solid var(--line);
+    border-radius: 999px; padding: 3px;
+  }
+  .seg button {
+    border: 0; background: transparent; border-radius: 999px;
+    padding: 6px 12px; font-size: 13px; font-weight: 650; color: #525252;
+  }
+  .seg button.on { background: #111; color: #fff; }
+  .seg.sub button { font-size: 12px; padding: 5px 10px; }
+
+  .field { margin: 14px 18px; }
+  .field label { display: block; font-weight: 650; font-size: 14px; margin-bottom: 8px; }
+  .req { color: var(--red); }
+  .langs { display: flex; gap: 8px; margin-bottom: 8px; }
+  .lang {
+    border: 1px solid var(--line); background: #f5f5f5; border-radius: 8px;
+    padding: 6px 10px; font-size: 13px;
+  }
+  .lang.on { background: #fff; border-color: #111; }
+  .textin {
+    width: 100%; border: 1px solid #d6d3d1; border-radius: 10px;
+    padding: 11px 12px; outline: none; background: #fff;
+  }
+  .textin:focus { border-color: #111; }
+
+  .section-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 18px 10px;
+  }
+  .section-head h2 { font-size: 16px; margin: 0; }
+  .linkish {
+    background: none; border: 0; text-decoration: underline; font-size: 14px; padding: 0;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .linkish svg { flex: none; }
+
+  .adder { position: relative; margin: 0 18px 14px; }
+  .adder > button.drop, .mini-add > button.drop {
+    width: 100%; text-align: left;
+    border: 1px solid #d6d3d1; background: #fff; border-radius: 10px;
+    padding: 11px 12px; color: #737373;
+  }
+  .menu {
+    position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px);
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.12); padding: 6px; max-height: 260px; overflow: auto;
+  }
+  .menu button {
+    width: 100%; text-align: left; border: 0; background: transparent;
+    border-radius: 8px; padding: 9px 10px; display: flex; justify-content: space-between; gap: 8px;
+  }
+  .menu button:hover { background: #f5f5f5; }
+  .menu .empty { padding: 10px; color: var(--muted); font-size: 13px; }
+
+  .cat {
+    margin: 0 12px 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  }
+  .cat-h {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 12px; background: #fff;
+  }
+  .chev { border: 0; background: none; width: 28px; font-size: 14px; }
+  .cat-h strong { font-size: 14px; }
+  .count { color: var(--muted); font-weight: 500; margin-left: 4px; }
+  .spacer { flex: 1; }
+  .remove {
+    border: 0; background: none; color: var(--red); font-weight: 600; font-size: 14px;
+  }
+  .cat-body { padding: 0 12px 12px; border-top: 1px solid var(--line); }
+  .mini-add { position: relative; margin: 12px 0; }
+  .use-all {
+    border: 0; background: none; color: #111; text-decoration: underline;
+    font-size: 13px; padding: 0 0 8px; display: block;
+  }
+  .prod {
+    display: grid; grid-template-columns: 28px 40px 1fr auto; gap: 8px 10px; align-items: center;
+    padding: 10px 8px; border-radius: 10px;
+  }
+  .prod.sorting { grid-template-columns: auto 40px 1fr auto; }
+  .prod:nth-child(even) { background: #fafafa; }
+  .prod > .more { grid-column: 1 / -1; }
+  .prod-tools {
+    grid-column: 1 / -1;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: end;
+    padding: 0 0 4px 38px;
+  }
+  .mini {
+    display: flex; flex-direction: column; gap: 3px; min-width: 88px;
+  }
+  .mini span { font-size: 11px; color: var(--muted); font-weight: 650; }
+  .mini input[type="number"] {
+    width: 88px; border: 1px solid #d6d3d1; border-radius: 8px; padding: 6px 8px;
+  }
+  .checkline { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; min-height: 32px; }
+  .cat-rules {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px;
+    margin: 12px 0 4px;
+  }
+  .cat-rules label { font-size: 11px; color: var(--muted); font-weight: 650; display: block; margin-bottom: 4px; }
+  .cat-rules input {
+    width: 100%; border: 1px solid #d6d3d1; border-radius: 8px; padding: 8px;
+  }
+  .vars { margin: 4px 0 8px 38px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .vars h5 {
+    margin: 0; padding: 8px 10px; font-size: 12px; background: #fafafa;
+    border-bottom: 1px solid var(--line);
+  }
+  .var-row {
+    display: grid; grid-template-columns: 1fr 72px 72px 72px; gap: 8px; align-items: center;
+    padding: 8px 10px; font-size: 13px;
+  }
+  .var-row + .var-row { border-top: 1px solid var(--line); }
+  .var-row input {
+    width: 100%; border: 1px solid #d6d3d1; border-radius: 8px; padding: 6px 8px;
+  }
+  .var-head { color: var(--muted); font-size: 11px; font-weight: 650; }
+  .qty {
+    display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
+    border: 1px solid var(--line); border-radius: 999px; padding: 2px 6px; background: #fff;
+  }
+  .qty button { border: 0; background: #111; color: #fff; width: 20px; height: 20px; border-radius: 999px; }
+  .sort { display: inline-flex; align-items: center; gap: 4px; }
+  .grip {
+    display: inline-flex; color: #a3a3a3; cursor: grab; touch-action: none;
+  }
+  .grip:active { cursor: grabbing; }
+  .cat.over, .prod.over { outline: 2px solid #111; outline-offset: -2px; }
+  .thumb {
+    width: 40px; height: 40px; border-radius: 999px;
+    display: grid; place-items: center; font-size: 20px; background: #f4f4f5;
+  }
+  .prod .name { font-weight: 700; font-size: 14px; }
+  .prod .price { color: #525252; font-size: 13px; }
+  .move { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 2px 7px; line-height: 1; }
+
+  .more {
+    margin: 8px 0 4px;
+  }
+  .more summary {
+    cursor: pointer; list-style: none; width: fit-content;
+    border: 1px solid var(--line); background: #fff; border-radius: 999px;
+    padding: 2px 8px; font-size: 12px; font-weight: 600; color: #292524;
+  }
+  .more summary::-webkit-details-marker { display: none; }
+  .more summary::before { content: "▸ "; color: #737373; }
+  .more[open] summary::before { content: "▾ "; }
+  .more summary .hint { color: var(--muted); font-weight: 550; }
+  .more .cat-rules { margin-top: 10px; }
+  .more .checkline { margin-top: 10px; }
+  .more .vars { margin: 12px 0 4px; }
+  .more-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .more-grid label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .more-grid input {
+    width: 100%; border: 1px solid #d6d3d1; border-radius: 8px; padding: 8px;
+  }
+  .free-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 8px; }
+
+  .actions {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 8px 18px 18px;
+  }
+  .btn {
+    border-radius: 10px; padding: 10px 16px; border: 1px solid transparent; font-weight: 650;
+  }
+  .btn.black { background: #111; color: #fff; }
+  .btn.ghost { background: #fff; border-color: var(--line); }
+
+  .phone {
+    background: #111; color: #fff; border-radius: 28px; padding: 14px;
+    position: sticky; top: 72px;
+  }
+  .phone .screen {
+    background: #fafafa; color: #111; border-radius: 20px; overflow: hidden; min-height: 460px;
+  }
+  .phone .bar { text-align: center; font-size: 11px; color: #a3a3a3; padding: 8px 0 0; }
+  .dish {
+    display: flex; gap: 10px; align-items: center; padding: 14px 14px 10px;
+  }
+  .dish .big { font-size: 28px; width: 52px; height: 52px; border-radius: 12px; background: #fff; display: grid; place-items: center; }
+  .dish h3 { margin: 0; font-size: 16px; }
+  .dish p { margin: 2px 0 0; color: #666; font-size: 13px; }
+  .guest-block { padding: 8px 14px 16px; }
+  .guest-block h4 { margin: 8px 0; font-size: 14px; }
+  .pill {
+    display: inline-block; font-size: 11px; background: #fff; border: 1px solid var(--line);
+    border-radius: 999px; padding: 2px 8px; color: #525252; margin-left: 6px;
+  }
+  .opt {
+    display: flex; align-items: center; gap: 8px;
+    background: #fff; border-radius: 12px; padding: 8px; margin-bottom: 6px;
+    border: 1px solid transparent;
+  }
+  .opt.on { border-color: #111; }
+  .dot {
+    width: 16px; height: 16px; border-radius: 999px; border: 2px solid #111; flex: none;
+  }
+  .opt.on .dot { background: #111; box-shadow: inset 0 0 0 3px #fff; }
+  .box {
+    width: 16px; height: 16px; border-radius: 4px; border: 2px solid #111; flex: none;
+  }
+  .opt.on .box { background: #111; }
+  .opt .meta { margin-left: auto; font-size: 13px; font-weight: 650; }
+  .opt .free { color: var(--red); }
+  .phone .cta {
+    margin: 8px 14px 14px; width: calc(100% - 28px);
+    background: #111; color: #fff; border: 0; border-radius: 12px; padding: 12px; font-weight: 700;
+  }
+
+  .callout {
+    background: var(--red); color: #fff; border-radius: 8px;
+    font-size: 12px; font-weight: 650; padding: 6px 8px; display: inline-block;
+  }
+
+  .why { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .why .card { padding: 16px 18px; }
+  .why h2 { margin: 0 0 8px; font-size: 16px; }
+  .why li { margin: 6px 0; }
+  .bad li { color: #7f1d1d; }
+  .good { border-color: #bbf7d0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fafafa; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: #525252; }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+  .filters button {
+    border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 10px; font-size: 13px;
+  }
+  .filters button.on { background: #111; color: #fff; border-color: #111; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .shot {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; padding: 0;
+    text-align: left;
+  }
+  .shot img { width: 100%; height: 150px; object-fit: cover; object-position: top; background: #fafafa; display: block; }
+  .shot figcaption { padding: 10px 12px 12px; }
+  .shot strong { display: block; font-size: 13px; }
+  .shot em { font-style: normal; color: var(--muted); font-size: 12px; }
+  .focus-banner {
+    display: grid; grid-template-columns: 280px 1fr; gap: 16px;
+    background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 16px;
+  }
+  .focus-banner img { width: 100%; border-radius: 10px; border: 1px solid var(--line); }
+
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(0,0,0,.72);
+    display: none; place-items: center; padding: 24px; z-index: 40;
+  }
+  .lightbox.on { display: grid; }
+  .lightbox img { max-width: min(1100px, 100%); max-height: 86vh; background: #fff; border-radius: 12px; }
+  .lightbox p { color: #fff; text-align: center; margin: 8px 0 0; }
+
+  .toast {
+    position: fixed; bottom: 18px; right: 18px; background: #111; color: #fff;
+    padding: 12px 14px; border-radius: 12px; display: none; max-width: 320px; z-index: 30;
+  }
+  .toast.on { display: block; }
+
+  .editor-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 16px; margin-bottom: 16px;
+  }
+  .dish-mini { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .dish-mini .thumb { width: 40px; height: 40px; border-radius: 10px; }
+  .dish-mini strong { display: block; font-size: 15px; }
+  .dish-mini span { color: var(--muted); font-size: 13px; }
+  .view-switch {
+    display: flex; flex-wrap: wrap; gap: 4px;
+    background: #f4f4f5; border: 1px solid var(--line); border-radius: 10px; padding: 4px;
+  }
+  .view-switch button {
+    border: 0; background: transparent; border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; font-weight: 650; color: #737373;
+  }
+  .view-switch button.on { background: #fff; color: #111; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .editor { display: none; }
+  .editor.on { display: block; }
+  .choice {
+    width: 100%; text-align: left; display: flex; gap: 10px; align-items: flex-start;
+    border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px;
+  }
+  .choice.on { border-color: #111; box-shadow: inset 0 0 0 1px #111; }
+  .choice strong { display: block; font-size: 14px; }
+  .choice em { display: block; color: var(--muted); font-style: normal; font-size: 13px; font-weight: 450; }
+  .dot {
+    width: 16px; height: 16px; border-radius: 999px; border: 2px solid #d6d3d1; margin-top: 2px; flex: none;
+  }
+  .choice.on .dot { border-color: #111; box-shadow: inset 0 0 0 4px #111; }
+  .progress { display: flex; gap: 6px; margin-bottom: 14px; }
+  .progress i { height: 4px; flex: 1; background: #e7e5e4; border-radius: 99px; display: block; }
+  .progress i.on { background: #111; }
+  .wiz-step { display: none; }
+  .wiz-step.on { display: block; }
+  .old-sec { padding: 16px 18px 18px; }
+  .old-sec + .old-sec { border-top: 1px solid var(--line); }
+  .old-sec h2 { margin: 0 0 4px; font-size: 16px; }
+  .old-sec p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  .check-row {
+    width: 100%; text-align: left; display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
+  }
+  .check-row.on { border-color: #111; background: #fafafa; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; }
+  .btn.ghost { background: #fff; color: #111; border: 1px solid var(--line); }
+  .workspace { display: none; }
+  .workspace.on { display: block; }
+  .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .pick-card {
+    text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+    display: flex; gap: 10px; align-items: center;
+  }
+  .pick-card:hover, .pick-card.on { border-color: #111; }
+  .pick-card strong { display: block; font-size: 14px; }
+  .pick-card span { color: var(--muted); font-size: 12px; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; place-items: center; z-index: 50; padding: 18px; }
+  .modal.on { display: grid; }
+  .sheet { background: #fff; border-radius: 16px; padding: 18px; width: min(680px, 100%); box-shadow: var(--shadow); }
+  .sheet h2 { margin: 0 0 6px; font-size: 18px; }
+  .view-cards { display: grid; gap: 8px; margin-top: 12px; }
+  .enh-step { display: none; }
+  .enh-step.on { display: block; }
+
+  @media (max-width: 900px) {
+    .layout, .why, .steps, .focus-banner, .cat-rules { grid-template-columns: 1fr; }
+    .phone { position: static; }
+    .top .hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">FOODLUK <span>recommendations</span></div>
+  <nav class="tabs">
+    <button class="on" data-view="builder">Recommendation</button>
+    <button data-view="method">Method</button>
+    <button data-view="shots">All screenshots</button>
+  </nav>
+  <div class="hint">Pattern taken from Belorder loyalty tier</div>
+</header>
+
+<main class="wrap">
+  <section class="view on" id="builder">
+    <div id="pick">
+      <h1>Recommendations</h1>
+      <p class="lead">Select the product you want to configure. The next step asks which recommendation view to open.</p>
+      <input class="textin" id="productSearch" placeholder="Search products" style="max-width:360px;margin-bottom:14px" />
+      <div class="pick-grid" id="productPick"></div>
+    </div>
+
+    <div id="workspace" class="workspace">
+    <div class="card editor-head">
+      <div class="dish-mini">
+        <div class="thumb">🍔</div>
+        <div>
+          <strong id="dishName">Cheese Burger</strong>
+          <span id="dishMeta">Burgers · Menu, Medium, XL</span>
+        </div>
+      </div>
+      <div class="view-switch" id="editorViews">
+        <button type="button" data-editor="classic">Classic View</button>
+        <button type="button" data-editor="advanced">Advanced View</button>
+        <button type="button" data-editor="enhanced">Enhanced View</button>
+        <button type="button" class="linkish" id="changeProduct" style="margin-left:8px">Change product</button>
+      </div>
+    </div>
+
+    <div class="editor" id="editor-classic">
+      <article class="card">
+        <div class="old-sec">
+          <h2>1 · Category · multiple selection</h2>
+          <p>The only recommendation type kept from the old form. Guests pick several extras from a whole category.</p>
+          <div class="check-row on"><span class="dot" style="box-shadow:inset 0 0 0 4px #111;border-color:#111"></span><span>Boissons <span style="color:#737373">· on the menu</span></span></div>
+          <div class="check-row"><span class="dot"></span><span>Accompagnements <span style="color:#737373">· on the menu</span></span></div>
+          <div class="check-row"><span class="dot"></span><span>Sauces <span style="color:#737373">· add-on only</span></span></div>
+          <div class="cat-rules" style="margin-top:12px">
+            <div><label>Discount %</label><input type="number" value="0" /></div>
+            <div><label>Extra pay %</label><input type="number" value="0" /></div>
+            <div><label>Free items</label><input type="number" value="0" /></div>
+            <div><label>Min</label><input type="number" value="0" /></div>
+            <div><label>Max</label><input type="number" value="3" /></div>
+          </div>
+          <p style="margin-top:10px">Min, max, and free follow Cheese Burger sizes when the parent product has variations.</p>
+          <div class="actions"><button type="button" class="btn black">Save category · multiple selection</button></div>
+        </div>
+        <div class="old-sec">
+          <h2>2 · Recommended deals</h2>
+          <p>Suggest a deal when this item is selected. This is separate from a recommendation choice.</p>
+          <div class="check-row"><span class="dot"></span><span>Menus</span></div>
+          <div class="actions"><button type="button" class="btn black">Save deals</button></div>
+        </div>
+        <div class="old-sec">
+          <h2>3 · Recommended products in the cart</h2>
+          <p>Upsells shown in the cart. Not a required choice on the dish.</p>
+          <div class="check-row"><span class="dot"></span><span>Desserts</span></div>
+          <div class="actions"><button type="button" class="btn black">Save cart suggestions</button></div>
+        </div>
+      </article>
+    </div>
+
+    <div class="editor" id="editor-advanced">
+      <article class="card old-sec">
+        <div class="progress" id="wizProgress"><i class="on"></i><i></i><i></i><i></i></div>
+        <div class="wiz-step on" data-step="0">
+          <h2>Besides size, can customers customize this?</h2>
+          <p>Most burgers need a drink or a side. A plain item can skip ahead.</p>
+          <button type="button" class="choice on" data-go="1"><span class="dot"></span><span><strong>Yes — they pick extras or options</strong><em>A drink, a side, toppings.</em></span></button>
+          <button type="button" class="choice" data-go="3"><span class="dot"></span><span><strong>No — size is enough</strong><em>Skip to deals and cart suggestions.</em></span></button>
+          <div class="actions"><button type="button" class="btn black" data-go="1">Continue</button></div>
+        </div>
+        <div class="wiz-step" data-step="1">
+          <h2>What are they choosing?</h2>
+          <p>Pick the closest match. You can add deals and cart suggestions after this.</p>
+          <button type="button" class="choice on"><span class="dot"></span><span><strong>Many extras from a category</strong><em>e.g. the whole Drinks category — pick several</em></span></button>
+          <div class="actions">
+            <button type="button" class="btn ghost" data-go="0">Back</button>
+            <button type="button" class="btn black" data-go="2">Continue</button>
+          </div>
+        </div>
+        <div class="wiz-step" data-step="2">
+          <h2>Which categories?</h2>
+          <p>Guests see the products in the categories you tick.</p>
+          <div class="check-row on"><span class="dot" style="box-shadow:inset 0 0 0 4px #111;border-color:#111"></span><span>Boissons</span></div>
+          <div class="check-row"><span class="dot"></span><span>Accompagnements</span></div>
+          <div class="check-row"><span class="dot"></span><span>Sauces</span></div>
+          <div class="actions">
+            <button type="button" class="btn ghost" data-go="1">Back</button>
+            <button type="button" class="btn black" data-go="3">Continue</button>
+          </div>
+        </div>
+        <div class="wiz-step" data-step="3">
+          <h2>Anything else?</h2>
+          <p>Deals and cart suggestions stay. They are not a required choice on the dish.</p>
+          <button type="button" class="choice"><span class="dot"></span><span><strong>Recommended deals</strong><em>Suggest a menu when this item is selected.</em></span></button>
+          <button type="button" class="choice"><span class="dot"></span><span><strong>Recommended products in the cart</strong><em>Suggest an add-on at checkout.</em></span></button>
+          <div class="actions">
+            <button type="button" class="btn ghost" data-go="2">Back</button>
+            <button type="button" class="btn black">Save recommendation</button>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <div class="editor" id="editor-enhanced">
+    <div class="progress" id="enhProgress"><i class="on"></i><i></i><i></i></div>
+    <div class="enh-step on" data-estep="0">
+      <article class="card old-sec">
+        <h2>Besides size, can customers customize this?</h2>
+        <p>Most burgers need a drink or a side. A plain item can skip ahead.</p>
+        <button type="button" class="choice on" data-ego="1"><span class="dot"></span><span><strong>Yes — they pick extras or options</strong><em>A drink, a side, toppings.</em></span></button>
+        <button type="button" class="choice" data-ego="2"><span class="dot"></span><span><strong>No — size is enough</strong><em>Skip to deals and cart suggestions.</em></span></button>
+        <div class="actions"><button type="button" class="btn black" data-ego="1">Continue</button></div>
+      </article>
+    </div>
+    <div class="enh-step" data-estep="1">
+    <h1>Enhanced recommendation</h1>
+    <p class="lead">One card. Name it, add a category, add the products inside that category. The phone on the right is what the guest sees. Show more stays closed until you need the extra limits.</p>
+
+    <div class="steps">
+      <div class="step"><b><span class="num">1</span>Name it</b><span>The words the guest reads.</span></div>
+      <div class="step"><b><span class="num">2</span>Add a category</b><span>Drinks, sides, sauces…</span></div>
+      <div class="step"><b><span class="num">3</span>Add products</b><span>Only the items you want to offer.</span></div>
+      <div class="step"><b><span class="num">4</span>Guest rule</b><span>Single, several, or several with quantity.</span></div>
+    </div>
+
+    <div class="layout">
+      <div>
+        <article class="card" id="card"></article>
+      </div>
+      <aside>
+        <div class="phone">
+          <div class="bar">Guest preview</div>
+          <div class="screen" id="preview"></div>
+        </div>
+      </aside>
+    </div>
+    <div class="actions" style="margin:0 0 8px">
+      <button type="button" class="btn ghost" data-ego="0">Back</button>
+    </div>
+    </div>
+    <div class="enh-step" data-estep="2">
+      <article class="card old-sec">
+        <h2>Anything else?</h2>
+        <p>Deals and cart suggestions stay. They are not a required choice on the dish.</p>
+        <button type="button" class="choice" id="dealChoice"><span class="dot"></span><span><strong>Recommended deals</strong><em>Suggest a menu when this item is selected.</em></span></button>
+        <button type="button" class="choice" id="cartChoice"><span class="dot"></span><span><strong>Recommended products in the cart</strong><em>Suggest an add-on at checkout.</em></span></button>
+        <div class="actions">
+          <button type="button" class="btn ghost" id="enhElseBack">Back</button>
+          <button type="button" class="btn black" id="saveElse">Save</button>
+        </div>
+      </article>
+    </div>
+    </div>
+    </div>
+  </section>
+
+  <div class="modal" id="viewPopup">
+    <div class="sheet">
+      <h2>Choose recommendation view</h2>
+      <p class="lead" style="margin:0">Select which view you want to use for configuring recommendations on this product.</p>
+      <div class="view-cards">
+        <button type="button" class="choice" data-pick-view="classic"><span class="dot"></span><span><strong>Classic View</strong><em>The old recommendation form, with every kept section open.</em></span></button>
+        <button type="button" class="choice" data-pick-view="advanced"><span class="dot"></span><span><strong>Advanced View</strong><em>The old step-by-step wizard.</em></span></button>
+        <button type="button" class="choice" data-pick-view="enhanced"><span class="dot"></span><span><strong>Enhanced View</strong><em>The new recommendation. Starts with the size question, then the easy builder.</em></span></button>
+      </div>
+      <div class="actions"><button type="button" class="btn ghost" id="closePopup">Cancel</button></div>
+    </div>
+  </div>
+
+  <section class="view" id="method">
+    <h1>Why the current builder feels hard</h1>
+    <p class="lead">Foodluk already stores rich rules (min, max, free items, variation price, discount). Belorder never asks for those on the first screen. The loyalty tier screenshot shows the whole creation method in one card.</p>
+
+    <div class="focus-banner">
+      <img src="docs-paliers-recompenses-fidelite--fidelite-palier-rempli.png" alt="Belorder filled loyalty tier" />
+      <div>
+        <span class="callout">The screenshot to copy</span>
+        <h2 style="margin:10px 0 6px">Palier = one recommendation group</h2>
+        <p>Title the guest can see. Then <b>Ajouter des catégories</b>. The category opens. Then <b>Ajouter des produits</b>. Each product is a row: drag, photo, name, price, <b>Retirer</b>. <b>Réarranger</b> sets the order. Nothing else is required to publish the tier.</p>
+        <p>Map that 1:1 onto a restaurant recommendation:</p>
+        <ul>
+          <li><b>Titre du palier</b> → name on the dish (“Choose a drink”).</li>
+          <li><b>80 points</b> → the only guest rule (“Pick one” or “Pick several”).</li>
+          <li><b>Boissons</b> → a menu category, not a separate form type.</li>
+          <li><b>Coca-Cola, Cafe expresso</b> → the products offered from that category.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="why">
+      <div class="card bad">
+        <h2>Hard method today</h2>
+        <ul>
+          <li>Four different forms: category-single, category-multiple, product-single, product-multiple.</li>
+          <li>You pick a source type before you see any products.</li>
+          <li>Min, max, free quantity, variation limits, discount %, extra cost %, default size, and per-product Free/Remove are open at once.</li>
+          <li>A category often has to be hidden from the website before it can be used as a recommendation pool.</li>
+          <li>The same category cannot be reused easily across sections.</li>
+        </ul>
+      </div>
+      <div class="card good">
+        <h2>Easy method</h2>
+        <ul>
+          <li>Start from the dish. Add a recommendation card.</li>
+          <li>Name what the guest reads. French and English, same as Belorder.</li>
+          <li>Add a real menu category. Add only the products to offer, or use the whole category in one click.</li>
+          <li>Choose one rule: pick one, or pick several.</li>
+          <li>Open “More options” only for min, max, and free items.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2 style="margin-top:22px">Same idea, restaurant words</h2>
+    <table>
+      <thead><tr><th>Belorder loyalty tier</th><th>Foodluk recommendation</th></tr></thead>
+      <tbody>
+        <tr><td>Palier 1</td><td>Recommendation 1 on Cheese Burger</td></tr>
+        <tr><td>Titre du palier, visible by the client</td><td>“Choose a drink” / “Choisissez une boisson”</td></tr>
+        <tr><td>80 points</td><td>Pick one, or pick several</td></tr>
+        <tr><td>Ajouter des catégories → Boissons</td><td>Add the Drinks category</td></tr>
+        <tr><td>Ajouter des produits → Coca-Cola, Cafe</td><td>Tick the drinks to upsell</td></tr>
+        <tr><td>Retirer / Réarranger</td><td>Remove a product or change order</td></tr>
+        <tr><td>Publish the tier</td><td>Save. Guest sheet updates immediately</td></tr>
+      </tbody>
+    </table>
+
+    <h2 style="margin-top:22px">What the other screenshots confirm</h2>
+    <table>
+      <thead><tr><th>Screen</th><th>Habit to keep</th></tr></thead>
+      <tbody>
+        <tr><td>Categories on a catalogue</td><td>One dropdown adds a category. Each row shows a count and Retirer.</td></tr>
+        <tr><td>Create a promotion</td><td>One radio decides the form. Do not show every option at once. A short example sits under each choice.</td></tr>
+        <tr><td>Catalogue create</td><td>Name first. Channels are chips, not a second wizard.</td></tr>
+        <tr><td>Orders, finance, KDS, call center</td><td>Lists, filters, and tickets. They do not change how a recommendation is built.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="view" id="shots">
+    <h1>Belorder screenshots</h1>
+    <p class="lead">Every image in <code>foodluk-screenshots/</code>. Open one to view it large. The loyalty tier is the reference for the builder.</p>
+    <div class="filters" id="filters"></div>
+    <div class="grid" id="grid"></div>
+  </section>
+</main>
+
+<div class="lightbox" id="lightbox">
+  <div>
+    <img alt="" id="lbimg" />
+    <p id="lbcap"></p>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const CATALOG = [
+  { id: "burgers", name: "Burgers", products: [
+    { id: "cheese", name: "Cheese Burger", price: 9.5, emoji: "🍔", variations: [
+      { id: "menu", name: "Menu" },
+      { id: "medium", name: "Medium" },
+      { id: "xl", name: "XL" }
+    ]},
+    { id: "chicken", name: "Chicken Burger", price: 8.9, emoji: "🍔" },
+    { id: "veggie", name: "Veggie Burger", price: 8.5, emoji: "🥬" }
+  ]},
+  { id: "drinks", name: "Boissons", products: [
+    { id: "cola", name: "Coca-Cola", price: 3.5, emoji: "🥤" },
+    { id: "cafe", name: "Cafe expresso", price: 2, emoji: "☕" },
+    { id: "water", name: "Eau plate", price: 1.5, emoji: "💧" },
+    { id: "juice", name: "Jus d'orange", price: 3, emoji: "🍊" }
+  ]},
+  { id: "sides", name: "Accompagnements", products: [
+    { id: "fries", name: "Frites", price: 3, emoji: "🍟" },
+    { id: "wedges", name: "Potatoes", price: 3.5, emoji: "🥔" },
+    { id: "salad", name: "Salade", price: 2.5, emoji: "🥗" }
+  ]},
+  { id: "sauces", name: "Sauces", products: [
+    { id: "ketchup", name: "Ketchup", price: 0.5, emoji: "🍅" },
+    { id: "mayo", name: "Mayonnaise", price: 0.5, emoji: "🥫" },
+    { id: "bbq", name: "Sauce BBQ", price: 0.6, emoji: "🔥" }
+  ]},
+  { id: "desserts", name: "Desserts", products: [
+    { id: "brownie", name: "Brownie", price: 4, emoji: "🍫" },
+    { id: "ice", name: "Glace vanille", price: 3.5, emoji: "🍦" }
+  ]}
+];
+
+let DISH = {
+  name: "Cheese Burger",
+  price: 9.5,
+  emoji: "🍔",
+  category: "Burgers",
+  variations: [
+    { id: "menu", name: "Menu" },
+    { id: "medium", name: "Medium" },
+    { id: "xl", name: "XL" }
+  ]
+};
+
+function parentVariationRows() {
+  return DISH.variations.map((v) => ({ id: v.id, name: v.name, min: 1, max: 3, free: 0 }));
+}
+
+function productEntry(catId, pid, extra) {
+  const src = CATALOG.find((c) => c.id === catId).products.find((p) => p.id === pid);
+  return {
+    id: pid,
+    free: false,
+    discount: "",
+    extraPay: "",
+    qtyMax: 3,
+    ...(extra || {})
+  };
+}
+
+let recs = [
+  {
+    id: 1,
+    fr: "Choisissez une boisson",
+    en: "Choose a drink",
+    lang: "fr",
+    mode: "one",
+    severalStyle: "check",
+    open: { drinks: true },
+    categories: [
+      {
+        id: "drinks",
+        discount: 0,
+        extra: 0,
+        min: 0,
+        max: 1,
+        freeQty: 0,
+        parentVars: parentVariationRows(),
+        products: [
+          productEntry("drinks", "cola", { free: false }),
+          productEntry("drinks", "cafe", { free: true })
+        ]
+      }
+    ]
+  }
+];
+let uid = 2;
+let openMenu = null;
+let rearrange = false;
+const GRIP = `<svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true"><circle cx="4" cy="3" r="1.25" fill="currentColor"/><circle cx="10" cy="3" r="1.25" fill="currentColor"/><circle cx="4" cy="8" r="1.25" fill="currentColor"/><circle cx="10" cy="8" r="1.25" fill="currentColor"/><circle cx="4" cy="13" r="1.25" fill="currentColor"/><circle cx="10" cy="13" r="1.25" fill="currentColor"/></svg>`;
+const REARRANGE_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 3v18"/><path d="M3 17l4 4 4-4"/><path d="M17 21V3"/><path d="M13 7l4-4 4 4"/></svg>`;
+
+const money = (n) => n.toFixed(2).replace(".", ",") + " €";
+const catById = (id) => CATALOG.find((c) => c.id === id);
+const prodById = (catId, pid) => catById(catId).products.find((p) => p.id === pid);
+
+function render() {
+  const card = document.getElementById("card");
+  card.innerHTML = recs.map((rec, index) => {
+    const title = rec.lang === "fr" ? rec.fr : rec.en;
+    const used = new Set(rec.categories.map((c) => c.id));
+    const available = CATALOG.filter((c) => !used.has(c.id) && c.id !== "burgers");
+    return `
+      <div class="card-pad row-between">
+        <div class="palier-title">Recommendation</div>
+        <div class="rule-stack">
+          <div class="seg" title="How the guest picks">
+            <button type="button" class="${rec.mode === "one" ? "on" : ""}" data-mode-set="${rec.id}:one">Single</button>
+            <button type="button" class="${rec.mode === "many" ? "on" : ""}" data-mode-set="${rec.id}:many">Several</button>
+          </div>
+          ${rec.mode === "many" ? `
+            <div class="seg sub" title="Several as checkboxes, or several of one product">
+              <button type="button" class="${rec.severalStyle !== "qty" ? "on" : ""}" data-style-set="${rec.id}:check">Checkboxes</button>
+              <button type="button" class="${rec.severalStyle === "qty" ? "on" : ""}" data-style-set="${rec.id}:qty">Quantity</button>
+            </div>
+          ` : ""}
+        </div>
+      </div>
+      <div class="field">
+        <label>Title <span class="req">*</span></label>
+        <div class="langs">
+          <button type="button" class="lang ${rec.lang === "fr" ? "on" : ""}" data-lang="${rec.id}:fr">Français</button>
+          <button type="button" class="lang ${rec.lang === "en" ? "on" : ""}" data-lang="${rec.id}:en">English</button>
+        </div>
+        <input class="textin" data-title="${rec.id}" value="${escapeAttr(title)}" placeholder="Visible to your guest" />
+        <div style="margin-top:8px"><span class="callout">Visible to your guest</span></div>
+      </div>
+      <div class="section-head">
+        <h2>Categories</h2>
+        <button type="button" class="linkish" id="rearrange">${REARRANGE_ICON}${rearrange ? "Done" : "Rearrange"}</button>
+      </div>
+      <p style="margin:-4px 18px 12px;color:#6b7280;font-size:13px">Single is one choice. Several is many choices. Quantity lets the guest add more than one of the same product.</p>
+      <div class="adder">
+        <button type="button" class="drop" data-open="cat:${rec.id}">Add a category</button>
+        ${openMenu === "cat:" + rec.id ? menuHtml(available.map((c) => ({
+          key: `addcat:${rec.id}:${c.id}`,
+          label: c.name,
+          extra: c.products.length + " products"
+        })), "Every category is already on this recommendation.") : ""}
+      </div>
+      ${rec.categories.map((block) => categoryHtml(rec, block)).join("")}
+      <div class="actions">
+        <button type="button" class="btn black" id="save">Save recommendation</button>
+      </div>
+    `;
+  }).join("");
+
+  document.getElementById("preview").innerHTML = previewHtml();
+}
+
+function appliedRates(block, line) {
+  const discount = line.discount === "" || line.discount == null ? Number(block.discount) || 0 : Number(line.discount) || 0;
+  const extra = line.extraPay === "" || line.extraPay == null ? Number(block.extra) || 0 : Number(line.extraPay) || 0;
+  return { discount, extra };
+}
+
+function catHint(block, several) {
+  const bits = [];
+  if (Number(block.discount)) bits.push(block.discount + "% off");
+  if (Number(block.extra)) bits.push("+" + block.extra + "%");
+  if (Number(block.freeQty)) bits.push(block.freeQty + " free");
+  if (several && block.parentVars?.length) {
+    bits.push(block.parentVars.map((v) => v.name + " " + v.min + "–" + v.max).join(", "));
+  } else if (Number(block.min) || Number(block.max) > 1) {
+    bits.push(block.min + "–" + block.max);
+  }
+  return bits.length ? " · " + bits.join(" · ") : "";
+}
+
+function prodHint(block, line, qtyMode) {
+  const bits = [];
+  if (line.free) bits.push("Free");
+  if (line.discount !== "" && line.discount != null) bits.push(line.discount + "% off");
+  if (line.extraPay !== "" && line.extraPay != null) bits.push("+" + line.extraPay + "%");
+  if (qtyMode) bits.push("×" + line.qtyMax);
+  return bits.length ? " · " + bits.join(" · ") : "";
+}
+
+function linePrice(block, line) {
+  const src = prodById(block.id, line.id);
+  if (line.free) return 0;
+  const { discount, extra } = appliedRates(block, line);
+  return Math.max(0, src.price * (1 - discount / 100) * (1 + extra / 100));
+}
+
+function categoryHtml(rec, block) {
+  const cat = catById(block.id);
+  const open = rec.open[block.id] !== false;
+  const picked = new Set(block.products.map((p) => p.id));
+  const left = cat.products.filter((p) => !picked.has(p.id));
+  const qtyMode = rec.mode === "many" && rec.severalStyle === "qty";
+  const byParent = rec.mode === "many" && (block.parentVars || []).length > 0;
+  return `
+    <section class="cat" ${rearrange ? `data-drop="cat:${rec.id}:${block.id}"` : ""}>
+      <div class="cat-h">
+        <button type="button" class="chev" data-toggle="${rec.id}:${block.id}">${open ? "▾" : "▸"}</button>
+        ${rearrange ? `<span class="sort">
+          <span class="grip" draggable="true" data-drag="cat:${rec.id}:${block.id}" title="Drag to reorder">${GRIP}</span>
+          <button type="button" class="move" data-move="cat-up:${rec.id}:${block.id}" title="Move up">↑</button>
+          <button type="button" class="move" data-move="cat-down:${rec.id}:${block.id}" title="Move down">↓</button>
+        </span>` : ""}
+        <strong>${cat.name}</strong><span class="count">(${block.products.length})</span>
+        <span class="spacer"></span>
+        <button type="button" class="remove" data-rmcat="${rec.id}:${block.id}">✕ Retirer</button>
+      </div>
+      ${open ? `<div class="cat-body">
+        <details class="more">
+          <summary>Show more<span class="hint">${catHint(block, byParent)}</span></summary>
+          <div class="cat-rules">
+            <div><label>Discount %</label><input type="number" min="0" max="100" value="${block.discount}" data-cat="discount:${rec.id}:${block.id}" /></div>
+            <div><label>Extra pay %</label><input type="number" min="0" max="500" value="${block.extra}" data-cat="extra:${rec.id}:${block.id}" /></div>
+            <div><label>Free items</label><input type="number" min="0" value="${block.freeQty}" data-cat="freeQty:${rec.id}:${block.id}" ${qtyMode ? "" : "disabled"} title="Used when Several is set to Quantity" /></div>
+            ${byParent ? "" : `
+            <div><label>Min</label><input type="number" min="0" value="${block.min}" data-cat="min:${rec.id}:${block.id}" ${rec.mode === "one" ? "disabled" : ""} /></div>
+            <div><label>Max</label><input type="number" min="1" value="${block.max}" data-cat="max:${rec.id}:${block.id}" ${rec.mode === "one" ? "disabled" : ""} /></div>`}
+          </div>
+          ${byParent ? `<div class="vars">
+            <h5>By ${DISH.name} — min, max, free</h5>
+            <div class="var-row var-head"><span>Parent size</span><span>Min</span><span>Max</span><span>Free</span></div>
+            ${block.parentVars.map((v) => `<div class="var-row">
+              <span>${v.name}</span>
+              <input type="number" min="0" value="${v.min}" data-pvar="min:${rec.id}:${block.id}:${v.id}" />
+              <input type="number" min="1" value="${v.max}" data-pvar="max:${rec.id}:${block.id}:${v.id}" />
+              <input type="number" min="0" value="${v.free}" data-pvar="free:${rec.id}:${block.id}:${v.id}" />
+            </div>`).join("")}
+          </div>` : ""}
+        </details>
+        <div class="mini-add">
+          <button type="button" class="drop" data-open="prod:${rec.id}:${block.id}">Add products to offer…</button>
+          ${openMenu === `prod:${rec.id}:${block.id}` ? menuHtml(left.map((p) => ({
+            key: `addprod:${rec.id}:${block.id}:${p.id}`,
+            label: p.name,
+            extra: money(p.price)
+          })), "All products in this category are already added.") : ""}
+        </div>
+        ${left.length ? `<button type="button" class="use-all" data-all="${rec.id}:${block.id}">Use every product in ${cat.name}</button>` : ""}
+        ${block.products.map((line) => {
+          const p = prodById(block.id, line.id);
+          const price = linePrice(block, line);
+          return `<div class="prod${rearrange ? " sorting" : ""}" ${rearrange ? `data-drop="prod:${rec.id}:${block.id}:${line.id}"` : ""}>
+            <div class="sort">
+              ${rearrange ? `<span class="grip" draggable="true" data-drag="prod:${rec.id}:${block.id}:${line.id}" title="Drag to reorder">${GRIP}</span>
+              <button type="button" class="move" data-move="prod-up:${rec.id}:${block.id}:${line.id}" title="Move up">↑</button>
+              <button type="button" class="move" data-move="prod-down:${rec.id}:${block.id}:${line.id}" title="Move down">↓</button>` : `<span class="grip">${GRIP}</span>`}
+            </div>
+            <div class="thumb">${p.emoji}</div>
+            <div>
+              <div class="name">${p.name}</div>
+              <div class="price">${line.free ? "Free" : money(price)}${price !== p.price && !line.free ? " · was " + money(p.price) : ""}</div>
+            </div>
+            <button type="button" class="remove" data-rmprod="${rec.id}:${block.id}:${line.id}">✕ Retirer</button>
+            <details class="more">
+              <summary>Show more<span class="hint">${prodHint(block, line, qtyMode)}</span></summary>
+              <label class="checkline"><input type="checkbox" data-free="${rec.id}:${block.id}:${line.id}" ${line.free ? "checked" : ""} /> Free</label>
+              <div class="cat-rules">
+                <div><label>Discount %</label><input type="number" min="0" max="100" placeholder="${block.discount || 0}" value="${line.discount}" data-pline="discount:${rec.id}:${block.id}:${line.id}" /></div>
+                <div><label>Extra pay %</label><input type="number" min="0" max="500" placeholder="${block.extra || 0}" value="${line.extraPay}" data-pline="extraPay:${rec.id}:${block.id}:${line.id}" /></div>
+                ${qtyMode ? `<div><label>Max quantity</label><input type="number" min="1" value="${line.qtyMax}" data-pline="qtyMax:${rec.id}:${block.id}:${line.id}" /></div>` : ""}
+              </div>
+            </details>
+          </div>`;
+        }).join("")}
+      </div>` : ""}
+    </section>
+  `;
+}
+
+function menuHtml(items, empty) {
+  if (!items.length) return `<div class="menu"><div class="empty">${empty}</div></div>`;
+  return `<div class="menu">${items.map((item) =>
+    `<button type="button" data-act="${item.key}"><span>${item.label}</span><span style="color:#737373">${item.extra}</span></button>`
+  ).join("")}</div>`;
+}
+
+function previewHtml() {
+  const blocks = recs.map((rec) => {
+    const title = rec.lang === "fr" ? rec.fr : rec.en;
+    const qtyMode = rec.mode === "many" && rec.severalStyle === "qty";
+    const rule = rec.mode === "one" ? "Single" : (qtyMode ? "Several · quantity" : "Several");
+    if (!rec.categories.length) {
+      return `<div class="guest-block"><h4>${escapeHtml(title) || "Untitled"}</h4><p style="color:#888;font-size:13px">Add a category, then a product.</p></div>`;
+    }
+    return rec.categories.map((block) => {
+      const cat = catById(block.id);
+      const heading = rec.categories.length === 1
+        ? (title || cat.name)
+        : ((title || "Recommendation") + " · " + cat.name);
+      const limits = rec.mode !== "many" ? ""
+        : (block.parentVars?.length ? "" : ` · ${block.min}–${block.max}`);
+      const sizeNote = rec.mode === "many" && block.parentVars?.length
+        ? `<p style="font-size:11px;color:#666;margin:0 0 6px">${DISH.name}: ${block.parentVars.map((v) => v.name + " " + v.min + "–" + v.max + (v.free ? " · " + v.free + " free" : "")).join(" · ")}</p>`
+        : "";
+      return `
+      <div class="guest-block">
+        <h4>${escapeHtml(heading)} <span class="pill">${rule}${limits}</span></h4>
+        ${sizeNote}
+        ${block.products.length ? block.products.map((line, i) => {
+          const p = prodById(block.id, line.id);
+          const price = linePrice(block, line);
+          const mark = rec.mode === "one" ? "dot" : "box";
+          const qty = qtyMode
+            ? `<span class="qty"><button type="button" tabindex="-1">−</button><b>${i === 0 ? 1 : 0}</b><button type="button" tabindex="-1">+</button></span>`
+            : "";
+          return `
+          <div class="opt ${i === 0 ? "on" : ""}">
+            <div class="${mark}"></div>
+            <div><b>${p.name}</b></div>
+            ${qty}
+            <div class="meta ${line.free || price === 0 ? "free" : ""}">${line.free || price === 0 ? "Free" : "+" + money(price)}</div>
+          </div>`;
+        }).join("") : `<p style="color:#888;font-size:13px">No products yet in ${cat.name}.</p>`}
+      </div>`;
+    }).join("");
+  }).join("");
+  return `
+    <div class="dish">
+      <div class="big">${DISH.emoji}</div>
+      <div><h3>${DISH.name}</h3><p>${DISH.category} · ${money(DISH.price)}</p><p style="font-size:11px;color:#888;margin:2px 0 0">${DISH.variations.map((v) => v.name).join(" · ")}</p></div>
+    </div>
+    ${blocks}
+    <button class="cta" type="button">Add to cart · ${money(DISH.price)}</button>
+  `;
+}
+
+function findRec(id) { return recs.find((r) => r.id === Number(id)); }
+
+function applyDrag(from, to) {
+  const a = from.split(":");
+  const b = to.split(":");
+  if (a[0] !== b[0] || a[1] !== b[1] || from === to) return;
+  if (a[0] === "cat") {
+    const rec = findRec(a[1]);
+    const i = rec.categories.findIndex((c) => c.id === a[2]);
+    const j = rec.categories.findIndex((c) => c.id === b[2]);
+    if (i < 0 || j < 0) return;
+    const [row] = rec.categories.splice(i, 1);
+    rec.categories.splice(j, 0, row);
+  } else if (a[2] === b[2]) {
+    const block = findRec(a[1]).categories.find((c) => c.id === a[2]);
+    const i = block.products.findIndex((p) => p.id === a[3]);
+    const j = block.products.findIndex((p) => p.id === b[3]);
+    if (i < 0 || j < 0) return;
+    const [row] = block.products.splice(i, 1);
+    block.products.splice(j, 0, row);
+  }
+}
+
+let dragKey = null;
+const cardEl = document.getElementById("card");
+cardEl.addEventListener("dragstart", (e) => {
+  const handle = e.target.closest("[data-drag]");
+  if (!handle) return;
+  dragKey = handle.dataset.drag;
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", dragKey);
+});
+cardEl.addEventListener("dragover", (e) => {
+  const row = e.target.closest("[data-drop]");
+  if (!row || !dragKey) return;
+  const from = dragKey.split(":");
+  const onto = row.dataset.drop.split(":");
+  if (from[0] !== onto[0] || from[1] !== onto[1]) return;
+  if (from[0] === "prod" && from[2] !== onto[2]) return;
+  e.preventDefault();
+  cardEl.querySelectorAll(".over").forEach((n) => n.classList.remove("over"));
+  row.classList.add("over");
+});
+cardEl.addEventListener("drop", (e) => {
+  const row = e.target.closest("[data-drop]");
+  if (!row || !dragKey) return;
+  e.preventDefault();
+  applyDrag(dragKey, row.dataset.drop);
+  dragKey = null;
+  render();
+});
+cardEl.addEventListener("dragend", () => {
+  dragKey = null;
+  cardEl.querySelectorAll(".over").forEach((n) => n.classList.remove("over"));
+});
+
+document.getElementById("card").addEventListener("click", (e) => {
+  const t = e.target.closest("[data-open],[data-act],[data-lang],[data-toggle],[data-rmcat],[data-rmprod],[data-all],[data-move],[data-mode-set],[data-style-set],[data-free],[data-cat],[data-pline],[data-pvar],[data-title]");
+  if (e.target.id === "rearrange") {
+    rearrange = !rearrange;
+    openMenu = null;
+    render();
+    return;
+  }
+  if (e.target.id === "save") {
+    const toast = document.getElementById("toast");
+    const names = recs.map((r) => (r.lang === "fr" ? r.fr : r.en) || "Untitled");
+    toast.textContent = "Saved “" + names.join("”, “") + "” on " + DISH.name + ".";
+    toast.classList.add("on");
+    setTimeout(() => toast.classList.remove("on"), 2400);
+    enhBack = 1;
+    enhancedGo(2);
+    return;
+  }
+  if (!t) {
+    if (openMenu) { openMenu = null; render(); }
+    return;
+  }
+  if (t.dataset.cat || t.dataset.pline || t.dataset.pvar || t.dataset.title) return;
+  if (t.dataset.open) {
+    openMenu = openMenu === t.dataset.open ? null : t.dataset.open;
+    render();
+    return;
+  }
+  if (t.dataset.lang) {
+    const [id, lang] = t.dataset.lang.split(":");
+    const rec = findRec(id);
+    const current = rec.lang === "fr" ? rec.fr : rec.en;
+    if (rec.lang === "fr") rec.fr = current; else rec.en = current;
+    rec.lang = lang;
+    openMenu = null;
+    render();
+    return;
+  }
+  if (t.dataset.toggle) {
+    const [id, cat] = t.dataset.toggle.split(":");
+    const rec = findRec(id);
+    rec.open[cat] = rec.open[cat] === false;
+    render();
+    return;
+  }
+  if (t.dataset.act) {
+    const parts = t.dataset.act.split(":");
+    if (parts[0] === "addcat") {
+      const rec = findRec(parts[1]);
+      rec.categories.push({
+        id: parts[2], products: [], discount: 0, extra: 0,
+        min: 0, max: rec.mode === "one" ? 1 : 3, freeQty: 0,
+        parentVars: parentVariationRows()
+      });
+      rec.open[parts[2]] = true;
+    }
+    if (parts[0] === "addprod") {
+      const rec = findRec(parts[1]);
+      rec.categories.find((c) => c.id === parts[2]).products.push(productEntry(parts[2], parts[3]));
+    }
+    openMenu = null;
+    render();
+    return;
+  }
+  if (t.dataset.all) {
+    const [id, cat] = t.dataset.all.split(":");
+    const rec = findRec(id);
+    const block = rec.categories.find((c) => c.id === cat);
+    const have = new Set(block.products.map((p) => p.id));
+    catById(cat).products.forEach((p) => {
+      if (!have.has(p.id)) block.products.push(productEntry(cat, p.id));
+    });
+    render();
+    return;
+  }
+  if (t.dataset.rmcat) {
+    const [id, cat] = t.dataset.rmcat.split(":");
+    const rec = findRec(id);
+    rec.categories = rec.categories.filter((c) => c.id !== cat);
+    render();
+    return;
+  }
+  if (t.dataset.rmprod) {
+    const [id, cat, pid] = t.dataset.rmprod.split(":");
+    const rec = findRec(id);
+    const block = rec.categories.find((c) => c.id === cat);
+    block.products = block.products.filter((p) => p.id !== pid);
+    render();
+    return;
+  }
+  if (t.dataset.modeSet) {
+    const [id, mode] = t.dataset.modeSet.split(":");
+    const rec = findRec(id);
+    rec.mode = mode;
+    if (mode === "one") rec.categories.forEach((c) => {
+      c.max = 1;
+      c.min = Math.min(c.min, 1);
+    });
+    render();
+    return;
+  }
+  if (t.dataset.styleSet) {
+    const [id, style] = t.dataset.styleSet.split(":");
+    findRec(id).severalStyle = style;
+    render();
+    return;
+  }
+  if (t.dataset.free) {
+    const [id, cat, pid] = t.dataset.free.split(":");
+    const line = findRec(id).categories.find((c) => c.id === cat).products.find((p) => p.id === pid);
+    line.free = t.checked;
+    document.getElementById("preview").innerHTML = previewHtml();
+    const priceEl = t.closest(".prod").querySelector(".price");
+    const block = findRec(id).categories.find((c) => c.id === cat);
+    const src = prodById(cat, pid);
+    const price = linePrice(block, line);
+    priceEl.textContent = line.free ? "Free" : money(price) + (price !== src.price ? " · was " + money(src.price) : "");
+    return;
+  }
+  if (t.dataset.move) {
+    const [kind, id, cat, pid] = t.dataset.move.split(":");
+    const rec = findRec(id);
+    if (kind === "cat-up" || kind === "cat-down") {
+      const i = rec.categories.findIndex((c) => c.id === cat);
+      const j = kind === "cat-up" ? i - 1 : i + 1;
+      if (j >= 0 && j < rec.categories.length) {
+        const [row] = rec.categories.splice(i, 1);
+        rec.categories.splice(j, 0, row);
+      }
+    } else {
+      const block = rec.categories.find((c) => c.id === cat);
+      const i = block.products.findIndex((p) => p.id === pid);
+      const j = kind === "prod-up" ? i - 1 : i + 1;
+      if (j >= 0 && j < block.products.length) {
+        const [row] = block.products.splice(i, 1);
+        block.products.splice(j, 0, row);
+      }
+    }
+    render();
+  }
+});
+
+document.getElementById("card").addEventListener("input", (e) => {
+  const el = e.target;
+  if (el.dataset.title) {
+    const rec = findRec(el.dataset.title);
+    if (rec.lang === "fr") rec.fr = el.value; else rec.en = el.value;
+    document.getElementById("preview").innerHTML = previewHtml();
+    return;
+  }
+  if (el.dataset.cat) {
+    const [field, id, cat] = el.dataset.cat.split(":");
+    const block = findRec(id).categories.find((c) => c.id === cat);
+    block[field] = Math.max(0, Number(el.value) || 0);
+    document.getElementById("preview").innerHTML = previewHtml();
+    return;
+  }
+  if (el.dataset.pline) {
+    const [field, id, cat, pid] = el.dataset.pline.split(":");
+    const line = findRec(id).categories.find((c) => c.id === cat).products.find((p) => p.id === pid);
+    if (field === "discount" || field === "extraPay") line[field] = el.value;
+    else line[field] = Math.max(1, Number(el.value) || 1);
+    document.getElementById("preview").innerHTML = previewHtml();
+    return;
+  }
+  if (el.dataset.pvar) {
+    const [field, id, cat, vid] = el.dataset.pvar.split(":");
+    const block = findRec(id).categories.find((c) => c.id === cat);
+    const variation = block.parentVars.find((v) => v.id === vid);
+    variation[field] = Math.max(field === "max" ? 1 : 0, Number(el.value) || 0);
+    const summary = el.closest("details")?.querySelector("summary .hint");
+    if (summary) summary.textContent = catHint(block, true);
+    document.getElementById("preview").innerHTML = previewHtml();
+  }
+});
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+const SHOTS = [
+  ["Loyalty tier — filled palier (copy this)", "Rewards", "docs-paliers-recompenses-fidelite--fidelite-palier-rempli.png", "Name, add category, add products, remove, rearrange."],
+  ["Loyalty — points rules", "Rewards", "docs-configurer-fidelite-belorder--fidelite-conditions-points.png", "One number per rule. Extra rules stay on their own row."],
+  ["Loyalty — code and expiry", "Rewards", "docs-configurer-fidelite-belorder--fidelite-general-code-expiration.png", "General settings are separate from the tier card."],
+  ["Categories on a menu", "Menu", "docs-categories-et-catalogues--categories-catalogue-ajout.png", "Dropdown adds a category. Count and Retirer on each row."],
+  ["Reorder categories", "Menu", "docs-categories-et-catalogues--categories-catalogue-tri.png", "Rearrange is its own short mode."],
+  ["Menu navigation", "Menu", "docs-creer-et-publier-votre-menu--menu-navigation-cartes-catalogues.png", "Cartes and catalogues live in the left nav."],
+  ["New catalogue — channel", "Menu", "docs-creer-un-catalogue--catalogue-canal-et-plateforme.png", "Name, then chips for order type and platform."],
+  ["Catalogue list", "Menu", "docs-gestion-carte-catalogues--catalogue-navigation-catalogues.png", "Dark nav, filters, one Add button."],
+  ["Publish catalogue", "Menu", "docs-publier-son-catalogue--catalogue-modale-publier.png", "Publish is a confirm modal, not part of editing."],
+  ["Published menu at the store", "Menu", "docs-publier-son-catalogue--catalogue-carte-publiee-point-de-vente.png", "The live menu after publish."],
+  ["Promotion — target", "Promo", "docs-creer-une-promotion--creer-promotion-cible.png", "One choice (cart, products, deal, delivery) changes the rest of the form."],
+  ["Promotion — type", "Promo", "docs-creer-une-promotion--creer-promotion-type.png", "Automatic, code, or manual POS discount."],
+  ["Promotion — channels", "Promo", "docs-creer-une-promotion--creer-promotion-canaux-plateformes.png", "Where the offer is allowed."],
+  ["Promotion — publish", "Promo", "docs-creer-une-promotion--creer-promotion-publier.png", "Save, then publish."],
+  ["Promotion list", "Promo", "docs-creer-une-promotion--promotions-liste-navigation.png", "List of offers with status."],
+  ["Promo code at checkout", "Promo", "docs-creer-une-promotion--code-promo-checkout-section.png", "Guest types the code at payment."],
+  ["Manual discount — amount", "Promo", "docs-remise-manuelle-caisse--remise-manuelle-reduction.png", "Cashier discount, cart only."],
+  ["Manual discount — form", "Promo", "docs-remise-manuelle-caisse--remise-manuelle-formulaire.png", "Short POS form."],
+  ["POS payment methods", "Orders", "docs-moyens-de-paiement-caisse-entreprise--company-moyens-paiement-pos.png", "Which tenders the register accepts."],
+  ["Orders — navigation", "Orders", "docs-gestion-des-commandes--commandes-navigation.png", "Orders in the left nav."],
+  ["Orders — table", "Orders", "docs-gestion-des-commandes--commandes-tableau.png", "Order list."],
+  ["Orders — filters", "Orders", "docs-filtrer-mes-commandes--commandes-filtres.png", "Filter the list."],
+  ["Orders — columns", "Orders", "docs-filtrer-mes-commandes--commandes-colonnes-visibles.png", "Show or hide columns."],
+  ["Orders — filtered table", "Orders", "docs-filtrer-mes-commandes--commandes-tableau.png", "Same table after filters."],
+  ["Order detail", "Orders", "docs-detail-d-une-commande--commande-fiche-detail.png", "One order sheet."],
+  ["Order payments", "Orders", "docs-detail-d-une-commande--commande-transactions.png", "Payments on the order."],
+  ["Accept — history", "Orders", "docs-accepter-une-commande--commande-historique-etat.png", "Status timeline."],
+  ["Accept — action", "Orders", "docs-accepter-une-commande--commande-bouton-action.png", "One primary action button."],
+  ["Export orders", "Orders", "docs-exporter-mes-commandes--commandes-export-modale.png", "Export modal."],
+  ["Refund", "Orders", "docs-rembourser-une-commande--commande-remboursement-modale.png", "Refund modal."],
+  ["Transactions", "Finance", "docs-suivre-vos-transactions--suivre-vos-transactions-tableau.png", "Finance table."],
+  ["Finance nav", "Finance", "docs-suivre-vos-transactions--finance-nav-transactions.png", "Where transactions live."],
+  ["Export transactions", "Finance", "docs-exporter-mes-transactions--suivre-vos-transactions-export.png", "Export from finance."],
+  ["KDS settings 1", "Kitchen", "docs-parametres-kds--27492773263645.png", "Kitchen display settings."],
+  ["KDS settings 2", "Kitchen", "docs-parametres-kds--27485547299101.png", "Kitchen display settings."],
+  ["KDS settings 3", "Kitchen", "docs-parametres-kds--27492802250781.png", "Kitchen display settings."],
+  ["KDS tickets", "Kitchen", "marketing-kds-tickets.png", "Marketing shot of kitchen tickets."],
+  ["Call center — start", "Call center", "docs-centre-d-appels-prendre-une-commande--call-center-demarrer-commande.png", "Start an order for a caller."],
+  ["Call center — form", "Call center", "docs-centre-d-appels-prendre-une-commande--call-center-commander-form.png", "Order form."],
+  ["Call center — existing guest", "Call center", "docs-centre-d-appels-prendre-une-commande--call-center-client-existant.png", "Find a known guest."],
+  ["Call center — guest", "Call center", "docs-centre-d-appels-prendre-une-commande--call-center-client-invite.png", "Guest checkout."],
+  ["Call center — details", "Call center", "docs-centre-d-appels-prendre-une-commande--call-center-web-coordonnees.png", "Name and phone."],
+  ["Order at table", "Storefront", "docs-commande-a-table--client-commande-a-table-menu.png", "Guest menu at the table."],
+  ["Click and collect", "Storefront", "marketing-click-collect.png", "Marketing shot of pickup."]
+];
+
+const groups = ["All", ...new Set(SHOTS.map((s) => s[1]))];
+const filters = document.getElementById("filters");
+let activeGroup = "All";
+groups.forEach((g) => {
+  const b = document.createElement("button");
+  b.textContent = g;
+  b.className = g === "All" ? "on" : "";
+  b.onclick = () => {
+    activeGroup = g;
+    [...filters.children].forEach((el) => el.classList.toggle("on", el.textContent === g));
+    drawShots();
+  };
+  filters.appendChild(b);
+});
+
+function drawShots() {
+  const grid = document.getElementById("grid");
+  grid.innerHTML = SHOTS.filter((s) => activeGroup === "All" || s[1] === activeGroup).map((s, i) => `
+    <button type="button" class="shot" data-shot="${SHOTS.indexOf(s)}">
+      <img src="${s[2]}" alt="${escapeAttr(s[0])}" />
+      <figcaption><strong>${s[0]}</strong><em>${s[1]} · ${s[3]}</em></figcaption>
+    </button>
+  `).join("");
+}
+drawShots();
+
+document.getElementById("grid").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-shot]");
+  if (!btn) return;
+  const s = SHOTS[Number(btn.dataset.shot)];
+  document.getElementById("lbimg").src = s[2];
+  document.getElementById("lbcap").textContent = s[0] + " — " + s[3];
+  document.getElementById("lightbox").classList.add("on");
+});
+document.getElementById("lightbox").onclick = () => document.getElementById("lightbox").classList.remove("on");
+
+document.querySelectorAll(".tabs button").forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b === btn));
+    document.querySelectorAll(".view").forEach((v) => v.classList.toggle("on", v.id === btn.dataset.view));
+  };
+});
+
+let pendingProduct = null;
+let enhBack = 0;
+
+function drawProducts(query) {
+  const q = (query || "").trim().toLowerCase();
+  const cards = [];
+  CATALOG.forEach((cat) => {
+    cat.products.forEach((p) => {
+      if (q && !p.name.toLowerCase().includes(q) && !cat.name.toLowerCase().includes(q)) return;
+      cards.push(`<button type="button" class="pick-card" data-pick="${cat.id}:${p.id}"><div class="thumb">${p.emoji}</div><div><strong>${p.name}</strong><span>${cat.name} · ${money(p.price)}</span></div></button>`);
+    });
+  });
+  document.getElementById("productPick").innerHTML = cards.join("") || `<p style="color:#6b7280">No products match.</p>`;
+}
+
+function applyProduct(product, categoryName) {
+  DISH = {
+    name: product.name,
+    price: product.price,
+    emoji: product.emoji,
+    category: categoryName,
+    variations: (product.variations || []).map((v) => ({ id: v.id, name: v.name }))
+  };
+  recs.forEach((rec) => rec.categories.forEach((block) => {
+    block.parentVars = parentVariationRows();
+  }));
+  document.querySelector(".dish-mini .thumb").textContent = product.emoji;
+  document.getElementById("dishName").textContent = product.name;
+  const sizes = DISH.variations.length ? DISH.variations.map((v) => v.name).join(", ") : "No sizes";
+  document.getElementById("dishMeta").textContent = categoryName + " · " + money(product.price) + " · " + sizes;
+  render();
+}
+
+function enhancedGo(step) {
+  document.querySelectorAll("#editor-enhanced .enh-step").forEach((panel) => {
+    panel.classList.toggle("on", panel.dataset.estep === String(step));
+  });
+  document.querySelectorAll("#enhProgress i").forEach((bar, i) => {
+    bar.classList.toggle("on", i <= step);
+  });
+}
+
+function openEditor(mode) {
+  document.getElementById("viewPopup").classList.remove("on");
+  document.getElementById("pick").hidden = true;
+  document.getElementById("workspace").classList.add("on");
+  document.querySelectorAll("#editorViews [data-editor]").forEach((b) => b.classList.toggle("on", b.dataset.editor === mode));
+  document.querySelectorAll(".editor").forEach((panel) => {
+    panel.classList.toggle("on", panel.id === "editor-" + mode);
+  });
+  if (mode === "enhanced") enhancedGo(0);
+}
+
+document.getElementById("productPick").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-pick]");
+  if (!btn) return;
+  pendingProduct = btn.dataset.pick;
+  document.querySelectorAll(".pick-card").forEach((card) => card.classList.toggle("on", card === btn));
+  document.getElementById("viewPopup").classList.add("on");
+});
+document.getElementById("productSearch").addEventListener("input", (e) => drawProducts(e.target.value));
+document.getElementById("closePopup").onclick = () => document.getElementById("viewPopup").classList.remove("on");
+document.getElementById("viewPopup").addEventListener("click", (e) => {
+  const choice = e.target.closest("[data-pick-view]");
+  if (!choice || !pendingProduct) return;
+  const [catId, pid] = pendingProduct.split(":");
+  const cat = catById(catId);
+  applyProduct(cat.products.find((p) => p.id === pid), cat.name);
+  openEditor(choice.dataset.pickView);
+});
+document.getElementById("changeProduct").onclick = () => {
+  document.getElementById("workspace").classList.remove("on");
+  document.getElementById("pick").hidden = false;
+};
+
+document.getElementById("editorViews").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-editor]");
+  if (!btn) return;
+  openEditor(btn.dataset.editor);
+});
+
+document.getElementById("editor-enhanced").addEventListener("click", (e) => {
+  const go = e.target.closest("[data-ego]");
+  if (go) {
+    const step = Number(go.dataset.ego);
+    if (go.classList.contains("choice")) {
+      go.parentElement.querySelectorAll(".choice").forEach((c) => c.classList.toggle("on", c === go));
+    }
+    if (step === 2) enhBack = 0;
+    enhancedGo(step);
+    return;
+  }
+  if (e.target.id === "enhElseBack") enhancedGo(enhBack);
+  if (e.target.id === "dealChoice" || e.target.id === "cartChoice") {
+    e.target.classList.toggle("on");
+  }
+  if (e.target.id === "saveElse") {
+    const toast = document.getElementById("toast");
+    toast.textContent = "Saved deals and cart suggestions on " + DISH.name + ".";
+    toast.classList.add("on");
+    setTimeout(() => toast.classList.remove("on"), 2400);
+  }
+});
+
+drawProducts();
+
+document.getElementById("editor-advanced").addEventListener("click", (e) => {
+  const go = e.target.closest("[data-go]");
+  if (!go) return;
+  const step = go.dataset.go;
+  document.querySelectorAll("#editor-advanced .wiz-step").forEach((panel) => {
+    panel.classList.toggle("on", panel.dataset.step === step);
+  });
+  document.querySelectorAll("#wizProgress i").forEach((bar, i) => {
+    bar.classList.toggle("on", i <= Number(step));
+  });
+});
+
+render();
+</script>
+</body>
+</html>

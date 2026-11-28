@@ -51,6 +51,12 @@ export function useEntitlements() {
 
   return useMemo(() => {
     function moduleAccess(key: ModuleKey | string): ClientModuleEntitlement {
+      if (
+        plan?.planId === 'PRO' &&
+        (key === 'menuLayout' || key === 'expenses')
+      ) {
+        return { access: 'full' };
+      }
       const m = modules[key];
       if (m) return m;
       return { access: 'paid' };

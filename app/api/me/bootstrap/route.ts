@@ -45,6 +45,7 @@ async function loadSubscriptionAccess(restaurantId: string) {
       trialEndsAt: true,
       currentPeriodEnd: true,
       plan: true,
+      registrationFeePaid: true,
     },
   });
 
@@ -52,8 +53,10 @@ async function loadSubscriptionAccess(restaurantId: string) {
   return {
     allowed: access.allowed,
     warning: access.warning,
+    reason: access.reason,
     plan: subscription?.plan ?? null,
     status: subscription?.status ?? null,
+    registrationFeePaid: subscription?.registrationFeePaid ?? false,
   };
 }
 
@@ -163,6 +166,8 @@ export async function GET(req: NextRequest) {
           warning: null,
           plan: null,
           status: null,
+          registrationFeePaid: false,
+          reason: null,
         },
       };
       return NextResponse.json({ data: payload });

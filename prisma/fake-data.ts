@@ -326,6 +326,8 @@ export function fakeRestaurantSubscription() {
     paypalSubscriptionId: undefined,
     paypalPlanId: undefined,
     adminPeriodEndAt: undefined,
+    registrationFeePaidAt: undefined,
+    registrationFeeAmount: undefined,
     updatedAt: faker.date.anytime(),
   };
 }
@@ -344,6 +346,10 @@ export function fakeRestaurantSubscriptionComplete() {
     paypalPlanId: undefined,
     autoRenew: true,
     adminPeriodEndAt: undefined,
+    registrationFeePaid: false,
+    registrationFeePaidAt: undefined,
+    registrationFeeAmount: undefined,
+    registrationFeeCurrency: 'EUR',
     createdAt: new Date(),
     updatedAt: faker.date.anytime(),
   };

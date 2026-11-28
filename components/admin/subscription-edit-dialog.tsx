@@ -60,6 +60,7 @@ type Sub = {
   notes: string | null;
   paypalSubscriptionId?: string | null;
   customSelectedModules?: string[];
+  registrationFeePaid?: boolean;
 } | null;
 
 const CUSTOM_MODULE_ROWS = getCustomSelectablePricingRows();
@@ -214,6 +215,7 @@ export function SubscriptionEditDialog({
   const [saving, setSaving] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set());
+  const [registrationFeePaid, setRegistrationFeePaid] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -224,6 +226,7 @@ export function SubscriptionEditDialog({
       utcToDatetimeLocalInTimezone(subscription?.currentPeriodEnd ?? null, ADMIN_TZ)
     );
     setNotes(subscription?.notes ?? '');
+    setRegistrationFeePaid(Boolean(subscription?.registrationFeePaid));
     setSelectedModules(
       new Set(toPricingModuleIds(subscription?.customSelectedModules ?? []))
     );
@@ -300,6 +303,7 @@ export function SubscriptionEditDialog({
           : null,
         notes: notes.trim() || null,
         customSelectedModules: plan === 'CUSTOM' ? [...selectedModules] : [],
+        registrationFeePaid,
       });
       toast.success(te('saveSuccess'));
       const sync = res.data?.sync;
@@ -450,6 +454,20 @@ export function SubscriptionEditDialog({
                     </SelectContent>
                   </Select>
                 </FormField>
+                <label className="flex items-start gap-2 rounded-xl bg-white/60 px-3 py-2.5 text-sm dark:bg-zinc-900/40 sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-border"
+                    checked={registrationFeePaid}
+                    onChange={(e) => setRegistrationFeePaid(e.target.checked)}
+                  />
+                  <span>
+                    {t('admin.subscriptions.registrationFeePaid', {
+                      defaultValue:
+                        'Registration fee paid (required for Free plan access)',
+                    })}
+                  </span>
+                </label>
               </div>
             </SectionPanel>
 

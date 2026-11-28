@@ -28,14 +28,16 @@ export const SUBSCRIPTION_CATALOG_SEED: CatalogSeed[] = [
     id: 'subcat_free',
     plan: 'FREE',
     name: bi('Free', 'Gratis'),
-    price: 0,
+    /** One-time registration fee amount (card shows €0/mo + this fee). */
+    price: 3,
     yearlyPrice: 0,
     priceLabel: bi('€0/mo', '0 €/mes'),
     description: bi(
-      'Trial / starter restaurant — core catalog and POS with tight limits.',
-      'Prueba / inicio — catálogo básico y TPV con límites estrictos.'
+      '€0/mo after a one-time registration fee — core catalog and POS with tight limits, no monthly subscription.',
+      '0 €/mes tras una cuota de registro única — catálogo básico y TPV con límites estrictos, sin cuota mensual.'
     ),
     features: [
+      bi('One-time registration fee', 'Cuota de registro única'),
       bi('Dashboard (7 days only)', 'Panel (solo 7 días)'),
       bi('POS with limited fulfillment', 'TPV con cumplimiento limitado'),
       bi(

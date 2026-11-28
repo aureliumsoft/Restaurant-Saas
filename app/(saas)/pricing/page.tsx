@@ -7,6 +7,7 @@ import { getRestaurantForUser } from '@/lib/restaurant-owner';
 import { isSubscriptionPeriodActive } from '@/lib/subscription-access';
 import { processSubscriptionLifecycle } from '@/lib/subscription-lifecycle';
 import { ensureSubscriptionCatalog } from '@/lib/ensure-subscription-catalog';
+import { getSaasDisplayCurrency } from '@/lib/saas-display-currency.server';
 import { finalPrice } from '@/lib/subscription-catalog-pricing';
 
 function formatPeriodEnd(iso: Date | null): string {
@@ -150,6 +151,8 @@ export default async function PricingPage() {
     plans = [];
   }
 
+  const display = await getSaasDisplayCurrency();
+
   return (
     <PricingPageView
       isLoggedIn={isLoggedIn}
@@ -158,6 +161,8 @@ export default async function PricingPage() {
       subscriptionPeriodActive={subscriptionPeriodActive}
       periodEndLabel={periodEndLabel}
       plans={plans}
+      displayCurrency={display.code}
+      exchangeRate={display.rate}
     />
   );
 }

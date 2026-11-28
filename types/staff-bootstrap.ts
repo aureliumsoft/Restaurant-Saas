@@ -57,6 +57,8 @@ export type StaffBootstrapSubscription = {
   warning: string | null;
   plan: string | null;
   status: string | null;
+  registrationFeePaid?: boolean;
+  reason?: string | null;
 };
 
 export type StaffBootstrapData = {

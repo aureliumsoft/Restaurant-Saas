@@ -28,10 +28,15 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { PayPalCheckoutButtons } from '@/components/payments/paypal-checkout-buttons';
 import { PayPalSubscriptionButtons } from '@/components/payments/paypal-subscription-buttons';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 import { resolveBilingualText } from '@/lib/menu/bilingual-text';
 import { PRICING_MODULE_ROWS } from '@/lib/pricing-comparison';
+import {
+  formatSaasDisplayPrice,
+  type SaasDisplayCurrencyCode,
+} from '@/lib/saas-display-currency';
 
 type Props = {
   plan: string;
@@ -48,6 +53,8 @@ type Props = {
   signedIn: boolean;
   userEmail: string | null;
   restaurantId?: string | null;
+  displayCurrency?: SaasDisplayCurrencyCode;
+  exchangeRate?: number | null;
 };
 
 export function PaymentCheckoutClient({
@@ -64,6 +71,8 @@ export function PaymentCheckoutClient({
   signedIn,
   userEmail,
   restaurantId,
+  displayCurrency = 'EUR',
+  exchangeRate = null,
 }: Props) {
   const { t } = useTranslation();
   const uiLang = useUiLanguage();
@@ -72,9 +81,21 @@ export function PaymentCheckoutClient({
   const [error, setError] = useState<string | null>(null);
 
   const isCustom = plan.toUpperCase() === 'CUSTOM';
+  const isFree = plan.toUpperCase() === 'FREE';
+  const isRegistrationFee = isFree && typeof priceMajor === 'number' && priceMajor > 0;
+  const showPkrNote = displayCurrency === 'PKR';
 
   const localizedName = resolveBilingualText(planName, uiLang);
-  const localizedPrice = resolveBilingualText(priceLabel, uiLang);
+  const localizedPrice =
+    !isCustom &&
+    typeof priceMajor === 'number' &&
+    Number.isFinite(priceMajor)
+      ? formatSaasDisplayPrice(priceMajor, {
+          code: displayCurrency,
+          rate: exchangeRate,
+          lang: uiLang,
+        })
+      : resolveBilingualText(priceLabel, uiLang);
   const localizedDescription = resolveBilingualText(description, uiLang);
   const localizedFeatures = useMemo(
     () => features.map((f) => resolveBilingualText(f, uiLang)),
@@ -227,6 +248,14 @@ export function PaymentCheckoutClient({
                 {localizedPrice}
               </span>
             </div>
+            {showPkrNote ? (
+              <p className="text-xs text-muted-foreground">
+                {t('marketingExtras.checkout.pkrApproxNote', {
+                  defaultValue:
+                    'Amount shown in PKR is approximate. You will be billed in EUR.',
+                })}
+              </p>
+            ) : null}
             <Separator />
             <div className="text-xs text-muted-foreground">
               <p>
@@ -252,6 +281,40 @@ export function PaymentCheckoutClient({
                 selectedModules={selectedModules}
                 defaultEmail={userEmail ?? ''}
                 restaurantId={restaurantId ?? null}
+              />
+            ) : isFree && !isRegistrationFee ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                {t('marketingExtras.checkout.registrationFeeMissing', {
+                  defaultValue:
+                    'Registration fee is not configured. Choose a paid plan or contact support.',
+                })}
+              </p>
+            ) : stripeReady && amount > 0 && restaurantId && isRegistrationFee ? (
+              <PayPalCheckoutButtons
+                amount={amount}
+                currency="EUR"
+                title={t('marketingExtras.checkout.registrationFeeTitle', {
+                  defaultValue: 'Foodluk registration fee',
+                })}
+                source="subscription"
+                metadata={{
+                  restaurantId,
+                  plan: 'FREE',
+                  kind: 'registration_fee',
+                }}
+                disabled={loading}
+                onProcessingChange={setLoading}
+                onApproved={async () => {
+                  toast.success(
+                    t('marketingExtras.checkout.activationSuccess')
+                  );
+                  router.replace('/dashboard');
+                  router.refresh();
+                }}
+                onError={(msg) => {
+                  setError(msg);
+                  toast.error(msg);
+                }}
               />
             ) : stripeReady && amount > 0 && restaurantId ? (
               <PayPalSubscriptionButtons

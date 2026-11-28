@@ -23,6 +23,8 @@ export type AdminSubscriptionPatch = {
   agreedPrice?: number | null;
   /** Pricing comparison module ids; only applied for CUSTOM plan. */
   customSelectedModules?: string[];
+  /** Manual unlock for Free plan registration fee. */
+  registrationFeePaid?: boolean;
 };
 
 export type AdminSubscriptionUpdateResult = {
@@ -96,6 +98,19 @@ export async function applyAdminSubscriptionUpdate(
       JSON.stringify([...(patch.customSelectedModules ?? [])].sort()) !==
         JSON.stringify([...(existing?.customSelectedModules ?? [])].sort()));
 
+  const registrationFeePatch =
+    patch.registrationFeePaid === undefined
+      ? {}
+      : patch.registrationFeePaid
+        ? {
+            registrationFeePaid: true as const,
+            registrationFeePaidAt: existing?.registrationFeePaidAt ?? new Date(),
+          }
+        : {
+            registrationFeePaid: false as const,
+            registrationFeePaidAt: null,
+          };
+
   const subscription = await db.restaurantSubscription.upsert({
     where: { restaurantId },
     create: {
@@ -109,6 +124,9 @@ export async function applyAdminSubscriptionUpdate(
       autoRenew: true,
       adminPeriodEndAt: currentPeriodEnd,
       customSelectedModules,
+      registrationFeePaid: patch.registrationFeePaid ?? false,
+      registrationFeePaidAt:
+        patch.registrationFeePaid === true ? new Date() : null,
     },
     update: {
       plan: patch.plan,
@@ -117,6 +135,7 @@ export async function applyAdminSubscriptionUpdate(
       currentPeriodEnd,
       notes: patch.notes === undefined ? undefined : patch.notes,
       ...(patch.agreedPrice !== undefined ? { agreedPrice: patch.agreedPrice } : {}),
+      ...registrationFeePatch,
       customSelectedModules,
       ...(periodChanged
         ? { adminPeriodEndAt: currentPeriodEnd }
